@@ -1,0 +1,32 @@
+# vectorstore
+vectorstore
+retrieve_db/
+wren-ai-service/qdrant_storage/
+
+# app
+.env
+.env.*
+!.env.*.example
+!src/eval/vulcansql-core-server/.env
+src/eval/vulcansql-core-server/config.properties
+outputs/
+spider/
+data/
+!wren-ai-service/tests/data
+!src/eval/data
+poetry.lock
+assertion.log
+
+# cache
+__pycache__
+local_cache
+.ruff_cache
+.pytest_cache
+
+# ide
+.idea
+.vscode/
+
+# os
+.DS_Store
+__MACOSX/
