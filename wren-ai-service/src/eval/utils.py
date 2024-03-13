@@ -189,7 +189,7 @@ def generate_eval_report(
                     "question": ground_truth["question"],
                     "ground_truth_answer": ground_truth["answer"],
                     "prediction_answer": prediction["answer"],
-                    "regas_eval_results": get_ragas_eval_results(
+                    "ragas_eval_results": get_ragas_eval_results(
                         ragas_eval_results,
                         i,
                     ),
@@ -219,7 +219,7 @@ def generate_eval_report(
                         "question": question,
                         "ground_truth_answer": ground_truth["answer"],
                         "prediction_answer": prediction["answer"],
-                        "regas_eval_results": get_ragas_eval_results(
+                        "ragas_eval_results": get_ragas_eval_results(
                             ragas_eval_results,
                             i,
                         ),
@@ -239,7 +239,7 @@ def generate_eval_report(
                         "prediction_answer": prediction["answer"],
                         "ground_truth_query_results": ground_truth_query_results,
                         "prediction_query_results": prediction_query_results,
-                        "regas_eval_results": get_ragas_eval_results(
+                        "ragas_eval_results": get_ragas_eval_results(
                             ragas_eval_results,
                             i,
                         ),
@@ -255,7 +255,7 @@ def generate_eval_report(
                 "ground_truth_query_results": ground_truth_query_results,
                 "prediction_query_results": prediction_query_results,
                 "prediction_error_details": prediction_error_details,
-                "regas_eval_results": get_ragas_eval_results(
+                "ragas_eval_results": get_ragas_eval_results(
                     ragas_eval_results,
                     i,
                 ),

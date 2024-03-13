@@ -13,7 +13,7 @@ from tqdm import tqdm
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.prompts import user_prompt_builder
+from src.pipelines.ask.components.prompts import init_generation_prompt_builder
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
@@ -162,7 +162,7 @@ if __name__ == "__main__":
         generation_pipeline = Generation(
             generator=generator,
             with_trace=with_trace,
-            prompt_builder=user_prompt_builder,
+            prompt_builder=init_generation_prompt_builder(),
         )
 
         start = time.time()
