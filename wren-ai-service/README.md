@@ -1,4 +1,4 @@
-## Introduction
+# AI Service of WrenAI
 
 ## Environment Setup
 
