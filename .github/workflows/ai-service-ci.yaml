@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+    run:
+        working-directory: wren-ai-service
+
 jobs:
   ci:
     strategy:
@@ -35,7 +39,7 @@ jobs:
       - name: Run Qdrant
         run: docker run -p 6333:6333 -p 6334:6334 -d --name qdrant qdrant/qdrant:v1.7.4
       - name: Test with pytest
-        run: poetry run pytest -s
+        run: poetry run pytest
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ENV: dev
