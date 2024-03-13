@@ -1,0 +1,10 @@
+
+node.environment = test
+duckdb.storage.access-key = 
+duckdb.storage.secret-key = 
+bigquery.project-id = canner-cml
+bigquery.credentials-key = 
+bigquery.location = asia-east1
+bigquery.bucket-name = test-pre-agg-cml
+accio.file = etc/mdl.json
+accio.datasource.type = bigquery

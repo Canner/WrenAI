@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  copilot:
+    image: vulcansql-copilot:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      UVICORN_PORT: ${UVICORN_PORT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # sometimes the console won't show print messages,
+      # using PYTHONUNBUFFERED: 1 can fix this
+      PYTHONUNBUFFERED: 1
+    ports:
+      - ${UVICORN_PORT}:80
+    depends_on:
+      - qdrant
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    ports:
+      - 6333:6333
+      - 6334:6334
