@@ -27,4 +27,5 @@
 - start docker
 - run qdrant and vulcansql-core-server docker containers: `make run-all`
 - evaluation: `make eval` and check out the outputs folder
+- `make streamlit` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)

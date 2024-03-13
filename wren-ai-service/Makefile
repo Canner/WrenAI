@@ -24,6 +24,9 @@ stop-qdrant:
 	docker stop qdrant && docker rm qdrant
 
 # evaluation related
+streamlit:
+	poetry run streamlit run src/eval/streamlit_app.py
+
 eval:
 	poetry run python -m src.eval.ask $(args)
 
