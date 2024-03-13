@@ -4,20 +4,19 @@
 name: AI Service CI
 
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
+    types: [ labeled ]
 
 permissions:
   contents: read
 
 defaults:
-    run:
-        working-directory: wren-ai-service
+  run:
+    working-directory: wren-ai-service
 
 jobs:
   ci:
+    if: ${{ github.event.label.name == 'ci/ai-service' }}
     strategy:
       fail-fast: false
       matrix:
