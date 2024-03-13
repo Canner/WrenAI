@@ -13,7 +13,7 @@ permissions:
 # Cancel previous runs.
 concurrency:
   # Cancel all workflow runs except latest within a concurrency group. This is achieved by defining a concurrency group for the PR.
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.label.name == 'ci/ai-service' && github.event.number || github.sha }}
   cancel-in-progress: true
 
 
