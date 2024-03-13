@@ -1,0 +1,34 @@
+.make-text-classes() {
+  @preset-text: {
+    base: @font-size-base;
+    xs: @font-size-sm - 2px;
+    sm: @font-size-sm;
+    md: @font-size-lg;
+    lg: @font-size-lg + 2px;
+  };
+  each(@preset-text, {
+    .text-@{key} {
+      font-size: @value !important;
+    }
+  });
+}
+
+.text-left {
+  text-align: left !important;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+.text-center {
+  text-align: center !important;
+}
+
+.make-text-classes();
+
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

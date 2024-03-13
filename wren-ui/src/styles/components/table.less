@@ -1,0 +1,28 @@
+// override antd styles
+.ant-table {
+  border: 1px @gray-4 solid;
+
+  .ant-table-row:last-child .ant-table-cell {
+    border-bottom: none;
+  }
+
+  &.ant-table-empty {
+    .ant-table-body {
+      overflow: auto !important;
+    }
+
+    .ant-table-tbody .ant-table-cell {
+      border-bottom: none;
+    }
+  }
+}
+
+.ant-table-wrapper:not(.ant-table-has-header) {
+  .ant-table-empty {
+    border: none;
+
+    .ant-empty-normal {
+      margin: 80px 0;
+    }
+  }
+}
