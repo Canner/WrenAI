@@ -10,9 +10,8 @@ on:
 permissions:
   contents: read
 
-# Cancel previous runs.
 concurrency:
-  # Cancel all workflow runs except latest within a concurrency group. This is achieved by defining a concurrency group for the PR.
+  # avoid mis-canceling the ci runs while other labels are added to the PR, so we add the label name as the condition
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.label.name == 'ci/ai-service' && github.event.number || github.sha }}
   cancel-in-progress: true
 
