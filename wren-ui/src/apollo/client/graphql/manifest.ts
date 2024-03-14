@@ -5,9 +5,3 @@ export const MANIFEST = gql`
     manifest
   }
 `;
-
-export const SAVE_MDL = gql`
-  mutation SaveMDL($data: MDLInput!) {
-    saveMDL(data: $data)
-  }
-`;
