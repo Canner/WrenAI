@@ -41,7 +41,7 @@ export class Encryptor {
 
   public decrypt(encryptedText: string) {
     const [ivBase64, encryptedBase64] = encryptedText.split(
-      this.ENCRYPTION_SEPARATOR
+      this.ENCRYPTION_SEPARATOR,
     );
     const iv = Buffer.from(ivBase64, 'base64');
     const encrypted = Buffer.from(encryptedBase64, 'base64');
@@ -49,7 +49,7 @@ export class Encryptor {
     const decipher = crypto.createDecipheriv(
       this.ENCRYPTION_ALGORITHM,
       key,
-      iv
+      iv,
     );
     const decrypted = Buffer.concat([
       decipher.update(encrypted),
@@ -64,7 +64,7 @@ export class Encryptor {
       this.ENCRYPTION_SALT,
       this.ENCRYPTION_ITERATION,
       this.ENCRYPTION_KEY_LENGTH,
-      'sha512'
+      'sha512',
     );
   }
 }

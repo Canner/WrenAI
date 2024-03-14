@@ -25,7 +25,7 @@ export default function EllipsisWrapper(props: Props) {
   };
 
   // Convert to string if React pass its children as array type to props
-  const title = Array.isArray(text) ? text.join('') : text
+  const title = Array.isArray(text) ? text.join('') : text;
 
   return (
     <div ref={ref} className="text-truncate" title={title} style={{ width }}>

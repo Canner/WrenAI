@@ -27,7 +27,7 @@ const RADIO_VALUE = {
 
 const getPreviewColumns = (
   fields: FieldValue[],
-  calculatedFields: CalculatedFieldTableValue
+  calculatedFields: CalculatedFieldTableValue,
 ) => {
   return [
     fields.map((field) => field.name),
@@ -63,10 +63,10 @@ export default function ModelDetailForm(props: {
   // Reset fields when table is changed.
   useEffect(() => {
     const allColumnNames = dataSourceTableColumnOptions.map(
-      (option) => option.value?.name
+      (option) => option.value?.name,
     );
     const isTableChange = fields.some(
-      (field) => !allColumnNames.includes(field.name)
+      (field) => !allColumnNames.includes(field.name),
     );
     if (isTableChange) form.setFieldsValue({ fields: [] });
   }, [dataSourceTableColumnOptions]);

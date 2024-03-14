@@ -65,5 +65,5 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
 };
 
 export default cors((req: NextApiRequest, res: NextApiResponse) =>
-  req.method === 'OPTIONS' ? res.status(200).end() : handler(req, res)
+  req.method === 'OPTIONS' ? res.status(200).end() : handler(req, res),
 );

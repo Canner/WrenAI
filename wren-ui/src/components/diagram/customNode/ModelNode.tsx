@@ -11,11 +11,7 @@ import MarkerHandle from './MarkerHandle';
 import { DiagramContext } from '../Context';
 import Column, { ColumnTitle } from './Column';
 import CustomDropdown from '../CustomDropdown';
-import {
-  PrimaryKeyIcon,
-  ModelIcon,
-  MoreIcon,
-} from '@/utils/icons';
+import { PrimaryKeyIcon, ModelIcon, MoreIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
 import { ModelColumnData, ModelData } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
@@ -39,7 +35,7 @@ export const ModelNode = ({ data }: CustomNodeProps<ModelData>) => {
   const hasRelationTitle = !!data.originalData.relationFields.length;
   const renderColumns = useCallback(
     (columns: ModelColumnData[]) => getColumns(columns, data),
-    [data.highlight]
+    [data.highlight],
   );
 
   return (
@@ -74,7 +70,7 @@ export default memo(ModelNode);
 
 function getColumns(
   columns: ModelColumnData[],
-  data: CustomNodeProps<ModelData>['data']
+  data: CustomNodeProps<ModelData>['data'],
 ) {
   return columns.map((column) => {
     const hasRelation = !!column.relation;
@@ -86,14 +82,14 @@ function getColumns(
       const relatedEdge = edges.find(
         (edge: any) =>
           trimId(edge.sourceHandle) === column.id ||
-          trimId(edge.targetHandle) === column.id
+          trimId(edge.targetHandle) === column.id,
       );
       setEdges(highlightEdges([relatedEdge.id], true));
       setNodes(
         highlightNodes(
           [relatedEdge.source, relatedEdge.target],
-          [trimId(relatedEdge.sourceHandle), trimId(relatedEdge.targetHandle)]
-        )
+          [trimId(relatedEdge.sourceHandle), trimId(relatedEdge.targetHandle)],
+        ),
       );
     }, []);
     const onMouseLeave = useCallback((reactflowInstance: any) => {

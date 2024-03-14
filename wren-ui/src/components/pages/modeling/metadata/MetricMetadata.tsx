@@ -9,7 +9,7 @@ export interface Props {
   measures: any[];
   dimensions?: any[];
   windows?: any[];
-  properties: Record<string, any>
+  properties: Record<string, any>;
 }
 
 export default function MetricMetadata(props: Props) {

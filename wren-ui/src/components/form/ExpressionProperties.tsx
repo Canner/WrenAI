@@ -65,7 +65,7 @@ export default function ExpressionProperties(props: Props) {
           rules={[
             {
               validator: modelFieldSelectorValidator(
-                ERROR_TEXTS.EXPRESS_PROPERTIES.MODEL_FIELD
+                ERROR_TEXTS.EXPRESS_PROPERTIES.MODEL_FIELD,
               ),
             },
           ]}

@@ -14,9 +14,8 @@ export class ModelResolver {
     const projectId = project.id;
     const models = await ctx.modelRepository.findAllBy({ projectId });
     const modelIds = models.map((m) => m.id);
-    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds(
-      modelIds
-    );
+    const modelColumns =
+      await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
     const result = [];
     for (const model of models) {
       result.push({

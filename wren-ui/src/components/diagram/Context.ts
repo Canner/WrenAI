@@ -1,9 +1,5 @@
 import { createContext } from 'react';
-import {
-  ModelData,
-  MetricData,
-  ViewData,
-} from '@/utils/data';
+import { ModelData, MetricData, ViewData } from '@/utils/data';
 
 export interface ClickPayload {
   [key: string]: any;

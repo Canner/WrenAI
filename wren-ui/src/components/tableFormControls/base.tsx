@@ -20,7 +20,7 @@ const setupInternalId = (value: any[]) => {
 };
 
 export const makeTableFormControl = <MData,>(
-  ModalComponent: React.FC<Partial<MData>>
+  ModalComponent: React.FC<Partial<MData>>,
 ) => {
   const TableFormControl = (props: Props<MData>) => {
     const {
@@ -33,7 +33,7 @@ export const makeTableFormControl = <MData,>(
       disabled,
     } = props;
     const [internalValue, setInternalValue] = useState(
-      setupInternalId(value || [])
+      setupInternalId(value || []),
     );
     const modalComponent = useModalAction();
 
@@ -74,7 +74,7 @@ export const makeTableFormControl = <MData,>(
           },
         },
       ],
-      [internalValue]
+      [internalValue],
     );
 
     const removeData = async (id) => {
@@ -95,8 +95,8 @@ export const makeTableFormControl = <MData,>(
         isNewItem
           ? [...internalValue, item]
           : internalValue.map((record) =>
-              record._id === item._id ? { ...record, ...item } : record
-            )
+              record._id === item._id ? { ...record, ...item } : record,
+            ),
       );
     };
 

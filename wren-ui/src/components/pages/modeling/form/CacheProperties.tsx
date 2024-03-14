@@ -16,7 +16,7 @@ const CachedPeriodControl = (props: {
 }) => {
   const { value, onChange } = props;
   const [internalValue, setInternalValue] = useState(
-    value ? splitCachedPeriod(value) : null
+    value ? splitCachedPeriod(value) : null,
   );
 
   const syncOnChange = () => {

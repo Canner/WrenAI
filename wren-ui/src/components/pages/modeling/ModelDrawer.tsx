@@ -28,7 +28,7 @@ const DynamicForm = (props: {
 
 const DynamicButtonGroup = (
   props: { step: MODEL_STEP; form: FormInstance } & ModelBasicButtonProps &
-    ModelDetailButtonProps
+    ModelDetailButtonProps,
 ) => {
   return (
     {
@@ -42,7 +42,7 @@ const getDrawerTitle = (formMode: FORM_MODE) =>
   ({
     [FORM_MODE.CREATE]: 'Create a model',
     [FORM_MODE.EDIT]: 'Update a model',
-  }[formMode]);
+  })[formMode];
 
 export default function ModelDrawer(props: Props) {
   const { visible, formMode, defaultValue, onClose, onSubmit } = props;

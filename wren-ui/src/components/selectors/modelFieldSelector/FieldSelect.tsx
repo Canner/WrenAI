@@ -2,16 +2,16 @@ import styled from 'styled-components';
 import { NODE_TYPE } from '@/utils/enum';
 import { ModelIcon } from '@/utils/icons';
 import { IterableComponent } from '@/utils/iteration';
-import Selector, {
-  Option,
-} from '@/components/selectors/Selector';
+import Selector, { Option } from '@/components/selectors/Selector';
 
 const FieldBox = styled.div`
   border-radius: 4px;
   background-color: white;
   width: 170px;
-  box-shadow: 0px 9px 28px 8px rgba(0, 0, 0, 0.05),
-    0px 6px 16px 0px rgba(0, 0, 0, 0.08), 0px 3px 6px -4px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0px 9px 28px 8px rgba(0, 0, 0, 0.05),
+    0px 6px 16px 0px rgba(0, 0, 0, 0.08),
+    0px 3px 6px -4px rgba(0, 0, 0, 0.12);
 
   + .adm-fieldBox {
     position: relative;
@@ -43,7 +43,9 @@ const FieldHeader = styled.div`
 `;
 
 const StyledSelector = styled(Selector)`
-  &.ant-select-status-error.ant-select:not(.ant-select-disabled):not(.ant-select-customize-input)
+  &.ant-select-status-error.ant-select:not(.ant-select-disabled):not(
+      .ant-select-customize-input
+    )
     .ant-select-selector {
     border-color: transparent !important;
   }

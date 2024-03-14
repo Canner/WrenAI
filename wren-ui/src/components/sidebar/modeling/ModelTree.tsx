@@ -3,10 +3,7 @@ import { DataNode } from 'antd/es/tree';
 import { startCase } from 'lodash';
 import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
 import { getNodeTypeIcon } from '@/utils/nodeType';
-import {
-  createTreeGroupNode,
-  getColumnNode,
-} from '@/components/sidebar/utils';
+import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
 import LabelTitle from '@/components/sidebar/LabelTitle';
 import { NODE_TYPE } from '@/utils/enum';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
@@ -43,7 +40,7 @@ export default function ModelTree(props) {
             ...getColumnNode(
               nodeKey,
               model.relationFields,
-              startCase(NODE_TYPE.RELATION)
+              startCase(NODE_TYPE.RELATION),
             ),
           ];
 
@@ -58,7 +55,7 @@ export default function ModelTree(props) {
             type: model.nodeType,
           };
         }),
-      })
+      }),
     );
   }, [models]);
 

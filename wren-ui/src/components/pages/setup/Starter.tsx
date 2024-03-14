@@ -4,10 +4,7 @@ import { Button, Typography, Row, Col } from 'antd';
 import styled from 'styled-components';
 import { DATA_SOURCES } from '@/utils/enum';
 import { ButtonOption, getDataSources, getTemplates } from './utils';
-import {
-  makeIterable,
-  IterableComponent,
-} from '@/utils/iteration';
+import { makeIterable, IterableComponent } from '@/utils/iteration';
 
 const ButtonItem = styled(Button)`
   border: 1px var(--gray-4) solid;
@@ -41,7 +38,7 @@ const CommingSoon = styled.div`
 const ButtonTemplate = (
   props: IterableComponent<
     ButtonOption & { value: string; onSelect: (value: string) => void }
-  >
+  >,
 ) => {
   const { value, disabled, logo, label, onSelect } = props;
   return (

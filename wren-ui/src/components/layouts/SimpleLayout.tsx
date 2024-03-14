@@ -1,7 +1,5 @@
 import { Layout } from 'antd';
-import HeaderBar, {
-  Connections,
-} from '@/components/HeaderBar';
+import HeaderBar, { Connections } from '@/components/HeaderBar';
 import PageLoading from '@/components/PageLoading';
 
 const { Content } = Layout;

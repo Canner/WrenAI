@@ -37,7 +37,7 @@ export class ProjectResolver {
     args: {
       data: DataSource;
     },
-    ctx: IContext
+    ctx: IContext,
   ) {
     const { type, properties } = args.data;
     if (type === DataSourceName.BIG_QUERY) {
@@ -62,7 +62,7 @@ export class ProjectResolver {
     arg: {
       data: { tables: CreateModelsInput[] };
     },
-    ctx: IContext
+    ctx: IContext,
   ) {
     const tables = arg.data.tables;
 
@@ -87,7 +87,7 @@ export class ProjectResolver {
       tables,
       models,
       dataSourceColumns as BQColumnResponse[],
-      ctx
+      ctx,
     );
 
     return { models, columns };
@@ -106,9 +106,8 @@ export class ProjectResolver {
     };
     const constraints = await connector.listConstraints(listConstraintOptions);
     const modelIds = models.map((m) => m.id);
-    const columns = await ctx.modelColumnRepository.findColumnsByModelIds(
-      modelIds
-    );
+    const columns =
+      await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
     const relations = this.analysisRelation(constraints, models, columns);
     return models.map(({ id, tableName }) => ({
       id,
@@ -120,7 +119,7 @@ export class ProjectResolver {
   public async saveRelations(
     _root: any,
     arg: { data: { relations: RelationData[] } },
-    ctx: IContext
+    ctx: IContext,
   ) {
     const { relations } = arg.data;
     const project = await this.getCurrentProject(ctx);
@@ -137,13 +136,13 @@ export class ProjectResolver {
     const columns = await ctx.modelColumnRepository.findColumnsByIds(columnIds);
     const relationValues = relations.map((relation) => {
       const fromColumn = columns.find(
-        (column) => column.id === relation.fromColumn
+        (column) => column.id === relation.fromColumn,
       );
       if (!fromColumn) {
         throw new Error(`Column not found, column Id ${relation.fromColumn}`);
       }
       const toColumn = columns.find(
-        (column) => column.id === relation.toColumn
+        (column) => column.id === relation.toColumn,
       );
       if (!toColumn) {
         throw new Error(`Column not found, column Id  ${relation.toColumn}`);
@@ -159,8 +158,8 @@ export class ProjectResolver {
 
     const savedRelations = await Promise.all(
       relationValues.map((relation) =>
-        ctx.relationRepository.createOne(relation)
-      )
+        ctx.relationRepository.createOne(relation),
+      ),
     );
     return savedRelations;
   }
@@ -168,7 +167,7 @@ export class ProjectResolver {
   private analysisRelation(
     constraints: BQConstraintResponse[],
     models: Model[],
-    columns: ModelColumn[]
+    columns: ModelColumn[],
   ): RelationData[] {
     const relations = [];
     for (const constraint of constraints) {
@@ -185,10 +184,10 @@ export class ProjectResolver {
         continue;
       }
       const fromColumn = columns.find(
-        (c) => c.modelId === fromModel.id && c.name === constraintColumn
+        (c) => c.modelId === fromModel.id && c.name === constraintColumn,
       );
       const toColumn = columns.find(
-        (c) => c.modelId === toModel.id && c.name === constraintedColumn
+        (c) => c.modelId === toModel.id && c.name === constraintedColumn,
       );
       if (!fromColumn || !toColumn) {
         continue;
@@ -230,7 +229,7 @@ export class ProjectResolver {
     const credentials = encryptor.decrypt(encryptedCredentials);
     const filePath = this.writeCredentialsFile(
       JSON.parse(credentials),
-      config.persistCredentialDir
+      config.persistCredentialDir,
     );
     return filePath;
   }
@@ -239,17 +238,17 @@ export class ProjectResolver {
     tables: CreateModelsInput[],
     models: Model[],
     dataSourceColumns: BQColumnResponse[],
-    ctx: IContext
+    ctx: IContext,
   ) {
     const columnValues = tables.reduce((acc, table) => {
       const modelId = models.find((m) => m.tableName === table.name)?.id;
       for (const columnName of table.columns) {
         const dataSourceColumn = dataSourceColumns.find(
-          (c) => c.table_name === table.name && c.column_name === columnName
+          (c) => c.table_name === table.name && c.column_name === columnName,
         );
         if (!dataSourceColumn) {
           throw new Error(
-            `Column ${columnName} not found in the DataSource ${table.name}`
+            `Column ${columnName} not found in the DataSource ${table.name}`,
           );
         }
         const columnValue = {
@@ -269,8 +268,8 @@ export class ProjectResolver {
     }, []);
     const columns = await Promise.all(
       columnValues.map(
-        async (column) => await ctx.modelColumnRepository.createOne(column)
-      )
+        async (column) => await ctx.modelColumnRepository.createOne(column),
+      ),
     );
     return columns;
   }
@@ -278,7 +277,7 @@ export class ProjectResolver {
   private async createModels(
     tables: CreateModelsInput[],
     id: number,
-    ctx: IContext
+    ctx: IContext,
   ) {
     const modelValues = tables.map(({ name }) => {
       const model = {
@@ -295,8 +294,8 @@ export class ProjectResolver {
 
     const models = await Promise.all(
       modelValues.map(
-        async (model) => await ctx.modelRepository.createOne(model)
-      )
+        async (model) => await ctx.modelRepository.createOne(model),
+      ),
     );
     return models;
   }
@@ -320,7 +319,7 @@ export class ProjectResolver {
     // check DataSource is valid and can connect to it
     filePath = await this.writeCredentialsFile(
       credentials,
-      config.persistCredentialDir
+      config.persistCredentialDir,
     );
     const connectionOption: BigQueryOptions = {
       location,
@@ -358,7 +357,7 @@ export class ProjectResolver {
 
   private writeCredentialsFile(
     credentials: JSON,
-    persistCredentialDir: string
+    persistCredentialDir: string,
   ) {
     // create persist_credential_dir if not exists
     if (!fs.existsSync(persistCredentialDir)) {

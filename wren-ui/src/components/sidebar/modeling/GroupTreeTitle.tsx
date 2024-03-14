@@ -25,7 +25,7 @@ const ActionIcons = ({ icons }: { icons: IconsType[] }) => {
         }`}
         {...restProps}
       />
-    )
+    ),
   );
 
   return <>{iconComponents}</>;

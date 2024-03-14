@@ -25,7 +25,7 @@ export type ModelFieldOption = {
 };
 
 export default function useModelFieldOptions(
-  transientData?: ModelFieldResposeData[]
+  transientData?: ModelFieldResposeData[],
 ) {
   const response = transientData
     ? transientData
@@ -87,7 +87,7 @@ export default function useModelFieldOptions(
         <div className="d-flex align-center">
           {getNodeTypeIcon(
             { nodeType, type: columnType },
-            { className: 'mr-1' }
+            { className: 'mr-1' },
           )}
           {item.name}
         </div>

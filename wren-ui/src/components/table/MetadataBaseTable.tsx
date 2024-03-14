@@ -54,7 +54,7 @@ export const makeMetadataBaseTable =
                 },
               ]
             : [],
-        [dataSource]
+        [dataSource],
       );
 
       const submitModal = async (values: any) => {

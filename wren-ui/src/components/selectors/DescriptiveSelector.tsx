@@ -78,7 +78,7 @@ export default function DescriptiveSelector(props: Props) {
   // Condition when met group option
   const [firstOption] = options;
   const [currentOption, setCurrentOption] = useState<any>(
-    firstOption.options ? firstOption.options[0] : firstOption
+    firstOption.options ? firstOption.options[0] : firstOption,
   );
   // if descriptiveContentRender is not provided, the maxHeight will auto set for defaultDescriptiveContentRender
   const maxHeight = descriptiveContentRender ? listHeight : 193;

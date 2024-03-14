@@ -28,7 +28,7 @@ const DynamicForm = (props: {
 
 const DynamicButtonGroup = (
   props: { step: METRIC_STEP; form: FormInstance } & MetricBasicButtonProps &
-    MetricDetailButtonProps
+    MetricDetailButtonProps,
 ) => {
   return (
     {
@@ -42,7 +42,7 @@ const getDrawerTitle = (formMode: FORM_MODE) =>
   ({
     [FORM_MODE.CREATE]: 'Create a metric',
     [FORM_MODE.EDIT]: 'Update a metric',
-  }[formMode]);
+  })[formMode];
 
 export default function MetricDrawer(props: Props) {
   const { visible, formMode, defaultValue, onClose, onSubmit } = props;
