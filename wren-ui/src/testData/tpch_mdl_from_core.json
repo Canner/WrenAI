@@ -1,0 +1,101 @@
+{
+  "catalog": "canner-cml",
+  "schema": "tpch_tiny",
+  "models": [
+    {
+      "name": "Orders",
+      "refSql": "select * from \"canner-cml\".tpch_tiny.orders",
+      "columns": [
+        { "name": "orderkey", "type": "integer" },
+        { "name": "custkey", "type": "integer" },
+        { "name": "orderstatus", "type": "string" },
+        { "name": "totalprice", "type": "float" },
+        {
+          "name": "customer",
+          "type": "Customer",
+          "relationship": "OrdersCustomer"
+        },
+        { "name": "orderdate", "type": "date" }
+      ],
+      "primaryKey": "orderkey"
+    },
+    {
+      "name": "Customer",
+      "refSql": "select * from \"canner-cml\".tpch_tiny.customer",
+      "columns": [
+        { "name": "custkey", "type": "integer" },
+        { "name": "name", "type": "string" },
+        { "name": "orders", "type": "Orders", "relationship": "OrdersCustomer" }
+      ],
+      "primaryKey": "custkey"
+    },
+    {
+      "name": "Lineitem",
+      "refSql": "select * from \"canner-cml\".tpch_tiny.lineitem",
+      "columns": [
+        { "name": "orderkey", "type": "integer" },
+        { "name": "partkey", "type": "integer" },
+        { "name": "linenumber", "type": "integer" },
+        { "name": "extendedprice", "type": "double" },
+        { "name": "discount", "type": "double" },
+        { "name": "shipdate", "type": "date" },
+        { "name": "order", "type": "Orders", "relationship": "OrdersLineitem" },
+        { "name": "part", "type": "Part", "relationship": "LineitemPart" },
+        { "name": "orderkey_linenumber", "type": "string" }
+      ],
+      "primaryKey": "orderkey_linenumber"
+    },
+    {
+      "name": "Part",
+      "refSql": "select * from \"canner-cml\".tpch_tiny.part",
+      "columns": [
+        { "name": "partkey", "type": "integer" },
+        { "name": "name", "type": "string" }
+      ],
+      "primaryKey": "partkey"
+    }
+  ],
+  "relationships": [
+    {
+      "name": "OrdersCustomer",
+      "models": ["Orders", "Customer"],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Orders.custkey = Customer.custkey"
+    },
+    {
+      "name": "OrdersLineitem",
+      "models": ["Orders", "Lineitem"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "Orders.orderkey = Lineitem.orderkey"
+    },
+    {
+      "name": "LineitemPart",
+      "models": ["Lineitem", "Part"],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Lineitem.partkey = Part.partkey"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "Revenue",
+      "baseModel": "Orders",
+      "dimension": [{ "name": "custkey", "type": "integer" }],
+      "measure": [
+        {
+          "name": "totalprice",
+          "type": "integer",
+          "expression": "sum(totalprice)"
+        }
+      ],
+      "timeGrain": [
+        {
+          "name": "orderdate",
+          "refColumn": "orderdate",
+          "dateParts": ["YEAR", "MONTH"]
+        }
+      ],
+      "preAggregated": true,
+      "refreshTime": "2m"
+    }
+  ]
+}

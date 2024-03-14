@@ -1,0 +1,376 @@
+{
+  "catalog": "test-catalog",
+  "schema": "test-schema",
+  "models": [
+    {
+      "name": "OrdersModel",
+      "refSql": "select * from orders",
+      "columns": [
+        {
+          "name": "orderkey",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "description": "the key of each order",
+          "properties": {
+            "description": "the key of each order"
+          }
+        },
+        {
+          "name": "custkey",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "orderstatus",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "totalprice",
+          "type": "double",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "orderdate",
+          "type": "date",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "orderpriority",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "clerk",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "shippriority",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "customer",
+          "type": "CustomerModel",
+          "relationship": "OrdersCustomer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "orderkey",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "description": "tpch tiny orders table",
+      "properties": {
+        "description": "tpch tiny orders table"
+      }
+    },
+    {
+      "name": "LineitemModel",
+      "refSql": "select * from lineitem",
+      "columns": [
+        {
+          "name": "orderkey",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "linenumber",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "extendedprice",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        }
+      ],
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {}
+    },
+    {
+      "name": "CustomerModel",
+      "refSql": "select * from customer",
+      "columns": [
+        {
+          "name": "custkey",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "address",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "nationkey",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "phone",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "acctbal",
+          "type": "double",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "mktsegment",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "orders",
+          "type": "OrdersModel",
+          "relationship": "OrdersCustomer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "orders_totalprice",
+          "type": "varchar",
+          "isCalculated": true,
+          "notNull": false,
+          "expression": "SUM(orders.totalprice)",
+          "properties": {}
+        }
+      ],
+      "primaryKey": "custkey",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {}
+    }
+  ],
+  "relationships": [
+    {
+      "name": "OrdersCustomer",
+      "models": [
+        "OrdersModel",
+        "CustomerModel"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "OrdersModel.custkey = CustomerModel.custkey",
+      "manySideSortKeys": [
+        {
+          "name": "orderkey",
+          "descending": false
+        }
+      ],
+      "description": "the relationship between orders and customers",
+      "properties": {
+        "description": "the relationship between orders and customers"
+      }
+    }
+  ],
+  "enumDefinitions": [
+    {
+      "name": "OrderStatus",
+      "values": [
+        {
+          "name": "PENDING",
+          "value": "pending",
+          "properties": {
+            "description": "pending"
+          }
+        },
+        {
+          "name": "PROCESSING",
+          "value": "processing",
+          "properties": {}
+        },
+        {
+          "name": "SHIPPED",
+          "value": "shipped",
+          "properties": {}
+        },
+        {
+          "name": "COMPLETE",
+          "value": "complete",
+          "properties": {}
+        }
+      ],
+      "description": "the status of an order",
+      "properties": {
+        "description": "the status of an order"
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "name": "Revenue",
+      "baseObject": "OrdersModel",
+      "dimension": [
+        {
+          "name": "orderkey",
+          "type": "string",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        }
+      ],
+      "measure": [
+        {
+          "name": "total",
+          "type": "integer",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        }
+      ],
+      "timeGrain": [
+        {
+          "name": "orderdate",
+          "refColumn": "orderdate",
+          "dateParts": [
+            "DAY",
+            "MONTH"
+          ]
+        }
+      ],
+      "cached": true,
+      "refreshTime": "30.00m",
+      "description": "the revenue of an order",
+      "properties": {
+        "description": "the revenue of an order"
+      }
+    }
+  ],
+  "cumulativeMetrics": [
+    {
+      "name": "DailyRevenue",
+      "baseObject": "Orders",
+      "measure": {
+        "name": "totalprice",
+        "type": "integer",
+        "operator": "sum",
+        "refColumn": "totalprice",
+        "properties": {
+          "description": "totalprice"
+        }
+      },
+      "window": {
+        "name": "orderdate",
+        "refColumn": "orderdate",
+        "timeUnit": "DAY",
+        "start": "1994-01-01",
+        "end": "1994-12-31",
+        "properties": {
+          "description": "orderdate"
+        }
+      },
+      "cached": false,
+      "description": "daily revenue",
+      "properties": {
+        "description": "daily revenue"
+      }
+    },
+    {
+      "name": "WeeklyRevenue",
+      "baseObject": "Orders",
+      "measure": {
+        "name": "totalprice",
+        "type": "integer",
+        "operator": "sum",
+        "refColumn": "totalprice"
+      },
+      "window": {
+        "name": "orderdate",
+        "refColumn": "orderdate",
+        "timeUnit": "WEEK",
+        "start": "1994-01-01",
+        "end": "1994-12-31",
+        "properties": {}
+      },
+      "cached": false,
+      "properties": {}
+    }
+  ],
+  "views": [
+    {
+      "name": "useMetric",
+      "statement": "select * from Revenue",
+      "description": "the view for the revenue metric",
+      "properties": {
+        "description": "the view for the revenue metric"
+      }
+    }
+  ],
+  "macros": [
+    {
+      "name": "test",
+      "definition": "(a: Expression) => a + 1",
+      "properties": {
+        "description": "a macro"
+      }
+    }
+  ],
+  "dateSpine": {
+    "unit": "DAY",
+    "start": "1970-01-01",
+    "end": "2077-12-31",
+    "properties": {
+      "description": "a date spine"
+    }
+  }
+}

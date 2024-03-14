@@ -1,0 +1,62 @@
+.make-spacing-classes(@i: 15) when (@i >= 0) {
+  .make-spacing-classes(@i - 1);
+  @preset: {
+    m: margin;
+    p: padding;
+  };
+  @base-spacing: 4px;
+  @spacing: @i * @base-spacing;
+
+  each(@preset, {
+    .@{key}-@{i} {
+      @{value}: @spacing !important;
+    }
+    .@{key}x-@{i} {
+      @{value}-left: @spacing !important;
+      @{value}-right: @spacing !important;
+    }
+    .@{key}y-@{i} {
+      @{value}-top: @spacing !important;
+      @{value}-bottom: @spacing !important;
+    }
+    .@{key}t-@{i} {
+      @{value}-top: @spacing !important;
+    }
+    .@{key}l-@{i} {
+      @{value}-left: @spacing !important;
+    }
+    .@{key}r-@{i} {
+      @{value}-right: @spacing !important;
+    }
+    .@{key}b-@{i} {
+      @{value}-bottom: @spacing !important;
+    }
+
+    // Negative spacing
+    .-@{key}-@{i} {
+      @{value}: -@spacing !important;
+    }
+    .-@{key}x-@{i} {
+      @{value}-left: -@spacing !important;
+      @{value}-right: -@spacing !important;
+    }
+    .-@{key}y-@{i} {
+      @{value}-top: -@spacing !important;
+      @{value}-bottom: -@spacing !important;
+    }
+    .-@{key}t-@{i} {
+      @{value}-top: -@spacing !important;
+    }
+    .-@{key}l-@{i} {
+      @{value}-left: -@spacing !important;
+    }
+    .-@{key}r-@{i} {
+      @{value}-right: -@spacing !important;
+    }
+    .-@{key}b-@{i} {
+      @{value}-bottom: -@spacing !important;
+    }
+  });
+}
+
+.make-spacing-classes();

@@ -11,7 +11,7 @@ wren-ai-service/qdrant_storage/
 src/eval/vulcansql-core-server/config.properties
 outputs/
 spider/
-data/
+wren-ai-service/**/data/
 !wren-ai-service/tests/data
 !src/eval/data
 poetry.lock
@@ -30,3 +30,39 @@ local_cache
 # os
 .DS_Store
 __MACOSX/
+*.pem
+
+# sqlite
+*.sqlite
+*.sqlite3
+
+# ui
+## dependencies
+node_modules
+.pnp
+.pnp.js
+
+## testing
+wren-ui/coverage
+
+## next.js
+wren-ui/.next
+wren-ui/out
+
+## production
+wren-ui/build
+
+## debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+## local env files
+.env*.local
+
+## vercel
+.vercel
+
+## typescript
+*.tsbuildinfo
+next-env.d.ts

@@ -1,0 +1,148 @@
+{
+  "catalog": "canner-cml",
+  "schema": "tpch_tiny",
+  "models": [
+    {
+      "name": "Orders",
+      "refSql": "select * from \"canner-cml\".tpch_tiny.orders",
+      "columns": [
+        {
+          "name": "orderkey",
+          "expression": "o_orderkey",
+          "type": "integer"
+        },
+        {
+          "name": "custkey",
+          "expression": "o_custkey",
+          "type": "integer"
+        },
+        {
+          "name": "prodkeys",
+          "expression": "o_prodkeys",
+          "type": "text[]"
+        },
+        {
+          "name": "orderstatus",
+          "expression": "o_orderstatus",
+          "type": "string"
+        },
+        {
+          "name": "totalprice",
+          "expression": "o_totalprice",
+          "type": "float"
+        },
+        {
+          "name": "customer",
+          "type": "Customer",
+          "relationship": "OrdersCustomer"
+        },
+        {
+          "name": "orderdate",
+          "expression": "o_orderdate",
+          "type": "date"
+        },
+        {
+          "name": "products",
+          "type": "Products",
+          "relationship": "OrdersProducts"
+        }
+      ],
+      "primaryKey": "orderkey"
+    },
+    {
+      "name": "Customer",
+      "refSql": "select * from \"canner-cml\".tpch_tiny.customer",
+      "columns": [
+        {
+          "name": "custkey",
+          "expression": "c_custkey",
+          "type": "integer"
+        },
+        {
+          "name": "name",
+          "expression": "c_name",
+          "type": "string"
+        }
+      ],
+      "primaryKey": "custkey"
+    },
+    {
+      "name": "Products",
+      "refSql": "select * from \"canner-cml\".tpch_tiny.products",
+      "columns": [
+        {
+          "name": "name",
+          "expression": "p_name",
+          "type": "string"
+        },
+        {
+          "name": "prodKey",
+          "expression": "p_prodKey",
+          "type": "integer"
+        },
+        {
+          "name": "quantity",
+          "expression": "p_quantity",
+          "type": "integer"
+        },
+        {
+          "name": "price",
+          "expression": "p_price",
+          "type": "float"
+        },
+        {
+          "name": "createdDate",
+          "expression": "p_createdDate",
+          "type": "date"
+        }
+      ],
+      "primaryKey": "prodKey"
+    }
+  ],
+  "relationships": [
+    {
+      "name": "OrdersCustomer",
+      "models": [
+        "Orders",
+        "Customer"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Orders.custkey = Customer.custkey"
+    },
+    {
+      "name": "OrdersProducts",
+      "models": ["Orders", "Products"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "Products.prodKey = ANY(Orders.prodkeys)"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "Revenue",
+      "baseModel": "Orders",
+      "dimension": [
+        {
+          "name": "custkey",
+          "type": "integer"
+        }
+      ],
+      "measure": [
+        {
+          "name": "totalprice",
+          "type": "integer",
+          "expression": "sum(totalprice)"
+        }
+      ],
+      "timeGrain": [
+        {
+          "name": "orderdate",
+          "refColumn": "orderdate",
+          "dateParts": [
+            "YEAR",
+            "MONTH"
+          ]
+        }
+      ]
+    }
+  ]
+}
