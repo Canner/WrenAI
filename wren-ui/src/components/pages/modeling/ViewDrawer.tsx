@@ -28,7 +28,7 @@ const DynamicForm = (props: {
 
 const DynamicButtonGroup = (
   props: { step: MODEL_STEP; form: FormInstance } & ViewBasicButtonProps &
-    ViewDetailButtonProps
+    ViewDetailButtonProps,
 ) => {
   return (
     {
@@ -42,7 +42,7 @@ const getDrawerTitle = (formMode: FORM_MODE) =>
   ({
     [FORM_MODE.CREATE]: 'Create a view',
     [FORM_MODE.EDIT]: 'Update a view',
-  }[formMode]);
+  })[formMode];
 
 export default function ViewDrawer(props: Props) {
   const { visible, formMode, defaultValue, onClose, onSubmit } = props;

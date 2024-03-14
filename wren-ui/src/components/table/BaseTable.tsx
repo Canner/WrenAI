@@ -3,10 +3,7 @@ import { Table, TableProps } from 'antd';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import CodeBlock from '@/components/editor/CodeBlock';
 import { getColumnTypeIcon } from '@/utils/columnType';
-import {
-  ModelColumnData,
-  getJoinTypeText,
-} from '@/utils/data';
+import { ModelColumnData, getJoinTypeText } from '@/utils/data';
 
 export const COLUMN = {
   DISPLAY_NAME: {
@@ -76,7 +73,7 @@ export default function BaseTable(props: Props) {
 
   const tableColumns = useMemo(
     () => columns.concat(actionColumns || []),
-    [dataSource]
+    [dataSource],
   );
 
   const tableData = useMemo(
@@ -85,7 +82,7 @@ export default function BaseTable(props: Props) {
         ...record,
         key: `${record.id}-${index}`,
       })),
-    [dataSource]
+    [dataSource],
   );
 
   return (

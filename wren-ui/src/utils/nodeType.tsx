@@ -4,7 +4,7 @@ import { MetricIcon, ModelIcon, RelationshipIcon, ViewIcon } from './icons';
 
 export const getNodeTypeIcon = (
   payload: { nodeType: NODE_TYPE | string; type?: COLUMN_TYPE | string },
-  attrs?: any
+  attrs?: any,
 ) => {
   const { nodeType, type } = payload;
   switch (nodeType) {

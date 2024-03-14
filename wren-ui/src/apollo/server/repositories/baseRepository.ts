@@ -18,7 +18,7 @@ export interface IBasicRepository<T> {
   updateOne: (
     id: string,
     data: Partial<T>,
-    queryOptions?: IQueryOptions
+    queryOptions?: IQueryOptions,
   ) => Promise<T>;
   deleteOne: (id: string, queryOptions?: IQueryOptions) => Promise<T>;
 }
@@ -47,7 +47,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   public async findOneBy(filter: Partial<T>, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const query = executer(this.tableName).where(
-      this.transformToDBData(filter)
+      this.transformToDBData(filter),
     );
     if (queryOptions?.limit) {
       query.limit(queryOptions.limit);
@@ -61,7 +61,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     // format filter keys to snake_case
 
     const query = executer(this.tableName).where(
-      this.transformToDBData(filter)
+      this.transformToDBData(filter),
     );
     if (queryOptions?.order) {
       query.orderBy(queryOptions.order);
@@ -94,7 +94,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   public async updateOne(
     id: string,
     data: Partial<T>,
-    queryOptions?: IQueryOptions
+    queryOptions?: IQueryOptions,
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const [result] = await executer(this.tableName)

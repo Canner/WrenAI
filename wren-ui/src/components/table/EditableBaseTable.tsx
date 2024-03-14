@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { set, cloneDeep, isEmpty } from 'lodash';
-import {
-  COLUMN,
-  Props as BaseTableProps,
-} from '@/components/table/BaseTable';
+import { COLUMN, Props as BaseTableProps } from '@/components/table/BaseTable';
 import EditableWrapper from '@/components/EditableWrapper';
 
 type Props = BaseTableProps & {

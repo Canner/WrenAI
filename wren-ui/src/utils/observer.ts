@@ -13,7 +13,7 @@ export default class Observer {
 
   public subscribe(
     subjectId: string | string[],
-    observer: (ctx: { id: string; payload: any }) => void
+    observer: (ctx: { id: string; payload: any }) => void,
   ) {
     const subscriberId = uuidv4();
 
@@ -36,7 +36,7 @@ export default class Observer {
       if (subjectSubscribers.includes(subscriberId)) {
         this.subjects.set(
           subjectId,
-          subjectSubscribers.filter((id) => id !== subscriberId)
+          subjectSubscribers.filter((id) => id !== subscriberId),
         );
       }
     });

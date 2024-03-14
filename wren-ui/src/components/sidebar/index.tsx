@@ -18,7 +18,7 @@ type Props = ModelingSidebarProps | ExplorationSidebarProps;
 const DynamicSidebar = (
   props: Props & {
     pathname: string;
-  }
+  },
 ) => {
   const { pathname, ...restProps } = props;
 

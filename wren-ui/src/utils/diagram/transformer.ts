@@ -1,10 +1,5 @@
 import { Edge, Node, Position } from 'reactflow';
-import {
-  EDGE_TYPE,
-  MARKER_TYPE,
-  NODE_TYPE,
-  JOIN_TYPE,
-} from '@/utils/enum';
+import { EDGE_TYPE, MARKER_TYPE, NODE_TYPE, JOIN_TYPE } from '@/utils/enum';
 import {
   ModelData,
   MetricData,
@@ -161,21 +156,21 @@ export class Transformer {
         const targetModel = this.models.find(
           (model) =>
             model.id !== data.id &&
-            column.relation?.models.includes(model.referenceName)
+            column.relation?.models.includes(model.referenceName),
         )!;
         const targetColumn = targetModel?.columns.find(
           (targetColumn) =>
             targetColumn.relation?.referenceName ===
-            column.relation?.referenceName
+            column.relation?.referenceName,
         );
 
         // check what source and target relation order
         const { joinType, models } = column.relation;
         const sourceJoinIndex = models.findIndex(
-          (name) => name === data.referenceName
+          (name) => name === data.referenceName,
         );
         const targetJoinIndex = models.findIndex(
-          (name) => name === targetModel?.referenceName
+          (name) => name === targetModel?.referenceName,
         );
 
         targetModel &&
@@ -189,7 +184,7 @@ export class Transformer {
               targetModel,
               targetColumn,
               targetJoinIndex,
-            })
+            }),
           );
       }
     }
@@ -198,7 +193,7 @@ export class Transformer {
   private addMetricEdge(data: MetricData) {
     const { baseObject } = data;
     const targetModel = this.models.find(
-      (model) => model.referenceName === baseObject
+      (model) => model.referenceName === baseObject,
     )!;
     targetModel &&
       this.edges.push(
@@ -206,7 +201,7 @@ export class Transformer {
           type: EDGE_TYPE.METRIC,
           sourceModel: data,
           targetModel,
-        })
+        }),
       );
   }
 
@@ -271,7 +266,7 @@ export class Transformer {
         if (current.id === target) result[1] = index;
         return result;
       },
-      [-1, -1]
+      [-1, -1],
     );
     const sourceFloorIndex = this.getFloorIndex(sourceIndex);
     const targetFloorIndex = this.getFloorIndex(targetIndex);
@@ -292,7 +287,7 @@ export class Transformer {
   private getMarker(
     joinType: JOIN_TYPE | string,
     joinIndex: number,
-    position?: Position
+    position?: Position,
   ) {
     const markers =
       {

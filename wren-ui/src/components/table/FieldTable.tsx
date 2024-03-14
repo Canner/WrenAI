@@ -1,7 +1,4 @@
-import BaseTable, {
-  Props,
-  COLUMN,
-} from '@/components/table/BaseTable';
+import BaseTable, { Props, COLUMN } from '@/components/table/BaseTable';
 
 export default function FieldTable(props: Props) {
   const { columns } = props;

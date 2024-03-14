@@ -18,7 +18,7 @@ import useDrawerAction from '@/hooks/useDrawerAction';
 
 const ModelFieldSelector = dynamic(
   () => import('@/components/selectors/modelFieldSelector'),
-  { ssr: false }
+  { ssr: false },
 );
 
 const initialValue = [

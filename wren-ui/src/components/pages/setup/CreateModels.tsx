@@ -3,10 +3,7 @@ import Link from 'next/link';
 import { Button, Col, Form, Row, TableColumnsType, Typography } from 'antd';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { ERROR_TEXTS } from '@/utils/error';
-import {
-  makeIterable,
-  IterableComponent,
-} from '@/utils/iteration';
+import { makeIterable, IterableComponent } from '@/utils/iteration';
 import ModelRelationSelectionTable, {
   SourceTable,
   SourceTableColumn,

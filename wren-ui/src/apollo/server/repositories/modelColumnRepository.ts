@@ -23,11 +23,11 @@ export interface ModelColumn {
 export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
   findColumnsByModelIds(
     modelIds: number[],
-    queryOptions?: IQueryOptions
+    queryOptions?: IQueryOptions,
   ): Promise<ModelColumn[]>;
   findColumnsByIds(
     ids: number[],
-    queryOptions?: IQueryOptions
+    queryOptions?: IQueryOptions,
   ): Promise<ModelColumn[]>;
 }
 

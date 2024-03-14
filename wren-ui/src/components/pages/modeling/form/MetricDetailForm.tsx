@@ -30,7 +30,7 @@ const RADIO_VALUE = {
 const getPreviewColumns = (
   measures: MeasureTableValue,
   dimensions: DimensionTableValue,
-  windows: WindowTableValue
+  windows: WindowTableValue,
 ) => {
   return [
     measures.map((field) => field.name),

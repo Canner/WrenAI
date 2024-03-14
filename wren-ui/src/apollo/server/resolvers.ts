@@ -120,7 +120,7 @@ const mockResolvers = {
       _,
       _args: {
         data: [tables: { name: string; columns: string[] }];
-      }
+      },
     ) => {
       return demoManifest;
     },
@@ -161,7 +161,7 @@ const mockResolvers = {
     },
     updateModel: (
       _,
-      args: { where: UpdateModelWhere; data: UpdateModelPayload }
+      args: { where: UpdateModelWhere; data: UpdateModelPayload },
     ) => {
       const { where, data } = args;
       const { models } = demoManifest;

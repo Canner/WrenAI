@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react';
 import { DataNode } from 'antd/es/tree';
 import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
 import { getNodeTypeIcon } from '@/utils/nodeType';
-import {
-  createTreeGroupNode,
-  getColumnNode,
-} from '@/components/sidebar/utils';
+import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
 import LabelTitle from '@/components/sidebar/LabelTitle';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
 
@@ -47,7 +44,7 @@ export default function ViewTree(props) {
             type: view.nodeType,
           };
         }),
-      })
+      }),
     );
   }, [views]);
 

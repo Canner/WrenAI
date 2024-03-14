@@ -37,7 +37,7 @@ export default function Selector(props: Props) {
       compactObject({
         ...getOption(item),
         options: item.options?.map(getOption),
-      })
+      }),
     );
   }, [options]);
 

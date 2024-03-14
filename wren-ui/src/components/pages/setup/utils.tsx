@@ -4,11 +4,7 @@ import SelectModels from './SelectModels';
 import CreateModels from './CreateModels';
 import RecommendRelations from './RecommendRelations';
 import DefineRelations from './DefineRelations';
-import {
-  SETUP,
-  DATA_SOURCES,
-  DEMO_TEMPLATES,
-} from '@/utils/enum';
+import { SETUP, DATA_SOURCES, DEMO_TEMPLATES } from '@/utils/enum';
 import BigQueryProperties from './dataSources/BigQueryProperties';
 import { merge } from 'lodash';
 
@@ -20,7 +16,7 @@ type SetupStep = {
       React.ComponentProps<typeof SelectModels> &
       React.ComponentProps<typeof CreateModels> &
       React.ComponentProps<typeof RecommendRelations> &
-      React.ComponentProps<typeof DefineRelations>
+      React.ComponentProps<typeof DefineRelations>,
   ) => JSX.Element;
   maxWidth?: number;
 };
@@ -112,7 +108,7 @@ export const getDataSources = () => {
 export const getDataSource = (dataSource: DATA_SOURCES) => {
   const defaultDataSource = merge(
     DATA_SOURCE_OPTIONS[DATA_SOURCES.BIG_QUERY],
-    DATA_SOURCE_FORM[DATA_SOURCES.BIG_QUERY]
+    DATA_SOURCE_FORM[DATA_SOURCES.BIG_QUERY],
   );
   return ({
     [DATA_SOURCES.BIG_QUERY]: defaultDataSource,

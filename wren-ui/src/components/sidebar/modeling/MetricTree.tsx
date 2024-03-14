@@ -3,10 +3,7 @@ import { DataNode } from 'antd/es/tree';
 import { startCase } from 'lodash';
 import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
 import { getNodeTypeIcon } from '@/utils/nodeType';
-import {
-  createTreeGroupNode,
-  getColumnNode,
-} from '@/components/sidebar/utils';
+import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
 import LabelTitle from '@/components/sidebar/LabelTitle';
 import { METRIC_TYPE } from '@/utils/enum';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
@@ -39,17 +36,17 @@ export default function MetricTree(props) {
             ...getColumnNode(
               nodeKey,
               [...(metric.dimensions || []), ...(metric.timeGrains || [])],
-              startCase(METRIC_TYPE.DIMENSION)
+              startCase(METRIC_TYPE.DIMENSION),
             ),
             ...getColumnNode(
               nodeKey,
               metric.measures || [],
-              startCase(METRIC_TYPE.MEASURE)
+              startCase(METRIC_TYPE.MEASURE),
             ),
             ...getColumnNode(
               nodeKey,
               metric.windows || [],
-              startCase(METRIC_TYPE.WINDOW)
+              startCase(METRIC_TYPE.WINDOW),
             ),
           ];
 
@@ -64,7 +61,7 @@ export default function MetricTree(props) {
             type: metric.nodeType,
           };
         }),
-      })
+      }),
     );
   }, [metrics]);
 

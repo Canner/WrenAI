@@ -41,7 +41,7 @@ interface Props {
 export default function MultiSelectBox(props: Props) {
   const { columns, items, onChange, value } = props;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>(
-    value || []
+    value || [],
   );
   const [searchValue, setSearchValue] = useState<string>('');
   const formItemContext =
@@ -53,7 +53,7 @@ export default function MultiSelectBox(props: Props) {
       ? items.filter((item) =>
           columns
             .map((column) => item[column['dataIndex']])
-            .some((value) => isString(value) && value.includes(searchValue))
+            .some((value) => isString(value) && value.includes(searchValue)),
         )
       : items;
   }, [items, searchValue]);

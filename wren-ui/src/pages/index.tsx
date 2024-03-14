@@ -1,7 +1,7 @@
-import { GetServerSideProps } from "next";
+import { GetServerSideProps } from 'next';
 
 export function Index() {
-  return <></>
+  return <></>;
 }
 
 export default Index;
@@ -11,6 +11,6 @@ export const getServerSideProps: GetServerSideProps = async () => {
     redirect: {
       destination: '/setup/connection',
       permanent: true,
-    }
-  }
-}
+    },
+  };
+};

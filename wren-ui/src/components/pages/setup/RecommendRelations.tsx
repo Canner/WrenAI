@@ -5,10 +5,7 @@ import ModelRelationSelectionTable, {
   RelationsDataType,
 } from '@/components/table/ModelRelationSelectionTable';
 import { SelectedRecommendRelations } from '@/components/pages/setup/DefineRelations';
-import {
-  makeIterable,
-  IterableComponent,
-} from '@/utils/iteration';
+import { makeIterable, IterableComponent } from '@/utils/iteration';
 import { getJoinTypeText } from '@/utils/data';
 
 const { Title, Text } = Typography;

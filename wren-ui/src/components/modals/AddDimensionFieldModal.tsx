@@ -51,7 +51,7 @@ export default function AddDimensionFieldModal(props: Props) {
       ? modelFields[modelFields.length - 1]
       : null;
     return [COLUMN_TYPE.DATE, COLUMN_TYPE.TIMESTAMP].includes(
-      selectedField?.type as COLUMN_TYPE
+      selectedField?.type as COLUMN_TYPE,
     );
   }, [modelFields]);
 
@@ -110,7 +110,7 @@ export default function AddDimensionFieldModal(props: Props) {
           rules={[
             {
               validator: modelFieldSelectorValidator(
-                ERROR_TEXTS.ADD_DIMENSION_FIELD.MODEL_FIELD
+                ERROR_TEXTS.ADD_DIMENSION_FIELD.MODEL_FIELD,
               ),
             },
           ]}

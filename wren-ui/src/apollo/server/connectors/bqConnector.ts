@@ -76,7 +76,7 @@ export class BQConnector
           } else {
             resolve(rows);
           }
-        }
+        },
       );
     });
 
@@ -109,7 +109,7 @@ export class BQConnector
           } else {
             resolve(rows);
           }
-        }
+        },
       );
     });
     return constraints as BQConstraintResponse[];

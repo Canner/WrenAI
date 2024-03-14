@@ -1,8 +1,4 @@
-import {
-  MetricData,
-  ModelData,
-  ViewData,
-} from '@/utils/data';
+import { MetricData, ModelData, ViewData } from '@/utils/data';
 import { LightningIcon } from '@/utils/icons';
 import { Tooltip } from 'antd';
 import { NodeProps } from 'reactflow';
@@ -19,8 +15,10 @@ export const StyledNode = styled.div`
   width: 200px;
   border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0px 3px 6px -4px rgba(0, 0, 0, 0.12),
-    0px 6px 16px rgba(0, 0, 0, 0.08), 0px 9px 28px 8px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0px 3px 6px -4px rgba(0, 0, 0, 0.12),
+    0px 6px 16px rgba(0, 0, 0, 0.08),
+    0px 9px 28px 8px rgba(0, 0, 0, 0.05);
   cursor: pointer;
 
   &:before {

@@ -10,7 +10,7 @@ const NODE_TYPE_CAPTION = {
 const convertColumns = (
   columnsArray: any,
   previousSqlName: string,
-  previousLayerName = ''
+  previousLayerName = '',
 ) =>
   (columnsArray || []).flatMap((column) => {
     const title = column.name;
@@ -32,7 +32,7 @@ const convertColumns = (
       const childrenColumn = convertColumns(
         nestedColumnsArray,
         previousSqlName,
-        columnSqlQueryKey
+        columnSqlQueryKey,
       );
       return [columnInfo, ...childrenColumn];
     }
@@ -41,7 +41,7 @@ const convertColumns = (
   });
 
 export const convertToAutoCompleteSourceWordInfo = (
-  adaptedData: AdaptedData
+  adaptedData: AdaptedData,
 ): SQLEditorAutoCompleteSourceWordInfo[] =>
   Object.keys(adaptedData).reduce((allWorkdInfo, key) => {
     if (!['metrics', 'models'].includes(key)) return allWorkdInfo;

@@ -5,11 +5,7 @@ import { ItemType } from 'antd/lib/menu/hooks/useItems';
 import SearchOutlined from '@ant-design/icons/SearchOutlined';
 import { ModalAction } from '@/hooks/useModalAction';
 import { compact } from 'lodash';
-import {
-  MetricIcon,
-  ModelIcon,
-  ViewIcon,
-} from '@/utils/icons';
+import { MetricIcon, ModelIcon, ViewIcon } from '@/utils/icons';
 import { NODE_TYPE } from '@/utils/enum';
 import { makeMetadataBaseTable } from '@/components/table/MetadataBaseTable';
 import FieldTable from '@/components/table/FieldTable';
@@ -228,7 +224,7 @@ export default function SelectDataToExploreModal(props: Props) {
         setSelectedItem(views.find((view) => view.id === id));
       }
     },
-    [models, metrics, views]
+    [models, metrics, views],
   );
 
   const reset = () => {
@@ -266,7 +262,7 @@ export default function SelectDataToExploreModal(props: Props) {
         </div>
       );
     },
-    [searchValue]
+    [searchValue],
   );
 
   const menu = useMemo(() => {

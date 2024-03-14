@@ -44,7 +44,7 @@ describe('Encryptor', () => {
       Buffer.concat([
         Buffer.from('ciphered'),
         Buffer.from('finalCiphered'),
-      ]).toString('base64')
+      ]).toString('base64'),
     ); // contain ciphered data
     expect(crypto.createCipheriv).toHaveBeenCalled();
   });

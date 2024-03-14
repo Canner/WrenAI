@@ -27,6 +27,6 @@ export const highlightNodes = (nodeIds: string[], highlight: string[]) => {
     nodes.map((node: any) =>
       nodeIds.includes(node.id)
         ? { ...node, data: { ...node.data, highlight } }
-        : { ...node, data: { ...node.data, highlight: [] } }
+        : { ...node, data: { ...node.data, highlight: [] } },
     );
 };

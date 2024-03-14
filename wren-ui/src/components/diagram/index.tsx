@@ -53,7 +53,7 @@ interface Props {
 
 const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
   props: Props,
-  ref
+  ref,
 ) {
   const { data, onMoreClick, onNodeClick } = props;
   const [forceRender, setForceRender] = useState(false);
@@ -85,11 +85,11 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
           [
             trimId(edge.sourceHandle as string),
             trimId(edge.targetHandle as string),
-          ]
-        )
+          ],
+        ),
       );
     },
-    []
+    [],
   );
 
   const onEdgeMouseLeave = useCallback(
@@ -97,7 +97,7 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
       setEdges(highlightEdges([], false));
       setNodes(highlightNodes([], []));
     },
-    []
+    [],
   );
 
   const onRestore = async () => {

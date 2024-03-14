@@ -13,10 +13,7 @@ import ViewDrawer from '@/components/pages/modeling/ViewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { useManifestQuery } from '@/apollo/client/graphql/manifest.generated';
 
-const Diagram = dynamic(
-  () => import('@/components/diagram'),
-  { ssr: false }
-);
+const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
 const ForwardDiagram = forwardRef(function ForwardDiagram(props: any, ref) {
   return <Diagram {...props} forwardRef={ref} />;

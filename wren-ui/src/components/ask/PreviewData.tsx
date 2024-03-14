@@ -1402,7 +1402,7 @@ export default function PreviewData(_props: { sql: string }) {
 
   const columns = useMemo(
     () => getPreviewColumns(previewData.columns),
-    [previewData]
+    [previewData],
   );
 
   return <PreviewDataContent columns={columns} data={previewData.data} />;

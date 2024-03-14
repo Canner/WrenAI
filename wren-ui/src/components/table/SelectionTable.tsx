@@ -62,8 +62,8 @@ type Props<T> = TableProps<T> & {
   extra?: (
     onCollapseOpen: (
       event: React.MouseEvent<HTMLElement, MouseEvent>,
-      collapseKey: string
-    ) => void
+      collapseKey: string,
+    ) => void,
   ) => React.ReactNode;
   onChange?: (value: any | null) => void;
   rowKey: (record: T) => string;
@@ -73,7 +73,7 @@ type Props<T> = TableProps<T> & {
 
 function SelectionTable<T extends Record<string, any>>(
   props: Props<T>,
-  ref: React.Ref<HTMLDivElement>
+  ref: React.Ref<HTMLDivElement>,
 ) {
   const {
     columns,
@@ -149,7 +149,7 @@ function useCollapseState(tableTitleName: string) {
 
   const onCollapseOpen = (
     event: React.MouseEvent<HTMLElement, MouseEvent>,
-    collapseKey: string
+    collapseKey: string,
   ) => {
     // Make sure the panel is open
     onChangeCollapsePanelState([collapseKey]);

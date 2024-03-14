@@ -76,14 +76,14 @@ export default function Exploration(props: Props) {
                 // TODO: Call API to rename the exploration result title
                 console.log(
                   'Call API to rename the exploration result title:',
-                  newExplorationName
+                  newExplorationName,
                 );
               }}
               onDelete={onDeleteExploration}
             />
           ),
         };
-      })
+      }),
     );
   }, [data]);
 

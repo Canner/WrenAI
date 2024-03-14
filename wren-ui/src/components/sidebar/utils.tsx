@@ -1,13 +1,7 @@
 import { DataNode } from 'antd/lib/tree';
 import { getColumnTypeIcon } from '@/utils/columnType';
-import {
-  PrimaryKeyIcon,
-  RelationshipIcon,
-} from '@/utils/icons';
-import {
-  MetricColumnData,
-  ModelColumnData,
-} from '@/utils/data';
+import { PrimaryKeyIcon, RelationshipIcon } from '@/utils/icons';
+import { MetricColumnData, ModelColumnData } from '@/utils/data';
 import { assign, isEmpty, snakeCase } from 'lodash';
 import GroupTreeTitle, { IconsType } from './modeling/GroupTreeTitle';
 import { getJoinTypeText } from '@/utils/data';
@@ -56,7 +50,7 @@ const getChildrenSubtitle = (nodeKey: string, title: string) => [
 export const getColumnNode = (
   nodeKey: string,
   columns: ModelColumnData[] | MetricColumnData[],
-  title?: string
+  title?: string,
 ): TreeNode[] => {
   if (columns.length === 0) return [];
 

@@ -6,7 +6,7 @@ import { SelectedSourceTables } from '@/components/pages/setup/CreateModels';
 export default function useSetupModels() {
   const [stepKey, setStepKey] = useState(SETUP.SELECT_MODELS);
   const [selectedModels, setSelectedModels] = useState<any | undefined>(
-    undefined
+    undefined,
   );
 
   const router = useRouter();

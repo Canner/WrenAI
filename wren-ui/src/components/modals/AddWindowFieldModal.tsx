@@ -57,7 +57,7 @@ export default function AddWindowFieldModal(props: Props) {
       return (
         !!option.options ||
         [COLUMN_TYPE.DATE, COLUMN_TYPE.TIMESTAMP].includes(
-          option.value?.type as COLUMN_TYPE
+          option.value?.type as COLUMN_TYPE,
         )
       );
     });
@@ -113,7 +113,7 @@ export default function AddWindowFieldModal(props: Props) {
           rules={[
             {
               validator: modelFieldSelectorValidator(
-                ERROR_TEXTS.ADD_DIMENSION_FIELD.MODEL_FIELD
+                ERROR_TEXTS.ADD_DIMENSION_FIELD.MODEL_FIELD,
               ),
             },
           ]}
