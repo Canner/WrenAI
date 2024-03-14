@@ -8,18 +8,6 @@ interface ModelField {
   field: string;
 }
 
-export interface SourceTableColumn {
-  name: string;
-  type: string;
-}
-
-export interface SourceTable {
-  id: string;
-  sqlName: string;
-  displayName: string;
-  columns: SourceTableColumn[];
-}
-
 export interface RelationsDataType {
   name: string;
   fromField: ModelField;
@@ -30,8 +18,8 @@ export interface RelationsDataType {
 }
 
 interface Props {
-  columns: ColumnsType<RelationsDataType> | ColumnsType<SourceTableColumn>;
-  dataSource: RelationsDataType[] | SourceTableColumn[];
+  columns: ColumnsType<RelationsDataType>;
+  dataSource: RelationsDataType[];
   enableRowSelection?: boolean;
   extra?: (
     onCollapseOpen: (
@@ -41,7 +29,7 @@ interface Props {
   ) => React.ReactNode;
   onChange?: (value: any | null) => void;
   tableTitle: string;
-  rowKey: (record: RelationsDataType | SourceTableColumn) => string;
+  rowKey: (record: RelationsDataType) => string;
 }
 
 export default function ModelRelationSelectionTable(props: Props) {

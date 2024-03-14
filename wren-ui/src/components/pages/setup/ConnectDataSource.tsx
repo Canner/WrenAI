@@ -43,18 +43,18 @@ export default function ConnectDataSource(props: Props) {
         Connect the data source
       </Typography.Title>
       <Typography.Text>
-        We only support BigQuery for now. You can vote for your warehouse in our{' '}
+        Vote for your preferred data source to be our next option on our{' '}
         <Link
-          href="https://github.com/Canner/vulcan-sql/issues"
+          href="https://github.com/Canner/WrenAI/issues"
           target="_blank"
           rel="noopener noreferrer"
         >
-          GitHub issues
+          GitHub
         </Link>
-        !
+        .
       </Typography.Text>
 
-      <StyledForm form={form} layout="vertical" className="p-6 mt-6">
+      <StyledForm form={form} layout="vertical" className="p-6 my-6">
         <Row align="middle" className="mb-6">
           <Col span={12}>
             <DataSource className="d-inline-block px-4 py-2 bg-gray-2 gray-8">
@@ -69,7 +69,8 @@ export default function ConnectDataSource(props: Props) {
             </DataSource>
           </Col>
           <Col className="text-right" span={12}>
-            Learn {current.label} <Link href={current.guide}>setup guide</Link>.
+            Learn more information in {current.label}{' '}
+            <Link href={current.guide}>setup guide</Link>.
           </Col>
         </Row>
         <current.component />
@@ -77,12 +78,17 @@ export default function ConnectDataSource(props: Props) {
 
       <Row gutter={16} className="pt-6">
         <Col span={12}>
-          <Button onClick={onBack} size="large" block>
+          <Button onClick={onBack} size="large" className="adm-onboarding-btn">
             Back
           </Button>
         </Col>
         <Col className="text-right" span={12}>
-          <Button type="primary" size="large" block onClick={submit}>
+          <Button
+            type="primary"
+            size="large"
+            onClick={submit}
+            className="adm-onboarding-btn"
+          >
             Next
           </Button>
         </Col>

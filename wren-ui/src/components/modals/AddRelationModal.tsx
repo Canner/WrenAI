@@ -5,12 +5,12 @@ import { ModalAction } from '@/hooks/useModalAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
 import { JOIN_TYPE } from '@/utils/enum';
-import { RelationData, getJoinTypeText } from '@/utils/data';
+import { getJoinTypeText } from '@/utils/data';
 import useCombineFieldOptions from '@/hooks/useCombineFieldOptions';
 import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
 
 export type RelationFieldValue = { [key: string]: any } & Pick<
-  RelationData,
+  RelationsDataType,
   'name' | 'joinType' | 'fromField' | 'toField' | 'properties'
 >;
 

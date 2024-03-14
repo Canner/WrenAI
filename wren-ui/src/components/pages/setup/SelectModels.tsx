@@ -3,20 +3,23 @@ import { Button, Col, Form, Row, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ERROR_TEXTS } from '@/utils/error';
 import MultiSelectBox from '@/components/table/MultiSelectBox';
-import { SourceTable } from '@/components/table/ModelRelationSelectionTable';
 
 const { Title, Text } = Typography;
 
+export interface SourceTable {
+  name: string;
+}
+
 interface Props {
   tables: SourceTable[];
-  onNext: (data: { selectedModels: string[] }) => void;
+  onNext: (data: { selectedTables: string[] }) => void;
   onBack: () => void;
 }
 
 const columns: ColumnsType<SourceTable> = [
   {
     title: 'Table name',
-    dataIndex: 'displayName',
+    dataIndex: 'name',
   },
 ];
 
@@ -26,14 +29,14 @@ export default function SelectModels(props: Props) {
 
   const items = tables.map((item) => ({
     ...item,
-    value: item.displayName,
+    value: item.name,
   }));
 
   const submit = () => {
     form
       .validateFields()
       .then((values) => {
-        onNext && onNext({ selectedModels: values.models });
+        onNext && onNext({ selectedTables: values.tables });
       })
       .catch((error) => {
         console.error(error);
@@ -43,20 +46,21 @@ export default function SelectModels(props: Props) {
   return (
     <div>
       <Title level={1} className="mb-3">
-        Create data model from tables
+        Select tables to create data models
       </Title>
       <Text>
-        Data models are created directly from your data source tables. It act as
-        a “view” of your underlying table to transform and extend on the
-        original data.{` `}
+        We will create data models from selected tables. It will help AI to
+        better know your data.
+        <br />
         <Link href="" target="_blank" rel="noopener noreferrer">
           Learn more
-        </Link>
+        </Link>{' '}
+        about data models.
       </Text>
       <div className="my-6">
         <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
           <Form.Item
-            name="models"
+            name="tables"
             rules={[
               {
                 required: true,
@@ -70,12 +74,17 @@ export default function SelectModels(props: Props) {
       </div>
       <Row gutter={16} className="pt-6">
         <Col span={12}>
-          <Button onClick={onBack} size="large" block>
+          <Button onClick={onBack} size="large" className="adm-onboarding-btn">
             Back
           </Button>
         </Col>
         <Col className="text-right" span={12}>
-          <Button type="primary" size="large" block onClick={submit}>
+          <Button
+            type="primary"
+            size="large"
+            onClick={submit}
+            className="adm-onboarding-btn"
+          >
             Next
           </Button>
         </Col>

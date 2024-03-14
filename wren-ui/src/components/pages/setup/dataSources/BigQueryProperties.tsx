@@ -59,7 +59,6 @@ export default function BigQueryProperties() {
         label="Display name"
         required
         name="displayName"
-        extra="The name will be called in VulcanSQL."
         rules={[
           {
             required: true,
@@ -83,30 +82,17 @@ export default function BigQueryProperties() {
         <Input placeholder="The GCP project ID" />
       </Form.Item>
       <Form.Item
-        label="Dataset name"
+        label="Dataset ID"
         required
-        name="dataset"
+        name="datasetId"
         rules={[
           {
             required: true,
-            message: ERROR_TEXTS.CONNECTION.DATASET.REQUIRED,
+            message: ERROR_TEXTS.CONNECTION.DATASET_ID.REQUIRED,
           },
         ]}
       >
-        <Input placeholder="The dataset name" />
-      </Form.Item>
-      <Form.Item
-        label="Data Location"
-        required
-        name="location"
-        rules={[
-          {
-            required: true,
-            message: ERROR_TEXTS.CONNECTION.LOCATION.REQUIRED,
-          },
-        ]}
-      >
-        <Input placeholder="The location of the dataset. e.g. US." />
+        <Input />
       </Form.Item>
       <Form.Item
         label="Credentials"
