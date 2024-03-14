@@ -30,7 +30,7 @@ GENERATION_KWARGS = {
 @component
 class CustomOpenAIGenerator(OpenAIGenerator):
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60)
+    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
     def run(self, prompt: str, generation_kwargs: Optional[Dict[str, Any]] = None):
         return super(CustomOpenAIGenerator, self).run(
             prompt=prompt, generation_kwargs=generation_kwargs
@@ -65,7 +65,9 @@ class AnthropicGenerator:
         )
 
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(backoff.expo, anthropic.RateLimitError, max_time=60)
+    @backoff.on_exception(
+        backoff.expo, anthropic.RateLimitError, max_time=60, max_tries=3
+    )
     def run(self, prompt: str):
         message = self._client.messages.create(
             model=self._model,
@@ -83,11 +85,9 @@ class AnthropicGenerator:
             ],
             "meta": [
                 {
-                    "generation": {
-                        "model": message.model,
-                        "index": message.id,
-                        "finish_reason": message.stop_reason,
-                    },
+                    "model": message.model,
+                    "index": message.id,
+                    "finish_reason": message.stop_reason,
                     "usage": {
                         "completion_tokens": message.usage.output_tokens,
                         "prompt_tokens": message.usage.input_tokens,

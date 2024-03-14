@@ -85,9 +85,18 @@ class Generation(BasicPipeline):
             )
 
             # add the missing "{" to the replies to construct a valid json object
-            for i, reply in enumerate(result["generator"]["replies"]):
-                if not reply.startswith("{"):
-                    result["generator"]["replies"][i] = "{" + reply
+            for i, _ in enumerate(result["generator"]["replies"]):
+                if not result["generator"]["replies"][i].startswith("{"):
+                    result["generator"]["replies"][i] = (
+                        "{" + result["generator"]["replies"][i]
+                    )
+                if (
+                    not result["generator"]["replies"][i].endswith("}")
+                    and "}" in result["generator"]["replies"][i]
+                ):
+                    result["generator"]["replies"][i] = (
+                        result["generator"]["replies"][i].split("}")[0] + "}"
+                    )
 
             trace.update(input=query, output=result["generator"])
         else:
@@ -102,9 +111,18 @@ class Generation(BasicPipeline):
             )
 
             # add the missing "{" to the replies to construct a valid json object
-            for i, reply in enumerate(result["generator"]["replies"]):
-                if not reply.startswith("{"):
-                    result["generator"]["replies"][i] = "{" + reply
+            for i, _ in enumerate(result["generator"]["replies"]):
+                if not result["generator"]["replies"][i].startswith("{"):
+                    result["generator"]["replies"][i] = (
+                        "{" + result["generator"]["replies"][i]
+                    )
+                if (
+                    not result["generator"]["replies"][i].endswith("}")
+                    and "}" in result["generator"]["replies"][i]
+                ):
+                    result["generator"]["replies"][i] = (
+                        result["generator"]["replies"][i].split("}")[0] + "}"
+                    )
 
         return result
 

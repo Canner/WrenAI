@@ -3,7 +3,6 @@ import json
 import os
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -60,28 +59,20 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         },
     }
 
-    print(f'generation_result: {generation_result["generator"]["replies"][0]}')
-    print(
-        f'cleaned_generation_result: {clean_generation_result(generation_result["generator"]["replies"][0])}'
-    )
+    sql = ""
     try:
-        print(
-            json.loads(
-                clean_generation_result(generation_result["generator"]["replies"][0])
-            )["sql"]
-        )
+        sql = json.loads(
+            clean_generation_result(generation_result["generator"]["replies"][0])
+        )["sql"]
     except Exception as e:
         print(e)
         print(
-            f'error: {clean_generation_result(generation_result["generator"]["replies"][0])}'
+            f'cleaned_generation_result: {clean_generation_result(generation_result["generator"]["replies"][0])}'
         )
-    time.sleep(60)
 
     return {
         "contexts": retrieval_result["retriever"]["documents"],
-        "prediction": json.loads(
-            clean_generation_result(generation_result["generator"]["replies"][0])
-        )["sql"],
+        "prediction": sql,
         "metadata": metadata,
     }
 
@@ -196,18 +187,22 @@ if __name__ == "__main__":
 
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
-        max_workers = os.cpu_count() // 2 if with_trace else None
-        user_id = str(uuid.uuid4()) if with_trace else None
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            args_list = [
-                (ground_truth["question"], user_id) for ground_truth in ground_truths
-            ]
-            outputs = list(
-                tqdm(
-                    executor.map(lambda p: process_item(*p), args_list),
-                    total=len(args_list),
-                )
-            )
+        # max_workers = os.cpu_count() // 2 if with_trace else None
+        # user_id = str(uuid.uuid4()) if with_trace else None
+        # with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        #     args_list = [
+        #         (ground_truth["question"], user_id) for ground_truth in ground_truths
+        #     ]
+        #     outputs = list(
+        #         tqdm(
+        #             executor.map(lambda p: process_item(*p), args_list),
+        #             total=len(args_list),
+        #         )
+        #     )
+        user_id = str(uuid.uuid4())
+        outputs = []
+        for ground_truth in tqdm(ground_truths):
+            outputs.append(process_item(ground_truth["question"], user_id))
         end = time.time()
         print(f"Time taken: {end - start:.2f}s")
 
