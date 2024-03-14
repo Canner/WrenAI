@@ -11,7 +11,7 @@ wren-ai-service/qdrant_storage/
 src/eval/vulcansql-core-server/config.properties
 outputs/
 spider/
-data/
+wren-ai-service/**/data/
 !wren-ai-service/tests/data
 !src/eval/data
 poetry.lock
