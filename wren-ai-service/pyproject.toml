@@ -30,6 +30,7 @@ sqlglot = "^22.1.0"
 httpx = "^0.27.0"
 streamlit = "^1.32.1"
 watchdog = "^4.0.0"
+sqlparse = "^0.4.4"
 
 [build-system]
 requires = ["poetry-core"]
