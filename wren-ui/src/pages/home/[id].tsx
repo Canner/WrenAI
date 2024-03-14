@@ -5,7 +5,7 @@ import { Divider } from 'antd';
 import { Path } from '@/utils/enum';
 import useModalAction from '@/hooks/useModalAction';
 import SiderLayout from '@/components/layouts/SiderLayout';
-import AnswerResult from '@/components/ask/AnswerResult';
+import AnswerResult from '@/components/pages/home/AnswerResult';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 
 const AnswerResultsBlock = styled.div`
@@ -58,7 +58,7 @@ export default function AnswerBlock() {
   const data = [];
 
   const onSelect = (selectKeys: string[]) => {
-    router.push(`${Path.ASK}/${selectKeys[0]}`);
+    router.push(`${Path.Home}/${selectKeys[0]}`);
   };
 
   // TODO: call API to get real answer results

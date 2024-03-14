@@ -2,13 +2,13 @@ import { Button, Skeleton, Typography } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
-import StepContent from '@/components/ask/StepContent';
+import StepContent from '@/components/pages/home/StepContent';
 
 const { Title } = Typography;
 
 interface Props {
   loading: boolean;
-  onOpenSaveAsViewModal: ({ sql: string }) => void;
+  onOpenSaveAsViewModal: (data: { sql: string }) => void;
   question: string;
   description: string;
   answerResultSteps: Array<{
