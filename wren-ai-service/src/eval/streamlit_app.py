@@ -75,18 +75,18 @@ def show_single_prediction_result(
         )
         if not question_right_or_wrong_mapping[prediction["question"]]["correct"]:
             st.markdown("Ground truth query results")
-            st.json(
+            st.markdown(
                 question_right_or_wrong_mapping[prediction["question"]][
                     "ground_truth_query_results"
-                ],
-                expanded=False,
+                ]
+                or "None"
             )
             st.markdown("Prediction query results")
-            st.json(
+            st.markdown(
                 question_right_or_wrong_mapping[prediction["question"]][
                     "prediction_query_results"
-                ],
-                expanded=False,
+                ]
+                or "None"
             )
             st.markdown("Prediction error details")
             st.markdown(
