@@ -60,6 +60,23 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         },
     }
 
+    print(f'generation_result: {generation_result["generator"]["replies"][0]}')
+    print(
+        f'cleaned_generation_result: {clean_generation_result(generation_result["generator"]["replies"][0])}'
+    )
+    try:
+        print(
+            json.loads(
+                clean_generation_result(generation_result["generator"]["replies"][0])
+            )["sql"]
+        )
+    except Exception as e:
+        print(e)
+        print(
+            f'error: {clean_generation_result(generation_result["generator"]["replies"][0])}'
+        )
+    time.sleep(60)
+
     return {
         "contexts": retrieval_result["retriever"]["documents"],
         "prediction": json.loads(
@@ -181,7 +198,7 @@ if __name__ == "__main__":
         start = time.time()
         max_workers = os.cpu_count() // 2 if with_trace else None
         user_id = str(uuid.uuid4()) if with_trace else None
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             args_list = [
                 (ground_truth["question"], user_id) for ground_truth in ground_truths
             ]

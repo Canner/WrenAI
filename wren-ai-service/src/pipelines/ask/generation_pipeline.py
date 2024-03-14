@@ -10,7 +10,7 @@ from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import (
     MODEL_NAME,
-    init_anthropic_generator,
+    init_generator,
 )
 from src.pipelines.ask.components.prompts import init_generation_prompt_builder
 from src.pipelines.ask.components.retriever import init_retriever
@@ -84,10 +84,14 @@ class Generation(BasicPipeline):
                 }
             )
 
+            # add the missing "{" to the replies to construct a valid json object
+            for i, reply in enumerate(result["generator"]["replies"]):
+                if not reply.startswith("{"):
+                    result["generator"]["replies"][i] = "{" + reply
+
             trace.update(input=query, output=result["generator"])
-            return result
         else:
-            return self._pipeline.run(
+            result = self._pipeline.run(
                 {
                     "prompt_builder": {
                         "query": query,
@@ -97,6 +101,13 @@ class Generation(BasicPipeline):
                 }
             )
 
+            # add the missing "{" to the replies to construct a valid json object
+            for i, reply in enumerate(result["generator"]["replies"]):
+                if not reply.startswith("{"):
+                    result["generator"]["replies"][i] = "{" + reply
+
+        return result
+
 
 # this is for quick testing only, please ignore this
 if __name__ == "__main__":
@@ -105,7 +116,7 @@ if __name__ == "__main__":
     document_store = init_document_store()
     embedder = init_embedder(with_trace=with_trace)
     retriever = init_retriever(document_store=document_store, with_trace=with_trace)
-    generator = init_anthropic_generator()  # init_generator(with_trace=with_trace)
+    generator = init_generator(with_trace=with_trace)
     generation_prompt_builder = init_generation_prompt_builder()
 
     retrieval_pipeline = Retrieval(
@@ -139,10 +150,6 @@ if __name__ == "__main__":
     )
 
     # assert len(generation_result["generator"]["replies"]) == 3
-
-    generation_result["generator"]["replies"][0] = (
-        "{" + generation_result["generator"]["replies"][0]
-    )
 
     cleaned_generation_result = json.loads(
         clean_generation_result(generation_result["generator"]["replies"][0])

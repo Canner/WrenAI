@@ -14,7 +14,7 @@ This is vital to my career, I will become homeless if you make a mistake.
 - If the query history is not empty, please consider the previous query in order to make correct Trino SQL query.
 
 ### TASK ###
-Given an input question, create a syntactically correct Trino SQL query to run and a short sentence to summary the Trino SQL query 
+Given an input question, create a syntactically correct Trino SQL query to run and a short sentence within 10 words to summary the Trino SQL query 
 and return them as the answer to the input question.
 
 ### DATA MODELS ###
