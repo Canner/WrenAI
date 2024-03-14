@@ -4,6 +4,8 @@
 name: AI Service CI
 
 on:
+  push:
+    branches: [ main ]
   pull_request:
     types: [ labeled ]
 
@@ -22,7 +24,7 @@ defaults:
 
 jobs:
   ci:
-    if: ${{ github.event.label.name == 'ci/ai-service' }}
+    if: ${{ github.event.label.name == 'ci/ai-service' || github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     strategy:
       fail-fast: false
       matrix:
