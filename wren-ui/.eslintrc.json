@@ -1,8 +1,8 @@
 {
   "root": true,
   "parser": "@typescript-eslint/parser",
-  "extends": ["next/core-web-vitals", "plugin:@typescript-eslint/recommended"],
-  "plugins": ["@typescript-eslint"],
+  "extends": ["next/core-web-vitals", "plugin:@typescript-eslint/recommended", "prettier"],
+  "plugins": ["@typescript-eslint", "eslint-plugin-prettier"],
   "ignorePatterns": [
     "!**/*",
     ".next/**/*",
@@ -31,6 +31,7 @@
     }
   ],
   "rules": {
+    "prettier/prettier": "error",
     "@next/next/no-html-link-for-pages": "off",
     "react/display-name": 0,
     "react/no-unescaped-entities": 0,
