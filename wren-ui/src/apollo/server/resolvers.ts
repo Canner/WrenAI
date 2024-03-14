@@ -118,7 +118,7 @@ const mockResolvers = {
     },
     saveTables: (
       _,
-      args: {
+      _args: {
         data: [tables: { name: string; columns: string[] }];
       }
     ) => {
@@ -192,7 +192,7 @@ const mockResolvers = {
         },
       };
     },
-    deleteModel: (_, args: { where: DeleteModelWhere }) => {
+    deleteModel: (_, _args: { where: DeleteModelWhere }) => {
       return true;
     },
   },

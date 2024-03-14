@@ -23,8 +23,8 @@ export default function ExplorationTitleInput(props: {
       onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
         onSetTitle(e.target.value)
       }
-      onPressEnter={(e) => onRename(title)}
-      onBlur={(e) => onRename(title)}
+      onPressEnter={(_e) => onRename(title)}
+      onBlur={(_e) => onRename(title)}
     />
   );
 }

@@ -100,7 +100,7 @@ export default function Exploration(props: Props) {
     message.success('Copied link to clipboard.');
   };
 
-  const onTreeSelect = (selectedKeys: React.Key[], info: any) => {
+  const onTreeSelect = (selectedKeys: React.Key[], _info: any) => {
     // prevent deselected
     if (selectedKeys.length === 0) return;
 

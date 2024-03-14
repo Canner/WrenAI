@@ -52,7 +52,7 @@ export class BQConnector
     try {
       await this.bq.query('SELECT 1;');
       return true;
-    } catch (err) {
+    } catch (_err) {
       return false;
     }
   }

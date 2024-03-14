@@ -29,7 +29,7 @@ export default function MetricTree(props) {
 
   // initial workspace
   useEffect(() => {
-    setTree((tree) =>
+    setTree((_tree) =>
       getMetricGroupNode({
         quotaUsage: metrics.length,
         children: metrics.map((metric) => {

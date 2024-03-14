@@ -15,7 +15,7 @@ export const compactObject = <T>(obj: T) => {
 export const parseJson = (data) => {
   try {
     return JSON.parse(data);
-  } catch (e) {
+  } catch (_e) {
     return data;
   }
 };

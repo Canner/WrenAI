@@ -46,7 +46,7 @@ export class ProjectResolver {
     }
   }
 
-  public async listDataSourceTables(_root: any, arg, ctx: IContext) {
+  public async listDataSourceTables(_root: any, _arg, ctx: IContext) {
     const project = await this.getCurrentProject(ctx);
     const filePath = await this.getCredentialFilePath(project, ctx.config);
     const connector = await this.getBQConnector(project, filePath);
@@ -93,7 +93,7 @@ export class ProjectResolver {
     return { models, columns };
   }
 
-  public async autoGenerateRelation(_root: any, arg: any, ctx: IContext) {
+  public async autoGenerateRelation(_root: any, _arg: any, ctx: IContext) {
     const project = await this.getCurrentProject(ctx);
     const filePath = await this.getCredentialFilePath(project, ctx.config);
     const models = await ctx.modelRepository.findAllBy({
@@ -335,7 +335,7 @@ export class ProjectResolver {
     // check can list dataset table
     try {
       await connector.listTables({ dataset });
-    } catch (e) {
+    } catch (_e) {
       throw new Error('Cannot list tables in dataset');
     }
     // save DataSource to database

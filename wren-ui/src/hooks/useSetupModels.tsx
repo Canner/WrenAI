@@ -11,7 +11,7 @@ export default function useSetupModels() {
 
   const router = useRouter();
 
-  const submitModels = async (models: SelectedSourceTables) => {
+  const submitModels = async (_models: SelectedSourceTables) => {
     // TODO: implement submitModels API
     router.push('/setup/relations');
   };

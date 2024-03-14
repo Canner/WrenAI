@@ -9,7 +9,7 @@ export class ModelResolver {
     this.listModels = this.listModels.bind(this);
   }
 
-  public async listModels(_root: any, args: any, ctx: IContext) {
+  public async listModels(_root: any, _args: any, ctx: IContext) {
     const project = await this.getCurrentProject(ctx);
     const projectId = project.id;
     const models = await ctx.modelRepository.findAllBy({ projectId });

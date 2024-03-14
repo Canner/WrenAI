@@ -7,7 +7,7 @@ export default function useSetupConnection() {
   const [dataSource, setDataSource] = useState(DATA_SOURCES.BIG_QUERY);
   const router = useRouter();
 
-  const submitDataSource = async (data: any) => {
+  const submitDataSource = async (_data: any) => {
     // TODO: implement submitDataSource API
     router.push('/setup/models');
   };

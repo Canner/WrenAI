@@ -27,7 +27,7 @@ export default function ViewTree(props) {
 
   // initial workspace
   useEffect(() => {
-    setTree((tree) =>
+    setTree((_tree) =>
       getViewGroupNode({
         quotaUsage: views.length,
         children: views.map((view) => {

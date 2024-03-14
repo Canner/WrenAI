@@ -29,7 +29,7 @@ export default function ModelTree(props) {
 
   // initial workspace
   useEffect(() => {
-    setTree((tree) =>
+    setTree((_tree) =>
       getModelGroupNode({
         quotaUsage: models.length,
         children: models.map((model) => {

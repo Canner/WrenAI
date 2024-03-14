@@ -29,7 +29,7 @@ const getPreviewColumns = (cols) =>
     };
   });
 
-export default function PreviewData(props: { sql: string }) {
+export default function PreviewData(_props: { sql: string }) {
   // TODO: call API to get real preview data
   const previewData = {
     id: '20240306_025536_00000_dnben',

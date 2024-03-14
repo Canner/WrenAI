@@ -77,7 +77,7 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
   // const { openInfoModal, closeInfoModal, infoModalProps } = useInfoModal();
 
   const onEdgeMouseEnter = useCallback(
-    (event: React.MouseEvent, edge: Edge) => {
+    (_event: React.MouseEvent, edge: Edge) => {
       setEdges(highlightEdges([edge.id], true));
       setNodes(
         highlightNodes(
@@ -93,7 +93,7 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
   );
 
   const onEdgeMouseLeave = useCallback(
-    (event: React.MouseEvent, edge: Edge) => {
+    (_event: React.MouseEvent, _edge: Edge) => {
       setEdges(highlightEdges([], false));
       setNodes(highlightNodes([], []));
     },
