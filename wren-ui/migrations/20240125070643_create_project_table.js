@@ -8,7 +8,7 @@ exports.up = function (knex) {
     table
       .string('type')
       .comment(
-        'project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc'
+        'project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc',
       );
     table.string('display_name').comment('project display name');
 

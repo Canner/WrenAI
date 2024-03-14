@@ -13,10 +13,26 @@ export interface Project {
   schema: string; // Schema name
 }
 
-export interface IProjectRepository extends IBasicRepository<Project> {}
+export interface IProjectRepository extends IBasicRepository<Project> {
+  getCurrentProject: () => Promise<Project>;
+}
 
-export class ProjectRepository extends BaseRepository<Project> {
+export class ProjectRepository
+  extends BaseRepository<Project>
+  implements IProjectRepository
+{
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'project' });
+  }
+
+  public async getCurrentProject() {
+    const projects = await this.findAll({
+      order: 'id',
+      limit: 1,
+    });
+    if (!projects.length) {
+      throw new Error('No project found');
+    }
+    return projects[0];
   }
 }

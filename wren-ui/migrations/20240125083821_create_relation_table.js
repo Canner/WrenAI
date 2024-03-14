@@ -11,15 +11,11 @@ exports.up = function (knex) {
       .string('join_type')
       .comment('join type, eg:"ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE"');
     table
-      .integer('left_column_id')
-      .comment(
-        'left column id, "{leftSideColumn} {joinType} {rightSideColumn}"'
-      );
+      .integer('from_column_id')
+      .comment('from column id, "{fromColumn} {joinType} {toSideColumn}"');
     table
-      .integer('right_column_id')
-      .comment(
-        'right column id, "{leftSideColumn} {joinType} {rightSideColumn}"'
-      );
+      .integer('to_column_id')
+      .comment('to column id, "{fromColumn} {joinType} {toSideColumn}"');
     table.timestamps(true, true);
   });
 };

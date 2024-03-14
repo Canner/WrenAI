@@ -11,16 +11,34 @@ export interface IBasicRepository<T> {
   transaction: () => Promise<Knex.Transaction>;
   commit: (tx: Knex.Transaction) => Promise<void>;
   rollback: (tx: Knex.Transaction) => Promise<void>;
-  findOneBy: (filter: Partial<T>, queryOptions?: IQueryOptions) => Promise<T>;
+  findOneBy: (
+    filter: Partial<T>,
+    queryOptions?: IQueryOptions,
+  ) => Promise<T | null>;
   findAllBy: (filter: Partial<T>, queryOptions?: IQueryOptions) => Promise<T[]>;
   findAll: (queryOptions?: IQueryOptions) => Promise<T[]>;
   createOne: (data: Partial<T>, queryOptions?: IQueryOptions) => Promise<T>;
+  createMany: (
+    data: Partial<T>[],
+    queryOptions?: IQueryOptions,
+  ) => Promise<T[]>;
   updateOne: (
     id: string,
     data: Partial<T>,
     queryOptions?: IQueryOptions,
   ) => Promise<T>;
-  deleteOne: (id: string, queryOptions?: IQueryOptions) => Promise<T>;
+  deleteOne: (
+    id: string | number,
+    queryOptions?: IQueryOptions,
+  ) => Promise<number>;
+  deleteMany: (
+    ids: (string | number)[],
+    queryOptions?: IQueryOptions,
+  ) => Promise<number>;
+  deleteAllBy: (
+    where: Partial<T>,
+    queryOptions?: IQueryOptions,
+  ) => Promise<number>;
 }
 
 export class BaseRepository<T> implements IBasicRepository<T> {
@@ -52,8 +70,10 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     if (queryOptions?.limit) {
       query.limit(queryOptions.limit);
     }
-    const [result] = await query;
-    return this.transformFromDBData(result);
+    const result = await query;
+    return result && result.length > 0
+      ? this.transformFromDBData(result[0])
+      : null;
   }
 
   public async findAllBy(filter: Partial<T>, queryOptions?: IQueryOptions) {
@@ -91,6 +111,14 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return this.transformFromDBData(result);
   }
 
+  public async createMany(data: Partial<T>[], queryOptions?: IQueryOptions) {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const result = await executer(this.tableName)
+      .insert(data.map(this.transformToDBData))
+      .returning('*');
+    return result;
+  }
+
   public async updateOne(
     id: string,
     data: Partial<T>,
@@ -106,12 +134,26 @@ export class BaseRepository<T> implements IBasicRepository<T> {
 
   public async deleteOne(id: string, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [result] = await executer(this.tableName)
-      .where({ id })
-      .del()
-      .returning('*');
-    return this.transformFromDBData(result);
+    const builder = executer.from(this.tableName).where({ id }).delete();
+    return await builder;
   }
+
+  public async deleteMany(ids: string[], queryOptions?: IQueryOptions) {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const builder = executer.from(this.tableName).whereIn('id', ids).delete();
+    return await builder;
+  }
+
+  public deleteAllBy = async (
+    where: Partial<T>,
+    queryOptions?: IQueryOptions,
+  ) => {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const builder = executer(this.tableName)
+      .where(this.transformToDBData(where))
+      .delete();
+    return await builder;
+  };
 
   protected transformToDBData = (data: Partial<T>) => {
     if (!isPlainObject(data)) {
