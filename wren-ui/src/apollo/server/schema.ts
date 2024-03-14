@@ -68,22 +68,12 @@ export const typeDefs = gql`
   }
 
   input SaveTablesInput {
-    tables: [ModelsInput!]!
-  }
-
-  input ModelsInput {
-    name: String!
-    columns: [String!]!
+    tables: [String!]!
   }
 
   type CompactColumn {
     name: String!
     type: String!
-  }
-
-  enum ModelType {
-    TABLE
-    CUSTOM
   }
 
   input CustomFieldInput {
@@ -94,39 +84,40 @@ export const typeDefs = gql`
   input CalculatedFieldInput {
     name: String!
     expression: String!
+    lineage: [Int!]!
+    diagram: JSON
   }
 
   input CreateModelInput {
-    type: ModelType!
-    tableName: String!
     displayName: String!
+    sourceTableName: String!
+    refSql: String
     description: String
     cached: Boolean!
     refreshTime: String
     fields: [String!]!
-    customFields: [CustomFieldInput!]
     calculatedFields: [CalculatedFieldInput!]
   }
 
   input ModelWhereInput {
-    name: String!
+    id: Int!
   }
 
   input UpdateModelInput {
-    type: ModelType!
     displayName: String!
     description: String
     cached: Boolean!
     refreshTime: String
     fields: [String!]!
-    customFields: [CustomFieldInput!]
     calculatedFields: [CalculatedFieldInput!]
   }
 
-  type ColumnInfo {
+  type FieldInfo {
     id: Int!
-    name: String!
-    type: String!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    type: String
     isCalculated: Boolean!
     notNull: Boolean!
     expression: String
@@ -135,32 +126,50 @@ export const typeDefs = gql`
 
   type ModelInfo {
     id: Int!
-    name: String!
+    displayName: String!
+    referenceName: String!
+    sourceTableName: String!
     refSql: String
     primaryKey: String
     cached: Boolean!
     refreshTime: String
     description: String
-    columns: [ColumnInfo]!
+    fields: [FieldInfo]!
+    calculatedFields: [FieldInfo]!
     properties: JSON
   }
 
   type DetailedColumn {
-    name: String!
-    type: String!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    type: String
     isCalculated: Boolean!
     notNull: Boolean!
     properties: JSON!
   }
 
-  type DetailedModel {
+  type DetailedRelation {
+    fromModelId: Int!
+    fromColumnId: Int!
+    toModelId: Int!
+    toColumnId: Int!
+    type: RelationType!
     name: String!
+  }
+
+  type DetailedModel {
+    displayName: String!
+    referenceName: String!
+    sourceTableName: String!
     refSql: String!
     primaryKey: String
     cached: Boolean!
-    refreshTime: String!
+    refreshTime: String
     description: String
-    columns: [DetailedColumn!]!
+    fields: [DetailedColumn]
+    calculatedFields: [DetailedColumn]
+    relations: [DetailedRelation]
     properties: JSON!
   }
 
@@ -193,7 +202,6 @@ export const typeDefs = gql`
     cached: Boolean!
     refreshTime: String
     model: String!
-    modelType: ModelType!
     properties: JSON!
     measure: [SimpleMeasureInput!]!
     dimension: [DimensionInput!]!
@@ -209,7 +217,7 @@ export const typeDefs = gql`
 
     # Modeling Page
     listModels: [ModelInfo!]!
-    getModel(where: ModelWhereInput!): DetailedModel!
+    model(where: ModelWhereInput!): DetailedModel!
   }
 
   type Mutation {

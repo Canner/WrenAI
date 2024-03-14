@@ -86,7 +86,7 @@ const mockResolvers = {
         ]),
       }));
     },
-    getModel: (_, args: { where: GetModelWhere }) => {
+    Model: (_, args: { where: GetModelWhere }) => {
       const { where } = args;
       const { models } = demoManifest;
       const model = models.find((model) => model.name === where.name);
@@ -207,11 +207,15 @@ const resolvers = {
     listDataSourceTables: projectResolver.listDataSourceTables,
     autoGenerateRelation: projectResolver.autoGenerateRelation,
     listModels: modelResolver.listModels,
+    model: modelResolver.getModel,
+    manifest: modelResolver.getManifest,
   },
   Mutation: {
     saveDataSource: projectResolver.saveDataSource,
     saveTables: projectResolver.saveTables,
     saveRelations: projectResolver.saveRelations,
+    createModel: modelResolver.createModel,
+    deleteModel: modelResolver.deleteModel,
   },
 };
 

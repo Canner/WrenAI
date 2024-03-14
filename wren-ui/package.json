@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "knex-migrate": "yarn knex migrate:latest",
+    "migrate": "yarn knex migrate:latest",
     "rollback": "yarn knex migrate:rollback",
     "generate-gql": "yarn graphql-codegen --config codegen.yaml"
   },

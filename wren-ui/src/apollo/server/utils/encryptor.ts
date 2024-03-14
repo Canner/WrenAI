@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import { IConfig } from '../config';
 
 export interface encryptOptions {
   password: string;
@@ -18,9 +17,15 @@ export class Encryptor {
   private ENCRYPTION_ALGORITHM = 'aes-256-cbc';
   private ENCRYPTION_SEPARATOR = ':';
 
-  constructor(config: IConfig) {
-    this.ENCRYPTION_PASSWORD = config.encryptionPassword;
-    this.ENCRYPTION_SALT = config.encryptionSalt;
+  constructor({
+    encryptionPassword,
+    encryptionSalt,
+  }: {
+    encryptionPassword: string;
+    encryptionSalt: string;
+  }) {
+    this.ENCRYPTION_PASSWORD = encryptionPassword;
+    this.ENCRYPTION_SALT = encryptionSalt;
   }
 
   public encrypt(credentials: JSON) {
