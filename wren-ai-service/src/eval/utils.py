@@ -39,7 +39,7 @@ def execute_sql_query(sql_query: str, db_path: str):
 
     try:
         cur.execute(sql_query)
-        # make each row a tuple of strings for easier comparison with the results from Vulcan
+        # make each row a tuple of strings for easier comparison with the results from wren-engine
         # also sort each row to make the order of the columns consistent
         results = tuple(tuple(sorted(map(str, row))) for row in cur.fetchall())
     except Exception:
@@ -51,7 +51,7 @@ def execute_sql_query(sql_query: str, db_path: str):
     return results
 
 
-def execute_sql_query_through_vulcan(sql_query: str):
+def execute_sql_query_through_wren_engine(sql_query: str):
     command = f'psql -d "postgres://localhost:7432/canner-cml?options=--search_path%3Dspider" -c "{sql_query}"'
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
@@ -206,7 +206,7 @@ def generate_eval_report(
         (
             prediction_query_results,
             prediction_error_details,
-        ) = execute_sql_query_through_vulcan(
+        ) = execute_sql_query_through_wren_engine(
             prediction["answer"],
         )
         if len(ground_truth_query_results) == len(prediction_query_results):

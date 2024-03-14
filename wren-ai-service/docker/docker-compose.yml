@@ -1,8 +1,8 @@
 version: '3.8'
 
 services:
-  copilot:
-    image: vulcansql-copilot:latest
+  ai-service:
+    image: wren-ai-service:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile

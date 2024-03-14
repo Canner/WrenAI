@@ -1,9 +1,10 @@
 # wren-ai-service
 wren-ai-service/.env
 wren-ai-service/.env.*
+!wren-ai-service/.env.example
 !wren-ai-service/.env.*.example
-!wren-ai-service/src/eval/vulcansql-core-server/.env
-wren-ai-service/src/eval/vulcansql-core-server/config.properties
+!wren-ai-service/src/eval/wren-engine/.env
+wren-ai-service/src/eval/wren-engine/config.properties
 wren-ai-service/outputs/
 wren-ai-service/spider/
 !wren-ai-service/tests/data

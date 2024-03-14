@@ -11,8 +11,7 @@
 
 ## Start the service for development
 
-- execute `make start` to start the service
-  - go to `http://UVICORN_HOST:UVICORN_PORT/docs` to see the API documentation and try the API
+- execute `make start` to start the service and go to `http://UVICORN_HOST:UVICORN_PORT/docs` to see the API documentation and try the API
 
 ## Production Environment Setup
 
@@ -23,9 +22,9 @@
 
 ## Pipeline Evaluation(for development)
 
-- fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/vulcansql-core-server folder
+- fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine folder
 - start docker
-- run qdrant and vulcansql-core-server docker containers: `make run-all`
+- run qdrant and wren-engine docker containers: `make run-all`
 - evaluation: `make eval` and check out the outputs folder
 - `make streamlit` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)

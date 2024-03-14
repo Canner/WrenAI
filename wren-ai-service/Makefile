@@ -30,19 +30,19 @@ streamlit:
 eval:
 	poetry run python -m src.eval.ask $(args)
 
-run-vulcansql-core-server:
-	docker compose -f ./src/eval/vulcansql-core-server/docker-compose.yml --env-file .env.dev --env-file ./src/eval/vulcansql-core-server/.env up -d
+run-wren-engine:
+	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file .env.dev --env-file ./src/eval/wren-engine/.env up -d
 
-stop-vulcansql-core-server:
-	docker compose -f ./src/eval/vulcansql-core-server/docker-compose.yml --env-file .env.dev --env-file ./src/eval/vulcansql-core-server/.env down
+stop-wren-engine:
+	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file .env.dev --env-file ./src/eval/wren-engine/.env down
 
 psql:
-	docker exec -it vulcansql-engine-1 bash launch-cli.sh
+	docker exec -it wren-engine-1 bash launch-cli.sh
 
 run-all:
 	make run-qdrant && \
-	make run-vulcansql-core-server
+	make run-wren-engine
 
 stop-all:
 	make stop-qdrant && \
-	make stop-vulcansql-core-server
+	make stop-wren-engine
