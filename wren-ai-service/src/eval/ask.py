@@ -200,9 +200,10 @@ if __name__ == "__main__":
         #         )
         #     )
         user_id = str(uuid.uuid4())
-        outputs = []
-        for ground_truth in tqdm(ground_truths):
-            outputs.append(process_item(ground_truth["question"], user_id))
+        outputs = [
+            process_item(ground_truth["question"], user_id)
+            for ground_truth in tqdm(ground_truths)
+        ]
         end = time.time()
         print(f"Time taken: {end - start:.2f}s")
 
