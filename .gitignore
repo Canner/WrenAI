@@ -1,21 +1,16 @@
-# vectorstore
-vectorstore
-retrieve_db/
-wren-ai-service/qdrant_storage/
-
-# app
-.env
-.env.*
-!.env.*.example
-!src/eval/vulcansql-core-server/.env
-src/eval/vulcansql-core-server/config.properties
-outputs/
-spider/
-wren-ai-service/**/data/
+# wren-ai-service
+wren-ai-service/.env
+wren-ai-service/.env.*
+!wren-ai-service/.env.example
+!wren-ai-service/.env.*.example
+!wren-ai-service/src/eval/wren-engine/.env
+wren-ai-service/src/eval/wren-engine/config.properties
+wren-ai-service/outputs/
+wren-ai-service/spider/
 !wren-ai-service/tests/data
-!src/eval/data
-poetry.lock
-assertion.log
+!wren-ai-service/src/eval/data
+wren-ai-service/poetry.lock
+wren-ai-service/assertion.log
 
 # cache
 __pycache__
