@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Typography, Form, Row, Col, Button } from 'antd';
+import { Alert, Typography, Form, Row, Col, Button } from 'antd';
 import styled from 'styled-components';
 import { DATA_SOURCES } from '@/utils/enum/dataSources';
 import { getDataSource } from './utils';
@@ -19,10 +19,14 @@ interface Props {
   dataSource: DATA_SOURCES;
   onNext: (data: any) => void;
   onBack: () => void;
+  connectInfo?: {
+    connected: boolean;
+    errorMessage?: string;
+  };
 }
 
 export default function ConnectDataSource(props: Props) {
-  const { dataSource, onNext, onBack } = props;
+  const { connectInfo, dataSource, onNext, onBack } = props;
   const [form] = Form.useForm();
   const current = getDataSource(dataSource);
 
@@ -75,6 +79,18 @@ export default function ConnectDataSource(props: Props) {
         </Row>
         <current.component />
       </StyledForm>
+
+      {connectInfo && !connectInfo.connected && (
+        <Alert
+          message="Failed to connect"
+          description={
+            connectInfo?.errorMessage || 'Cannot connect to data source'
+          }
+          type="error"
+          showIcon
+          className="my-6"
+        />
+      )}
 
       <Row gutter={16} className="pt-6">
         <Col span={12}>
