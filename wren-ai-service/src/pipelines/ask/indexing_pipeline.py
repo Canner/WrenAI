@@ -29,6 +29,7 @@ class Indexing(BasicPipeline):
         embedding_model_dim: int = EMBEDDING_MODEL_DIMENSION,
     ) -> None:
         self._pipeline = Pipeline()
+        # TODO: add a component to remove existing documents to fully delete old documents
         self._pipeline.add_component(
             "writer",
             DocumentWriter(
