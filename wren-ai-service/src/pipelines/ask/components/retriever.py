@@ -31,11 +31,11 @@ class TracedQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
         )
 
 
-def init_retriever(document_store: Any, with_trace: bool = False):
+def init_retriever(document_store: Any, with_trace: bool = False, top_k: int = 3):
     if with_trace:
         return TracedQdrantEmbeddingRetriever(
             document_store=document_store,
-            top_k=3,
+            top_k=top_k,
         )
 
-    return QdrantEmbeddingRetriever(document_store=document_store, top_k=3)
+    return QdrantEmbeddingRetriever(document_store=document_store, top_k=top_k)
