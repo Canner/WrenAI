@@ -7,8 +7,9 @@ export default function RelationTable(props: Props) {
       {...props}
       columns={
         columns || [
-          COLUMN.DISPLAY_NAME,
           COLUMN.REFERENCE_NAME,
+          COLUMN.RELATION_FROM,
+          COLUMN.RELATION_TO,
           COLUMN.RELATION,
           COLUMN.DESCRIPTION,
         ]

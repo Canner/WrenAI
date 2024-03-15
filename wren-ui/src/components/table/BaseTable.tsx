@@ -15,10 +15,9 @@ export const COLUMN = {
     render: (name) => name || '-',
   },
   REFERENCE_NAME: {
-    title: 'Reference name',
+    title: 'Name',
     dataIndex: 'referenceName',
     key: 'referenceName',
-    width: 150,
     ellipsis: true,
     render: (name) => name || '-',
   },
@@ -46,10 +45,25 @@ export const COLUMN = {
       );
     },
   },
+  RELATION_FROM: {
+    title: 'From',
+    dataIndex: 'fromField',
+    key: 'fromField',
+    ellipsis: true,
+    render: (fromField) => `${fromField.model}.${fromField.field}`,
+  },
+  RELATION_TO: {
+    title: 'To',
+    dataIndex: 'toField',
+    key: 'toField',
+    ellipsis: true,
+    render: (toField) => `${toField.model}.${toField.field}`,
+  },
   RELATION: {
-    title: 'Relation',
+    title: 'Relation type',
     dataIndex: 'joinType',
     key: 'joinType',
+    width: 130,
     render: (joinType) => getJoinTypeText(joinType),
   },
   DESCRIPTION: {
