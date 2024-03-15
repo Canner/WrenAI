@@ -1,11 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { JOIN_TYPE, NODE_TYPE } from '@/utils/enum';
-import {
-  Relationship,
-  ModelColumn,
-  Model,
-  Manifest,
-} from '@/utils/data/type';
+import { Relationship, ModelColumn, Model, Manifest } from '@/utils/data/type';
 
 export class ModelData {
   public readonly nodeType: NODE_TYPE = NODE_TYPE.MODEL;
@@ -39,19 +34,19 @@ export class ModelData {
     this.refreshTime = model.refreshTime;
     this.relations = data.relationships
       .filter((relationship) =>
-        relationship.models.includes(this.referenceName)
+        relationship.models.includes(this.referenceName),
       )
       .map((relationship) => new RelationData(relationship));
 
     this.columns = model.columns.map(
-      (column) => new ModelColumnData(column, model, this.relations)
+      (column) => new ModelColumnData(column, model, this.relations),
     );
     this.fields = this.columns.filter(
-      (column) => !column.isCalculated && !column.relation
+      (column) => !column.isCalculated && !column.relation,
     );
     this.relationFields = this.columns.filter((column) => column.relation);
     this.calculatedFields = this.columns.filter(
-      (column) => column.isCalculated && !column.relation
+      (column) => column.isCalculated && !column.relation,
     );
   }
 }
@@ -76,7 +71,7 @@ export class ModelColumnData {
     this.type = column.type;
     if (column?.relationship) {
       const relation = relations.find(
-        (item) => item.referenceName === column?.relationship
+        (item) => item.referenceName === column?.relationship,
       );
       this.relation = relation;
     }

@@ -27,7 +27,7 @@ export class ViewData {
     this.properties = view.properties;
 
     this.fields = (view.columns || []).map(
-      (column) => new ViewColumnData(column)
+      (column) => new ViewColumnData(column),
     );
   }
 }
