@@ -70,6 +70,8 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
 
 
 def eval(prediction_results_file: Path, dataset_name: str, ground_truths: list[dict]):
+    print(f"Generating evaluation report for {dataset_name} dataset...")
+
     download_spider_data()
 
     with open(prediction_results_file, "r") as f:
@@ -130,7 +132,7 @@ if __name__ == "__main__":
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
 
-    print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...")
+    print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
         PREDICTION_RESULTS_FILE
         and Path(PREDICTION_RESULTS_FILE).exists()
@@ -153,9 +155,10 @@ if __name__ == "__main__":
         )
         generator = init_generator(with_trace=with_trace)
 
+        print("Indexing documents...")
         Indexing(document_store=document_store).run(mdl_str)
         print(
-            f"finished indexing documents, document count: {document_store.count_documents()}"
+            f"Finished indexing documents, document count: {document_store.count_documents()}"
         )
 
         retrieval_pipeline = Retrieval(
@@ -170,6 +173,7 @@ if __name__ == "__main__":
             prompt_builder=init_generation_prompt_builder(),
         )
 
+        print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
         max_workers = os.cpu_count() // 2 if with_trace else None
         user_id = str(uuid.uuid4()) if with_trace else None
