@@ -213,6 +213,21 @@ def show_prediction_results(eval_file_paths: List, prediction_file_paths: List):
             )
 
 
+def show_prediction_result(eval_file_path: Path, prediction_file_path: Path):
+    with open(eval_file_path, "r") as f:
+        eval_results = json.load(f)
+
+    with open(prediction_file_path, "r") as f:
+        predictions = [json.loads(line) for line in f]
+
+    question_right_or_wrong_mapping = get_question_right_or_wrong_mapping(
+        eval_results["eval_results"]
+    )
+
+    for prediction in predictions:
+        show_single_prediction_result(question_right_or_wrong_mapping, prediction)
+
+
 st.set_page_config(layout="wide")
 
 st.title("Ask pipeline prediction evaluation results comparison")
@@ -238,12 +253,22 @@ timestamps = sorted(
     set([f.stem.split("_")[-1] for f in output_files if dataset_name in f.stem])
 )
 selected_timestamps = st.multiselect(
-    "Select 2 timestamps", timestamps, max_selections=2, disabled=len(timestamps) < 2
+    "Select 2 timestamps", timestamps, max_selections=2
 )
 
 st.markdown("---")
 
-if len(selected_timestamps) == 2:
+if len(selected_timestamps) == 1:
+    prediction_file1_path = (
+        output_dir / f"{dataset_name}_predictions_{selected_timestamps[0]}.json"
+    )
+    eval_file1_path = (
+        output_dir / f"{dataset_name}_eval_results_{selected_timestamps[0]}.json"
+    )
+    st.markdown(f"## {selected_timestamps[0]}")
+    show_eval_results(eval_file1_path)
+    show_prediction_result(eval_file1_path, prediction_file1_path)
+elif len(selected_timestamps) == 2:
     prediction_file1_path = (
         output_dir / f"{dataset_name}_predictions_{selected_timestamps[0]}.json"
     )
