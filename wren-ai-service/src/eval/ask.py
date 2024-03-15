@@ -173,7 +173,10 @@ if __name__ == "__main__":
             with_trace=with_trace,
             top_k=10,
         )
-        generator = init_generator(provider=LLM_PROVIDER, with_trace=with_trace)
+        generator = init_generator(
+            provider=LLM_PROVIDER,
+            with_trace=with_trace,
+        )
 
         print("Indexing documents...")
         indexing_pipeline = Indexing(document_store=document_store)
