@@ -118,9 +118,10 @@ def _init_openai_generator(
     )
 
 
-def _init_anthropic_generator():
+def _init_anthropic_generator(model: str = "claude-3-haiku-20240307"):
     return AnthropicGenerator(
         api_key=Secret.from_env_var("ANTHROPIC_API_KEY"),
+        model=model,
     )
 
 
@@ -131,7 +132,9 @@ def init_generator(
     generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
 ):
     if provider == "anthropic":
-        return _init_anthropic_generator()
+        return _init_anthropic_generator(
+            model=model_name if "claude-3" in model_name else "claude-3-haiku-20240307",
+        )
     elif provider == "openai":
         return _init_openai_generator(
             with_trace=with_trace,
