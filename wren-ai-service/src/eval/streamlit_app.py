@@ -248,6 +248,21 @@ def show_prediction_result(eval_file_path: Path, prediction_file_path: Path):
         show_pipelines(eval_results["pipelines"])
 
 
+def show_prediction_result(eval_file_path: Path, prediction_file_path: Path):
+    with open(eval_file_path, "r") as f:
+        eval_results = json.load(f)
+
+    with open(prediction_file_path, "r") as f:
+        predictions = [json.loads(line) for line in f]
+
+    question_right_or_wrong_mapping = get_question_right_or_wrong_mapping(
+        eval_results["eval_results"]
+    )
+
+    for prediction in predictions:
+        show_single_prediction_result(question_right_or_wrong_mapping, prediction)
+
+
 st.set_page_config(layout="wide")
 
 st.title("Ask pipeline prediction evaluation results comparison")
