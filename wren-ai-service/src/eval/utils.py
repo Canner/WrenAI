@@ -525,19 +525,19 @@ def get_table_relationships(db_path: str):
             from_column = fk[3]
             to_column = fk[4]
 
-        # Determine relationship type
-        if is_unique_or_pk(table, from_column):
-            if is_unique_or_pk(ref_table, to_column):
-                relation_type = "ONE_TO_ONE"
+            # Determine relationship type
+            if is_unique_or_pk(table, from_column):
+                if is_unique_or_pk(ref_table, to_column):
+                    relation_type = "ONE_TO_ONE"
+                else:
+                    relation_type = "ONE_TO_MANY"
             else:
-                relation_type = "ONE_TO_MANY"
-        else:
-            if is_unique_or_pk(ref_table, to_column):
-                relation_type = "MANY_TO_ONE"
-            else:
-                relation_type = "MANY_TO_MANY"
+                if is_unique_or_pk(ref_table, to_column):
+                    relation_type = "MANY_TO_ONE"
+                else:
+                    relation_type = "MANY_TO_MANY"
 
-        relationships[(table, ref_table)] = relation_type
+            relationships[(table, ref_table)] = relation_type
 
     conn.close()
     return relationships
@@ -554,28 +554,31 @@ def get_appropriat_column_type(column_type: str):
     return column_type.upper()
 
 
-def split_table_defnition(table_definition: str):
-    parts = []
-    bracket_level = 0
-    current = []
-    for char in table_definition:
-        if char == "(" and bracket_level == 0:
-            bracket_level += 1
-        elif char == "(":
-            bracket_level += 1
-            current.append(char)
-        elif char == ")" and bracket_level == 1:
-            bracket_level -= 1
-        elif char == ")":
-            bracket_level -= 1
-            current.append(char)
-        elif char == "," and bracket_level == 0:
-            parts.append("".join(current).strip())
-            current = []
-        else:
-            current.append(char)
-    parts.append("".join(current).strip())  # add the last part
-    return parts
+def split_table_definition(table_definition: str):
+    # parts = []
+    # bracket_level = 0
+    # current = []
+    # for char in table_definition:
+    #     if char == "(" and bracket_level == 0:
+    #         bracket_level += 1
+    #     elif char == "(":
+    #         bracket_level += 1
+    #         current.append(char)
+    #     elif char == ")" and bracket_level == 1:
+    #         bracket_level -= 1
+    #     elif char == ")":
+    #         bracket_level -= 1
+    #         current.append(char)
+    #     elif char == "," and bracket_level == 0:
+    #         parts.append("".join(current).strip())
+    #         current = []
+    #     else:
+    #         current.append(char)
+    # parts.append("".join(current).strip())  # add the last part
+    # print(f'parts: {parts}')
+    # return parts
+
+    return table_definition.split(", ")
 
 
 def parse_column_definition(column_definition: str):
@@ -596,7 +599,7 @@ def parse_table_definition(
     match = re.search(r"\((.*)\)", table_definition)
     assert match
     inside_parentheses = match.group(1)
-    parts = split_table_defnition(inside_parentheses)
+    parts = split_table_definition(inside_parentheses)
 
     # Lists to store columns and foreign keys
     columns = []
@@ -604,11 +607,10 @@ def parse_table_definition(
     primary_key = ""
 
     for part in parts:
-        # Checking if the part is a foreign key
         if part.startswith("foreign key") or part.startswith("FOREIGN KEY"):
             part = part.replace("`", "").replace('"', "")
-            regex1 = r"FOREIGN KEY \(([^)]+)\) REFERENCES ([^(]+)\(([^)]+)\)"
-            regex2 = r"foreign key \(([^)]+)\) references ([^(]+)\(([^)]+)\)"
+            regex1 = r"FOREIGN KEY\(([^)]+)\) REFERENCES ([^(]+)\(([^)]+)\)"
+            regex2 = r"foreign key\(([^)]+)\) references ([^(]+)\(([^)]+)\)"
             match = re.search(regex1, part)
             match2 = re.search(regex2, part)
             match_result = False
@@ -631,23 +633,15 @@ def parse_table_definition(
                         "properties": {},
                     }
                 )
-        elif "PRIMARY KEY" in part or "primary key" in part:
-            regex1 = r'primary key \("(.+?)"\)'
-            regex2 = r'PRIMARY KEY \("(.+?)"\)'
-            match = re.search(regex1, part)
-            match2 = re.search(regex2, part)
-            match_result = False
-
-            if match:
-                match_result = match
-            elif match2:
-                match_result = match2
-
-            if match_result:
-                primary_key = match_result.group(1)
         else:
+            if "PRIMARY KEY" in part or "primary key" in part:
+                primary_key = part.strip().split(" ")[0]
+                part = (
+                    part.replace("PRIMARY KEY", "").replace("primary key", "").strip()
+                )
+
             # Splitting the column name and type
-            column_def = parse_column_definition(part)
+            column_def = parse_column_definition(part.strip())
 
             columns.append(
                 {
