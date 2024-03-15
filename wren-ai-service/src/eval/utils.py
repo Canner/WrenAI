@@ -24,6 +24,10 @@ def get_generation_model_pricing(
             "prompt_tokens": 0.25 / 10**6,
             "completion_tokens": 1.25 / 10**6,
         },
+        "claude-3-opus-20240229": {
+            "prompt_tokens": 15 / 10**6,
+            "completion_tokens": 75 / 10**6,
+        },
     }
 
     return generation_model_pricing[model_name]
