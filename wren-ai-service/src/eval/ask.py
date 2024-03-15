@@ -130,6 +130,7 @@ if __name__ == "__main__":
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
 
+    print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...")
     if (
         PREDICTION_RESULTS_FILE
         and Path(PREDICTION_RESULTS_FILE).exists()
@@ -140,11 +141,15 @@ if __name__ == "__main__":
         with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
             mdl_str = json.dumps(json.load(f))
 
-        document_store = init_document_store()
+        document_store = init_document_store(
+            dataset_name=DATASET_NAME,
+            recreate_index=True,
+        )
         embedder = init_embedder(with_trace=with_trace)
         retriever = init_retriever(
             document_store=document_store,
             with_trace=with_trace,
+            top_k=10,
         )
         generator = init_generator(with_trace=with_trace)
 

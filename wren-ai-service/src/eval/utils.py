@@ -544,7 +544,7 @@ def get_table_relationships(db_path: str):
 
 
 def get_appropriat_column_type(column_type: str):
-    if column_type.lower() == "text":
+    if column_type.lower() == "text" or "varchar" in column_type.lower():
         return "VARCHAR"
     elif column_type.lower() == "numeric":
         return "REAL"
