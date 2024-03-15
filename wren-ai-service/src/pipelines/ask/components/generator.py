@@ -125,7 +125,7 @@ def _init_anthropic_generator():
 
 
 def init_generator(
-    provider: str = "anthropic",
+    provider: str = "openai",
     with_trace: bool = False,
     model_name: str = MODEL_NAME,
     generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,

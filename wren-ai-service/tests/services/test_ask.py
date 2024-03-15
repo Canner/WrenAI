@@ -103,7 +103,7 @@ def test_ask_with_easy_query(ask_service: AskService, mdl_str: str):
 
     if ask_result_response.status == "finished":
         assert ask_result_response.response is not None
-        # assert len(ask_result_response.response) == 3
+        assert len(ask_result_response.response) == 3
         assert ask_result_response.response[0].sql != ""
         assert ask_result_response.response[0].summary != ""
     else:
