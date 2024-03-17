@@ -71,7 +71,7 @@ if __name__ == "__main__":
         if ai_generate_metadata_ok:
             st.session_state["mdl_json"] = get_new_mdl_json(chosen_models=chosen_models)
 
-        # Display the model using the selected dataset
+        # Display the model using the selected database
         st.markdown("MDL Model")
         st.json(
             body=st.session_state["mdl_json"],
@@ -80,14 +80,14 @@ if __name__ == "__main__":
 
         show_erd_diagram()
 
-        deploy_ok = st.button("Deploy the model using the selected dataset")
+        deploy_ok = st.button("Deploy the model using the selected database")
         # Semantics preparation
         if deploy_ok:
             rerun_wren_engine(chosen_dataset)
             prepare_semantics(st.session_state["mdl_json"])
 
     query = st.chat_input(
-        "Ask a question about the dataset",
+        "Ask a question about the database",
         disabled=st.session_state["semantics_preparation_status"] != "finished",
     )
 
