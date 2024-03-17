@@ -12,7 +12,6 @@ import psycopg2
 import requests
 import sqlglot
 import sqlparse
-
 import streamlit as st
 
 WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5000"

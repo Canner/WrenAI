@@ -1,5 +1,6 @@
 import uuid
 
+import streamlit as st
 from utils import (
     ask,
     ask_details,
@@ -11,8 +12,6 @@ from utils import (
     show_asks_details_results,
     show_asks_results,
 )
-
-import streamlit as st
 
 st.set_page_config(layout="wide")
 st.title("Wren AI Service Demo")

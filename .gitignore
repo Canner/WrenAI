@@ -14,8 +14,8 @@ wren-ai-service/src/eval/data
 !wren-ai-service/src/eval/data/college_3*.json
 wren-ai-service/poetry.lock
 wren-ai-service/assertion.log
-wren-ai-service/streamlit/spider
-wren-ai-service/streamlit/poetry.lock
+wren-ai-service/demo/spider
+wren-ai-service/demo/poetry.lock
 
 # cache
 __pycache__
