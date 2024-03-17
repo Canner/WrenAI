@@ -11,7 +11,7 @@ from utils import (
     rerun_wren_engine,
     show_asks_details_results,
     show_asks_results,
-    show_erd_diagram,
+    show_er_diagram,
 )
 
 st.set_page_config(layout="wide")
@@ -80,7 +80,7 @@ if __name__ == "__main__":
             expanded=False,
         )
 
-        show_erd_diagram()
+        show_er_diagram()
 
         deploy_ok = st.button(
             "Deploy the model using the selected database",

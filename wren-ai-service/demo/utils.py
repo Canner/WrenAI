@@ -474,7 +474,7 @@ def get_data_from_wren_engine(pg_url: str, sql: str):
 
 
 # ui related
-def show_erd_diagram():
+def show_er_diagram():
     models = st.session_state["mdl_json"]["models"]
     relationships = st.session_state["mdl_json"]["relationships"]
 
