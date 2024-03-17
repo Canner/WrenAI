@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   engine:
-    image: ghcr.io/canner/accio:latest
+    image: ghcr.io/canner/accio:main-ed88364
     platform: ${PLATFORM}
     ports:
       - 8080:8080
