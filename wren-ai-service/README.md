@@ -13,11 +13,6 @@
 
 - execute `make start` to start the service and go to `http://UVICORN_HOST:UVICORN_PORT/docs` to see the API documentation and try the API
 
-## Demo
-
-- go to the `demo` folder and run `poetry install` to install the dependencies
-- in the `demo` folder, run `make prepare` in one terminal, and `make run` in another terminal to start the demo and go to `http://localhost:8501` to see the demo
-
 ## Production Environment Setup
 
 - copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
@@ -33,3 +28,9 @@
 - evaluation: `make eval` and check out the outputs folder
 - `make streamlit` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
+
+## Demo
+
+- you should stop all services first before running the demo
+- go to the `demo` folder and run `poetry install` to install the dependencies
+- in the `demo` folder, run `make prepare` in one terminal, and `make run` in another terminal to start the demo and go to `http://localhost:8501` to see the demo
