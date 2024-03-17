@@ -50,7 +50,9 @@ if __name__ == "__main__":
 
     with col1:
         chosen_dataset = st.selectbox(
-            "Select a database from the Spider dataset", datasets
+            "Select a database from the Spider dataset",
+            options=datasets,
+            index=datasets.index("college_3"),  # default dataset
         )
         if st.session_state["chosen_dataset"] != chosen_dataset:
             st.session_state["chosen_dataset"] = chosen_dataset
@@ -80,7 +82,10 @@ if __name__ == "__main__":
 
         show_erd_diagram()
 
-        deploy_ok = st.button("Deploy the model using the selected database")
+        deploy_ok = st.button(
+            "Deploy the model using the selected database",
+            type="primary",
+        )
         # Semantics preparation
         if deploy_ok:
             rerun_wren_engine(chosen_dataset)
