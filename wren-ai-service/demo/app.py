@@ -11,6 +11,7 @@ from utils import (
     rerun_wren_engine,
     show_asks_details_results,
     show_asks_results,
+    show_erd_diagram,
 )
 
 st.set_page_config(layout="wide")
@@ -77,12 +78,9 @@ if __name__ == "__main__":
             expanded=False,
         )
 
-        # TODO: Display the ERD diagram using the selected dataset
-        # st.markdown('ERD Diagram')
-        # show_erd_diagram()
+        show_erd_diagram()
 
         deploy_ok = st.button("Deploy the model using the selected dataset")
-
         # Semantics preparation
         if deploy_ok:
             rerun_wren_engine(chosen_dataset)

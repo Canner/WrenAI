@@ -52,6 +52,9 @@ class Indexing(BasicPipeline):
     def _get_documents(self, mdl_str: str) -> List[Document]:
         mdl_json = json.loads(mdl_str)
 
+        for i, _ in enumerate(mdl_json["relationships"]):
+            mdl_json["relationships"][i]["type"] = "relationship"
+
         semantics = {"models": [], "relationships": mdl_json["relationships"]}
 
         for model in mdl_json["models"]:

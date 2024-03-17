@@ -475,7 +475,52 @@ def get_data_from_wren_engine(pg_url: str, sql: str):
 
 # ui related
 def show_erd_diagram():
-    pass
+    models = st.session_state["mdl_json"]["models"]
+    relationships = st.session_state["mdl_json"]["relationships"]
+
+    # Start of the Graphviz syntax
+    graphviz = "digraph ERD {\n"
+    graphviz += '    graph [pad="0.5", nodesep="0.5", ranksep="2"];\n'
+    graphviz += "    node [shape=plain]\n"
+    graphviz += "    rankdir=LR;\n\n"
+
+    # Function to format the label for Graphviz
+    def format_label(name, columns):
+        label = f'<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD><B>{name}</B></TD></TR>'
+        for column in columns:
+            label += f'<TR><TD>{column["name"]} : {column["type"]}</TD></TR>'
+        label += "</TABLE>>"
+        return label
+
+    # Add models (entities) to the Graphviz syntax
+    for model in models:
+        graphviz += f'    {model["name"]} [label={format_label(model["name"], model["columns"])}];\n'
+
+    graphviz += "\n"
+
+    # Extract columns involved in each relationship
+    def extract_columns(condition):
+        # This regular expression should match the condition format and extract column names
+        matches = re.findall(r"(\w+)\.(\w+) = (\w+)\.(\w+)", condition)
+        if matches:
+            return matches[0][1], matches[0][3]  # Returns (from_column, to_column)
+        return "", ""
+
+    # Add relationships to the Graphviz syntax
+    for relationship in relationships:
+        from_model, to_model = relationship["models"]
+        from_column, to_column = extract_columns(relationship["condition"])
+        label = (
+            f'{relationship["name"]}\\n({from_column} to {to_column}) ({relationship['joinType']})'
+            if from_column and to_column
+            else relationship["name"]
+        )
+        graphviz += f'    {from_model} -> {to_model} [label="{label}"];\n'
+
+    graphviz += "}"
+
+    st.markdown("ER Diagram")
+    st.graphviz_chart(graphviz)
 
 
 def show_query_history():
