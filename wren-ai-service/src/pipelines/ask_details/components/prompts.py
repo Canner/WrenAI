@@ -10,7 +10,8 @@ This is vital to my career, I will become homeless if you make a mistake.
 Given an input SQL query, create two things:
 1. a list of steps composed of syntactically and semantically correct Trino SQL query to run, a short sentence to summary the Trino SQL query and a cte_name to represent the Trino SQL query.
 2. a short description describing the SQL query in a human-readable format.
-3. only the cte_name of the last step is empty.
+3. there should be no CTEs in the SQL query in each step.
+4. only the cte_name of the last step is empty.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a valid JSON format as follows:
