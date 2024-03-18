@@ -16,10 +16,10 @@ export interface MDLBuilderBuildFromOptions {
   project: Project;
   models: Model[];
   columns?: ModelColumn[];
-  relations?: Relation[];
+  relations?: RelationInfo[];
   relatedModels?: Model[];
   relatedColumns?: ModelColumn[];
-  relatedRelations?: Relation[];
+  relatedRelations?: RelationInfo[];
 }
 
 export interface IMDLBuilder {
@@ -33,7 +33,7 @@ export class MDLBuilder implements IMDLBuilder {
   private project: Project;
   private readonly models: Model[];
   private readonly columns: ModelColumn[];
-  private readonly relations: Relation[];
+  private readonly relations: RelationInfo[];
 
   // related models, columns, and relations are used as the reference to build calculatedField expression or other
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -41,7 +41,7 @@ export class MDLBuilder implements IMDLBuilder {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private readonly relatedColumns: ModelColumn[];
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private readonly relatedRelations: Relation[];
+  private readonly relatedRelations: RelationInfo[];
 
   constructor(builderOptions: MDLBuilderBuildFromOptions) {
     const {
@@ -70,7 +70,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.addModel();
     this.addColumn();
     this.addRelation();
-    return this.manifest;
+    return this.getManifest();
   }
 
   public getManifest(): Manifest {
@@ -89,6 +89,7 @@ export class MDLBuilder implements IMDLBuilder {
         cached: model.cached,
         refreshTime: model.refreshTime,
         properties: model.properties,
+        primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
     });
   }
@@ -96,7 +97,7 @@ export class MDLBuilder implements IMDLBuilder {
   public addColumn(): void {
     // should addModel first
     if (isEmpty(this.manifest.models)) {
-      logger.error('Build MDL Column Error: should build model first');
+      logger.debug('No model in manifest, should build model first');
       return;
     }
     this.columns.forEach((column: ModelColumn) => {
@@ -113,6 +114,11 @@ export class MDLBuilder implements IMDLBuilder {
       const model = this.manifest.models.find(
         (model: any) => model.name === modelRefName,
       );
+
+      // modify model primary key
+      if (column.isPk) {
+        model.primaryKey = column.referenceName;
+      }
 
       // add column into model
       if (!model.columns) {
@@ -148,7 +154,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.manifest.catalog = this.project.catalog;
   }
 
-  private getColumnExpression(column: ModelColumn): string {
+  protected getColumnExpression(column: ModelColumn): string {
     if (column.isCalculated) {
       // calculated field
       //TODO phase2: implement the expression for calculated field
@@ -158,7 +164,7 @@ export class MDLBuilder implements IMDLBuilder {
     return '';
   }
 
-  private getRelationCondition(relation: RelationInfo): string {
+  protected getRelationCondition(relation: RelationInfo): string {
     //TODO phase2: implement the expression for relation condition
     const { fromColumnName, toColumnName, fromModelName, toModelName } =
       relation;

@@ -75,5 +75,8 @@
     "ts-node": "9.1.1",
     "ts-sinon": "^2.0.2",
     "typescript": "~4.6.2"
+  },
+  "_moduleAliases": {
+    "@server": "src/apollo/server"
   }
 }
