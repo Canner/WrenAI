@@ -8,7 +8,10 @@ from haystack import Document, Pipeline
 from src.core.pipeline import BasicPipeline
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
-from src.pipelines.ask.components.generator import MODEL_NAME, init_generator
+from src.pipelines.ask.components.generator import (
+    MODEL_NAME,
+    init_anthropic_generator,
+)
 from src.pipelines.ask.components.prompts import init_generation_prompt_builder
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.retrieval_pipeline import Retrieval
@@ -102,7 +105,7 @@ if __name__ == "__main__":
     document_store = init_document_store()
     embedder = init_embedder(with_trace=with_trace)
     retriever = init_retriever(document_store=document_store, with_trace=with_trace)
-    generator = init_generator(with_trace=with_trace)
+    generator = init_anthropic_generator()  # init_generator(with_trace=with_trace)
     generation_prompt_builder = init_generation_prompt_builder()
 
     retrieval_pipeline = Retrieval(
@@ -135,7 +138,11 @@ if __name__ == "__main__":
         user_id=str(uuid.uuid4()) if with_trace else None,
     )
 
-    assert len(generation_result["generator"]["replies"]) == 3
+    # assert len(generation_result["generator"]["replies"]) == 3
+
+    generation_result["generator"]["replies"][0] = (
+        "{" + generation_result["generator"]["replies"][0]
+    )
 
     cleaned_generation_result = json.loads(
         clean_generation_result(generation_result["generator"]["replies"][0])
