@@ -159,11 +159,9 @@ export class ProjectResolver {
     const { relations } = arg.data;
     const project = await ctx.projectService.getCurrentProject();
 
-    // throw error if the relation name is duplicated
-    const relationNames = relations.map((relation) => relation.name);
-    if (new Set(relationNames).size !== relationNames.length) {
-      throw new Error('Duplicated relation name');
-    }
+    const models = await ctx.modelRepository.findAllBy({
+      projectId: project.id,
+    });
 
     const columnIds = relations
       .map(({ fromColumn, toColumn }) => [fromColumn, toColumn])
@@ -182,9 +180,10 @@ export class ProjectResolver {
       if (!toColumn) {
         throw new Error(`Column not found, column Id  ${relation.toColumn}`);
       }
+      const relationName = this.generateRelationName(relation, models);
       return {
         projectId: project.id,
-        name: relation.name,
+        name: relationName,
         fromColumnId: relation.fromColumn,
         toColumnId: relation.toColumn,
         joinType: relation.type,
@@ -376,5 +375,19 @@ export class ProjectResolver {
       credentials: encryptedCredentials,
     });
     return project;
+  }
+
+  private generateRelationName(relation: RelationData, models: Model[]) {
+    const fromModel = models.find((m) => m.id === relation.fromModel);
+    const toModel = models.find((m) => m.id === relation.toModel);
+    if (!fromModel || !toModel) {
+      throw new Error('Model not found');
+    }
+    return (
+      fromModel.sourceTableName.charAt(0).toUpperCase() +
+      fromModel.sourceTableName.slice(1) +
+      toModel.sourceTableName.charAt(0).toUpperCase() +
+      toModel.sourceTableName.slice(1)
+    );
   }
 }

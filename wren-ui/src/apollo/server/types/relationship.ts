@@ -1,5 +1,4 @@
 export interface RelationData {
-  name: string;
   fromModel: number;
   fromColumn: number;
   toModel: number;

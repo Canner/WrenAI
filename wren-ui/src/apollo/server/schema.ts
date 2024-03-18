@@ -62,7 +62,6 @@ export const typeDefs = gql`
   }
 
   input RelationInput {
-    name: String!
     fromModel: Int!
     fromColumn: Int!
     toModel: Int!
