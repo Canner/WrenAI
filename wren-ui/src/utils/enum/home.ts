@@ -1,0 +1,17 @@
+export enum COLLAPSE_CONTENT_TYPE {
+  NONE = 'none',
+  VIEW_SQL = 'view_sql',
+  PREVIEW_DATA = 'preview_data',
+}
+
+export enum PROCESS_STATE {
+  IDLE,
+  UNDERSTANDING,
+  SEARCHING,
+  GENERATING,
+  FINISHED,
+
+  UNDERSTANDING_FAILED,
+  SEARCHING_FAILED,
+  NO_RESULT,
+}

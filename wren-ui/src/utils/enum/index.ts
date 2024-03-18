@@ -5,4 +5,4 @@ export * from './columnType';
 export * from './modeling';
 export * from './path';
 export * from './diagram';
-export * from './ask';
+export * from './home';
