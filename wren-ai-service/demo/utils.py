@@ -602,7 +602,8 @@ def show_asks_details_results():
     st.markdown(
         f'Description: {st.session_state['asks_details_result']["description"]}'
     )
-    full_sqls = []
+    sqls_with_cte = []
+    sqls = []
     for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
         st.markdown(f"#### Step {i + 1}")
         st.markdown(step["summary"])
@@ -611,11 +612,15 @@ def show_asks_details_results():
                 body=step["sql"],
                 language="sql",
             )
-            full_sqls.append("WTIH " + step["cte_name"] + " AS (" + step["sql"] + ")")
+            sqls_with_cte.append(
+                "WTIH " + step["cte_name"] + " AS (" + step["sql"] + ")"
+            )
+            sqls.append(step["sql"])
         else:
-            full_sqls.append("\n".join(full_sqls) + "\n\n" + step["sql"])
+            last_step_sql = "\n".join(sqls_with_cte) + "\n\n" + step["sql"]
+            sqls.append(last_step_sql)
             st.code(
-                body=full_sqls[-1],
+                body=last_step_sql,
                 language="sql",
             )
 
@@ -623,22 +628,23 @@ def show_asks_details_results():
             label="Preview Data",
             key=i,
             on_click=on_click_preview_data_button,
-            args=[i, full_sqls],
+            args=[i, sqls],
         )
 
-    if (
-        st.session_state["preview_data_button_index"] is not None
-        and st.session_state["preview_sql"] is not None
-    ):
-        st.markdown(
-            f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
-        )
-        st.dataframe(
-            get_data_from_wren_engine(
-                WREN_ENGINE_PG_URL,
-                st.session_state["preview_sql"],
+        if (
+            st.session_state["preview_data_button_index"] is not None
+            and st.session_state["preview_sql"] is not None
+            and i == st.session_state["preview_data_button_index"]
+        ):
+            st.markdown(
+                f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
             )
-        )
+            st.dataframe(
+                get_data_from_wren_engine(
+                    WREN_ENGINE_PG_URL,
+                    st.session_state["preview_sql"],
+                )
+            )
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
