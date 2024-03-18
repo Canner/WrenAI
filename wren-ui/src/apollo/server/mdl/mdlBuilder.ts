@@ -31,17 +31,17 @@ export class MDLBuilder implements IMDLBuilder {
   private manifest: Manifest;
 
   private project: Project;
-  private models: Model[];
-  private columns: ModelColumn[];
-  private relations: Relation[];
+  private readonly models: Model[];
+  private readonly columns: ModelColumn[];
+  private readonly relations: Relation[];
 
   // related models, columns, and relations are used as the reference to build calculatedField expression or other
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private relatedModels: Model[];
+  private readonly relatedModels: Model[];
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private relatedColumns: ModelColumn[];
+  private readonly relatedColumns: ModelColumn[];
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private relatedRelations: Relation[];
+  private readonly relatedRelations: Relation[];
 
   constructor(builderOptions: MDLBuilderBuildFromOptions) {
     const {
@@ -67,16 +67,8 @@ export class MDLBuilder implements IMDLBuilder {
 
   public build(): Manifest {
     this.addProject();
-    logger.debug('after addProject');
-    logger.debug(this.manifest);
     this.addModel();
-    logger.debug('after Model');
-    logger.debug(this.manifest);
-
     this.addColumn();
-    logger.debug('after column');
-    logger.debug(this.manifest);
-
     this.addRelation();
     return this.manifest;
   }

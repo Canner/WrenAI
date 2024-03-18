@@ -150,8 +150,10 @@ export class RelationRepository
 
     const result = await builder.select(
       `${this.tableName}.*`,
-      'fm.id AS fromModelId, fm.reference_name AS fromModelName',
-      'tm.id AS toModelId, tm.reference_name AS toModelName',
+      'fm.id AS fromModelId',
+      'fm.reference_name AS fromModelName',
+      'tm.id AS toModelId',
+      'tm.reference_name AS toModelName',
       'fmc.reference_name AS fromColumnName',
       'tmc.reference_name AS toColumnName',
     );
