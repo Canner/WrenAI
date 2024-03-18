@@ -11,6 +11,7 @@ export interface Project {
   credentials: string; // Project credentials, big query specific
   catalog: string; // Catalog name
   schema: string; // Schema name
+  sampleDataset: string; // Sample dataset name
 }
 
 export interface IProjectRepository extends IBasicRepository<Project> {

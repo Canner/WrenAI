@@ -18,6 +18,13 @@ import { Model, ModelColumn, Project } from '../repositories';
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
 
+export enum OnboardingStatusEnum {
+  NOT_STARTED = 'NOT_STARTED',
+  DATASOURCE_SAVED = 'DATASOURCE_SAVED',
+  ONBOARDING_FINISHED = 'ONBOARDING_FINISHED',
+  WITH_SAMPLE_DATASET = 'WITH_SAMPLE_DATASET',
+}
+
 export class ProjectResolver {
   constructor() {
     this.saveDataSource = this.saveDataSource.bind(this);
@@ -25,6 +32,34 @@ export class ProjectResolver {
     this.saveTables = this.saveTables.bind(this);
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
     this.saveRelations = this.saveRelations.bind(this);
+    this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
+  }
+
+  public async getOnboardingStatus(_root: any, _arg: any, ctx: IContext) {
+    let project: Project | null;
+    try {
+      project = await ctx.projectRepository.getCurrentProject();
+    } catch (_err: any) {
+      return {
+        status: OnboardingStatusEnum.NOT_STARTED,
+      };
+    }
+    const { id, sampleDataset } = project;
+    if (sampleDataset) {
+      return {
+        status: OnboardingStatusEnum.WITH_SAMPLE_DATASET,
+      };
+    }
+    const models = await ctx.modelRepository.findAllBy({ projectId: id });
+    if (!models.length) {
+      return {
+        status: OnboardingStatusEnum.DATASOURCE_SAVED,
+      };
+    } else {
+      return {
+        status: OnboardingStatusEnum.ONBOARDING_FINISHED,
+      };
+    }
   }
 
   public async saveDataSource(

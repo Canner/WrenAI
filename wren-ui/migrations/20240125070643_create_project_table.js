@@ -26,6 +26,9 @@ exports.up = function (knex) {
     table.string('catalog').comment('catalog name');
     table.string('schema').comment('');
 
+    // sample datset
+    table.string('sample_dataset').nullable().comment('sample dataset name');
+
     table.timestamps(true, true);
   });
 };

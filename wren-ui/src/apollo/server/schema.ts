@@ -39,6 +39,13 @@ export const typeDefs = gql`
     MANY_TO_MANY
   }
 
+  enum OnboardingStatusEnum {
+    NOT_STARTED
+    DATASOURCE_SAVED
+    ONBOARDING_FINISHED
+    WITH_SAMPLE_DATASET
+  }
+
   type Relation {
     fromModel: Int!
     fromColumn: Int!
@@ -173,6 +180,10 @@ export const typeDefs = gql`
     properties: JSON!
   }
 
+  type OnboardingStatus {
+    status: OnboardingStatusEnum
+  }
+
   input SimpleMeasureInput {
     name: String!
     type: String!
@@ -214,6 +225,7 @@ export const typeDefs = gql`
     listDataSourceTables: [CompactTable!]!
     autoGenerateRelation: [RecommandRelations!]
     manifest: JSON!
+    onboardingStatus: OnboardingStatus!
 
     # Modeling Page
     listModels: [ModelInfo!]!

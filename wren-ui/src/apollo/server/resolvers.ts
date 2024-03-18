@@ -209,6 +209,7 @@ const resolvers = {
     listModels: modelResolver.listModels,
     model: modelResolver.getModel,
     manifest: modelResolver.getManifest,
+    onboardingStatus: projectResolver.getOnboardingStatus,
   },
   Mutation: {
     saveDataSource: projectResolver.saveDataSource,
