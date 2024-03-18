@@ -83,7 +83,7 @@ if __name__ == "__main__":
         show_er_diagram()
 
         deploy_ok = st.button(
-            "Deploy the model using the selected database",
+            "Deploy the MDL model using the selected database",
             type="primary",
         )
         # Semantics preparation
