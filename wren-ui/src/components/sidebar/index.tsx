@@ -7,7 +7,7 @@ import Modeling, { Props as ModelingSidebarProps } from './Modeling';
 const Layout = styled.div`
   position: relative;
   min-height: 100%;
-  background-color: var(--gray-3);
+  background-color: var(--gray-2);
   color: var(--gray-8);
   padding-bottom: 24px;
   overflow-x: hidden;
