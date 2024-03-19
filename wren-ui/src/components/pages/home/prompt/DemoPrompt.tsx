@@ -7,7 +7,7 @@ interface Props {
   onSelect: (data: any) => void;
 }
 
-const BlockTemplate = ({ title, summary, onSelect }) => {
+const DemoTemplate = ({ title, summary, onSelect }) => {
   return (
     <Col span={8}>
       <div
@@ -23,14 +23,15 @@ const BlockTemplate = ({ title, summary, onSelect }) => {
   );
 };
 
+const DemoColumnIterator = makeIterable(DemoTemplate);
+
 export default function DemoPrompt(props: Props) {
   const { demo, onSelect } = props;
-  const DemoColumns = makeIterable(BlockTemplate);
   return (
     <div style={{ width: 580 }}>
       <div className="text-center mt-3 mb-2">Try asking</div>
       <Row gutter={16}>
-        <DemoColumns data={demo} onSelect={onSelect} />
+        <DemoColumnIterator data={demo} onSelect={onSelect} />
       </Row>
     </div>
   );

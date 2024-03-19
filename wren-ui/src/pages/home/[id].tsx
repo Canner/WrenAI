@@ -1,12 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import { Divider } from 'antd';
 import { Path } from '@/utils/enum';
+import { nextTick } from '@/utils/time';
 import useModalAction from '@/hooks/useModalAction';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import AnswerResult from '@/components/pages/home/AnswerResult';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
+import Prompt from '@/components/pages/home/prompt';
 
 const AnswerResultsBlock = styled.div`
   width: 768px;
@@ -31,10 +33,30 @@ const AnswerResultsBlock = styled.div`
   }
 `;
 
+const testData = {
+  status: '',
+  result: [
+    {
+      summary: 'Top 10 customer with most order from global customer in 2024',
+      sql: 'SELECT * FROM customer',
+    },
+    {
+      summary: 'Top 10 customer with most order from global customer in 2024',
+      sql: 'SELECT * FROM customer',
+    },
+    {
+      summary: 'Top 10 customer with most order from global customer in 2024',
+      sql: 'SELECT * FROM customer',
+    },
+  ],
+};
+
 export default function AnswerBlock() {
   const divRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const saveAsViewModal = useModalAction();
+  // TODO: adjust when intergrating with API
+  const [simulateData, setSimulateData] = useState(testData);
 
   // TODO: implement scroll when has new answer result
   useEffect(() => {
@@ -90,6 +112,23 @@ export default function AnswerBlock() {
     },
   ];
 
+  const onStop = () => {
+    // TODO: send stop asking API
+  };
+
+  const simulateProcess = async () => {
+    setSimulateData({ ...simulateData, status: 'understanding' });
+    await nextTick(3000);
+    setSimulateData({ ...simulateData, status: 'searching' });
+    await nextTick(3000);
+    setSimulateData({ ...simulateData, status: 'finished' });
+  };
+
+  const onSubmit = async (value) => {
+    console.log(value);
+    await simulateProcess();
+  };
+
   return (
     <SiderLayout loading={false} sidebar={{ data, onSelect }}>
       <AnswerResultsBlock className="mt-12 mb-15" ref={divRef}>
@@ -114,6 +153,7 @@ export default function AnswerBlock() {
           console.log('save as view', values);
         }}
       />
+      <Prompt data={simulateData} onSubmit={onSubmit} onStop={onStop} />
     </SiderLayout>
   );
 }

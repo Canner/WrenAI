@@ -75,11 +75,11 @@ const SelectRelationTemplate: IterableComponent = ({
   </Form.Item>
 );
 
+const SelectRelationIterator = makeIterable(SelectRelationTemplate);
+
 export default function RecommendRelations(props: Props) {
   const { recommendRelations, onBack, onNext } = props;
   const [form] = Form.useForm();
-
-  const SelectRelationIterator = makeIterable(SelectRelationTemplate);
 
   const submit = () => {
     form

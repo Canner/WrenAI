@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Row, Col, Button } from 'antd';
+import { Row, Col, Button, Collapse } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
@@ -10,6 +10,7 @@ import StopOutlined from '@ant-design/icons/StopFilled';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import CloseCircleFilled from '@ant-design/icons/CloseCircleFilled';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
+import CaretRightOutlined from '@ant-design/icons/CaretRightOutlined';
 import ViewSQLModal from '@/components/pages/home/prompt/ViewSQLModal';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import useModalAction from '@/hooks/useModalAction';
@@ -20,6 +21,33 @@ const ResultStyle = styled.div`
   bottom: calc(100% + 12px);
   left: 0;
   width: 100%;
+  background: white;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+`;
+
+const StyledCollapse = styled(Collapse)`
+  .ant-collapse-item {
+    > .ant-collapse-header {
+      color: var(--gray-7);
+      padding-left: 0;
+      padding-right: 0;
+
+      .ant-collapse-arrow {
+        margin-right: 8px;
+      }
+    }
+    > .ant-collapse-content .ant-collapse-content-box {
+      color: var(--gray-7);
+      padding: 0;
+    }
+  }
+`;
+
+const ResultBlock = styled.div`
+  &:hover {
+    border-color: var(--geekblue-6) !important;
+    transition: border-color ease 0.2s;
+  }
 `;
 
 interface Props {
@@ -30,10 +58,10 @@ interface Props {
   onStop: () => void;
 }
 
-const BlockTemplate = ({ index, summary, sql, onShowSQL }) => {
+const ResultTemplate = ({ index, summary, sql, onShowSQL }) => {
   return (
     <Col span={8}>
-      <div className="border border-gray-5 rounded px-3 pt-3 pb-4 cursor-pointer">
+      <ResultBlock className="border border-gray-5 rounded px-3 pt-3 pb-4 cursor-pointer">
         <div className="d-flex justify-space-between align-center text-sm mb-3">
           <div className="border border-gray-5 px-2 rounded-pill">
             Result {index + 1}
@@ -48,10 +76,11 @@ const BlockTemplate = ({ index, summary, sql, onShowSQL }) => {
           </Button>
         </div>
         <EllipsisWrapper multipleLine={3} text={summary} />
-      </div>
+      </ResultBlock>
     </Col>
   );
 };
+const ResultColumnIterator = makeIterable(ResultTemplate);
 
 const makeProcessing = (text: string) => (props: Props) => {
   const { onStop } = props;
@@ -62,8 +91,9 @@ const makeProcessing = (text: string) => (props: Props) => {
         {text}
       </span>
       <Button
-        className="adm-btn-no-style gray-7 bg-gray-3 px-2"
+        className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
         type="text"
+        size="small"
         onClick={onStop}
       >
         <StopOutlined className="-mr-1" />
@@ -76,7 +106,8 @@ const makeProcessing = (text: string) => (props: Props) => {
 const makeProcessingError =
   (config: { icon: ReactNode; title: string; description: string }) =>
   (props: Props) => {
-    const { onClose } = props;
+    const { onClose, error } = props;
+    const { message } = error || {};
     return (
       <div>
         <div className="d-flex justify-space-between text-medium mb-2">
@@ -85,8 +116,9 @@ const makeProcessingError =
             {config.title}
           </div>
           <Button
-            className="adm-btn-no-style gray-7 bg-gray-3 px-2"
+            className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
             type="text"
+            size="small"
             onClick={onClose}
           >
             <CloseOutlined className="-mr-1" />
@@ -94,6 +126,18 @@ const makeProcessingError =
           </Button>
         </div>
         <div className="gray-7">{config.description}</div>
+        {message && (
+          <StyledCollapse
+            ghost
+            expandIcon={({ isActive }) => (
+              <CaretRightOutlined rotate={isActive ? 90 : 0} />
+            )}
+          >
+            <Collapse.Panel key="1" header="Show error messages">
+              <pre className="mb-0">{message}</pre>
+            </Collapse.Panel>
+          </StyledCollapse>
+        )}
       </div>
     );
   };
@@ -130,7 +174,6 @@ const Finished = (props: Props) => {
   const showSQL = (payload: { sql: string; summary: string }) => {
     viewSQLModal.openModal(payload);
   };
-  const ResultColumns = makeIterable(BlockTemplate);
 
   return (
     <div>
@@ -140,8 +183,9 @@ const Finished = (props: Props) => {
           result(s) found
         </div>
         <Button
-          className="adm-btn-no-style gray-7 bg-gray-3 px-2"
+          className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
           type="text"
+          size="small"
           onClick={onClose}
         >
           <CloseOutlined className="-mr-1" />
@@ -149,7 +193,7 @@ const Finished = (props: Props) => {
         </Button>
       </div>
       <Row gutter={12}>
-        <ResultColumns data={data} onShowSQL={showSQL} />
+        <ResultColumnIterator data={data} onShowSQL={showSQL} />
       </Row>
       <ViewSQLModal {...viewSQLModal.state} onClose={viewSQLModal.closeModal} />
     </div>

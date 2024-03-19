@@ -63,6 +63,8 @@ const SelectModelTemplate: IterableComponent = ({ index, name, fields }) => (
   </Form.Item>
 );
 
+const SelectModelIterator = makeIterable(SelectModelTemplate);
+
 export default function CreateModels(props: Props) {
   const { onBack, onNext, selectedModels, tables } = props;
 
@@ -77,8 +79,6 @@ export default function CreateModels(props: Props) {
       };
     });
   }, [selectedModels, tables]);
-
-  const SelectModelIterator = makeIterable(SelectModelTemplate);
 
   const submit = () => {
     form

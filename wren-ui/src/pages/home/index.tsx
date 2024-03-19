@@ -24,16 +24,17 @@ const testData = {
   ],
 };
 
-const errorData = {
-  message: '',
-  extensions: {
-    code: '000',
-    data: {
-      status: 'searching',
-      message: '',
-    },
-  },
-};
+const errorData = undefined;
+// {
+//   message: '',
+//   extensions: {
+//     code: '000',
+//     data: {
+//       status: 'finished',
+//       // message: `Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: 10\n     at Main.main(Main.java:4)`,
+//     },
+//   },
+// };
 
 const demoData = [
   {
