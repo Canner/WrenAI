@@ -621,7 +621,7 @@ def show_asks_details_results():
                 language="sql",
             )
             sqls_with_cte.append(
-                "WTIH " + step["cte_name"] + " AS (" + step["sql"] + ")"
+                "WITH " + step["cte_name"] + " AS (" + step["sql"] + ")"
             )
             sqls.append(step["sql"])
         else:
