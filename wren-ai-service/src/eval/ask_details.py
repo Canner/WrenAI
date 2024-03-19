@@ -1,15 +1,4 @@
 # todo: implement the following steps
-#    1. generate the evaluation data from any data in the spider dataset
-#      a. convert the input(query, answer) to the the ask details input as following
-#         {
-#           "description": <SHORT_SQL_QUERY_DESCRIPTION>,
-#           "steps: [{
-#               "sql": <SQL_QUERY_STRING>,
-#               "summary": <SUMMARY_STRING>,
-#               "cte_name": <CTE_NAME_STRING>
-#           }] # list of steps
-#         }
-#      b. review the result to make sure these evaluation data are correct and make sense
 #    2. implement the evaluation pipeline
 #      a. implement with ragas evaluator
 #      b. according to the evaluation result to run the CTE query to ensure it is equal to the input query
@@ -17,42 +6,54 @@
 import json
 import os
 
+from src.pipelines.ask_details.components.generator import init_generator
+from src.pipelines.ask_details.generation_pipeline import Generation
 from src.utils import load_env_vars
 
 
-def _prepare_ask_details_eval_data():
-    with open("./data/baseball_1_data.json") as f:
-        inputs = [json.loads(line) for line in f]
+def _prepare_ask_details_eval_data(input_path: str, output_path: str):
+    """
+    This function prepares the evaluation data for the ask_details pipeline.
+    However, the initial data will be produced by the pipeline itself. So, the file have to be reviewed and corrected
+    manually.
+    """
 
-    eval_context = [
-        {
-            "input": {"query": i["question"], "sql": i["answer"], "summary": None},
-            "output": {
-                "description": None,
-                "steps": [
-                    {
-                        "sql": None,
-                        "summary": None,
-                        "cte_name": None,
-                    }
-                ],
+    generator = init_generator()
+    generation_pipeline = Generation(
+        generator=generator,
+    )
+
+    def _generate_data(input: dict):
+        response = generation_pipeline.run(
+            sql=input["answer"],
+        )
+
+        output = json.loads(response["generator"]["replies"][0])
+        print(output)
+        return {
+            "input": {
+                "query": input["question"],
+                "sql": input["answer"],
+                "summary": None,
             },
+            "output": output,
         }
-        for i in inputs
-    ]
 
-    # ensure the directory exists
-    os.makedirs("./data/ask_details/", exist_ok=True)
+    with open(input_path) as f:
+        eval_context = [_generate_data(json.loads(line)) for line in f]
 
-    # save the context to json file
-    with open("./data/ask_details/baseball_1_eval_context.json", "w") as f:
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    with open(output_path, "w") as f:
         json.dump(eval_context, f)
-    pass
 
 
 if __name__ == "__main__":
     load_env_vars()
-    _prepare_ask_details_eval_data()
+    _prepare_ask_details_eval_data(
+        input_path="./data/baseball_1_data.json",
+        output_path="./data/ask_details/baseball_1_eval_context.json",
+    )
 
     # pipeline = Pipeline()
     # evaluator = RagasEvaluator(
