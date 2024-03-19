@@ -133,21 +133,10 @@ if __name__ == "__main__":
         default=False,
         help="Whether to run the evaluation from scratch. Default is False.",
     )
-    parser.add_argument(
-        "--llm_provider",
-        type=str,
-        default="openai",
-        choices=["openai", "anthropic"],
-        help="The LLM provider to use. Default is 'openai'.",
-    )
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
     EVAL_AFTER_PREDICTION = args.eval_after_prediction
-    LLM_PROVIDER = args.llm_provider
-
-    if LLM_PROVIDER not in ["openai", "anthropic"]:
-        raise ValueError(f"Invalid LLM provider: {LLM_PROVIDER}")
 
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
@@ -174,7 +163,6 @@ if __name__ == "__main__":
             top_k=10,
         )
         generator = init_generator(
-            provider=LLM_PROVIDER,
             with_trace=with_trace,
         )
 
@@ -203,25 +191,18 @@ if __name__ == "__main__":
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
         user_id = str(uuid.uuid4())
-        if LLM_PROVIDER == "openai":
-            max_workers = os.cpu_count() // 2 if with_trace else None
-            user_id = str(uuid.uuid4()) if with_trace else None
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                args_list = [
-                    (ground_truth["question"], user_id)
-                    for ground_truth in ground_truths
-                ]
-                outputs = list(
-                    tqdm(
-                        executor.map(lambda p: process_item(*p), args_list),
-                        total=len(args_list),
-                    )
-                )
-        elif LLM_PROVIDER == "anthropic":
-            outputs = [
-                process_item(ground_truth["question"], user_id)
-                for ground_truth in tqdm(ground_truths)
+        max_workers = os.cpu_count() // 2 if with_trace else None
+        user_id = str(uuid.uuid4()) if with_trace else None
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            args_list = [
+                (ground_truth["question"], user_id) for ground_truth in ground_truths
             ]
+            outputs = list(
+                tqdm(
+                    executor.map(lambda p: process_item(*p), args_list),
+                    total=len(args_list),
+                )
+            )
         end = time.time()
         print(f"Time taken: {end - start:.2f}s")
 

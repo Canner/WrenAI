@@ -84,20 +84,6 @@ class Generation(BasicPipeline):
                 }
             )
 
-            # add the missing "{" to the replies to construct a valid json object
-            for i, _ in enumerate(result["generator"]["replies"]):
-                if not result["generator"]["replies"][i].startswith("{"):
-                    result["generator"]["replies"][i] = (
-                        "{" + result["generator"]["replies"][i]
-                    )
-                if (
-                    not result["generator"]["replies"][i].endswith("}")
-                    and "}" in result["generator"]["replies"][i]
-                ):
-                    result["generator"]["replies"][i] = (
-                        result["generator"]["replies"][i].split("}")[0] + "}"
-                    )
-
             trace.update(input=query, output=result["generator"])
         else:
             result = self._pipeline.run(
@@ -110,35 +96,17 @@ class Generation(BasicPipeline):
                 }
             )
 
-            # add the missing "{" to the replies to construct a valid json object
-            for i, _ in enumerate(result["generator"]["replies"]):
-                if not result["generator"]["replies"][i].startswith("{"):
-                    result["generator"]["replies"][i] = (
-                        "{" + result["generator"]["replies"][i]
-                    )
-                if (
-                    not result["generator"]["replies"][i].endswith("}")
-                    and "}" in result["generator"]["replies"][i]
-                ):
-                    result["generator"]["replies"][i] = (
-                        result["generator"]["replies"][i].split("}")[0] + "}"
-                    )
-
         return result
 
 
 # this is for quick testing only, please ignore this
 if __name__ == "__main__":
     DATASET_NAME = os.getenv("DATASET_NAME")
-    LLM_PROVIDER = "openai"
 
     document_store = init_document_store()
     embedder = init_embedder(with_trace=with_trace)
     retriever = init_retriever(document_store=document_store, with_trace=with_trace)
-    generator = init_generator(
-        provider=LLM_PROVIDER,
-        with_trace=with_trace,
-    )
+    generator = init_generator(with_trace=with_trace)
     generation_prompt_builder = init_generation_prompt_builder()
 
     retrieval_pipeline = Retrieval(
@@ -171,9 +139,7 @@ if __name__ == "__main__":
         user_id=str(uuid.uuid4()) if with_trace else None,
     )
 
-    # TODO: we should also make sure the size of generator replies is 3 for anthropic if we decide to use this model later
-    if LLM_PROVIDER == "openai":
-        assert len(generation_result["generator"]["replies"]) == 3
+    assert len(generation_result["generator"]["replies"]) == 3
 
     cleaned_generation_result = json.loads(
         clean_generation_result(generation_result["generator"]["replies"][0])
