@@ -144,6 +144,7 @@ def generate_eval_report(
                 "retrieval": 0,
                 "generation": 0,
             },
+            "number_of_failed_queries": 0,
             "details": {
                 "correct": {
                     "sql_semantic_same": [],
@@ -215,6 +216,8 @@ def generate_eval_report(
         ) = execute_sql_query_through_wren_engine(
             prediction["answer"],
         )
+        if prediction_error_details:
+            results["eval_results"]["number_of_failed_queries"] += 1
         if len(ground_truth_query_results) == len(prediction_query_results):
             if set(ground_truth_query_results) == set(prediction_query_results):
                 correct += 1
