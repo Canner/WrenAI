@@ -153,7 +153,7 @@ const UnderstandingFailed = makeProcessingError({
 
 const SearchingFailed = makeProcessingError({
   icon: <ErrorIcon />,
-  title: 'Something when wrong',
+  title: 'Something went wrong',
   description:
     "Sorry, we encountered an error when we're processing your request.",
 });

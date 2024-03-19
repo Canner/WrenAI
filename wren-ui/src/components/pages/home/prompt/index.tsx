@@ -86,12 +86,12 @@ export default function Prompt(props: Props) {
   const inputEnter = (event) => {
     if (event.shiftKey) return;
     event.preventDefault();
-    submitAsk();
+
+    if (!isProcessing) submitAsk();
   };
 
   const submitAsk = async () => {
     if (question) {
-      setInputValue('');
       onSubmit && (await onSubmit(question));
     }
   };
