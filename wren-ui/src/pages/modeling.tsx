@@ -80,9 +80,6 @@ export function Modeling({ connections }) {
       sidebar={{
         data: adaptedManifest,
         onSelect,
-        onOpenModelDrawer: modelDrawer.openDrawer,
-        onOpenMetricDrawer: metricDrawer.openDrawer,
-        onOpenViewDrawer: viewDrawer.openDrawer,
       }}
     >
       <DiagramWrapper>
