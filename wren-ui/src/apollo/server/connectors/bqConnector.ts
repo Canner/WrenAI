@@ -39,7 +39,7 @@ export interface BQListTableFilter {
   tableName: string;
 }
 export interface BQListTableOptions {
-  dataset: string;
+  datasetId: string;
   format?: boolean;
   filter?: BQListTableFilter;
 }
@@ -63,16 +63,16 @@ export class BQConnector
   }
 
   public async listTables(listTableOptions: BQListTableOptions) {
-    const { dataset, format, filter } = listTableOptions;
+    const { datasetId, format, filter } = listTableOptions;
     let sql = `SELECT 
         c.*, 
         cf.description AS column_description, 
         table_options.option_value AS table_description
-      FROM ${dataset}.INFORMATION_SCHEMA.COLUMNS c 
-      JOIN ${dataset}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS cf 
+      FROM ${datasetId}.INFORMATION_SCHEMA.COLUMNS c 
+      JOIN ${datasetId}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS cf 
         ON cf.table_name = c.table_name 
         AND cf.column_name = c.column_name
-      LEFT JOIN ${dataset}.INFORMATION_SCHEMA.TABLE_OPTIONS table_options
+      LEFT JOIN ${datasetId}.INFORMATION_SCHEMA.TABLE_OPTIONS table_options
         ON c.table_name = table_options.table_name
       `;
 
@@ -99,7 +99,7 @@ export class BQConnector
   }
 
   public async listConstraints(options) {
-    const { dataset } = options;
+    const { datasetId } = options;
     // ref: information schema link: https://cloud.google.com/bigquery/docs/information-schema-intro
     const constraints = await new Promise((resolve, reject) => {
       this.bq.query(
@@ -108,10 +108,10 @@ export class BQConnector
         ccu.table_name as constraintTable, ccu.column_name constraintColumn, 
         kcu.table_name as constraintedTable, kcu.column_name as constraintedColumn, 
         tc.constraint_type as constraintType
-      FROM ${dataset}.INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE ccu 
-      JOIN ${dataset}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
+      FROM ${datasetId}.INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE ccu 
+      JOIN ${datasetId}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
         ON ccu.constraint_name = kcu.constraint_name
-      JOIN ${dataset}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+      JOIN ${datasetId}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
         ON ccu.constraint_name = tc.constraint_name
       WHERE tc.constraint_type = 'FOREIGN KEY'
       `,

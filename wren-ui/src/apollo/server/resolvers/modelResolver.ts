@@ -107,7 +107,7 @@ export class ModelResolver {
     const filePath = await ctx.projectService.getCredentialFilePath(project);
     const connector = await this.getBQConnector(project, filePath);
     const dataSourceTables = <CompactTable[]>await connector.listTables({
-      dataset: project.dataset,
+      datasetId: project.datasetId,
       format: true,
     });
     this.validateTableExist(sourceTableName, dataSourceTables);
@@ -196,9 +196,8 @@ export class ModelResolver {
 
   private async getBQConnector(project: Project, filePath: string) {
     // fetch tables
-    const { location, projectId } = project;
+    const { projectId } = project;
     const connectionOption: BigQueryOptions = {
-      location,
       projectId,
       keyFilename: filePath,
     };

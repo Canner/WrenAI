@@ -39,7 +39,7 @@ export const typeDefs = gql`
     MANY_TO_MANY
   }
 
-  enum OnboardingStatusEnum {
+  enum OnboardingStatus {
     NOT_STARTED
     DATASOURCE_SAVED
     ONBOARDING_FINISHED
@@ -179,8 +179,8 @@ export const typeDefs = gql`
     properties: JSON!
   }
 
-  type OnboardingStatus {
-    status: OnboardingStatusEnum
+  type OnboardingStatusResponse {
+    status: OnboardingStatus
   }
 
   input SimpleMeasureInput {
@@ -224,7 +224,7 @@ export const typeDefs = gql`
     listDataSourceTables: [CompactTable!]!
     autoGenerateRelation: [RecommandRelations!]
     manifest: JSON!
-    onboardingStatus: OnboardingStatus!
+    onboardingStatus: OnboardingStatusResponse!
 
     # Modeling Page
     listModels: [ModelInfo!]!

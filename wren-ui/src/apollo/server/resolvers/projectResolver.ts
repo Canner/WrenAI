@@ -81,7 +81,7 @@ export class ProjectResolver {
     const filePath = await ctx.projectService.getCredentialFilePath(project);
     const connector = await this.getBQConnector(project, filePath);
     const listTableOptions: BQListTableOptions = {
-      dataset: project.dataset,
+      datasetId: project.datasetId,
       format: true,
     };
     return await connector.listTables(listTableOptions);
@@ -103,7 +103,7 @@ export class ProjectResolver {
     // get columns with descriptions
     const connector = await this.getBQConnector(project, filePath);
     const listTableOptions: BQListTableOptions = {
-      dataset: project.dataset,
+      datasetId: project.datasetId,
       format: false,
     };
     const dataSourceColumns = await connector.listTables(listTableOptions);
@@ -136,10 +136,9 @@ export class ProjectResolver {
 
     const connector = await this.getBQConnector(project, filePath);
     const listConstraintOptions = {
-      dataset: project.dataset,
+      datasetId: project.datasetId,
     };
     const constraints = await connector.listConstraints(listConstraintOptions);
-    logger.log('constraints', constraints);
     const modelIds = models.map((m) => m.id);
     const columns =
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
@@ -254,9 +253,8 @@ export class ProjectResolver {
 
   private async getBQConnector(project: Project, filePath: string) {
     // fetch tables
-    const { location, projectId } = project;
+    const { projectId } = project;
     const connectionOption: BigQueryOptions = {
-      location,
       projectId,
       keyFilename: filePath,
     };
@@ -334,8 +332,7 @@ export class ProjectResolver {
   }
 
   private async saveBigQueryDataSource(properties: any, ctx: IContext) {
-    const { displayName, location, projectId, dataset, credentials } =
-      properties;
+    const { displayName, projectId, datasetId, credentials } = properties;
     const { config } = ctx;
     let filePath = '';
     // check DataSource is valid and can connect to it
@@ -344,7 +341,6 @@ export class ProjectResolver {
       config.persistCredentialDir,
     );
     const connectionOption: BigQueryOptions = {
-      location,
       projectId,
       keyFilename: filePath,
     };
@@ -355,7 +351,7 @@ export class ProjectResolver {
     }
     // check can list dataset table
     try {
-      await connector.listTables({ dataset });
+      await connector.listTables({ datasetId });
     } catch (_e) {
       throw new Error('Cannot list tables in dataset');
     }
@@ -370,8 +366,7 @@ export class ProjectResolver {
       catalog: 'tbd',
       type: DataSourceName.BIG_QUERY,
       projectId,
-      location,
-      dataset,
+      datasetId,
       credentials: encryptedCredentials,
     });
     return project;
