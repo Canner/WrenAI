@@ -152,8 +152,12 @@ def generate_eval_report(
                 },
                 "wrong": [],
             },
-        }
+        },
+        "pipelines": [],
     }
+
+    if len(predictions) > 0:
+        results["pipelines"] = predictions[0]["pipelines"]
 
     total = 0
     correct = 0
@@ -306,7 +310,10 @@ def download_spider_data():
 
 
 def write_prediction_results(
-    file_name: str, ground_truths: List[Dict], outputs: List[Dict[str, Any]]
+    file_name: str,
+    ground_truths: List[Dict],
+    outputs: List[Dict[str, Any]],
+    pipeline_defs: Dict[str, str],
 ):
     with open(file_name, "w") as f:
         for ground_truth, output in tzip(ground_truths, outputs):
@@ -322,6 +329,7 @@ def write_prediction_results(
                     ],
                     "answer": output["prediction"],
                     "metadata": output["metadata"],
+                    "pipelines": pipeline_defs,
                 },
                 f,
             )

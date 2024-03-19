@@ -156,7 +156,9 @@ if __name__ == "__main__":
         generator = init_generator(with_trace=with_trace)
 
         print("Indexing documents...")
-        Indexing(document_store=document_store).run(mdl_str)
+        indexing_pipeline = Indexing(document_store=document_store)
+        indexing_pipeline_def = indexing_pipeline._pipe.dumps()
+        indexing_pipeline.run(mdl_str)
         print(
             f"Finished indexing documents, document count: {document_store.count_documents()}"
         )
@@ -166,12 +168,14 @@ if __name__ == "__main__":
             retriever=retriever,
             with_trace=with_trace,
         )
+        retrieval_pipeline_def = retrieval_pipeline._pipe.dumps()
 
         generation_pipeline = Generation(
             generator=generator,
             with_trace=with_trace,
             prompt_builder=init_generation_prompt_builder(),
         )
+        generation_pipeline_def = generation_pipeline._pipe.dumps()
 
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
@@ -195,6 +199,11 @@ if __name__ == "__main__":
             f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json",
             ground_truths,
             outputs,
+            {
+                "indexing": indexing_pipeline_def,
+                "retrieval": retrieval_pipeline_def,
+                "generation": generation_pipeline_def,
+            },
         )
         if with_trace:
             langfuse.flush()
