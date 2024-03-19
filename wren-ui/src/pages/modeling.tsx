@@ -1,6 +1,4 @@
-import { GetServerSideProps } from 'next';
 import dynamic from 'next/dynamic';
-import getConfig from 'next/config';
 import { forwardRef, useMemo, useRef } from 'react';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
@@ -24,7 +22,7 @@ const DiagramWrapper = styled.div`
   height: 100%;
 `;
 
-export function Modeling({ connections }) {
+export function Modeling() {
   const diagramRef = useRef(null);
 
   const { data } = useManifestQuery();
@@ -75,7 +73,6 @@ export function Modeling({ connections }) {
 
   return (
     <SiderLayout
-      connections={connections}
       loading={adaptedManifest === null}
       sidebar={{
         data: adaptedManifest,
@@ -120,20 +117,3 @@ export function Modeling({ connections }) {
 }
 
 export default Modeling;
-
-export const getServerSideProps: GetServerSideProps = async () => {
-  const { serverRuntimeConfig } = getConfig();
-  const { PG_DATABASE, PG_PORT, PG_USERNAME, PG_PASSWORD } =
-    serverRuntimeConfig;
-
-  return {
-    props: {
-      connections: {
-        database: PG_DATABASE,
-        port: PG_PORT,
-        username: PG_USERNAME,
-        password: PG_PASSWORD,
-      },
-    },
-  };
-};

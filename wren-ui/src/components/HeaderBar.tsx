@@ -2,7 +2,6 @@ import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import { Button, ButtonProps, Layout, Space } from 'antd';
 import LogoBar from '@/components/LogoBar';
-import SharePopover from '@/components/SharePopover';
 import { Path } from '@/utils/enum';
 
 const { Header } = Layout;
@@ -29,26 +28,10 @@ const StyledHeader = styled(Header)`
   padding: 10px 16px;
 `;
 
-export interface Connections {
-  database: string;
-  port: string;
-  username: string;
-  password: string;
-}
-
-export default function HeaderBar(props: { connections?: Connections }) {
-  const { connections = {} as Connections } = props;
+export default function HeaderBar() {
   const router = useRouter();
   const { pathname } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
-  const showConnectInfo = pathname.startsWith(Path.Modeling);
-
-  const infoSources = [
-    { title: 'Database', type: 'text', value: connections?.database },
-    { title: 'Port', type: 'text', value: connections?.port },
-    { title: 'Username', type: 'text', value: connections?.username },
-    { title: 'Password', type: 'password', value: connections?.password },
-  ];
 
   return (
     <StyledHeader>
@@ -75,11 +58,6 @@ export default function HeaderBar(props: { connections?: Connections }) {
             </Space>
           )}
         </Space>
-        {showConnectInfo && (
-          <SharePopover sources={infoSources}>
-            <Button type="primary">Connect</Button>
-          </SharePopover>
-        )}
       </div>
     </StyledHeader>
   );

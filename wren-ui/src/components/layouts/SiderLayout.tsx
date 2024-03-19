@@ -24,10 +24,10 @@ type Props = React.ComponentProps<typeof SimpleLayout> & {
 };
 
 export default function SiderLayout(props: Props) {
-  const { connections, sidebar, loading } = props;
+  const { sidebar, loading } = props;
 
   return (
-    <SimpleLayout connections={connections} loading={loading}>
+    <SimpleLayout loading={loading}>
       <Layout className="adm-layout">
         <StyledSider width={280}>
           <Sidebar {...sidebar} />

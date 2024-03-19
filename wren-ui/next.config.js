@@ -10,12 +10,6 @@ const nextConfig = {
       ssr: true,
     },
   },
-  serverRuntimeConfig: {
-    PG_DATABASE: process.env.PG_DATABASE,
-    PG_PORT: process.env.PG_PORT,
-    PG_USERNAME: process.env.PG_USERNAME,
-    PG_PASSWORD: process.env.PG_PASSWORD,
-  },
   ...withAntdLess({
     // next-plugin-antd-less options
     lessVarsFilePath: path.resolve(__dirname, 'src/styles/antd-variables.less'),
