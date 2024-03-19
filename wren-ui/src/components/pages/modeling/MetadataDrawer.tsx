@@ -4,12 +4,8 @@ import { DrawerAction } from '@/hooks/useDrawerAction';
 import ModelMetadata, {
   Props as ModelMetadataProps,
 } from './metadata/ModelMetadata';
-import ViewMetadata, {
-  Props as ViewMetadataProps,
-} from './metadata/ViewMetadata';
 
-type Metadata = { nodeType: NODE_TYPE } & ModelMetadataProps &
-  ViewMetadataProps;
+type Metadata = { nodeType: NODE_TYPE } & ModelMetadataProps;
 
 type Props = DrawerAction<Metadata>;
 
@@ -27,7 +23,6 @@ export default function MetadataDrawer(props: Props) {
       onClose={onClose}
     >
       {nodeType === NODE_TYPE.MODEL && <ModelMetadata {...defaultValue} />}
-      {nodeType === NODE_TYPE.VIEW && <ViewMetadata {...defaultValue} />}
     </Drawer>
   );
 }
