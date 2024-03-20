@@ -2,7 +2,6 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { Dropdown, Menu } from 'antd';
 import EditOutlined from '@ant-design/icons/EditOutlined';
-import LinkOutlined from '@ant-design/icons/LinkOutlined';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import LabelTitle from '@/components/sidebar/LabelTitle';
 import TreeTitleInput from '@/components/sidebar/home/TreeTitleInput';
@@ -10,7 +9,6 @@ import { DeleteThreadModal } from '@/components/modals/DeleteModal';
 
 const MENU_ITEM_KEYS = {
   RENAME: 'rename',
-  COPY_LINK: 'copy-link',
   DELETE: 'delete',
 };
 
@@ -22,12 +20,11 @@ const StyledMenu = styled(Menu)`
 
 export default function TreeTitle(props: {
   threadId: string;
-  onCopyLink: (threadId: string) => void;
   onDelete: (threadId: string) => void;
   onRename: (newName: string) => void;
   title: string;
 }) {
-  const { threadId, onCopyLink, onDelete, onRename } = props;
+  const { threadId, onDelete, onRename } = props;
   const [title, setTitle] = useState(props.title);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -55,7 +52,7 @@ export default function TreeTitle(props: {
       appendIcon={
         <Dropdown
           trigger={['click']}
-          overlayStyle={{ userSelect: 'none' }}
+          overlayStyle={{ userSelect: 'none', minWidth: 150 }}
           overlay={
             <StyledMenu
               items={[
@@ -74,23 +71,8 @@ export default function TreeTitle(props: {
                 },
                 {
                   label: (
-                    <>
-                      <LinkOutlined className="mr-2" />
-                      Copy link
-                    </>
-                  ),
-                  key: MENU_ITEM_KEYS.COPY_LINK,
-                  onClick: ({ domEvent }) => {
-                    domEvent.stopPropagation();
-                    onCopyLink(threadId);
-                  },
-                },
-                { type: 'divider' },
-                {
-                  label: (
                     <DeleteThreadModal onConfirm={() => onDelete(threadId)} />
                   ),
-                  danger: true,
                   key: MENU_ITEM_KEYS.DELETE,
                   onClick: ({ domEvent }) => {
                     domEvent.stopPropagation();

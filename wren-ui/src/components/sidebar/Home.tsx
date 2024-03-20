@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Button, message } from 'antd';
+import { Button } from 'antd';
 import styled from 'styled-components';
-import copy from 'copy-to-clipboard';
 import { DataNode } from 'antd/es/tree';
 import { Path } from '@/utils/enum';
 import { createTreeGroupNode } from '@/components/sidebar/utils';
@@ -71,7 +70,6 @@ export default function Home(props: Props) {
             <TreeTitle
               threadId={nodeKey}
               title={thread.name}
-              onCopyLink={onCopyLink}
               onRename={(newThreadName) => {
                 // TODO: Call API to rename the thread name
                 console.log(
@@ -93,11 +91,6 @@ export default function Home(props: Props) {
     if (router.query.id === threadId) {
       router.push(Path.Home);
     }
-  };
-
-  const onCopyLink = (threadId: string) => {
-    copy(`${window.location.toString()}/${threadId}`);
-    message.success('Copied link to clipboard.');
   };
 
   const onTreeSelect = (selectedKeys: React.Key[], _info: any) => {
