@@ -14,12 +14,10 @@ export type Scalars = {
   JSON: any;
 };
 
-export type AutoGenerateInput = {
-  tables: Array<Scalars['String']>;
-};
-
 export type CalculatedFieldInput = {
+  diagram?: InputMaybe<Scalars['JSON']>;
   expression: Scalars['String'];
+  lineage: Array<Scalars['Int']>;
   name: Scalars['String'];
 };
 
@@ -27,16 +25,6 @@ export type CompactColumn = {
   __typename?: 'CompactColumn';
   name: Scalars['String'];
   type: Scalars['String'];
-};
-
-export type CompactModel = {
-  __typename?: 'CompactModel';
-  cached: Scalars['Boolean'];
-  description?: Maybe<Scalars['String']>;
-  name: Scalars['String'];
-  primaryKey?: Maybe<Scalars['String']>;
-  refSql: Scalars['String'];
-  refreshTime: Scalars['String'];
 };
 
 export type CompactTable = {
@@ -48,13 +36,12 @@ export type CompactTable = {
 export type CreateModelInput = {
   cached: Scalars['Boolean'];
   calculatedFields?: InputMaybe<Array<CalculatedFieldInput>>;
-  customFields?: InputMaybe<Array<CustomFieldInput>>;
   description?: InputMaybe<Scalars['String']>;
   displayName: Scalars['String'];
   fields: Array<Scalars['String']>;
+  refSql?: InputMaybe<Scalars['String']>;
   refreshTime?: InputMaybe<Scalars['String']>;
-  tableName: Scalars['String'];
-  type: ModelType;
+  sourceTableName: Scalars['String'];
 };
 
 export type CreateSimpleMetricInput = {
@@ -64,7 +51,6 @@ export type CreateSimpleMetricInput = {
   displayName: Scalars['String'];
   measure: Array<SimpleMeasureInput>;
   model: Scalars['String'];
-  modelType: ModelType;
   name: Scalars['String'];
   properties: Scalars['JSON'];
   refreshTime?: InputMaybe<Scalars['String']>;
@@ -93,23 +79,39 @@ export enum DataSourceName {
 
 export type DetailedColumn = {
   __typename?: 'DetailedColumn';
+  displayName: Scalars['String'];
   isCalculated: Scalars['Boolean'];
-  name: Scalars['String'];
   notNull: Scalars['Boolean'];
   properties: Scalars['JSON'];
-  type: Scalars['String'];
+  referenceName: Scalars['String'];
+  sourceColumnName: Scalars['String'];
+  type?: Maybe<Scalars['String']>;
 };
 
 export type DetailedModel = {
   __typename?: 'DetailedModel';
   cached: Scalars['Boolean'];
-  columns: Array<DetailedColumn>;
+  calculatedFields?: Maybe<Array<Maybe<DetailedColumn>>>;
   description?: Maybe<Scalars['String']>;
-  name: Scalars['String'];
+  displayName: Scalars['String'];
+  fields?: Maybe<Array<Maybe<DetailedColumn>>>;
   primaryKey?: Maybe<Scalars['String']>;
   properties: Scalars['JSON'];
   refSql: Scalars['String'];
-  refreshTime: Scalars['String'];
+  referenceName: Scalars['String'];
+  refreshTime?: Maybe<Scalars['String']>;
+  relations?: Maybe<Array<Maybe<DetailedRelation>>>;
+  sourceTableName: Scalars['String'];
+};
+
+export type DetailedRelation = {
+  __typename?: 'DetailedRelation';
+  fromColumnId: Scalars['Int'];
+  fromModelId: Scalars['Int'];
+  name: Scalars['String'];
+  toColumnId: Scalars['Int'];
+  toModelId: Scalars['Int'];
+  type: RelationType;
 };
 
 export type DimensionInput = {
@@ -120,9 +122,17 @@ export type DimensionInput = {
   type: Scalars['String'];
 };
 
-export type MdlInput = {
-  models: Array<MdlModelSubmitInput>;
-  relations: Array<RelationInput>;
+export type FieldInfo = {
+  __typename?: 'FieldInfo';
+  displayName: Scalars['String'];
+  expression?: Maybe<Scalars['String']>;
+  id: Scalars['Int'];
+  isCalculated: Scalars['Boolean'];
+  notNull: Scalars['Boolean'];
+  properties?: Maybe<Scalars['JSON']>;
+  referenceName: Scalars['String'];
+  sourceColumnName: Scalars['String'];
+  type?: Maybe<Scalars['String']>;
 };
 
 export type MdlModelSubmitInput = {
@@ -130,13 +140,24 @@ export type MdlModelSubmitInput = {
   name: Scalars['String'];
 };
 
-export enum ModelType {
-  Custom = 'CUSTOM',
-  Table = 'TABLE'
-}
+export type ModelInfo = {
+  __typename?: 'ModelInfo';
+  cached: Scalars['Boolean'];
+  calculatedFields: Array<Maybe<FieldInfo>>;
+  description?: Maybe<Scalars['String']>;
+  displayName: Scalars['String'];
+  fields: Array<Maybe<FieldInfo>>;
+  id: Scalars['Int'];
+  primaryKey?: Maybe<Scalars['String']>;
+  properties?: Maybe<Scalars['JSON']>;
+  refSql?: Maybe<Scalars['String']>;
+  referenceName: Scalars['String'];
+  refreshTime?: Maybe<Scalars['String']>;
+  sourceTableName: Scalars['String'];
+};
 
 export type ModelWhereInput = {
-  name: Scalars['String'];
+  id: Scalars['Int'];
 };
 
 export type Mutation = {
@@ -144,7 +165,8 @@ export type Mutation = {
   createModel: Scalars['JSON'];
   deleteModel: Scalars['Boolean'];
   saveDataSource: DataSource;
-  saveMDL: Scalars['JSON'];
+  saveRelations: Scalars['JSON'];
+  saveTables: Scalars['JSON'];
   updateModel: Scalars['JSON'];
 };
 
@@ -164,8 +186,13 @@ export type MutationSaveDataSourceArgs = {
 };
 
 
-export type MutationSaveMdlArgs = {
-  data: MdlInput;
+export type MutationSaveRelationsArgs = {
+  data: SaveRelationInput;
+};
+
+
+export type MutationSaveTablesArgs = {
+  data: SaveTablesInput;
 };
 
 
@@ -174,47 +201,60 @@ export type MutationUpdateModelArgs = {
   where: ModelWhereInput;
 };
 
+export enum OnboardingStatus {
+  DatasourceSaved = 'DATASOURCE_SAVED',
+  NotStarted = 'NOT_STARTED',
+  OnboardingFinished = 'ONBOARDING_FINISHED',
+  WithSampleDataset = 'WITH_SAMPLE_DATASET'
+}
+
+export type OnboardingStatusResponse = {
+  __typename?: 'OnboardingStatusResponse';
+  status?: Maybe<OnboardingStatus>;
+};
+
 export type Query = {
   __typename?: 'Query';
-  autoGenerateRelation: Array<Relation>;
-  getModel: DetailedModel;
+  autoGenerateRelation?: Maybe<Array<RecommandRelations>>;
   listDataSourceTables: Array<CompactTable>;
-  listModels: Array<CompactModel>;
+  listModels: Array<ModelInfo>;
   manifest: Scalars['JSON'];
+  model: DetailedModel;
+  onboardingStatus: OnboardingStatusResponse;
   usableDataSource: Array<UsableDataSource>;
 };
 
 
-export type QueryAutoGenerateRelationArgs = {
-  where?: InputMaybe<AutoGenerateInput>;
+export type QueryModelArgs = {
+  where: ModelWhereInput;
 };
 
-
-export type QueryGetModelArgs = {
-  where: ModelWhereInput;
+export type RecommandRelations = {
+  __typename?: 'RecommandRelations';
+  id: Scalars['Int'];
+  name: Scalars['String'];
+  relations: Array<Maybe<Relation>>;
 };
 
 export type Relation = {
   __typename?: 'Relation';
-  from: RelationColumnInformation;
-  to: RelationColumnInformation;
+  fromColumnId: Scalars['Int'];
+  fromColumnReferenceName: Scalars['String'];
+  fromModelId: Scalars['Int'];
+  fromModelReferenceName: Scalars['String'];
+  name: Scalars['String'];
+  toColumnId: Scalars['Int'];
+  toColumnReferenceName: Scalars['String'];
+  toModelId: Scalars['Int'];
+  toModelReferenceName: Scalars['String'];
   type: RelationType;
 };
 
-export type RelationColumnInformation = {
-  __typename?: 'RelationColumnInformation';
-  columnName: Scalars['String'];
-  tableName: Scalars['String'];
-};
-
-export type RelationColumnInformationInput = {
-  columnName: Scalars['String'];
-  tableName: Scalars['String'];
-};
-
 export type RelationInput = {
-  from: RelationColumnInformationInput;
-  to: RelationColumnInformationInput;
+  fromColumnId: Scalars['Int'];
+  fromModelId: Scalars['Int'];
+  toColumnId: Scalars['Int'];
+  toModelId: Scalars['Int'];
   type: RelationType;
 };
 
@@ -224,6 +264,14 @@ export enum RelationType {
   OneToMany = 'ONE_TO_MANY',
   OneToOne = 'ONE_TO_ONE'
 }
+
+export type SaveRelationInput = {
+  relations: Array<InputMaybe<RelationInput>>;
+};
+
+export type SaveTablesInput = {
+  tables: Array<Scalars['String']>;
+};
 
 export type SimpleMeasureInput = {
   isCalculated: Scalars['Boolean'];
@@ -242,12 +290,10 @@ export type TimeGrainInput = {
 export type UpdateModelInput = {
   cached: Scalars['Boolean'];
   calculatedFields?: InputMaybe<Array<CalculatedFieldInput>>;
-  customFields?: InputMaybe<Array<CustomFieldInput>>;
   description?: InputMaybe<Scalars['String']>;
   displayName: Scalars['String'];
   fields: Array<Scalars['String']>;
   refreshTime?: InputMaybe<Scalars['String']>;
-  type: ModelType;
 };
 
 export type UsableDataSource = {
