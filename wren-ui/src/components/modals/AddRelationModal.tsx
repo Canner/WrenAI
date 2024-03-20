@@ -1,40 +1,54 @@
 import { useEffect } from 'react';
 import { isEmpty } from 'lodash';
-import { Modal, Form, Input, Select, Row, Col } from 'antd';
+import { Modal, Form, Select, Row, Col } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
 import { JOIN_TYPE } from '@/utils/enum';
-import { RelationData, getJoinTypeText } from '@/utils/data';
+import { getJoinTypeText } from '@/utils/data';
 import useCombineFieldOptions from '@/hooks/useCombineFieldOptions';
 import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
+import { SelectedRecommendRelations } from '@/components/pages/setup/DefineRelations';
 
 export type RelationFieldValue = { [key: string]: any } & Pick<
-  RelationData,
-  'name' | 'joinType' | 'fromField' | 'toField' | 'properties'
+  RelationsDataType,
+  'name' | 'type' | 'fromField' | 'toField' | 'properties'
 >;
 
 type Props = ModalAction<RelationFieldValue, RelationsDataType> & {
   model: string;
   loading?: boolean;
-  allowSetDescription?: boolean;
+  relations: SelectedRecommendRelations;
 };
 
 export default function RelationModal(props: Props) {
   const {
-    allowSetDescription = true,
     defaultValue,
     loading,
     model,
     onClose,
     onSubmit,
+    relations,
     visible,
   } = props;
   const [form] = Form.useForm();
 
+  const fromCombineField = useCombineFieldOptions({ model });
+
+  const toFieldModel = defaultValue?.toField.model;
+  const toCombineField = useCombineFieldOptions({
+    model: toFieldModel,
+    excludeModels: [model],
+  });
+
   useEffect(() => {
     if (!visible) return;
+    fromCombineField.onModelChange(model);
     form.setFieldsValue(defaultValue || {});
+
+    if (toFieldModel) {
+      toCombineField.onModelChange(toFieldModel);
+    }
   }, [form, defaultValue, visible]);
 
   const relationTypeOptions = Object.keys(JOIN_TYPE).map((key) => ({
@@ -42,11 +56,37 @@ export default function RelationModal(props: Props) {
     value: JOIN_TYPE[key],
   }));
 
-  const fromCombineField = useCombineFieldOptions({ model });
-  const toCombineField = useCombineFieldOptions({
-    model: defaultValue?.toField.model,
-    excludeModels: [model],
-  });
+  const toCombineModelOptions = toCombineField.modelOptions.map(
+    (modelOption) => {
+      const modelList = Object.entries(relations).reduce(
+        (acc, [modelName, modelRelations]) => {
+          // For add relation, if the Model option has been selected in the From model relations, the Model option should be disabled
+          if (modelName === model) {
+            acc = [
+              ...acc,
+              ...modelRelations.map((relation) => relation.toField.model),
+            ];
+          } else {
+            const toFieldModelList = modelRelations.map(
+              (relation) => relation.toField.model,
+            );
+            if (toFieldModelList.includes(model)) {
+              acc = [...acc, modelName];
+            }
+          }
+          return acc;
+        },
+        [],
+      );
+
+      const disabled = modelList.includes(modelOption.value);
+
+      return {
+        ...modelOption,
+        disabled,
+      };
+    },
+  );
 
   const submit = () => {
     form
@@ -70,25 +110,13 @@ export default function RelationModal(props: Props) {
       maskClosable={false}
       destroyOnClose
       afterClose={() => form.resetFields()}
+      centered
     >
       <Form form={form} preserve={false} layout="vertical">
-        <Form.Item
-          label="Name"
-          name="name"
-          required
-          rules={[
-            {
-              required: true,
-              message: ERROR_TEXTS.ADD_RELATION.NAME.REQUIRED,
-            },
-          ]}
-        >
-          <Input />
-        </Form.Item>
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              label="From field"
+              label="From"
               name="fromField"
               required
               rules={[
@@ -109,7 +137,7 @@ export default function RelationModal(props: Props) {
           </Col>
           <Col span={12}>
             <Form.Item
-              label="To field"
+              label="To"
               name="toField"
               required
               rules={[
@@ -121,7 +149,7 @@ export default function RelationModal(props: Props) {
             >
               <CombineFieldSelector
                 onModelChange={toCombineField.onModelChange}
-                modelOptions={toCombineField.modelOptions}
+                modelOptions={toCombineModelOptions}
                 fieldOptions={toCombineField.fieldOptions}
               />
             </Form.Item>
@@ -129,7 +157,7 @@ export default function RelationModal(props: Props) {
         </Row>
         <Form.Item
           label="Relation type"
-          name="joinType"
+          name="type"
           required
           rules={[
             {
@@ -143,11 +171,6 @@ export default function RelationModal(props: Props) {
             placeholder="Select a relation type"
           />
         </Form.Item>
-        {allowSetDescription && (
-          <Form.Item label="Description" name={['properties', 'description']}>
-            <Input.TextArea showCount maxLength={300} />
-          </Form.Item>
-        )}
       </Form>
     </Modal>
   );

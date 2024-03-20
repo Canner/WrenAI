@@ -1,8 +1,6 @@
 import Starter from './Starter';
 import ConnectDataSource from './ConnectDataSource';
 import SelectModels from './SelectModels';
-import CreateModels from './CreateModels';
-import RecommendRelations from './RecommendRelations';
 import DefineRelations from './DefineRelations';
 import { SETUP, DATA_SOURCES, DEMO_TEMPLATES } from '@/utils/enum';
 import BigQueryProperties from './dataSources/BigQueryProperties';
@@ -14,8 +12,6 @@ type SetupStep = {
     props?: React.ComponentProps<typeof Starter> &
       React.ComponentProps<typeof ConnectDataSource> &
       React.ComponentProps<typeof SelectModels> &
-      React.ComponentProps<typeof CreateModels> &
-      React.ComponentProps<typeof RecommendRelations> &
       React.ComponentProps<typeof DefineRelations>,
   ) => JSX.Element;
   maxWidth?: number;
@@ -36,19 +32,12 @@ export const SETUP_STEPS = {
   [SETUP.CREATE_DATA_SOURCE]: {
     step: 0,
     component: ConnectDataSource,
-    maxWidth: 800,
+    maxWidth: 960,
   },
   [SETUP.SELECT_MODELS]: {
     step: 1,
     component: SelectModels,
-  },
-  [SETUP.CREATE_MODELS]: {
-    step: 1,
-    component: CreateModels,
-  },
-  [SETUP.RECOMMEND_RELATIONS]: {
-    step: 2,
-    component: RecommendRelations,
+    maxWidth: 960,
   },
   [SETUP.DEFINE_RELATIONS]: {
     step: 2,
@@ -63,21 +52,15 @@ export const DATA_SOURCE_OPTIONS = {
     guide: '',
     disabled: false,
   },
-  [DATA_SOURCES.DATA_BRICKS]: {
-    label: 'Databricks',
-    logo: '/images/dataSource/dataBricks.svg',
+  [DATA_SOURCES.DUCKDB]: {
+    label: 'DuckDB',
+    logo: '/images/dataSource/duckDb.svg',
     guide: '',
     disabled: true,
   },
-  [DATA_SOURCES.SNOWFLAKE]: {
-    label: 'Snowflake',
-    logo: '/images/dataSource/snowflake.svg',
-    guide: '',
-    disabled: true,
-  },
-  [DATA_SOURCES.TRINO]: {
-    label: 'Trino',
-    logo: '',
+  [DATA_SOURCES.PG_SQL]: {
+    label: 'PostgreSQL',
+    logo: '/images/dataSource/postgreSql.svg',
     guide: '',
     disabled: true,
   },

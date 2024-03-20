@@ -6,11 +6,8 @@ export const ERROR_TEXTS = {
     PROJECT_ID: {
       REQUIRED: 'Please input project id.',
     },
-    DATASET: {
-      REQUIRED: 'Please input dataset name.',
-    },
-    LOCATION: {
-      REQUIRED: 'Please input data location.',
+    DATASET_ID: {
+      REQUIRED: 'Please input dataset ID.',
     },
     CREDENTIAL: {
       REQUIRED: 'Please upload credential.',
@@ -60,9 +57,6 @@ export const ERROR_TEXTS = {
     },
   },
   ADD_RELATION: {
-    NAME: {
-      REQUIRED: 'Please input name.',
-    },
     FROM_FIELD: {
       REQUIRED: 'Please select a field.',
     },
@@ -111,9 +105,6 @@ export const ERROR_TEXTS = {
   SETUP_MODEL: {
     TABLE: {
       REQUIRED: 'Please select at least one table.',
-    },
-    FIELDS: {
-      REQUIRED: 'Please select at least one field.',
     },
   },
   SAVE_AS_VIEW: {

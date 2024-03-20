@@ -46,26 +46,26 @@ export class MetricData {
           (column) =>
             new MetricColumnData(
               column as MetricColumn,
-              metricType as METRIC_TYPE
-            )
+              metricType as METRIC_TYPE,
+            ),
         ),
       ];
     }, []);
 
     this.measures = this.columns.filter(
-      (column) => column.metricType === METRIC_TYPE.MEASURE
+      (column) => column.metricType === METRIC_TYPE.MEASURE,
     );
     this.timeGrains = this.columns.filter(
-      (column) => column.metricType === METRIC_TYPE.TIME_GRAIN
+      (column) => column.metricType === METRIC_TYPE.TIME_GRAIN,
     );
     this.dimensions = !isCumulative
       ? this.columns.filter(
-          (column) => column.metricType === METRIC_TYPE.DIMENSION
+          (column) => column.metricType === METRIC_TYPE.DIMENSION,
         )
       : undefined;
     this.windows = isCumulative
       ? this.columns.filter(
-          (column) => column.metricType === METRIC_TYPE.WINDOW
+          (column) => column.metricType === METRIC_TYPE.WINDOW,
         )
       : undefined;
   }

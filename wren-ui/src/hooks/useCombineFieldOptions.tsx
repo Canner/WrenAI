@@ -19,6 +19,12 @@ export default function useCombineFieldOptions(props: Props) {
           name: 'orders',
           properties: { type: 'Orders' },
         },
+        {
+          name: 'custkey',
+        },
+        {
+          name: 'id',
+        },
       ],
     },
     {
@@ -27,6 +33,9 @@ export default function useCombineFieldOptions(props: Props) {
         {
           name: 'lineitem',
           properties: { type: 'Lineitem' },
+        },
+        {
+          name: 'orderkey',
         },
       ],
     },
@@ -40,6 +49,23 @@ export default function useCombineFieldOptions(props: Props) {
         {
           name: 'discount',
           properties: { type: 'REAL' },
+        },
+        {
+          name: 'orderkey',
+        },
+      ],
+    },
+    {
+      name: 'trans',
+      columns: [
+        {
+          name: 'custkey',
+        },
+        {
+          name: 'col_a',
+        },
+        {
+          name: 'col_b',
         },
       ],
     },

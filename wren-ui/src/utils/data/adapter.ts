@@ -1,9 +1,5 @@
 import { Manifest } from '@/utils/data/type';
-import {
-  MetricData,
-  ModelData,
-  ViewData,
-} from '@/utils/data/model';
+import { MetricData, ModelData, ViewData } from '@/utils/data/model';
 
 export interface AdaptedData
   extends Omit<Manifest, 'models' | 'metrics' | 'views'> {

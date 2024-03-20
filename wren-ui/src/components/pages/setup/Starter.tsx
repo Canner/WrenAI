@@ -87,29 +87,29 @@ export default function Starter(props) {
   return (
     <>
       <Typography.Title level={1} className="mb-3">
-        Connect the data source
+        Connect a data source
       </Typography.Title>
       <Typography.Text>
-        We only support BigQuery for now. You can vote for your warehouse in our{' '}
+        Vote for your preferred data source to be our next option on our{' '}
         <Link
-          href="https://github.com/Canner/vulcan-sql/issues"
+          href="https://github.com/Canner/WrenAI/issues"
           target="_blank"
           rel="noopener noreferrer"
         >
-          GitHub issues
+          GitHub
         </Link>
-        !
+        .
       </Typography.Text>
-      <Row className="mt-6" gutter={16}>
+      <Row className="mt-6" gutter={[16, 16]}>
         <DataSourceIterator data={dataSources} onSelect={onSelectDataSource} />
       </Row>
 
       <div className="py-8" />
 
       <Typography.Title level={1} className="mb-3">
-        or play around with a template
+        Play around with sample data
       </Typography.Title>
-      <Row className="mt-6" gutter={16}>
+      <Row className="mt-6" gutter={[16, 16]}>
         <TemplatesIterator data={templates} onSelect={onSelectTemplate} />
       </Row>
 
