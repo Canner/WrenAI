@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--database_name",
         type=str,
-        required=True,
+        default="book_2",
     )
     args = parser.parse_args()
     database_name = args.database_name
