@@ -10,18 +10,21 @@ import {
   DataSourceName,
   IContext,
   RelationData,
+  AnalysisRelationInfo,
   RelationType,
 } from '../types';
-import crypto from 'crypto';
-import * as fs from 'fs';
-import path from 'path';
-import { getLogger, Encryptor } from '@/apollo/server/utils';
-import { Model, ModelColumn, Project } from '../repositories';
-import { CreateModelsInput } from '../models';
-import { IConfig } from '../config';
+import { getLogger, Encryptor } from '@server/utils';
+import { Model, ModelColumn, Project, Relation } from '../repositories';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
+
+export enum OnboardingStatusEnum {
+  NOT_STARTED = 'NOT_STARTED',
+  DATASOURCE_SAVED = 'DATASOURCE_SAVED',
+  ONBOARDING_FINISHED = 'ONBOARDING_FINISHED',
+  WITH_SAMPLE_DATASET = 'WITH_SAMPLE_DATASET',
+}
 
 export class ProjectResolver {
   constructor() {
@@ -30,6 +33,34 @@ export class ProjectResolver {
     this.saveTables = this.saveTables.bind(this);
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
     this.saveRelations = this.saveRelations.bind(this);
+    this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
+  }
+
+  public async getOnboardingStatus(_root: any, _arg: any, ctx: IContext) {
+    let project: Project | null;
+    try {
+      project = await ctx.projectRepository.getCurrentProject();
+    } catch (_err: any) {
+      return {
+        status: OnboardingStatusEnum.NOT_STARTED,
+      };
+    }
+    const { id, sampleDataset } = project;
+    if (sampleDataset) {
+      return {
+        status: OnboardingStatusEnum.WITH_SAMPLE_DATASET,
+      };
+    }
+    const models = await ctx.modelRepository.findAllBy({ projectId: id });
+    if (!models.length) {
+      return {
+        status: OnboardingStatusEnum.DATASOURCE_SAVED,
+      };
+    } else {
+      return {
+        status: OnboardingStatusEnum.ONBOARDING_FINISHED,
+      };
+    }
   }
 
   public async saveDataSource(
@@ -47,11 +78,11 @@ export class ProjectResolver {
   }
 
   public async listDataSourceTables(_root: any, _arg, ctx: IContext) {
-    const project = await this.getCurrentProject(ctx);
-    const filePath = await this.getCredentialFilePath(project, ctx.config);
+    const project = await ctx.projectService.getCurrentProject();
+    const filePath = await ctx.projectService.getCredentialFilePath(project);
     const connector = await this.getBQConnector(project, filePath);
     const listTableOptions: BQListTableOptions = {
-      dataset: project.dataset,
+      datasetId: project.datasetId,
       format: true,
     };
     return await connector.listTables(listTableOptions);
@@ -60,30 +91,34 @@ export class ProjectResolver {
   public async saveTables(
     _root: any,
     arg: {
-      data: { tables: CreateModelsInput[] };
+      data: { tables: string[] };
     },
     ctx: IContext,
   ) {
     const tables = arg.data.tables;
 
     // get current project
-    const project = await this.getCurrentProject(ctx);
-    const filePath = await this.getCredentialFilePath(project, ctx.config);
+    const project = await ctx.projectService.getCurrentProject();
+    const filePath = await ctx.projectService.getCredentialFilePath(project);
 
     // get columns with descriptions
-    const transformToCompactTable = false;
     const connector = await this.getBQConnector(project, filePath);
     const listTableOptions: BQListTableOptions = {
-      dataset: project.dataset,
-      format: transformToCompactTable,
+      datasetId: project.datasetId,
+      format: false,
     };
     const dataSourceColumns = await connector.listTables(listTableOptions);
     // create models
     const id = project.id;
-    const models = await this.createModels(tables, id, ctx);
-
+    const tableDescriptions = dataSourceColumns
+      .filter((col: BQColumnResponse) => col.table_description)
+      .reduce((acc, column: BQColumnResponse) => {
+        acc[column.table_name] = column.table_description;
+        return acc;
+      }, {});
+    const models = await this.createModels(tables, id, ctx, tableDescriptions);
     // create columns
-    const columns = await this.createModelColumns(
+    const columns = await this.createAllColumnsInDataSource(
       tables,
       models,
       dataSourceColumns as BQColumnResponse[],
@@ -94,25 +129,25 @@ export class ProjectResolver {
   }
 
   public async autoGenerateRelation(_root: any, _arg: any, ctx: IContext) {
-    const project = await this.getCurrentProject(ctx);
-    const filePath = await this.getCredentialFilePath(project, ctx.config);
+    const project = await ctx.projectService.getCurrentProject();
+    const filePath = await ctx.projectService.getCredentialFilePath(project);
     const models = await ctx.modelRepository.findAllBy({
       projectId: project.id,
     });
 
     const connector = await this.getBQConnector(project, filePath);
     const listConstraintOptions = {
-      dataset: project.dataset,
+      datasetId: project.datasetId,
     };
     const constraints = await connector.listConstraints(listConstraintOptions);
     const modelIds = models.map((m) => m.id);
     const columns =
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
     const relations = this.analysisRelation(constraints, models, columns);
-    return models.map(({ id, tableName }) => ({
+    return models.map(({ id, sourceTableName }) => ({
       id,
-      name: tableName,
-      relations: relations.filter((relation) => relation.fromModel === id),
+      name: sourceTableName,
+      relations: relations.filter((relation) => relation.fromModelId === id),
     }));
   }
 
@@ -122,38 +157,37 @@ export class ProjectResolver {
     ctx: IContext,
   ) {
     const { relations } = arg.data;
-    const project = await this.getCurrentProject(ctx);
+    const project = await ctx.projectService.getCurrentProject();
 
-    // throw error if the relation name is duplicated
-    const relationNames = relations.map((relation) => relation.name);
-    if (new Set(relationNames).size !== relationNames.length) {
-      throw new Error('Duplicated relation name');
-    }
+    const models = await ctx.modelRepository.findAllBy({
+      projectId: project.id,
+    });
 
     const columnIds = relations
-      .map(({ fromColumn, toColumn }) => [fromColumn, toColumn])
+      .map(({ fromColumnId, toColumnId }) => [fromColumnId, toColumnId])
       .flat();
     const columns = await ctx.modelColumnRepository.findColumnsByIds(columnIds);
     const relationValues = relations.map((relation) => {
       const fromColumn = columns.find(
-        (column) => column.id === relation.fromColumn,
+        (column) => column.id === relation.fromColumnId,
       );
       if (!fromColumn) {
-        throw new Error(`Column not found, column Id ${relation.fromColumn}`);
+        throw new Error(`Column not found, column Id ${relation.fromColumnId}`);
       }
       const toColumn = columns.find(
-        (column) => column.id === relation.toColumn,
+        (column) => column.id === relation.toColumnId,
       );
       if (!toColumn) {
-        throw new Error(`Column not found, column Id  ${relation.toColumn}`);
+        throw new Error(`Column not found, column Id  ${relation.toColumnId}`);
       }
+      const relationName = this.generateRelationName(relation, models);
       return {
         projectId: project.id,
-        name: relation.name,
-        leftColumnId: relation.fromColumn,
-        rightColumnId: relation.toColumn,
+        name: relationName,
+        fromColumnId: relation.fromColumnId,
+        toColumnId: relation.toColumnId,
         joinType: relation.type,
-      };
+      } as Partial<Relation>;
     });
 
     const savedRelations = await Promise.all(
@@ -168,7 +202,7 @@ export class ProjectResolver {
     constraints: BQConstraintResponse[],
     models: Model[],
     columns: ModelColumn[],
-  ): RelationData[] {
+  ): AnalysisRelationInfo[] {
     const relations = [];
     for (const constraint of constraints) {
       const {
@@ -178,32 +212,42 @@ export class ProjectResolver {
         constraintedColumn,
       } = constraint;
       // validate tables and columns exists in our models and model columns
-      const fromModel = models.find((m) => m.tableName === constraintTable);
-      const toModel = models.find((m) => m.tableName === constraintedTable);
+      const fromModel = models.find(
+        (m) => m.sourceTableName === constraintTable,
+      );
+      const toModel = models.find(
+        (m) => m.sourceTableName === constraintedTable,
+      );
       if (!fromModel || !toModel) {
         continue;
       }
       const fromColumn = columns.find(
-        (c) => c.modelId === fromModel.id && c.name === constraintColumn,
+        (c) =>
+          c.modelId === fromModel.id && c.sourceColumnName === constraintColumn,
       );
       const toColumn = columns.find(
-        (c) => c.modelId === toModel.id && c.name === constraintedColumn,
+        (c) =>
+          c.modelId === toModel.id && c.sourceColumnName === constraintedColumn,
       );
       if (!fromColumn || !toColumn) {
         continue;
       }
       // create relation
-      const relation = {
-        // upper case the first letter of the tableName
+      const relation: AnalysisRelationInfo = {
+        // upper case the first letter of the sourceTableName
         name:
-          fromModel.tableName.charAt(0).toUpperCase() +
-          fromModel.tableName.slice(1) +
-          toModel.tableName.charAt(0).toUpperCase() +
-          toModel.tableName.slice(1),
-        fromModel: fromModel.id,
-        fromColumn: fromColumn.id,
-        toModel: toModel.id,
-        toColumn: toColumn.id,
+          fromModel.sourceTableName.charAt(0).toUpperCase() +
+          fromModel.sourceTableName.slice(1) +
+          toModel.sourceTableName.charAt(0).toUpperCase() +
+          toModel.sourceTableName.slice(1),
+        fromModelId: fromModel.id,
+        fromModelReferenceName: fromModel.referenceName,
+        fromColumnId: fromColumn.id,
+        fromColumnReferenceName: fromColumn.referenceName,
+        toModelId: toModel.id,
+        toModelReferenceName: toModel.referenceName,
+        toColumnId: toColumn.id,
+        toColumnReferenceName: toColumn.referenceName,
         // TODO: add join type
         type: RelationType.ONE_TO_MANY,
       };
@@ -214,52 +258,41 @@ export class ProjectResolver {
 
   private async getBQConnector(project: Project, filePath: string) {
     // fetch tables
-    const { location, projectId } = project;
+    const { projectId } = project;
     const connectionOption: BigQueryOptions = {
-      location,
       projectId,
       keyFilename: filePath,
     };
     return new BQConnector(connectionOption);
   }
 
-  private async getCredentialFilePath(project: Project, config: IConfig) {
-    const { credentials: encryptedCredentials } = project;
-    const encryptor = new Encryptor(config);
-    const credentials = encryptor.decrypt(encryptedCredentials);
-    const filePath = this.writeCredentialsFile(
-      JSON.parse(credentials),
-      config.persistCredentialDir,
-    );
-    return filePath;
-  }
-
-  private async createModelColumns(
-    tables: CreateModelsInput[],
+  private async createAllColumnsInDataSource(
+    tables: string[],
     models: Model[],
     dataSourceColumns: BQColumnResponse[],
     ctx: IContext,
   ) {
-    const columnValues = tables.reduce((acc, table) => {
-      const modelId = models.find((m) => m.tableName === table.name)?.id;
-      for (const columnName of table.columns) {
-        const dataSourceColumn = dataSourceColumns.find(
-          (c) => c.table_name === table.name && c.column_name === columnName,
-        );
-        if (!dataSourceColumn) {
-          throw new Error(
-            `Column ${columnName} not found in the DataSource ${table.name}`,
-          );
-        }
+    const columnValues = tables.reduce((acc, tableName) => {
+      const modelId = models.find((m) => m.sourceTableName === tableName)?.id;
+      if (!modelId) {
+        throw new Error('Model not found');
+      }
+      const tableColumns = dataSourceColumns.filter(
+        (col) => col.table_name === tableName,
+      );
+      for (const tableColumn of tableColumns) {
+        const columnName = tableColumn.column_name;
         const columnValue = {
           modelId,
           isCalculated: false,
-          name: columnName,
-          type: dataSourceColumn?.data_type || 'string',
-          notNull: dataSourceColumn.is_nullable.toLocaleLowerCase() !== 'yes',
+          displayName: columnName,
+          sourceColumnName: columnName,
+          referenceName: columnName,
+          type: tableColumn?.data_type || 'string',
+          notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
           isPk: false,
           properties: JSON.stringify({
-            description: dataSourceColumn.description,
+            description: tableColumn.column_description,
           }),
         } as Partial<ModelColumn>;
         acc.push(columnValue);
@@ -275,54 +308,44 @@ export class ProjectResolver {
   }
 
   private async createModels(
-    tables: CreateModelsInput[],
+    tables: string[],
     id: number,
     ctx: IContext,
+    tableDescriptions: { [key: string]: string },
   ) {
-    const modelValues = tables.map(({ name }) => {
+    const modelValues = tables.map((tableName) => {
+      const description = tableDescriptions[tableName];
       const model = {
         projectId: id,
-        name, //use table name as model name
-        tableName: name,
-        refSql: `select * from ${name}`,
+        displayName: tableName, //use table name as displayName, referenceName and tableName
+        referenceName: tableName,
+        sourceTableName: tableName,
+        refSql: `select * from ${tableName}`,
         cached: false,
         refreshTime: null,
-        properties: JSON.stringify({ description: '' }),
+        properties: JSON.stringify({ description }),
       } as Partial<Model>;
       return model;
     });
 
     const models = await Promise.all(
       modelValues.map(
-        async (model) => await ctx.modelRepository.createOne(model),
+        async (modelValue) => await ctx.modelRepository.createOne(modelValue),
       ),
     );
     return models;
   }
 
-  private async getCurrentProject(ctx: IContext) {
-    const projects = await ctx.projectRepository.findAll({
-      order: 'id',
-      limit: 1,
-    });
-    if (!projects.length) {
-      throw new Error('No project found');
-    }
-    return projects[0];
-  }
-
   private async saveBigQueryDataSource(properties: any, ctx: IContext) {
-    const { displayName, location, projectId, dataset, credentials } =
-      properties;
+    const { displayName, projectId, datasetId, credentials } = properties;
     const { config } = ctx;
     let filePath = '';
     // check DataSource is valid and can connect to it
-    filePath = await this.writeCredentialsFile(
+    filePath = ctx.projectService.writeCredentialFile(
       credentials,
       config.persistCredentialDir,
     );
     const connectionOption: BigQueryOptions = {
-      location,
       projectId,
       keyFilename: filePath,
     };
@@ -333,7 +356,7 @@ export class ProjectResolver {
     }
     // check can list dataset table
     try {
-      await connector.listTables({ dataset });
+      await connector.listTables({ datasetId });
     } catch (_e) {
       throw new Error('Cannot list tables in dataset');
     }
@@ -348,37 +371,23 @@ export class ProjectResolver {
       catalog: 'tbd',
       type: DataSourceName.BIG_QUERY,
       projectId,
-      location,
-      dataset,
+      datasetId,
       credentials: encryptedCredentials,
     });
     return project;
   }
 
-  private writeCredentialsFile(
-    credentials: JSON,
-    persistCredentialDir: string,
-  ) {
-    // create persist_credential_dir if not exists
-    if (!fs.existsSync(persistCredentialDir)) {
-      fs.mkdirSync(persistCredentialDir, { recursive: true });
+  private generateRelationName(relation: RelationData, models: Model[]) {
+    const fromModel = models.find((m) => m.id === relation.fromModelId);
+    const toModel = models.find((m) => m.id === relation.toModelId);
+    if (!fromModel || !toModel) {
+      throw new Error('Model not found');
     }
-    // file name will be the hash of the credentials, file path is current working directory
-    // convert credentials from base64 to string and replace all the matched "\n" with "\\n",  there are many \n in the "private_key" property
-    const credentialString = JSON.stringify(credentials);
-    const fileName = crypto
-      .createHash('md5')
-      .update(credentialString)
-      .digest('hex');
-
-    const filePath = path.join(persistCredentialDir, `${fileName}.json`);
-    // check if file exists
-    if (fs.existsSync(filePath)) {
-      logger.debug(`File ${filePath} already exists`);
-      return filePath;
-    }
-    logger.debug(`Writing credentials to file ${filePath}`);
-    fs.writeFileSync(filePath, credentialString);
-    return filePath;
+    return (
+      fromModel.sourceTableName.charAt(0).toUpperCase() +
+      fromModel.sourceTableName.slice(1) +
+      toModel.sourceTableName.charAt(0).toUpperCase() +
+      toModel.sourceTableName.slice(1)
+    );
   }
 }

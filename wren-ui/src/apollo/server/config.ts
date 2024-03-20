@@ -25,7 +25,7 @@ const defaultConfig = {
   debug: false,
 
   // sqlite
-  sqliteFile: './db.sqlite',
+  sqliteFile: './db.sqlite3',
 
   persistCredentialDir: process.cwd(),
 

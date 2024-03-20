@@ -39,11 +39,22 @@ export const typeDefs = gql`
     MANY_TO_MANY
   }
 
+  enum OnboardingStatus {
+    NOT_STARTED
+    DATASOURCE_SAVED
+    ONBOARDING_FINISHED
+    WITH_SAMPLE_DATASET
+  }
+
   type Relation {
-    fromModel: Int!
-    fromColumn: Int!
-    toModel: Int!
-    toColumn: Int!
+    fromModelId: Int!
+    fromModelReferenceName: String!
+    fromColumnId: Int!
+    fromColumnReferenceName: String!
+    toModelId: Int!
+    toModelReferenceName: String!
+    toColumnId: Int!
+    toColumnReferenceName: String!
     type: RelationType!
     name: String!
   }
@@ -55,11 +66,10 @@ export const typeDefs = gql`
   }
 
   input RelationInput {
-    name: String!
-    fromModel: Int!
-    fromColumn: Int!
-    toModel: Int!
-    toColumn: Int!
+    fromModelId: Int!
+    fromColumnId: Int!
+    toModelId: Int!
+    toColumnId: Int!
     type: RelationType!
   }
 
@@ -68,22 +78,12 @@ export const typeDefs = gql`
   }
 
   input SaveTablesInput {
-    tables: [ModelsInput!]!
-  }
-
-  input ModelsInput {
-    name: String!
-    columns: [String!]!
+    tables: [String!]!
   }
 
   type CompactColumn {
     name: String!
     type: String!
-  }
-
-  enum ModelType {
-    TABLE
-    CUSTOM
   }
 
   input CustomFieldInput {
@@ -94,39 +94,40 @@ export const typeDefs = gql`
   input CalculatedFieldInput {
     name: String!
     expression: String!
+    lineage: [Int!]!
+    diagram: JSON
   }
 
   input CreateModelInput {
-    type: ModelType!
-    tableName: String!
     displayName: String!
+    sourceTableName: String!
+    refSql: String
     description: String
     cached: Boolean!
     refreshTime: String
     fields: [String!]!
-    customFields: [CustomFieldInput!]
     calculatedFields: [CalculatedFieldInput!]
   }
 
   input ModelWhereInput {
-    name: String!
+    id: Int!
   }
 
   input UpdateModelInput {
-    type: ModelType!
     displayName: String!
     description: String
     cached: Boolean!
     refreshTime: String
     fields: [String!]!
-    customFields: [CustomFieldInput!]
     calculatedFields: [CalculatedFieldInput!]
   }
 
-  type ColumnInfo {
+  type FieldInfo {
     id: Int!
-    name: String!
-    type: String!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    type: String
     isCalculated: Boolean!
     notNull: Boolean!
     expression: String
@@ -135,33 +136,55 @@ export const typeDefs = gql`
 
   type ModelInfo {
     id: Int!
-    name: String!
+    displayName: String!
+    referenceName: String!
+    sourceTableName: String!
     refSql: String
     primaryKey: String
     cached: Boolean!
     refreshTime: String
     description: String
-    columns: [ColumnInfo]!
+    fields: [FieldInfo]!
+    calculatedFields: [FieldInfo]!
     properties: JSON
   }
 
   type DetailedColumn {
-    name: String!
-    type: String!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    type: String
     isCalculated: Boolean!
     notNull: Boolean!
     properties: JSON!
   }
 
-  type DetailedModel {
+  type DetailedRelation {
+    fromModelId: Int!
+    fromColumnId: Int!
+    toModelId: Int!
+    toColumnId: Int!
+    type: RelationType!
     name: String!
+  }
+
+  type DetailedModel {
+    displayName: String!
+    referenceName: String!
+    sourceTableName: String!
     refSql: String!
     primaryKey: String
     cached: Boolean!
-    refreshTime: String!
+    refreshTime: String
     description: String
-    columns: [DetailedColumn!]!
+    fields: [DetailedColumn]
+    calculatedFields: [DetailedColumn]
+    relations: [DetailedRelation]
     properties: JSON!
+  }
+
+  type OnboardingStatusResponse {
+    status: OnboardingStatus
   }
 
   input SimpleMeasureInput {
@@ -193,7 +216,6 @@ export const typeDefs = gql`
     cached: Boolean!
     refreshTime: String
     model: String!
-    modelType: ModelType!
     properties: JSON!
     measure: [SimpleMeasureInput!]!
     dimension: [DimensionInput!]!
@@ -206,10 +228,11 @@ export const typeDefs = gql`
     listDataSourceTables: [CompactTable!]!
     autoGenerateRelation: [RecommandRelations!]
     manifest: JSON!
+    onboardingStatus: OnboardingStatusResponse!
 
     # Modeling Page
     listModels: [ModelInfo!]!
-    getModel(where: ModelWhereInput!): DetailedModel!
+    model(where: ModelWhereInput!): DetailedModel!
   }
 
   type Mutation {

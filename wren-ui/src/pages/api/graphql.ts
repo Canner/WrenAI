@@ -1,19 +1,22 @@
 import microCors from 'micro-cors';
 import { NextApiRequest, NextApiResponse, PageConfig } from 'next';
 import { ApolloServer } from 'apollo-server-micro';
-import { typeDefs } from '@/apollo/server';
-import resolvers from '@/apollo/server/resolvers';
-import { IContext } from '@/apollo/server/types';
+import { typeDefs } from '@server';
+import resolvers from '@server/resolvers';
+import { IContext } from '@server/types';
 import {
   ModelColumnRepository,
   ModelRepository,
   ProjectRepository,
   RelationRepository,
-} from '@/apollo/server/repositories';
+} from '@server/repositories';
 import { bootstrapKnex } from '../../apollo/server/utils/knex';
 import { GraphQLError } from 'graphql';
-import { getLogger } from '@/apollo/server/utils';
-import { getConfig } from '@/apollo/server/config';
+import { getLogger } from '@server/utils';
+import { getConfig } from '@server/config';
+import { ProjectService } from '@server/services/projectService';
+import { ModelService } from '@server/services/modelService';
+import { MDLService } from '@server/services/mdlService';
 
 const serverConfig = getConfig();
 const apolloLogger = getLogger('APOLLO');
@@ -36,6 +39,15 @@ const modelRepository = new ModelRepository(knex);
 const modelColumnRepository = new ModelColumnRepository(knex);
 const relationRepository = new RelationRepository(knex);
 
+const projectService = new ProjectService({ projectRepository });
+const modelService = new ModelService();
+const mdlService = new MDLService({
+  projectRepository,
+  modelRepository,
+  modelColumnRepository,
+  relationRepository,
+});
+
 const apolloServer: ApolloServer = new ApolloServer({
   typeDefs,
   resolvers,
@@ -46,6 +58,11 @@ const apolloServer: ApolloServer = new ApolloServer({
   introspection: process.env.NODE_ENV !== 'production',
   context: (): IContext => ({
     config: serverConfig,
+
+    // services
+    projectService,
+    modelService,
+    mdlService,
 
     // repository
     projectRepository,

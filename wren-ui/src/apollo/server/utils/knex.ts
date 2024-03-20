@@ -18,7 +18,7 @@ export const bootstrapKnex = (options: KnexOptions) => {
     });
   } else {
     console.log('using sqlite');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    /* eslint-disable @typescript-eslint/no-var-requires */
     return require('knex')({
       client: 'better-sqlite3',
       connection: {

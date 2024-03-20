@@ -9,7 +9,9 @@ export interface ModelColumn {
   id: number; // ID
   modelId: number; // Reference to model ID
   isCalculated: boolean; // Is calculated field
-  name: string; // Column name
+  displayName: string; // Column name displayed in UI
+  referenceName: string; // The name used in the MDL structure and when querying the data
+  sourceColumnName: string; // The column name in the datasource
   aggregation?: string; // Expression for the column, could be custom field or calculated field expression
   lineage?: string; // The selected field in calculated field, array of ids
   diagram?: string; // For FE to store the calculated field diagram
@@ -31,7 +33,10 @@ export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
   ): Promise<ModelColumn[]>;
 }
 
-export class ModelColumnRepository extends BaseRepository<ModelColumn> {
+export class ModelColumnRepository
+  extends BaseRepository<ModelColumn>
+  implements IModelColumnRepository
+{
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'model_column' });
   }
