@@ -13,11 +13,6 @@
 
 - execute `make start` to start the service and go to `http://UVICORN_HOST:UVICORN_PORT/docs` to see the API documentation and try the API
 
-## Demo
-
-- go to the `demo` folder and run `poetry install` to install the dependencies
-- in the `demo` folder, run `make prepare` in one terminal, and `make run` in another terminal to start the demo and go to `http://localhost:8501` to see the demo
-
 ## Production Environment Setup
 
 - copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
