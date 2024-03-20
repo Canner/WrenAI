@@ -151,7 +151,6 @@ class AskService:
             for reply in generation_result["generator"]["replies"]
         ]
 
-        assert len(cleaned_generation_results) == 3
         if not cleaned_generation_results[0]["sql"]:
             self.ask_results[query_id] = AskResultResponse(
                 status="failed", error="Failed to generate SQL"
