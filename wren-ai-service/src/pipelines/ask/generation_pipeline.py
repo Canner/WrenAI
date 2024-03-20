@@ -139,8 +139,6 @@ if __name__ == "__main__":
         user_id=str(uuid.uuid4()) if with_trace else None,
     )
 
-    assert len(generation_result["generator"]["replies"]) == 3
-
     cleaned_generation_result = json.loads(
         clean_generation_result(generation_result["generator"]["replies"][0])
     )
