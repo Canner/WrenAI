@@ -7,26 +7,37 @@ on:
         type: string
         description: Docker image tag name (Optional)
 
+defaults:
+  run:
+    working-directory: wren-ai-service/docker
+
 jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
-    - name: Echo Hi
-      run: echo "Hi"
-    # - name: Checkout repository
-    #   uses: actions/checkout@v2
-    # - name: Set up Docker Buildx
-    #   uses: docker/setup-buildx-action@v1
-    # - name: Login to GitHub Container Registry
-    #   run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-    # - name: Build and push image
-    #   run: |
-    #     docker buildx build \
-    #       --platform linux/amd64,linux/arm64 \
-    #       -t ghcr.io/${{ github.repository }}/ai-service:${{ github.sha }}
-    #       --push .
-    #     docker tag \
-    #       ghcr.io/${{ github.repository }}/ai-service:${{ github.sha }}
-    #       ghcr.io/${{ github.repository }}/ai-service:latest
-    #     docker push \
-    #       ghcr.io/${{ github.repository }}/ai-service:latest
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{secrets.GHCR_USERNAME}}
+          password: ${{secrets.GHCR_TOKEN}}
+      - name: Prepare tag name
+        id: prepare_tag
+        run: |
+          if [ -n "${{ github.event.inputs.docker_image_tag_name }}" ]; then
+            tag_name=${{ github.event.inputs.docker_image_tag_name }}
+          else
+            tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
+          fi
+          echo ::set-output name=tag_name::$tag_name
+      - name: Build and push image
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag ghcr.io/canner/wren-ai-service:${{ steps.prepare_tag.outputs.tag_name }} \
+            --push .
