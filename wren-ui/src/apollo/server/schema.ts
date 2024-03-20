@@ -47,10 +47,14 @@ export const typeDefs = gql`
   }
 
   type Relation {
-    fromModel: Int!
-    fromColumn: Int!
-    toModel: Int!
-    toColumn: Int!
+    fromModelId: Int!
+    fromModelReferenceName: String!
+    fromColumnId: Int!
+    fromColumnReferenceName: String!
+    toModelId: Int!
+    toModelReferenceName: String!
+    toColumnId: Int!
+    toColumnReferenceName: String!
     type: RelationType!
     name: String!
   }
@@ -62,10 +66,10 @@ export const typeDefs = gql`
   }
 
   input RelationInput {
-    fromModel: Int!
-    fromColumn: Int!
-    toModel: Int!
-    toColumn: Int!
+    fromModelId: Int!
+    fromColumnId: Int!
+    toModelId: Int!
+    toColumnId: Int!
     type: RelationType!
   }
 

@@ -10,10 +10,11 @@ import {
   DataSourceName,
   IContext,
   RelationData,
+  AnalysisRelationInfo,
   RelationType,
 } from '../types';
 import { getLogger, Encryptor } from '@server/utils';
-import { Model, ModelColumn, Project } from '../repositories';
+import { Model, ModelColumn, Project, Relation } from '../repositories';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -146,7 +147,7 @@ export class ProjectResolver {
     return models.map(({ id, sourceTableName }) => ({
       id,
       name: sourceTableName,
-      relations: relations.filter((relation) => relation.fromModel === id),
+      relations: relations.filter((relation) => relation.fromModelId === id),
     }));
   }
 
@@ -163,30 +164,30 @@ export class ProjectResolver {
     });
 
     const columnIds = relations
-      .map(({ fromColumn, toColumn }) => [fromColumn, toColumn])
+      .map(({ fromColumnId, toColumnId }) => [fromColumnId, toColumnId])
       .flat();
     const columns = await ctx.modelColumnRepository.findColumnsByIds(columnIds);
     const relationValues = relations.map((relation) => {
       const fromColumn = columns.find(
-        (column) => column.id === relation.fromColumn,
+        (column) => column.id === relation.fromColumnId,
       );
       if (!fromColumn) {
-        throw new Error(`Column not found, column Id ${relation.fromColumn}`);
+        throw new Error(`Column not found, column Id ${relation.fromColumnId}`);
       }
       const toColumn = columns.find(
-        (column) => column.id === relation.toColumn,
+        (column) => column.id === relation.toColumnId,
       );
       if (!toColumn) {
-        throw new Error(`Column not found, column Id  ${relation.toColumn}`);
+        throw new Error(`Column not found, column Id  ${relation.toColumnId}`);
       }
       const relationName = this.generateRelationName(relation, models);
       return {
         projectId: project.id,
         name: relationName,
-        fromColumnId: relation.fromColumn,
-        toColumnId: relation.toColumn,
+        fromColumnId: relation.fromColumnId,
+        toColumnId: relation.toColumnId,
         joinType: relation.type,
-      };
+      } as Partial<Relation>;
     });
 
     const savedRelations = await Promise.all(
@@ -201,7 +202,7 @@ export class ProjectResolver {
     constraints: BQConstraintResponse[],
     models: Model[],
     columns: ModelColumn[],
-  ): RelationData[] {
+  ): AnalysisRelationInfo[] {
     const relations = [];
     for (const constraint of constraints) {
       const {
@@ -232,17 +233,21 @@ export class ProjectResolver {
         continue;
       }
       // create relation
-      const relation = {
+      const relation: AnalysisRelationInfo = {
         // upper case the first letter of the sourceTableName
         name:
           fromModel.sourceTableName.charAt(0).toUpperCase() +
           fromModel.sourceTableName.slice(1) +
           toModel.sourceTableName.charAt(0).toUpperCase() +
           toModel.sourceTableName.slice(1),
-        fromModel: fromModel.id,
-        fromColumn: fromColumn.id,
-        toModel: toModel.id,
-        toColumn: toColumn.id,
+        fromModelId: fromModel.id,
+        fromModelReferenceName: fromModel.referenceName,
+        fromColumnId: fromColumn.id,
+        fromColumnReferenceName: fromColumn.referenceName,
+        toModelId: toModel.id,
+        toModelReferenceName: toModel.referenceName,
+        toColumnId: toColumn.id,
+        toColumnReferenceName: toColumn.referenceName,
         // TODO: add join type
         type: RelationType.ONE_TO_MANY,
       };
@@ -373,8 +378,8 @@ export class ProjectResolver {
   }
 
   private generateRelationName(relation: RelationData, models: Model[]) {
-    const fromModel = models.find((m) => m.id === relation.fromModel);
-    const toModel = models.find((m) => m.id === relation.toModel);
+    const fromModel = models.find((m) => m.id === relation.fromModelId);
+    const toModel = models.find((m) => m.id === relation.toModelId);
     if (!fromModel || !toModel) {
       throw new Error('Model not found');
     }
