@@ -14,7 +14,7 @@ logger.level = 'debug';
 export interface IProjectService {
   getCurrentProject: () => Promise<Project>;
   getCredentialFilePath: (project?: Project) => Promise<string>;
-  writeCredentialsFile: (
+  writeCredentialFile: (
     credentials: JSON,
     persistCredentialDir: string,
   ) => string;
@@ -38,14 +38,14 @@ export class ProjectService implements IProjectService {
     const { credentials: encryptedCredentials } = project;
     const encryptor = new Encryptor(config);
     const credentials = encryptor.decrypt(encryptedCredentials);
-    const filePath = this.writeCredentialsFile(
+    const filePath = this.writeCredentialFile(
       JSON.parse(credentials),
       config.persistCredentialDir,
     );
     return filePath;
   }
 
-  public writeCredentialsFile(credentials: JSON, persistCredentialDir: string) {
+  public writeCredentialFile(credentials: JSON, persistCredentialDir: string) {
     // create persist_credential_dir if not exists
     if (!fs.existsSync(persistCredentialDir)) {
       fs.mkdirSync(persistCredentialDir, { recursive: true });

@@ -341,7 +341,7 @@ export class ProjectResolver {
     const { config } = ctx;
     let filePath = '';
     // check DataSource is valid and can connect to it
-    filePath = ctx.projectService.writeCredentialsFile(
+    filePath = ctx.projectService.writeCredentialFile(
       credentials,
       config.persistCredentialDir,
     );
