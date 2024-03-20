@@ -5,7 +5,7 @@ import sqlite3
 import time
 import zipfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import gdown
 import psycopg2
@@ -77,6 +77,11 @@ def get_datasets():
         datasets = sorted(table_counts_in_database.keys())
 
     return datasets
+
+
+def save_mdl_json_file(file_name: str, mdl_json: Dict):
+    with open(f"../src/eval/data/{file_name}", "w", encoding="utf-8") as file:
+        json.dump(mdl_json, file, indent=2)
 
 
 @st.cache_data
