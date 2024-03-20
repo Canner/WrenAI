@@ -566,29 +566,6 @@ def get_appropriat_column_type(column_type: str):
 
 
 def split_table_definition(table_definition: str):
-    # parts = []
-    # bracket_level = 0
-    # current = []
-    # for char in table_definition:
-    #     if char == "(" and bracket_level == 0:
-    #         bracket_level += 1
-    #     elif char == "(":
-    #         bracket_level += 1
-    #         current.append(char)
-    #     elif char == ")" and bracket_level == 1:
-    #         bracket_level -= 1
-    #     elif char == ")":
-    #         bracket_level -= 1
-    #         current.append(char)
-    #     elif char == "," and bracket_level == 0:
-    #         parts.append("".join(current).strip())
-    #         current = []
-    #     else:
-    #         current.append(char)
-    # parts.append("".join(current).strip())  # add the last part
-    # print(f'parts: {parts}')
-    # return parts
-
     return table_definition.split(", ")
 
 
