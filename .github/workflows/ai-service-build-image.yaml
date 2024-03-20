@@ -1,4 +1,4 @@
-name: Build image
+name: AI Service Build image
 
 on:
   workflow_dispatch:
