@@ -554,53 +554,37 @@ def show_asks_results():
     show_query_history()
 
     st.markdown("### Query Results")
-    asks_result_col1, asks_result_col2, asks_result_col3 = st.columns(3)
-    with asks_result_col1:
-        st.markdown("Result 1")
-        st.code(
-            body=st.session_state["asks_results"][0]["sql"],
-            language="sql",
-        )
-        st.markdown(st.session_state["asks_results"][0]["summary"])
-        choose_result_1 = st.button("Choose Result 1")
-    with asks_result_col2:
-        st.markdown("Result 2")
-        st.code(
-            body=st.session_state["asks_results"][1]["sql"],
-            language="sql",
-        )
-        st.markdown(st.session_state["asks_results"][1]["summary"])
-        choose_result_2 = st.button("Choose Result 2")
-    with asks_result_col3:
-        st.markdown("Result 3")
-        st.code(
-            body=st.session_state["asks_results"][2]["sql"],
-            language="sql",
-        )
-        st.markdown(st.session_state["asks_results"][2]["summary"])
-        choose_result_3 = st.button("Choose Result 3")
+    asks_result_count = len(st.session_state["asks_results"])
+    ask_result_cols = st.columns(asks_result_count)
+    choose_result_n = [False] * asks_result_count
+    for i, ask_result_col in enumerate(ask_result_cols):
+        with ask_result_col:
+            st.markdown(f"Result {i+1}")
+            st.code(
+                body=st.session_state["asks_results"][i]["sql"],
+                language="sql",
+            )
+            st.markdown(st.session_state["asks_results"][i]["summary"])
+            choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
-    if choose_result_1 or choose_result_2 or choose_result_3:
-        if choose_result_1:
-            sql = st.session_state["asks_results"][0]["sql"]
-            summary = st.session_state["asks_results"][0]["summary"]
-        elif choose_result_2:
-            sql = st.session_state["asks_results"][1]["sql"]
-            summary = st.session_state["asks_results"][1]["summary"]
-        elif choose_result_3:
-            sql = st.session_state["asks_results"][2]["sql"]
-            summary = st.session_state["asks_results"][2]["summary"]
-        st.session_state["chosen_query_result"] = {
-            "index": 0 if choose_result_1 else 1 if choose_result_2 else 2,
-            "query": st.session_state["query"],
-            "sql": sql,
-            "summary": summary,
-        }
+    for i, choose_result in enumerate(choose_result_n):
+        if choose_result:
+            sql = st.session_state["asks_results"][i]["sql"]
+            summary = st.session_state["asks_results"][i]["summary"]
 
-        # reset relevant session_states
-        st.session_state["asks_details_result"] = None
-        st.session_state["preview_data_button_index"] = None
-        st.session_state["preview_sql"] = None
+            st.session_state["chosen_query_result"] = {
+                "index": i,
+                "query": st.session_state["query"],
+                "sql": sql,
+                "summary": summary,
+            }
+
+            # reset relevant session_states
+            st.session_state["asks_details_result"] = None
+            st.session_state["preview_data_button_index"] = None
+            st.session_state["preview_sql"] = None
+
+            break
 
 
 def show_asks_details_results():
