@@ -68,13 +68,13 @@ const ButtonTemplate = (
   );
 };
 
+const DataSourceIterator = makeIterable(ButtonTemplate);
+const TemplatesIterator = makeIterable(ButtonTemplate);
+
 export default function Starter(props) {
   const { onNext } = props;
   const dataSources = getDataSources();
   const templates = getTemplates();
-
-  const DataSourceIterator = makeIterable(ButtonTemplate);
-  const TemplatesIterator = makeIterable(ButtonTemplate);
 
   const onSelectDataSource = (value: DATA_SOURCES) => {
     onNext && onNext({ dataSource: value });

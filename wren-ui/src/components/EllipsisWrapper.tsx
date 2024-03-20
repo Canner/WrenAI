@@ -1,12 +1,29 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import styled from 'styled-components';
 
 interface Props {
   text?: string;
   children?: ReactNode;
+  multipleLine?: number;
 }
 
+const Wrapper = styled.div<{ multipleLine?: number }>`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  ${(props) =>
+    props.multipleLine
+      ? `
+  display: -webkit-box;
+  -webkit-line-clamp: ${props.multipleLine};
+  -webkit-box-orient: vertical;
+`
+      : `
+  white-space: nowrap;
+`}
+`;
+
 export default function EllipsisWrapper(props: Props) {
-  const { text, children } = props;
+  const { text, multipleLine, children } = props;
   const ref = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(undefined);
   const hasWidth = width !== undefined;
@@ -28,8 +45,13 @@ export default function EllipsisWrapper(props: Props) {
   const title = Array.isArray(text) ? text.join('') : text;
 
   return (
-    <div ref={ref} className="text-truncate" title={title} style={{ width }}>
+    <Wrapper
+      ref={ref}
+      title={title}
+      multipleLine={multipleLine}
+      style={{ width }}
+    >
       {hasWidth ? renderContent() : null}
-    </div>
+    </Wrapper>
   );
 }
