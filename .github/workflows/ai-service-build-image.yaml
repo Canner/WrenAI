@@ -9,7 +9,7 @@ on:
 
 defaults:
   run:
-    working-directory: wren-ai-service/docker
+    working-directory: wren-ai-service
 
 jobs:
   build-image:
@@ -40,4 +40,5 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --tag ghcr.io/canner/wren-ai-service:${{ steps.prepare_tag.outputs.tag_name }} \
+            --file ./docker/Dockerfile \
             --push .
