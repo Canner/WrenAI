@@ -36,5 +36,5 @@
 - in the `demo` folder, run `make prepare` in one terminal, and `make run` in another terminal to start the demo and go to `http://localhost:8501` to see the demo
     - `make prepare` will run three other services: qdrant, wren-engine, and wren-ai-service
     - qdrant: ports should be 6333, 6334
-    - wren-engine: ports should be8080, 7342
+    - wren-engine: ports should be 8080, 7342
     - wren-ai-service: port should be 5000
