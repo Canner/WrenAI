@@ -12,7 +12,10 @@ export interface MetricMeasure {
 export interface IMetricMeasureRepository
   extends IBasicRepository<MetricMeasure> {}
 
-export class MetricMeasureRepository extends BaseRepository<MetricMeasure> {
+export class MetricMeasureRepository
+  extends BaseRepository<MetricMeasure>
+  implements IMetricMeasureRepository
+{
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'metric_measure' });
   }

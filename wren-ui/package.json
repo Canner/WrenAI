@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "knex-migrate": "yarn knex migrate:latest",
+    "migrate": "yarn knex migrate:latest",
     "rollback": "yarn knex migrate:rollback",
     "generate-gql": "yarn graphql-codegen --config codegen.yaml"
   },
@@ -75,5 +75,8 @@
     "ts-node": "9.1.1",
     "ts-sinon": "^2.0.2",
     "typescript": "~4.6.2"
+  },
+  "_moduleAliases": {
+    "@server": "src/apollo/server"
   }
 }

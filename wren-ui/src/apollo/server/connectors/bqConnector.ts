@@ -22,7 +22,8 @@ export interface BQColumnResponse {
   collation_name: string;
   column_default: string;
   rounding_mode: string;
-  description: string;
+  column_description: string;
+  table_description: string;
 }
 
 export interface BQConstraintResponse {
@@ -34,9 +35,13 @@ export interface BQConstraintResponse {
   constraintedColumn: string;
 }
 
+export interface BQListTableFilter {
+  tableName: string;
+}
 export interface BQListTableOptions {
-  dataset: string;
+  datasetId: string;
   format?: boolean;
+  filter?: BQListTableFilter;
 }
 export class BQConnector
   implements IConnector<BQColumnResponse, BQConstraintResponse>
@@ -58,26 +63,33 @@ export class BQConnector
   }
 
   public async listTables(listTableOptions: BQListTableOptions) {
-    const { dataset, format } = listTableOptions;
+    const { datasetId, format, filter } = listTableOptions;
+    let sql = `SELECT 
+        c.*, 
+        cf.description AS column_description, 
+        table_options.option_value AS table_description
+      FROM ${datasetId}.INFORMATION_SCHEMA.COLUMNS c 
+      JOIN ${datasetId}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS cf 
+        ON cf.table_name = c.table_name 
+        AND cf.column_name = c.column_name
+      LEFT JOIN ${datasetId}.INFORMATION_SCHEMA.TABLE_OPTIONS table_options
+        ON c.table_name = table_options.table_name
+      `;
+
+    if (filter?.tableName) {
+      sql += ` WHERE c.table_name = '${filter.tableName}'`;
+    }
+    sql += ` ORDER BY c.table_name, c.ordinal_position`;
+
     // list columns from INFORMATION_SCHEMA ref: https://cloud.google.com/bigquery/docs/information-schema-columns
     const columns = await new Promise((resolve, reject) => {
-      this.bq.query(
-        `SELECT 
-          c.*, cf.description 
-        FROM ${dataset}.INFORMATION_SCHEMA.COLUMNS c 
-        JOIN ${dataset}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS cf 
-          ON cf.table_name = c.table_name 
-          AND cf.column_name = c.column_name
-        ORDER BY 
-          c.table_name, c.ordinal_position;`,
-        (err, rows) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        },
-      );
+      this.bq.query(sql, (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
     });
 
     if (!format) {
@@ -87,7 +99,7 @@ export class BQConnector
   }
 
   public async listConstraints(options) {
-    const { dataset } = options;
+    const { datasetId } = options;
     // ref: information schema link: https://cloud.google.com/bigquery/docs/information-schema-intro
     const constraints = await new Promise((resolve, reject) => {
       this.bq.query(
@@ -96,10 +108,10 @@ export class BQConnector
         ccu.table_name as constraintTable, ccu.column_name constraintColumn, 
         kcu.table_name as constraintedTable, kcu.column_name as constraintedColumn, 
         tc.constraint_type as constraintType
-      FROM ${dataset}.INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE ccu 
-      JOIN ${dataset}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
+      FROM ${datasetId}.INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE ccu 
+      JOIN ${datasetId}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
         ON ccu.constraint_name = kcu.constraint_name
-      JOIN ${dataset}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+      JOIN ${datasetId}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
         ON ccu.constraint_name = tc.constraint_name
       WHERE tc.constraint_type = 'FOREIGN KEY'
       `,
@@ -121,6 +133,7 @@ export class BQConnector
       if (!table) {
         table = {
           name: row.table_name,
+          description: row.table_description,
           columns: [],
         };
         acc.push(table);
@@ -128,6 +141,8 @@ export class BQConnector
       table.columns.push({
         name: row.column_name,
         type: row.data_type,
+        notNull: row.is_nullable.toLocaleLowerCase() !== 'yes',
+        description: row.column_description,
       });
       return acc;
     }, []);

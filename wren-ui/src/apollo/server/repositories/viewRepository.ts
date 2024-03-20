@@ -13,7 +13,10 @@ export interface View {
 
 export interface IViewRepository extends IBasicRepository<View> {}
 
-export class ViewRepository extends BaseRepository<View> {
+export class ViewRepository
+  extends BaseRepository<View>
+  implements IViewRepository
+{
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'view' });
   }

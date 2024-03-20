@@ -1,9 +1,20 @@
 export interface RelationData {
+  fromModelId: number;
+  fromColumnId: number;
+  toModelId: number;
+  toColumnId: number;
+  type: RelationType;
+}
+export interface AnalysisRelationInfo {
   name: string;
-  fromModel: number;
-  fromColumn: number;
-  toModel: number;
-  toColumn: number;
+  fromModelId: number;
+  fromModelReferenceName: string;
+  fromColumnId: number;
+  fromColumnReferenceName: string;
+  toModelId: number;
+  toModelReferenceName: string;
+  toColumnId: number;
+  toColumnReferenceName: string;
   type: RelationType;
 }
 
