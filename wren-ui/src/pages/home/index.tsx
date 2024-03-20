@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { useRouter } from 'next/router';
-import { Path } from '@/utils/enum';
 import { nextTick } from '@/utils/time';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
+import useHomeSidebar from '@/hooks/useHomeSidebar';
 
 const testData = {
   status: 'searching',
@@ -54,15 +53,10 @@ const demoData = [
 ];
 
 export default function Ask() {
-  const router = useRouter();
+  const homeSidebar = useHomeSidebar();
   // TODO: adjust when intergrating with API
   const [simulateData, setSimulateData] = useState(testData);
-  const data = [];
   const isDemo = true;
-
-  const onSelect = (selectKeys: string[]) => {
-    router.push(`${Path.Home}/${selectKeys[0]}`);
-  };
 
   const onDemoSelect = () => {};
 
@@ -84,7 +78,7 @@ export default function Ask() {
   };
 
   return (
-    <SiderLayout loading={false} sidebar={{ data, onSelect }}>
+    <SiderLayout loading={false} sidebar={homeSidebar}>
       <div
         className="d-flex align-center justify-center flex-column"
         style={{ height: '100%' }}

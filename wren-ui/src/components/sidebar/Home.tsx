@@ -1,29 +1,29 @@
-import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import copy from 'copy-to-clipboard';
-import styled from 'styled-components';
+import { useRouter } from 'next/router';
 import { Button, message } from 'antd';
+import styled from 'styled-components';
+import copy from 'copy-to-clipboard';
 import { DataNode } from 'antd/es/tree';
+import { Path } from '@/utils/enum';
+import { createTreeGroupNode } from '@/components/sidebar/utils';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import SidebarTree, { useSidebarTreeState } from './SidebarTree';
-import { createTreeGroupNode } from '@/components/sidebar/utils';
-import { Path } from '@/utils/enum';
-import ExplorationTreeTitle from '@/components/sidebar/exploration/ExplorationTreeTitle';
+import TreeTitle from '@/components/sidebar/home/TreeTitle';
 
-// TODO: update it to real exploration data type
-interface ExplorationData {
+// TODO: update it to real thread data type
+interface ThreadData {
   id: string;
   name: string;
 }
 
 export interface Props {
-  data: ExplorationData[];
+  data: ThreadData[];
   onSelect: (selectKeys) => void;
 }
 
-const ExplorationSidebarTree = styled(SidebarTree)`
+const StyledSidebarTree = styled(SidebarTree)`
   .adm-treeNode {
-    &.adm-treeNode__exploration {
+    &.adm-treeNode__thread {
       padding: 0px 16px 0px 4px !important;
 
       .ant-tree-title {
@@ -39,17 +39,17 @@ const ExplorationSidebarTree = styled(SidebarTree)`
   }
 `;
 
-export default function Exploration(props: Props) {
+export default function Home(props: Props) {
   const { data, onSelect } = props;
   const router = useRouter();
 
-  const getExplorationGroupNode = createTreeGroupNode({
-    groupName: 'Exploration',
-    groupKey: 'exploration',
+  const getThreadGroupNode = createTreeGroupNode({
+    groupName: 'Thread',
+    groupKey: 'thread',
     icons: [],
   });
 
-  const [tree, setTree] = useState<DataNode[]>(getExplorationGroupNode());
+  const [tree, setTree] = useState<DataNode[]>(getThreadGroupNode());
   const { treeSelectedKeys, setTreeSelectedKeys } = useSidebarTreeState();
 
   useEffect(() => {
@@ -59,27 +59,27 @@ export default function Exploration(props: Props) {
   // initial workspace
   useEffect(() => {
     setTree(
-      data.map((exploration) => {
-        const nodeKey = exploration.id;
+      data.map((thread) => {
+        const nodeKey = thread.id;
 
         return {
-          className: 'adm-treeNode adm-treeNode__exploration',
+          className: 'adm-treeNode adm-treeNode__thread',
           id: nodeKey,
           isLeaf: true,
           key: nodeKey,
           title: (
-            <ExplorationTreeTitle
-              explorationId={nodeKey}
-              title={exploration.name}
+            <TreeTitle
+              threadId={nodeKey}
+              title={thread.name}
               onCopyLink={onCopyLink}
-              onRename={(newExplorationName) => {
-                // TODO: Call API to rename the exploration result title
+              onRename={(newThreadName) => {
+                // TODO: Call API to rename the thread name
                 console.log(
-                  'Call API to rename the exploration result title:',
-                  newExplorationName,
+                  'Call API to rename the thread name:',
+                  newThreadName,
                 );
               }}
-              onDelete={onDeleteExploration}
+              onDelete={onDeleteThread}
             />
           ),
         };
@@ -87,16 +87,16 @@ export default function Exploration(props: Props) {
     );
   }, [data]);
 
-  const onDeleteExploration = (explorationId: string) => {
-    // TODO: Call API to delete the exploration result
-    console.log('Call delete API:', explorationId);
-    if (router.query.id === explorationId) {
-      router.push(Path.Exploration);
+  const onDeleteThread = (threadId: string) => {
+    // TODO: Call API to delete the thread result
+    console.log('Call delete API:', threadId);
+    if (router.query.id === threadId) {
+      router.push(Path.Home);
     }
   };
 
-  const onCopyLink = (explorationId: string) => {
-    copy(`${window.location.toString()}/${explorationId}`);
+  const onCopyLink = (threadId: string) => {
+    copy(`${window.location.toString()}/${threadId}`);
     message.success('Copied link to clipboard.');
   };
 
@@ -113,15 +113,15 @@ export default function Exploration(props: Props) {
       <div className="px-4 py-4">
         <Button
           style={{ backgroundColor: 'transparent' }}
-          key="add-exploration-result"
-          onClick={() => router.push(Path.Exploration)}
+          key="add-home-result"
+          onClick={() => router.push(Path.Home)}
           block
         >
           <PlusOutlined />
-          New exploration
+          New thread
         </Button>
       </div>
-      <ExplorationSidebarTree
+      <StyledSidebarTree
         treeData={tree}
         onSelect={onTreeSelect}
         selectedKeys={treeSelectedKeys}

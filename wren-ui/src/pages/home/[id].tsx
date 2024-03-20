@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/router';
-import styled from 'styled-components';
 import { Divider } from 'antd';
-import { Path } from '@/utils/enum';
+import styled from 'styled-components';
 import { nextTick } from '@/utils/time';
+import useHomeSidebar from '@/hooks/useHomeSidebar';
 import useModalAction from '@/hooks/useModalAction';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import AnswerResult from '@/components/pages/home/AnswerResult';
@@ -53,7 +52,8 @@ const testData = {
 
 export default function AnswerBlock() {
   const divRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const homeSidebar = useHomeSidebar();
+
   const saveAsViewModal = useModalAction();
   // TODO: adjust when intergrating with API
   const [simulateData, setSimulateData] = useState(testData);
@@ -75,13 +75,6 @@ export default function AnswerBlock() {
       }
     }
   }, [divRef]);
-
-  // TODO: call API to get real exploration list data
-  const data = [];
-
-  const onSelect = (selectKeys: string[]) => {
-    router.push(`${Path.Home}/${selectKeys[0]}`);
-  };
 
   // TODO: call API to get real answer results
   const answerResults = [
@@ -130,7 +123,7 @@ export default function AnswerBlock() {
   };
 
   return (
-    <SiderLayout loading={false} sidebar={{ data, onSelect }}>
+    <SiderLayout loading={false} sidebar={homeSidebar}>
       <AnswerResultsBlock className="mt-12 mb-15" ref={divRef}>
         {answerResults.map((answerResult, index) => (
           <div key={`${answerResult.query}-${index}`}>

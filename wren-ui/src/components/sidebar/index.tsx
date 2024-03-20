@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
-import Exploration, { Props as ExplorationSidebarProps } from './Exploration';
+import Home, { Props as HomeSidebarProps } from './Home';
 import Modeling, { Props as ModelingSidebarProps } from './Modeling';
 
 const Layout = styled.div`
@@ -13,7 +13,7 @@ const Layout = styled.div`
   overflow-x: hidden;
 `;
 
-type Props = ModelingSidebarProps | ExplorationSidebarProps;
+type Props = ModelingSidebarProps | HomeSidebarProps;
 
 const DynamicSidebar = (
   props: Props & {
@@ -22,8 +22,8 @@ const DynamicSidebar = (
 ) => {
   const { pathname, ...restProps } = props;
 
-  if (pathname.startsWith(Path.Exploration)) {
-    return <Exploration {...(restProps as ExplorationSidebarProps)} />;
+  if (pathname.startsWith(Path.Home)) {
+    return <Home {...(restProps as HomeSidebarProps)} />;
   }
 
   if (pathname.startsWith(Path.Modeling)) {

@@ -5,8 +5,8 @@ import EditOutlined from '@ant-design/icons/EditOutlined';
 import LinkOutlined from '@ant-design/icons/LinkOutlined';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import LabelTitle from '@/components/sidebar/LabelTitle';
-import { DeleteIconModal } from '@/components/modals/DeleteModal';
-import ExplorationTitleInput from '@/components/sidebar/exploration/ExplorationTitleInput';
+import TreeTitleInput from '@/components/sidebar/home/TreeTitleInput';
+import { DeleteThreadModal } from '@/components/modals/DeleteModal';
 
 const MENU_ITEM_KEYS = {
   RENAME: 'rename',
@@ -20,14 +20,14 @@ const StyledMenu = styled(Menu)`
   }
 `;
 
-export default function ExplorationTreeTitle(props: {
-  explorationId: string;
-  onCopyLink: (explorationId: string) => void;
-  onDelete: (explorationId: string) => void;
+export default function TreeTitle(props: {
+  threadId: string;
+  onCopyLink: (threadId: string) => void;
+  onDelete: (threadId: string) => void;
   onRename: (newName: string) => void;
   title: string;
 }) {
-  const { explorationId, onCopyLink, onDelete, onRename } = props;
+  const { threadId, onCopyLink, onDelete, onRename } = props;
   const [title, setTitle] = useState(props.title);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -36,14 +36,14 @@ export default function ExplorationTreeTitle(props: {
     setTitle(props.title);
   };
 
-  const onChangeTitle = (newExplorationTitle: string) => {
+  const onChangeTitle = (newThreadTitle: string) => {
     setIsEditing(false);
-    setTitle(newExplorationTitle);
-    onRename(newExplorationTitle);
+    setTitle(newThreadTitle);
+    onRename(newThreadTitle);
   };
 
   return isEditing ? (
-    <ExplorationTitleInput
+    <TreeTitleInput
       title={title}
       onCancelChange={onCancelChange}
       onSetTitle={setTitle}
@@ -82,16 +82,13 @@ export default function ExplorationTreeTitle(props: {
                   key: MENU_ITEM_KEYS.COPY_LINK,
                   onClick: ({ domEvent }) => {
                     domEvent.stopPropagation();
-                    onCopyLink(explorationId);
+                    onCopyLink(threadId);
                   },
                 },
                 { type: 'divider' },
                 {
                   label: (
-                    <DeleteIconModal
-                      itemName="exploration"
-                      onConfirm={() => onDelete(explorationId)}
-                    />
+                    <DeleteThreadModal onConfirm={() => onDelete(threadId)} />
                   ),
                   danger: true,
                   key: MENU_ITEM_KEYS.DELETE,

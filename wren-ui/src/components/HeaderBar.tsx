@@ -44,10 +44,10 @@ export default function HeaderBar() {
           {showNav && (
             <Space size={[16, 0]}>
               <StyledButton
-                $isHighlight={pathname.startsWith(Path.Exploration)}
-                onClick={() => router.push(Path.Exploration)}
+                $isHighlight={pathname.startsWith(Path.Home)}
+                onClick={() => router.push(Path.Home)}
               >
-                Exploration
+                Home
               </StyledButton>
               <StyledButton
                 $isHighlight={pathname.startsWith(Path.Modeling)}
