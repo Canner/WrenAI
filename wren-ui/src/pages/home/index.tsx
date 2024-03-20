@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { nextTick } from '@/utils/time';
+import Image from 'next/image';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
@@ -83,8 +84,14 @@ export default function Ask() {
         className="d-flex align-center justify-center flex-column"
         style={{ height: '100%' }}
       >
-        <img src="https://picsum.photos/45/45" alt="home-logo" />
-        <div className="text-md text-medium mt-3">
+        <Image
+          src="/images/logo.svg"
+          width="41"
+          height="48"
+          alt="logo"
+          style={{ opacity: 0.6 }}
+        />
+        <div className="text-md text-medium gray-8 mt-3">
           Know more about your data
         </div>
 

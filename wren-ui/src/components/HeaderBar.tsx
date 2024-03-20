@@ -39,7 +39,7 @@ export default function HeaderBar() {
         className="d-flex justify-space-between"
         style={{ marginTop: -2, alignItems: 'self-end' }}
       >
-        <Space size={[24, 0]}>
+        <Space size={[48, 0]}>
           <LogoBar />
           {showNav && (
             <Space size={[16, 0]}>
