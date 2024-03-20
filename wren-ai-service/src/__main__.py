@@ -54,4 +54,5 @@ if __name__ == "__main__":
         host=server_host,
         port=server_port,
         reload=(env == "dev"),
+        reload_dirs=["src"],
     )

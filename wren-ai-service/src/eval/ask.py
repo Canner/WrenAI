@@ -70,6 +70,8 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
 
 
 def eval(prediction_results_file: Path, dataset_name: str, ground_truths: list[dict]):
+    print(f"Generating evaluation report for {dataset_name} dataset...")
+
     download_spider_data()
 
     with open(prediction_results_file, "r") as f:
@@ -130,6 +132,7 @@ if __name__ == "__main__":
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
 
+    print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
         PREDICTION_RESULTS_FILE
         and Path(PREDICTION_RESULTS_FILE).exists()
@@ -140,17 +143,24 @@ if __name__ == "__main__":
         with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
             mdl_str = json.dumps(json.load(f))
 
-        document_store = init_document_store()
+        document_store = init_document_store(
+            dataset_name=DATASET_NAME,
+            recreate_index=True,
+        )
         embedder = init_embedder(with_trace=with_trace)
         retriever = init_retriever(
             document_store=document_store,
             with_trace=with_trace,
+            top_k=10,
         )
         generator = init_generator(with_trace=with_trace)
 
-        Indexing(document_store=document_store).run(mdl_str)
+        print("Indexing documents...")
+        indexing_pipeline = Indexing(document_store=document_store)
+        indexing_pipeline_def = indexing_pipeline._pipe.dumps()
+        indexing_pipeline.run(mdl_str)
         print(
-            f"finished indexing documents, document count: {document_store.count_documents()}"
+            f"Finished indexing documents, document count: {document_store.count_documents()}"
         )
 
         retrieval_pipeline = Retrieval(
@@ -158,13 +168,16 @@ if __name__ == "__main__":
             retriever=retriever,
             with_trace=with_trace,
         )
+        retrieval_pipeline_def = retrieval_pipeline._pipe.dumps()
 
         generation_pipeline = Generation(
             generator=generator,
             with_trace=with_trace,
             prompt_builder=init_generation_prompt_builder(),
         )
+        generation_pipeline_def = generation_pipeline._pipe.dumps()
 
+        print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
         max_workers = os.cpu_count() // 2 if with_trace else None
         user_id = str(uuid.uuid4()) if with_trace else None
@@ -186,6 +199,11 @@ if __name__ == "__main__":
             f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json",
             ground_truths,
             outputs,
+            {
+                "indexing": indexing_pipeline_def,
+                "retrieval": retrieval_pipeline_def,
+                "generation": generation_pipeline_def,
+            },
         )
         if with_trace:
             langfuse.flush()

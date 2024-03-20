@@ -7,10 +7,15 @@ wren-ai-service/.env.*
 wren-ai-service/src/eval/wren-engine/config.properties
 wren-ai-service/outputs/
 wren-ai-service/spider/
+wren-ai-service/src/eval/data
 !wren-ai-service/tests/data
-!wren-ai-service/src/eval/data
+!wren-ai-service/src/eval/data/book_2*.json
+!wren-ai-service/src/eval/data/baseball_1*.json
+!wren-ai-service/src/eval/data/college_3*.json
 wren-ai-service/poetry.lock
 wren-ai-service/assertion.log
+wren-ai-service/demo/spider
+wren-ai-service/demo/poetry.lock
 
 # cache
 __pycache__

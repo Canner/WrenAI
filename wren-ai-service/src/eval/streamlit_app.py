@@ -10,7 +10,7 @@ def show_eval_results(eval_file_path: Path):
     with open(eval_file_path, "r") as f:
         eval_results = json.load(f)
 
-    st.markdown("**Performance Benchmark**")
+    st.markdown("### Performance Benchmark")
     for k, v in eval_results["eval_results"].items():
         if k == "details":
             continue
@@ -212,6 +212,41 @@ def show_prediction_results(eval_file_paths: List, prediction_file_paths: List):
                 file2_question_right_or_wrong_mapping, file_predictions[1][i]
             )
 
+    if "pipelines" in file_evals[0] and "pipelines" in file_evals[1]:
+        st.markdown("### Pipelines")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            show_pipelines(file_evals[0]["pipelines"])
+        with col2:
+            show_pipelines(file_evals[1]["pipelines"])
+
+
+def show_pipelines(pipelines: Dict):
+    for k, v in pipelines.items():
+        st.markdown(f"**{k}**")
+        st.code(v, language="yaml")
+
+
+def show_prediction_result(eval_file_path: Path, prediction_file_path: Path):
+    with open(eval_file_path, "r") as f:
+        eval_results = json.load(f)
+
+    with open(prediction_file_path, "r") as f:
+        predictions = [json.loads(line) for line in f]
+
+    question_right_or_wrong_mapping = get_question_right_or_wrong_mapping(
+        eval_results["eval_results"]
+    )
+
+    st.markdown("### Predictions")
+    for prediction in predictions:
+        show_single_prediction_result(question_right_or_wrong_mapping, prediction)
+
+    if "pipelines" in eval_results:
+        st.markdown("### Pipelines")
+        show_pipelines(eval_results["pipelines"])
+
 
 st.set_page_config(layout="wide")
 
@@ -237,13 +272,21 @@ dataset_name = st.selectbox("Select dataset", dataset_names)
 timestamps = sorted(
     set([f.stem.split("_")[-1] for f in output_files if dataset_name in f.stem])
 )
-selected_timestamps = st.multiselect(
-    "Select 2 timestamps", timestamps, max_selections=2, disabled=len(timestamps) < 2
-)
+selected_timestamps = st.multiselect("Select timestamps", timestamps, max_selections=2)
 
 st.markdown("---")
 
-if len(selected_timestamps) == 2:
+if len(selected_timestamps) == 1:
+    prediction_file1_path = (
+        output_dir / f"{dataset_name}_predictions_{selected_timestamps[0]}.json"
+    )
+    eval_file1_path = (
+        output_dir / f"{dataset_name}_eval_results_{selected_timestamps[0]}.json"
+    )
+    st.markdown(f"## {selected_timestamps[0]}")
+    show_eval_results(eval_file1_path)
+    show_prediction_result(eval_file1_path, prediction_file1_path)
+elif len(selected_timestamps) == 2:
     prediction_file1_path = (
         output_dir / f"{dataset_name}_predictions_{selected_timestamps[0]}.json"
     )

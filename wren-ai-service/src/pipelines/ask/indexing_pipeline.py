@@ -29,6 +29,7 @@ class Indexing(BasicPipeline):
         embedding_model_dim: int = EMBEDDING_MODEL_DIMENSION,
     ) -> None:
         self._pipeline = Pipeline()
+        # TODO: add a component to remove existing documents to fully delete old documents
         self._pipeline.add_component(
             "writer",
             DocumentWriter(
@@ -50,6 +51,9 @@ class Indexing(BasicPipeline):
 
     def _get_documents(self, mdl_str: str) -> List[Document]:
         mdl_json = json.loads(mdl_str)
+
+        for i, _ in enumerate(mdl_json["relationships"]):
+            mdl_json["relationships"][i]["type"] = "relationship"
 
         semantics = {"models": [], "relationships": mdl_json["relationships"]}
 

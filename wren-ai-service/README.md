@@ -28,3 +28,13 @@
 - evaluation: `make eval` and check out the outputs folder
 - `make streamlit` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
+
+## Demo
+
+- you should stop all services first before running the demo
+- go to the `demo` folder and run `poetry install` to install the dependencies
+- in the `demo` folder, run `make prepare` in one terminal, and `make run` in another terminal to start the demo and go to `http://localhost:8501` to see the demo
+    - `make prepare` will run three other services: qdrant, wren-engine, and wren-ai-service
+    - qdrant: ports should be 6333, 6334
+    - wren-engine: ports should be8080, 7342
+    - wren-ai-service: port should be 5000
