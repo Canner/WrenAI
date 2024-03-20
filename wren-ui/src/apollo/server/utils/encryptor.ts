@@ -10,8 +10,8 @@ export interface encryptOptions {
 }
 
 export class Encryptor {
-  private ENCRYPTION_PASSWORD: string;
-  private ENCRYPTION_SALT: string;
+  private readonly ENCRYPTION_PASSWORD: string;
+  private readonly ENCRYPTION_SALT: string;
   private ENCRYPTION_ITERATION = 1000;
   private ENCRYPTION_KEY_LENGTH = 256 / 8; // in bytes
   private ENCRYPTION_ALGORITHM = 'aes-256-cbc';
