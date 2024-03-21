@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 const path = require('path');
 const withAntdLess = require('next-plugin-antd-less');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: {
@@ -17,4 +19,4 @@ const nextConfig = {
   }),
 };
 
-module.exports = nextConfig
+module.exports = nextConfig;
