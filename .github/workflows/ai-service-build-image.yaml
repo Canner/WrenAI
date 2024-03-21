@@ -44,7 +44,7 @@ jobs:
           echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Build and push image
         run: |
-          if [ -n "${{ github.event.inputs.is_latest }}" ]; then
+          if [ ${{ github.event.inputs.is_latest }} == true ]; then
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
               --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
