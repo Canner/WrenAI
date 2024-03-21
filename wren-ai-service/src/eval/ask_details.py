@@ -1,8 +1,3 @@
-# todo: implement the following steps
-#    2. implement the evaluation pipeline
-#      a. implement with ragas evaluator
-#      b. according to the evaluation result to run the CTE query to ensure it is equal to the input query
-#    3. aggregate the evaluation result and generate the evaluation report
 import json
 import os
 
@@ -18,6 +13,12 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
     manually.
     """
 
+    if os.path.exists(output_path):
+        print(
+            f"File {output_path} already exists. Skipping generation of evaluation data."
+        )
+        return
+
     generator = init_generator()
     generation_pipeline = Generation(
         generator=generator,
@@ -29,6 +30,7 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
         )
 
         output = json.loads(response["generator"]["replies"][0])
+        # consider to add a LLM judge to review the output
         print(output)
         return {
             "input": {
@@ -54,6 +56,26 @@ if __name__ == "__main__":
         input_path="./data/baseball_1_data.json",
         output_path="./data/ask_details/baseball_1_eval_context.json",
     )
+
+    # todo: implement the following steps
+    #    2. implement the evaluation pipeline
+    #      a. implement with ragas evaluator
+    #      b. according to the evaluation result to run the CTE query to ensure it is equal to the input query
+    #    3. aggregate the evaluation result and generate the evaluation report
+
+    # read the evaluation data
+    with open("./data/ask_details/baseball_1_eval_context.json") as f:
+        eval_context = json.load(f)
+
+    generator = init_generator()
+    pipeline = Generation(
+        generator=generator,
+    )
+
+    for item in eval_context:
+        pipeline.run(
+            sql=input["answer"],
+        )
 
     # pipeline = Pipeline()
     # evaluator = RagasEvaluator(
