@@ -22,8 +22,8 @@
 
 ## Pipeline Evaluation(for development)
 
-- fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine folder
-- start docker
+- fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
+- start the docker service
 - run qdrant and wren-engine docker containers: `make run-all`
 - evaluation: `make eval` and check out the outputs folder
 - `make streamlit` to compare between the evaluation results
@@ -33,6 +33,7 @@
 
 - you should stop all services first before running the demo
 - go to the `demo` folder and run `poetry install` to install the dependencies
+- start the docker service
 - in the `demo` folder, run `make prepare` in one terminal, and `make run` in another terminal to start the demo and go to `http://localhost:8501` to see the demo
     - `make prepare` will run three other services: qdrant, wren-engine, and wren-ai-service
     - qdrant: ports should be 6333, 6334

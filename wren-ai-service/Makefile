@@ -40,6 +40,7 @@ psql:
 	docker exec -it wren-engine-1 bash launch-cli.sh
 
 run-all:
+	poetry run python -m src.eval.prepare_mdl_json && \
 	make run-qdrant && \
 	make run-wren-engine
 

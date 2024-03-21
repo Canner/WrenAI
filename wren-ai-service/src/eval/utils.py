@@ -12,8 +12,11 @@ import gdown
 import pandas as pd
 import sqlglot
 import sqlparse
+from dotenv import load_dotenv
 from tqdm import tqdm
 from tqdm.contrib import tzip
+
+load_dotenv(override=True)
 
 
 def semantic_diff(sql_query1: str, sql_query2: str):
@@ -742,9 +745,9 @@ def generate_mdl_json(
 
 def generate_text_to_sql_dataset(
     paths: list[str],
-    database_name: str = "baseball_1",
+    database_name: str = "college_3",
     should_save_file: bool = False,
-    file_path: str = "data/baseball_1_data.json",
+    file_path: str = "data/college_3_data.json",
 ):
     target_data = []
     for path in paths:

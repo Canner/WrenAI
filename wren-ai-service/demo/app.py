@@ -108,7 +108,10 @@ if __name__ == "__main__":
         )
         # Semantics preparation
         if deploy_ok:
-            rerun_wren_engine(st.session_state["chosen_dataset"])
+            rerun_wren_engine(
+                st.session_state["chosen_dataset"],
+                st.session_state["mdl_json"],
+            )
             prepare_semantics(st.session_state["mdl_json"])
 
     query = st.chat_input(

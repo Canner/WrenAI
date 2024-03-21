@@ -2,12 +2,12 @@ version: '3.8'
 
 services:
   engine:
-    image: ghcr.io/canner/accio:main-ed88364
+    image: ghcr.io/canner/wren-engine:latest
+    pull_policy: always
     platform: ${PLATFORM}
     ports:
       - 8080:8080
       - 7432:7432
     volumes:
-      - ../data/${DATASET_NAME}_mdl.json:/usr/src/app/etc/mdl.json
-      - ${CONFIG_PATH}:/usr/src/app/etc/config.properties
+      - ./etc:/usr/src/app/etc
       - ${LAUNCH_CLI_PATH}:/usr/src/app/launch-cli.sh

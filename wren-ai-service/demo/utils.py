@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import sqlite3
 import time
 import zipfile
@@ -18,6 +19,7 @@ WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5000"
 WREN_ENGINE_PG_URL = (
     "postgres://localhost:7432/canner-cml?options=--search_path%3Dspider"
 )
+WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 
 
@@ -43,28 +45,48 @@ def download_spider_data():
     os.remove("spider.zip")
 
 
-def rerun_wren_engine(dataset_name: str):
-    os.system(
-        "export DATASET_NAME="
-        + dataset_name
-        + " && "
-        + "docker compose "
-        + "-f ../src/eval/wren-engine/docker-compose.yml "
-        + "--env-file ../src/eval/wren-engine/.env "
-        "up " + "-d"
+def prepare_mdl_json(dataset_name: str):
+    assert Path(
+        f"../src/eval/data/{dataset_name}_mdl.json"
+    ).exists(), f"File not found in src/eval/data: {dataset_name}_mdl.json"
+
+    # move the file to src/eval/wren-engine/etc/mdl
+    shutil.copyfile(
+        f"../src/eval/data/{dataset_name}_mdl.json",
+        f"../src/eval/wren-engine/etc/mdl/{dataset_name}_mdl.json",
     )
+
+
+def rerun_wren_engine(dataset_name: str, mdl_json: Dict):
+    st.toast("Wren Engine is being re-run", icon="⏳")
+
+    # this step is not necessary, since we'll use the wren engine api to directly deploy new mdl json
+    # this step is for consistency
+    prepare_mdl_json(dataset_name)
+
+    response = requests.post(
+        f"{WREN_ENGINE_API_URL}/v1/mdl/deploy",
+        json={
+            "manifest": mdl_json,
+            "version": "latest",
+        },
+    )
+
+    assert response.status_code == 202
 
     wren_engine_is_ready = False
 
     while not wren_engine_is_ready:
-        try:
-            psycopg2.connect(dsn=WREN_ENGINE_PG_URL)
-            wren_engine_is_ready = True
-        except Exception:
-            time.sleep(POLLING_INTERVAL)
+        response = requests.get(
+            f"{WREN_ENGINE_API_URL}/v1/mdl/status",
+        )
 
-    if wren_engine_is_ready:
-        st.toast("Wren Engine is ready", icon="🎉")
+        assert response.status_code == 200
+
+        if response.json()["systemStatus"] == "READY":
+            wren_engine_is_ready = True
+
+    st.toast("Wren Engine is ready", icon="🎉")
 
 
 def get_datasets():
