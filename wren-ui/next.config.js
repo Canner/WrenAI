@@ -5,6 +5,7 @@ const withAntdLess = require('next-plugin-antd-less');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  staticPageGenerationTimeout: 1000,
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: {
