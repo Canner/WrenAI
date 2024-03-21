@@ -1,9 +1,8 @@
-import { useMemo } from 'react';
+import { COLUMN } from '@/components/table/BaseTable';
 import { makeTableFormControl } from './base';
 import AddMeasureFieldModal, {
   MeasureFieldValue,
 } from '@/components/modals/AddMeasureFieldModal';
-import { getMeasureFieldTableColumns } from '@/components/table/MeasureFieldTable';
 
 export type MeasureTableValue = MeasureFieldValue[];
 
@@ -12,6 +11,10 @@ type Props = Omit<React.ComponentProps<typeof TableFormControl>, 'columns'>;
 const TableFormControl = makeTableFormControl(AddMeasureFieldModal);
 
 export default function MeasureTableFormControl(props: Props) {
-  const columns = useMemo(getMeasureFieldTableColumns, [props.value]);
-  return <TableFormControl {...props} columns={columns} />;
+  return (
+    <TableFormControl
+      {...props}
+      columns={[COLUMN.DISPLAY_NAME, COLUMN.REFERENCE_NAME, COLUMN.DESCRIPTION]}
+    />
+  );
 }

@@ -1,9 +1,8 @@
-import { useMemo } from 'react';
+import { COLUMN } from '@/components/table/BaseTable';
 import { makeTableFormControl } from './base';
 import AddCalculatedFieldModal, {
   CalculatedFieldValue,
 } from '@/components/modals/AddCalculatedFieldModal';
-import { getCalculatedFieldTableColumns } from '@/components/table/CalculatedFieldTable';
 
 export type CalculatedFieldTableValue = CalculatedFieldValue[];
 
@@ -12,6 +11,15 @@ type Props = Omit<React.ComponentProps<typeof TableFormControl>, 'columns'>;
 const TableFormControl = makeTableFormControl(AddCalculatedFieldModal);
 
 export default function CalculatedFieldTableFormControl(props: Props) {
-  const columns = useMemo(getCalculatedFieldTableColumns, [props.value]);
-  return <TableFormControl {...props} columns={columns} />;
+  return (
+    <TableFormControl
+      {...props}
+      columns={[
+        COLUMN.DISPLAY_NAME,
+        COLUMN.REFERENCE_NAME,
+        COLUMN.EXPRESSION,
+        COLUMN.DESCRIPTION,
+      ]}
+    />
+  );
 }

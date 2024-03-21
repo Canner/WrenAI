@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Table, Button, TableColumnProps, Space, Popconfirm } from 'antd';
+import { Button, TableColumnProps, Space, Popconfirm } from 'antd';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import useModalAction from '@/hooks/useModalAction';
+import BaseTable from '../table/BaseTable';
 
 interface Props<MData> {
   columns: TableColumnProps<any>[];
@@ -41,9 +42,8 @@ export const makeTableFormControl = <MData,>(
       onChange && onChange(internalValue);
     }, [internalValue]);
 
-    const tableColumns: TableColumnProps<typeof internalValue>[] = useMemo(
+    const actionColumns = useMemo(
       () => [
-        ...columns,
         {
           key: 'action',
           width: 80,
@@ -103,15 +103,10 @@ export const makeTableFormControl = <MData,>(
     return (
       <>
         {!!internalValue.length && (
-          <Table
-            rowKey="_id"
+          <BaseTable
             dataSource={internalValue}
-            columns={tableColumns}
-            pagination={{
-              hideOnSinglePage: true,
-              pageSize: 10,
-              size: 'small',
-            }}
+            columns={columns}
+            actionColumns={actionColumns}
           />
         )}
         <Button
