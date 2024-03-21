@@ -352,13 +352,13 @@ export class ProjectResolver {
     const connector = new BQConnector(connectionOption);
     const connected = await connector.connect();
     if (!connected) {
-      throw new Error('Cannot connect to DataSource');
+      throw new Error('Can not connect to data source');
     }
     // check can list dataset table
     try {
       await connector.listTables({ datasetId });
     } catch (_e) {
-      throw new Error('Cannot list tables in dataset');
+      throw new Error('Can not list tables in dataset');
     }
     // save DataSource to database
     const encryptor = new Encryptor(config);
