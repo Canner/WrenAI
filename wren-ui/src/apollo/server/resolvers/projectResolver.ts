@@ -110,9 +110,9 @@ export class ProjectResolver {
     const dataSourceColumns = await connector.listTables(listTableOptions);
     // create models
     const id = project.id;
-    const tableDescriptions = dataSourceColumns
-      .filter((col: BQColumnResponse) => col.table_description)
-      .reduce((acc, column: BQColumnResponse) => {
+    const tableDescriptions = (dataSourceColumns as BQColumnResponse[])
+      .filter((col) => col.table_description)
+      .reduce((acc, column) => {
         acc[column.table_name] = column.table_description;
         return acc;
       }, {});

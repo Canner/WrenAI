@@ -158,7 +158,7 @@ export default function Component() {
         }}
         onClose={addRelationModal.closeModal}
         defaultValue={{
-          joinType: JOIN_TYPE.ONE_TO_ONE,
+          type: JOIN_TYPE.ONE_TO_ONE,
           fromField: {
             model: 'Customer',
             field: 'orders',
@@ -172,6 +172,7 @@ export default function Component() {
             description: 'customer_orders_description',
           },
         }}
+        relations={{}}
       />
 
       <ModelDrawer
@@ -219,32 +220,18 @@ export default function Component() {
         onSubmit={async (values) => {
           console.log(values);
         }}
-        // defaultValue={{
-        //   name: 'Customer',
-        //   nodeType: NODE_TYPE.MODEL,
-        //   description: 'customer_description',
-        //   fields: [
-        //     {
-        //       name: 'custKey',
-        //       type: 'UUID',
-        //     },
-        //   ],
-        //   calculatedFields: [
-        //     {
-        //       fieldName: 'test',
-        //       expression: 'Sum',
-        //       modelFields: [
-        //         { nodeType: NODE_TYPE.MODEL, name: 'customer' },
-        //         { nodeType: NODE_TYPE.FIELD, name: 'custKey', type: 'UUID' },
-        //       ],
-        //     },
-        //   ],
-        //   relations: [],
-        // }}
         defaultValue={{
-          name: 'Metric',
-          nodeType: NODE_TYPE.METRIC,
-          measures: [
+          displayName: 'Customer',
+          referenceName: 'Customer',
+          sourceTableName: 'sourceTable',
+          nodeType: NODE_TYPE.MODEL,
+          fields: [
+            {
+              name: 'custKey',
+              type: 'UUID',
+            },
+          ],
+          calculatedFields: [
             {
               fieldName: 'test',
               expression: 'Sum',
@@ -254,19 +241,8 @@ export default function Component() {
               ],
             },
           ],
-          dimensions: [
-            {
-              fieldName: 'test',
-              expression: 'Sum',
-              modelFields: [
-                { nodeType: NODE_TYPE.MODEL, name: 'customer' },
-                { nodeType: NODE_TYPE.FIELD, name: 'custKey', type: 'UUID' },
-              ],
-            },
-          ],
-          properties: {
-            description: 'metric description',
-          },
+          relations: [],
+          properties: {},
         }}
       />
 

@@ -1,6 +1,6 @@
 export enum Path {
   Exploration = '/exploration',
-  HOME = '/home',
+  Home = '/home',
   Modeling = '/modeling',
   Onboarding = '/setup',
 }
