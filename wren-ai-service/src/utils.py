@@ -1,6 +1,9 @@
 import os
 import re
+from typing import Dict, List, Optional
 
+import psycopg2
+import requests
 from dotenv import load_dotenv
 
 
@@ -27,3 +30,34 @@ def load_env_vars() -> str:
         load_dotenv(".env.prod", override=True)
 
     return "dev" if is_dev_env else "prod"
+
+
+def get_mdl_catalog_and_schema(api_endpoint: str):
+    response = requests.get(f"{api_endpoint}/v1/mdl")
+    if response.status_code != 200:
+        raise Exception(f"Error fetching MDL catalog and schema: {response.text}")
+
+    mdl_json = response.json()
+
+    return mdl_json["catalog"], mdl_json["schema"]
+
+
+def remove_invalid_generation_results(
+    sql_endpoint: str,
+    generation_results: List[Dict[str, str]],
+) -> List[Optional[Dict[str, str]]]:
+    valid_generation_results = []
+
+    conn = psycopg2.connect(dsn=sql_endpoint)
+
+    for generation_result in generation_results:
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(generation_result["sql"])
+                valid_generation_results.append(generation_result)
+        except Exception as e:
+            print(f"Invalid generation result: {generation_result}; error: {e}")
+
+    conn.close()
+
+    return valid_generation_results

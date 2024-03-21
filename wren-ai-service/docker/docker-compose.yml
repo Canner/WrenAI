@@ -1,7 +1,11 @@
 version: '3.8'
 
+networks:
+  wren:
+    driver: bridge
+
 services:
-  ai-service:
+  wren-ai-service:
     image: wren-ai-service:latest
     build:
       context: ..

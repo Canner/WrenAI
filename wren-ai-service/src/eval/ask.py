@@ -17,7 +17,7 @@ from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
-from src.utils import clean_generation_result, load_env_vars
+from src.utils import load_env_vars
 
 # from .eval_pipeline import Evaluation
 from .utils import (
@@ -59,20 +59,11 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         },
     }
 
-    sql = ""
-    try:
-        sql = json.loads(
-            clean_generation_result(generation_result["generator"]["replies"][0])
-        )["sql"]
-    except Exception as e:
-        print(e)
-        print(
-            f'cleaned_generation_result: {clean_generation_result(generation_result["generator"]["replies"][0])}'
-        )
-
     return {
         "contexts": retrieval_result["retriever"]["documents"],
-        "prediction": sql,
+        "prediction": generation_result["post_processor"]["results"][0]["sql"]
+        if generation_result["post_processor"]["results"]
+        else "",
         "metadata": metadata,
     }
 

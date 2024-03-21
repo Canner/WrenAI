@@ -137,23 +137,28 @@ class AskService:
 
         self.ask_results[query_id] = AskResultResponse(status="generating")
 
-        generation_result = self._pipelines["generation"].run(
-            query=ask_request.query,
-            contexts=retrieval_result["retriever"]["documents"],
-            history=ask_request.history,
-        )
-
-        if not generation_result["post_processor"]:
-            self.ask_results[query_id] = AskResultResponse(
-                status="failed", error="Failed to generate SQL"
+        try:
+            generation_result = self._pipelines["generation"].run(
+                query=ask_request.query,
+                contexts=retrieval_result["retriever"]["documents"],
+                history=ask_request.history,
             )
-        else:
+
+            if not generation_result["post_processor"]:
+                self.ask_results[query_id] = AskResultResponse(
+                    status="failed", error="Failed to generate SQL"
+                )
+            else:
+                self.ask_results[query_id] = AskResultResponse(
+                    status="finished",
+                    response=[
+                        AskResultResponse.AskResult(**result)
+                        for result in generation_result["post_processor"]["results"]
+                    ],
+                )
+        except Exception as e:
             self.ask_results[query_id] = AskResultResponse(
-                status="finished",
-                response=[
-                    AskResultResponse.AskResult(**result)
-                    for result in generation_result["post_processor"]["results"]
-                ],
+                status="failed", error=f"Failed to generate SQL: {e}"
             )
 
     def stop_ask(

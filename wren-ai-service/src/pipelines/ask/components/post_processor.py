@@ -1,9 +1,17 @@
 import json
+import os
 from typing import Any, Dict, List, Optional
 
 from haystack import component
 
-from src.utils import clean_generation_result
+from src.utils import (
+    clean_generation_result,
+    get_mdl_catalog_and_schema,
+    load_env_vars,
+    remove_invalid_generation_results,
+)
+
+load_env_vars()
 
 
 @component
@@ -18,10 +26,14 @@ class PostProcessor:
         ):
             return {"results": []}
 
-        return {
-            "results": (
-                [cleaned_generation_result]
-                if isinstance(cleaned_generation_result, dict)
-                else cleaned_generation_result
-            )
-        }
+        mdl_catalog, mdl_schema = get_mdl_catalog_and_schema(
+            os.getenv("WREN_ENGINE_API_ENDPOINT")
+        )
+        valid_generation_results = remove_invalid_generation_results(
+            f'{os.getenv("WREN_ENGINE_SQL_ENDPOINT")}/{mdl_catalog}?options=--search_path%3D{mdl_schema}',
+            [cleaned_generation_result]
+            if isinstance(cleaned_generation_result, dict)
+            else cleaned_generation_result,
+        )
+
+        return {"results": valid_generation_results}
