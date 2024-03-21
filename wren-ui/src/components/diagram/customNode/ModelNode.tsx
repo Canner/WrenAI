@@ -10,9 +10,7 @@ import {
 import MarkerHandle from './MarkerHandle';
 import { DiagramContext } from '../Context';
 import Column, { ColumnTitle, MoreColumnTip } from './Column';
-import CustomDropdown from '../CustomDropdown';
-import { PrimaryKeyIcon, ModelIcon, MoreIcon } from '@/utils/icons';
-import { MORE_ACTION } from '@/utils/enum';
+import { PrimaryKeyIcon, ModelIcon } from '@/utils/icons';
 import { ModelColumnData, ModelData } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { makeIterable } from '@/utils/iteration';
@@ -20,13 +18,6 @@ import { Config } from '@/utils/diagram';
 
 export const ModelNode = ({ data }: CustomNodeProps<ModelData>) => {
   const context = useContext(DiagramContext);
-  const onMoreClick = (type: MORE_ACTION) => {
-    context?.onMoreClick({
-      type,
-      title: data.originalData.displayName,
-      data: data.originalData,
-    });
-  };
   const onNodeClick = () => {
     context?.onNodeClick({
       title: data.originalData.displayName,
@@ -50,9 +41,6 @@ export const ModelNode = ({ data }: CustomNodeProps<ModelData>) => {
         </span>
         <span>
           <CachedIcon originalData={data.originalData} />
-          <CustomDropdown onMoreClick={onMoreClick}>
-            <MoreIcon onClick={(e) => e.stopPropagation()} />
-          </CustomDropdown>
         </span>
 
         <MarkerHandle id={data.originalData.id} />
