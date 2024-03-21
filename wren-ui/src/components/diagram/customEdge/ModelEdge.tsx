@@ -67,20 +67,17 @@ const ModelEdge = ({
       <EdgeLabelRenderer>
         <CustomPopover
           visible={isPopoverShow}
-          title="Relations"
+          title="Relation"
           content={
             <CustomPopover.Row gutter={16}>
-              <CustomPopover.Col title="Name" span={12}>
-                {relation.name}
-              </CustomPopover.Col>
-              <CustomPopover.Col title="Relation type" span={12}>
-                {relation.joinType}
-              </CustomPopover.Col>
               <CustomPopover.Col title="From field" span={12}>
                 {relation.fromField}
               </CustomPopover.Col>
               <CustomPopover.Col title="To field" span={12}>
                 {relation.toField}
+              </CustomPopover.Col>
+              <CustomPopover.Col title="Relation type" span={12}>
+                {relation.joinType}
               </CustomPopover.Col>
               <CustomPopover.Col title="Description">
                 {relation.description}
