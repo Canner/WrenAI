@@ -5,7 +5,6 @@ import {
   ModelColumnData,
   RelationData,
   AdaptedData,
-  ViewData,
 } from '@/utils/data';
 
 export const Config = {
@@ -45,7 +44,7 @@ const getLimitedColumnsLengthProps = (columns: any[]) => {
   };
 };
 
-type ComposeData = ModelData | ViewData;
+type ComposeData = ModelData;
 
 type NodeWithData = Node<{
   originalData: ComposeData;
@@ -64,7 +63,6 @@ type StartPoint = { x: number; y: number; floor: number };
 export class Transformer {
   private readonly config: typeof Config = Config;
   private models: ModelData[];
-  private views: ViewData[];
   public nodes: NodeWithData[] = [];
   public edges: Edge[] = [];
   private start: StartPoint = {
@@ -75,12 +73,11 @@ export class Transformer {
 
   constructor(data: AdaptedData) {
     this.models = data?.models || [];
-    this.views = data?.views || [];
     this.init();
   }
 
   public init() {
-    const allNodeData = [...this.models, ...this.views];
+    const allNodeData = [...this.models];
     for (const data of allNodeData) {
       this.addOne(data);
     }

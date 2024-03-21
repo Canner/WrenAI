@@ -18,7 +18,7 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
 } from 'reactflow';
-import { ModelNode, ViewNode } from './customNode';
+import { ModelNode } from './customNode';
 import { ModelEdge } from './customEdge';
 import Marker from './Marker';
 import { DiagramContext, ClickPayload } from './Context';
@@ -33,7 +33,6 @@ import 'reactflow/dist/style.css';
 
 const nodeTypes = {
   [NODE_TYPE.MODEL]: ModelNode,
-  [NODE_TYPE.VIEW]: ViewNode,
 };
 const edgeTypes = {
   [EDGE_TYPE.MODEL]: ModelEdge,
@@ -71,8 +70,6 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
 
   const [nodes, setNodes, onNodesChange] = useNodesState(diagram.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(diagram.edges);
-
-  // const { openInfoModal, closeInfoModal, infoModalProps } = useInfoModal();
 
   const onEdgeMouseEnter = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
