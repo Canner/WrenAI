@@ -42,19 +42,20 @@ jobs:
             tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
           fi
           echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Build and push image
         run: |
           if [ ${{ github.event.inputs.is_latest }} == true ]; then
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
-              --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
+              --tag ghcr.io/canner/wren-ai-service:"$TAG_NAME" \
               --tag ghcr.io/canner/wren-ai-service:latest \
               --file ./docker/Dockerfile \
               --push .
           else
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
-              --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
+              --tag ghcr.io/canner/wren-ai-service:"$TAG_NAME" \
               --file ./docker/Dockerfile \
               --push .
           fi
