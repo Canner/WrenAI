@@ -1,8 +1,6 @@
 name: AI Service Build image
 
 on:
-  pull_request:
-    types: [ labeled ]
   workflow_dispatch:
     inputs:
       docker_image_tag_name:
