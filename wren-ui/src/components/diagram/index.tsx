@@ -18,8 +18,8 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
 } from 'reactflow';
-import { ModelNode, MetricNode, ViewNode } from './customNode';
-import { ModelEdge, MetricEdge } from './customEdge';
+import { ModelNode, ViewNode } from './customNode';
+import { ModelEdge } from './customEdge';
 import Marker from './Marker';
 import { DiagramContext, ClickPayload } from './Context';
 import { trimId, highlightNodes, highlightEdges } from './utils';
@@ -33,12 +33,10 @@ import 'reactflow/dist/style.css';
 
 const nodeTypes = {
   [NODE_TYPE.MODEL]: ModelNode,
-  [NODE_TYPE.METRIC]: MetricNode,
   [NODE_TYPE.VIEW]: ViewNode,
 };
 const edgeTypes = {
   [EDGE_TYPE.MODEL]: ModelEdge,
-  [EDGE_TYPE.METRIC]: MetricEdge,
 };
 const minimapStyle = {
   height: 120,

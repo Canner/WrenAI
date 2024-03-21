@@ -2,9 +2,7 @@ import { Edge, Node, Position } from 'reactflow';
 import { EDGE_TYPE, MARKER_TYPE, NODE_TYPE, JOIN_TYPE } from '@/utils/enum';
 import {
   ModelData,
-  MetricData,
   ModelColumnData,
-  MetricColumnData,
   RelationData,
   AdaptedData,
   ViewData,
@@ -47,7 +45,7 @@ const getLimitedColumnsLengthProps = (columns: any[]) => {
   };
 };
 
-type ComposeData = ModelData | MetricData | ViewData;
+type ComposeData = ModelData | ViewData;
 
 type NodeWithData = Node<{
   originalData: ComposeData;
@@ -66,7 +64,6 @@ type StartPoint = { x: number; y: number; floor: number };
 export class Transformer {
   private readonly config: typeof Config = Config;
   private models: ModelData[];
-  private metrics: MetricData[];
   private views: ViewData[];
   public nodes: NodeWithData[] = [];
   public edges: Edge[] = [];
@@ -78,13 +75,12 @@ export class Transformer {
 
   constructor(data: AdaptedData) {
     this.models = data?.models || [];
-    this.metrics = data?.metrics || [];
     this.views = data?.views || [];
     this.init();
   }
 
   public init() {
-    const allNodeData = [...this.models, ...this.metrics, ...this.views];
+    const allNodeData = [...this.models, ...this.views];
     for (const data of allNodeData) {
       this.addOne(data);
     }
@@ -138,9 +134,6 @@ export class Transformer {
     switch (nodeType) {
       case NODE_TYPE.MODEL:
         this.addModelEdge(data as ModelData);
-        break;
-      case NODE_TYPE.METRIC:
-        this.addMetricEdge(data as MetricData);
         break;
       default:
         break;
@@ -208,28 +201,13 @@ export class Transformer {
     }
   }
 
-  private addMetricEdge(data: MetricData) {
-    const { baseObject } = data;
-    const targetModel = this.models.find(
-      (model) => model.referenceName === baseObject,
-    )!;
-    targetModel &&
-      this.edges.push(
-        this.createEdge({
-          type: EDGE_TYPE.METRIC,
-          sourceModel: data,
-          targetModel,
-        }),
-      );
-  }
-
   private createEdge(props: {
     type?: EDGE_TYPE;
     sourceModel: ComposeData;
-    sourceColumn?: ModelColumnData | MetricColumnData;
+    sourceColumn?: ModelColumnData;
     sourceJoinIndex?: number;
     targetModel: ComposeData;
-    targetColumn?: ModelColumnData | MetricColumnData;
+    targetColumn?: ModelColumnData;
     targetJoinIndex?: number;
     joinType?: JOIN_TYPE | string;
     animated?: boolean;
@@ -278,7 +256,7 @@ export class Transformer {
 
   private detectEdgePosition(source: string, target: string) {
     const position = [];
-    const [sourceIndex, targetIndex] = [...this.models, ...this.metrics].reduce(
+    const [sourceIndex, targetIndex] = [...this.models].reduce(
       (result, current, index) => {
         if (current.id === source) result[0] = index;
         if (current.id === target) result[1] = index;
