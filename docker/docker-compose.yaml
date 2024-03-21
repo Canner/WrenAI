@@ -1,0 +1,65 @@
+version: '3'
+
+volumes:
+  data:
+
+networks:
+  wren:
+    driver: bridge
+
+services:
+  wren-engine:
+    image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
+    platform: ${PLATFORM}
+    expose:
+      - ${WREN_ENGINE_PORT}
+      - ${WREN_ENGINE_SQL_PORT}
+    volumes:
+      - data:/usr/src/app/etc
+    networks:
+      - wren
+
+  wren-ai-service:
+    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+    platform: ${PLATFORM}
+    expose:
+      - ${WREN_AI_SERVICE_PORT}
+    environment:
+      UVICORN_PORT: ${WREN_AI_SERVICE_PORT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # sometimes the console won't show print messages,
+      # using PYTHONUNBUFFERED: 1 can fix this
+      PYTHONUNBUFFERED: 1
+    networks:
+      - wren
+    depends_on:
+      - qdrant
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    expose:
+      - 6333
+      - 6334
+    networks:
+      - wren
+
+  wren-ui:
+    # image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
+    image: wren-ui:0.0.1
+    platform: ${PLATFORM}
+    environment:
+      DB_TYPE: sqlite
+      # /app is the working directory in the container
+      SQLITE_FILE: /app/db.sqlite3
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      WREN_AI_ENDPOINT: http://wren-ai-service:${WREN_AI_SERVICE_PORT}
+    ports:
+      # HOST_PORT is the port you want to expose to the host machine
+      - ${HOST_PORT}:3000
+    volumes:
+      - data:/app
+    networks:
+      - wren
+    depends_on:
+      - wren-ai-service
+      - wren-engine
