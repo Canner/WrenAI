@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
@@ -16,7 +17,7 @@ def init_document_store(
     recreate_index: bool = False,
 ):
     return QdrantDocumentStore(
-        url="localhost" if env == "dev" else "qdrant",
+        url=os.getenv("QDRANT_HOST"),
         embedding_dim=embedding_dim,
         index=dataset_name or "Document",
         recreate_index=recreate_index,
