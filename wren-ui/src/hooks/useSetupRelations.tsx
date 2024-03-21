@@ -10,7 +10,7 @@ export default function useSetupRelations() {
 
   const submitReleations = async (_relations: SelectedRecommendRelations) => {
     // TODO: implement submitReleations API
-    router.push(Path.HOME);
+    router.push(Path.Home);
   };
 
   const onBack = () => {
@@ -21,7 +21,7 @@ export default function useSetupRelations() {
     submitReleations(data.relations);
   };
 
-  const onSkip = () => router.push(Path.HOME);
+  const onSkip = () => router.push(Path.Home);
 
   const recommendRelations = recommendRelationsData.reduce(
     (acc, currentValue) => {
