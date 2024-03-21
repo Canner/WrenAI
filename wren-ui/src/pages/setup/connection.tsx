@@ -5,7 +5,14 @@ import useSetupConnection from '@/hooks/useSetupConnection';
 import { SETUP_STEPS } from '@/components/pages/setup/utils';
 
 export default function SetupConnection() {
-  const { stepKey, dataSource, onNext, onBack } = useSetupConnection();
+  const {
+    connectErrorMessage,
+    dataSource,
+    onBack,
+    onNext,
+    stepKey,
+    submitting,
+  } = useSetupConnection();
 
   const current = useMemo(() => SETUP_STEPS[stepKey], [stepKey]);
 
@@ -13,9 +20,11 @@ export default function SetupConnection() {
     <SimpleLayout>
       <ContainerCard step={current.step} maxWidth={current.maxWidth}>
         <current.component
+          connectErrorMessage={connectErrorMessage}
           dataSource={dataSource}
           onNext={onNext}
           onBack={onBack}
+          submitting={submitting}
         />
       </ContainerCard>
     </SimpleLayout>
