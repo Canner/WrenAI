@@ -1,11 +1,18 @@
 name: AI Service Build image
 
 on:
+  pull_request:
+    types: [ labeled ]
   workflow_dispatch:
     inputs:
       docker_image_tag_name:
-        type: string
         description: Docker image tag name (Optional)
+        type: string
+      is_latest:
+        description: Is latest (Optional)
+        type: boolean
+        required: false
+        default: false
 
 defaults:
   run:
@@ -34,12 +41,20 @@ jobs:
           else
             tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
           fi
-          echo ::set-output name=tag_name::$tag_name
+          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Build and push image
         run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --tag ghcr.io/canner/wren-ai-service:${{ steps.prepare_tag.outputs.tag_name }} \
-            --tag ghcr.io/canner/wren-ai-service:latest \
-            --file ./docker/Dockerfile \
-            --push .
+          if [ -n "${{ github.event.inputs.is_latest }}" ]; then
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
+              --tag ghcr.io/canner/wren-ai-service:latest \
+              --file ./docker/Dockerfile \
+              --push .
+          else
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
+              --file ./docker/Dockerfile \
+              --push .
+          fi
