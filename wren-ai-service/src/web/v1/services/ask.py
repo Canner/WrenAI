@@ -1,10 +1,7 @@
-import json
 from typing import List, Literal, Optional
 
 from haystack import Pipeline
 from pydantic import BaseModel
-
-from src.utils import clean_generation_result
 
 
 # POST /v1/semantics-preparations
@@ -146,12 +143,7 @@ class AskService:
             history=ask_request.history,
         )
 
-        cleaned_generation_results = [
-            json.loads(clean_generation_result(reply))
-            for reply in generation_result["generator"]["replies"]
-        ]
-
-        if not cleaned_generation_results[0]["sql"]:
+        if not generation_result["post_processor"]:
             self.ask_results[query_id] = AskResultResponse(
                 status="failed", error="Failed to generate SQL"
             )
@@ -160,7 +152,7 @@ class AskService:
                 status="finished",
                 response=[
                     AskResultResponse.AskResult(**result)
-                    for result in cleaned_generation_results
+                    for result in generation_result["post_processor"]["results"]
                 ],
             )
 

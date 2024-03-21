@@ -1,9 +1,9 @@
-import json
 import os
 import uuid
 from typing import Any, List, Optional
 
 from haystack import Document, Pipeline
+from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.core.pipeline import BasicPipeline
 from src.pipelines.ask.components.document_store import init_document_store
@@ -12,10 +12,11 @@ from src.pipelines.ask.components.generator import (
     MODEL_NAME,
     init_generator,
 )
-from src.pipelines.ask.components.prompts import init_generation_prompt_builder
+from src.pipelines.ask.components.post_processor import PostProcessor
+from src.pipelines.ask.components.prompts import generation_user_prompt_template
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.retrieval_pipeline import Retrieval
-from src.utils import clean_generation_result, load_env_vars
+from src.utils import load_env_vars
 from src.web.v1.services.ask import AskRequest, AskResultResponse
 
 load_env_vars()
@@ -32,14 +33,17 @@ class Generation(BasicPipeline):
     def __init__(
         self,
         generator: Any,
-        prompt_builder: Any,
         with_trace: bool = False,
     ):
         self._pipeline = Pipeline()
-        self._pipeline.add_component("prompt_builder", prompt_builder)
+        self._pipeline.add_component(
+            "prompt_builder", PromptBuilder(template=generation_user_prompt_template)
+        )
         self._pipeline.add_component("generator", generator)
+        self._pipeline.add_component("post_processor", PostProcessor())
 
         self._pipeline.connect("prompt_builder.prompt", "generator.prompt")
+        self._pipeline.connect("generator.replies", "post_processor.replies")
 
         self.with_trace = with_trace
         self.prompt_builder = self._pipeline.get_component("prompt_builder")
@@ -107,7 +111,6 @@ if __name__ == "__main__":
     embedder = init_embedder(with_trace=with_trace)
     retriever = init_retriever(document_store=document_store, with_trace=with_trace)
     generator = init_generator(with_trace=with_trace)
-    generation_prompt_builder = init_generation_prompt_builder()
 
     retrieval_pipeline = Retrieval(
         embedder=embedder,
@@ -118,7 +121,6 @@ if __name__ == "__main__":
     generation_pipeline = Generation(
         generator=generator,
         with_trace=with_trace,
-        prompt_builder=generation_prompt_builder,
     )
 
     if DATASET_NAME == "book_2":
@@ -139,11 +141,11 @@ if __name__ == "__main__":
         user_id=str(uuid.uuid4()) if with_trace else None,
     )
 
-    cleaned_generation_result = json.loads(
-        clean_generation_result(generation_result["generator"]["replies"][0])
+    print(generation_result)
+
+    assert AskResultResponse.AskResult(
+        **generation_result["post_processor"]["results"][0]
     )
-    print(f"cleaned_generation_result: {cleaned_generation_result}")
-    assert AskResultResponse.AskResult(**cleaned_generation_result)
 
     if with_trace:
         generation_pipeline.draw(

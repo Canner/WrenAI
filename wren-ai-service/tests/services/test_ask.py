@@ -11,7 +11,6 @@ from src.pipelines.ask import (
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.prompts import init_generation_prompt_builder
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.web.v1.services.ask import (
@@ -28,7 +27,6 @@ def ask_service():
     embedder = init_embedder()
     retriever = init_retriever(document_store=document_store)
     generator = init_generator()
-    generation_prompt_builder = init_generation_prompt_builder()
 
     return AskService(
         {
@@ -41,7 +39,6 @@ def ask_service():
             ),
             "generation": generation_pipeline.Generation(
                 generator=generator,
-                prompt_builder=generation_prompt_builder,
             ),
         }
     )

@@ -14,7 +14,6 @@ from src.pipelines.ask import (
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.prompts import init_generation_prompt_builder
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask_details import (
     generation_pipeline as ask_details_generation_pipeline,
@@ -47,7 +46,6 @@ def init_globals():
     )
     ask_generator = init_generator(with_trace=with_trace)
     ask_details_generator = init_ask_details_generator(with_trace=with_trace)
-    generation_prompt_builder = init_generation_prompt_builder()
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
@@ -66,7 +64,6 @@ def init_globals():
             ),
             "generation": ask_generation_pipeline.Generation(
                 generator=ask_generator,
-                prompt_builder=generation_prompt_builder,
                 with_trace=with_trace,
             ),
         }
