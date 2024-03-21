@@ -1,11 +1,5 @@
 import { isEmpty } from 'lodash';
-import {
-  Model,
-  ModelColumn,
-  Project,
-  Relation,
-  RelationInfo,
-} from '../repositories';
+import { Model, ModelColumn, Project, RelationInfo } from '../repositories';
 import { Manifest, ModelMDL } from './type';
 import { getLogger } from '@server/utils';
 
