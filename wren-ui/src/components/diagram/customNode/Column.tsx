@@ -121,3 +121,7 @@ export default function Column(props: ColumnProps) {
     nodeColumn
   );
 }
+
+export const MoreColumnTip = (props: { count: number }) => {
+  return <div className="text-sm gray-7 px-3 py-1">And {props.count} more</div>;
+};

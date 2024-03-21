@@ -26,7 +26,7 @@ import { trimId, highlightNodes, highlightEdges } from './utils';
 import { AdaptedData } from '@/utils/data';
 import { RefreshIcon } from '@/utils/icons';
 import { EDGE_TYPE, NODE_TYPE } from '@/utils/enum';
-import { DiagramCreator } from '@/utils/diagram/creator';
+import { DiagramCreator } from '@/utils/diagram';
 import { nextTick } from '@/utils/time';
 
 import 'reactflow/dist/style.css';
