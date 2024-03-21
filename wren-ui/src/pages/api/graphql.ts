@@ -17,6 +17,10 @@ import { getConfig } from '@server/config';
 import { ProjectService } from '@server/services/projectService';
 import { ModelService } from '@server/services/modelService';
 import { MDLService } from '@server/services/mdlService';
+import { WrenEngineAdaptor } from '@/apollo/server/adaptors/wrenEngineAdaptor';
+import { DeployLogRepository } from '@/apollo/server/repositories/deployLogRepository';
+import { DeployService } from '@/apollo/server/services/deployService';
+import { WrenAIAdaptor } from '@/apollo/server/adaptors/wrenAIAdaptor';
 
 const serverConfig = getConfig();
 const apolloLogger = getLogger('APOLLO');
@@ -34,10 +38,19 @@ const knex = bootstrapKnex({
   debug: serverConfig.debug,
   sqliteFile: serverConfig.sqliteFile,
 });
+
 const projectRepository = new ProjectRepository(knex);
 const modelRepository = new ModelRepository(knex);
 const modelColumnRepository = new ModelColumnRepository(knex);
 const relationRepository = new RelationRepository(knex);
+const deployLogRepository = new DeployLogRepository(knex);
+
+const wrenEngineAdaptor = new WrenEngineAdaptor({
+  wrenEngineEndpoint: serverConfig.wrenEngineEndpoint,
+});
+const wrenAIAdaptor = new WrenAIAdaptor({
+  wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
+});
 
 const projectService = new ProjectService({ projectRepository });
 const modelService = new ModelService();
@@ -46,6 +59,11 @@ const mdlService = new MDLService({
   modelRepository,
   modelColumnRepository,
   relationRepository,
+});
+const deployService = new DeployService({
+  wrenAIAdaptor,
+  wrenEngineAdaptor,
+  deployLogRepository,
 });
 
 const apolloServer: ApolloServer = new ApolloServer({
@@ -63,12 +81,14 @@ const apolloServer: ApolloServer = new ApolloServer({
     projectService,
     modelService,
     mdlService,
+    deployService,
 
     // repository
     projectRepository,
     modelRepository,
     modelColumnRepository,
     relationRepository,
+    deployRepository: deployLogRepository,
   }),
 });
 

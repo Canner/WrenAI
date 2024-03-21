@@ -240,6 +240,7 @@ export const typeDefs = gql`
     saveDataSource(data: DataSourceInput!): DataSource!
     saveTables(data: SaveTablesInput!): JSON!
     saveRelations(data: SaveRelationInput!): JSON!
+    deploy: JSON!
 
     # Modeling Page
     createModel(data: CreateModelInput!): JSON!

@@ -11,6 +11,12 @@ export interface IConfig {
 
   persistCredentialDir?: string;
 
+  // wren engine
+  wrenEngineEndpoint: string;
+
+  // wren AI
+  wrenAIEndpoint: string;
+
   // encryption
   encryptionPassword: string;
   encryptionSalt: string;
@@ -28,6 +34,12 @@ const defaultConfig = {
   sqliteFile: './db.sqlite3',
 
   persistCredentialDir: process.cwd(),
+
+  // wren engine
+  wrenEngineEndpoint: 'http://localhost:8080',
+
+  // wren AI
+  wrenAIEndpoint: 'http://localhost:5000',
 
   // encryption
   encryptionPassword: 'sementic',
@@ -52,6 +64,12 @@ const config = {
     }
     return undefined;
   })(),
+
+  // wren engine
+  wrenEngineEndpoint: process.env.WREN_ENGINE_ENDPOINT,
+
+  // wren AI
+  wrenAIEndpoint: process.env.WREN_AI_ENDPOINT,
 
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,

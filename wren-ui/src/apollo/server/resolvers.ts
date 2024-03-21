@@ -212,6 +212,7 @@ const resolvers = {
     onboardingStatus: projectResolver.getOnboardingStatus,
   },
   Mutation: {
+    deploy: modelResolver.deploy,
     saveDataSource: projectResolver.saveDataSource,
     saveTables: projectResolver.saveTables,
     saveRelations: projectResolver.saveRelations,

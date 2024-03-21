@@ -23,7 +23,7 @@ export interface IBasicRepository<T> {
     queryOptions?: IQueryOptions,
   ) => Promise<T[]>;
   updateOne: (
-    id: string,
+    id: string | number,
     data: Partial<T>,
     queryOptions?: IQueryOptions,
   ) => Promise<T>;
@@ -120,7 +120,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   }
 
   public async updateOne(
-    id: string,
+    id: string | number,
     data: Partial<T>,
     queryOptions?: IQueryOptions,
   ) {

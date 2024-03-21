@@ -6,6 +6,7 @@ import { getLogger } from '@server/utils';
 import { BQConnector } from '../connectors/bqConnector';
 import { GenerateReferenceNameData } from '../services/modelService';
 import { Manifest } from '../mdl/type';
+import { DeployResponse } from '../services/deployService';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -17,6 +18,17 @@ export class ModelResolver {
     this.createModel = this.createModel.bind(this);
     this.deleteModel = this.deleteModel.bind(this);
     this.getManifest = this.getManifest.bind(this);
+    this.deploy = this.deploy.bind(this);
+  }
+
+  public async deploy(
+    _root: any,
+    _args: any,
+    ctx: IContext,
+  ): Promise<DeployResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const manifest = await ctx.mdlService.makeCurrentModelMDL();
+    return await ctx.deployService.deploy(manifest, project.id);
   }
 
   public async getManifest(
