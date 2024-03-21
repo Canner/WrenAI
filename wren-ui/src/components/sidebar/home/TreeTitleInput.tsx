@@ -2,7 +2,7 @@ import { Input } from 'antd';
 
 const ESCAPE = 'escape';
 
-export default function ExplorationTitleInput(props: {
+export default function TreeTitleInput(props: {
   title: string;
   onCancelChange: () => void;
   onSetTitle: (newTitle: string) => void;

@@ -2,15 +2,13 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { Dropdown, Menu } from 'antd';
 import EditOutlined from '@ant-design/icons/EditOutlined';
-import LinkOutlined from '@ant-design/icons/LinkOutlined';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import LabelTitle from '@/components/sidebar/LabelTitle';
-import { DeleteIconModal } from '@/components/modals/DeleteModal';
-import ExplorationTitleInput from '@/components/sidebar/exploration/ExplorationTitleInput';
+import TreeTitleInput from '@/components/sidebar/home/TreeTitleInput';
+import { DeleteThreadModal } from '@/components/modals/DeleteModal';
 
 const MENU_ITEM_KEYS = {
   RENAME: 'rename',
-  COPY_LINK: 'copy-link',
   DELETE: 'delete',
 };
 
@@ -20,14 +18,13 @@ const StyledMenu = styled(Menu)`
   }
 `;
 
-export default function ExplorationTreeTitle(props: {
-  explorationId: string;
-  onCopyLink: (explorationId: string) => void;
-  onDelete: (explorationId: string) => void;
+export default function TreeTitle(props: {
+  threadId: string;
+  onDelete: (threadId: string) => void;
   onRename: (newName: string) => void;
   title: string;
 }) {
-  const { explorationId, onCopyLink, onDelete, onRename } = props;
+  const { threadId, onDelete, onRename } = props;
   const [title, setTitle] = useState(props.title);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -36,14 +33,14 @@ export default function ExplorationTreeTitle(props: {
     setTitle(props.title);
   };
 
-  const onChangeTitle = (newExplorationTitle: string) => {
+  const onChangeTitle = (newThreadTitle: string) => {
     setIsEditing(false);
-    setTitle(newExplorationTitle);
-    onRename(newExplorationTitle);
+    setTitle(newThreadTitle);
+    onRename(newThreadTitle);
   };
 
   return isEditing ? (
-    <ExplorationTitleInput
+    <TreeTitleInput
       title={title}
       onCancelChange={onCancelChange}
       onSetTitle={setTitle}
@@ -55,7 +52,7 @@ export default function ExplorationTreeTitle(props: {
       appendIcon={
         <Dropdown
           trigger={['click']}
-          overlayStyle={{ userSelect: 'none' }}
+          overlayStyle={{ userSelect: 'none', minWidth: 150 }}
           overlay={
             <StyledMenu
               items={[
@@ -74,26 +71,8 @@ export default function ExplorationTreeTitle(props: {
                 },
                 {
                   label: (
-                    <>
-                      <LinkOutlined className="mr-2" />
-                      Copy link
-                    </>
+                    <DeleteThreadModal onConfirm={() => onDelete(threadId)} />
                   ),
-                  key: MENU_ITEM_KEYS.COPY_LINK,
-                  onClick: ({ domEvent }) => {
-                    domEvent.stopPropagation();
-                    onCopyLink(explorationId);
-                  },
-                },
-                { type: 'divider' },
-                {
-                  label: (
-                    <DeleteIconModal
-                      itemName="exploration"
-                      onConfirm={() => onDelete(explorationId)}
-                    />
-                  ),
-                  danger: true,
                   key: MENU_ITEM_KEYS.DELETE,
                   onClick: ({ domEvent }) => {
                     domEvent.stopPropagation();

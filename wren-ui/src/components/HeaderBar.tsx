@@ -39,15 +39,15 @@ export default function HeaderBar() {
         className="d-flex justify-space-between"
         style={{ marginTop: -2, alignItems: 'self-end' }}
       >
-        <Space size={[24, 0]}>
+        <Space size={[48, 0]}>
           <LogoBar />
           {showNav && (
             <Space size={[16, 0]}>
               <StyledButton
-                $isHighlight={pathname.startsWith(Path.Exploration)}
-                onClick={() => router.push(Path.Exploration)}
+                $isHighlight={pathname.startsWith(Path.Home)}
+                onClick={() => router.push(Path.Home)}
               >
-                Exploration
+                Home
               </StyledButton>
               <StyledButton
                 $isHighlight={pathname.startsWith(Path.Modeling)}

@@ -36,7 +36,7 @@ const DemoColumnIterator = makeIterable(DemoTemplate);
 export default function DemoPrompt(props: Props) {
   const { demo, onSelect } = props;
   return (
-    <div style={{ width: 580 }}>
+    <div className="gray-8" style={{ width: 580 }}>
       <div className="text-center mt-3 mb-2">Try asking...</div>
       <Row gutter={16}>
         <DemoColumnIterator data={demo} onSelect={onSelect} />
