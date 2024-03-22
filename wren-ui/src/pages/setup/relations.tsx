@@ -5,8 +5,15 @@ import useSetupRelations from '@/hooks/useSetupRelations';
 import { SETUP_STEPS } from '@/components/pages/setup/utils';
 
 export default function SetupRelations() {
-  const { stepKey, recommendRelations, onNext, onBack, onSkip } =
-    useSetupRelations();
+  const {
+    fetching,
+    stepKey,
+    recommendRelations,
+    onNext,
+    onBack,
+    onSkip,
+    submitting,
+  } = useSetupRelations();
 
   const current = useMemo(() => SETUP_STEPS[stepKey], [stepKey]);
 
@@ -14,10 +21,12 @@ export default function SetupRelations() {
     <SimpleLayout>
       <ContainerCard step={current.step} maxWidth={current.maxWidth}>
         <current.component
+          fetching={fetching}
           recommendRelations={recommendRelations}
           onNext={onNext}
           onBack={onBack}
           onSkip={onSkip}
+          submitting={submitting}
         />
       </ContainerCard>
     </SimpleLayout>

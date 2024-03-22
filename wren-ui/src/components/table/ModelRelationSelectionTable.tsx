@@ -4,8 +4,10 @@ import { ModelIcon } from '@/utils/icons';
 import SelectionTable from '@/components/table/SelectionTable';
 
 interface ModelField {
-  model: string;
-  field: string;
+  modelId: string;
+  modelName: string;
+  fieldId: string;
+  fieldName: string;
 }
 
 export interface RelationsDataType {

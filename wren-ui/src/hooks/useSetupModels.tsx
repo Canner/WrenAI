@@ -11,7 +11,9 @@ export default function useSetupModels() {
 
   const router = useRouter();
 
-  const { data, loading: fetching } = useListDataSourceTablesQuery();
+  const { data, loading: fetching } = useListDataSourceTablesQuery({
+    onError: (error) => console.error(error),
+  });
 
   const [saveTablesMutation, { loading: submitting }] = useSaveTablesMutation();
 

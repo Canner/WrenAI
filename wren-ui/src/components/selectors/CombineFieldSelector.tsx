@@ -14,8 +14,8 @@ interface Props {
   modelValue?: string;
   fieldValue?: string;
   value?: Value;
-  onModelChange?: (value: string) => void;
-  onFieldChange?: (value: string) => void;
+  onModelChange?: (modelLabel: string) => void;
+  onFieldChange?: (fieldLabel: string) => void;
   onChange?: (value: Value) => void;
 }
 
@@ -47,13 +47,13 @@ export default function CombineFieldSelector(props: Props) {
 
   useEffect(syncOnChange, [internalValue]);
 
-  const changeModel = async (model) => {
-    onModelChange && onModelChange(model);
+  const changeModel = async (model: string, option) => {
+    onModelChange && onModelChange(option.label);
     setInternalValue({ ...internalValue, model });
   };
 
-  const changeField = (field) => {
-    onFieldChange && onFieldChange(field);
+  const changeField = (field: string, option) => {
+    onFieldChange && onFieldChange(option.label);
     setInternalValue({ ...internalValue, field });
   };
 
