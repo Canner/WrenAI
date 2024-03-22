@@ -9,7 +9,7 @@ networks:
 
 services:
   bootstrap:
-    image: bootstrap:0.0.3
+    image: ghcr.io/canner/wren-bootstrap:${WREN_BOOTSTRAP_VERSION}
     platform: ${PLATFORM}
     environment:
       DATA_PATH: /app/data
@@ -56,8 +56,7 @@ services:
       - wren
 
   wren-ui:
-    # image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
-    image: wren-ui:0.0.11
+    image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
     platform: ${PLATFORM}
     environment:
       DB_TYPE: sqlite
