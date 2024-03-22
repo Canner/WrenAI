@@ -33,13 +33,14 @@ const StyledTotal = styled.div`
 
 interface Props {
   columns: ColumnsType<any>;
+  loading: boolean;
   items: { [key: string]: any; value: string }[];
   value?: string[];
   onChange?: (value: string[]) => void;
 }
 
 export default function MultiSelectBox(props: Props) {
-  const { columns, items, onChange, value } = props;
+  const { columns, loading, items, onChange, value } = props;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>(
     value || [],
   );
@@ -98,6 +99,7 @@ export default function MultiSelectBox(props: Props) {
         dataSource={dataSource}
         scroll={{ y: 195 }}
         pagination={false}
+        loading={loading}
       />
     </StyledBox>
   );

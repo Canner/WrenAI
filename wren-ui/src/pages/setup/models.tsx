@@ -5,14 +5,21 @@ import useSetupModels from '@/hooks/useSetupModels';
 import { SETUP_STEPS } from '@/components/pages/setup/utils';
 
 export default function SetupModels() {
-  const { stepKey, tables, onNext, onBack } = useSetupModels();
+  const { fetching, stepKey, tables, onNext, onBack, submitting } =
+    useSetupModels();
 
   const current = useMemo(() => SETUP_STEPS[stepKey], [stepKey]);
 
   return (
     <SimpleLayout>
       <ContainerCard step={current.step} maxWidth={current.maxWidth}>
-        <current.component tables={tables} onNext={onNext} onBack={onBack} />
+        <current.component
+          fetching={fetching}
+          onBack={onBack}
+          onNext={onNext}
+          submitting={submitting}
+          tables={tables}
+        />
       </ContainerCard>
     </SimpleLayout>
   );
