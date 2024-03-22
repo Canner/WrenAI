@@ -54,9 +54,7 @@ RUN mkdir .next
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY migrations ./migrations
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
 COPY knexfile.js ./knexfile.js
-RUN chmod +x ./docker-entrypoint.sh
 RUN yarn global add knex
 # RUN chown -R nextjs:nodejs /app
 
