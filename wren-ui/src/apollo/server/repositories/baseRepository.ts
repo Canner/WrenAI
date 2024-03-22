@@ -96,7 +96,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     if (queryOptions?.order) {
       query.orderBy(queryOptions.order);
     }
-    if (queryOptions.limit) {
+    if (queryOptions?.limit) {
       query.limit(queryOptions.limit);
     }
     const result = await query;

@@ -96,7 +96,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.get(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations/${deployId}/status`,
       );
-      return res.data?.status as WrenAISystemStatus;
+      return res.data?.status.toUpperCase() as WrenAISystemStatus;
     } catch (err: any) {
       logger.debug(
         `Got error in API /v1/semantics-preparations/${deployId}/status: ${err.message}`,

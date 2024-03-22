@@ -210,6 +210,7 @@ const resolvers = {
     model: modelResolver.getModel,
     manifest: modelResolver.getManifest,
     onboardingStatus: projectResolver.getOnboardingStatus,
+    modelSync: modelResolver.checkModelSync,
   },
   Mutation: {
     deploy: modelResolver.deploy,

@@ -187,6 +187,10 @@ export const typeDefs = gql`
     status: OnboardingStatus
   }
 
+  type ModelSyncResponse {
+    isSyncronized: Boolean!
+  }
+
   input SimpleMeasureInput {
     name: String!
     type: String!
@@ -233,6 +237,7 @@ export const typeDefs = gql`
     # Modeling Page
     listModels: [ModelInfo!]!
     model(where: ModelWhereInput!): DetailedModel!
+    modelSync: ModelSyncResponse
   }
 
   type Mutation {

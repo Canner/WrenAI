@@ -60,16 +60,8 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         `${this.wrenEngineBaseEndpoint}/v1/mdl/deploy`,
         deployPayload,
       );
-      const deploySuccess = await this.waitDeployFinished(hash);
-      if (deploySuccess) {
-        logger.debug(`WrenEngine: Deploy wren engine success, hash: ${hash}`);
-        return { status: WrenEngineDeployStatusEnum.SUCCESS };
-      } else {
-        return {
-          status: WrenEngineDeployStatusEnum.FAILED,
-          error: 'WrenEngine: Deploy wren engine failed or timeout',
-        };
-      }
+      logger.debug(`WrenEngine: Deploy wren engine success, hash: ${hash}`);
+      return { status: WrenEngineDeployStatusEnum.SUCCESS };
     } catch (err: any) {
       logger.debug(`Got error when deploying to wren engine: ${err.message}`);
       return {
@@ -77,31 +69,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         error: `WrenEngine Error, deployment hash:${hash}: ${err.message}`,
       };
     }
-  }
-
-  private async waitDeployFinished(version) {
-    let deploySuccess = false;
-    // timeout after 20 seconds
-    for (let waitTime = 1; waitTime <= 6; waitTime++) {
-      try {
-        const deployStatus = await this.getDeployStatus();
-        const { systemStatus, version: deployVersion } = deployStatus;
-        if (
-          systemStatus === WrenEngineSystemStatus.READY &&
-          version == deployVersion
-        ) {
-          deploySuccess = true;
-          break;
-        }
-      } catch (err: any) {
-        logger.debug(
-          `WrenEngine: Got error when waiting for deploy finished: ${err.message}`,
-        );
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
-    }
-    return deploySuccess;
   }
 
   private async getDeployStatus(): Promise<WrenEngineDeployStatusResponse> {

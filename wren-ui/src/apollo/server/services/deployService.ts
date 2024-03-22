@@ -23,8 +23,14 @@ export interface DeployResponse {
   error?: string;
 }
 
+export interface MDLSyncResponse {
+  isSyncronized: boolean;
+}
+
 export interface IDeployService {
   deploy(manifest: Manifest, projectId: number): Promise<DeployResponse>;
+  getLastDeployment(projectId: number): Promise<string>;
+  createMDLHash(manifest: Manifest): string;
 }
 
 export class DeployService implements IDeployService {
@@ -44,6 +50,15 @@ export class DeployService implements IDeployService {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.wrenEngineAdaptor = wrenEngineAdaptor;
     this.deployLogRepository = deployLogRepository;
+  }
+
+  public async getLastDeployment(projectId) {
+    const lastDeploy =
+      await this.deployLogRepository.findLastProjectDeployLog(projectId);
+    if (!lastDeploy) {
+      return null;
+    }
+    return lastDeploy.hash;
   }
 
   public async deploy(manifest, projectId) {
@@ -78,7 +93,7 @@ export class DeployService implements IDeployService {
     return { status, error };
   }
 
-  protected createMDLHash(manifest: Manifest) {
+  public createMDLHash(manifest: Manifest) {
     const content = JSON.stringify(manifest);
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;

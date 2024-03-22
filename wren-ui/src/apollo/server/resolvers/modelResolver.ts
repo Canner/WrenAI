@@ -19,6 +19,20 @@ export class ModelResolver {
     this.deleteModel = this.deleteModel.bind(this);
     this.getManifest = this.getManifest.bind(this);
     this.deploy = this.deploy.bind(this);
+    this.checkModelSync = this.checkModelSync.bind(this);
+  }
+
+  public async checkModelSync(_root: any, _args: any, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    const manifest = await ctx.mdlService.makeCurrentModelMDL();
+    const currentHash = ctx.deployService.createMDLHash(manifest);
+    const lastDeployHash = await ctx.deployService.getLastDeployment(
+      project.id,
+    );
+
+    return currentHash == lastDeployHash
+      ? { isSyncronized: true }
+      : { isSyncronized: false };
   }
 
   public async deploy(

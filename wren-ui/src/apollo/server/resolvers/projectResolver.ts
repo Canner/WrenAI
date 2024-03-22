@@ -100,6 +100,7 @@ export class ProjectResolver {
     // get current project
     const project = await ctx.projectService.getCurrentProject();
     const filePath = await ctx.projectService.getCredentialFilePath(project);
+    const projectId = project.id;
 
     // get columns with descriptions
     const connector = await this.getBQConnector(project, filePath);
@@ -108,15 +109,23 @@ export class ProjectResolver {
       format: false,
     };
     const dataSourceColumns = await connector.listTables(listTableOptions);
+
+    // delete existing models and columns
+    await this.resetCurrentProjectModel(ctx, projectId);
+
     // create models
-    const id = project.id;
     const tableDescriptions = (dataSourceColumns as BQColumnResponse[])
       .filter((col) => col.table_description)
       .reduce((acc, column) => {
         acc[column.table_name] = column.table_description;
         return acc;
       }, {});
-    const models = await this.createModels(tables, id, ctx, tableDescriptions);
+    const models = await this.createModels(
+      tables,
+      projectId,
+      ctx,
+      tableDescriptions,
+    );
     // create columns
     const columns = await this.createAllColumnsInDataSource(
       tables,
@@ -125,7 +134,8 @@ export class ProjectResolver {
       ctx,
     );
 
-    return { models, columns };
+    this.deploy(ctx);
+    return { models: models, columns };
   }
 
   public async autoGenerateRelation(_root: any, _arg: any, ctx: IContext) {
@@ -195,6 +205,9 @@ export class ProjectResolver {
         ctx.relationRepository.createOne(relation),
       ),
     );
+
+    // async deploy
+    this.deploy(ctx);
     return savedRelations;
   }
 
@@ -364,6 +377,15 @@ export class ProjectResolver {
     const encryptor = new Encryptor(config);
     const encryptedCredentials = encryptor.encrypt(credentials);
 
+    // remove existing datasource
+    try {
+      const currentProject = await ctx.projectRepository.getCurrentProject();
+      await this.resetCurrentProjectModel(ctx, currentProject.id);
+      await ctx.projectRepository.deleteOne(currentProject.id);
+    } catch (_err: any) {
+      // do nothing
+    }
+
     // TODO: add displayName, schema, catalog to the DataSource, depends on the MDL structure
     const project = await ctx.projectRepository.createOne({
       displayName,
@@ -389,5 +411,18 @@ export class ProjectResolver {
       toModel.sourceTableName.charAt(0).toUpperCase() +
       toModel.sourceTableName.slice(1)
     );
+  }
+
+  private async deploy(ctx) {
+    const project = await ctx.projectService.getCurrentProject();
+    const manifest = await ctx.mdlService.makeCurrentModelMDL();
+    return await ctx.deployService.deploy(manifest, project.id);
+  }
+
+  private async resetCurrentProjectModel(ctx, projectId) {
+    const existsModels = await ctx.modelRepository.findAllBy({ projectId });
+    const modelIds = existsModels.map((m) => m.id);
+    await ctx.modelColumnRepository.deleteByModelIds(modelIds);
+    await ctx.modelRepository.deleteMany(modelIds);
   }
 }
