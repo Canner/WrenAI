@@ -1,0 +1,105 @@
+package commands
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path"
+	"strings"
+
+	utils "github.com/Canner/WrenAI/wren-launcher/utils"
+	"github.com/common-nighthawk/go-figure"
+	"github.com/manifoldco/promptui"
+)
+
+func prepareProjectDir() string {
+	// create a project directory under ~/.wrenai
+	homedir, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+
+	projectDir := path.Join(homedir, ".wrenai")
+
+	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
+		os.Mkdir(projectDir, 0755)
+	}
+
+	return projectDir
+}
+
+func askForAPIKey() (string, error) {
+	// let users know we're asking for an API key
+	fmt.Println("Please provide your OpenAI API key")
+
+	validate := func(input string) error {
+		// check if input is a valid API key
+		// OpenAI API keys are starting with "sk-"
+		if !strings.HasPrefix(input, "sk-") {
+			return errors.New("invalid API key")
+		}
+		return nil
+	}
+
+	prompt := promptui.Prompt{
+		Label:    "OpenAI API key",
+		Validate: validate,
+		Mask:     '*',
+	}
+
+	result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
+func Launch() {
+	// print WrenAI header
+	fmt.Println(strings.Repeat("=", 55))
+	myFigure := figure.NewFigure("WrenAI", "", true)
+	myFigure.Print()
+	fmt.Println(strings.Repeat("=", 55))
+
+	// ask for OpenAI API key
+	apiKey, err := askForAPIKey()
+
+	if err != nil {
+		fmt.Println("Failed to get API key")
+		return
+	}
+
+	fmt.Println("API key:", apiKey)
+
+	// check if docker engine installed
+	_, error := utils.CheckDockerInstalled()
+
+	if error != nil {
+		fmt.Println("Docker is not installed")
+		return
+	}
+
+	// prepare a project directory
+	fmt.Println("Preparing project directory")
+	projectDir := prepareProjectDir()
+
+	// download docker-compose file and env file template for WrenAI
+	fmt.Println("Downloading docker-compose file and env file")
+	err = utils.PrepareDockerFiles(apiKey, projectDir)
+	if err != nil {
+		panic(err)
+	}
+
+	// launch WrenAI
+	fmt.Println("Launching WrenAI")
+	const projectName string = "wrenai"
+	err = utils.RunDockerCompose(projectName, projectDir)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Scanf("h")
+}
