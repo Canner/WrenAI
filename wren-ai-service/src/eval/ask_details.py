@@ -82,19 +82,19 @@ def _prepare_ragas_eval_pipeline() -> Pipeline:
     return pipeline
 
 
-# todo: r1: compare the cte query with the the correct answer
-
-# todo: r2: connect wren-engine to compare the result
-# r3: if the result is the subset of the answer, then the answer is correct
-
-
-# todo: LLM judge to review the output and give it a score from 0 to 1
 class Collector:
     _result = {
         "accuracy": {
             "ragas": {
                 "answer_correctness": 0.0,
-            }
+            },
+            "wren": {
+                # todo: LLM judge to review the output and give it a score from 0 to 1
+                "llm_judge": 0.0,
+                # todo: r2: connect wren-engine to compare the result
+                # r3: if the result is the subset of the answer, then the answer is correct
+                "result_correct": False,
+            },
         },
         "latency": 0.0,
         "cost": 0.0,
@@ -150,8 +150,8 @@ class Collector:
 
         self._result["accuracy"]["ragas"]["answer_correctness"] = score
 
-    def result(self):
-        print(self._result)
+    def result(self) -> Dict[str, Any]:
+        return self._result
 
 
 if __name__ == "__main__":
@@ -172,15 +172,14 @@ if __name__ == "__main__":
         generator=init_generator(),
     )
 
+    # todo: generate the report for the evaluation process
+    # the report includes the following information:
+    # - average accuracy, cost, and latency
+    # - the evaluation result for each question
+    #   - is the answer correct?
+    #   - display the input query
+    #   - disopay the output answer
+    #   - (optional) why the answer is correct or incorrect)
     for collector in collectors:
         collector.eval(pipeline)
         collector.result()
-
-# todo: generate the report for the evaluation process
-# the report includes the following information:
-# - average accuracy, cost, and latency
-# - the evaluation result for each question
-#   - is the answer correct?
-#   - display the input query
-#   - disopay the output answer
-#   - (optional) why the answer is correct or incorrect)
