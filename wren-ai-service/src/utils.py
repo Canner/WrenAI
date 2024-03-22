@@ -42,11 +42,12 @@ def get_mdl_catalog_and_schema(api_endpoint: str):
     return mdl_json["catalog"], mdl_json["schema"]
 
 
-def remove_invalid_generation_results(
+def classify_invalid_generation_results(
     sql_endpoint: str,
     generation_results: List[Dict[str, str]],
 ) -> List[Optional[Dict[str, str]]]:
     valid_generation_results = []
+    invalid_generation_results = []
 
     conn = psycopg2.connect(dsn=sql_endpoint)
 
@@ -56,8 +57,14 @@ def remove_invalid_generation_results(
                 cursor.execute(generation_result["sql"])
                 valid_generation_results.append(generation_result)
         except Exception as e:
-            print(f"Invalid generation result: {generation_result}; error: {e}")
+            invalid_generation_results.append(
+                {
+                    "sql": generation_result["sql"],
+                    "summary": generation_result["summary"],
+                    "error": str(e),
+                }
+            )
 
     conn.close()
 
-    return valid_generation_results
+    return valid_generation_results, invalid_generation_results

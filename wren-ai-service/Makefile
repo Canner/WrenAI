@@ -37,7 +37,7 @@ stop-wren-engine:
 	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file .env.dev --env-file ./src/eval/wren-engine/.env down
 
 psql:
-	docker exec -it wren-engine-1 bash launch-cli.sh
+	docker exec -it wren-wren-engine-1 bash launch-cli.sh
 
 run-all:
 	poetry run python -m src.eval.prepare_mdl_json && \

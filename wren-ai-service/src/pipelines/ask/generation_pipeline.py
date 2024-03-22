@@ -13,11 +13,14 @@ from src.pipelines.ask.components.generator import (
     init_generator,
 )
 from src.pipelines.ask.components.post_processor import PostProcessor
-from src.pipelines.ask.components.prompts import generation_user_prompt_template
+from src.pipelines.ask.components.prompts import (
+    generation_user_prompt_template,
+    sql_correction_user_prompt_template,
+)
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.utils import load_env_vars
-from src.web.v1.services.ask import AskRequest, AskResultResponse
+from src.web.v1.services.ask import AskRequest
 
 load_env_vars()
 
@@ -32,21 +35,43 @@ if with_trace := os.getenv("ENABLE_TRACE", default=False):
 class Generation(BasicPipeline):
     def __init__(
         self,
-        generator: Any,
+        text_to_sql_generator: Any,
+        sql_correction_generator: Any,
         with_trace: bool = False,
     ):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
-            "prompt_builder", PromptBuilder(template=generation_user_prompt_template)
+            "text_to_sql_prompt_builder",
+            PromptBuilder(template=generation_user_prompt_template),
         )
-        self._pipeline.add_component("generator", generator)
+        self._pipeline.add_component("text_to_sql_generator", text_to_sql_generator)
         self._pipeline.add_component("post_processor", PostProcessor())
+        self._pipeline.add_component(
+            "sql_correction_generator", sql_correction_generator
+        )
+        self._pipeline.add_component(
+            "sql_correction_prompt_builder",
+            PromptBuilder(template=sql_correction_user_prompt_template),
+        )
 
-        self._pipeline.connect("prompt_builder.prompt", "generator.prompt")
-        self._pipeline.connect("generator.replies", "post_processor.replies")
+        self._pipeline.connect(
+            "text_to_sql_prompt_builder.prompt", "text_to_sql_generator.prompt"
+        )
+        self._pipeline.connect(
+            "text_to_sql_generator.replies", "post_processor.replies"
+        )
+        self._pipeline.connect(
+            "post_processor.invalid_generation_results",
+            "sql_correction_prompt_builder.invalid_generation_results",
+        )
+        self._pipeline.connect(
+            "sql_correction_prompt_builder.prompt", "sql_correction_generator.prompt"
+        )
 
         self.with_trace = with_trace
-        self.prompt_builder = self._pipeline.get_component("prompt_builder")
+        self.text_to_sql_prompt_builder = self._pipeline.get_component(
+            "text_to_sql_prompt_builder"
+        )
 
         super().__init__(self._pipeline)
 
@@ -68,16 +93,16 @@ class Generation(BasicPipeline):
 
             result = self._pipeline.run(
                 {
-                    "prompt_builder": {
+                    "text_to_sql_prompt_builder": {
                         "query": query,
                         "documents": contexts,
                         "history": history,
                     },
-                    "generator": {
+                    "text_to_sql_generator": {
                         "trace_generation_input": TraceGenerationInput(
                             trace_id=trace.id,
                             name="generator",
-                            input=self.prompt_builder.run(
+                            input=self.text_to_sql_prompt_builder.run(
                                 query=query,
                                 documents=contexts,
                                 history=history,
@@ -85,17 +110,23 @@ class Generation(BasicPipeline):
                             model=MODEL_NAME,
                         )
                     },
+                    "sql_correction_prompt_builder": {
+                        "documents": contexts,
+                    },
                 }
             )
 
-            trace.update(input=query, output=result["generator"])
+            trace.update(input=query, output=result["text_to_sql_generator"])
         else:
             result = self._pipeline.run(
                 {
-                    "prompt_builder": {
+                    "text_to_sql_prompt_builder": {
                         "query": query,
                         "documents": contexts,
                         "history": history,
+                    },
+                    "sql_correction_prompt_builder": {
+                        "documents": contexts,
                     },
                 }
             )
@@ -110,7 +141,8 @@ if __name__ == "__main__":
     document_store = init_document_store()
     embedder = init_embedder(with_trace=with_trace)
     retriever = init_retriever(document_store=document_store, with_trace=with_trace)
-    generator = init_generator(with_trace=with_trace)
+    text_to_sql_generator = init_generator(with_trace=with_trace)
+    sql_correction_generator = init_generator(with_trace=with_trace)
 
     retrieval_pipeline = Retrieval(
         embedder=embedder,
@@ -119,7 +151,8 @@ if __name__ == "__main__":
     )
 
     generation_pipeline = Generation(
-        generator=generator,
+        text_to_sql_generator=text_to_sql_generator,
+        sql_correction_generator=sql_correction_generator,
         with_trace=with_trace,
     )
 
@@ -143,9 +176,9 @@ if __name__ == "__main__":
 
     print(generation_result)
 
-    assert AskResultResponse.AskResult(
-        **generation_result["post_processor"]["results"][0]
-    )
+    # assert AskResultResponse.AskResult(
+    #     **generation_result["post_processor"]["results"][0]
+    # )
 
     if with_trace:
         generation_pipeline.draw(

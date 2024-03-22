@@ -35,3 +35,26 @@ For a question that you can return the SQL query
 For a question that you can't return the SQL query
 {"sql": "", "summary": ""}
 """
+
+sql_correction_user_prompt_template = """
+You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
+
+### TASK ###
+Now you are given a list of syntactically incorrect Trino SQL queries.
+With given data models, please think step by step to correct these wrong Trino SQL quries.
+
+### DATA MODELS ###
+{% for document in documents %}
+    {{ document.content }}
+{% endfor %}
+
+### QUESTION ###
+{{ invalid_generation_results }}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a list of dictionary as follows 
+that confirms to the JSON format:
+
+Dictionary structure:
+{"sql": <SQL_QUERY_STRING>, "summary": <SUMMARY_STRING>}
+"""

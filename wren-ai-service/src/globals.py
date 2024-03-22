@@ -44,7 +44,8 @@ def init_globals():
         document_store=document_store,
         with_trace=with_trace,
     )
-    ask_generator = init_generator(with_trace=with_trace)
+    ask_text_to_sql_generator = init_generator(with_trace=with_trace)
+    ask_sql_correction_generator = init_generator(with_trace=with_trace)
     ask_details_generator = init_ask_details_generator(with_trace=with_trace)
 
     SEMANTIC_SERVICE = SemanticsService(
@@ -63,7 +64,8 @@ def init_globals():
                 with_trace=with_trace,
             ),
             "generation": ask_generation_pipeline.Generation(
-                generator=ask_generator,
+                text_to_sql_generator=ask_text_to_sql_generator,
+                sql_correction_generator=ask_sql_correction_generator,
                 with_trace=with_trace,
             ),
         }
