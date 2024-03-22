@@ -9,6 +9,7 @@ from haystack_integrations.components.evaluators.ragas import (
     RagasMetric,
 )
 
+from src.eval.utils import get_generation_model_pricing
 from src.pipelines.ask_details.components.generator import init_generator
 from src.pipelines.ask_details.generation_pipeline import Generation
 from src.utils import load_env_vars
@@ -23,7 +24,8 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
 
     if os.path.exists(output_path):
         print(
-            f"File {output_path} already exists. Skipping generation of evaluation data."
+            f"File {
+            output_path} already exists. Skipping generation of evaluation data."
         )
         return
 
@@ -80,44 +82,76 @@ def _prepare_ragas_eval_pipeline() -> Pipeline:
     return pipeline
 
 
+# todo: r1: compare the cte query with the the correct answer
+
+# todo: r2: connect wren-engine to compare the result
+# r3: if the result is the subset of the answer, then the answer is correct
+
+
+# todo: LLM judge to review the output and give it a score from 0 to 1
 class Collector:
     _result = {
         "accuracy": {
-            "ragas": 0.0,
+            "ragas": {
+                "answer_correctness": 0.0,
+            }
         },
-        "token": 0,
-        "cost": 0.0,
         "latency": 0.0,
+        "cost": 0.0,
+        "usage": {},
+        "question": {},
+        "response": {},
+        "ground_truth": {},
     }
 
     def __init__(self, element: Dict[str, Any]):
-        self._element = element
+        self._result["question"] = element["input"]
+        self._result["ground_truth"] = element["output"]
         self._ragas_eval_pipeline = _prepare_ragas_eval_pipeline()
 
     def eval(self, pipeline: Pipeline):
         start = time.perf_counter()
         self._response = pipeline.run(
-            sql=self._element["input"]["sql"],
+            sql=self._result["question"]["sql"],
         )
         self._result["latency"] = time.perf_counter() - start
-        self._run_ragas_eval()
+        self._result["response"] = json.loads(self._response["generator"]["replies"][0])
 
-    def _run_ragas_eval(self):
-        replies = self._response["generator"]["replies"]
-        meta = self._response["generator"]["meta"]
-        print(replies)
-        print(meta)
+        self._cost_analysis()
+        self._ragas_eval()
 
-        results = self._ragas_eval_pipeline.run(
+    def _cost_analysis(self):
+        meta = self._response["generator"]["meta"][0]
+        self._result["usage"] = meta["usage"]
+
+        model_pricing = get_generation_model_pricing(meta["model"])
+        prompt_cost = (
+            model_pricing["prompt_tokens"] * self._result["usage"]["prompt_tokens"]
+        )
+        completion_cost = (
+            model_pricing["completion_tokens"]
+            * self._result["usage"]["completion_tokens"]
+        )
+
+        self._result["cost"] = prompt_cost + completion_cost
+
+    def _ragas_eval(self):
+        response = self._ragas_eval_pipeline.run(
             {
                 "evaluator_context": {
-                    "questions": [self._element["input"]["sql"]],
-                    "responses": [str(json.loads(replies[0]))],
-                    "ground_truths": [str(self._element["output"])],
+                    "questions": [self._result["question"]["sql"]],
+                    "responses": [str(self._result["response"])],
+                    "ground_truths": [str(self._result["ground_truth"])],
                 },
             }
         )
-        print(results)
+        results = response["evaluator_context"]["results"]
+        score = results[0][0]["score"]
+
+        self._result["accuracy"]["ragas"]["answer_correctness"] = score
+
+    def result(self):
+        print(self._result)
 
 
 if __name__ == "__main__":
@@ -140,13 +174,7 @@ if __name__ == "__main__":
 
     for collector in collectors:
         collector.eval(pipeline)
-
-# todo: r1: compare the cte query with the the correct answer
-
-# todo: r2: connect wren-engine to compare the result
-# r3: if the result is the subset of the answer, then the answer is correct
-
-# todo: LLM judge to review the output and give it a score from 0 to 1
+        collector.result()
 
 # todo: generate the report for the evaluation process
 # the report includes the following information:
@@ -156,4 +184,3 @@ if __name__ == "__main__":
 #   - display the input query
 #   - disopay the output answer
 #   - (optional) why the answer is correct or incorrect)
-# - save the report to a file
