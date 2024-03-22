@@ -8,22 +8,21 @@ from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 
 from src.utils import load_env_vars
-
-from ...trace import TraceGenerationInput, trace_generation
 from .prompts import init_sql_details_system_prompt_builder
+from ...trace import TraceGenerationInput, trace_generation
 
 load_env_vars()
 
 logging.getLogger("backoff").addHandler(logging.StreamHandler())
 
-MODEL_NAME = "gpt-3.5-turbo"
-MAX_TOKENS = {
+_MODEL_NAME = "gpt-3.5-turbo"
+_MAX_TOKENS = {
     "gpt-3.5-turbo": 4096,
 }
-GENERATION_KWARGS = {
+_GENERATION_KWARGS = {
     "temperature": 0,
     "n": 1,
-    "max_tokens": MAX_TOKENS[MODEL_NAME] if MODEL_NAME in MAX_TOKENS else 4096,
+    "max_tokens": _MAX_TOKENS[_MODEL_NAME] if _MODEL_NAME in _MAX_TOKENS else 4096,
     "response_format": {"type": "json_object"},
 }
 
@@ -59,8 +58,8 @@ class TracedOpenAIGenerator(CustomOpenAIGenerator):
 
 def init_generator(
     with_trace: bool = False,
-    model_name: str = MODEL_NAME,
-    generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
+    model_name: str = _MODEL_NAME,
+    generation_kwargs: Optional[Dict[str, Any]] = _GENERATION_KWARGS,
 ) -> Any:
     system_prompt = init_sql_details_system_prompt_builder().run()["prompt"]
 
