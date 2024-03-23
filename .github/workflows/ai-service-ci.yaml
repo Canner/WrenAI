@@ -43,8 +43,12 @@ jobs:
           poetry-version: ${{ matrix.poetry-version }}
       - name: Install the project dependencies
         run: poetry install
-      - name: Run Qdrant
-        run: docker run -p 6333:6333 -p 6334:6334 -d --name qdrant qdrant/qdrant:v1.7.4
+      - name: Prepare testing environment
+        run: |
+          mkdir -p src/eval/wren-engine/etc && \
+          cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties && \
+          sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties && \
+          make prepare-test
       - name: Test with pytest
         run: poetry run pytest
         env:
