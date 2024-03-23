@@ -13,7 +13,7 @@ def clean_generation_result(result: str) -> str:
 
     return (
         _normalize_whitespace(result)
-        .replace("\n", "")
+        .replace("\\n", " ")
         .replace("```sql", "")
         .replace('"""', "")
         .replace("'''", "")
@@ -55,7 +55,7 @@ def classify_invalid_generation_results(
         try:
             with conn.cursor() as cursor:
                 cursor.execute(generation_result["sql"])
-                valid_generation_results.append(generation_result)
+            valid_generation_results.append(generation_result)
         except Exception as e:
             invalid_generation_results.append(
                 {

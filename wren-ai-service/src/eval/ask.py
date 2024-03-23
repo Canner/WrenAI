@@ -17,6 +17,7 @@ from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
+from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
 from src.utils import load_env_vars
 
 # from .eval_pipeline import Evaluation
@@ -43,27 +44,67 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     )
     retrieval_end = time.perf_counter()
 
-    generation_start = time.perf_counter()
-    generation_result = generation_pipeline.run(
+    text_to_sql_generation_start = time.perf_counter()
+    valid_generation_results = []
+    invalid_generation_results = []
+    text_to_sql_generation_results = generation_pipeline.run(
         query,
         contexts=retrieval_result["retriever"]["documents"],
         user_id=user_id,
     )
-    generation_end = time.perf_counter()
+    if text_to_sql_generation_results["post_processor"]["valid_generation_results"]:
+        valid_generation_results += text_to_sql_generation_results["post_processor"][
+            "valid_generation_results"
+        ]
+    text_to_sql_generation_end = time.perf_counter()
+
+    sql_correction_generation_start = time.perf_counter()
+    sql_correction_results = None
+    if text_to_sql_generation_results["post_processor"]["invalid_generation_results"]:
+        sql_correction_results = sql_correction_pipeline.run(
+            contexts=retrieval_result["retriever"]["documents"],
+            invalid_generation_results=text_to_sql_generation_results["post_processor"][
+                "invalid_generation_results"
+            ],
+        )
+        valid_generation_results += sql_correction_results["post_processor"][
+            "valid_generation_results"
+        ]
+        invalid_generation_results += sql_correction_results["post_processor"][
+            "invalid_generation_results"
+        ]
+    sql_correction_generation_end = time.perf_counter()
 
     metadata = {
-        "generation": generation_result["generator"]["meta"][0],
+        "generation": {
+            "text_to_sql": text_to_sql_generation_results["text_to_sql_generator"][
+                "meta"
+            ][0],
+            "sql_correction": (
+                sql_correction_results["sql_correction_generator"]["meta"][0]
+                if sql_correction_results
+                else []
+            ),
+        },
         "latency": {
             "retrieval": retrieval_end - retrieval_start,
-            "generation": generation_end - generation_start,
+            "generation": {
+                "text_to_sql": text_to_sql_generation_end
+                - text_to_sql_generation_start,
+                "sql_correction": sql_correction_generation_end
+                - sql_correction_generation_start,
+            },
         },
     }
 
+    print(f"size of valid_generation_results: {len(valid_generation_results)}")
+    print(f"size of invalid_generation_results: {len(invalid_generation_results)}")
+
     return {
         "contexts": retrieval_result["retriever"]["documents"],
-        "prediction": generation_result["post_processor"]["results"][0]["sql"]
-        if generation_result["post_processor"]["results"]
-        else "",
+        "prediction": (
+            valid_generation_results[0]["sql"] if valid_generation_results else ""
+        ),
         "metadata": metadata,
     }
 
@@ -152,7 +193,10 @@ if __name__ == "__main__":
             with_trace=with_trace,
             top_k=10,
         )
-        generator = init_generator(
+        text_to_sql_generator = init_generator(
+            with_trace=with_trace,
+        )
+        sql_correction_generator = init_generator(
             with_trace=with_trace,
         )
 
@@ -172,10 +216,15 @@ if __name__ == "__main__":
         retrieval_pipeline_def = retrieval_pipeline._pipe.dumps()
 
         generation_pipeline = Generation(
-            generator=generator,
+            text_to_sql_generator=text_to_sql_generator,
             with_trace=with_trace,
         )
         generation_pipeline_def = generation_pipeline._pipe.dumps()
+
+        sql_correction_pipeline = SQLCorrection(
+            sql_correction_generator=sql_correction_generator,
+        )
+        sql_correction_pipeline_def = sql_correction_pipeline._pipe.dumps()
 
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
@@ -204,6 +253,7 @@ if __name__ == "__main__":
                 "indexing": indexing_pipeline_def,
                 "retrieval": retrieval_pipeline_def,
                 "generation": generation_pipeline_def,
+                "sql_correction": sql_correction_pipeline_def,
             },
         )
         if with_trace:

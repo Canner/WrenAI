@@ -137,15 +137,24 @@ def generate_eval_report(
     results = {
         "eval_results": {
             "average_accuracy": 0,
-            "average_cost": {
+            "average_generation_cost": {
                 "total": 0,
-                "input": 0,
-                "output": 0,
+                "text_to_sql": {
+                    "input": 0,
+                    "output": 0,
+                },
+                "sql_correction": {
+                    "input": 0,
+                    "output": 0,
+                },
             },
             "average_latency": {
                 "total": 0,
                 "retrieval": 0,
-                "generation": 0,
+                "generation": {
+                    "text_to_sql": 0,
+                    "sql_correction": 0,
+                },
             },
             "number_of_failed_queries": 0,
             "details": {
@@ -165,31 +174,41 @@ def generate_eval_report(
 
     total = 0
     correct = 0
-    retrieval_total_latency = 0
-    generation_total_latency = 0
-    input_total_cost = 0
-    output_total_cost = 0
     for i, (ground_truth, prediction) in enumerate(tzip(groundtruths, predictions)):
+        total += 1
+
         ## dealing with cost part
-        model_name = prediction["metadata"]["generation"]["model"]
-        generation_model_pricing = get_generation_model_pricing(model_name)
-        input_total_cost += (
-            generation_model_pricing["prompt_tokens"]
-            * prediction["metadata"]["generation"]["usage"]["prompt_tokens"]
-        )
-        output_total_cost += (
-            generation_model_pricing["completion_tokens"]
-            * prediction["metadata"]["generation"]["usage"]["completion_tokens"]
-        )
+        for pipeline, pipeline_metadata in prediction["metadata"]["generation"].items():
+            if pipeline_metadata:
+                model_name = pipeline_metadata["model"]
+                generation_model_pricing = get_generation_model_pricing(model_name)
+                results["eval_results"]["average_generation_cost"][pipeline][
+                    "input"
+                ] += (
+                    generation_model_pricing["prompt_tokens"]
+                    * pipeline_metadata["usage"]["prompt_tokens"]
+                )
+                results["eval_results"]["average_generation_cost"][pipeline][
+                    "output"
+                ] += (
+                    generation_model_pricing["completion_tokens"]
+                    * pipeline_metadata["usage"]["completion_tokens"]
+                )
 
         ## dealing with latency part
-        retrieval_total_latency += prediction["metadata"]["latency"]["retrieval"]
-        generation_total_latency += prediction["metadata"]["latency"]["generation"]
+        results["eval_results"]["average_latency"]["retrieval"] += prediction[
+            "metadata"
+        ]["latency"]["retrieval"]
+        for pipeline, pipeline_metadata in prediction["metadata"]["latency"][
+            "generation"
+        ].items():
+            results["eval_results"]["average_latency"]["generation"][
+                pipeline
+            ] += pipeline_metadata
 
         ## dealing with accuracy part
         assert ground_truth["question"] == prediction["question"]
         question = ground_truth["question"]
-        total += 1
 
         # directly compare the sql query using semantic diff
         if not semantic_diff(ground_truth["answer"], prediction["answer"]):
@@ -275,20 +294,28 @@ def generate_eval_report(
         )
 
     results["eval_results"]["average_accuracy"] = correct / total
-    results["eval_results"]["average_cost"]["total"] = (
-        input_total_cost + output_total_cost
+    results["eval_results"]["average_generation_cost"]["total"] = (
+        results["eval_results"]["average_generation_cost"]["text_to_sql"]["input"]
+        + results["eval_results"]["average_generation_cost"]["text_to_sql"]["output"]
+        + results["eval_results"]["average_generation_cost"]["sql_correction"]["input"]
+        + results["eval_results"]["average_generation_cost"]["sql_correction"]["output"]
     ) / total
-    results["eval_results"]["average_cost"]["input"] = input_total_cost / total
-    results["eval_results"]["average_cost"]["output"] = output_total_cost / total
+    results["eval_results"]["average_generation_cost"]["text_to_sql"]["input"] /= total
+    results["eval_results"]["average_generation_cost"]["text_to_sql"]["output"] /= total
+    results["eval_results"]["average_generation_cost"]["sql_correction"][
+        "input"
+    ] /= total
+    results["eval_results"]["average_generation_cost"]["sql_correction"][
+        "output"
+    ] /= total
     results["eval_results"]["average_latency"]["total"] = (
-        retrieval_total_latency + generation_total_latency
+        results["eval_results"]["average_latency"]["retrieval"]
+        + results["eval_results"]["average_latency"]["generation"]["text_to_sql"]
+        + results["eval_results"]["average_latency"]["generation"]["sql_correction"]
     ) / total
-    results["eval_results"]["average_latency"]["retrieval"] = (
-        retrieval_total_latency
-    ) / total
-    results["eval_results"]["average_latency"]["generation"] = (
-        generation_total_latency
-    ) / total
+    results["eval_results"]["average_latency"]["retrieval"] /= total
+    results["eval_results"]["average_latency"]["generation"]["text_to_sql"] /= total
+    results["eval_results"]["average_latency"]["generation"]["sql_correction"] /= total
 
     return results
 

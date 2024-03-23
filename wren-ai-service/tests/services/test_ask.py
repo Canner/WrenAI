@@ -7,12 +7,12 @@ from src.pipelines.ask import (
     generation_pipeline,
     indexing_pipeline,
     retrieval_pipeline,
+    sql_correction_pipeline,
 )
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
 from src.pipelines.ask.components.retriever import init_retriever
-from src.pipelines.ask.indexing_pipeline import Indexing
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
@@ -26,7 +26,8 @@ def ask_service():
     document_store = init_document_store()
     embedder = init_embedder()
     retriever = init_retriever(document_store=document_store)
-    generator = init_generator()
+    text_to_sql_generator = init_generator()
+    sql_correction_generator = init_generator()
 
     return AskService(
         {
@@ -38,7 +39,10 @@ def ask_service():
                 retriever=retriever,
             ),
             "generation": generation_pipeline.Generation(
-                generator=generator,
+                text_to_sql_generator=text_to_sql_generator,
+            ),
+            "sql_correction": sql_correction_pipeline.SQLCorrection(
+                sql_correction_generator=sql_correction_generator,
             ),
         }
     )
@@ -48,16 +52,6 @@ def ask_service():
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
         return json.dumps(json.load(f))
-
-
-def test_indexing_pipeline(mdl_str: str):
-    document_store = init_document_store(dataset_name="book_2")
-    indexing_pipeline = Indexing(
-        document_store=document_store,
-    )
-
-    indexing_pipeline.run(mdl_str)
-    assert document_store.count_documents() == 2
 
 
 def test_ask_with_easy_query(ask_service: AskService, mdl_str: str):

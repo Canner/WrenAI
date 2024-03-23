@@ -11,6 +11,9 @@ from src.pipelines.ask import (
 from src.pipelines.ask import (
     retrieval_pipeline as ask_retrieval_pipeline,
 )
+from src.pipelines.ask import (
+    sql_correction_pipeline as ask_sql_correction_pipeline,
+)
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
@@ -65,8 +68,10 @@ def init_globals():
             ),
             "generation": ask_generation_pipeline.Generation(
                 text_to_sql_generator=ask_text_to_sql_generator,
-                sql_correction_generator=ask_sql_correction_generator,
                 with_trace=with_trace,
+            ),
+            "sql_correction": ask_sql_correction_pipeline.SQLCorrection(
+                sql_correction_generator=ask_sql_correction_generator,
             ),
         }
     )

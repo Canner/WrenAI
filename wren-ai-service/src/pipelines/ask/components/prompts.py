@@ -1,4 +1,6 @@
-generation_user_prompt_template = """
+from haystack.components.builders.prompt_builder import PromptBuilder
+
+text_to_sql_user_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
 Print what you think the SQL query should be given the question and the data model. 
 This is vital to my career, I will become homeless if you make a mistake.
@@ -40,7 +42,7 @@ sql_correction_user_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### TASK ###
-Now you are given a list of syntactically incorrect Trino SQL queries.
+Now you are given a list of syntactically incorrect Trino SQL queries and related error messages.
 With given data models, please think step by step to correct these wrong Trino SQL quries.
 
 ### DATA MODELS ###
@@ -52,9 +54,15 @@ With given data models, please think step by step to correct these wrong Trino S
 {{ invalid_generation_results }}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a list of dictionary as follows 
-that confirms to the JSON format:
+The final answer must be a list of corrected SQL quries and its original corresponding summary in JSON format
 
-Dictionary structure:
-{"sql": <SQL_QUERY_STRING>, "summary": <SUMMARY_STRING>}
+{"sql": <CORRECTED_SQL_QUERY_STRING>, "summary": <ORIGINAL_SUMMARY_STRING>}
 """
+
+
+def init_text_to_sql_prompt_builder():
+    return PromptBuilder(template=text_to_sql_user_prompt_template)
+
+
+def init_sql_correction_prompt_builder():
+    return PromptBuilder(template=sql_correction_user_prompt_template)
