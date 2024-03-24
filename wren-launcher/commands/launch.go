@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
+	"runtime"
 	"strings"
+	"time"
 
 	utils "github.com/Canner/WrenAI/wren-launcher/utils"
 	"github.com/common-nighthawk/go-figure"
@@ -57,6 +60,22 @@ func askForAPIKey() (string, error) {
 	return result, nil
 }
 
+func openbrowser(url string) error {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	return err
+}
+
 func Launch() {
 	// print WrenAI header
 	fmt.Println(strings.Repeat("=", 55))
@@ -100,6 +119,28 @@ func Launch() {
 	if err != nil {
 		panic(err)
 	}
+
+	// wait for 10 seconds
+	fmt.Println("WrenAI is starting, please wait for a moment...")
+	// wait until checking if CheckWrenAIStarted return without error
+	// if timeout 2 minutes, panic
+	timeoutTime := time.Now().Add(2 * time.Minute)
+	for {
+		if time.Now().After(timeoutTime) {
+			panic("Timeout")
+		}
+
+		// check if WrenAI is started
+		err = utils.CheckWrenAIStarted()
+		if err == nil {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
+
+	// open browser
+	fmt.Println("Opening browser")
+	openbrowser("http://localhost:3000")
 
 	fmt.Scanf("h")
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 
@@ -155,6 +156,31 @@ func RunDockerCompose(projectName string, projectDir string) error {
 	err = apiService.Up(ctx, projectType, api.UpOptions{})
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func OpenDockerDaemon() error {
+	// open docker daemon with command
+	cmd := exec.Command("open", "-a", "Docker")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func CheckWrenAIStarted() error {
+	// check response from localhost:3000
+	resp, err := http.Get("http://localhost:3000")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("WrenAI is not started yet")
 	}
 
 	return nil
