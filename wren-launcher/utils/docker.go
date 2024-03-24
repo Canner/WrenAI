@@ -24,7 +24,7 @@ const (
 )
 
 func replaceEnvFileContent(content string, OpenaiApiKey string) string {
-	reg := regexp.MustCompile(`$OPENAI_API_KEY=sk-(.*)$`)
+	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	return reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
 }
 
