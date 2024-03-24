@@ -13,6 +13,7 @@ import (
 	utils "github.com/Canner/WrenAI/wren-launcher/utils"
 	"github.com/common-nighthawk/go-figure"
 	"github.com/manifoldco/promptui"
+	"github.com/pterm/pterm"
 )
 
 func prepareProjectDir() string {
@@ -84,24 +85,23 @@ func Launch() {
 	fmt.Println(strings.Repeat("=", 55))
 
 	// ask for OpenAI API key
+	pterm.Print("\n")
 	apiKey, err := askForAPIKey()
 
 	if err != nil {
-		fmt.Println("Failed to get API key")
+		pterm.Error.Println("Failed to get API key")
 		return
 	}
 
-	fmt.Println("API key:", apiKey)
-
 	// check if docker daemon is running, if not, open it and loop to check again
-	fmt.Println("Checking if Docker daemon is running")
+	pterm.Info.Println("Checking if Docker daemon is running")
 	for {
 		_, err = utils.CheckDockerDaemonRunning()
 		if err == nil {
 			break
 		}
 
-		fmt.Println("Docker daemon is not running, opening Docker Desktop")
+		pterm.Info.Println("Docker daemon is not running, opening Docker Desktop")
 		err = utils.OpenDockerDaemon()
 		if err != nil {
 			panic(err)
@@ -111,18 +111,18 @@ func Launch() {
 	}
 
 	// prepare a project directory
-	fmt.Println("Preparing project directory")
+	pterm.Info.Println("Preparing project directory")
 	projectDir := prepareProjectDir()
 
 	// download docker-compose file and env file template for WrenAI
-	fmt.Println("Downloading docker-compose file and env file")
+	pterm.Info.Println("Downloading docker-compose file and env file")
 	err = utils.PrepareDockerFiles(apiKey, projectDir)
 	if err != nil {
 		panic(err)
 	}
 
 	// launch WrenAI
-	fmt.Println("Launching WrenAI")
+	pterm.Info.Println("Launching WrenAI")
 	const projectName string = "wrenai"
 	err = utils.RunDockerCompose(projectName, projectDir)
 	if err != nil {
@@ -130,7 +130,7 @@ func Launch() {
 	}
 
 	// wait for 10 seconds
-	fmt.Println("WrenAI is starting, please wait for a moment...")
+	pterm.Info.Println("WrenAI is starting, please wait for a moment...")
 	// wait until checking if CheckWrenAIStarted return without error
 	// if timeout 2 minutes, panic
 	timeoutTime := time.Now().Add(2 * time.Minute)
@@ -148,8 +148,9 @@ func Launch() {
 	}
 
 	// open browser
-	fmt.Println("Opening browser")
+	pterm.Info.Println("Opening browser")
 	openbrowser("http://localhost:3000")
 
+	pterm.Info.Println("You can now safely close this terminal window")
 	fmt.Scanf("h")
 }

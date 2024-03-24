@@ -15,6 +15,7 @@ import (
 	cmdCompose "github.com/docker/compose/v2/cmd/compose"
 	"github.com/docker/compose/v2/pkg/api"
 	"github.com/docker/compose/v2/pkg/compose"
+	"github.com/pterm/pterm"
 )
 
 const (
@@ -71,7 +72,7 @@ func CheckDockerDaemonRunning() (bool, error) {
 func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
-	fmt.Println("Downloading docker-compose file to", composeFile)
+	pterm.Info.Println("Downloading docker-compose file to", composeFile)
 	err := downloadFile(composeFile, DOCKER_COMPOSE_YAML_URL)
 	if err != nil {
 		return err
@@ -79,7 +80,7 @@ func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
 
 	// download env file
 	envFile := path.Join(projectDir, ".env.example")
-	fmt.Println("Downloading env file to", envFile)
+	pterm.Info.Println("Downloading env file to", envFile)
 	err = downloadFile(envFile, DOCKER_COMPOSE_ENV_URL)
 	if err != nil {
 		return err
@@ -87,7 +88,6 @@ func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
 
 	// replace OPENAI_API_KEY=sk-xxxxxx with OPENAI_API_KEY=OpenaiApiKey
 	// read the file
-	fmt.Println("Replacing OpenAI API key in env file")
 	envFileContent, err := os.ReadFile(envFile)
 	if err != nil {
 		return err
@@ -103,7 +103,6 @@ func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
 	}
 
 	// remove the old env file
-	fmt.Println("Removing old env file")
 	err = os.Remove(envFile)
 	if err != nil {
 		return err
@@ -118,7 +117,6 @@ func RunDockerCompose(projectName string, projectDir string) error {
 	envFile := path.Join(projectDir, ".env")
 
 	// docker-compose up
-	fmt.Println("Starting project")
 	dockerCli, err := command.NewDockerCli()
 	if err != nil {
 		return err
