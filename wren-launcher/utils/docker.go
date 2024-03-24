@@ -48,7 +48,7 @@ func downloadFile(filepath string, url string) error {
 	return err
 }
 
-func CheckDockerInstalled() (bool, error) {
+func CheckDockerDaemonRunning() (bool, error) {
 	ctx := context.Background()
 	dockerCli, err := command.NewDockerCli()
 	if err != nil {

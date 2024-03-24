@@ -93,12 +93,21 @@ func Launch() {
 
 	fmt.Println("API key:", apiKey)
 
-	// check if docker engine installed
-	_, error := utils.CheckDockerInstalled()
+	// check if docker daemon is running, if not, open it and loop to check again
+	fmt.Println("Checking if Docker daemon is running")
+	for {
+		_, err = utils.CheckDockerDaemonRunning()
+		if err == nil {
+			break
+		}
 
-	if error != nil {
-		fmt.Println("Docker is not installed")
-		return
+		fmt.Println("Docker daemon is not running, opening Docker Desktop")
+		err = utils.OpenDockerDaemon()
+		if err != nil {
+			panic(err)
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 
 	// prepare a project directory
