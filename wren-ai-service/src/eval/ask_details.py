@@ -89,15 +89,16 @@ class Collector:
                 "answer_correctness": 0.0,
             },
             "wren": {
+                # todo: r2: connect wren-engine to compare the result
+                "execution_correct": False,
+                # r3: if the result is the subset of the answer, then the answer is correct
                 # todo: LLM judge to review the output and give it a score from 0 to 1
                 "llm_judge": 0.0,
-                # todo: r2: connect wren-engine to compare the result
-                # r3: if the result is the subset of the answer, then the answer is correct
-                "result_correct": False,
             },
         },
         "latency": 0.0,
         "cost": 0.0,
+        "model": None,
         "usage": {},
         "question": {},
         "response": {},
@@ -111,20 +112,23 @@ class Collector:
 
     def eval(self, pipeline: Pipeline):
         start = time.perf_counter()
-        self._response = pipeline.run(
+        response = pipeline.run(
             sql=self._result["question"]["sql"],
         )
         self._result["latency"] = time.perf_counter() - start
-        self._result["response"] = json.loads(self._response["generator"]["replies"][0])
+        self._result["response"] = json.loads(response["generator"]["replies"][0])
 
+        meta = response["generator"]["meta"][0]
+        self._result["model"] = meta["model"]
+        self._result["usage"] = meta["usage"]
         self._cost_analysis()
+
         self._ragas_eval()
+        self._execution_correctness_eval()
+        self._llm_judge()
 
     def _cost_analysis(self):
-        meta = self._response["generator"]["meta"][0]
-        self._result["usage"] = meta["usage"]
-
-        model_pricing = get_generation_model_pricing(meta["model"])
+        model_pricing = get_generation_model_pricing(self._result["model"])
         prompt_cost = (
             model_pricing["prompt_tokens"] * self._result["usage"]["prompt_tokens"]
         )
@@ -149,6 +153,12 @@ class Collector:
         score = results[0][0]["score"]
 
         self._result["accuracy"]["ragas"]["answer_correctness"] = score
+
+    def _execution_correctness_eval(self):
+        self.result["accuracy"]["wren"]["execution_correct"] = False
+
+    def _llm_judge(self):
+        self.result["accuracy"]["wren"]["llm_judge"] = 0.0
 
     def result(self) -> Dict[str, Any]:
         return self._result
@@ -182,4 +192,5 @@ if __name__ == "__main__":
     #   - (optional) why the answer is correct or incorrect)
     for collector in collectors:
         collector.eval(pipeline)
-        collector.result()
+        result = collector.result()
+        print(result)
