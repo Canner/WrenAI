@@ -68,10 +68,6 @@ export default function Column(props: ColumnProps) {
     style = {},
     icon,
     append,
-    properties,
-    relation,
-    isCalculated,
-    expression,
   } = props;
   const reactflowInstance = useReactFlow();
   const mouseEnter = onMouseEnter
@@ -80,8 +76,6 @@ export default function Column(props: ColumnProps) {
   const mouseLeave = onMouseLeave
     ? () => onMouseLeave(reactflowInstance)
     : undefined;
-
-  const isPopoverShow = !relation;
 
   const nodeColumn = (
     <NodeColumn
@@ -98,26 +92,9 @@ export default function Column(props: ColumnProps) {
     </NodeColumn>
   );
 
-  return isPopoverShow ? (
-    <CustomPopover
-      title={displayName}
-      placement="right"
-      content={
-        <CustomPopover.Row gutter={16}>
-          <CustomPopover.Col title="Description">
-            {properties?.description || '-'}
-          </CustomPopover.Col>
-          {isCalculated && (
-            <CustomPopover.Col title="Expression" code>
-              {expression}
-            </CustomPopover.Col>
-          )}
-        </CustomPopover.Row>
-      }
-    >
-      {nodeColumn}
-    </CustomPopover>
-  ) : (
-    nodeColumn
-  );
+  return nodeColumn;
 }
+
+export const MoreColumnTip = (props: { count: number }) => {
+  return <div className="text-sm gray-7 px-3 py-1">and {props.count} more</div>;
+};

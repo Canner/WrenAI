@@ -12,8 +12,7 @@ jest.mock('crypto', () => ({
 const credentials = { username: 'user', password: 'pass' };
 
 describe('Encryptor', () => {
-  const mockConfig: IConfig = {
-    dbType: 'sqlite',
+  const mockConfig = {
     encryptionPassword: 'testPassword',
     encryptionSalt: 'testSalt',
   };

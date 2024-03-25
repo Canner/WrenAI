@@ -2,15 +2,12 @@ import { Edge, Node, Position } from 'reactflow';
 import { EDGE_TYPE, MARKER_TYPE, NODE_TYPE, JOIN_TYPE } from '@/utils/enum';
 import {
   ModelData,
-  MetricData,
   ModelColumnData,
-  MetricColumnData,
   RelationData,
   AdaptedData,
-  ViewData,
 } from '@/utils/data';
 
-const config = {
+export const Config = {
   // the number of model in one row
   modelsInRow: 4,
   // the width of the model
@@ -20,7 +17,13 @@ const config = {
   // the height of the model header
   headerHeight: 32,
   // the height of the model column
-  columnHeight: 32,
+  columnHeight: 28,
+  // the height of the subtitle
+  subtitleHeight: 28,
+  // the height of more tip
+  moreTipHeight: 25,
+  // the columns limit
+  columnsLimit: 50,
   // the overflow of the model body
   bodyOverflow: 'auto',
   // the margin x between the model and the other models
@@ -29,7 +32,19 @@ const config = {
   marginY: 50,
 };
 
-type ComposeData = ModelData | MetricData | ViewData;
+const convertBooleanToNumber = (value) => (value ? 1 : 0);
+
+const getLimitedColumnsLengthProps = (columns: any[]) => {
+  const isOverLimit = columns.length > Config.columnsLimit;
+  const limitedLength = isOverLimit ? Config.columnsLimit : columns.length;
+  return {
+    isOverLimit,
+    limitedLength,
+    originalLength: columns.length,
+  };
+};
+
+type ComposeData = ModelData;
 
 type NodeWithData = Node<{
   originalData: ComposeData;
@@ -46,10 +61,8 @@ type EdgeWithData = Edge<{
 type StartPoint = { x: number; y: number; floor: number };
 
 export class Transformer {
-  private readonly config: typeof config = config;
+  private readonly config: typeof Config = Config;
   private models: ModelData[];
-  private metrics: MetricData[];
-  private views: ViewData[];
   public nodes: NodeWithData[] = [];
   public edges: Edge[] = [];
   private start: StartPoint = {
@@ -60,13 +73,11 @@ export class Transformer {
 
   constructor(data: AdaptedData) {
     this.models = data?.models || [];
-    this.metrics = data?.metrics || [];
-    this.views = data?.views || [];
     this.init();
   }
 
   public init() {
-    const allNodeData = [...this.models, ...this.metrics, ...this.views];
+    const allNodeData = [...this.models];
     for (const data of allNodeData) {
       this.addOne(data);
     }
@@ -87,7 +98,7 @@ export class Transformer {
   }
 
   private updateNextStartedPoint() {
-    const width = this.getModelWidth();
+    const width = this.getNodeWidth();
     let floorHeight = 0;
     const { length } = this.nodes;
     const { marginX, marginY, modelsInRow } = this.config;
@@ -101,7 +112,7 @@ export class Transformer {
         return prev.columns.length > current.columns.length ? prev : current;
       }, models[0]);
 
-      floorHeight = this.getModelHeight(modelWithMostColumns.columns) + marginY;
+      floorHeight = this.getNodeHeight(modelWithMostColumns) + marginY;
     }
 
     this.start.x = this.start.x + width + marginX;
@@ -120,9 +131,6 @@ export class Transformer {
     switch (nodeType) {
       case NODE_TYPE.MODEL:
         this.addModelEdge(data as ModelData);
-        break;
-      case NODE_TYPE.METRIC:
-        this.addMetricEdge(data as MetricData);
         break;
       default:
         break;
@@ -190,28 +198,13 @@ export class Transformer {
     }
   }
 
-  private addMetricEdge(data: MetricData) {
-    const { baseObject } = data;
-    const targetModel = this.models.find(
-      (model) => model.referenceName === baseObject,
-    )!;
-    targetModel &&
-      this.edges.push(
-        this.createEdge({
-          type: EDGE_TYPE.METRIC,
-          sourceModel: data,
-          targetModel,
-        }),
-      );
-  }
-
   private createEdge(props: {
     type?: EDGE_TYPE;
     sourceModel: ComposeData;
-    sourceColumn?: ModelColumnData | MetricColumnData;
+    sourceColumn?: ModelColumnData;
     sourceJoinIndex?: number;
     targetModel: ComposeData;
-    targetColumn?: ModelColumnData | MetricColumnData;
+    targetColumn?: ModelColumnData;
     targetJoinIndex?: number;
     joinType?: JOIN_TYPE | string;
     animated?: boolean;
@@ -260,7 +253,7 @@ export class Transformer {
 
   private detectEdgePosition(source: string, target: string) {
     const position = [];
-    const [sourceIndex, targetIndex] = [...this.models, ...this.metrics].reduce(
+    const [sourceIndex, targetIndex] = [...this.models].reduce(
       (result, current, index) => {
         if (current.id === source) result[0] = index;
         if (current.id === target) result[1] = index;
@@ -298,12 +291,49 @@ export class Transformer {
     return markers[joinIndex] + (position ? `_${position}` : '');
   }
 
-  private getModelWidth() {
+  private getNodeWidth() {
     return this.config.width;
   }
 
-  private getModelHeight(columns: ModelColumnData[]) {
-    const { height: diagramHeight, headerHeight, columnHeight } = this.config;
-    return headerHeight + (diagramHeight || columnHeight * columns.length);
+  private getNodeHeight(model: ModelData) {
+    const {
+      height: nodeHeight,
+      headerHeight,
+      columnHeight,
+      subtitleHeight,
+      moreTipHeight,
+    } = this.config;
+
+    const fields = model.columns.filter((column) => !column.relation);
+
+    const { limitedLength: fieldsLength, isOverLimit: isFieldsOverLimit } =
+      getLimitedColumnsLengthProps(fields);
+    const {
+      limitedLength: relationFieldsLength,
+      isOverLimit: isRelationsOverLimit,
+    } = getLimitedColumnsLengthProps(model.relationFields);
+
+    // currently only support relation subtitle
+    const subtitleCount = convertBooleanToNumber(relationFieldsLength !== 0);
+    const moreTipCount =
+      convertBooleanToNumber(isFieldsOverLimit) +
+      convertBooleanToNumber(isRelationsOverLimit);
+
+    // calculate all block height
+    const displayHeaderHeight = headerHeight;
+    const displaySubtitleHeight = subtitleHeight * subtitleCount;
+    const displayColumnHeight =
+      nodeHeight || columnHeight * (fieldsLength + relationFieldsLength);
+    const displayMoreTipHeight = moreTipHeight * moreTipCount;
+    // padding remain
+    const paddingHeight = 4;
+
+    return (
+      displayHeaderHeight +
+      displaySubtitleHeight +
+      displayColumnHeight +
+      displayMoreTipHeight +
+      paddingHeight
+    );
   }
 }

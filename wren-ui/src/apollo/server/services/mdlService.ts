@@ -6,7 +6,6 @@ import {
   IRelationRepository,
 } from '../repositories';
 import { Manifest } from '../mdl/type';
-
 export interface IMDLService {
   makeCurrentModelMDL(): Promise<Manifest>;
 }

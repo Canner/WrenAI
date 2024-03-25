@@ -64,6 +64,7 @@ export class BQConnector
 
   public async listTables(listTableOptions: BQListTableOptions) {
     const { datasetId, format, filter } = listTableOptions;
+    // AND cf.column_name = cf.field_path => filter out the subfield in record
     let sql = `SELECT 
         c.*, 
         cf.description AS column_description, 
@@ -74,10 +75,13 @@ export class BQConnector
         AND cf.column_name = c.column_name
       LEFT JOIN ${datasetId}.INFORMATION_SCHEMA.TABLE_OPTIONS table_options
         ON c.table_name = table_options.table_name
+      WHERE 
+        NOT REGEXP_CONTAINS(cf.data_type, r'^(STRUCT|ARRAY<STRUCT)')
+        AND cf.column_name = cf.field_path 
       `;
 
     if (filter?.tableName) {
-      sql += ` WHERE c.table_name = '${filter.tableName}'`;
+      sql += ` AND c.table_name = '${filter.tableName}'`;
     }
     sql += ` ORDER BY c.table_name, c.ordinal_position`;
 

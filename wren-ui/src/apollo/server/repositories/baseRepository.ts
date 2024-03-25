@@ -23,7 +23,7 @@ export interface IBasicRepository<T> {
     queryOptions?: IQueryOptions,
   ) => Promise<T[]>;
   updateOne: (
-    id: string,
+    id: string | number,
     data: Partial<T>,
     queryOptions?: IQueryOptions,
   ) => Promise<T>;
@@ -96,7 +96,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     if (queryOptions?.order) {
       query.orderBy(queryOptions.order);
     }
-    if (queryOptions.limit) {
+    if (queryOptions?.limit) {
       query.limit(queryOptions.limit);
     }
     const result = await query;
@@ -120,7 +120,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   }
 
   public async updateOne(
-    id: string,
+    id: string | number,
     data: Partial<T>,
     queryOptions?: IQueryOptions,
   ) {
