@@ -18,27 +18,24 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
 } from 'reactflow';
-import { ModelNode, MetricNode, ViewNode } from './customNode';
-import { ModelEdge, MetricEdge } from './customEdge';
+import { ModelNode } from './customNode';
+import { ModelEdge } from './customEdge';
 import Marker from './Marker';
 import { DiagramContext, ClickPayload } from './Context';
 import { trimId, highlightNodes, highlightEdges } from './utils';
 import { AdaptedData } from '@/utils/data';
 import { RefreshIcon } from '@/utils/icons';
 import { EDGE_TYPE, NODE_TYPE } from '@/utils/enum';
-import { DiagramCreator } from '@/utils/diagram/creator';
+import { DiagramCreator } from '@/utils/diagram';
 import { nextTick } from '@/utils/time';
 
 import 'reactflow/dist/style.css';
 
 const nodeTypes = {
   [NODE_TYPE.MODEL]: ModelNode,
-  [NODE_TYPE.METRIC]: MetricNode,
-  [NODE_TYPE.VIEW]: ViewNode,
 };
 const edgeTypes = {
   [EDGE_TYPE.MODEL]: ModelEdge,
-  [EDGE_TYPE.METRIC]: MetricEdge,
 };
 const minimapStyle = {
   height: 120,
@@ -73,8 +70,6 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
 
   const [nodes, setNodes, onNodesChange] = useNodesState(diagram.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(diagram.edges);
-
-  // const { openInfoModal, closeInfoModal, infoModalProps } = useInfoModal();
 
   const onEdgeMouseEnter = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
