@@ -70,10 +70,10 @@ const ModelEdge = ({
           title="Relation"
           content={
             <CustomPopover.Row gutter={16}>
-              <CustomPopover.Col title="From field" span={12}>
+              <CustomPopover.Col title="From" span={12}>
                 {relation.fromField}
               </CustomPopover.Col>
-              <CustomPopover.Col title="To field" span={12}>
+              <CustomPopover.Col title="To" span={12}>
                 {relation.toField}
               </CustomPopover.Col>
               <CustomPopover.Col title="Relation type" span={12}>
