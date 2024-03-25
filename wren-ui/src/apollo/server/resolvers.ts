@@ -86,7 +86,7 @@ const mockResolvers = {
         ]),
       }));
     },
-    Model: (_, args: { where: GetModelWhere }) => {
+    model: (_, args: { where: GetModelWhere }) => {
       const { where } = args;
       const { models } = demoManifest;
       const model = models.find((model) => model.name === where.name);
