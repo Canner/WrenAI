@@ -82,7 +82,7 @@ export class MDLBuilder implements IMDLBuilder {
         refSql: model.refSql,
         cached: model.cached,
         refreshTime: model.refreshTime,
-        properties: model.properties,
+        properties: JSON.parse(model.properties),
         primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
     });
@@ -125,6 +125,7 @@ export class MDLBuilder implements IMDLBuilder {
         isCalculated: column.isCalculated,
         notNull: column.notNull,
         expression,
+        properties: JSON.parse(column.properties),
       });
     });
   }

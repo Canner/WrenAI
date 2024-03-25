@@ -31,6 +31,10 @@ export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
     ids: number[],
     queryOptions?: IQueryOptions,
   ): Promise<ModelColumn[]>;
+  deleteByModelIds(
+    modelIds: number[],
+    queryOptions?: IQueryOptions,
+  ): Promise<void>;
 }
 
 export class ModelColumnRepository
@@ -65,5 +69,19 @@ export class ModelColumnRepository
       .whereIn('id', ids)
       .select('*');
     return result.map((r) => this.transformFromDBData(r));
+  }
+
+  public async deleteByModelIds(
+    modelIds: number[],
+    queryOptions?: IQueryOptions,
+  ) {
+    if (queryOptions && queryOptions.tx) {
+      const { tx } = queryOptions;
+      await tx(this.tableName).whereIn('model_id', modelIds).delete();
+      return;
+    }
+    await this.knex<ModelColumn>('model_column')
+      .whereIn('model_id', modelIds)
+      .delete();
   }
 }
