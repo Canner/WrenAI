@@ -53,6 +53,10 @@ export class BQConnector
     this.bq = new BigQuery(bqOptions);
   }
 
+  public async prepare() {
+    return;
+  }
+
   public async connect() {
     try {
       await this.bq.query('SELECT 1;');

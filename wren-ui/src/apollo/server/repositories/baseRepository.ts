@@ -116,7 +116,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     const result = await executer(this.tableName)
       .insert(data.map(this.transformToDBData))
       .returning('*');
-    return result;
+    return result.map((data) => this.transformFromDBData(data));
   }
 
   public async updateOne(

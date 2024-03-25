@@ -77,6 +77,9 @@ const apolloServer: ApolloServer = new ApolloServer({
   context: (): IContext => ({
     config: serverConfig,
 
+    // adaptor
+    wrenEngineAdaptor,
+
     // services
     projectService,
     modelService,
