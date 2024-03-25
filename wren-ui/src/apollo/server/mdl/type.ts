@@ -3,6 +3,7 @@ export interface ColumnMDL {
   type?: string; // eg: "integer", "string", "relationName"
   isCalculated: boolean; // eg: true, false
   notNull?: boolean; // eg: true, false
+  relationship?: string; //eg: OrdersCustomer
   properties?: {
     description?: string; // eg: "the key of each order"
   };

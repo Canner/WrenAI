@@ -133,11 +133,29 @@ export class MDLBuilder implements IMDLBuilder {
   public addRelation(): void {
     this.manifest.relationships = this.relations.map(
       (relation: RelationInfo) => {
+        const {
+          name,
+          joinType,
+          fromModelName,
+          fromColumnName,
+          toModelName,
+          toColumnName,
+        } = relation;
         const condition = this.getRelationCondition(relation);
+        this.addRelationColumn(fromModelName, {
+          modelReferenceName: toModelName,
+          columnReferenceName: toColumnName,
+          relation: name,
+        });
+        this.addRelationColumn(toModelName, {
+          modelReferenceName: fromModelName,
+          columnReferenceName: fromColumnName,
+          relation: name,
+        });
         return {
-          name: relation.name,
-          models: [relation.fromModelName, relation.toModelName],
-          joinType: relation.joinType,
+          name: name,
+          models: [fromModelName, toModelName],
+          joinType: joinType,
           condition,
         };
       },
@@ -147,6 +165,40 @@ export class MDLBuilder implements IMDLBuilder {
   public addProject(): void {
     this.manifest.schema = this.project.schema;
     this.manifest.catalog = this.project.catalog;
+  }
+
+  protected addRelationColumn(
+    modelName: string,
+    columnData: {
+      modelReferenceName: string;
+      columnReferenceName: string;
+      relation: string;
+    },
+  ) {
+    const model = this.manifest.models.find(
+      (model: any) => model.name === modelName,
+    );
+    if (!model) {
+      logger.debug(`Can not find model "${modelName}" to add relation column`);
+      return;
+    }
+    if (!model.columns) {
+      model.columns = [];
+    }
+    // check if the modelReferenceName is already in the model column
+    const modelNameDuplicated = model.columns.find(
+      (column: any) => column.name === columnData.modelReferenceName,
+    );
+
+    model.columns.push({
+      name: modelNameDuplicated
+        ? `${columnData.modelReferenceName}_${columnData.columnReferenceName}`
+        : columnData.modelReferenceName,
+      type: columnData.modelReferenceName,
+      relationship: columnData.relation,
+      isCalculated: false,
+      notNull: false,
+    });
   }
 
   protected getColumnExpression(column: ModelColumn): string {
