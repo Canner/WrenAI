@@ -141,12 +141,12 @@ export class MDLBuilder implements IMDLBuilder {
           toColumnName,
         } = relation;
         const condition = this.getRelationCondition(relation);
-        this.AddRelationColumn(fromModelName, {
+        this.addRelationColumn(fromModelName, {
           modelReferenceName: toModelName,
           columnReferenceName: toColumnName,
           relation: name,
         });
-        this.AddRelationColumn(toModelName, {
+        this.addRelationColumn(toModelName, {
           modelReferenceName: fromModelName,
           columnReferenceName: fromColumnName,
           relation: name,
@@ -166,8 +166,8 @@ export class MDLBuilder implements IMDLBuilder {
     this.manifest.catalog = this.project.catalog;
   }
 
-  protected AddRelationColumn(
-    fromModelName: string,
+  protected addRelationColumn(
+    modelName: string,
     columnData: {
       modelReferenceName: string;
       columnReferenceName: string;
@@ -175,12 +175,10 @@ export class MDLBuilder implements IMDLBuilder {
     },
   ) {
     const model = this.manifest.models.find(
-      (model: any) => model.name === fromModelName,
+      (model: any) => model.name === modelName,
     );
     if (!model) {
-      logger.debug(
-        `Can not find model "${fromModelName}" to add relation column`,
-      );
+      logger.debug(`Can not find model "${modelName}" to add relation column`);
       return;
     }
     if (!model.columns) {
