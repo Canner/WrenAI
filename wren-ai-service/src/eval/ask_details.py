@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from datetime import datetime
 from typing import Any, Dict
 
 from haystack import Pipeline
@@ -90,9 +91,11 @@ class Collector:
                 "answer_correctness": 0.0,
             },
             "wren": {
-                # todo: r2: connect wren-engine to compare the result
                 "execution_correct": False,
-                "llm_judge": {},
+                "llm_judge": {
+                    "explanation": "",
+                    "score": 0.0,
+                },
             },
         },
         "latency": 0.0,
@@ -120,10 +123,10 @@ class Collector:
         meta = response["generator"]["meta"][0]
         self._result["model"] = meta["model"]
         self._result["usage"] = meta["usage"]
-        # self._cost_analysis()
+        self._cost_analysis()
 
-        # self._ragas_eval()
-        # self._execution_correctness_eval()
+        self._ragas_eval()
+        self._execution_correctness_eval()
         self._llm_judge()
 
     def _cost_analysis(self):
@@ -154,13 +157,15 @@ class Collector:
         self._result["accuracy"]["ragas"]["answer_correctness"] = score
 
     def _execution_correctness_eval(self):
+        # cte_sql = _build_cte_query(self._result["response"]["steps"])
+        # todo: call the preview data API to check the execution correctness
         self._result["accuracy"]["wren"]["execution_correct"] = False
 
     def _llm_judge(self):
         prompt = f"""
-        **Task:** As a Judge with expertise in data analysis and SQL statement evaluation, 
-        you are tasked with assessing the quality of candidate SQL statements generated from natural language queries. 
-        Your evaluation will be based on a comparison with a ground truth description, 
+        **Task:** As a Judge with expertise in data analysis and SQL statement evaluation,
+        you are tasked with assessing the quality of candidate SQL statements generated from natural language queries.
+        Your evaluation will be based on a comparison with a ground truth description,
         focusing on the accuracy and fidelity of the candidate SQL in representing the user's intent.
 
         **Ground Truth Response:** [{self._result["ground_truth"]}]
@@ -169,17 +174,17 @@ class Collector:
 
         **Evaluation Criteria:**
 
-        1. **Accuracy of Representation:** Assess how accurately the candidate SQL captures the essence and 
-        specifics of the ground truth response. Consider the structure, selection of columns, 
+        1. **Accuracy of Representation:** Assess how accurately the candidate SQL captures the essence and
+        specifics of the ground truth response. Consider the structure, selection of columns,
         and conditions specified in the candidate SQL.
 
-        2. **Fidelity to User Intent:** Determine the degree to which the candidate SQL aligns 
-        with the original user intent as described by the ground truth. Pay special attention to 
-        any potential deviations that could affect the outcome of the query, such as incorrect filters, 
+        2. **Fidelity to User Intent:** Determine the degree to which the candidate SQL aligns
+        with the original user intent as described by the ground truth. Pay special attention to
+        any potential deviations that could affect the outcome of the query, such as incorrect filters,
         missing joins, or aggregation errors.
 
-        3. **Execution Feasibility:** Evaluate the candidate SQL's feasibility of execution 
-        within a real database environment. Consider syntax correctness, reference to valid table/column names, 
+        3. **Execution Feasibility:** Evaluate the candidate SQL's feasibility of execution
+        within a real database environment. Consider syntax correctness, reference to valid table/column names,
         and adherence to SQL best practices.
 
         4. **Score Assignment:** Based on your evaluation, assign a score from 0 to 3, where:
@@ -192,15 +197,15 @@ class Collector:
 
         Please provide your assessment in the following JSON dictionary format:
         {{
-          "E": "Explanation of how the candidate SQL matches the user intent. 
-                Highlight both the strengths and weaknesses observed during the evaluation, 
+          "E": "Explanation of how the candidate SQL matches the user intent.
+                Highlight both the strengths and weaknesses observed during the evaluation,
                 providing specific examples from the SQL statement to support your analysis.",
           "S": "Numerical score indicating the level of match with the user intent (0-3)."
         }}
 
-        **Your Expertise:** Remember, your role as a Judge in this scenario is pivotal. 
-        Your expertise not only helps in evaluating the fidelity of SQL statements to user intent 
-        but also guides improvements in the generation process. 
+        **Your Expertise:** Remember, your role as a Judge in this scenario is pivotal.
+        Your expertise not only helps in evaluating the fidelity of SQL statements to user intent
+        but also guides improvements in the generation process.
         Your detailed feedback is invaluable for refining the RAG pipeline's accuracy and efficiency.
         """
 
@@ -210,11 +215,66 @@ class Collector:
 
         self._result["accuracy"]["wren"]["llm_judge"] = {
             "explanation": reply["E"],
-            "score": reply["S"],
+            "score": float(reply["S"]),
         }
 
     def result(self) -> Dict[str, Any]:
         return self._result
+
+
+class Summary:
+    _accuracy = {
+        "ragas": {
+            "answer_correctness": 0.0,
+        },
+        "wren": {
+            "execution_correct": {
+                True: 0,
+                False: 0,
+            },
+            "llm_judge": 0.0,
+        },
+    }
+    _latency = 0.0
+    _cost = 0.0
+    _collection = []
+
+    def append(self, collector: Collector):
+        result = collector.result()
+        self._accuracy["ragas"]["answer_correctness"] += result["accuracy"]["ragas"][
+            "answer_correctness"
+        ]
+        self._accuracy["wren"]["execution_correct"][
+            result["accuracy"]["wren"]["execution_correct"]
+        ] += 1
+        self._accuracy["wren"]["llm_judge"] += result["accuracy"]["wren"]["llm_judge"][
+            "score"
+        ]
+        self._latency += result["latency"]
+        self._cost += result["cost"]
+        self._collection.append(result)
+
+    def generate(self):
+        total = len(self._collection)
+        return {
+            "total": total,
+            "accuracy": {
+                "ragas": {
+                    "answer_correctness": self._accuracy["ragas"]["answer_correctness"]
+                    / total,
+                },
+                "wren": {
+                    "execution_correct": {
+                        True: self._accuracy["wren"]["execution_correct"][True],
+                        False: self._accuracy["wren"]["execution_correct"][False],
+                    },
+                    "llm_judge": self._accuracy["wren"]["llm_judge"] / total,
+                },
+            },
+            "latency": self._latency / total,
+            "cost": self._cost / total,
+            "collection": self._collection,
+        }
 
 
 if __name__ == "__main__":
@@ -229,21 +289,21 @@ if __name__ == "__main__":
     with open("./data/ask_details/baseball_1_eval_context_1.json") as f:
         eval_context = json.load(f)
 
+    summary = Summary()
     collectors = [Collector(element=element) for element in eval_context]
 
     pipeline = Generation(
         generator=init_generator(),
     )
 
-    # todo: generate the report for the evaluation process
-    # the report includes the following information:
-    # - average accuracy, cost, and latency
-    # - the evaluation result for each question
-    #   - is the answer correct?
-    #   - display the input query
-    #   - disopay the output answer
-    #   - (optional) why the answer is correct or incorrect)
     for collector in collectors:
         collector.eval(pipeline)
-        result = collector.result()
-        print(result)
+        summary.append(collector)
+
+    now = datetime.now()
+    timestamp = datetime.timestamp(now)
+
+    output_path = f"./output/ask_details/baseball_1_eval_summary_{timestamp}.json"
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(summary.generate(), f, indent=4)
