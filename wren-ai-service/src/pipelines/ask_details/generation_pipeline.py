@@ -98,9 +98,9 @@ if __name__ == "__main__":
     )
 
     if DATASET_NAME == "book_2":
-        query = "Show the title and publication dates of books."
-    elif DATASET_NAME == "baseball_1":
-        query = "what is the full name and id of the college with the largest number of baseball players?"
+        query = "How many books are there?"
+    elif DATASET_NAME == "college_3":
+        query = "Count the number of courses."
     else:
         query = "random query here..."
 

@@ -118,7 +118,7 @@ if __name__ == "__main__":
         document_store=document_store,
     )
 
-    with open("src/eval/data/book_2_mdl.json", "r") as f:
+    with open(f"src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
         mdl_str = json.dumps(json.load(f))
 
     indexing_pipeline.run(mdl_str)

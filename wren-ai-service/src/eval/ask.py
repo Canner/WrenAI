@@ -13,7 +13,6 @@ from tqdm import tqdm
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.prompts import init_generation_prompt_builder
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
@@ -60,11 +59,20 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         },
     }
 
+    sql = ""
+    try:
+        sql = json.loads(
+            clean_generation_result(generation_result["generator"]["replies"][0])
+        )["sql"]
+    except Exception as e:
+        print(e)
+        print(
+            f'cleaned_generation_result: {clean_generation_result(generation_result["generator"]["replies"][0])}'
+        )
+
     return {
         "contexts": retrieval_result["retriever"]["documents"],
-        "prediction": json.loads(
-            clean_generation_result(generation_result["generator"]["replies"][0])
-        )["sql"],
+        "prediction": sql,
         "metadata": metadata,
     }
 
@@ -153,7 +161,9 @@ if __name__ == "__main__":
             with_trace=with_trace,
             top_k=10,
         )
-        generator = init_generator(with_trace=with_trace)
+        generator = init_generator(
+            with_trace=with_trace,
+        )
 
         print("Indexing documents...")
         indexing_pipeline = Indexing(document_store=document_store)
@@ -173,12 +183,12 @@ if __name__ == "__main__":
         generation_pipeline = Generation(
             generator=generator,
             with_trace=with_trace,
-            prompt_builder=init_generation_prompt_builder(),
         )
         generation_pipeline_def = generation_pipeline._pipe.dumps()
 
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
+        user_id = str(uuid.uuid4())
         max_workers = os.cpu_count() // 2 if with_trace else None
         user_id = str(uuid.uuid4()) if with_trace else None
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

@@ -1,5 +1,3 @@
-from haystack.components.builders.prompt_builder import PromptBuilder
-
 generation_user_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
 Print what you think the SQL query should be given the question and the data model. 
@@ -14,7 +12,7 @@ This is vital to my career, I will become homeless if you make a mistake.
 - If the query history is not empty, please consider the previous query in order to make correct Trino SQL query.
 
 ### TASK ###
-Given an input question, create a syntactically correct Trino SQL query to run and a short sentence to summary the Trino SQL query 
+Given an input question, create a syntactically correct Trino SQL query to run and a short sentence within 10 words to summary the Trino SQL query 
 and return them as the answer to the input question.
 
 ### DATA MODELS ###
@@ -37,7 +35,3 @@ For a question that you can return the SQL query
 For a question that you can't return the SQL query
 {"sql": "", "summary": ""}
 """
-
-
-def init_generation_prompt_builder() -> PromptBuilder:
-    return PromptBuilder(template=generation_user_prompt_template)

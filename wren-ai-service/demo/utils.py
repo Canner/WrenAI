@@ -1,11 +1,12 @@
 import json
 import os
 import re
+import shutil
 import sqlite3
 import time
 import zipfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import gdown
 import psycopg2
@@ -18,6 +19,7 @@ WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5000"
 WREN_ENGINE_PG_URL = (
     "postgres://localhost:7432/canner-cml?options=--search_path%3Dspider"
 )
+WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 
 
@@ -43,28 +45,48 @@ def download_spider_data():
     os.remove("spider.zip")
 
 
-def rerun_wren_engine(dataset_name: str):
-    os.system(
-        "export DATASET_NAME="
-        + dataset_name
-        + " && "
-        + "docker compose "
-        + "-f ../src/eval/wren-engine/docker-compose.yml "
-        + "--env-file ../src/eval/wren-engine/.env "
-        "up " + "-d"
+def prepare_mdl_json(dataset_name: str):
+    assert Path(
+        f"../src/eval/data/{dataset_name}_mdl.json"
+    ).exists(), f"File not found in src/eval/data: {dataset_name}_mdl.json"
+
+    # move the file to src/eval/wren-engine/etc/mdl
+    shutil.copyfile(
+        f"../src/eval/data/{dataset_name}_mdl.json",
+        f"../src/eval/wren-engine/etc/mdl/{dataset_name}_mdl.json",
     )
+
+
+def rerun_wren_engine(dataset_name: str, mdl_json: Dict):
+    st.toast("Wren Engine is being re-run", icon="⏳")
+
+    # this step is not necessary, since we'll use the wren engine api to directly deploy new mdl json
+    # this step is for consistency
+    prepare_mdl_json(dataset_name)
+
+    response = requests.post(
+        f"{WREN_ENGINE_API_URL}/v1/mdl/deploy",
+        json={
+            "manifest": mdl_json,
+            "version": "latest",
+        },
+    )
+
+    assert response.status_code == 202
 
     wren_engine_is_ready = False
 
     while not wren_engine_is_ready:
-        try:
-            psycopg2.connect(dsn=WREN_ENGINE_PG_URL)
-            wren_engine_is_ready = True
-        except Exception:
-            time.sleep(POLLING_INTERVAL)
+        response = requests.get(
+            f"{WREN_ENGINE_API_URL}/v1/mdl/status",
+        )
 
-    if wren_engine_is_ready:
-        st.toast("Wren Engine is ready", icon="🎉")
+        assert response.status_code == 200
+
+        if response.json()["systemStatus"] == "READY":
+            wren_engine_is_ready = True
+
+    st.toast("Wren Engine is ready", icon="🎉")
 
 
 def get_datasets():
@@ -77,6 +99,11 @@ def get_datasets():
         datasets = sorted(table_counts_in_database.keys())
 
     return datasets
+
+
+def save_mdl_json_file(file_name: str, mdl_json: Dict):
+    with open(f"../src/eval/data/{file_name}", "w", encoding="utf-8") as file:
+        json.dump(mdl_json, file, indent=2)
 
 
 @st.cache_data
@@ -554,53 +581,37 @@ def show_asks_results():
     show_query_history()
 
     st.markdown("### Query Results")
-    asks_result_col1, asks_result_col2, asks_result_col3 = st.columns(3)
-    with asks_result_col1:
-        st.markdown("Result 1")
-        st.code(
-            body=st.session_state["asks_results"][0]["sql"],
-            language="sql",
-        )
-        st.markdown(st.session_state["asks_results"][0]["summary"])
-        choose_result_1 = st.button("Choose Result 1")
-    with asks_result_col2:
-        st.markdown("Result 2")
-        st.code(
-            body=st.session_state["asks_results"][1]["sql"],
-            language="sql",
-        )
-        st.markdown(st.session_state["asks_results"][1]["summary"])
-        choose_result_2 = st.button("Choose Result 2")
-    with asks_result_col3:
-        st.markdown("Result 3")
-        st.code(
-            body=st.session_state["asks_results"][2]["sql"],
-            language="sql",
-        )
-        st.markdown(st.session_state["asks_results"][2]["summary"])
-        choose_result_3 = st.button("Choose Result 3")
+    asks_result_count = len(st.session_state["asks_results"])
+    ask_result_cols = st.columns(asks_result_count)
+    choose_result_n = [False] * asks_result_count
+    for i, ask_result_col in enumerate(ask_result_cols):
+        with ask_result_col:
+            st.markdown(f"Result {i+1}")
+            st.code(
+                body=st.session_state["asks_results"][i]["sql"],
+                language="sql",
+            )
+            st.markdown(st.session_state["asks_results"][i]["summary"])
+            choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
-    if choose_result_1 or choose_result_2 or choose_result_3:
-        if choose_result_1:
-            sql = st.session_state["asks_results"][0]["sql"]
-            summary = st.session_state["asks_results"][0]["summary"]
-        elif choose_result_2:
-            sql = st.session_state["asks_results"][1]["sql"]
-            summary = st.session_state["asks_results"][1]["summary"]
-        elif choose_result_3:
-            sql = st.session_state["asks_results"][2]["sql"]
-            summary = st.session_state["asks_results"][2]["summary"]
-        st.session_state["chosen_query_result"] = {
-            "index": 0 if choose_result_1 else 1 if choose_result_2 else 2,
-            "query": st.session_state["query"],
-            "sql": sql,
-            "summary": summary,
-        }
+    for i, choose_result in enumerate(choose_result_n):
+        if choose_result:
+            sql = st.session_state["asks_results"][i]["sql"]
+            summary = st.session_state["asks_results"][i]["summary"]
 
-        # reset relevant session_states
-        st.session_state["asks_details_result"] = None
-        st.session_state["preview_data_button_index"] = None
-        st.session_state["preview_sql"] = None
+            st.session_state["chosen_query_result"] = {
+                "index": i,
+                "query": st.session_state["query"],
+                "sql": sql,
+                "summary": summary,
+            }
+
+            # reset relevant session_states
+            st.session_state["asks_details_result"] = None
+            st.session_state["preview_data_button_index"] = None
+            st.session_state["preview_sql"] = None
+
+            break
 
 
 def show_asks_details_results():

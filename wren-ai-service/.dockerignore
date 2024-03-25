@@ -1,4 +1,4 @@
 *
-src/eval
 !src
 !pyproject.toml
+src/eval

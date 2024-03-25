@@ -12,8 +12,11 @@ import gdown
 import pandas as pd
 import sqlglot
 import sqlparse
+from dotenv import load_dotenv
 from tqdm import tqdm
 from tqdm.contrib import tzip
+
+load_dotenv(override=True)
 
 
 def semantic_diff(sql_query1: str, sql_query2: str):
@@ -566,29 +569,6 @@ def get_appropriat_column_type(column_type: str):
 
 
 def split_table_definition(table_definition: str):
-    # parts = []
-    # bracket_level = 0
-    # current = []
-    # for char in table_definition:
-    #     if char == "(" and bracket_level == 0:
-    #         bracket_level += 1
-    #     elif char == "(":
-    #         bracket_level += 1
-    #         current.append(char)
-    #     elif char == ")" and bracket_level == 1:
-    #         bracket_level -= 1
-    #     elif char == ")":
-    #         bracket_level -= 1
-    #         current.append(char)
-    #     elif char == "," and bracket_level == 0:
-    #         parts.append("".join(current).strip())
-    #         current = []
-    #     else:
-    #         current.append(char)
-    # parts.append("".join(current).strip())  # add the last part
-    # print(f'parts: {parts}')
-    # return parts
-
     return table_definition.split(", ")
 
 
@@ -765,9 +745,9 @@ def generate_mdl_json(
 
 def generate_text_to_sql_dataset(
     paths: list[str],
-    database_name: str = "baseball_1",
+    database_name: str = "college_3",
     should_save_file: bool = False,
-    file_path: str = "data/baseball_1_data.json",
+    file_path: str = "data/college_3_data.json",
 ):
     target_data = []
     for path in paths:

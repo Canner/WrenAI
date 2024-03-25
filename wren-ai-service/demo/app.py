@@ -1,3 +1,4 @@
+import json
 import uuid
 
 import streamlit as st
@@ -9,6 +10,7 @@ from utils import (
     get_new_mdl_json,
     prepare_semantics,
     rerun_wren_engine,
+    save_mdl_json_file,
     show_asks_details_results,
     show_asks_results,
     show_er_diagram,
@@ -49,14 +51,32 @@ if __name__ == "__main__":
     col1, col2 = st.columns([2, 4])
 
     with col1:
+        uploaded_file = st.file_uploader(
+            "Upload an MDL json file, and the file name must be [xxx]_mdl.json",
+            type="json",
+        )
+        st.markdown("or")
         chosen_dataset = st.selectbox(
             "Select a database from the Spider dataset",
             options=datasets,
             index=datasets.index("college_3"),  # default dataset
         )
-        if st.session_state["chosen_dataset"] != chosen_dataset:
+        if uploaded_file is not None:
+            if "_mdl.json" not in uploaded_file.name:
+                st.error("File name must be [xxx]_mdl.json")
+                st.stop()
+            st.session_state["chosen_dataset"] = uploaded_file.name.split("_mdl.json")[
+                0
+            ]
+            st.session_state["mdl_json"] = json.loads(
+                uploaded_file.getvalue().decode("utf-8")
+            )
+            save_mdl_json_file(uploaded_file.name, st.session_state["mdl_json"])
+        elif chosen_dataset and st.session_state["chosen_dataset"] != chosen_dataset:
             st.session_state["chosen_dataset"] = chosen_dataset
             st.session_state["mdl_json"] = get_mdl_json(chosen_dataset)
+
+        st.markdown("---")
 
         chosen_models = st.multiselect(
             "Select data models for AI to generate MDL metadata",
@@ -88,7 +108,10 @@ if __name__ == "__main__":
         )
         # Semantics preparation
         if deploy_ok:
-            rerun_wren_engine(chosen_dataset)
+            rerun_wren_engine(
+                st.session_state["chosen_dataset"],
+                st.session_state["mdl_json"],
+            )
             prepare_semantics(st.session_state["mdl_json"])
 
     query = st.chat_input(
