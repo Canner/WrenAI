@@ -156,6 +156,17 @@ def generate_eval_report(
                     "sql_correction": 0,
                 },
             },
+            "sql_statistics": {
+                "text_to_sql": {
+                    "valid": 0,
+                    "invalid": 0,
+                    "empty": 0,
+                },
+                "sql_correction": {
+                    "valid": 0,
+                    "invalid": 0,
+                },
+            },
             "number_of_failed_queries": 0,
             "details": {
                 "correct": {
@@ -206,77 +217,87 @@ def generate_eval_report(
                 pipeline
             ] += pipeline_metadata
 
+        ## dealing with sql statistics part
+        for pipeline, values in prediction["sql_statistics"].items():
+            for key, value in values.items():
+                results["eval_results"]["sql_statistics"][pipeline][key] += value
+
         ## dealing with accuracy part
         assert ground_truth["question"] == prediction["question"]
         question = ground_truth["question"]
 
         # directly compare the sql query using semantic diff
-        if not semantic_diff(ground_truth["answer"], prediction["answer"]):
-            correct += 1
-            results["eval_results"]["details"]["correct"]["sql_semantic_same"].append(
-                {
-                    "question": ground_truth["question"],
-                    "ground_truth_answer": ground_truth["answer"],
-                    "prediction_answer": prediction["answer"],
-                    "ragas_eval_results": get_ragas_eval_results(
-                        ragas_eval_results,
-                        i,
-                    ),
-                }
+        if prediction["answer"]:
+            if not semantic_diff(ground_truth["answer"], prediction["answer"]):
+                correct += 1
+                results["eval_results"]["details"]["correct"][
+                    "sql_semantic_same"
+                ].append(
+                    {
+                        "question": ground_truth["question"],
+                        "ground_truth_answer": ground_truth["answer"],
+                        "prediction_answer": prediction["answer"],
+                        "ragas_eval_results": get_ragas_eval_results(
+                            ragas_eval_results,
+                            i,
+                        ),
+                    }
+                )
+                continue
+
+            # since the order of the sql query may be different, we compare the results as sets
+            ground_truth_query_results = execute_sql_query(
+                ground_truth["answer"],
+                f"./spider/database/{database_name}/{database_name}.sqlite",
             )
-            continue
 
-        # since the order of the sql query may be different, we compare the results as sets
-        ground_truth_query_results = execute_sql_query(
-            ground_truth["answer"],
-            f"./spider/database/{database_name}/{database_name}.sqlite",
-        )
-
-        (
-            prediction_query_results,
-            prediction_error_details,
-        ) = execute_sql_query_through_wren_engine(
-            prediction["answer"],
-        )
-        if prediction_error_details:
+            (
+                prediction_query_results,
+                prediction_error_details,
+            ) = execute_sql_query_through_wren_engine(
+                prediction["answer"],
+            )
+            if prediction_error_details:
+                results["eval_results"]["number_of_failed_queries"] += 1
+            if len(ground_truth_query_results) == len(prediction_query_results):
+                if set(ground_truth_query_results) == set(prediction_query_results):
+                    correct += 1
+                    results["eval_results"]["details"]["correct"][
+                        "query_results_same"
+                    ].append(
+                        {
+                            "question": question,
+                            "ground_truth_answer": ground_truth["answer"],
+                            "prediction_answer": prediction["answer"],
+                            "ragas_eval_results": get_ragas_eval_results(
+                                ragas_eval_results,
+                                i,
+                            ),
+                        }
+                    )
+                    continue
+                elif ground_truth_query_results_issubset(
+                    ground_truth_query_results, prediction_query_results
+                ):
+                    correct += 1
+                    results["eval_results"]["details"]["correct"][
+                        "ground_truth_query_results_issubset"
+                    ].append(
+                        {
+                            "question": question,
+                            "ground_truth_answer": ground_truth["answer"],
+                            "prediction_answer": prediction["answer"],
+                            "ground_truth_query_results": ground_truth_query_results,
+                            "prediction_query_results": prediction_query_results,
+                            "ragas_eval_results": get_ragas_eval_results(
+                                ragas_eval_results,
+                                i,
+                            ),
+                        }
+                    )
+                    continue
+        else:
             results["eval_results"]["number_of_failed_queries"] += 1
-        if len(ground_truth_query_results) == len(prediction_query_results):
-            if set(ground_truth_query_results) == set(prediction_query_results):
-                correct += 1
-                results["eval_results"]["details"]["correct"][
-                    "query_results_same"
-                ].append(
-                    {
-                        "question": question,
-                        "ground_truth_answer": ground_truth["answer"],
-                        "prediction_answer": prediction["answer"],
-                        "ragas_eval_results": get_ragas_eval_results(
-                            ragas_eval_results,
-                            i,
-                        ),
-                    }
-                )
-                continue
-            elif ground_truth_query_results_issubset(
-                ground_truth_query_results, prediction_query_results
-            ):
-                correct += 1
-                results["eval_results"]["details"]["correct"][
-                    "ground_truth_query_results_issubset"
-                ].append(
-                    {
-                        "question": question,
-                        "ground_truth_answer": ground_truth["answer"],
-                        "prediction_answer": prediction["answer"],
-                        "ground_truth_query_results": ground_truth_query_results,
-                        "prediction_query_results": prediction_query_results,
-                        "ragas_eval_results": get_ragas_eval_results(
-                            ragas_eval_results,
-                            i,
-                        ),
-                    }
-                )
-                continue
 
         results["eval_results"]["details"]["wrong"].append(
             {
@@ -362,6 +383,7 @@ def write_prediction_results(
                     ],
                     "answer": output["prediction"],
                     "metadata": output["metadata"],
+                    "sql_statistics": output["sql_statistics"],
                     "pipelines": pipeline_defs,
                 },
                 f,

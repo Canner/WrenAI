@@ -44,36 +44,96 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     )
     retrieval_end = time.perf_counter()
 
-    text_to_sql_generation_start = time.perf_counter()
     valid_generation_results = []
     invalid_generation_results = []
+
+    sql_statistics = {
+        "text_to_sql": {
+            "valid": 0,
+            "invalid": 0,
+            "empty": 0,
+        },
+        "sql_correction": {
+            "valid": 0,
+            "invalid": 0,
+        },
+    }
+
+    text_to_sql_generation_start = time.perf_counter()
     text_to_sql_generation_results = generation_pipeline.run(
         query,
         contexts=retrieval_result["retriever"]["documents"],
         user_id=user_id,
     )
+    text_to_sql_generation_end = time.perf_counter()
+    text_to_sql_generation_time_cost = (
+        text_to_sql_generation_end - text_to_sql_generation_start
+    )
+
     if text_to_sql_generation_results["post_processor"]["valid_generation_results"]:
         valid_generation_results += text_to_sql_generation_results["post_processor"][
             "valid_generation_results"
         ]
-    text_to_sql_generation_end = time.perf_counter()
+        sql_statistics["text_to_sql"]["valid"] += len(
+            text_to_sql_generation_results["post_processor"]["valid_generation_results"]
+        )
 
-    sql_correction_generation_start = time.perf_counter()
     sql_correction_results = None
+    sql_correction_generation_time_cost = 0
     if text_to_sql_generation_results["post_processor"]["invalid_generation_results"]:
+        print("before:")
+        print(
+            f'invalid: {text_to_sql_generation_results["post_processor"]["invalid_generation_results"]}'
+        )
+
+        sql_statistics["text_to_sql"]["invalid"] += len(
+            text_to_sql_generation_results["post_processor"][
+                "invalid_generation_results"
+            ]
+        )
+
+        sql_correction_generation_start = time.perf_counter()
         sql_correction_results = sql_correction_pipeline.run(
             contexts=retrieval_result["retriever"]["documents"],
             invalid_generation_results=text_to_sql_generation_results["post_processor"][
                 "invalid_generation_results"
             ],
         )
+        sql_correction_generation_end = time.perf_counter()
+        sql_correction_generation_time_cost = (
+            sql_correction_generation_end - sql_correction_generation_start
+        )
+
         valid_generation_results += sql_correction_results["post_processor"][
             "valid_generation_results"
         ]
         invalid_generation_results += sql_correction_results["post_processor"][
             "invalid_generation_results"
         ]
-    sql_correction_generation_end = time.perf_counter()
+        sql_statistics["sql_correction"]["valid"] += len(
+            sql_correction_results["post_processor"]["valid_generation_results"]
+        )
+        sql_statistics["sql_correction"]["invalid"] += len(
+            sql_correction_results["post_processor"]["invalid_generation_results"]
+        )
+
+        print("after:")
+        print(
+            f'valid: {sql_correction_results["post_processor"][
+            "valid_generation_results"
+        ]}'
+        )
+        print(
+            f'invalid: {sql_correction_results["post_processor"]["invalid_generation_results"]}'
+        )
+
+    if (
+        not text_to_sql_generation_results["post_processor"]["valid_generation_results"]
+        and not text_to_sql_generation_results["post_processor"][
+            "invalid_generation_results"
+        ]
+    ):
+        sql_statistics["text_to_sql"]["empty"] += 1
 
     metadata = {
         "generation": {
@@ -89,16 +149,11 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         "latency": {
             "retrieval": retrieval_end - retrieval_start,
             "generation": {
-                "text_to_sql": text_to_sql_generation_end
-                - text_to_sql_generation_start,
-                "sql_correction": sql_correction_generation_end
-                - sql_correction_generation_start,
+                "text_to_sql": text_to_sql_generation_time_cost,
+                "sql_correction": sql_correction_generation_time_cost,
             },
         },
     }
-
-    print(f"size of valid_generation_results: {len(valid_generation_results)}")
-    print(f"size of invalid_generation_results: {len(invalid_generation_results)}")
 
     return {
         "contexts": retrieval_result["retriever"]["documents"],
@@ -106,6 +161,7 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
             valid_generation_results[0]["sql"] if valid_generation_results else ""
         ),
         "metadata": metadata,
+        "sql_statistics": sql_statistics,
     }
 
 
@@ -147,21 +203,19 @@ if __name__ == "__main__":
         description=f"Evaluate the ask pipeline using the Spider dataset: {DATASET_NAME}"
     )
     parser.add_argument(
-        "--input_file",
+        "--input-file",
         type=str,
         default=get_latest_prediction_outputs_file(Path("./outputs"), DATASET_NAME),
         help="Path to the prediction results file. If not provided, the latest prediction results file will be used. The file should be located in the outputs folder in the root directory of the project.",
     )
     parser.add_argument(
-        "--eval_after_prediction",
-        action="store_true",
-        default=True,
+        "--eval-after-prediction",
+        action=argparse.BooleanOptionalAction,
         help="Whether to run the evaluation after making predictions. Default is True.",
     )
     parser.add_argument(
-        "--eval_from_scratch",
-        action="store_true",
-        default=False,
+        "--eval-from-scratch",
+        action=argparse.BooleanOptionalAction,
         help="Whether to run the evaluation from scratch. Default is False.",
     )
     args = parser.parse_args()

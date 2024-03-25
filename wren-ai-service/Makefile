@@ -1,5 +1,3 @@
-args ?=
-
 start:
 	poetry run python -m src.__main__
 
@@ -24,11 +22,11 @@ stop-qdrant:
 	docker stop qdrant && docker rm qdrant
 
 # evaluation related
+eval-ask:
+	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction
+
 streamlit:
 	poetry run streamlit run src/eval/streamlit_app.py
-
-eval:
-	poetry run python -m src.eval.ask $(args)
 
 run-wren-engine:
 	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file .env.dev --env-file ./src/eval/wren-engine/.env up -d
