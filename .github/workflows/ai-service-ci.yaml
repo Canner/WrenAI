@@ -31,6 +31,19 @@ jobs:
         python-version: [ "3.12" ]
         poetry-version: [ "1.7.1" ]
     runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.7.4
+        ports:
+          - 6333:6333
+          - 6334:6334
+      wren-engine:
+        image: ghcr.io/canner/wren-engine:latest
+        ports:
+          - 8080:8080
+          - 7432:7432
+        volumes:
+          - src/eval/wren-engine/etc:/usr/src/app/etc
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.12
@@ -43,13 +56,14 @@ jobs:
           poetry-version: ${{ matrix.poetry-version }}
       - name: Install the project dependencies
         run: poetry install
-      - name: Test with pytest
+      - name: Prepare testing environment
         run: |
           mkdir -p src/eval/wren-engine/etc && \
           cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties && \
-          sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties && \
-          make test
+          sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties
+      - name: Run tests
+        run: poetry run pytest
         env:
-          WREN_ENGINE_ENDPOINT: http://0.0.0.0:8080
+          WREN_ENGINE_ENDPOINT: http://wren-engine:8080
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ENV: dev
