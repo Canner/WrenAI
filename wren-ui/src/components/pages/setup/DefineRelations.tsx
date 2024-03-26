@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { omit } from 'lodash';
 import { Button, Col, Popconfirm, Row, Space, Spin, Typography } from 'antd';
-import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import type { ColumnsType } from 'antd/es/table';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
@@ -256,12 +255,7 @@ export default function DefineRelations(props: Props) {
             onDeleteRow={onDeleteRow}
           />
         ))}
-        <Spin
-          spinning={fetching}
-          indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />}
-          tip="Loading..."
-          className="my-15"
-        />
+        <Spin spinning={fetching} tip="Loading..." className="my-15" />
       </div>
       <Row gutter={16} className="pt-6">
         <Col span={12}>
