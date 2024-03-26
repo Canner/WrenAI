@@ -49,8 +49,8 @@ jobs:
           cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties && \
           sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties && \
           poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
-          docker run --net host -p 6333:6333 -p 6334:6334 -d --name qdrant qdrant/qdrant:v1.7.4 && \
-          docker run --net host -p 8080:8080 -p 7432:7432 -d --name --env-file ./src/eval/wren-engine/.env wren-engine ghcr.io/canner/wren-engine:latest && \
+          docker run --net host -d --name qdrant qdrant/qdrant:v1.7.4 && \
+          docker run --net host -d --name --env-file ./src/eval/wren-engine/.env wren-engine ghcr.io/canner/wren-engine:latest && \
           poetry run pytest && \
           docker stop qdrant && docker rm qdrant && \
           docker stop wren-engine && docker rm wren-engine
