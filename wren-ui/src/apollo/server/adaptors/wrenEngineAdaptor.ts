@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
-import path from 'node:path';
 
 const logger = getLogger('WrenEngineAdaptor');
 logger.level = 'debug';
