@@ -17,7 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.label.name == 'ci/ai-service' && github.event.number || github.sha }}
   cancel-in-progress: true
 
-
 defaults:
   run:
     working-directory: wren-ai-service
@@ -37,20 +36,20 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Run image
+      - name: Install Poetry
         uses: abatilo/actions-poetry@v2
         with:
           poetry-version: ${{ matrix.poetry-version }}
       - name: Install the project dependencies
         run: poetry install
-      - name: Prepare testing environment
+      - name: Prepare testing environment and Run tests
         run: |
           mkdir -p src/eval/wren-engine/etc && \
           cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties && \
           sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties && \
           poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
-          docker run --net host -d --name qdrant qdrant/qdrant:v1.7.4 && \
-          docker run --net host -d --name --env-file ./src/eval/wren-engine/.env wren-engine ghcr.io/canner/wren-engine:latest && \
+          docker run -d --name=qdrant --net=host qdrant/qdrant:v1.7.4 && \
+          docker run -d --name=wren-engine --net=host--env-file ./src/eval/wren-engine/.env ghcr.io/canner/wren-engine:latest && \
           poetry run pytest && \
           docker stop qdrant && docker rm qdrant && \
           docker stop wren-engine && docker rm wren-engine
