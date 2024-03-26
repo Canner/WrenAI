@@ -88,6 +88,11 @@ class Generation(BasicPipeline):
                 }
             )
 
+            # add the missing "{" to the replies to construct a valid json object
+            for i, reply in enumerate(result["generator"]["replies"]):
+                if not reply.startswith("{"):
+                    result["generator"]["replies"][i] = "{" + reply
+
             trace.update(input=query, output=result["generator"])
         else:
             result = self._pipeline.run(
