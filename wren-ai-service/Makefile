@@ -27,6 +27,9 @@ stop-qdrant:
 streamlit:
 	poetry run streamlit run src/eval/streamlit_app.py
 
+eval:
+	poetry run python -m $(pipeline) $(args)
+
 run-wren-engine:
 	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
 
