@@ -48,7 +48,9 @@ jobs:
           mkdir -p src/eval/wren-engine/etc && \
           cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties && \
           sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties && \
-          make test && \
+          poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
+          make run-qdrant && \
+          make run-wren-engine && \
           docker ps
         env:
           WREN_ENGINE_ENDPOINT: http://wren-engine:8080
