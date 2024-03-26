@@ -50,7 +50,9 @@ jobs:
           poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
           docker run -d -p 8080:8080 --name wren-engine -v $(pwd)/src/eval/wren-engine/etc:/usr/src/app/etc ghcr.io/canner/wren-engine:latest && \
           make run-qdrant && \
-          docker ps -a
+          poetry run pytest && \
+          make stop-qdrant && \
+          docker stop wren-engine && docker rm wren-engine
         env:
           ENV: dev
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
