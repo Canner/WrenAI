@@ -28,6 +28,7 @@ if __name__ == "__main__":
 
     # remove all files in src/eval/wren-engine/etc/mdl
     os.system("rm -rf src/eval/wren-engine/etc/mdl/*")
+    os.makedirs("src/eval/wren-engine/etc/mdl", exist_ok=True)
 
     # move the file to src/eval/wren-engine/etc/mdl
     shutil.copyfile(
