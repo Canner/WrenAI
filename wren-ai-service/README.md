@@ -7,10 +7,11 @@
 - execute `poetry install` to install the dependencies
 - copy `.env.example` file to `.env`, and `.env.dev.example` file to `.env.dev` and fill in the environment variables
 - [for development] execute `poetry run pre-commit install` to install the pre-commit hooks and `poetry run pre-commit run --all-files` to run the pre-commit checks at the first time to check if everything is set up correctly
+- [for development] to run the tests, execute `make prepare-test` then `poetry run pytest`
 
 ## Start the service for development
 
-- execute `make start` to start the service and go to `http://UVICORN_HOST:UVICORN_PORT/docs` to see the API documentation and try the API
+- execute `make start` to start the service and go to `http://UVICORN_HOST:UVICORN_PORT` to see the API documentation and try the APIs
 
 ## Production Environment Setup
 
