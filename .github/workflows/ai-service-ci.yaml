@@ -50,6 +50,6 @@ jobs:
           sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties && \
           make test
         env:
-          WREN_ENGINE_ENDPOINT: http://wren-engine:8080
+          WREN_ENGINE_ENDPOINT: http://localhost:8080
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ENV: dev
