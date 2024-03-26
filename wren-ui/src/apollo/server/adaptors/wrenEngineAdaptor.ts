@@ -44,13 +44,14 @@ export interface IWrenEngineAdaptor {
   initDatabase(sql: string): Promise<void>;
   putSessionProps(props: Record<string, any>): Promise<void>;
   queryDuckdb(sql: string): Promise<QueryResponse>;
+  patchConfig(config: Record<string, any>): Promise<void>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private readonly wrenEngineBaseEndpoint: string;
-  private sessionPropsUrlPath = '/v1/data-source/DuckDB/settings/session-sql';
-  private queryDuckdbUrlPath = '/v1/data-source/DuckDB/query';
-  private initSqlUrlPath = '/v1/data-source/DuckDB/settings/init-sql';
+  private sessionPropsUrlPath = '/v1/data-source/duckdb/settings/session-sql';
+  private queryDuckdbUrlPath = '/v1/data-source/duckdb/query';
+  private initSqlUrlPath = '/v1/data-source/duckdb/settings/init-sql';
   constructor({ wrenEngineEndpoint }: { wrenEngineEndpoint: string }) {
     this.wrenEngineBaseEndpoint = wrenEngineEndpoint;
   }
@@ -127,6 +128,25 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data as QueryResponse;
     } catch (err: any) {
       logger.debug(`Got error when querying duckdb: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async patchConfig(config: Record<string, any>) {
+    try {
+      const configPayload = Object.entries(config).map(([key, value]) => {
+        return {
+          name: key,
+          value,
+        };
+      });
+      const url = new URL('/v1/config', this.wrenEngineBaseEndpoint);
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      await axios.patch(url.href, configPayload, { headers });
+    } catch (err: any) {
+      logger.debug(`Got error when patching config: ${err.message}`);
       throw err;
     }
   }
