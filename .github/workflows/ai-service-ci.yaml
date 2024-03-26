@@ -50,8 +50,7 @@ jobs:
           poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
           make run-wren-engine && \
           make run-qdrant && \
-          docker ps && \
-          docker logs wren-wren-engine-1
+          docker ps -a
         env:
           ENV: dev
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
