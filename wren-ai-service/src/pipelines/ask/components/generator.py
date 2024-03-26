@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+import anthropic
 import backoff
 import openai
 from haystack import component
@@ -55,6 +56,49 @@ class TracedOpenAIGenerator(CustomOpenAIGenerator):
         )
 
 
+@component
+class AnthropicGenerator:
+    def __init__(self, api_key: Secret, model: str = "claude-3-haiku-20240307"):
+        self._model = model
+        self._client = anthropic.Anthropic(
+            api_key=api_key.resolve_value(),
+        )
+
+    @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
+    @backoff.on_exception(backoff.expo, anthropic.RateLimitError, max_time=60)
+    def run(self, prompt: str):
+        message = self._client.messages.create(
+            model=self._model,
+            max_tokens=4096,
+            messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": "{"},
+            ],
+            temperature=0,
+        )
+
+        return {
+            "replies": [
+                content.text for content in message.content if content.type == "text"
+            ],
+            "meta": [
+                {
+                    "generation": {
+                        "model": message.model,
+                        "index": message.id,
+                        "finish_reason": message.stop_reason,
+                    },
+                    "usage": {
+                        "completion_tokens": message.usage.output_tokens,
+                        "prompt_tokens": message.usage.input_tokens,
+                        "total_tokens": message.usage.output_tokens
+                        + message.usage.input_tokens,
+                    },
+                }
+            ],
+        }
+
+
 def init_generator(
     with_trace: bool = False,
     model_name: str = MODEL_NAME,
@@ -71,4 +115,10 @@ def init_generator(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
         model=model_name,
         generation_kwargs=generation_kwargs,
+    )
+
+
+def init_anthropic_generator():
+    return AnthropicGenerator(
+        api_key=Secret.from_env_var("ANTHROPIC_API_KEY"),
     )
