@@ -1,4 +1,4 @@
-export const sampleData = {
+export const sampleDatasets = {
   music: {
     initSql: `\
         CREATE TABLE album AS FROM 'https://wrenai-public.s3.amazonaws.com/demo/Music/Album.csv';

@@ -13,6 +13,7 @@ import {
   AnalysisRelationInfo,
   RelationType,
   CompactTable,
+  SampleDatasetData,
 } from '../types';
 import { getLogger, Encryptor } from '@server/utils';
 import { Model, ModelColumn, Project, Relation } from '../repositories';
@@ -22,6 +23,8 @@ import {
   DuckDBPrepareOptions,
 } from '../connectors/duckdbConnector';
 import { IConnector } from '../connectors/connector';
+import { sampleDatasets } from '../data';
+import { snakeCase } from 'lodash';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -41,6 +44,34 @@ export class ProjectResolver {
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
+    this.startSampleDataset = this.startSampleDataset.bind(this);
+  }
+
+  public async startSampleDataset(
+    _root: any,
+    _arg: { data: SampleDatasetData },
+    ctx: IContext,
+  ) {
+    const { name } = _arg.data;
+    logger.debug({ name: snakeCase(name) });
+    const dataset = sampleDatasets[snakeCase(name)];
+    if (!dataset) {
+      throw new Error('Sample dataset not found');
+    }
+    const duckdbDatasourceProperties = {
+      initSql: dataset.initSql,
+      extensions: [],
+      configurations: {},
+    };
+    const project = await this.saveDuckDBDataSource(
+      duckdbDatasourceProperties,
+      ctx,
+    );
+    const tables = await this.listDataSourceTables(_root, _arg, ctx);
+    const tableNames = tables.map((table) => table.name);
+    await this.saveTables(_root, { data: { tables: tableNames } }, ctx);
+    await ctx.projectRepository.updateOne(project.id, { sampleDataset: name });
+    return { name };
   }
 
   public async getOnboardingStatus(_root: any, _arg: any, ctx: IContext) {

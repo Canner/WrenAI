@@ -16,6 +16,10 @@ export interface DataSource {
   properties: any;
 }
 
+export interface SampleDatasetData {
+  name: string;
+}
+
 export interface BigQueryDataSourceOptions {
   displayName: string;
   location: string;
