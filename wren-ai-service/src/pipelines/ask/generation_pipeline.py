@@ -120,6 +120,7 @@ class Generation(BasicPipeline):
 # this is for quick testing only, please ignore this
 if __name__ == "__main__":
     DATASET_NAME = os.getenv("DATASET_NAME")
+    LLM_PROVIDER = "openai"
 
     document_store = init_document_store()
     embedder = init_embedder(with_trace=with_trace)
