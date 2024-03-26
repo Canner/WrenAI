@@ -278,8 +278,8 @@ class Summary:
 
 
 if __name__ == "__main__":
-    INPUT_PATH = "./src/eval/data/baseball_1_data.json"
-    EVAL_CONTEXT_PATH = "./src/eval/data/ask_details/baseball_1_eval_context_1.json"
+    INPUT_PATH = "./src/eval/ask_details/data/baseball_1_data.json"
+    EVAL_CONTEXT_PATH = "./src/eval/ask_details/data/baseball_1_eval_context_1.json"
     EVAL_REPORT_PATH = f"./outputs/ask_details/baseball_1_eval_report_{datetime.timestamp(datetime.now())}.json"
 
     load_env_vars()
