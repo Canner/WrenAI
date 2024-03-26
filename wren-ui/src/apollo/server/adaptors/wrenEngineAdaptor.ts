@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 
@@ -18,11 +18,6 @@ export interface WrenEngineDeployStatusResponse {
 export interface DeployResponse {
   status: WrenEngineDeployStatusEnum;
   error?: string;
-}
-
-enum WrenEngineSystemStatus {
-  READY = 'READY',
-  PREPARE = 'PREPARE',
 }
 
 interface DeployPayload {

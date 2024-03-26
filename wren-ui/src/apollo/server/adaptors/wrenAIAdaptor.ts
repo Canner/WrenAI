@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 
