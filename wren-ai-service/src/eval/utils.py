@@ -381,7 +381,7 @@ def write_prediction_results(
                     "question": ground_truth["question"],
                     "contexts": [
                         {
-                            "content": [json.loads(context.content)],
+                            "content": [context.content],
                             "score": context.score,
                         }
                         for context in output["contexts"]
