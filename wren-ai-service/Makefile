@@ -1,3 +1,6 @@
+test_args ?= 
+eval_ask_args ?= --eval-from-scratch --eval-after-prediction
+
 start:
 	poetry run python -m src.__main__
 
@@ -47,12 +50,12 @@ stop-all:
 
 eval-ask:
 	make run-all && \
-	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction && \
+	poetry run python -m src.eval.ask $(eval_ask_args) && \
 	make stop-all
 
 test:
 	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
 	make run-qdrant && \
 	make run-wren-engine && \
-	poetry run pytest -s && \
+	poetry run pytest -s $(test_args) && \
 	make stop-all

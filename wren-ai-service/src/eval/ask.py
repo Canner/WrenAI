@@ -212,17 +212,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval-after-prediction",
         action=argparse.BooleanOptionalAction,
-        help="Whether to run the evaluation after making predictions. Default is True.",
+        help="Run the evaluation after making predictions.",
     )
     parser.add_argument(
         "--eval-from-scratch",
         action=argparse.BooleanOptionalAction,
-        help="Whether to run the evaluation from scratch. Default is False.",
+        help="Run the evaluation from scratch.",
     )
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
     EVAL_AFTER_PREDICTION = args.eval_after_prediction
+    EVAL_FROM_SCRATCH = args.eval_from_scratch
 
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
@@ -231,7 +232,7 @@ if __name__ == "__main__":
     if (
         PREDICTION_RESULTS_FILE
         and Path(PREDICTION_RESULTS_FILE).exists()
-        and not args.eval_from_scratch
+        and not EVAL_FROM_SCRATCH
     ):
         eval(Path(PREDICTION_RESULTS_FILE), DATASET_NAME, ground_truths)
     else:
