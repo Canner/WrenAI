@@ -7,7 +7,7 @@
 - execute `poetry install` to install the dependencies
 - copy `.env.example` file to `.env`, and `.env.dev.example` file to `.env.dev` and fill in the environment variables
 - [for development] execute `poetry run pre-commit install` to install the pre-commit hooks and `poetry run pre-commit run --all-files` to run the pre-commit checks at the first time to check if everything is set up correctly
-- [for development] to run the tests, execute `make prepare-test` then `poetry run pytest`
+- [for development] to run the tests, execute `make test`
 
 ## Start the service for development
 
@@ -25,7 +25,7 @@
 - fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
 - start the docker service
 - run qdrant and wren-engine docker containers: `make run-all`
-- evaluation: `make eval` and check out the outputs folder
+- evaluation: `make eval-ask` and check out the outputs folder
 - `make streamlit` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
 

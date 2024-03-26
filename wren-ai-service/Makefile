@@ -48,7 +48,9 @@ stop-all:
 	make stop-qdrant && \
 	make stop-wren-engine
 
-prepare-test:
+test:
 	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
 	make run-qdrant && \
-	make run-wren-engine
+	make run-wren-engine && \
+	poetry run pytest && \
+	make stop-all
