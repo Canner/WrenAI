@@ -88,20 +88,6 @@ class Generation(BasicPipeline):
                 }
             )
 
-            # add the missing "{" to the replies to construct a valid json object
-            for i, _ in enumerate(result["generator"]["replies"]):
-                if not result["generator"]["replies"][i].startswith("{"):
-                    result["generator"]["replies"][i] = (
-                        "{" + result["generator"]["replies"][i]
-                    )
-                if (
-                    not result["generator"]["replies"][i].endswith("}")
-                    and "}" in result["generator"]["replies"][i]
-                ):
-                    result["generator"]["replies"][i] = (
-                        result["generator"]["replies"][i].split("}")[0] + "}"
-                    )
-
             trace.update(input=query, output=result["generator"])
         else:
             result = self._pipeline.run(
@@ -120,7 +106,6 @@ class Generation(BasicPipeline):
 # this is for quick testing only, please ignore this
 if __name__ == "__main__":
     DATASET_NAME = os.getenv("DATASET_NAME")
-    LLM_PROVIDER = "openai"
 
     document_store = init_document_store()
     embedder = init_embedder(with_trace=with_trace)

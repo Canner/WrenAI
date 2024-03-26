@@ -17,7 +17,10 @@ backoff = "^2.2.1"
 tqdm = "^4.66.2"
 numpy = "^1.26.4"
 psycopg2-binary = "^2.9.9"
+<<<<<<< HEAD
 langfuse = "^2.19.1"
+=======
+>>>>>>> 4e3f231 (remove anthropic)
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
