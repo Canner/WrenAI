@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-import anthropic
 import backoff
 import openai
 from haystack import component
@@ -56,50 +55,7 @@ class TracedOpenAIGenerator(CustomOpenAIGenerator):
         )
 
 
-@component
-class AnthropicGenerator:
-    def __init__(self, api_key: Secret, model: str = "claude-3-haiku-20240307"):
-        self._model = model
-        self._client = anthropic.Anthropic(
-            api_key=api_key.resolve_value(),
-        )
-
-    @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(
-        backoff.expo, anthropic.RateLimitError, max_time=60, max_tries=3
-    )
-    def run(self, prompt: str):
-        message = self._client.messages.create(
-            model=self._model,
-            max_tokens=4096,
-            messages=[
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": "{"},
-            ],
-            temperature=0,
-        )
-
-        return {
-            "replies": [
-                content.text for content in message.content if content.type == "text"
-            ],
-            "meta": [
-                {
-                    "model": message.model,
-                    "index": message.id,
-                    "finish_reason": message.stop_reason,
-                    "usage": {
-                        "completion_tokens": message.usage.output_tokens,
-                        "prompt_tokens": message.usage.input_tokens,
-                        "total_tokens": message.usage.output_tokens
-                        + message.usage.input_tokens,
-                    },
-                }
-            ],
-        }
-
-
-def _init_openai_generator(
+def init_generator(
     with_trace: bool = False,
     model_name: str = MODEL_NAME,
     generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
@@ -116,27 +72,3 @@ def _init_openai_generator(
         model=model_name,
         generation_kwargs=generation_kwargs,
     )
-
-
-def _init_anthropic_generator():
-    return AnthropicGenerator(
-        api_key=Secret.from_env_var("ANTHROPIC_API_KEY"),
-    )
-
-
-def init_generator(
-    provider: str = "openai",
-    with_trace: bool = False,
-    model_name: str = MODEL_NAME,
-    generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
-):
-    if provider == "anthropic":
-        return _init_anthropic_generator()
-    elif provider == "openai":
-        return _init_openai_generator(
-            with_trace=with_trace,
-            model_name=model_name,
-            generation_kwargs=generation_kwargs,
-        )
-
-    raise ValueError(f"Invalid provider: {provider}")
