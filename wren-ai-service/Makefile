@@ -10,7 +10,7 @@ up:
 
 down:
 	make stop-wren-engine && \
-	docker compose -f docker/docker-compose.yml --env-file .env.prod down && \
+	docker compose -f docker/docker-compose.yml --env-file .env.prod down
 
 run-qdrant:
 	docker run \
@@ -24,9 +24,6 @@ stop-qdrant:
 	docker stop qdrant && docker rm qdrant
 
 # evaluation related
-eval-ask:
-	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction
-
 streamlit:
 	poetry run streamlit run src/eval/streamlit_app.py
 
@@ -47,6 +44,11 @@ run-all:
 stop-all:
 	make stop-qdrant && \
 	make stop-wren-engine
+
+eval-ask:
+	make run-all && \
+	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction && \
+	make stop-all
 
 test:
 	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
