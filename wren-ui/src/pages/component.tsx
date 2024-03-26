@@ -160,16 +160,16 @@ export default function Component() {
         defaultValue={{
           type: JOIN_TYPE.ONE_TO_ONE,
           fromField: {
-            model: 'Customer',
-            field: 'orders',
+            modelId: '1',
+            modelName: 'tableCaseAA',
+            fieldId: 'tc_id',
+            fieldName: '1',
           },
           toField: {
-            model: 'Lineitem',
-            field: 'discount',
-          },
-          name: 'customer_orders',
-          properties: {
-            description: 'customer_orders_description',
+            modelId: '2',
+            modelName: 'tableCaseAa',
+            fieldId: 'tableCaseAA_id',
+            fieldName: '9',
           },
         }}
         relations={{}}
