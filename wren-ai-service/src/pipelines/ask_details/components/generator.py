@@ -10,7 +10,7 @@ from haystack.utils.auth import Secret
 from src.utils import load_env_vars
 
 from ...trace import TraceGenerationInput, trace_generation
-from .prompts import system_prompt_builder
+from .prompts import init_sql_details_system_prompt_builder
 
 load_env_vars()
 
@@ -22,7 +22,7 @@ MAX_TOKENS = {
 }
 GENERATION_KWARGS = {
     "temperature": 0,
-    "n": 3,
+    "n": 1,
     "max_tokens": MAX_TOKENS[MODEL_NAME] if MODEL_NAME in MAX_TOKENS else 4096,
     "response_format": {"type": "json_object"},
 }
@@ -62,17 +62,19 @@ def init_generator(
     model_name: str = MODEL_NAME,
     generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
 ) -> Any:
+    system_prompt = init_sql_details_system_prompt_builder().run()["prompt"]
+
     if with_trace:
         return TracedOpenAIGenerator(
             api_key=Secret.from_env_var("OPENAI_API_KEY"),
             model=model_name,
             generation_kwargs=generation_kwargs,
-            system_prompt=system_prompt_builder.run()["prompt"],
+            system_prompt=system_prompt,
         )
 
     return CustomOpenAIGenerator(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
         model=model_name,
         generation_kwargs=generation_kwargs,
-        system_prompt=system_prompt_builder.run()["prompt"],
+        system_prompt=system_prompt,
     )

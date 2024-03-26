@@ -58,3 +58,18 @@ def classify_invalid_generation_results(
             )
 
     return valid_generation_results, invalid_generation_results
+
+
+def check_if_sql_executable(
+    api_endpoint: str,
+    sql: str,
+):
+    response = requests.get(
+        f"{api_endpoint}/v1/mdl/preview",
+        json={
+            "sql": sql,
+            "limit": 1,
+        },
+    )
+
+    return True if response.status_code == 200 else False
