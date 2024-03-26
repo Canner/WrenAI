@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from haystack import component
+from haystack import Document, component
 
 from src.utils import (
     classify_invalid_generation_results,
@@ -14,7 +14,7 @@ load_env_vars()
 
 
 @component
-class PostProcessor:
+class GenerationPostProcessor:
     @component.output_types(
         valid_generation_results=List[Optional[Dict[str, Any]]],
         invalid_generation_results=List[Optional[Dict[str, Any]]],
@@ -47,5 +47,20 @@ class PostProcessor:
         }
 
 
-def init_post_processor():
-    return PostProcessor()
+@component
+class RetrievalPostProcessor:
+    @component.output_types(
+        documents=List[Optional[Document]],
+    )
+    def run(self, documents: List[Document]):
+        return {
+            "documents": list(filter(lambda document: document.score >= 0.6, documents))
+        }
+
+
+def init_generation_post_processor():
+    return GenerationPostProcessor()
+
+
+def init_retrieval_post_processor():
+    return RetrievalPostProcessor()

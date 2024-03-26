@@ -81,7 +81,7 @@ def test_semantics_preparations():
         assert status == "finished"
 
 
-def test_asks():
+def test_asks_with_successful_query():
     with TestClient(app) as client:
         semantics_preparation_id = ValueStorage.semantics_preperation_id
 
@@ -107,12 +107,43 @@ def test_asks():
             response = client.get(url=f"/v1/asks/{query_id}/result/")
 
         assert response.status_code == 200
-        if response.json()["status"] == "failed":
-            assert response.json()["error"]
-        else:
-            for r in response.json()["response"]:
-                assert r["sql"] is not None and r["sql"] != ""
-                assert r["summary"] is not None and r["summary"] != ""
+        assert response.json()["status"] == "finished"
+        for r in response.json()["response"]:
+            assert r["sql"] is not None and r["sql"] != ""
+            assert r["summary"] is not None and r["summary"] != ""
+
+
+def test_asks_with_failed_query():
+    with TestClient(app) as client:
+        semantics_preparation_id = ValueStorage.semantics_preperation_id
+
+        response = client.post(
+            url="/v1/asks",
+            json={
+                "query": "xxxx",
+                "id": semantics_preparation_id,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["query_id"] != ""
+
+        query_id = response.json()["query_id"]
+        ValueStorage.query_id = query_id
+
+        response = client.get(url=f"/v1/asks/{query_id}/result/")
+        while (
+            response.json()["status"] != "finished"
+            and response.json()["status"] != "failed"
+        ):
+            response = client.get(url=f"/v1/asks/{query_id}/result/")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "failed"
+        assert (
+            response.json()["error"]["code"] == "NO_RELEVANT_SQL"
+            or response.json()["error"]["code"] == "NO_RELEVANT_DATA"
+        )
 
 
 def test_stop_asks():

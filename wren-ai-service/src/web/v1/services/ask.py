@@ -82,11 +82,15 @@ class AskResultResponse(BaseModel):
         sql: str
         summary: str
 
+    class AskError(BaseModel):
+        code: Literal["MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL"]
+        message: str
+
     status: Literal[
         "understanding", "searching", "generating", "finished", "failed", "stopped"
     ]
     response: Optional[List[AskResult]] = None
-    error: Optional[str] = None
+    error: Optional[AskError] = None
 
 
 class AskService:
@@ -134,52 +138,59 @@ class AskService:
         retrieval_result = self._pipelines["retrieval"].run(
             query=ask_request.query,
         )
+        documents = retrieval_result["post_processor"]["documents"]
+
+        if not documents:
+            self.ask_results[query_id] = AskResultResponse(
+                status="failed",
+                error=AskResultResponse.AskError(
+                    code="NO_RELEVANT_DATA",
+                    message="No relevant data",
+                ),
+            )
+            return
 
         self.ask_results[query_id] = AskResultResponse(status="generating")
+        text_to_sql_generation_results = self._pipelines["generation"].run(
+            query=ask_request.query,
+            contexts=documents,
+            history=ask_request.history,
+        )
 
-        try:
-            text_to_sql_generation_results = self._pipelines["generation"].run(
-                query=ask_request.query,
-                contexts=retrieval_result["retriever"]["documents"],
-                history=ask_request.history,
-            )
+        valid_generation_results = []
+        if text_to_sql_generation_results["post_processor"]["valid_generation_results"]:
+            valid_generation_results += text_to_sql_generation_results[
+                "post_processor"
+            ]["valid_generation_results"]
 
-            valid_generation_results = []
-            if text_to_sql_generation_results["post_processor"][
-                "valid_generation_results"
-            ]:
-                valid_generation_results += text_to_sql_generation_results[
+        if text_to_sql_generation_results["post_processor"][
+            "invalid_generation_results"
+        ]:
+            sql_correction_results = self._pipelines["sql_correction"].run(
+                contexts=documents,
+                invalid_generation_results=text_to_sql_generation_results[
                     "post_processor"
-                ]["valid_generation_results"]
+                ]["invalid_generation_results"],
+            )
+            valid_generation_results += sql_correction_results["post_processor"][
+                "valid_generation_results"
+            ]
 
-            if text_to_sql_generation_results["post_processor"][
-                "invalid_generation_results"
-            ]:
-                sql_correction_results = self._pipelines["sql_correction"].run(
-                    contexts=retrieval_result["retriever"]["documents"],
-                    invalid_generation_results=text_to_sql_generation_results[
-                        "post_processor"
-                    ]["invalid_generation_results"],
-                )
-                valid_generation_results += sql_correction_results["post_processor"][
-                    "valid_generation_results"
-                ]
-
-            if not valid_generation_results:
-                self.ask_results[query_id] = AskResultResponse(
-                    status="failed", error="Failed to generate SQL"
-                )
-            else:
-                self.ask_results[query_id] = AskResultResponse(
-                    status="finished",
-                    response=[
-                        AskResultResponse.AskResult(**result)
-                        for result in valid_generation_results
-                    ],
-                )
-        except Exception as e:
+        if not valid_generation_results:
             self.ask_results[query_id] = AskResultResponse(
-                status="failed", error=f"Failed to generate SQL: {e}"
+                status="failed",
+                error=AskResultResponse.AskError(
+                    code="NO_RELEVANT_SQL",
+                    message="No relevant SQL",
+                ),
+            )
+        else:
+            self.ask_results[query_id] = AskResultResponse(
+                status="finished",
+                response=[
+                    AskResultResponse.AskResult(**result)
+                    for result in valid_generation_results
+                ],
             )
 
     def stop_ask(
