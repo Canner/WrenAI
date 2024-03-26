@@ -7,7 +7,6 @@ from haystack import component
 from src.utils import (
     classify_invalid_generation_results,
     clean_generation_result,
-    get_mdl_catalog_and_schema,
     load_env_vars,
 )
 
@@ -32,14 +31,11 @@ class PostProcessor:
                 "invalid_generation_results": [],
             }
 
-        mdl_catalog, mdl_schema = get_mdl_catalog_and_schema(
-            os.getenv("WREN_ENGINE_API_ENDPOINT")
-        )
         (
             valid_generation_results,
             invalid_generation_results,
         ) = classify_invalid_generation_results(
-            f'{os.getenv("WREN_ENGINE_SQL_ENDPOINT")}/{mdl_catalog}?options=--search_path%3D{mdl_schema}',
+            os.getenv("WREN_ENGINE_ENDPOINT"),
             [cleaned_generation_result]
             if isinstance(cleaned_generation_result, dict)
             else cleaned_generation_result,

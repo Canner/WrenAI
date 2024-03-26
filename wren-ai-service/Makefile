@@ -5,10 +5,12 @@ build:
 	docker compose -f docker/docker-compose.yml build
 
 up:
+	make run-wren-engine && \
 	docker compose -f docker/docker-compose.yml --env-file .env.prod up -d
 
 down:
-	docker compose -f docker/docker-compose.yml --env-file .env.prod down
+	make stop-wren-engine && \
+	docker compose -f docker/docker-compose.yml --env-file .env.prod down && \
 
 run-qdrant:
 	docker run \

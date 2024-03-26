@@ -16,7 +16,6 @@ qdrant-haystack = "^3.0.0"
 backoff = "^2.2.1"
 tqdm = "^4.66.2"
 numpy = "^1.26.4"
-psycopg2-binary = "^2.9.9"
 langfuse = "^2.19.1"
 
 [tool.poetry.group.dev.dependencies]
@@ -31,6 +30,7 @@ watchdog = "^4.0.0"
 sqlparse = "^0.4.4"
 ragas = "^0.1.1"
 ragas-haystack = "^0.1.1"
+psycopg2-binary = "^2.9.9"
 setuptools = "^69.1.0"
 
 [build-system]
