@@ -7,11 +7,10 @@ from src.utils import load_env_vars
 
 from .embedder import EMBEDDING_MODEL_DIMENSION
 
-env = load_env_vars()
+load_env_vars()
 
 
 def init_document_store(
-    env: str = env,
     embedding_dim: int = EMBEDDING_MODEL_DIMENSION,
     dataset_name: Optional[str] = None,
     recreate_index: bool = False,
