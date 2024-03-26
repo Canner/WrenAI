@@ -1,7 +1,6 @@
 import { ReactFlowInstance, useReactFlow } from 'reactflow';
 import styled from 'styled-components';
 import MarkerHandle from './MarkerHandle';
-import CustomPopover from '../CustomPopover';
 
 const NodeColumn = styled.div`
   position: relative;
