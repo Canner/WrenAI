@@ -31,10 +31,10 @@ streamlit:
 	poetry run streamlit run src/eval/streamlit_app.py
 
 run-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file .env.dev --env-file ./src/eval/wren-engine/.env up -d
+	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
 
 stop-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file .env.dev --env-file ./src/eval/wren-engine/.env down
+	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env down
 
 psql:
 	docker exec -it wren-wren-engine-1 bash launch-cli.sh
