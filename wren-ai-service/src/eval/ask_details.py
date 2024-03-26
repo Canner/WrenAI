@@ -41,7 +41,7 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
         )
 
         output = json.loads(response["generator"]["replies"][0])
-        # consider to add a LLM judge to review the output
+
         print(output)
         return {
             "input": {
@@ -157,8 +157,8 @@ class Collector:
         self._result["accuracy"]["ragas"]["answer_correctness"] = score
 
     def _execution_correctness_eval(self):
-        # cte_sql = _build_cte_query(self._result["response"]["steps"])
         # todo: call the preview data API to check the execution correctness
+        # cte_sql = _build_cte_query(self._result["response"]["steps"])
         self._result["accuracy"]["wren"]["execution_correct"] = False
 
     def _llm_judge(self):
@@ -256,37 +256,41 @@ class Summary:
 
     def generate(self):
         total = len(self._collection)
+        accuracy_ragas = self._accuracy["ragas"]["answer_correctness"] / total
+        execution_correct = self._accuracy["wren"]["execution_correct"]
+        llm_judge = self._accuracy["wren"]["llm_judge"] / total
+        latency = self._latency / total
+        cost = self._cost / total
+
         return {
             "total": total,
             "accuracy": {
-                "ragas": {
-                    "answer_correctness": self._accuracy["ragas"]["answer_correctness"]
-                    / total,
-                },
+                "ragas": {"answer_correctness": accuracy_ragas},
                 "wren": {
-                    "execution_correct": {
-                        True: self._accuracy["wren"]["execution_correct"][True],
-                        False: self._accuracy["wren"]["execution_correct"][False],
-                    },
-                    "llm_judge": self._accuracy["wren"]["llm_judge"] / total,
+                    "execution_correct": execution_correct,
+                    "llm_judge": llm_judge,
                 },
             },
-            "latency": self._latency / total,
-            "cost": self._cost / total,
+            "latency": latency,
+            "cost": cost,
             "collection": self._collection,
         }
 
 
 if __name__ == "__main__":
+    INPUT_PATH = "./data/baseball_1_data.json"
+    EVAL_CONTEXT_PATH = "./data/ask_details/baseball_1_eval_context_1.json"
+    EVAL_REPORT_PATH = f"./output/ask_details/baseball_1_eval_report_{datetime.timestamp(datetime.now())}.json"
+
     load_env_vars()
     _prepare_ask_details_eval_data(
-        input_path="./data/baseball_1_data.json",
-        output_path="./data/ask_details/baseball_1_eval_context.json",
+        input_path=INPUT_PATH,
+        output_path=EVAL_CONTEXT_PATH,
     )
 
     # read the evaluation data
     eval_context = None
-    with open("./data/ask_details/baseball_1_eval_context_1.json") as f:
+    with open(EVAL_CONTEXT_PATH) as f:
         eval_context = json.load(f)
 
     summary = Summary()
@@ -300,10 +304,6 @@ if __name__ == "__main__":
         collector.eval(pipeline)
         summary.append(collector)
 
-    now = datetime.now()
-    timestamp = datetime.timestamp(now)
-
-    output_path = f"./output/ask_details/baseball_1_eval_summary_{timestamp}.json"
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
+    os.makedirs(os.path.dirname(EVAL_REPORT_PATH), exist_ok=True)
+    with open(EVAL_REPORT_PATH, "w") as f:
         json.dump(summary.generate(), f, indent=4)
