@@ -1,16 +1,8 @@
-import { GetServerSideProps } from 'next';
+import { useWithOnboarding } from '@/hooks/useCheckOnboarding';
+import PageLoading from '@/components/PageLoading';
 
-export function Index() {
-  return <></>;
+export default function Index() {
+  useWithOnboarding();
+
+  return <PageLoading visible />;
 }
-
-export default Index;
-
-export const getServerSideProps: GetServerSideProps = async () => {
-  return {
-    redirect: {
-      destination: '/setup/connection',
-      permanent: true,
-    },
-  };
-};

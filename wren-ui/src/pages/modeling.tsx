@@ -10,6 +10,7 @@ import MetricDrawer from '@/components/pages/modeling/MetricDrawer';
 import ViewDrawer from '@/components/pages/modeling/ViewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { useManifestQuery } from '@/apollo/client/graphql/manifest.generated';
+import { useWithOnboarding } from '@/hooks/useCheckOnboarding';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -23,6 +24,7 @@ const DiagramWrapper = styled.div`
 `;
 
 export function Modeling() {
+  const { loading } = useWithOnboarding();
   const diagramRef = useRef(null);
 
   const { data } = useManifestQuery();
@@ -73,7 +75,7 @@ export function Modeling() {
 
   return (
     <SiderLayout
-      loading={adaptedManifest === null}
+      loading={adaptedManifest === null || loading}
       sidebar={{
         data: adaptedManifest,
         onSelect,

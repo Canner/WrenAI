@@ -5,6 +5,7 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
+import { useWithOnboarding } from '@/hooks/useCheckOnboarding';
 
 const testData = {
   status: 'searching',
@@ -54,7 +55,9 @@ const demoData = [
 ];
 
 export default function Ask() {
+  const { loading } = useWithOnboarding();
   const homeSidebar = useHomeSidebar();
+
   // TODO: adjust when intergrating with API
   const [simulateData, setSimulateData] = useState(testData);
   const isDemo = true;
@@ -79,7 +82,7 @@ export default function Ask() {
   };
 
   return (
-    <SiderLayout loading={false} sidebar={homeSidebar}>
+    <SiderLayout loading={loading} sidebar={homeSidebar}>
       <div
         className="d-flex align-center justify-center flex-column"
         style={{ height: '100%' }}
