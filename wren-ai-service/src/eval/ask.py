@@ -285,7 +285,7 @@ if __name__ == "__main__":
         user_id = str(uuid.uuid4())
         max_workers = os.cpu_count() // 2 if with_trace else None
         user_id = str(uuid.uuid4()) if with_trace else None
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             args_list = [
                 (ground_truth["question"], user_id) for ground_truth in ground_truths
             ]
