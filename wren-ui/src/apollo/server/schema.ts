@@ -239,6 +239,79 @@ export const typeDefs = gql`
     timeGrain: [TimeGrainInput!]!
   }
 
+  # Task
+  type Task {
+    id: String!
+  }
+
+  # Error
+  type Error {
+    code: String
+    message: String
+  }
+
+  # Asking Task
+  input AskingTaskInput {
+    question: String!
+    # Used for follow-up questions
+    threadId: String
+  }
+
+  enum AskingTaskStatus {
+    UNDERSTANDING
+    SEARCHING
+    GENERATING
+    FINISHED
+    FAILED
+    STOPPED
+  }
+
+  type AskingTaskResult {
+    sql: String!
+    summary: String!
+  }
+
+  type AskingTask {
+    status: AskingTaskStatus!
+    error: Error
+    result: AskingTaskResult
+  }
+
+  # Thread
+  input CreateThreadInput {
+    question: String!
+    sql: String!
+    summary: String!
+  }
+
+  type DetailStep {
+    summary: String!
+    sql: String!
+    cteName: String!
+  }
+
+  type ThreadResponseDetail {
+    sql: String!
+    summary: String!
+    steps: [DetailStep!]!
+  }
+
+  type ThreadResponse {
+    id: Int!
+    question: String!
+    status: AskingTaskStatus!
+    detail: ThreadResponseDetail
+    error: Error
+  }
+
+  type Thread {
+    id: Int!
+    sql: String!
+    summary: String!
+    responses: [ThreadResponse!]!
+  }
+
+  # Query and Mutation
   type Query {
     # On Boarding Steps
     usableDataSource: [UsableDataSource!]!
@@ -251,6 +324,12 @@ export const typeDefs = gql`
     listModels: [ModelInfo!]!
     model(where: ModelWhereInput!): DetailedModel!
     modelSync: ModelSyncResponse
+
+    # Ask
+    askingTask(taskId: String!): AskingTask!
+    threads: [Thread!]!
+    thread(threadId: String!): Thread!
+    threadResponse(responseId: String!): ThreadResponse!
   }
 
   type Mutation {
@@ -265,5 +344,12 @@ export const typeDefs = gql`
     createModel(data: CreateModelInput!): JSON!
     updateModel(where: ModelWhereInput!, data: UpdateModelInput!): JSON!
     deleteModel(where: ModelWhereInput!): Boolean!
+
+    # Ask
+    createAskingTask(input: AskingTaskInput!): Task!
+    cancelAskingTask(queryId: String!): Boolean!
+
+    # Thread
+    createThread(input: CreateThreadInput!): Thread!
   }
 `;
