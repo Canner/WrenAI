@@ -1,6 +1,6 @@
 import { ReactFlowInstance, useReactFlow } from 'reactflow';
 import styled from 'styled-components';
-import MarkerHandle from './MarkerHandle';
+import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
 
 const NodeColumn = styled.div`
   position: relative;
@@ -41,16 +41,9 @@ export const ColumnTitle = styled.div`
 `;
 
 type ColumnProps = {
-  id: string;
+  id: number | string;
   type: string;
   displayName: string;
-  properties: {
-    [key: string]: any;
-    description?: string;
-  };
-  relation?: any;
-  isCalculated?: boolean;
-  expression?: string;
   style?: React.CSSProperties;
   icon: React.ReactNode;
   append?: React.ReactNode;
@@ -87,7 +80,7 @@ export default function Column(props: ColumnProps) {
         <span title={displayName}>{displayName}</span>
       </div>
       {append}
-      <MarkerHandle id={id} />
+      <MarkerHandle id={id.toString()} />
     </NodeColumn>
   );
 

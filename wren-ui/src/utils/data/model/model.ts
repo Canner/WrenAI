@@ -5,7 +5,7 @@ import { Relationship, ModelColumn, Model, Manifest } from '@/utils/data/type';
 export class ModelData {
   public readonly nodeType: NODE_TYPE = NODE_TYPE.MODEL;
 
-  public readonly id: string;
+  public readonly id: number;
   public readonly displayName: string;
   public readonly referenceName: string;
   public readonly sourceTableName: string;

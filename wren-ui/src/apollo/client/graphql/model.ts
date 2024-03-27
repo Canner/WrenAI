@@ -1,54 +1,90 @@
 import { gql } from '@apollo/client';
 
+const COMMON_COLUMN = gql`
+  fragment CommonColumn on DetailedColumn {
+    displayName
+    referenceName
+    sourceColumnName
+    type
+    isCalculated
+    notNull
+    properties
+  }
+`;
+
+const COMMON_FIELD = gql`
+  fragment CommonField on FieldInfo {
+    id
+    displayName
+    referenceName
+    sourceColumnName
+    type
+    isCalculated
+    notNull
+    expression
+    properties
+  }
+`;
+
+const COMMON_RELATION = gql`
+  fragment CommonRelation on DetailedRelation {
+    fromModelId
+    fromColumnId
+    toModelId
+    toColumnId
+    type
+    name
+  }
+`;
+
 export const LIST_MODELS = gql`
   query ListModels {
     listModels {
       id
+      displayName
       referenceName
       sourceTableName
-      displayName
-      fields {
-        id
-        referenceName
-      }
-      cached
-      primaryKey
-      refreshTime
       refSql
+      primaryKey
+      cached
+      refreshTime
+      description
+      fields {
+        ...CommonField
+      }
+      calculatedFields {
+        ...CommonField
+      }
     }
   }
+  ${COMMON_FIELD}
 `;
 
 export const GET_MODEL = gql`
   query GetModel($where: ModelWhereInput!) {
     model(where: $where) {
-      referenceName
       displayName
+      referenceName
       sourceTableName
       refSql
       primaryKey
       cached
       refreshTime
+      description
       fields {
-        referenceName
-        displayName
-        sourceColumnName
-        type
-        isCalculated
-        notNull
-        # properties
+        ...CommonColumn
+      }
+      calculatedFields {
+        ...CommonColumn
       }
       relations {
-        fromModelId
-        fromColumnId
-        toModelId
-        toColumnId
-        type
-        name
+        ...CommonRelation
       }
-      # properties
+      properties
     }
   }
+  ${COMMON_COLUMN}
+  ${COMMON_RELATION}
 `;
 
 export const CREATE_MODEL = gql`

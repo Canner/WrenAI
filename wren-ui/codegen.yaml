@@ -9,6 +9,9 @@ generates:
       - typescript
       - typescript-operations
       - typescript-react-apollo
+    config:
+      namingConvention:
+        enumValues: keep
   ./:
     preset: near-operation-file
     presetConfig:

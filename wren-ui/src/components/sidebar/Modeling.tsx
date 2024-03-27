@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 import SidebarTree from './SidebarTree';
 import ModelTree from './modeling/ModelTree';
-import { AdaptedData } from '@/utils/data';
+import { Diagram } from '@/utils/data';
 
 export const StyledSidebarTree = styled(SidebarTree)`
   .ant-tree-title {
@@ -25,7 +25,7 @@ export const StyledSidebarTree = styled(SidebarTree)`
 `;
 
 export interface Props {
-  data: AdaptedData;
+  data: Diagram;
   onSelect: (selectKeys) => void;
 }
 

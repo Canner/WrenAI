@@ -1,10 +1,10 @@
 import { Edge, Node, Position } from 'reactflow';
 import { EDGE_TYPE, MARKER_TYPE, NODE_TYPE, JOIN_TYPE } from '@/utils/enum';
 import {
-  ModelData,
-  ModelColumnData,
-  RelationData,
-  AdaptedData,
+  ComposeDiagram,
+  Diagram,
+  DiagramModel,
+  DiagramModelRelationField,
 } from '@/utils/data';
 
 export const Config = {
@@ -44,17 +44,15 @@ const getLimitedColumnsLengthProps = (columns: any[]) => {
   };
 };
 
-type ComposeData = ModelData;
-
 type NodeWithData = Node<{
-  originalData: ComposeData;
+  originalData: ComposeDiagram;
   index: number;
   // highlight column ids inside
   highlight: string[];
 }>;
 
 type EdgeWithData = Edge<{
-  relation?: RelationData;
+  relation?: DiagramModelRelationField;
   highlight: boolean;
 }>;
 
@@ -62,7 +60,7 @@ type StartPoint = { x: number; y: number; floor: number };
 
 export class Transformer {
   private readonly config: typeof Config = Config;
-  private models: ModelData[];
+  private models: DiagramModel[];
   public nodes: NodeWithData[] = [];
   public edges: Edge[] = [];
   private start: StartPoint = {
@@ -71,7 +69,7 @@ export class Transformer {
     floor: 0,
   };
 
-  constructor(data: AdaptedData) {
+  constructor(data: Diagram) {
     this.models = data?.models || [];
     this.init();
   }
@@ -83,7 +81,7 @@ export class Transformer {
     }
   }
 
-  public addOne(data: ComposeData) {
+  public addOne(data: ComposeDiagram) {
     const { nodeType } = data;
     // set position
     const nodeX = this.start.x;
@@ -109,7 +107,9 @@ export class Transformer {
       const models = this.models.slice(lastFloorIndex, lastFloorIndex + 4);
 
       const modelWithMostColumns = models.reduce((prev, current) => {
-        return prev.columns.length > current.columns.length ? prev : current;
+        const prevColumns = [...prev.fields, ...prev.calculatedFields];
+        const currentColumns = [...current.fields, ...current.calculatedFields];
+        return prevColumns.length > currentColumns.length ? prev : current;
       }, models[0]);
 
       floorHeight = this.getNodeHeight(modelWithMostColumns) + marginY;
@@ -122,7 +122,7 @@ export class Transformer {
 
   private createNode(props: {
     nodeType: NODE_TYPE | string;
-    data: ComposeData;
+    data: ComposeDiagram;
     x: number;
     y: number;
   }): NodeWithData {
@@ -130,7 +130,7 @@ export class Transformer {
     // check nodeType and add edge
     switch (nodeType) {
       case NODE_TYPE.MODEL:
-        this.addModelEdge(data as ModelData);
+        this.addModelEdge(data);
         break;
       default:
         break;
@@ -149,62 +149,65 @@ export class Transformer {
     };
   }
 
-  private addModelEdge(data: ModelData) {
-    const { columns } = data;
-    for (const column of columns) {
-      if (column?.relation) {
-        // check if edge already exist
-        const hasEdgeExist = this.edges.some((edge) => {
-          const [id] = (edge.targetHandle || '').split('_');
-          return id === column.id;
-        });
-        if (hasEdgeExist) break;
+  private addModelEdge(data: DiagramModel) {
+    const { relationFields } = data;
+    for (const relationField of relationFields) {
+      // check if edge already exist
+      const hasEdgeExist = this.edges.some((edge) => {
+        const [id] = (edge.targetHandle || '').split('_');
+        return id === relationField.id;
+      });
+      if (hasEdgeExist) break;
 
-        // prepare to add new edge
-        const targetModel = this.models.find(
-          (model) =>
-            model.id !== data.id &&
-            column.relation?.models.includes(model.referenceName),
-        )!;
-        const targetColumn = targetModel?.columns.find(
-          (targetColumn) =>
-            targetColumn.relation?.referenceName ===
-            column.relation?.referenceName,
-        );
+      // prepare to add new edge
+      const targetModel = this.models.find(
+        (model) =>
+          model.id !== data.id &&
+          [relationField.fromModelName, relationField.toModelName].includes(
+            model.referenceName,
+          ),
+      )!;
+      const targetField = targetModel.relationFields.find(
+        (field) =>
+          [field.fromColumnName, field.toColumnName].toString() ===
+          [relationField.fromColumnName, relationField.toColumnName].toString(),
+      );
 
-        // check what source and target relation order
-        const { joinType, models } = column.relation;
-        const sourceJoinIndex = models.findIndex(
-          (name) => name === data.referenceName,
-        );
-        const targetJoinIndex = models.findIndex(
-          (name) => name === targetModel?.referenceName,
-        );
+      // check what source and target relation order
+      const relationModels = [
+        relationField.fromModelName,
+        relationField.toModelName,
+      ];
+      const sourceJoinIndex = relationModels.findIndex(
+        (name) => name === data.referenceName,
+      );
+      const targetJoinIndex = relationModels.findIndex(
+        (name) => name === targetModel?.referenceName,
+      );
 
-        targetModel &&
-          this.edges.push(
-            this.createEdge({
-              type: EDGE_TYPE.MODEL,
-              joinType,
-              sourceModel: data,
-              sourceColumn: column,
-              sourceJoinIndex,
-              targetModel,
-              targetColumn,
-              targetJoinIndex,
-            }),
-          );
-      }
+      targetModel &&
+        this.edges.push(
+          this.createEdge({
+            type: EDGE_TYPE.MODEL,
+            joinType: relationField.type,
+            sourceModel: data,
+            sourceField: relationField,
+            sourceJoinIndex,
+            targetModel,
+            targetField,
+            targetJoinIndex,
+          }),
+        );
     }
   }
 
   private createEdge(props: {
     type?: EDGE_TYPE;
-    sourceModel: ComposeData;
-    sourceColumn?: ModelColumnData;
+    sourceModel: ComposeDiagram;
+    sourceField?: DiagramModelRelationField;
     sourceJoinIndex?: number;
-    targetModel: ComposeData;
-    targetColumn?: ModelColumnData;
+    targetModel: ComposeDiagram;
+    targetField?: DiagramModelRelationField;
     targetJoinIndex?: number;
     joinType?: JOIN_TYPE | string;
     animated?: boolean;
@@ -212,10 +215,10 @@ export class Transformer {
     const {
       type,
       sourceModel,
-      sourceColumn,
+      sourceField,
       sourceJoinIndex,
       targetModel,
-      targetColumn,
+      targetField,
       targetJoinIndex,
       joinType,
       animated,
@@ -223,8 +226,8 @@ export class Transformer {
     const source = sourceModel.id;
     const target = targetModel.id;
     const [sourcePos, targetPos] = this.detectEdgePosition(source, target);
-    const sourceHandle = `${sourceColumn?.id || source}_${sourcePos}`;
-    const targetHandle = `${targetColumn?.id || target}_${targetPos}`;
+    const sourceHandle = `${sourceField?.id || source}_${sourcePos}`;
+    const targetHandle = `${targetField?.id || target}_${targetPos}`;
 
     const markerStart = this.getMarker(joinType!, sourceJoinIndex!, sourcePos);
     const markerEnd = this.getMarker(joinType!, targetJoinIndex!, targetPos);
@@ -239,7 +242,7 @@ export class Transformer {
       markerStart,
       markerEnd,
       data: {
-        relation: (sourceColumn as ModelColumnData)?.relation,
+        relation: sourceField,
         highlight: false,
       },
       animated,
@@ -295,7 +298,7 @@ export class Transformer {
     return this.config.width;
   }
 
-  private getNodeHeight(model: ModelData) {
+  private getNodeHeight(model: DiagramModel) {
     const {
       height: nodeHeight,
       headerHeight,
@@ -304,10 +307,8 @@ export class Transformer {
       moreTipHeight,
     } = this.config;
 
-    const fields = model.columns.filter((column) => !column.relation);
-
     const { limitedLength: fieldsLength, isOverLimit: isFieldsOverLimit } =
-      getLimitedColumnsLengthProps(fields);
+      getLimitedColumnsLengthProps(model.fields);
     const {
       limitedLength: relationFieldsLength,
       isOverLimit: isRelationsOverLimit,

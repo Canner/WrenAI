@@ -47,28 +47,27 @@ export const COLUMN = {
   },
   RELATION_FROM: {
     title: 'From',
-    dataIndex: 'fromField',
     key: 'fromField',
     ellipsis: true,
-    render: (fromField) => `${fromField.model}.${fromField.field}`,
+    render: (relation) =>
+      `${relation.fromModelName}.${relation.fromColumnName}`,
   },
   RELATION_TO: {
     title: 'To',
-    dataIndex: 'toField',
     key: 'toField',
     ellipsis: true,
-    render: (toField) => `${toField.model}.${toField.field}`,
+    render: (relation) => `${relation.toModelName}.${relation.toColumnName}`,
   },
   RELATION: {
     title: 'Relation type',
-    dataIndex: 'joinType',
+    dataIndex: 'type',
     key: 'joinType',
     width: 130,
     render: (joinType) => getJoinTypeText(joinType),
   },
   DESCRIPTION: {
     title: 'Description',
-    dataIndex: ['properties', 'description'],
+    dataIndex: 'description',
     key: 'description',
     width: 200,
     ellipsis: true,

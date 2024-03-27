@@ -8,12 +8,12 @@ export interface Props {
   sourceTableName: string;
   fields: any[];
   calculatedFields: any[];
-  relations: any[];
+  relationFields: any[];
   properties: Record<string, any>;
 }
 
 export default function ModelMetadata(props: Props) {
-  const { referenceName, fields = [], relations = [] } = props || {};
+  const { referenceName, fields = [], relationFields = [] } = props || {};
 
   return (
     <>
@@ -31,9 +31,9 @@ export default function ModelMetadata(props: Props) {
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
-          Relations ({relations.length})
+          Relations ({relationFields.length})
         </Typography.Text>
-        <RelationTable dataSource={relations} />
+        <RelationTable dataSource={relationFields} />
       </div>
     </>
   );

@@ -76,8 +76,8 @@ export type DataSourceInput = {
 };
 
 export enum DataSourceName {
-  BigQuery = 'BIG_QUERY',
-  Duckdb = 'DUCKDB'
+  BIG_QUERY = 'BIG_QUERY',
+  DUCKDB = 'DUCKDB'
 }
 
 export type DetailedColumn = {
@@ -114,6 +114,56 @@ export type DetailedRelation = {
   name: Scalars['String'];
   toColumnId: Scalars['Int'];
   toModelId: Scalars['Int'];
+  type: RelationType;
+};
+
+export type Diagram = {
+  __typename?: 'Diagram';
+  models: Array<Maybe<DiagramModel>>;
+};
+
+export type DiagramModel = {
+  __typename?: 'DiagramModel';
+  cached: Scalars['Boolean'];
+  calculatedFields: Array<Maybe<DiagramModelField>>;
+  description?: Maybe<Scalars['String']>;
+  displayName: Scalars['String'];
+  fields: Array<Maybe<DiagramModelField>>;
+  id: Scalars['String'];
+  modelId: Scalars['Int'];
+  nodeType: NodeType;
+  refSql: Scalars['String'];
+  referenceName: Scalars['String'];
+  refreshTime?: Maybe<Scalars['String']>;
+  relationFields: Array<Maybe<DiagramModelRelationField>>;
+  sourceTableName: Scalars['String'];
+};
+
+export type DiagramModelField = {
+  __typename?: 'DiagramModelField';
+  columnId: Scalars['Int'];
+  description?: Maybe<Scalars['String']>;
+  displayName: Scalars['String'];
+  expression?: Maybe<Scalars['String']>;
+  id: Scalars['String'];
+  isPrimaryKey: Scalars['Boolean'];
+  nodeType: NodeType;
+  referenceName: Scalars['String'];
+  type: Scalars['String'];
+};
+
+export type DiagramModelRelationField = {
+  __typename?: 'DiagramModelRelationField';
+  description?: Maybe<Scalars['String']>;
+  displayName: Scalars['String'];
+  fromColumnName: Scalars['String'];
+  fromModelName: Scalars['String'];
+  id: Scalars['String'];
+  nodeType: NodeType;
+  referenceName: Scalars['String'];
+  relationId: Scalars['Int'];
+  toColumnName: Scalars['String'];
+  toModelName: Scalars['String'];
   type: RelationType;
 };
 
@@ -216,11 +266,18 @@ export type MutationUpdateModelArgs = {
   where: ModelWhereInput;
 };
 
+export enum NodeType {
+  CALCULATED_FIELD = 'CALCULATED_FIELD',
+  FIELD = 'FIELD',
+  MODEL = 'MODEL',
+  RELATION = 'RELATION'
+}
+
 export enum OnboardingStatus {
-  DatasourceSaved = 'DATASOURCE_SAVED',
-  NotStarted = 'NOT_STARTED',
-  OnboardingFinished = 'ONBOARDING_FINISHED',
-  WithSampleDataset = 'WITH_SAMPLE_DATASET'
+  DATASOURCE_SAVED = 'DATASOURCE_SAVED',
+  NOT_STARTED = 'NOT_STARTED',
+  ONBOARDING_FINISHED = 'ONBOARDING_FINISHED',
+  WITH_SAMPLE_DATASET = 'WITH_SAMPLE_DATASET'
 }
 
 export type OnboardingStatusResponse = {
@@ -231,9 +288,9 @@ export type OnboardingStatusResponse = {
 export type Query = {
   __typename?: 'Query';
   autoGenerateRelation?: Maybe<Array<RecommandRelations>>;
+  diagram: Diagram;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
-  manifest: Scalars['JSON'];
   model: DetailedModel;
   modelSync?: Maybe<ModelSyncResponse>;
   onboardingStatus: OnboardingStatusResponse;
@@ -275,10 +332,10 @@ export type RelationInput = {
 };
 
 export enum RelationType {
-  ManyToMany = 'MANY_TO_MANY',
-  ManyToOne = 'MANY_TO_ONE',
-  OneToMany = 'ONE_TO_MANY',
-  OneToOne = 'ONE_TO_ONE'
+  MANY_TO_MANY = 'MANY_TO_MANY',
+  MANY_TO_ONE = 'MANY_TO_ONE',
+  ONE_TO_MANY = 'ONE_TO_MANY',
+  ONE_TO_ONE = 'ONE_TO_ONE'
 }
 
 export type SampleDatasetInput = {
@@ -286,9 +343,9 @@ export type SampleDatasetInput = {
 };
 
 export enum SampleDatasetName {
-  Ecommerce = 'ECOMMERCE',
-  Music = 'MUSIC',
-  Nba = 'NBA'
+  ECOMMERCE = 'ECOMMERCE',
+  MUSIC = 'MUSIC',
+  NBA = 'NBA'
 }
 
 export type SaveRelationInput = {

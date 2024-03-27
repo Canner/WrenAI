@@ -13,10 +13,10 @@ import Column, { ColumnTitle } from './Column';
 import CustomDropdown from '../CustomDropdown';
 import { MetricIcon, MoreIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
-import { MetricColumnData, MetricData } from '@/utils/data';
+import { ComposeDiagramField } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 
-export const MetricNode = ({ data }: CustomNodeProps<MetricData>) => {
+export const MetricNode = ({ data }: CustomNodeProps<any>) => {
   const context = useContext(DiagramContext);
   const onMoreClick = (type: MORE_ACTION) => {
     context?.onMoreClick({
@@ -75,7 +75,7 @@ export const MetricNode = ({ data }: CustomNodeProps<MetricData>) => {
 
 export default memo(MetricNode);
 
-function getColumns(columns: MetricColumnData[]) {
+function getColumns(columns: ComposeDiagramField[]) {
   return columns.map((column) => (
     <Column
       key={column.id}
