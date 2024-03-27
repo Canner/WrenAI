@@ -32,6 +32,13 @@ def load_env_vars() -> str:
     return "dev" if is_dev_env else "prod"
 
 
+def remove_limit_statement(sql: str) -> str:
+    pattern = r"\s*LIMIT\s+\d+(\s*;?\s*--.*|\s*;?\s*)$"
+    modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
+
+    return modified_sql
+
+
 def classify_invalid_generation_results(
     api_endpoint: str,
     generation_results: List[Dict[str, str]],
@@ -43,7 +50,7 @@ def classify_invalid_generation_results(
         response = requests.get(
             f"{api_endpoint}/v1/mdl/preview",
             json={
-                "sql": generation_result["sql"],
+                "sql": remove_limit_statement(generation_result["sql"]),
                 "limit": 1,
             },
         )
@@ -68,7 +75,7 @@ def check_if_sql_executable(
     response = requests.get(
         f"{api_endpoint}/v1/mdl/preview",
         json={
-            "sql": sql,
+            "sql": remove_limit_statement(sql),
             "limit": 1,
         },
     )
