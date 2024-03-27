@@ -3,7 +3,7 @@ import { Table, TableProps } from 'antd';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import CodeBlock from '@/components/editor/CodeBlock';
 import { getColumnTypeIcon } from '@/utils/columnType';
-import { ModelColumnData, getJoinTypeText } from '@/utils/data';
+import { ComposeDiagramField, getJoinTypeText } from '@/utils/data';
 
 export const COLUMN = {
   DISPLAY_NAME: {
@@ -75,7 +75,7 @@ export const COLUMN = {
   },
 };
 
-type BaseTableProps = TableProps<ModelColumnData>;
+type BaseTableProps = TableProps<ComposeDiagramField>;
 
 export type Props = BaseTableProps & {
   actionColumns?: BaseTableProps['columns'];
