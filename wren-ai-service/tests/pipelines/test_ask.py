@@ -13,7 +13,9 @@ from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
 from src.web.v1.services.ask import AskResultResponse
 
-from ..conftest import ValueStorage
+GLOBAL_DATA = {
+    "contexts": None,
+}
 
 
 @pytest.fixture
@@ -50,7 +52,7 @@ def test_retrieval_pipeline(document_store: Any):
     assert retrieval_result is not None
     assert len(retrieval_result["retriever"]["documents"]) > 0
 
-    ValueStorage.contexts = retrieval_result["retriever"]["documents"]
+    GLOBAL_DATA["contexts"] = retrieval_result["retriever"]["documents"]
 
 
 def test_generation_pipeline():
@@ -59,7 +61,7 @@ def test_generation_pipeline():
     )
     generation_result = generation_pipeline.run(
         "How many authors are there?",
-        contexts=ValueStorage.contexts,
+        contexts=GLOBAL_DATA["contexts"],
     )
 
     assert AskResultResponse.AskResult(
@@ -73,7 +75,7 @@ def test_sql_correction_pipeline():
     )
 
     sql_correction_result = sql_correction_pipeline.run(
-        contexts=ValueStorage.contexts,
+        contexts=GLOBAL_DATA["contexts"],
         invalid_generation_results=[
             {
                 "sql": "Select count(*) from books",

@@ -5,7 +5,10 @@ from fastapi.testclient import TestClient
 
 from src.__main__ import app
 
-from .conftest import ValueStorage
+GLOBAL_DATA = {
+    "semantics_preperation_id": str(uuid.uuid4()),
+    "query_id": None,
+}
 
 
 def test_semantics_description():
@@ -50,8 +53,7 @@ def test_semantics_description():
 
 def test_semantics_preparations():
     with TestClient(app) as client:
-        semantics_preperation_id = str(uuid.uuid4())
-        ValueStorage.semantics_preperation_id = semantics_preperation_id
+        semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
 
         with open("tests/data/book_2_mdl.json", "r") as f:
             mdl_str = json.dumps(json.load(f))
@@ -83,7 +85,7 @@ def test_semantics_preparations():
 
 def test_asks():
     with TestClient(app) as client:
-        semantics_preparation_id = ValueStorage.semantics_preperation_id
+        semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
 
         response = client.post(
             url="/v1/asks",
@@ -97,7 +99,7 @@ def test_asks():
         assert response.json()["query_id"] != ""
 
         query_id = response.json()["query_id"]
-        ValueStorage.query_id = query_id
+        GLOBAL_DATA["query_id"] = query_id
 
         response = client.get(url=f"/v1/asks/{query_id}/result/")
         while (
@@ -117,7 +119,7 @@ def test_asks():
 
 def test_stop_asks():
     with TestClient(app) as client:
-        query_id = ValueStorage.query_id
+        query_id = GLOBAL_DATA["query_id"]
 
         response = client.patch(
             url=f"/v1/asks/{query_id}",
