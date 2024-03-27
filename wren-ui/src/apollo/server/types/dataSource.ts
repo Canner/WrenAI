@@ -1,5 +1,6 @@
 export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
+  DUCKDB = 'DUCKDB',
 }
 
 interface BaseDataSource {
@@ -13,6 +14,10 @@ export interface UsableDataSource extends BaseDataSource {
 export interface DataSource {
   type: DataSourceName;
   properties: any;
+}
+
+export interface SampleDatasetData {
+  name: string;
 }
 
 export interface BigQueryDataSourceOptions {

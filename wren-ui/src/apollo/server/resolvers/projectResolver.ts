@@ -12,9 +12,20 @@ import {
   RelationData,
   AnalysisRelationInfo,
   RelationType,
+  CompactTable,
+  SampleDatasetData,
 } from '../types';
 import { getLogger, Encryptor } from '@server/utils';
 import { Model, ModelColumn, Project, Relation } from '../repositories';
+import {
+  DuckDBConnector,
+  DuckDBListTableOptions,
+  DuckDBPrepareOptions,
+} from '../connectors/duckdbConnector';
+import { IConnector } from '../connectors/connector';
+import { sampleDatasets } from '@server/data';
+import { snakeCase } from 'lodash';
+import { toBase64 } from '@server/utils';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -34,6 +45,34 @@ export class ProjectResolver {
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
+    this.startSampleDataset = this.startSampleDataset.bind(this);
+  }
+
+  public async startSampleDataset(
+    _root: any,
+    _arg: { data: SampleDatasetData },
+    ctx: IContext,
+  ) {
+    const { name } = _arg.data;
+    logger.debug({ name: snakeCase(name) });
+    const dataset = sampleDatasets[snakeCase(name)];
+    if (!dataset) {
+      throw new Error('Sample dataset not found');
+    }
+    const duckdbDatasourceProperties = {
+      initSql: dataset.initSql,
+      extensions: [],
+      configurations: {},
+    };
+    const project = await this.saveDuckDBDataSource(
+      duckdbDatasourceProperties,
+      ctx,
+    );
+    const tables = await this.listDataSourceTables(_root, _arg, ctx);
+    const tableNames = tables.map((table) => table.name);
+    await this.saveTables(_root, { data: { tables: tableNames } }, ctx);
+    await ctx.projectRepository.updateOne(project.id, { sampleDataset: name });
+    return { name };
   }
 
   public async getOnboardingStatus(_root: any, _arg: any, ctx: IContext) {
@@ -73,19 +112,34 @@ export class ProjectResolver {
     const { type, properties } = args.data;
     if (type === DataSourceName.BIG_QUERY) {
       await this.saveBigQueryDataSource(properties, ctx);
-      return args.data;
+    } else if (type === DataSourceName.DUCKDB) {
+      await this.saveDuckDBDataSource(properties, ctx);
     }
+    return args.data;
   }
 
   public async listDataSourceTables(_root: any, _arg, ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
-    const filePath = await ctx.projectService.getCredentialFilePath(project);
-    const connector = await this.getBQConnector(project, filePath);
-    const listTableOptions: BQListTableOptions = {
-      datasetId: project.datasetId,
-      format: true,
-    };
-    return await connector.listTables(listTableOptions);
+    let connector: IConnector<any, any>;
+    let listTableOptions: any;
+    if (project.type === DataSourceName.BIG_QUERY) {
+      const filePath = await ctx.projectService.getCredentialFilePath(project);
+      connector = await this.getBQConnector(project, filePath);
+      listTableOptions = {
+        datasetId: project.datasetId,
+        format: true,
+      } as BQListTableOptions;
+    } else {
+      connector = new DuckDBConnector({
+        wrenEngineAdaptor: ctx.wrenEngineAdaptor,
+      });
+      listTableOptions = { format: true } as DuckDBListTableOptions;
+    }
+    const tables = (await connector.listTables(
+      listTableOptions,
+    )) as CompactTable[];
+    logger.debug(tables);
+    return tables;
   }
 
   public async saveTables(
@@ -99,52 +153,87 @@ export class ProjectResolver {
 
     // get current project
     const project = await ctx.projectService.getCurrentProject();
-    const filePath = await ctx.projectService.getCredentialFilePath(project);
     const projectId = project.id;
 
     // get columns with descriptions
-    const connector = await this.getBQConnector(project, filePath);
-    const listTableOptions: BQListTableOptions = {
-      datasetId: project.datasetId,
-      format: false,
-    };
-    const dataSourceColumns = await connector.listTables(listTableOptions);
+    let connector: IConnector<any, any>;
+    let listTableOptions: any;
+    let dataSourceColumns: any;
+    if (project.type === DataSourceName.BIG_QUERY) {
+      const filePath = await ctx.projectService.getCredentialFilePath(project);
+      connector = await this.getBQConnector(project, filePath);
+      listTableOptions = {
+        datasetId: project.datasetId,
+        format: false,
+      } as BQListTableOptions;
+      dataSourceColumns = (await connector.listTables(
+        listTableOptions,
+      )) as BQColumnResponse[];
+    } else {
+      connector = new DuckDBConnector({
+        wrenEngineAdaptor: ctx.wrenEngineAdaptor,
+      });
+      listTableOptions = { format: true } as DuckDBListTableOptions;
+      dataSourceColumns = (await connector.listTables(
+        listTableOptions,
+      )) as CompactTable[];
+    }
 
     // delete existing models and columns
     await this.resetCurrentProjectModel(ctx, projectId);
 
     // create models
-    const tableDescriptions = (dataSourceColumns as BQColumnResponse[])
-      .filter((col) => col.table_description)
-      .reduce((acc, column) => {
-        acc[column.table_name] = column.table_description;
-        return acc;
-      }, {});
-    const models = await this.createModels(
-      tables,
-      projectId,
-      ctx,
-      tableDescriptions,
-    );
-    // create columns
-    const columns = await this.createAllColumnsInDataSource(
-      tables,
-      models,
-      dataSourceColumns as BQColumnResponse[],
-      ctx,
-    );
-
+    let models: Model[];
+    let columns: ModelColumn[];
+    if (project.type === DataSourceName.BIG_QUERY) {
+      models = await this.createBigQueryModels(
+        project,
+        tables,
+        projectId,
+        ctx,
+        dataSourceColumns,
+      );
+      // create columns
+      columns = await this.createBigQueryColumns(
+        tables,
+        models,
+        dataSourceColumns as BQColumnResponse[],
+        ctx,
+      );
+    } else {
+      models = await this.createDuckDBModels(
+        tables,
+        projectId,
+        ctx,
+        dataSourceColumns as CompactTable[],
+      );
+      logger.debug({ models });
+      // create columns
+      columns = await this.createDuckDBColumns(
+        tables,
+        models,
+        dataSourceColumns as CompactTable[],
+        ctx,
+      );
+    }
     this.deploy(ctx);
     return { models: models, columns };
   }
 
   public async autoGenerateRelation(_root: any, _arg: any, ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
-    const filePath = await ctx.projectService.getCredentialFilePath(project);
     const models = await ctx.modelRepository.findAllBy({
       projectId: project.id,
     });
-
+    // Duckdb: skip auto generate relation
+    if (project.type === DataSourceName.DUCKDB) {
+      return models.map(({ id, sourceTableName }) => ({
+        id,
+        name: sourceTableName,
+        relations: [],
+      }));
+    }
+    const filePath = await ctx.projectService.getCredentialFilePath(project);
     const connector = await this.getBQConnector(project, filePath);
     const listConstraintOptions = {
       datasetId: project.datasetId,
@@ -279,7 +368,7 @@ export class ProjectResolver {
     return new BQConnector(connectionOption);
   }
 
-  private async createAllColumnsInDataSource(
+  private async createBigQueryColumns(
     tables: string[],
     models: Model[],
     dataSourceColumns: BQColumnResponse[],
@@ -320,20 +409,65 @@ export class ProjectResolver {
     return columns;
   }
 
-  private async createModels(
+  private async createDuckDBColumns(
+    tables: string[],
+    models: Model[],
+    compactTables: CompactTable[],
+    ctx: IContext,
+  ) {
+    const columnValues = tables.reduce((acc, tableName) => {
+      const modelId = models.find((m) => m.sourceTableName === tableName)?.id;
+      if (!modelId) {
+        throw new Error(`Model not found: ${tableName}`);
+      }
+      const compactColumns = compactTables.find(
+        (table) => table.name === tableName,
+      )?.columns;
+      if (!compactColumns) {
+        throw new Error('Table not found');
+      }
+      for (const compactColumn of compactColumns) {
+        const columnName = compactColumn.name;
+        const columnValue = {
+          modelId,
+          isCalculated: false,
+          displayName: columnName,
+          sourceColumnName: columnName,
+          referenceName: columnName,
+          type: compactColumn.type || 'string',
+          notNull: compactColumn.notNull,
+          isPk: false,
+          properties: JSON.stringify(compactColumn.properties),
+        } as Partial<ModelColumn>;
+        acc.push(columnValue);
+      }
+      return acc;
+    }, []);
+    const columns = await ctx.modelColumnRepository.createMany(columnValues);
+    return columns;
+  }
+
+  private async createBigQueryModels(
+    project: Project,
     tables: string[],
     id: number,
     ctx: IContext,
-    tableDescriptions: { [key: string]: string },
+    dataSourceColumns: BQColumnResponse[],
   ) {
+    const tableDescriptionMap = dataSourceColumns
+      .filter((col) => col.table_description)
+      .reduce((acc, column) => {
+        acc[column.table_name] = column.table_description;
+        return acc;
+      }, {});
     const modelValues = tables.map((tableName) => {
-      const description = tableDescriptions[tableName];
+      const description = tableDescriptionMap[tableName];
       const model = {
         projectId: id,
         displayName: tableName, //use table name as displayName, referenceName and tableName
         referenceName: tableName,
         sourceTableName: tableName,
-        refSql: `select * from ${tableName}`,
+        refSql: `select * from "${project.datasetId}".${tableName}`,
         cached: false,
         refreshTime: null,
         properties: JSON.stringify({ description }),
@@ -341,12 +475,86 @@ export class ProjectResolver {
       return model;
     });
 
-    const models = await Promise.all(
-      modelValues.map(
-        async (modelValue) => await ctx.modelRepository.createOne(modelValue),
-      ),
-    );
+    const models = await ctx.modelRepository.createMany(modelValues);
     return models;
+  }
+
+  private async createDuckDBModels(
+    tables: string[],
+    id: number,
+    ctx: IContext,
+    compactTables: CompactTable[],
+  ) {
+    const modelValues = tables.map((tableName) => {
+      const compactTable = compactTables.find(
+        (table) => table.name === tableName,
+      );
+      const properties = compactTable.properties
+        ? JSON.stringify(compactTable.properties)
+        : null;
+      const model = {
+        projectId: id,
+        displayName: tableName, //use table name as displayName, referenceName and tableName
+        referenceName: tableName,
+        sourceTableName: tableName,
+        refSql: `select * from ${compactTable.properties.schema}.${tableName}`,
+        cached: false,
+        refreshTime: null,
+        properties,
+      } as Partial<Model>;
+      return model;
+    });
+
+    const models = await ctx.modelRepository.createMany(modelValues);
+    return models;
+  }
+
+  private async saveDuckDBDataSource(properties: any, ctx: IContext) {
+    const { displayName, extensions, configurations } = properties;
+    const initSql = this.concatInitSql(properties.initSql, extensions);
+    const connector = new DuckDBConnector({
+      wrenEngineAdaptor: ctx.wrenEngineAdaptor,
+    });
+
+    // prepare duckdb environment in wren-engine
+    const prepareOption = {
+      sessionProps: configurations,
+      initSql,
+    } as DuckDBPrepareOptions;
+    await connector.prepare(prepareOption);
+
+    // update wren-engine config
+    const config = {
+      'wren.datasource.type': 'duckdb',
+    };
+    await ctx.wrenEngineAdaptor.patchConfig(config);
+
+    // check DataSource is valid and can connect to it
+    const connected = await connector.connect();
+    if (!connected) {
+      throw new Error('Can not connect to data source');
+    }
+    // check can list dataset table
+    try {
+      await connector.listTables({ format: false });
+    } catch (_e) {
+      throw new Error('Can not list tables in dataset');
+    }
+
+    // remove existing datasource
+    await this.removeCurrentProject(ctx);
+
+    // save DataSource to database
+    const project = await ctx.projectRepository.createOne({
+      displayName,
+      schema: 'tbd',
+      catalog: 'tbd',
+      type: DataSourceName.DUCKDB,
+      initSql,
+      configurations,
+      extensions,
+    });
+    return project;
   }
 
   private async saveBigQueryDataSource(properties: any, ctx: IContext) {
@@ -363,6 +571,16 @@ export class ProjectResolver {
       keyFilename: filePath,
     };
     const connector = new BQConnector(connectionOption);
+    await connector.prepare();
+
+    // update wren-engine config
+    const wrenEngineConfig = {
+      'wren.datasource.type': 'bigquery',
+      'bigquery.project-id': projectId,
+      'bigquery.credentials-key': toBase64(JSON.stringify(credentials)),
+    };
+    await ctx.wrenEngineAdaptor.patchConfig(wrenEngineConfig);
+
     const connected = await connector.connect();
     if (!connected) {
       throw new Error('Can not connect to data source');
@@ -378,13 +596,7 @@ export class ProjectResolver {
     const encryptedCredentials = encryptor.encrypt(credentials);
 
     // remove existing datasource
-    try {
-      const currentProject = await ctx.projectRepository.getCurrentProject();
-      await this.resetCurrentProjectModel(ctx, currentProject.id);
-      await ctx.projectRepository.deleteOne(currentProject.id);
-    } catch (_err: any) {
-      // do nothing
-    }
+    await this.removeCurrentProject(ctx);
 
     // TODO: add displayName, schema, catalog to the DataSource, depends on the MDL structure
     const project = await ctx.projectRepository.createOne({
@@ -424,5 +636,24 @@ export class ProjectResolver {
     const modelIds = existsModels.map((m) => m.id);
     await ctx.modelColumnRepository.deleteByModelIds(modelIds);
     await ctx.modelRepository.deleteMany(modelIds);
+  }
+
+  private concatInitSql(initSql: string, extensions: string[]) {
+    const installExtensions = extensions
+      .map((ext) => `INSTALL ${ext};`)
+      .join('\n');
+    return `${installExtensions}\n${initSql}`;
+  }
+
+  private async removeCurrentProject(ctx) {
+    let currentProject: Project;
+    try {
+      currentProject = await ctx.projectRepository.getCurrentProject();
+    } catch (_err: any) {
+      // no project found
+      return;
+    }
+    await this.resetCurrentProjectModel(ctx, currentProject.id);
+    await ctx.projectRepository.deleteOne(currentProject.id);
   }
 }

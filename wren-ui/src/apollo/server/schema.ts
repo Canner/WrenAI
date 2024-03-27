@@ -5,6 +5,13 @@ export const typeDefs = gql`
 
   enum DataSourceName {
     BIG_QUERY
+    DUCKDB
+  }
+
+  enum SampleDatasetName {
+    ECOMMERCE
+    NBA
+    MUSIC
   }
 
   type UsableDataSource {
@@ -22,9 +29,14 @@ export const typeDefs = gql`
     properties: JSON!
   }
 
+  input SampleDatasetInput {
+    name: SampleDatasetName!
+  }
+
   type CompactTable {
     name: String!
     columns: [CompactColumn!]!
+    properties: JSON
   }
 
   input MDLModelSubmitInput {
@@ -84,6 +96,7 @@ export const typeDefs = gql`
   type CompactColumn {
     name: String!
     type: String!
+    properties: JSON
   }
 
   input CustomFieldInput {
@@ -243,6 +256,7 @@ export const typeDefs = gql`
   type Mutation {
     # On Boarding Steps
     saveDataSource(data: DataSourceInput!): DataSource!
+    startSampleDataset(data: SampleDatasetInput!): JSON!
     saveTables(data: SaveTablesInput!): JSON!
     saveRelations(data: SaveRelationInput!): JSON!
     deploy: JSON!

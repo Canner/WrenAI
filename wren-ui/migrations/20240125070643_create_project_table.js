@@ -13,11 +13,34 @@ exports.up = function (knex) {
     table.string('display_name').comment('project display name');
 
     // bq
-    table.string('project_id').comment('gcp project id, big query specific');
+    table
+      .string('project_id')
+      .nullable()
+      .comment('gcp project id, big query specific');
     table
       .text('credentials')
+      .nullable()
       .comment('project credentials, big query specific');
-    table.string('dataset_id').comment('big query datasetId');
+    table.string('dataset_id').nullable().comment('big query datasetId');
+
+    // duckdb
+    table
+      .jsonb('init_sql')
+      .nullable()
+      .comment('init sql for establishing duckdb environment');
+    // knex jsonb ref: https://knexjs.org/guide/schema-builder.html#json
+    table
+      .jsonb('extensions')
+      .nullable()
+      .comment(
+        'duckdb extensions, will be a array-like string like, eg: ["extension1", "extension2"]',
+      );
+    table
+      .jsonb('configurations')
+      .nullable()
+      .comment(
+        'duckdb configurations that can be set in session, eg: { "key1": "value1", "key2": "value2" }',
+      );
 
     // not sure to store or not, the catalog & schema in the manifest
     table.string('catalog').comment('catalog name');
