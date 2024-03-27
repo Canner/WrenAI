@@ -14,6 +14,7 @@ import * as demoManifest from './manifest.json';
 import { pick } from 'lodash';
 import { ProjectResolver } from './resolvers/projectResolver';
 import { ModelResolver } from './resolvers/modelResolver';
+import { DiagramResolver } from './resolvers/diagramResolver';
 
 const mockResolvers = {
   JSON: GraphQLJSON,
@@ -72,7 +73,6 @@ const mockResolvers = {
         },
       ] as CompactTable[],
     autoGenerateRelation: () => [],
-    manifest: () => demoManifest,
     listModels: () => {
       const { models } = demoManifest;
       return models.map((model) => ({
@@ -86,7 +86,7 @@ const mockResolvers = {
         ]),
       }));
     },
-    Model: (_, args: { where: GetModelWhere }) => {
+    model: (_, args: { where: GetModelWhere }) => {
       const { where } = args;
       const { models } = demoManifest;
       const model = models.find((model) => model.name === where.name);
@@ -200,6 +200,7 @@ const mockResolvers = {
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
+const diagramResolver = new DiagramResolver();
 
 const resolvers = {
   JSON: GraphQLJSON,
@@ -208,9 +209,9 @@ const resolvers = {
     autoGenerateRelation: projectResolver.autoGenerateRelation,
     listModels: modelResolver.listModels,
     model: modelResolver.getModel,
-    manifest: modelResolver.getManifest,
     onboardingStatus: projectResolver.getOnboardingStatus,
     modelSync: modelResolver.checkModelSync,
+    diagram: diagramResolver.getDiagram,
   },
   Mutation: {
     deploy: modelResolver.deploy,

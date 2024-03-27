@@ -58,6 +58,13 @@ export const typeDefs = gql`
     WITH_SAMPLE_DATASET
   }
 
+  enum NodeType {
+    MODEL
+    RELATION
+    FIELD
+    CALCULATED_FIELD
+  }
+
   type Relation {
     fromModelId: Int!
     fromModelReferenceName: String!
@@ -204,6 +211,52 @@ export const typeDefs = gql`
     isSyncronized: Boolean!
   }
 
+  type Diagram {
+    models: [DiagramModel]!
+  }
+
+  type DiagramModel {
+    id: String!
+    modelId: Int!
+    nodeType: NodeType!
+    displayName: String!
+    referenceName: String!
+    sourceTableName: String!
+    refSql: String!
+    cached: Boolean!
+    refreshTime: String
+    description: String
+    fields: [DiagramModelField]!
+    calculatedFields: [DiagramModelField]!
+    relationFields: [DiagramModelRelationField]!
+  }
+
+  type DiagramModelField {
+    id: String!
+    columnId: Int!
+    nodeType: NodeType!
+    type: String!
+    displayName: String!
+    referenceName: String!
+    description: String
+    isPrimaryKey: Boolean!
+    expression: String
+  }
+
+  type DiagramModelRelationField {
+    id: String!
+    relationId: Int!
+    nodeType: NodeType!
+    type: RelationType!
+    displayName: String!
+    referenceName: String!
+    description: String
+    fromModelName: String!
+    fromColumnName: String!
+    toModelName: String!
+    toColumnName: String!
+  }
+
   input SimpleMeasureInput {
     name: String!
     type: String!
@@ -244,13 +297,13 @@ export const typeDefs = gql`
     usableDataSource: [UsableDataSource!]!
     listDataSourceTables: [CompactTable!]!
     autoGenerateRelation: [RecommandRelations!]
-    manifest: JSON!
     onboardingStatus: OnboardingStatusResponse!
 
     # Modeling Page
     listModels: [ModelInfo!]!
     model(where: ModelWhereInput!): DetailedModel!
     modelSync: ModelSyncResponse
+    diagram: Diagram!
   }
 
   type Mutation {
