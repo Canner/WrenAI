@@ -234,11 +234,12 @@ if __name__ == "__main__":
     PREDICTION_RESULTS_FILE = args.input_file
     EVAL_AFTER_PREDICTION = args.eval_after_prediction
     EVAL_FROM_SCRATCH = args.eval_from_scratch
+    ENABLE_SEMANTIC_DESCRIPTION = args.semantic_description
 
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
 
-    if args.semantic_description:
+    if ENABLE_SEMANTIC_DESCRIPTION:
         if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
             print(f"Use the existed {DATASET_NAME}_with_semantic_mdl.json...\n")
         else:
@@ -253,7 +254,7 @@ if __name__ == "__main__":
             with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
                 mdl_data = json.load(f)
 
-            for model in mdl_data["models"]:
+            for model in tqdm(mdl_data["models"]):
                 semantic_desc = semantics_service.generate_description(
                     GenerateDescriptionRequest(
                         mdl=model,
@@ -290,7 +291,7 @@ if __name__ == "__main__":
     ):
         eval(Path(PREDICTION_RESULTS_FILE), DATASET_NAME, ground_truths)
     else:
-        if args.semantic_description:
+        if ENABLE_SEMANTIC_DESCRIPTION:
             with open(
                 f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "r"
             ) as f:
