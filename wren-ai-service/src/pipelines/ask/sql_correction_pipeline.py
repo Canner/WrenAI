@@ -6,7 +6,7 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.ask.components.generator import (
     init_generator,
 )
-from src.pipelines.ask.components.post_processor import init_post_processor
+from src.pipelines.ask.components.post_processors import init_generation_post_processor
 from src.pipelines.ask.components.prompts import (
     init_sql_correction_prompt_builder,
 )
@@ -25,7 +25,7 @@ class SQLCorrection(BasicPipeline):
         self._pipeline.add_component(
             "sql_correction_generator", sql_correction_generator
         )
-        self._pipeline.add_component("post_processor", init_post_processor())
+        self._pipeline.add_component("post_processor", init_generation_post_processor())
 
         self._pipeline.connect(
             "sql_correction_prompt_builder.prompt", "sql_correction_generator.prompt"

@@ -54,5 +54,5 @@ test:
 	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
 	make run-qdrant && \
 	make run-wren-engine && \
-	poetry run pytest && \
+	poetry run pytest -s && \
 	make stop-all

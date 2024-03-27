@@ -42,6 +42,7 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         query,
         user_id=user_id,
     )
+    documents = retrieval_result["post_processor"]["documents"]
     retrieval_end = time.perf_counter()
 
     valid_generation_results = []
@@ -62,7 +63,7 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     text_to_sql_generation_start = time.perf_counter()
     text_to_sql_generation_results = generation_pipeline.run(
         query,
-        contexts=retrieval_result["retriever"]["documents"],
+        contexts=documents,
         user_id=user_id,
     )
     text_to_sql_generation_end = time.perf_counter()
@@ -94,7 +95,7 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
 
         sql_correction_generation_start = time.perf_counter()
         sql_correction_results = sql_correction_pipeline.run(
-            contexts=retrieval_result["retriever"]["documents"],
+            contexts=documents,
             invalid_generation_results=text_to_sql_generation_results["post_processor"][
                 "invalid_generation_results"
             ],
@@ -156,7 +157,7 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     }
 
     return {
-        "contexts": retrieval_result["retriever"]["documents"],
+        "contexts": documents,
         "prediction": (
             valid_generation_results[0]["sql"] if valid_generation_results else ""
         ),
