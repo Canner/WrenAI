@@ -5,6 +5,7 @@ export const typeDefs = gql`
 
   enum DataSourceName {
     BIG_QUERY
+    DUCKDB
   }
 
   type UsableDataSource {
@@ -25,6 +26,7 @@ export const typeDefs = gql`
   type CompactTable {
     name: String!
     columns: [CompactColumn!]!
+    properties: JSON
   }
 
   input MDLModelSubmitInput {
@@ -84,6 +86,7 @@ export const typeDefs = gql`
   type CompactColumn {
     name: String!
     type: String!
+    properties: JSON
   }
 
   input CustomFieldInput {

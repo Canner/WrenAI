@@ -1,4 +1,3 @@
-import { IConfig } from '../../config';
 import { Encryptor } from '../encryptor';
 import crypto from 'crypto';
 

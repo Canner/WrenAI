@@ -1,3 +1,4 @@
+import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import { IConfig } from '../config';
 import {
   IModelColumnRepository,
@@ -13,6 +14,9 @@ import { IProjectService } from '../services/projectService';
 
 export interface IContext {
   config: IConfig;
+
+  // adaptor
+  wrenEngineAdaptor: IWrenEngineAdaptor;
 
   // services
   projectService: IProjectService;

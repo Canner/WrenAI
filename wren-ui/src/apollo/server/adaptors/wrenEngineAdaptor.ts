@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 
@@ -20,11 +20,6 @@ export interface DeployResponse {
   error?: string;
 }
 
-enum WrenEngineSystemStatus {
-  READY = 'READY',
-  PREPARE = 'PREPARE',
-}
-
 interface DeployPayload {
   manifest: Manifest;
   version: string;
@@ -35,12 +30,27 @@ export interface deployData {
   hash: string;
 }
 
+export interface ColumnMetadata {
+  name: string;
+  type: string;
+}
+export interface QueryResponse {
+  columns: ColumnMetadata[];
+  data: any[][];
+}
+
 export interface IWrenEngineAdaptor {
   deploy(deployData: deployData): Promise<DeployResponse>;
+  initDatabase(sql: string): Promise<void>;
+  putSessionProps(props: Record<string, any>): Promise<void>;
+  queryDuckdb(sql: string): Promise<QueryResponse>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private readonly wrenEngineBaseEndpoint: string;
+  private sessionPropsUrlPath = '/v1/data-source/DuckDB/settings/session-sql';
+  private queryDuckdbUrlPath = '/v1/data-source/DuckDB/query';
+  private initSqlUrlPath = '/v1/data-source/DuckDB/settings/init-sql';
   constructor({ wrenEngineEndpoint }: { wrenEngineEndpoint: string }) {
     this.wrenEngineBaseEndpoint = wrenEngineEndpoint;
   }
@@ -68,6 +78,56 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         status: WrenEngineDeployStatusEnum.FAILED,
         error: `WrenEngine Error, deployment hash:${hash}: ${err.message}`,
       };
+    }
+  }
+
+  public async initDatabase(sql) {
+    try {
+      const url = new URL(this.initSqlUrlPath, this.wrenEngineBaseEndpoint);
+      logger.debug(`Endpoint: ${url.href}`);
+      const headers = {
+        'Content-Type': 'text/plain; charset=utf-8',
+      };
+      await axios.put(url.href, sql, { headers });
+    } catch (err: any) {
+      logger.debug(`Got error when init database: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async putSessionProps(props: Record<string, any>) {
+    const setSessionStatements = Object.entries(props)
+      .map(([key, value]) => {
+        return `SET ${key} = '${value}';`;
+      })
+      .join('\n');
+    try {
+      const url = new URL(
+        this.sessionPropsUrlPath,
+        this.wrenEngineBaseEndpoint,
+      );
+      logger.debug(`Endpoint: ${url.href}`);
+      const headers = {
+        'Content-Type': 'text/plain; charset=utf-8',
+      };
+      await axios.put(url.href, setSessionStatements, { headers });
+    } catch (err: any) {
+      logger.debug(`Got error when put session props: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async queryDuckdb(sql: string): Promise<QueryResponse> {
+    try {
+      const url = new URL(this.queryDuckdbUrlPath, this.wrenEngineBaseEndpoint);
+      const headers = {
+        'Content-Type': 'text/plain; charset=utf-8',
+      };
+      const res = await axios.post(url.href, sql, { headers });
+      return res.data as QueryResponse;
+    } catch (err: any) {
+      logger.debug(`Got error when querying duckdb: ${err.message}`);
+      throw err;
     }
   }
 
