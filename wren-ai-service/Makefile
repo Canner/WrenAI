@@ -55,7 +55,7 @@ eval-ask:
 
 eval-ask-with-semantic:
 	make run-all && \
-	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction --semantic-description && \
+	poetry run python -m src.eval.ask $(eval_ask_args) --semantic-description && \
 	make stop-all
 
 test:
