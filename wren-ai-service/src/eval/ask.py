@@ -18,7 +18,12 @@ from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
+from src.pipelines.semantics import description
 from src.utils import load_env_vars
+from src.web.v1.services.semantics import (
+    GenerateDescriptionRequest,
+    SemanticsService,
+)
 
 # from .eval_pipeline import Evaluation
 from .utils import (
@@ -219,6 +224,11 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="Run the evaluation from scratch.",
     )
+    parser.add_argument(
+        "--semantic-description",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to add semantic description before asking. Default is False.",
+    )
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
@@ -228,6 +238,38 @@ if __name__ == "__main__":
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
 
+    if args.semantic_description:
+        if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
+            print(f"Use the existed {DATASET_NAME}_with_semantic_mdl.json...\n")
+        else:
+            print(
+                f"Generating semantic description for the {DATASET_NAME} dataset...\n"
+            )
+            semantics_service = SemanticsService(
+                pipelines={
+                    "generate_description": description.Generation(),
+                }
+            )
+            with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+                mdl_data = json.load(f)
+
+            for model in mdl_data["models"]:
+                for column in model["columns"]:
+                    semantic_desc = semantics_service.generate_description(
+                        GenerateDescriptionRequest(
+                            mdl=model,
+                            model=model["name"],
+                            identifier="column@" + column["name"],
+                        )
+                    )
+                    column["properties"]["description"] = semantic_desc.description
+                    column["properties"]["display_name"] = semantic_desc.display_name
+
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "w"
+            ) as f:
+                json.dump(mdl_data, f)
+
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
         PREDICTION_RESULTS_FILE
@@ -236,8 +278,14 @@ if __name__ == "__main__":
     ):
         eval(Path(PREDICTION_RESULTS_FILE), DATASET_NAME, ground_truths)
     else:
-        with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
-            mdl_str = json.dumps(json.load(f))
+        if args.semantic_description:
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "r"
+            ) as f:
+                mdl_str = json.dumps(json.load(f))
+        else:
+            with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+                mdl_str = json.dumps(json.load(f))
 
         document_store = init_document_store(
             dataset_name=DATASET_NAME,
