@@ -226,6 +226,10 @@ def generate_eval_report(
         assert ground_truth["question"] == prediction["question"]
         question = ground_truth["question"]
 
+        ground_truth_query_results = []
+        prediction_query_results = []
+        prediction_error_details = []
+
         # directly compare the sql query using semantic diff
         if prediction["answer"]:
             if not semantic_diff(ground_truth["answer"], prediction["answer"]):
