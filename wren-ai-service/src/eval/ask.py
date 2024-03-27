@@ -361,6 +361,9 @@ if __name__ == "__main__":
         print(f"Time taken: {end - start:.2f}s")
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        print(
+            f"Write predictions to ./outputs/{DATASET_NAME}_predictions_{timestamp}.json"
+        )
         write_prediction_results(
             f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json",
             ground_truths,
