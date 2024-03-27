@@ -81,6 +81,9 @@ const bootstrapServer = async () => {
     threadResponseRepository,
   });
 
+  // initialize services
+  await askingService.initialize();
+
   const apolloServer: ApolloServer = new ApolloServer({
     typeDefs,
     resolvers,

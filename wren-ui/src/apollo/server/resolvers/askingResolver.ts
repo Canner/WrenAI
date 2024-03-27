@@ -121,8 +121,8 @@ export class AskingResolver {
       (acc, response) => {
         if (!acc.id) {
           acc.id = response.threadId;
-          acc.sql = response.threadSql;
-          acc.summary = response.threadSummary;
+          acc.sql = response.sql;
+          acc.summary = response.summary;
           acc.responses = [];
         }
 
@@ -160,6 +160,7 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
+    console.log(response);
     return response;
   }
 }

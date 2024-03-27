@@ -89,10 +89,8 @@ class BackgroundTracker {
     setInterval(() => {
       const jobs = Object.values(this.tasks).map(
         (threadResponse) => async () => {
-          logger.debug(`Running job ${threadResponse.id}`);
           // check if same job is running
           if (this.runningJobs.has(threadResponse.id)) {
-            logger.debug(`Job ${threadResponse.id} is already running`);
             return;
           }
 
@@ -134,7 +132,9 @@ class BackgroundTracker {
       );
 
       // run the jobs
-      Promise.all(jobs);
+      Promise.all(jobs.map((job) => job())).catch((err) => {
+        logger.error(`Error running jobs: ${err.message}`);
+      });
     }, this.intervalTime);
   }
 
@@ -183,10 +183,15 @@ export class AskingService implements IAskingService {
     // list thread responses from database
     // filter status not finalized and put them into background tracker
     const threadResponses = await this.threadResponseRepository.findAll();
-    for (const threadResponse of threadResponses) {
-      if (!isFinalized(threadResponse.status as AskResultStatus)) {
-        this.backgroundTracker.addTask(threadResponse);
-      }
+    const unfininshedThreadResponses = threadResponses.filter(
+      (threadResponse) =>
+        !isFinalized(threadResponse.status as AskResultStatus),
+    );
+    logger.info(
+      `Initialization: adding unfininshed thread responses (total: ${unfininshedThreadResponses.length}) to background tracker`,
+    );
+    for (const threadResponse of unfininshedThreadResponses) {
+      this.backgroundTracker.addTask(threadResponse);
     }
   }
 

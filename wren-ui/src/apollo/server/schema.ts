@@ -287,12 +287,11 @@ export const typeDefs = gql`
   type DetailStep {
     summary: String!
     sql: String!
-    cteName: String!
+    cteName: String
   }
 
   type ThreadResponseDetail {
-    sql: String!
-    summary: String!
+    description: String
     steps: [DetailStep!]!
   }
 
@@ -304,7 +303,15 @@ export const typeDefs = gql`
     error: Error
   }
 
+  # Thread only consists of basic information of a thread
   type Thread {
+    id: Int!
+    sql: String!
+    summary: String!
+  }
+
+  # Detailed thread consists of thread and thread responses
+  type DetailedThread {
     id: Int!
     sql: String!
     summary: String!
@@ -328,8 +335,8 @@ export const typeDefs = gql`
     # Ask
     askingTask(taskId: String!): AskingTask!
     threads: [Thread!]!
-    thread(threadId: String!): Thread!
-    threadResponse(responseId: String!): ThreadResponse!
+    thread(threadId: Int!): DetailedThread!
+    threadResponse(responseId: Int!): ThreadResponse!
   }
 
   type Mutation {

@@ -291,7 +291,6 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformAskResult(body: any): AskResult {
-    console.log(body);
     const { status, error } = this.transformStatusAndError(body);
     return {
       status,
@@ -303,9 +302,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   private transformAskDetailResult(body: any): AskDetailResult {
     const { status, error } = this.transformStatusAndError(body);
 
-    // transform cte_name to cteName
+    // snake_case to camelCase
     const steps = (body?.response?.steps || []).map((step: any) => ({
-      ...step,
+      summary: step.summary,
+      sql: step.sql,
       cteName: step.cte_name,
     }));
 
