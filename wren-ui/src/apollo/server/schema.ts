@@ -266,7 +266,7 @@ export const typeDefs = gql`
     STOPPED
   }
 
-  type AskingTaskResult {
+  type ResultCandidate {
     sql: String!
     summary: String!
   }
@@ -274,7 +274,7 @@ export const typeDefs = gql`
   type AskingTask {
     status: AskingTaskStatus!
     error: Error
-    result: AskingTaskResult
+    candidates: [ResultCandidate!]!
   }
 
   # Thread
@@ -346,10 +346,10 @@ export const typeDefs = gql`
     deleteModel(where: ModelWhereInput!): Boolean!
 
     # Ask
-    createAskingTask(input: AskingTaskInput!): Task!
-    cancelAskingTask(queryId: String!): Boolean!
+    createAskingTask(data: AskingTaskInput!): Task!
+    cancelAskingTask(taskId: String!): Boolean!
 
     # Thread
-    createThread(input: CreateThreadInput!): Thread!
+    createThread(data: CreateThreadInput!): Thread!
   }
 `;

@@ -7,8 +7,20 @@ logger.level = 'debug';
 
 export enum WrenAIErrorCode {
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
-  WRONG_SQL_SYNTAX = 'WRONG_SQL_SYNTAX',
+  MISLEADING_QUERY = 'MISLEADING_QUERY',
+  NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
+  NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
 }
+
+export const WrenAIErrorMessages = {
+  [WrenAIErrorCode.INTERNAL_SERVER_ERROR]: 'Internal server error',
+  [WrenAIErrorCode.MISLEADING_QUERY]:
+    'The query provided is misleading and may not yield accurate results. Please refine your query.',
+  [WrenAIErrorCode.NO_RELEVANT_DATA]:
+    'No relevant data found for the given query. Please try a different query.',
+  [WrenAIErrorCode.NO_RELEVANT_SQL]:
+    'No relevant SQL found for the given query. Please check your query and try again.',
+};
 
 export interface WrenAIError {
   code: WrenAIErrorCode;
@@ -135,12 +147,12 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   public async ask(input: AskInput): Promise<AsyncQueryResponse> {
     try {
-      const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/ask`, {
+      const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
         query: input.query,
         id: input.deployId,
         history: input.history,
       });
-      return { queryId: res.data.queryId };
+      return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(`Got error when asking wren AI: ${err.message}`);
       throw err;
@@ -179,10 +191,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   ): Promise<AsyncQueryResponse> {
     try {
       const res = await axios.post(
-        `${this.wrenAIBaseEndpoint}/v1/ask-detail`,
+        `${this.wrenAIBaseEndpoint}/v1/ask-details`,
         input,
       );
-      return { queryId: res.data.queryId };
+      return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(`Got error when generating ask detail: ${err.message}`);
       throw err;
@@ -279,6 +291,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformAskResult(body: any): AskResult {
+    console.log(body);
     const { status, error } = this.transformStatusAndError(body);
     return {
       status,
@@ -325,10 +338,13 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     // transform error to WrenAIError
     // if error code is not in WrenAIErrorCode, use INTERNAL_SERVER_ERROR
     // if error message is not string, use internal server error message
+    const errorCode = (WrenAIErrorCode[body?.error?.code?.toUpperCase()] ||
+      WrenAIErrorCode.INTERNAL_SERVER_ERROR) as WrenAIErrorCode;
+    const errorMessage = (WrenAIErrorMessages[errorCode] ||
+      WrenAIErrorMessages[WrenAIErrorCode.INTERNAL_SERVER_ERROR]) as string;
     const error = body?.error && {
-      code: (WrenAIErrorCode[body?.error?.code?.toUpperCase()] ||
-        WrenAIErrorCode.INTERNAL_SERVER_ERROR) as WrenAIErrorCode,
-      message: (body.error.message || 'Internal server error') as string,
+      code: errorCode,
+      message: errorMessage,
     };
 
     return {

@@ -1,4 +1,4 @@
-import { AskResult } from '../adaptors/wrenAIAdaptor';
+import { WrenAIError, AskResultStatus } from '../adaptors/wrenAIAdaptor';
 import { Thread } from '../repositories/threadRepository';
 import { ThreadResponse } from '../repositories/threadResponseRepository';
 import { reduce } from 'lodash';
@@ -10,6 +10,15 @@ logger.level = 'debug';
 
 export interface Task {
   id: string;
+}
+
+export interface AskingTask {
+  status: AskResultStatus;
+  candidates: Array<{
+    sql: string;
+    summary: string;
+  }>;
+  error: WrenAIError | null;
 }
 
 // DetailedThread is a type that represents a detailed thread, which is a thread with responses.
@@ -60,11 +69,24 @@ export class AskingResolver {
     _root: any,
     args: { taskId: string },
     ctx: IContext,
-  ): Promise<AskResult> {
+  ): Promise<AskingTask> {
     const { taskId } = args;
     const askingService = ctx.askingService;
     const askResult = await askingService.getAskingTask(taskId);
-    return askResult;
+
+    // construct candidates from response
+    const candidates = (askResult.response || []).map((response) => {
+      return {
+        sql: response.sql,
+        summary: response.summary,
+      };
+    });
+
+    return {
+      status: askResult.status,
+      error: askResult.error,
+      candidates,
+    };
   }
 
   public async createThread(
