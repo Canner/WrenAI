@@ -128,6 +128,7 @@ def get_generation_model_pricing(
     return generation_model_pricing[model_name]
 
 
+# TODO: refactor this function if possible in the future
 def generate_eval_report(
     database_name: str,
     groundtruths: List[Dict[str, str]],
