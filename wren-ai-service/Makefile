@@ -27,11 +27,6 @@ stop-qdrant:
 	docker stop qdrant && docker rm qdrant
 
 # evaluation related
-eval-ask-with-semantic:
-	make run-all && \
-	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction --semantic-description && \
-	make stop-all
-
 streamlit:
 	poetry run streamlit run src/eval/streamlit_app.py
 
@@ -56,6 +51,11 @@ stop-all:
 eval-ask:
 	make run-all && \
 	poetry run python -m src.eval.ask $(eval_ask_args) && \
+	make stop-all
+
+eval-ask-with-semantic:
+	make run-all && \
+	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction --semantic-description && \
 	make stop-all
 
 test:

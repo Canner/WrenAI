@@ -270,6 +270,9 @@ if __name__ == "__main__":
             ) as f:
                 json.dump(mdl_data, f)
 
+    if not Path("./outputs").exists():
+        Path("./outputs").mkdir()
+
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
         PREDICTION_RESULTS_FILE
@@ -295,7 +298,7 @@ if __name__ == "__main__":
         retriever = init_retriever(
             document_store=document_store,
             with_trace=with_trace,
-            top_k=10,
+            top_k=3,
         )
         text_to_sql_generator = init_generator(
             with_trace=with_trace,
