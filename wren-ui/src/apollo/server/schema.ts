@@ -8,6 +8,12 @@ export const typeDefs = gql`
     DUCKDB
   }
 
+  enum SampleDatasetName {
+    ECOMMERCE
+    NBA
+    MUSIC
+  }
+
   type UsableDataSource {
     type: DataSourceName!
     requiredProperties: [String!]!
@@ -21,6 +27,10 @@ export const typeDefs = gql`
   input DataSourceInput {
     type: DataSourceName!
     properties: JSON!
+  }
+
+  input SampleDatasetInput {
+    name: SampleDatasetName!
   }
 
   type CompactTable {
@@ -246,6 +256,7 @@ export const typeDefs = gql`
   type Mutation {
     # On Boarding Steps
     saveDataSource(data: DataSourceInput!): DataSource!
+    startSampleDataset(data: SampleDatasetInput!): JSON!
     saveTables(data: SaveTablesInput!): JSON!
     saveRelations(data: SaveRelationInput!): JSON!
     deploy: JSON!

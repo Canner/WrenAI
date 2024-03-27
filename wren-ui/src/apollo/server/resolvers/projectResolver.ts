@@ -13,6 +13,7 @@ import {
   AnalysisRelationInfo,
   RelationType,
   CompactTable,
+  SampleDatasetData,
 } from '../types';
 import { getLogger, Encryptor } from '@server/utils';
 import { Model, ModelColumn, Project, Relation } from '../repositories';
@@ -22,6 +23,9 @@ import {
   DuckDBPrepareOptions,
 } from '../connectors/duckdbConnector';
 import { IConnector } from '../connectors/connector';
+import { sampleDatasets } from '@server/data';
+import { snakeCase } from 'lodash';
+import { toBase64 } from '@server/utils';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -41,6 +45,34 @@ export class ProjectResolver {
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
+    this.startSampleDataset = this.startSampleDataset.bind(this);
+  }
+
+  public async startSampleDataset(
+    _root: any,
+    _arg: { data: SampleDatasetData },
+    ctx: IContext,
+  ) {
+    const { name } = _arg.data;
+    logger.debug({ name: snakeCase(name) });
+    const dataset = sampleDatasets[snakeCase(name)];
+    if (!dataset) {
+      throw new Error('Sample dataset not found');
+    }
+    const duckdbDatasourceProperties = {
+      initSql: dataset.initSql,
+      extensions: [],
+      configurations: {},
+    };
+    const project = await this.saveDuckDBDataSource(
+      duckdbDatasourceProperties,
+      ctx,
+    );
+    const tables = await this.listDataSourceTables(_root, _arg, ctx);
+    const tableNames = tables.map((table) => table.name);
+    await this.saveTables(_root, { data: { tables: tableNames } }, ctx);
+    await ctx.projectRepository.updateOne(project.id, { sampleDataset: name });
+    return { name };
   }
 
   public async getOnboardingStatus(_root: any, _arg: any, ctx: IContext) {
@@ -155,6 +187,7 @@ export class ProjectResolver {
     let columns: ModelColumn[];
     if (project.type === DataSourceName.BIG_QUERY) {
       models = await this.createBigQueryModels(
+        project,
         tables,
         projectId,
         ctx,
@@ -415,6 +448,7 @@ export class ProjectResolver {
   }
 
   private async createBigQueryModels(
+    project: Project,
     tables: string[],
     id: number,
     ctx: IContext,
@@ -433,7 +467,7 @@ export class ProjectResolver {
         displayName: tableName, //use table name as displayName, referenceName and tableName
         referenceName: tableName,
         sourceTableName: tableName,
-        refSql: `select * from ${tableName}`,
+        refSql: `select * from "${project.datasetId}".${tableName}`,
         cached: false,
         refreshTime: null,
         properties: JSON.stringify({ description }),
@@ -489,6 +523,12 @@ export class ProjectResolver {
     } as DuckDBPrepareOptions;
     await connector.prepare(prepareOption);
 
+    // update wren-engine config
+    const config = {
+      'wren.datasource.type': 'duckdb',
+    };
+    await ctx.wrenEngineAdaptor.patchConfig(config);
+
     // check DataSource is valid and can connect to it
     const connected = await connector.connect();
     if (!connected) {
@@ -532,6 +572,15 @@ export class ProjectResolver {
     };
     const connector = new BQConnector(connectionOption);
     await connector.prepare();
+
+    // update wren-engine config
+    const wrenEngineConfig = {
+      'wren.datasource.type': 'bigquery',
+      'bigquery.project-id': projectId,
+      'bigquery.credentials-key': toBase64(JSON.stringify(credentials)),
+    };
+    await ctx.wrenEngineAdaptor.patchConfig(wrenEngineConfig);
+
     const connected = await connector.connect();
     if (!connected) {
       throw new Error('Can not connect to data source');
