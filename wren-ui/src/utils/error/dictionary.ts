@@ -12,6 +12,17 @@ export const ERROR_TEXTS = {
     CREDENTIAL: {
       REQUIRED: 'Please upload credential.',
     },
+    INIT_SQL: {
+      REQUIRED: 'Please input initial SQL statements.',
+    },
+    CONFIGURATION: {
+      KEY: {
+        REQUIRED: 'Please input configuration key.',
+      },
+      VALUE: {
+        REQUIRED: 'Please input configuration value.',
+      },
+    },
   },
   ADD_CALCULATED_FIELD: {
     FIELD_NAME: {

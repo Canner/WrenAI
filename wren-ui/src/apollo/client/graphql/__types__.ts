@@ -24,6 +24,7 @@ export type CalculatedFieldInput = {
 export type CompactColumn = {
   __typename?: 'CompactColumn';
   name: Scalars['String'];
+  properties?: Maybe<Scalars['JSON']>;
   type: Scalars['String'];
 };
 
@@ -31,6 +32,7 @@ export type CompactTable = {
   __typename?: 'CompactTable';
   columns: Array<CompactColumn>;
   name: Scalars['String'];
+  properties?: Maybe<Scalars['JSON']>;
 };
 
 export type CreateModelInput = {
@@ -74,7 +76,8 @@ export type DataSourceInput = {
 };
 
 export enum DataSourceName {
-  BigQuery = 'BIG_QUERY'
+  BigQuery = 'BIG_QUERY',
+  Duckdb = 'DUCKDB'
 }
 
 export type DetailedColumn = {
@@ -156,6 +159,11 @@ export type ModelInfo = {
   sourceTableName: Scalars['String'];
 };
 
+export type ModelSyncResponse = {
+  __typename?: 'ModelSyncResponse';
+  isSyncronized: Scalars['Boolean'];
+};
+
 export type ModelWhereInput = {
   id: Scalars['Int'];
 };
@@ -164,9 +172,11 @@ export type Mutation = {
   __typename?: 'Mutation';
   createModel: Scalars['JSON'];
   deleteModel: Scalars['Boolean'];
+  deploy: Scalars['JSON'];
   saveDataSource: DataSource;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
+  startSampleDataset: Scalars['JSON'];
   updateModel: Scalars['JSON'];
 };
 
@@ -196,6 +206,11 @@ export type MutationSaveTablesArgs = {
 };
 
 
+export type MutationStartSampleDatasetArgs = {
+  data: SampleDatasetInput;
+};
+
+
 export type MutationUpdateModelArgs = {
   data: UpdateModelInput;
   where: ModelWhereInput;
@@ -220,6 +235,7 @@ export type Query = {
   listModels: Array<ModelInfo>;
   manifest: Scalars['JSON'];
   model: DetailedModel;
+  modelSync?: Maybe<ModelSyncResponse>;
   onboardingStatus: OnboardingStatusResponse;
   usableDataSource: Array<UsableDataSource>;
 };
@@ -263,6 +279,16 @@ export enum RelationType {
   ManyToOne = 'MANY_TO_ONE',
   OneToMany = 'ONE_TO_MANY',
   OneToOne = 'ONE_TO_ONE'
+}
+
+export type SampleDatasetInput = {
+  name: SampleDatasetName;
+};
+
+export enum SampleDatasetName {
+  Ecommerce = 'ECOMMERCE',
+  Music = 'MUSIC',
+  Nba = 'NBA'
 }
 
 export type SaveRelationInput = {
