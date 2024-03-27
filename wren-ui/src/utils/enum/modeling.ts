@@ -1,23 +1,13 @@
-export enum JOIN_TYPE {
-  MANY_TO_ONE = 'MANY_TO_ONE',
-  ONE_TO_MANY = 'ONE_TO_MANY',
-  ONE_TO_ONE = 'ONE_TO_ONE',
-}
+export {
+  NodeType as NODE_TYPE,
+  RelationType as JOIN_TYPE,
+} from '@/apollo/client/graphql/__types__';
 
 export enum METRIC_TYPE {
   DIMENSION = 'dimension',
   MEASURE = 'measure',
   TIME_GRAIN = 'timeGrain',
   WINDOW = 'window',
-}
-
-export enum NODE_TYPE {
-  MODEL = 'model',
-  METRIC = 'metric',
-  VIEW = 'view',
-  RELATION = 'relation',
-  FIELD = 'field',
-  CALCULATED_FIELD = 'calculatedField',
 }
 
 export enum CACHED_PERIOD {

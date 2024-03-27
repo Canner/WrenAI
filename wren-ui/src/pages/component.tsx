@@ -241,7 +241,7 @@ export default function Component() {
               ],
             },
           ],
-          relations: [],
+          relationFields: [],
           properties: {},
         }}
       />

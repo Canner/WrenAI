@@ -12,10 +12,10 @@ import Column from './Column';
 import CustomDropdown from '../CustomDropdown';
 import { MoreIcon, ViewIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
-import { ViewColumnData, ViewData } from '@/utils/data';
+import { ComposeDiagram, ComposeDiagramField } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 
-export const ViewNode = ({ data }: CustomNodeProps<ViewData>) => {
+export const ViewNode = ({ data }: CustomNodeProps<ComposeDiagram>) => {
   const context = useContext(DiagramContext);
   const onMoreClick = (type: MORE_ACTION) => {
     context?.onMoreClick({
@@ -63,7 +63,7 @@ export const ViewNode = ({ data }: CustomNodeProps<ViewData>) => {
 
 export default memo(ViewNode);
 
-function getColumns(columns: ViewColumnData[]) {
+function getColumns(columns: ComposeDiagramField[]) {
   return columns.map((column) => (
     <Column
       key={column.id}

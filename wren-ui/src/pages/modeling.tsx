@@ -3,13 +3,13 @@ import { forwardRef, useMemo, useRef } from 'react';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
-import { adapter, Manifest } from '@/utils/data';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
 import MetricDrawer from '@/components/pages/modeling/MetricDrawer';
 import ViewDrawer from '@/components/pages/modeling/ViewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
-import { useManifestQuery } from '@/apollo/client/graphql/manifest.generated';
+import { ClickPayload } from '@/components/diagram/Context';
+import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -25,11 +25,11 @@ const DiagramWrapper = styled.div`
 export function Modeling() {
   const diagramRef = useRef(null);
 
-  const { data } = useManifestQuery();
+  const { data } = useDiagramQuery();
 
-  const adaptedManifest = useMemo(() => {
+  const diagramData = useMemo(() => {
     if (!data) return null;
-    return adapter(data?.manifest as Manifest);
+    return data?.diagram;
   }, [data]);
 
   const metadataDrawer = useDrawerAction();
@@ -50,7 +50,7 @@ export function Modeling() {
     }
   };
 
-  const onNodeClick = (payload) => {
+  const onNodeClick = async (payload: ClickPayload) => {
     metadataDrawer.openDrawer(payload.data);
   };
 
@@ -73,16 +73,16 @@ export function Modeling() {
 
   return (
     <SiderLayout
-      loading={adaptedManifest === null}
+      loading={diagramData === null}
       sidebar={{
-        data: adaptedManifest,
+        data: diagramData,
         onSelect,
       }}
     >
       <DiagramWrapper>
         <ForwardDiagram
           ref={diagramRef}
-          data={adaptedManifest}
+          data={diagramData}
           onMoreClick={onMoreClick}
           onNodeClick={onNodeClick}
         />

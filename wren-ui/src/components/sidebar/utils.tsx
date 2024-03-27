@@ -1,7 +1,7 @@
 import { DataNode } from 'antd/lib/tree';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { PrimaryKeyIcon, RelationshipIcon } from '@/utils/icons';
-import { MetricColumnData, ModelColumnData } from '@/utils/data';
+import { ComposeDiagramField } from '@/utils/data';
 import { assign, isEmpty, snakeCase } from 'lodash';
 import GroupTreeTitle, { IconsType } from './modeling/GroupTreeTitle';
 import { getJoinTypeText } from '@/utils/data';
@@ -49,7 +49,7 @@ const getChildrenSubtitle = (nodeKey: string, title: string) => [
 
 export const getColumnNode = (
   nodeKey: string,
-  columns: ModelColumnData[] | MetricColumnData[],
+  columns: ComposeDiagramField[],
   title?: string,
 ): TreeNode[] => {
   if (columns.length === 0) return [];
@@ -58,7 +58,8 @@ export const getColumnNode = (
     ...(title ? getChildrenSubtitle(nodeKey, title) : []),
     ...columns.map((column): TreeNode => {
       // show the model icon for relation item
-      const icon = column.relation
+      const isRelation = column.nodeType === NODE_TYPE.RELATION;
+      const icon = isRelation
         ? getNodeTypeIcon({ nodeType: NODE_TYPE.MODEL })
         : getColumnTypeIcon(column, { title: column.type });
 
@@ -68,7 +69,7 @@ export const getColumnNode = (
         title: (
           <ColumnNode
             title={column.displayName}
-            relation={column?.relation}
+            relation={isRelation ? column : null}
             primary={column?.isPrimaryKey}
           />
         ),

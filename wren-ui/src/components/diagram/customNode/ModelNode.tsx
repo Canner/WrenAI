@@ -1,22 +1,30 @@
 import { memo, useCallback, useContext } from 'react';
-import { highlightEdges, highlightNodes, trimId } from '../utils';
+import {
+  highlightEdges,
+  highlightNodes,
+  trimId,
+} from '@/components/diagram/utils';
 import {
   CachedIcon,
   CustomNodeProps,
   NodeBody,
   NodeHeader,
   StyledNode,
-} from './utils';
-import MarkerHandle from './MarkerHandle';
-import { DiagramContext } from '../Context';
-import Column, { ColumnTitle, MoreColumnTip } from './Column';
+} from '@/components/diagram/customNode/utils';
+import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
+import { DiagramContext } from '@/components/diagram/Context';
+import Column, {
+  ColumnTitle,
+  MoreColumnTip,
+} from '@/components/diagram/customNode/Column';
 import { PrimaryKeyIcon, ModelIcon } from '@/utils/icons';
-import { ModelColumnData, ModelData } from '@/utils/data';
+import { ComposeDiagram, ComposeDiagramField } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { makeIterable } from '@/utils/iteration';
 import { Config } from '@/utils/diagram';
+import { NODE_TYPE } from '@/utils/enum';
 
-export const ModelNode = ({ data }: CustomNodeProps<ModelData>) => {
+export const ModelNode = ({ data }: CustomNodeProps<ComposeDiagram>) => {
   const context = useContext(DiagramContext);
   const onNodeClick = () => {
     context?.onNodeClick({
@@ -27,7 +35,7 @@ export const ModelNode = ({ data }: CustomNodeProps<ModelData>) => {
 
   const hasRelationTitle = !!data.originalData.relationFields.length;
   const renderColumns = useCallback(
-    (columns: ModelColumnData[]) =>
+    (columns: ComposeDiagramField[]) =>
       getColumns(columns, data, { limit: Config.columnsLimit }),
     [data.highlight],
   );
@@ -43,7 +51,7 @@ export const ModelNode = ({ data }: CustomNodeProps<ModelData>) => {
           <CachedIcon originalData={data.originalData} />
         </span>
 
-        <MarkerHandle id={data.originalData.id} />
+        <MarkerHandle id={data.originalData.id.toString()} />
       </NodeHeader>
       <NodeBody draggable={false}>
         {renderColumns([
@@ -60,11 +68,11 @@ export const ModelNode = ({ data }: CustomNodeProps<ModelData>) => {
 export default memo(ModelNode);
 
 const ColumnTemplate = (props) => {
-  const { id, type, isPrimaryKey, relation, highlight } = props;
-  const hasRelation = !!relation;
+  const { nodeType, id, type, isPrimaryKey, highlight } = props;
+  const isRelation = nodeType === NODE_TYPE.RELATION;
 
   const onMouseEnter = useCallback((reactflowInstance: any) => {
-    if (!hasRelation) return;
+    if (!isRelation) return;
     const { getEdges, setEdges, setNodes } = reactflowInstance;
     const edges = getEdges();
     const relatedEdge = edges.find(
@@ -80,7 +88,7 @@ const ColumnTemplate = (props) => {
     );
   }, []);
   const onMouseLeave = useCallback((reactflowInstance: any) => {
-    if (!hasRelation) return;
+    if (!isRelation) return;
     const { setEdges, setNodes } = reactflowInstance;
     setEdges(highlightEdges([], false));
     setNodes(highlightNodes([], []));
@@ -91,7 +99,7 @@ const ColumnTemplate = (props) => {
       {...props}
       key={id}
       className={highlight.includes(id) ? 'bg-gray-3' : undefined}
-      icon={hasRelation ? <ModelIcon /> : getColumnTypeIcon({ type })}
+      icon={isRelation ? <ModelIcon /> : getColumnTypeIcon({ type })}
       append={isPrimaryKey && <PrimaryKeyIcon />}
       onMouseLeave={onMouseLeave}
       onMouseEnter={onMouseEnter}
@@ -102,8 +110,8 @@ const ColumnTemplate = (props) => {
 const ColumnIterator = makeIterable(ColumnTemplate);
 
 const getColumns = (
-  columns: ModelColumnData[],
-  data: CustomNodeProps<ModelData>['data'],
+  columns: ComposeDiagramField[],
+  data: CustomNodeProps<ComposeDiagram>['data'],
   pagination?: { limit: number },
 ) => {
   const moreCount = pagination ? columns.length - pagination.limit : 0;
