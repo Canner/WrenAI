@@ -254,6 +254,15 @@ if __name__ == "__main__":
                 mdl_data = json.load(f)
 
             for model in mdl_data["models"]:
+                semantic_desc = semantics_service.generate_description(
+                    GenerateDescriptionRequest(
+                        mdl=model,
+                        model=model["name"],
+                        identifier="model",
+                    )
+                )
+                model["properties"]["description"] = semantic_desc.description
+                model["properties"]["display_name"] = semantic_desc.display_name
                 for column in model["columns"]:
                     semantic_desc = semantics_service.generate_description(
                         GenerateDescriptionRequest(
