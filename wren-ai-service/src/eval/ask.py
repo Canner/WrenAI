@@ -18,7 +18,12 @@ from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
+from src.pipelines.semantics import description
 from src.utils import load_env_vars
+from src.web.v1.services.semantics import (
+    GenerateDescriptionRequest,
+    SemanticsService,
+)
 
 # from .eval_pipeline import Evaluation
 from .utils import (
@@ -219,14 +224,64 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="Run the evaluation from scratch.",
     )
+    parser.add_argument(
+        "--semantic-description",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to add semantic description before asking. Default is False.",
+    )
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
     EVAL_AFTER_PREDICTION = args.eval_after_prediction
     EVAL_FROM_SCRATCH = args.eval_from_scratch
+    ENABLE_SEMANTIC_DESCRIPTION = args.semantic_description
 
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
+
+    if ENABLE_SEMANTIC_DESCRIPTION:
+        if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
+            print(f"Use the existed {DATASET_NAME}_with_semantic_mdl.json...\n")
+        else:
+            print(
+                f"Generating semantic description for the {DATASET_NAME} dataset...\n"
+            )
+            semantics_service = SemanticsService(
+                pipelines={
+                    "generate_description": description.Generation(),
+                }
+            )
+            with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+                mdl_data = json.load(f)
+
+            for model in tqdm(mdl_data["models"]):
+                semantic_desc = semantics_service.generate_description(
+                    GenerateDescriptionRequest(
+                        mdl=model,
+                        model=model["name"],
+                        identifier="model",
+                    )
+                )
+                model["properties"]["description"] = semantic_desc.description
+                model["properties"]["display_name"] = semantic_desc.display_name
+                for column in model["columns"]:
+                    semantic_desc = semantics_service.generate_description(
+                        GenerateDescriptionRequest(
+                            mdl=model,
+                            model=model["name"],
+                            identifier="column@" + column["name"],
+                        )
+                    )
+                    column["properties"]["description"] = semantic_desc.description
+                    column["properties"]["display_name"] = semantic_desc.display_name
+
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "w"
+            ) as f:
+                json.dump(mdl_data, f)
+
+    if not Path("./outputs").exists():
+        Path("./outputs").mkdir()
 
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
@@ -236,8 +291,14 @@ if __name__ == "__main__":
     ):
         eval(Path(PREDICTION_RESULTS_FILE), DATASET_NAME, ground_truths)
     else:
-        with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
-            mdl_str = json.dumps(json.load(f))
+        if ENABLE_SEMANTIC_DESCRIPTION:
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "r"
+            ) as f:
+                mdl_str = json.dumps(json.load(f))
+        else:
+            with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+                mdl_str = json.dumps(json.load(f))
 
         document_store = init_document_store(
             dataset_name=DATASET_NAME,
@@ -247,7 +308,7 @@ if __name__ == "__main__":
         retriever = init_retriever(
             document_store=document_store,
             with_trace=with_trace,
-            top_k=10,
+            top_k=3,
         )
         text_to_sql_generator = init_generator(
             with_trace=with_trace,
@@ -301,6 +362,9 @@ if __name__ == "__main__":
         print(f"Time taken: {end - start:.2f}s")
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        print(
+            f"Write predictions to ./outputs/{DATASET_NAME}_predictions_{timestamp}.json"
+        )
         write_prediction_results(
             f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json",
             ground_truths,
