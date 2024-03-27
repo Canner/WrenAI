@@ -21,6 +21,9 @@ import { WrenEngineAdaptor } from '@/apollo/server/adaptors/wrenEngineAdaptor';
 import { DeployLogRepository } from '@/apollo/server/repositories/deployLogRepository';
 import { DeployService } from '@/apollo/server/services/deployService';
 import { WrenAIAdaptor } from '@/apollo/server/adaptors/wrenAIAdaptor';
+import { AskingService } from '@/apollo/server/services/askingService';
+import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
+import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 
 const serverConfig = getConfig();
 const apolloLogger = getLogger('APOLLO');
@@ -32,73 +35,90 @@ export const config: PageConfig = {
     bodyParser: false,
   },
 };
-const knex = bootstrapKnex({
-  dbType: serverConfig.dbType,
-  pgUrl: serverConfig.pgUrl,
-  debug: serverConfig.debug,
-  sqliteFile: serverConfig.sqliteFile,
-});
 
-const projectRepository = new ProjectRepository(knex);
-const modelRepository = new ModelRepository(knex);
-const modelColumnRepository = new ModelColumnRepository(knex);
-const relationRepository = new RelationRepository(knex);
-const deployLogRepository = new DeployLogRepository(knex);
+const bootstrapServer = async () => {
+  const knex = bootstrapKnex({
+    dbType: serverConfig.dbType,
+    pgUrl: serverConfig.pgUrl,
+    debug: serverConfig.debug,
+    sqliteFile: serverConfig.sqliteFile,
+  });
 
-const wrenEngineAdaptor = new WrenEngineAdaptor({
-  wrenEngineEndpoint: serverConfig.wrenEngineEndpoint,
-});
-const wrenAIAdaptor = new WrenAIAdaptor({
-  wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
-});
+  const projectRepository = new ProjectRepository(knex);
+  const modelRepository = new ModelRepository(knex);
+  const modelColumnRepository = new ModelColumnRepository(knex);
+  const relationRepository = new RelationRepository(knex);
+  const deployLogRepository = new DeployLogRepository(knex);
+  const threadRepository = new ThreadRepository(knex);
+  const threadResponseRepository = new ThreadResponseRepository(knex);
 
-const projectService = new ProjectService({ projectRepository });
-const modelService = new ModelService();
-const mdlService = new MDLService({
-  projectRepository,
-  modelRepository,
-  modelColumnRepository,
-  relationRepository,
-});
-const deployService = new DeployService({
-  wrenAIAdaptor,
-  wrenEngineAdaptor,
-  deployLogRepository,
-});
+  const wrenEngineAdaptor = new WrenEngineAdaptor({
+    wrenEngineEndpoint: serverConfig.wrenEngineEndpoint,
+  });
+  const wrenAIAdaptor = new WrenAIAdaptor({
+    wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
+  });
 
-const apolloServer: ApolloServer = new ApolloServer({
-  typeDefs,
-  resolvers,
-  formatError: (error: GraphQLError) => {
-    apolloLogger.error(error.extensions);
-    return error;
-  },
-  introspection: process.env.NODE_ENV !== 'production',
-  context: (): IContext => ({
-    config: serverConfig,
-
-    // adaptor
-    wrenEngineAdaptor,
-
-    // services
-    projectService,
-    modelService,
-    mdlService,
-    deployService,
-
-    // repository
+  const projectService = new ProjectService({ projectRepository });
+  const modelService = new ModelService();
+  const mdlService = new MDLService({
     projectRepository,
     modelRepository,
     modelColumnRepository,
     relationRepository,
-    deployRepository: deployLogRepository,
-  }),
-});
+  });
+  const deployService = new DeployService({
+    wrenAIAdaptor,
+    wrenEngineAdaptor,
+    deployLogRepository,
+  });
 
-const startServer = apolloServer.start();
+  const askingService = new AskingService({
+    wrenAIAdaptor,
+    deployService,
+    projectService,
+    threadRepository,
+    threadResponseRepository,
+  });
+
+  const apolloServer: ApolloServer = new ApolloServer({
+    typeDefs,
+    resolvers,
+    formatError: (error: GraphQLError) => {
+      apolloLogger.error(error.extensions);
+      return error;
+    },
+    introspection: process.env.NODE_ENV !== 'production',
+    context: (): IContext => ({
+      config: serverConfig,
+
+      // adaptor
+      wrenEngineAdaptor,
+
+      // services
+      projectService,
+      modelService,
+      mdlService,
+      deployService,
+      askingService,
+
+      // repository
+      projectRepository,
+      modelRepository,
+      modelColumnRepository,
+      relationRepository,
+      deployRepository: deployLogRepository,
+    }),
+  });
+
+  await apolloServer.start();
+  return apolloServer;
+};
+
+const startServer = bootstrapServer();
 
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
-  await startServer;
+  const apolloServer = await startServer;
   await apolloServer.createHandler({
     path: '/api/graphql',
   })(req, res);
