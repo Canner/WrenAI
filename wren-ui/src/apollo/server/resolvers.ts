@@ -15,6 +15,7 @@ import { pick } from 'lodash';
 import { ProjectResolver } from './resolvers/projectResolver';
 import { ModelResolver } from './resolvers/modelResolver';
 import { AskingResolver } from './resolvers/askingResolver';
+import { DiagramResolver } from './resolvers/diagramResolver';
 
 const mockResolvers = {
   JSON: GraphQLJSON,
@@ -73,7 +74,6 @@ const mockResolvers = {
         },
       ] as CompactTable[],
     autoGenerateRelation: () => [],
-    manifest: () => demoManifest,
     listModels: () => {
       const { models } = demoManifest;
       return models.map((model) => ({
@@ -202,6 +202,7 @@ const mockResolvers = {
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
 const askingResolver = new AskingResolver();
+const diagramResolver = new DiagramResolver();
 
 const resolvers = {
   JSON: GraphQLJSON,
@@ -210,9 +211,9 @@ const resolvers = {
     autoGenerateRelation: projectResolver.autoGenerateRelation,
     listModels: modelResolver.listModels,
     model: modelResolver.getModel,
-    manifest: modelResolver.getManifest,
     onboardingStatus: projectResolver.getOnboardingStatus,
     modelSync: modelResolver.checkModelSync,
+    diagram: diagramResolver.getDiagram,
 
     // Ask
     askingTask: askingResolver.getAskingTask,
