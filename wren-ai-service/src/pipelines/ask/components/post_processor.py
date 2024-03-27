@@ -20,31 +20,37 @@ class PostProcessor:
         invalid_generation_results=List[Optional[Dict[str, Any]]],
     )
     def run(self, replies: List[str]):
-        cleaned_generation_result = json.loads(clean_generation_result(replies[0]))
+        try:
+            cleaned_generation_result = json.loads(clean_generation_result(replies[0]))
 
-        if (
-            isinstance(cleaned_generation_result, dict)
-            and cleaned_generation_result["sql"] == ""
-        ):
+            if isinstance(cleaned_generation_result, dict):
+                cleaned_generation_result = [cleaned_generation_result]
+
+            if cleaned_generation_result[0]["sql"] == "":
+                return {
+                    "valid_generation_results": [],
+                    "invalid_generation_results": [],
+                }
+
+            (
+                valid_generation_results,
+                invalid_generation_results,
+            ) = classify_invalid_generation_results(
+                os.getenv("WREN_ENGINE_ENDPOINT"),
+                cleaned_generation_result,
+            )
+
+            return {
+                "valid_generation_results": valid_generation_results,
+                "invalid_generation_results": invalid_generation_results,
+            }
+        except Exception as e:
+            print(f"Error in PostProcessor: {e}")
+
             return {
                 "valid_generation_results": [],
                 "invalid_generation_results": [],
             }
-
-        (
-            valid_generation_results,
-            invalid_generation_results,
-        ) = classify_invalid_generation_results(
-            os.getenv("WREN_ENGINE_ENDPOINT"),
-            [cleaned_generation_result]
-            if isinstance(cleaned_generation_result, dict)
-            else cleaned_generation_result,
-        )
-
-        return {
-            "valid_generation_results": valid_generation_results,
-            "invalid_generation_results": invalid_generation_results,
-        }
 
 
 def init_post_processor():
