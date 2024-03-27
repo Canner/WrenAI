@@ -1,4 +1,4 @@
-import { AdaptedData } from '@/utils/data';
+import { Diagram } from '@/utils/data';
 import { NODE_TYPE } from '@/utils/enum';
 import { SQLEditorAutoCompleteSourceWordInfo } from '@/components/editor';
 
@@ -41,12 +41,12 @@ const convertColumns = (
   });
 
 export const convertToAutoCompleteSourceWordInfo = (
-  adaptedData: AdaptedData,
+  diagram: Diagram,
 ): SQLEditorAutoCompleteSourceWordInfo[] =>
-  Object.keys(adaptedData).reduce((allWorkdInfo, key) => {
+  Object.keys(diagram).reduce((allWorkdInfo, key) => {
     if (!['metrics', 'models'].includes(key)) return allWorkdInfo;
 
-    const data = adaptedData[key];
+    const data = diagram[key];
     const wordInfo = data.reduce((allWorkdInfo, item) => {
       return [
         ...allWorkdInfo,

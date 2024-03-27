@@ -1,5 +1,5 @@
 import { Edge, Node, Viewport, ReactFlowJsonObject } from 'reactflow';
-import { AdaptedData } from '@/utils/data';
+import { Diagram } from '@/utils/data/type';
 import { Transformer } from './transformer';
 
 export class DiagramCreator {
@@ -7,7 +7,7 @@ export class DiagramCreator {
   private edges: Edge[];
   private viewport: Viewport = { x: 0, y: 0, zoom: 1 };
 
-  constructor(data: AdaptedData) {
+  constructor(data: Diagram) {
     const transformedData = new Transformer(data);
     this.nodes = transformedData.nodes;
     this.edges = transformedData.edges;
