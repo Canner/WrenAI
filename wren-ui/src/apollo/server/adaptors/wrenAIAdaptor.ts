@@ -43,6 +43,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         { mdl: JSON.stringify(manifest), id: hash },
       );
       const deployId = res.data.id;
+      logger.debug(
+        `WrenAI: Deploying wren AI, hash: ${hash}, deployId: ${deployId}`,
+      );
       const deploySuccess = await this.waitDeployFinished(deployId);
       if (deploySuccess) {
         logger.debug(`WrenAI: Deploy wren AI success, hash: ${hash}`);
@@ -50,7 +53,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       } else {
         return {
           status: WrenAIDeployStatusEnum.FAILED,
-          error: 'WrenAI: Deploy wren AI failed or timeout, hash: ${hash}',
+          error: `WrenAI: Deploy wren AI failed or timeout, hash: ${hash}`,
         };
       }
     } catch (err: any) {
@@ -69,6 +72,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     for (let waitTime = 1; waitTime <= 7; waitTime++) {
       try {
         const status = await this.getDeployStatus(deployId);
+        logger.debug(`WrenAI: Deploy status: ${status}`);
         if (status === WrenAISystemStatus.FINISHED) {
           deploySuccess = true;
           break;
@@ -81,6 +85,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
           return;
         }
       } catch (err: any) {
+        logger.debug(err);
         logger.debug(
           `Got error when waiting for deploy finished: ${err.message}`,
         );
