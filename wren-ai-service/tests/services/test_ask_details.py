@@ -66,7 +66,7 @@ def test_ask_details_wit_successful_sql(ask_details_service: AskDetailsService):
         assert ask_details_result_response.response.steps[-1].cte_name == ""
 
 
-def test_ask_details_wit_failed_sql(ask_details_service: AskDetailsService):
+def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
     # asking details
     query_id = str(uuid.uuid4())
     sql = "SELECT * FROM xxx"
