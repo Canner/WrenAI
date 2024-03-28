@@ -12,7 +12,6 @@ import {
   RelationData,
   AnalysisRelationInfo,
   RelationType,
-  CompactTable,
   SampleDatasetData,
 } from '../types';
 import { getLogger, Encryptor } from '@server/utils';
@@ -22,7 +21,7 @@ import {
   DuckDBListTableOptions,
   DuckDBPrepareOptions,
 } from '../connectors/duckdbConnector';
-import { IConnector } from '../connectors/connector';
+import { CompactTable, IConnector } from '../connectors/connector';
 import { sampleDatasets } from '@server/data';
 import { snakeCase } from 'lodash';
 import { toBase64 } from '@server/utils';
