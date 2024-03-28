@@ -31,6 +31,19 @@ jobs:
         python-version: [ "3.12" ]
         poetry-version: [ "1.7.1" ]
     runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.7.4
+        ports:
+          - 6333:6333
+          - 6334:6334
+      wren-engine:
+        image: ghcr.io/canner/wren-engine:latest
+        ports:
+          - 8080:8080
+          - 7432:7432
+        volumes:
+          - src/eval/wren-engine/etc:/usr/src/app/etc
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.12
