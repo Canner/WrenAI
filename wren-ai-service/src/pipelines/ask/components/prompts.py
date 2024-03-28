@@ -2,14 +2,10 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 text_to_sql_user_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
-Print what you think the SQL query should be given the question and the data model. 
+Print what you think the SQL query should be given the question and the database schema. 
 This is vital to my career, I will become homeless if you make a mistake.
 
-### TASK ###
-Given an input question, create a syntactically correct Trino SQL query to run and a short sentence within 10 words to summary the Trino SQL query 
-and return them as the answer to the input question.
-
-### DATA MODELS ###
+### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document.content }}
 {% endfor %}
@@ -17,14 +13,18 @@ and return them as the answer to the input question.
 ### QUERY HISTORY ###
 {{ history }}
 
+### TASK ###
+Given a user query, create one to three groups of Trino SQL queries and within-10-words summary based on the following conditions:
+- Each pair should contain different SQL query and summary.
+- If the user query is more ambiguous, you should generate more groups.
+
 ### FINAL ANSWER FORMAT ###
-The final answer must be the JSON format
+The final answer must be the JSON format like following:
 
-For a question that you can return the SQL query
-{"sql": <SQL_QUERY_STRING>, "summary": <SUMMARY_STRING>}
-
-For a question that you can't return the SQL query
-{"sql": "", "summary": ""}
+[
+    {"sql": <SQL_QUERY_STRING1>, "summary": <SUMMARY_STRING1>},
+    {"sql": <SQL_QUERY_STRING2>, "summary": <SUMMARY_STRING2>}
+]
 
 ### QUESTION ###
 {{ query }} Think step by step to generate the Trino SQL query.
