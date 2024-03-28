@@ -31,7 +31,7 @@ class TracedQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
         )
 
 
-def init_retriever(document_store: Any, with_trace: bool = False, top_k: int = 3):
+def init_retriever(document_store: Any, with_trace: bool = False, top_k: int = 10):
     if with_trace:
         return TracedQdrantEmbeddingRetriever(
             document_store=document_store,
