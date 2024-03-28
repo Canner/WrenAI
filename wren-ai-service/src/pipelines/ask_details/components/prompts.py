@@ -1,6 +1,6 @@
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-system_prompt_template = """
+sql_details_system_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
 Print what you think the SQL query means by giving 1 to 5 explainable steps to the user according to the complexity of SQL query.
 If the SQL query is simple a select statement, you can just give one step to explain the SQL query; and vice versa.
@@ -26,4 +26,6 @@ The final answer must be a valid JSON format as follows:
 }
 """
 
-system_prompt_builder = PromptBuilder(template=system_prompt_template)
+
+def init_sql_details_system_prompt_builder():
+    return PromptBuilder(template=sql_details_system_prompt_template)

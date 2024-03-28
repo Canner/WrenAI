@@ -11,6 +11,9 @@ from src.pipelines.ask import (
 from src.pipelines.ask import (
     retrieval_pipeline as ask_retrieval_pipeline,
 )
+from src.pipelines.ask import (
+    sql_correction_pipeline as ask_sql_correction_pipeline,
+)
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
@@ -44,8 +47,9 @@ def init_globals():
         document_store=document_store,
         with_trace=with_trace,
     )
-    ask_generator = init_generator(with_trace=with_trace)
-    ask_details_generator = init_ask_details_generator(with_trace=with_trace)
+    text_to_sql_generator = init_generator(with_trace=with_trace)
+    sql_correction_generator = init_generator(with_trace=with_trace)
+    sql_details_generator = init_ask_details_generator(with_trace=with_trace)
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
@@ -63,15 +67,18 @@ def init_globals():
                 with_trace=with_trace,
             ),
             "generation": ask_generation_pipeline.Generation(
-                generator=ask_generator,
+                text_to_sql_generator=text_to_sql_generator,
                 with_trace=with_trace,
+            ),
+            "sql_correction": ask_sql_correction_pipeline.SQLCorrection(
+                sql_correction_generator=sql_correction_generator,
             ),
         }
     )
     ASK_DETAILS_SERVICE = AskDetailsService(
         pipelines={
             "generation": ask_details_generation_pipeline.Generation(
-                generator=ask_details_generator,
+                sql_details_generator=sql_details_generator,
                 with_trace=with_trace,
             ),
         }

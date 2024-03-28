@@ -1,7 +1,11 @@
 version: '3.8'
 
+networks:
+  wren:
+    driver: bridge
+
 services:
-  ai-service:
+  wren-ai-service:
     image: wren-ai-service:latest
     build:
       context: ..
@@ -9,6 +13,8 @@ services:
     environment:
       UVICORN_PORT: ${UVICORN_PORT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      QDRANT_HOST: ${QDRANT_HOST}
+      WREN_ENGINE_ENDPOINT: ${WREN_ENGINE_ENDPOINT}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1

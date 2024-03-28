@@ -1,5 +1,4 @@
 import os
-import uuid
 from typing import Any, Optional
 
 from haystack import Pipeline
@@ -7,6 +6,7 @@ from haystack import Pipeline
 from src.core.pipeline import BasicPipeline
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
+from src.pipelines.ask.components.post_processors import init_retrieval_post_processor
 from src.pipelines.ask.components.retriever import init_retriever
 from src.utils import load_env_vars
 
@@ -30,8 +30,10 @@ class Retrieval(BasicPipeline):
         self._pipeline = Pipeline()
         self._pipeline.add_component("embedder", embedder)
         self._pipeline.add_component("retriever", retriever)
+        self._pipeline.add_component("post_processor", init_retrieval_post_processor())
 
         self._pipeline.connect("embedder.embedding", "retriever.query_embedding")
+        self._pipeline.connect("retriever.documents", "post_processor.documents")
 
         self.with_trace = with_trace
 
@@ -80,35 +82,13 @@ class Retrieval(BasicPipeline):
         return result
 
 
-# this is for quick testing only, please ignore this
 if __name__ == "__main__":
-    DATASET_NAME = os.getenv("DATASET_NAME")
-    document_store = init_document_store()
-
     retrieval_pipeline = Retrieval(
-        embedder=init_embedder(with_trace=with_trace),
-        retriever=init_retriever(with_trace=with_trace, document_store=document_store),
-        with_trace=with_trace,
+        embedder=init_embedder(),
+        retriever=init_retriever(
+            document_store=init_document_store(),
+        ),
     )
 
-    if DATASET_NAME == "book_2":
-        query = "How many books are there?"
-    elif DATASET_NAME == "college_3":
-        query = "Count the number of courses."
-    else:
-        query = "random query here..."
-
-    retrieval_result = retrieval_pipeline.run(
-        query,
-        user_id=str(uuid.uuid4()) if with_trace else None,
-    )
-
-    print(retrieval_result)
-
-    if with_trace:
-        retrieval_pipeline.draw(
-            "./outputs/pipelines/ask/retrieval_pipeline_with_trace.jpg"
-        )
-        langfuse.flush()
-    else:
-        retrieval_pipeline.draw("./outputs/pipelines/ask/retrieval_pipeline.jpg")
+    print("generating retrieval_pipeline.jpg to outputs/pipelines/ask...")
+    retrieval_pipeline.draw("./outputs/pipelines/ask/retrieval_pipeline.jpg")
