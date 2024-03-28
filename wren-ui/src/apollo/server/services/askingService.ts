@@ -13,6 +13,7 @@ import {
   ThreadResponseWithThreadSummary,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
+import { isEmpty } from 'lodash';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -44,6 +45,11 @@ export interface IAskingService {
    * Asking detail task.
    */
   createThread(input: AskingDetailTaskInput): Promise<Thread>;
+  updateThread(
+    threadId: number,
+    input: Partial<AskingDetailTaskInput>,
+  ): Promise<Thread>;
+  deleteThread(threadId: number): Promise<void>;
   listThreads(): Promise<Thread[]>;
   createThreadResponse(
     threadId: number,
@@ -268,6 +274,24 @@ export class AskingService implements IAskingService {
 
   public async listThreads(): Promise<Thread[]> {
     return this.threadRepository.findAll();
+  }
+
+  public async updateThread(
+    threadId: number,
+    input: Partial<AskingDetailTaskInput>,
+  ): Promise<Thread> {
+    // if input is empty, throw error
+    if (isEmpty(input)) {
+      throw new Error('Update thread input is empty');
+    }
+
+    return this.threadRepository.updateOne(threadId, {
+      summary: input.summary,
+    });
+  }
+
+  public async deleteThread(threadId: number): Promise<void> {
+    await this.threadRepository.deleteOne(threadId);
   }
 
   public async createThreadResponse(

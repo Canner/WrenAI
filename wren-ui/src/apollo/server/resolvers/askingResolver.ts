@@ -143,6 +143,30 @@ export class AskingResolver {
     return thread;
   }
 
+  public async updateThread(
+    _root: any,
+    args: { where: { id: number }; data: { summary: string } },
+    ctx: IContext,
+  ): Promise<Thread> {
+    const { where, data } = args;
+
+    const askingService = ctx.askingService;
+    const thread = await askingService.updateThread(where.id, data);
+    return thread;
+  }
+
+  public async deleteThread(
+    _root: any,
+    args: { where: { id: number } },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { where } = args;
+
+    const askingService = ctx.askingService;
+    await askingService.deleteThread(where.id);
+    return true;
+  }
+
   public async listThreads(
     _root: any,
     _args: any,

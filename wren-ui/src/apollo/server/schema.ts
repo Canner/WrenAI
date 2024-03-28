@@ -290,6 +290,14 @@ export const typeDefs = gql`
     summary: String!
   }
 
+  input ThreadUniqueWhereInput {
+    id: Int!
+  }
+
+  input UpdateThreadInput {
+    summary: String
+  }
+
   type DetailStep {
     summary: String!
     sql: String!
@@ -364,6 +372,13 @@ export const typeDefs = gql`
 
     # Thread
     createThread(data: CreateThreadInput!): Thread!
+    updateThread(
+      where: ThreadUniqueWhereInput!
+      data: UpdateThreadInput!
+    ): Thread!
+    deleteThread(where: ThreadUniqueWhereInput!): Boolean!
+
+    # Thread Response
     createThreadResponse(
       threadId: Int!
       data: CreateThreadResponseInput!
