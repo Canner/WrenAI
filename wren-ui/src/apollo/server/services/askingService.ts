@@ -192,8 +192,13 @@ class BackgroundTracker {
       );
 
       // run the jobs
-      Promise.all(jobs.map((job) => job())).catch((err) => {
-        logger.error(`Error running jobs: ${err.message}`);
+      Promise.allSettled(jobs.map((job) => job())).then((results) => {
+        // show reason of rejection
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            logger.error(`Job ${index} failed: ${result.reason}`);
+          }
+        });
       });
     }, this.intervalTime);
   }
