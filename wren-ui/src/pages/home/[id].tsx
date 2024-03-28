@@ -8,7 +8,6 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import AnswerResult from '@/components/pages/home/AnswerResult';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import Prompt from '@/components/pages/home/prompt';
-import { useWithOnboarding } from '@/hooks/useCheckOnboarding';
 
 const AnswerResultsBlock = styled.div`
   width: 768px;
@@ -53,7 +52,6 @@ const testData = {
 
 export default function AnswerBlock() {
   const divRef = useRef<HTMLDivElement>(null);
-  const { loading } = useWithOnboarding();
   const homeSidebar = useHomeSidebar();
 
   const saveAsViewModal = useModalAction();
@@ -125,7 +123,7 @@ export default function AnswerBlock() {
   };
 
   return (
-    <SiderLayout loading={loading} sidebar={homeSidebar}>
+    <SiderLayout loading={false} sidebar={homeSidebar}>
       <AnswerResultsBlock className="mt-12 mb-15" ref={divRef}>
         {answerResults.map((answerResult, index) => (
           <div key={`${answerResult.query}-${index}`}>
