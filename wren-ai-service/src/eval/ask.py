@@ -308,7 +308,7 @@ if __name__ == "__main__":
         retriever = init_retriever(
             document_store=document_store,
             with_trace=with_trace,
-            top_k=3,
+            top_k=10,
         )
         text_to_sql_generator = init_generator(
             with_trace=with_trace,
