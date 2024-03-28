@@ -28,9 +28,9 @@ stop-qdrant:
 streamlit:
 	poetry run streamlit run $(pipeline)
 
-# example: make eval pipeline=src.eval.ask
+# example: make eval pipeline=ask_details
 eval:
-	poetry run python -m $(pipeline) $(args)
+	poetry run python -m src.eval.$(pipeline) $(args)
 
 run-wren-engine:
 	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
