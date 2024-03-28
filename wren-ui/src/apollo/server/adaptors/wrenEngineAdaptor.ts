@@ -5,6 +5,8 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('WrenEngineAdaptor');
 logger.level = 'debug';
 
+const DEFAULT_PREVIEW_LIMIT = 500;
+
 export enum WrenEngineDeployStatusEnum {
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
@@ -34,6 +36,7 @@ export interface ColumnMetadata {
   name: string;
   type: string;
 }
+
 export interface QueryResponse {
   columns: ColumnMetadata[];
   data: any[][];
@@ -45,6 +48,7 @@ export interface IWrenEngineAdaptor {
   putSessionProps(props: Record<string, any>): Promise<void>;
   queryDuckdb(sql: string): Promise<QueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
+  previewData(sql: string, limit?: number): Promise<QueryResponse>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -52,9 +56,12 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private sessionPropsUrlPath = '/v1/data-source/duckdb/settings/session-sql';
   private queryDuckdbUrlPath = '/v1/data-source/duckdb/query';
   private initSqlUrlPath = '/v1/data-source/duckdb/settings/init-sql';
+  private previewUrlPath = '/v1/mdl/preview';
+
   constructor({ wrenEngineEndpoint }: { wrenEngineEndpoint: string }) {
     this.wrenEngineBaseEndpoint = wrenEngineEndpoint;
   }
+
   public async deploy(deployData: deployData): Promise<DeployResponse> {
     const { manifest, hash } = deployData;
     const deployPayload = { manifest, version: hash } as DeployPayload;
@@ -147,6 +154,33 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       await axios.patch(url.href, configPayload, { headers });
     } catch (err: any) {
       logger.debug(`Got error when patching config: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async previewData(
+    sql: string,
+    limit: number = DEFAULT_PREVIEW_LIMIT,
+  ): Promise<QueryResponse> {
+    try {
+      const url = new URL(this.previewUrlPath, this.wrenEngineBaseEndpoint);
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      const res = await axios({
+        method: 'get',
+        url: url.href,
+        headers,
+        data: {
+          sql,
+          limit,
+        },
+      });
+
+      return res.data as QueryResponse;
+    } catch (err: any) {
+      logger.debug(`Got error when previewing data: ${err.message}`);
       throw err;
     }
   }

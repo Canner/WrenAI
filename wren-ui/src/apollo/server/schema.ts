@@ -298,6 +298,12 @@ export const typeDefs = gql`
     summary: String
   }
 
+  input PreviewDataInput {
+    responseId: Int!
+    # Optional, only used for preview data of a single step
+    stepIndex: Int
+  }
+
   type DetailStep {
     summary: String!
     sql: String!
@@ -383,5 +389,7 @@ export const typeDefs = gql`
       threadId: Int!
       data: CreateThreadResponseInput!
     ): ThreadResponse!
+    previewData(where: PreviewDataInput!): JSON!
+    showFullSql(responseId: Int!): String!
   }
 `;

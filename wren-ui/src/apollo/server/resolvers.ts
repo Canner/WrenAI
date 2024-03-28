@@ -240,6 +240,8 @@ const resolvers = {
     updateThread: askingResolver.updateThread,
     deleteThread: askingResolver.deleteThread,
     createThreadResponse: askingResolver.createThreadResponse,
+    previewData: askingResolver.previewData,
+    showFullSql: askingResolver.showFullSql,
   },
 };
 

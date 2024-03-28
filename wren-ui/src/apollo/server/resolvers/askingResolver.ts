@@ -36,7 +36,10 @@ export class AskingResolver {
     this.getAskingTask = this.getAskingTask.bind(this);
     this.createThread = this.createThread.bind(this);
     this.getThread = this.getThread.bind(this);
+    this.updateThread = this.updateThread.bind(this);
+    this.deleteThread = this.deleteThread.bind(this);
     this.listThreads = this.listThreads.bind(this);
+    this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
   }
 
@@ -201,5 +204,27 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
     return response;
+  }
+
+  public async previewData(
+    _root: any,
+    args: { where: { responseId: number; stepIndex?: number } },
+    ctx: IContext,
+  ): Promise<any> {
+    const { responseId, stepIndex } = args.where;
+    const askingService = ctx.askingService;
+    const data = await askingService.previewData(responseId, stepIndex);
+    return data;
+  }
+
+  public async showFullSql(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<string> {
+    const { responseId } = args;
+    const askingService = ctx.askingService;
+    const sql = await askingService.showFullSql(responseId);
+    return sql;
   }
 }

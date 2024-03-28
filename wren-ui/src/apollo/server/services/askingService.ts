@@ -13,7 +13,12 @@ import {
   ThreadResponseWithThreadSummary,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
-import { isEmpty } from 'lodash';
+import { isEmpty, isNil } from 'lodash';
+import {
+  IWrenEngineAdaptor,
+  QueryResponse,
+} from '../adaptors/wrenEngineAdaptor';
+import { format } from 'sql-formatter';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -59,6 +64,8 @@ export interface IAskingService {
     threadId: number,
   ): Promise<ThreadResponseWithThreadSummary[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
+  previewData(responseId: number, stepIndex?: number): Promise<QueryResponse>;
+  showFullSql(responseId: number): Promise<string>;
 }
 
 /**
@@ -70,6 +77,47 @@ const isFinalized = (status: AskResultStatus) => {
     status === AskResultStatus.FINISHED ||
     status === AskResultStatus.STOPPED
   );
+};
+
+/**
+ * Given a list of steps, construct the SQL statement with CTEs
+ * If stepIndex is provided, only construct the SQL from top to that step
+ * @param steps
+ * @param stepIndex
+ * @returns string
+ */
+export const constructCteSql = (
+  steps: Array<{ cteName: string; summary: string; sql: string }>,
+  stepIndex?: number,
+): string => {
+  // validate stepIndex
+  if (!isNil(stepIndex) && (stepIndex < 0 || stepIndex >= steps.length)) {
+    throw new Error(`Invalid stepIndex: ${stepIndex}`);
+  }
+
+  const slicedSteps = isNil(stepIndex) ? steps : steps.slice(0, stepIndex + 1);
+
+  // if there's only one step, return the sql directly
+  if (slicedSteps.length === 1) {
+    return `-- ${slicedSteps[0].summary}\n${slicedSteps[0].sql}`;
+  }
+
+  let sql = 'WITH ';
+  slicedSteps.forEach((step, index) => {
+    if (index === slicedSteps.length - 1) {
+      // if it's the last step, remove the trailing comma.
+      // no need to wrap with WITH
+      sql += `\n-- ${step.summary}\n`;
+      sql += `${step.sql}`;
+    } else {
+      // if it's not the last step, wrap with CTE
+      sql += `${step.cteName} AS`;
+      sql += `\n-- ${step.summary}\n`;
+      sql += `(${step.sql}),`;
+    }
+  });
+
+  return sql;
 };
 
 /**
@@ -161,6 +209,7 @@ class BackgroundTracker {
 
 export class AskingService implements IAskingService {
   private wrenAIAdaptor: IWrenAIAdaptor;
+  private wrenEngineAdaptor: IWrenEngineAdaptor;
   private deployService: IDeployService;
   private projectService: IProjectService;
   private threadRepository: IThreadRepository;
@@ -169,18 +218,21 @@ export class AskingService implements IAskingService {
 
   constructor({
     wrenAIAdaptor,
+    wrenEngineAdaptor,
     deployService,
     projectService,
     threadRepository,
     threadResponseRepository,
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
+    wrenEngineAdaptor: IWrenEngineAdaptor;
     deployService: IDeployService;
     projectService: IProjectService;
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
+    this.wrenEngineAdaptor = wrenEngineAdaptor;
     this.deployService = deployService;
     this.projectService = projectService;
     this.threadRepository = threadRepository;
@@ -334,6 +386,38 @@ export class AskingService implements IAskingService {
 
   public async getResponse(responseId: number) {
     return this.threadResponseRepository.findOneBy({ id: responseId });
+  }
+
+  /**
+   * this function is used to preview the data of a thread response
+   * get the target thread response and get the steps
+   * construct the CTEs and get the data
+   * @param responseId
+   * @param stepIndex
+   * @returns Promise<QueryResponse>
+   */
+  public async previewData(
+    responseId: number,
+    stepIndex?: number,
+  ): Promise<QueryResponse> {
+    const response = await this.getResponse(responseId);
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    const steps = response.detail.steps;
+    const sql = format(constructCteSql(steps, stepIndex));
+    return this.wrenEngineAdaptor.previewData(sql);
+  }
+
+  public async showFullSql(responseId: number): Promise<string> {
+    const response = await this.getResponse(responseId);
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    const steps = response.detail.steps;
+    return format(constructCteSql(steps));
   }
 
   private async getDeployId() {

@@ -75,6 +75,7 @@ const bootstrapServer = async () => {
 
   const askingService = new AskingService({
     wrenAIAdaptor,
+    wrenEngineAdaptor,
     deployService,
     projectService,
     threadRepository,
