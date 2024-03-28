@@ -22,7 +22,7 @@ GENERATION_KWARGS = {
     "temperature": 0,
     "n": 1,
     "max_tokens": MAX_TOKENS[MODEL_NAME] if MODEL_NAME in MAX_TOKENS else 4096,
-    "response_format": {"type": "json_object"},
+    "top_p": 1,
 }
 
 
