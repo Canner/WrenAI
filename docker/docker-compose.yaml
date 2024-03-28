@@ -39,12 +39,14 @@ services:
       UVICORN_PORT: ${WREN_AI_SERVICE_PORT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       QDRANT_HOST: qdrant
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
     networks:
       - wren
     depends_on:
+      - wren-engine
       - qdrant
 
   qdrant:
@@ -52,6 +54,8 @@ services:
     expose:
       - 6333
       - 6334
+    volumes:
+      - data:/qdrant/storage
     networks:
       - wren
 

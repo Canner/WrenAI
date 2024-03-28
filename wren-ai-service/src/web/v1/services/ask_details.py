@@ -1,10 +1,7 @@
-import json
 from typing import List, Literal, Optional
 
 from haystack import Pipeline
 from pydantic import BaseModel
-
-from src.utils import clean_generation_result
 
 
 class SQLExplanation(BaseModel):
@@ -43,8 +40,13 @@ class AskDetailsResultResponse(BaseModel):
         description: str
         steps: List[SQLExplanation]
 
-    status: Literal["understanding", "searching", "generating", "finished"]
+    class AskDetailsError(BaseModel):
+        code: Literal["NO_RELEVANT_SQL"]
+        message: str
+
+    status: Literal["understanding", "searching", "generating", "finished", "failed"]
     response: Optional[AskDetailsResponseDetails] = None
+    error: Optional[AskDetailsError] = None
 
 
 class AskDetailsService:
@@ -75,16 +77,25 @@ class AskDetailsService:
             sql=ask_details_request.sql,
         )
 
-        cleaned_generation_result = json.loads(
-            clean_generation_result(generation_result["generator"]["replies"][0])
-        )
+        ask_details_result = generation_result["sql_details_post_processor"][
+            "post_processing_results"
+        ]
 
-        self.ask_details_results[query_id] = AskDetailsResultResponse(
-            status="finished",
-            response=AskDetailsResultResponse.AskDetailsResponseDetails(
-                **cleaned_generation_result
-            ),
-        )
+        if ask_details_result is None:
+            self.ask_details_results[query_id] = AskDetailsResultResponse(
+                status="failed",
+                error=AskDetailsResultResponse.AskDetailsError(
+                    code="NO_RELEVANT_SQL",
+                    message="No relevant SQL",
+                ),
+            )
+        else:
+            self.ask_details_results[query_id] = AskDetailsResultResponse(
+                status="finished",
+                response=AskDetailsResultResponse.AskDetailsResponseDetails(
+                    **ask_details_result
+                ),
+            )
 
     def get_ask_details_result(
         self,

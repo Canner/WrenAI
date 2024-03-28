@@ -8,7 +8,7 @@ from src.pipelines.ask.components.generator import (
     MODEL_NAME,
     init_generator,
 )
-from src.pipelines.ask.components.post_processor import init_post_processor
+from src.pipelines.ask.components.post_processors import init_generation_post_processor
 from src.pipelines.ask.components.prompts import init_text_to_sql_prompt_builder
 from src.utils import load_env_vars
 from src.web.v1.services.ask import AskRequest
@@ -35,7 +35,7 @@ class Generation(BasicPipeline):
             init_text_to_sql_prompt_builder(),
         )
         self._pipeline.add_component("text_to_sql_generator", text_to_sql_generator)
-        self._pipeline.add_component("post_processor", init_post_processor())
+        self._pipeline.add_component("post_processor", init_generation_post_processor())
 
         self._pipeline.connect(
             "text_to_sql_prompt_builder.prompt", "text_to_sql_generator.prompt"

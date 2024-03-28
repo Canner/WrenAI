@@ -50,9 +50,9 @@ def test_retrieval_pipeline(document_store: Any):
     )
 
     assert retrieval_result is not None
-    assert len(retrieval_result["retriever"]["documents"]) > 0
+    assert len(retrieval_result["post_processor"]["documents"]) > 0
 
-    GLOBAL_DATA["contexts"] = retrieval_result["retriever"]["documents"]
+    GLOBAL_DATA["contexts"] = retrieval_result["post_processor"]["documents"]
 
 
 def test_generation_pipeline():
