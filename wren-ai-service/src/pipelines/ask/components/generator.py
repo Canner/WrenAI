@@ -99,7 +99,7 @@ class AnthropicGenerator:
         }
 
 
-def init_generator(
+def _init_openai_generator(
     with_trace: bool = False,
     model_name: str = MODEL_NAME,
     generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
@@ -118,7 +118,25 @@ def init_generator(
     )
 
 
-def init_anthropic_generator():
+def _init_anthropic_generator():
     return AnthropicGenerator(
         api_key=Secret.from_env_var("ANTHROPIC_API_KEY"),
     )
+
+
+def init_generator(
+    provider: str = "anthropic",
+    with_trace: bool = False,
+    model_name: str = MODEL_NAME,
+    generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
+):
+    if provider == "anthropic":
+        return _init_anthropic_generator()
+    elif provider == "openai":
+        return _init_openai_generator(
+            with_trace=with_trace,
+            model_name=model_name,
+            generation_kwargs=generation_kwargs,
+        )
+
+    raise ValueError(f"Invalid provider: {provider}")
