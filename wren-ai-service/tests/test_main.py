@@ -109,12 +109,10 @@ def test_asks_with_successful_query():
             response = client.get(url=f"/v1/asks/{query_id}/result/")
 
         assert response.status_code == 200
-        if response.json()["status"] == "failed":
-            assert response.json()["error"]
-        else:
-            for r in response.json()["response"]:
-                assert r["sql"] is not None and r["sql"] != ""
-                assert r["summary"] is not None and r["summary"] != ""
+        assert response.json()["status"] == "finished"
+        for r in response.json()["response"]:
+            assert r["sql"] is not None and r["sql"] != ""
+            assert r["summary"] is not None and r["summary"] != ""
 
 
 def test_asks_with_failed_query():
