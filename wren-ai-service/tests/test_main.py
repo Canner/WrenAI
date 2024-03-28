@@ -1,14 +1,16 @@
 import json
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src.__main__ import app
 
-GLOBAL_DATA = {
-    "semantics_preperation_id": str(uuid.uuid4()),
-    "query_id": None,
-}
+
+@pytest.fixture
+def mdl_str():
+    with open("tests/data/book_2_mdl.json", "r") as f:
+        return json.dumps(json.load(f))
 
 
 def test_semantics_description():
@@ -51,12 +53,9 @@ def test_semantics_description():
         )
 
 
-def test_semantics_preparations():
+def test_semantics_preparations(mdl_str: str):
     with TestClient(app) as client:
-        semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
-
-        with open("tests/data/book_2_mdl.json", "r") as f:
-            mdl_str = json.dumps(json.load(f))
+        semantics_preperation_id = str(uuid.uuid4())
 
         response = client.post(
             url="/v1/semantics-preparations/",
@@ -83,15 +82,30 @@ def test_semantics_preparations():
         assert status == "finished"
 
 
-def test_asks():
+def test_asks(mdl_str: str):
     with TestClient(app) as client:
-        semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
+        semantics_preperation_id = str(uuid.uuid4())
+
+        response = client.post(
+            url="/v1/semantics-preparations/",
+            json={
+                "mdl": mdl_str,
+                "id": semantics_preperation_id,
+            },
+        )
+
+        status = "indexing"
+        while status != "finished":
+            response = client.get(
+                url=f"/v1/semantics-preparations/{semantics_preperation_id}/status/"
+            )
+            status = response.json()["status"]
 
         response = client.post(
             url="/v1/asks",
             json={
                 "query": "How many books are there?",
-                "id": semantics_preparation_id,
+                "id": semantics_preperation_id,
             },
         )
 
@@ -99,27 +113,46 @@ def test_asks():
         assert response.json()["query_id"] != ""
 
         query_id = response.json()["query_id"]
-        GLOBAL_DATA["query_id"] = query_id
 
         response = client.get(url=f"/v1/asks/{query_id}/result/")
-        while (
-            response.json()["status"] != "finished"
-            and response.json()["status"] != "failed"
-        ):
+        while response.json()["status"] != "finished":
             response = client.get(url=f"/v1/asks/{query_id}/result/")
 
         assert response.status_code == 200
-        if response.json()["status"] == "failed":
-            assert response.json()["error"]
-        else:
-            for r in response.json()["response"]:
-                assert r["sql"] is not None and r["sql"] != ""
-                assert r["summary"] is not None and r["summary"] != ""
+        assert response.json()["status"] == "finished"
+        for r in response.json()["response"]:
+            assert r["sql"] is not None and r["sql"] != ""
+            assert r["summary"] is not None and r["summary"] != ""
 
 
-def test_stop_asks():
+def test_stop_asks(mdl_str: str):
     with TestClient(app) as client:
-        query_id = GLOBAL_DATA["query_id"]
+        semantics_preperation_id = str(uuid.uuid4())
+
+        response = client.post(
+            url="/v1/semantics-preparations/",
+            json={
+                "mdl": mdl_str,
+                "id": semantics_preperation_id,
+            },
+        )
+
+        status = "indexing"
+        while status != "finished":
+            response = client.get(
+                url=f"/v1/semantics-preparations/{semantics_preperation_id}/status/"
+            )
+            status = response.json()["status"]
+
+        response = client.post(
+            url="/v1/asks",
+            json={
+                "query": "How many books are there?",
+                "id": semantics_preperation_id,
+            },
+        )
+
+        query_id = response.json()["query_id"]
 
         response = client.patch(
             url=f"/v1/asks/{query_id}",
@@ -139,14 +172,49 @@ def test_stop_asks():
         assert response.json()["status"] == "stopped"
 
 
-def test_ask_details():
+def test_ask_details(mdl_str: str):
     with TestClient(app) as client:
+        semantics_preperation_id = str(uuid.uuid4())
+
+        response = client.post(
+            url="/v1/semantics-preparations/",
+            json={
+                "mdl": mdl_str,
+                "id": semantics_preperation_id,
+            },
+        )
+
+        status = "indexing"
+        while status != "finished":
+            response = client.get(
+                url=f"/v1/semantics-preparations/{semantics_preperation_id}/status/"
+            )
+            status = response.json()["status"]
+
+        query = "How many books are there?"
+        response = client.post(
+            url="/v1/asks",
+            json={
+                "query": query,
+                "id": semantics_preperation_id,
+            },
+        )
+
+        query_id = response.json()["query_id"]
+
+        response = client.get(url=f"/v1/asks/{query_id}/result/")
+        while response.json()["status"] != "finished":
+            response = client.get(url=f"/v1/asks/{query_id}/result/")
+
+        sql = response.json()["response"][0]["sql"]
+        summary = response.json()["response"][0]["summary"]
+
         response = client.post(
             url="/v1/ask-details/",
             json={
-                "query": "How many books are there?",
-                "sql": "SELECT COUNT(*) FROM book",
-                "summary": "Retrieve the number of books",
+                "query": query,
+                "sql": sql,
+                "summary": summary,
             },
         )
 
