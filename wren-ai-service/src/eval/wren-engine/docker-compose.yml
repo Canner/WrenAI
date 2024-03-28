@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  wren-engine:
+  engine:
     image: ghcr.io/canner/wren-engine:latest
     pull_policy: always
     platform: ${PLATFORM}

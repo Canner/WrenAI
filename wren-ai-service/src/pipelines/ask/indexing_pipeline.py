@@ -110,10 +110,20 @@ class Indexing(BasicPipeline):
         ]
 
 
+# this is for quick testing only, please ignore this
 if __name__ == "__main__":
+    document_store = init_document_store()
+
     indexing_pipeline = Indexing(
-        document_store=init_document_store(),
+        document_store=document_store,
     )
 
-    print("generating indexing_pipeline.jpg to outputs/pipelines/ask...")
+    with open(f"src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+        mdl_str = json.dumps(json.load(f))
+
+    indexing_pipeline.run(mdl_str)
     indexing_pipeline.draw("./outputs/pipelines/ask/indexing_pipeline.jpg")
+
+    print(
+        f"finished indexing documents, document count: {document_store.count_documents()}"
+    )

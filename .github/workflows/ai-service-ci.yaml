@@ -17,6 +17,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.label.name == 'ci/ai-service' && github.event.number || github.sha }}
   cancel-in-progress: true
 
+
 defaults:
   run:
     working-directory: wren-ai-service
@@ -36,25 +37,16 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install Poetry
+      - name: Run image
         uses: abatilo/actions-poetry@v2
         with:
           poetry-version: ${{ matrix.poetry-version }}
       - name: Install the project dependencies
         run: poetry install
-      - name: Prepare testing environment and Run tests
-        run: |
-          mkdir -p src/eval/wren-engine/etc
-          cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties
-          sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties
-          poetry run python -m src.prepare_mdl_json --dataset_name book_2
-          docker run -d -p 8080:8080 --name wren-engine -v $(pwd)/src/eval/wren-engine/etc:/usr/src/app/etc ghcr.io/canner/wren-engine:latest
-          make run-qdrant
-          poetry run pytest
-          make stop-qdrant
-          docker stop wren-engine && docker rm wren-engine
+      - name: Run Qdrant
+        run: docker run -p 6333:6333 -p 6334:6334 -d --name qdrant qdrant/qdrant:v1.7.4
+      - name: Test with pytest
+        run: poetry run pytest
         env:
-          ENV: dev
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          WREN_ENGINE_ENDPOINT: http://localhost:8080
-          QDRANT_HOST: localhost
+          ENV: dev
