@@ -237,6 +237,7 @@ const resolvers = {
 
     // Thread
     createThread: askingResolver.createThread,
+    createThreadResponse: askingResolver.createThreadResponse,
   },
 };
 

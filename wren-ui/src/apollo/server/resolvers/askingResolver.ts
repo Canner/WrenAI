@@ -42,14 +42,15 @@ export class AskingResolver {
 
   public async createAskingTask(
     _root: any,
-    args: { data: { question: string } },
+    args: { data: { question: string; threadId?: number } },
     ctx: IContext,
   ): Promise<Task> {
-    const { question } = args.data;
+    const { question, threadId } = args.data;
 
     const askingService = ctx.askingService;
     const task = await askingService.createAskingTask({
       question,
+      threadId,
     });
     return task;
   }
@@ -152,6 +153,21 @@ export class AskingResolver {
     return threads;
   }
 
+  public async createThreadResponse(
+    _root: any,
+    args: {
+      threadId: number;
+      data: { question: string; sql: string; summary: string };
+    },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const { threadId, data } = args;
+
+    const askingService = ctx.askingService;
+    const response = await askingService.createThreadResponse(threadId, data);
+    return response;
+  }
+
   public async getResponse(
     _root: any,
     args: { responseId: number },
@@ -160,7 +176,6 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
-    console.log(response);
     return response;
   }
 }

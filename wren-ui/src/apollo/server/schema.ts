@@ -254,7 +254,7 @@ export const typeDefs = gql`
   input AskingTaskInput {
     question: String!
     # Used for follow-up questions
-    threadId: String
+    threadId: Int
   }
 
   enum AskingTaskStatus {
@@ -279,6 +279,12 @@ export const typeDefs = gql`
 
   # Thread
   input CreateThreadInput {
+    question: String!
+    sql: String!
+    summary: String!
+  }
+
+  input CreateThreadResponseInput {
     question: String!
     sql: String!
     summary: String!
@@ -358,5 +364,9 @@ export const typeDefs = gql`
 
     # Thread
     createThread(data: CreateThreadInput!): Thread!
+    createThreadResponse(
+      threadId: Int!
+      data: CreateThreadResponseInput!
+    ): ThreadResponse!
   }
 `;

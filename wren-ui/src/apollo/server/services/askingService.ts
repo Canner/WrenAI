@@ -2,6 +2,7 @@ import {
   AskResult,
   IWrenAIAdaptor,
   AskResultStatus,
+  AskHistory,
 } from '@server/adaptors/wrenAIAdaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -22,6 +23,7 @@ export interface Task {
 
 export interface AskingTaskInput {
   question: string;
+  threadId?: number;
 }
 
 export interface AskingDetailTaskInput {
@@ -43,6 +45,10 @@ export interface IAskingService {
    */
   createThread(input: AskingDetailTaskInput): Promise<Thread>;
   listThreads(): Promise<Thread[]>;
+  createThreadResponse(
+    threadId: number,
+    input: AskingDetailTaskInput,
+  ): Promise<ThreadResponse>;
   getResponsesWithThread(
     threadId: number,
   ): Promise<ThreadResponseWithThreadSummary[]>;
@@ -200,8 +206,16 @@ export class AskingService implements IAskingService {
    */
   public async createAskingTask(input: AskingTaskInput): Promise<Task> {
     const deployId = await this.getDeployId();
+
+    // if it's a follow-up question, then the input will have a threadId
+    // then use the threadId to get the sql, summary and get the steps of last thread response
+    // construct it into AskHistory and pass to ask
+    const history: AskHistory = input.threadId
+      ? await this.getHistory(input.threadId)
+      : null;
     const response = await this.wrenAIAdaptor.ask({
       query: input.question,
+      history,
       deployId,
     });
     return {
@@ -256,6 +270,40 @@ export class AskingService implements IAskingService {
     return this.threadRepository.findAll();
   }
 
+  public async createThreadResponse(
+    threadId: number,
+    input: AskingDetailTaskInput,
+  ): Promise<ThreadResponse> {
+    const thread = await this.threadRepository.findOneBy({
+      id: threadId,
+    });
+
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    // 1. create a task on AI service to generate the detail
+    const response = await this.wrenAIAdaptor.generateAskDetail({
+      query: input.question,
+      sql: input.sql,
+      summary: input.summary,
+    });
+
+    // 2. create a thread and the first thread response
+    const threadResponse = await this.threadResponseRepository.createOne({
+      threadId: thread.id,
+      queryId: response.queryId,
+      question: input.question,
+      status: AskResultStatus.UNDERSTANDING,
+    });
+
+    // 3. put the task into background tracker
+    this.backgroundTracker.addTask(threadResponse);
+
+    // return the task id
+    return threadResponse;
+  }
+
   public async getResponsesWithThread(threadId: number) {
     return this.threadResponseRepository.getResponsesWithThread(threadId);
   }
@@ -268,5 +316,26 @@ export class AskingService implements IAskingService {
     const project = await this.projectService.getCurrentProject();
     const lastDeploy = await this.deployService.getLastDeployment(project.id);
     return lastDeploy;
+  }
+
+  /**
+   * Get the thread with threadId & latest thread response of a thread
+   * transform the response into AskHistory
+   * @param threadId
+   * @returns Promise<AskHistory>
+   */
+  private async getHistory(threadId: number): Promise<AskHistory> {
+    const responses =
+      await this.threadResponseRepository.getResponsesWithThread(threadId, 1);
+    if (!responses.length) {
+      return null;
+    }
+
+    const latestResponse = responses[0];
+    return {
+      sql: latestResponse.sql,
+      summary: latestResponse.summary,
+      steps: latestResponse.detail.steps,
+    };
   }
 }

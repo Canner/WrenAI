@@ -7,13 +7,22 @@ import {
 import { camelCase, mapKeys } from 'lodash';
 import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
 
+export interface ThreadResponseDetail {
+  description: string;
+  steps: Array<{
+    summary: string;
+    sql: string;
+    cteName: string;
+  }>;
+}
+
 export interface ThreadResponse {
   id: number; // ID
   threadId: number; // Reference to thread.id
   queryId: string; // Thread response query ID
   question: string; // Thread response question
   status: string; // Thread response status
-  detail: object; // Thread response detail
+  detail: ThreadResponseDetail; // Thread response detail
   error: object; // Thread response error
 }
 
@@ -26,6 +35,7 @@ export interface IThreadResponseRepository
   extends IBasicRepository<ThreadResponse> {
   getResponsesWithThread(
     threadId: number,
+    limit?: number,
   ): Promise<ThreadResponseWithThreadSummary[]>;
 }
 
@@ -37,15 +47,19 @@ export class ThreadResponseRepository
     super({ knexPg, tableName: 'thread_response' });
   }
 
-  public async getResponsesWithThread(threadId: number) {
-    const responses = await this.knex(this.tableName)
+  public async getResponsesWithThread(threadId: number, limit?: number) {
+    const query = this.knex(this.tableName)
       .select('thread_response.*')
       .select('thread.summary as summary')
       .select('thread.sql as sql')
       .where({ thread_id: threadId })
       .leftJoin('thread', 'thread.id', 'thread_response.thread_id');
 
-    return responses
+    if (limit) {
+      query.orderBy('created_at', 'desc').limit(limit);
+    }
+
+    return (await query)
       .map((res) => {
         // turn object keys into camelCase
         return mapKeys(res, (_, key) => camelCase(key));
@@ -93,7 +107,7 @@ export class ThreadResponseRepository
     id: string | number,
     data: Partial<{
       status: AskResultStatus;
-      detail: object;
+      detail: ThreadResponseDetail;
       error: WrenAIError;
     }>,
     queryOptions?: IQueryOptions,

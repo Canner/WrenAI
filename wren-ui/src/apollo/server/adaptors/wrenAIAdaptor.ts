@@ -49,14 +49,16 @@ export interface deployData {
 }
 
 // ask
+export interface AskStep {
+  summary: string;
+  sql: string;
+  cteName: string;
+}
+
 export interface AskHistory {
   sql: string;
   summary: string;
-  steps: Array<{
-    summary: string;
-    sql: string;
-    cte_name: string;
-  }>;
+  steps: Array<AskStep>;
 }
 
 export interface AskInput {
@@ -93,11 +95,7 @@ export interface AskDetailInput {
 export type AskDetailResult = AskResponse<
   {
     description: string;
-    steps: Array<{
-      summary: string;
-      sql: string;
-      cte_name: string; // the last step will be an empty string
-    }>;
+    steps: AskStep[];
   },
   AskResultStatus
 >;
@@ -150,7 +148,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
         query: input.query,
         id: input.deployId,
-        history: input.history,
+        history: this.transfromHistoryInput(input.history),
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
@@ -350,6 +348,22 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     return {
       status,
       error,
+    };
+  }
+
+  private transfromHistoryInput(history: AskHistory) {
+    if (!history) {
+      return null;
+    }
+
+    // make it snake_case
+    return {
+      ...history,
+      steps: history.steps.map((step) => ({
+        sql: step.sql,
+        summary: step.summary,
+        cte_name: step.cteName,
+      })),
     };
   }
 }
