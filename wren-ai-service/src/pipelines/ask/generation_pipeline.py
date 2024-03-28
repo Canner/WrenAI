@@ -1,23 +1,17 @@
 import os
-import uuid
 from typing import Any, List, Optional
 
 from haystack import Document, Pipeline
-from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import (
     MODEL_NAME,
     init_generator,
 )
-from src.pipelines.ask.components.post_processor import PostProcessor
-from src.pipelines.ask.components.prompts import generation_user_prompt_template
-from src.pipelines.ask.components.retriever import init_retriever
-from src.pipelines.ask.retrieval_pipeline import Retrieval
+from src.pipelines.ask.components.post_processor import init_post_processor
+from src.pipelines.ask.components.prompts import init_text_to_sql_prompt_builder
 from src.utils import load_env_vars
-from src.web.v1.services.ask import AskRequest, AskResultResponse
+from src.web.v1.services.ask import AskRequest
 
 load_env_vars()
 
@@ -32,21 +26,28 @@ if with_trace := os.getenv("ENABLE_TRACE", default=False):
 class Generation(BasicPipeline):
     def __init__(
         self,
-        generator: Any,
+        text_to_sql_generator: Any,
         with_trace: bool = False,
     ):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
-            "prompt_builder", PromptBuilder(template=generation_user_prompt_template)
+            "text_to_sql_prompt_builder",
+            init_text_to_sql_prompt_builder(),
         )
-        self._pipeline.add_component("generator", generator)
-        self._pipeline.add_component("post_processor", PostProcessor())
+        self._pipeline.add_component("text_to_sql_generator", text_to_sql_generator)
+        self._pipeline.add_component("post_processor", init_post_processor())
 
-        self._pipeline.connect("prompt_builder.prompt", "generator.prompt")
-        self._pipeline.connect("generator.replies", "post_processor.replies")
+        self._pipeline.connect(
+            "text_to_sql_prompt_builder.prompt", "text_to_sql_generator.prompt"
+        )
+        self._pipeline.connect(
+            "text_to_sql_generator.replies", "post_processor.replies"
+        )
 
         self.with_trace = with_trace
-        self.prompt_builder = self._pipeline.get_component("prompt_builder")
+        self.text_to_sql_prompt_builder = self._pipeline.get_component(
+            "text_to_sql_prompt_builder"
+        )
 
         super().__init__(self._pipeline)
 
@@ -68,16 +69,16 @@ class Generation(BasicPipeline):
 
             result = self._pipeline.run(
                 {
-                    "prompt_builder": {
+                    "text_to_sql_prompt_builder": {
                         "query": query,
                         "documents": contexts,
                         "history": history,
                     },
-                    "generator": {
+                    "text_to_sql_generator": {
                         "trace_generation_input": TraceGenerationInput(
                             trace_id=trace.id,
                             name="generator",
-                            input=self.prompt_builder.run(
+                            input=self.text_to_sql_prompt_builder.run(
                                 query=query,
                                 documents=contexts,
                                 history=history,
@@ -88,11 +89,11 @@ class Generation(BasicPipeline):
                 }
             )
 
-            trace.update(input=query, output=result["generator"])
+            trace.update(input=query, output=result["text_to_sql_generator"])
         else:
             result = self._pipeline.run(
                 {
-                    "prompt_builder": {
+                    "text_to_sql_prompt_builder": {
                         "query": query,
                         "documents": contexts,
                         "history": history,
@@ -103,54 +104,10 @@ class Generation(BasicPipeline):
         return result
 
 
-# this is for quick testing only, please ignore this
 if __name__ == "__main__":
-    DATASET_NAME = os.getenv("DATASET_NAME")
-
-    document_store = init_document_store()
-    embedder = init_embedder(with_trace=with_trace)
-    retriever = init_retriever(document_store=document_store, with_trace=with_trace)
-    generator = init_generator(with_trace=with_trace)
-
-    retrieval_pipeline = Retrieval(
-        embedder=embedder,
-        retriever=retriever,
-        with_trace=with_trace,
-    )
-
     generation_pipeline = Generation(
-        generator=generator,
-        with_trace=with_trace,
+        text_to_sql_generator=init_generator(),
     )
 
-    if DATASET_NAME == "book_2":
-        query = "How many books are there?"
-    elif DATASET_NAME == "college_3":
-        query = "Count the number of courses."
-    else:
-        query = "random query here..."
-
-    retrieval_result = retrieval_pipeline.run(
-        query,
-        user_id=str(uuid.uuid4()) if with_trace else None,
-    )
-
-    generation_result = generation_pipeline.run(
-        query,
-        contexts=retrieval_result["retriever"]["documents"],
-        user_id=str(uuid.uuid4()) if with_trace else None,
-    )
-
-    print(generation_result)
-
-    assert AskResultResponse.AskResult(
-        **generation_result["post_processor"]["results"][0]
-    )
-
-    if with_trace:
-        generation_pipeline.draw(
-            "./outputs/pipelines/ask/generation_pipeline_with_trace.jpg"
-        )
-        langfuse.flush()
-    else:
-        generation_pipeline.draw("./outputs/pipelines/ask/generation_pipeline.jpg")
+    print("generating generation_pipeline.jpg to outputs/pipelines/ask...")
+    generation_pipeline.draw("./outputs/pipelines/ask/generation_pipeline.jpg")
