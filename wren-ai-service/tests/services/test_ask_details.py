@@ -25,7 +25,7 @@ def ask_details_service():
 
 
 # TODO: we may need to add one more test for the case that steps must be more than 1
-def test_ask_details_wit_successful_sql(ask_details_service: AskDetailsService):
+def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService):
     # asking details
     query_id = str(uuid.uuid4())
     sql = "SELECT * FROM book"
