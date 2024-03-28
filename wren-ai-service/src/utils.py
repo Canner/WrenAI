@@ -19,6 +19,7 @@ def clean_generation_result(result: str) -> str:
         .replace('"""', "")
         .replace("'''", "")
         .replace("```", "")
+        .replace(";", "")
     )
 
 
