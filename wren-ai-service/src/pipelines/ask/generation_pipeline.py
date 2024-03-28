@@ -86,6 +86,9 @@ class Generation(BasicPipeline):
                             model=MODEL_NAME,
                         )
                     },
+                    "sql_correction_prompt_builder": {
+                        "documents": contexts,
+                    },
                 }
             )
 
@@ -97,6 +100,9 @@ class Generation(BasicPipeline):
                         "query": query,
                         "documents": contexts,
                         "history": history,
+                    },
+                    "sql_correction_prompt_builder": {
+                        "documents": contexts,
                     },
                 }
             )
