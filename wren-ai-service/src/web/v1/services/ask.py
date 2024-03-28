@@ -161,11 +161,19 @@ class AskService:
 
         if not self._is_stopped(query_id):
             self.ask_results[query_id] = AskResultResponse(status="generating")
-            text_to_sql_generation_results = self._pipelines["generation"].run(
-                query=ask_request.query,
-                contexts=documents,
-                history=ask_request.history,
-            )
+            if ask_request.history:
+                text_to_sql_generation_results = self._pipelines[
+                    "followup_generation"
+                ].run(
+                    query=ask_request.query,
+                    contexts=documents,
+                    history=ask_request.history,
+                )
+            else:
+                text_to_sql_generation_results = self._pipelines["generation"].run(
+                    query=ask_request.query,
+                    contexts=documents,
+                )
 
             valid_generation_results = []
             if text_to_sql_generation_results["post_processor"][

@@ -7,11 +7,12 @@ from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
 from src.pipelines.ask.components.retriever import init_retriever
+from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
-from src.web.v1.services.ask import AskResultResponse
+from src.web.v1.services.ask import AskRequest, AskResultResponse, SQLExplanation
 
 GLOBAL_DATA = {
     "contexts": None,
@@ -62,6 +63,31 @@ def test_generation_pipeline():
     generation_result = generation_pipeline.run(
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
+    )
+
+    assert AskResultResponse.AskResult(
+        **generation_result["post_processor"]["valid_generation_results"][0]
+    )
+
+
+def test_followup_generation_pipeline():
+    generation_pipeline = FollowUpGeneration(
+        text_to_sql_generator=init_generator(),
+    )
+    generation_result = generation_pipeline.run(
+        "What are the names of authors?",
+        contexts=GLOBAL_DATA["contexts"],
+        history=AskRequest.AskResponseDetails(
+            sql="SELECT COUNT(*) FROM authors",
+            summary="Retrieve the number of authors",
+            steps=[
+                SQLExplanation(
+                    sql="SELECT COUNT(*) FROM authors",
+                    summary="Retrieve the number of authors",
+                    cte_name="",
+                )
+            ],
+        ),
     )
 
     assert AskResultResponse.AskResult(

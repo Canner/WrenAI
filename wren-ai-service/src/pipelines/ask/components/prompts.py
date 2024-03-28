@@ -38,9 +38,6 @@ Proceed in a similar manner for the other queries.
     {{ document.content }}
 {% endfor %}
 
-### QUERY HISTORY ###
-{{ history }}
-
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
 

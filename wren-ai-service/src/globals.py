@@ -1,6 +1,9 @@
 from dotenv import load_dotenv
 
 from src.pipelines.ask import (
+    followup_generation_pipeline as ask_followup_generation_pipeline,
+)
+from src.pipelines.ask import (
     generation_pipeline as ask_generation_pipeline,
 )
 from src.pipelines.ask import (
@@ -43,6 +46,7 @@ def init_globals():
         document_store=document_store,
     )
     text_to_sql_generator = init_generator()
+    text_to_sql_with_followup_generator = init_generator()
     sql_correction_generator = init_generator()
     sql_details_generator = init_ask_details_generator()
 
@@ -65,6 +69,9 @@ def init_globals():
             ),
             "sql_correction": ask_sql_correction_pipeline.SQLCorrection(
                 sql_correction_generator=sql_correction_generator,
+            ),
+            "followup_generation": ask_followup_generation_pipeline.FollowUpGeneration(
+                text_to_sql_generator=text_to_sql_with_followup_generator,
             ),
         }
     )
