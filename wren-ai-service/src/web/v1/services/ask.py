@@ -124,6 +124,12 @@ class AskService:
     ) -> SemanticsPreparationStatusResponse:
         return self.prepare_semantics_statuses[prepare_semantics_status_request.id]
 
+    def _is_stopped(self, query_id: str):
+        return (
+            query_id in self.ask_results
+            and self.ask_results[query_id].status == "stopped"
+        )
+
     def ask(
         self,
         ask_request: AskRequest,
@@ -132,66 +138,72 @@ class AskService:
         # we will need to handle business logic for each status
         query_id = ask_request.query_id
 
-        self.ask_results[query_id] = AskResultResponse(status="understanding")
-        self.ask_results[query_id] = AskResultResponse(status="searching")
+        if not self._is_stopped(query_id):
+            self.ask_results[query_id] = AskResultResponse(status="understanding")
 
-        retrieval_result = self._pipelines["retrieval"].run(
-            query=ask_request.query,
-        )
-        documents = retrieval_result["post_processor"]["documents"]
+        if not self._is_stopped(query_id):
+            self.ask_results[query_id] = AskResultResponse(status="searching")
 
-        if not documents:
-            self.ask_results[query_id] = AskResultResponse(
-                status="failed",
-                error=AskResultResponse.AskError(
-                    code="NO_RELEVANT_DATA",
-                    message="No relevant data",
-                ),
+            retrieval_result = self._pipelines["retrieval"].run(
+                query=ask_request.query,
             )
-            return
+            documents = retrieval_result["post_processor"]["documents"]
 
-        self.ask_results[query_id] = AskResultResponse(status="generating")
-        text_to_sql_generation_results = self._pipelines["generation"].run(
-            query=ask_request.query,
-            contexts=documents,
-            history=ask_request.history,
-        )
+            if not documents:
+                self.ask_results[query_id] = AskResultResponse(
+                    status="failed",
+                    error=AskResultResponse.AskError(
+                        code="NO_RELEVANT_DATA",
+                        message="No relevant data",
+                    ),
+                )
+                return
 
-        valid_generation_results = []
-        if text_to_sql_generation_results["post_processor"]["valid_generation_results"]:
-            valid_generation_results += text_to_sql_generation_results[
-                "post_processor"
-            ]["valid_generation_results"]
-
-        if text_to_sql_generation_results["post_processor"][
-            "invalid_generation_results"
-        ]:
-            sql_correction_results = self._pipelines["sql_correction"].run(
+        if not self._is_stopped(query_id):
+            self.ask_results[query_id] = AskResultResponse(status="generating")
+            text_to_sql_generation_results = self._pipelines["generation"].run(
+                query=ask_request.query,
                 contexts=documents,
-                invalid_generation_results=text_to_sql_generation_results[
-                    "post_processor"
-                ]["invalid_generation_results"],
+                history=ask_request.history,
             )
-            valid_generation_results += sql_correction_results["post_processor"][
-                "valid_generation_results"
-            ]
 
-        if not valid_generation_results:
-            self.ask_results[query_id] = AskResultResponse(
-                status="failed",
-                error=AskResultResponse.AskError(
-                    code="NO_RELEVANT_SQL",
-                    message="No relevant SQL",
-                ),
-            )
-        else:
-            self.ask_results[query_id] = AskResultResponse(
-                status="finished",
-                response=[
-                    AskResultResponse.AskResult(**result)
-                    for result in valid_generation_results
-                ],
-            )
+            valid_generation_results = []
+            if text_to_sql_generation_results["post_processor"][
+                "valid_generation_results"
+            ]:
+                valid_generation_results += text_to_sql_generation_results[
+                    "post_processor"
+                ]["valid_generation_results"]
+
+            if text_to_sql_generation_results["post_processor"][
+                "invalid_generation_results"
+            ]:
+                sql_correction_results = self._pipelines["sql_correction"].run(
+                    contexts=documents,
+                    invalid_generation_results=text_to_sql_generation_results[
+                        "post_processor"
+                    ]["invalid_generation_results"],
+                )
+                valid_generation_results += sql_correction_results["post_processor"][
+                    "valid_generation_results"
+                ]
+
+            if not valid_generation_results:
+                self.ask_results[query_id] = AskResultResponse(
+                    status="failed",
+                    error=AskResultResponse.AskError(
+                        code="NO_RELEVANT_SQL",
+                        message="No relevant SQL",
+                    ),
+                )
+            else:
+                self.ask_results[query_id] = AskResultResponse(
+                    status="finished",
+                    response=[
+                        AskResultResponse.AskResult(**result)
+                        for result in valid_generation_results
+                    ],
+                )
 
     def stop_ask(
         self,
