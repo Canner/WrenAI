@@ -24,9 +24,11 @@ import { WrenAIAdaptor } from '@/apollo/server/adaptors/wrenAIAdaptor';
 import { AskingService } from '@/apollo/server/services/askingService';
 import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
+import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
 
 const serverConfig = getConfig();
-const apolloLogger = getLogger('APOLLO');
+const logger = getLogger('APOLLO');
+logger.level = 'debug';
 
 const cors = microCors();
 
@@ -89,8 +91,8 @@ const bootstrapServer = async () => {
     typeDefs,
     resolvers,
     formatError: (error: GraphQLError) => {
-      apolloLogger.error(error.extensions);
-      return error;
+      logger.error(error);
+      return defaultApolloErrorHandler(error);
     },
     introspection: process.env.NODE_ENV !== 'production',
     context: (): IContext => ({
