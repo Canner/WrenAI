@@ -6,7 +6,9 @@ export enum SETUP {
   DEFINE_RELATIONS = 'defineRelations',
 }
 
+// TODO: use SampleDatasetName enum instead of DEMO_TEMPLATES
 export enum DEMO_TEMPLATES {
-  CRM = 'CRM',
-  ECORMERCE = 'Ecommerce',
+  ECORMERCE = 'ECOMMERCE',
+  MUSIC_STORE = 'MUSIC',
+  NBA = 'NBA',
 }

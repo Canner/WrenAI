@@ -1,5 +1,11 @@
 import { gql } from '@apollo/client';
 
+export const SET_SAMPLE_DATASETS = gql`
+  mutation StartSampleDataset($data: SampleDatasetInput!) {
+    startSampleDataset(data: $data)
+  }
+`;
+
 export const LIST_DATA_SOURCE_TABLES = gql`
   query ListDataSourceTables {
     listDataSourceTables {

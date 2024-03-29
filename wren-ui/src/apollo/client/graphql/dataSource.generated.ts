@@ -3,6 +3,13 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
+export type StartSampleDatasetMutationVariables = Types.Exact<{
+  data: Types.SampleDatasetInput;
+}>;
+
+
+export type StartSampleDatasetMutation = { __typename?: 'Mutation', startSampleDataset: any };
+
 export type ListDataSourceTablesQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
@@ -35,6 +42,37 @@ export type SaveRelationsMutationVariables = Types.Exact<{
 export type SaveRelationsMutation = { __typename?: 'Mutation', saveRelations: any };
 
 
+export const StartSampleDatasetDocument = gql`
+    mutation StartSampleDataset($data: SampleDatasetInput!) {
+  startSampleDataset(data: $data)
+}
+    `;
+export type StartSampleDatasetMutationFn = Apollo.MutationFunction<StartSampleDatasetMutation, StartSampleDatasetMutationVariables>;
+
+/**
+ * __useStartSampleDatasetMutation__
+ *
+ * To run a mutation, you first call `useStartSampleDatasetMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useStartSampleDatasetMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [startSampleDatasetMutation, { data, loading, error }] = useStartSampleDatasetMutation({
+ *   variables: {
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useStartSampleDatasetMutation(baseOptions?: Apollo.MutationHookOptions<StartSampleDatasetMutation, StartSampleDatasetMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<StartSampleDatasetMutation, StartSampleDatasetMutationVariables>(StartSampleDatasetDocument, options);
+      }
+export type StartSampleDatasetMutationHookResult = ReturnType<typeof useStartSampleDatasetMutation>;
+export type StartSampleDatasetMutationResult = Apollo.MutationResult<StartSampleDatasetMutation>;
+export type StartSampleDatasetMutationOptions = Apollo.BaseMutationOptions<StartSampleDatasetMutation, StartSampleDatasetMutationVariables>;
 export const ListDataSourceTablesDocument = gql`
     query ListDataSourceTables {
   listDataSourceTables {

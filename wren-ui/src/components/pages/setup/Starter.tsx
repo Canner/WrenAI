@@ -1,10 +1,15 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { useState } from 'react';
 import { Button, Typography, Row, Col } from 'antd';
+import Icon from '@ant-design/icons';
 import styled from 'styled-components';
 import { ButtonOption, getDataSources, getTemplates } from './utils';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import {
+  DataSourceName,
+  SampleDatasetName,
+} from '@/apollo/client/graphql/__types__';
 
 const ButtonItem = styled(Button)`
   border: 1px var(--gray-4) solid;
@@ -14,6 +19,11 @@ const ButtonItem = styled(Button)`
 
   &:disabled {
     opacity: 0.5;
+  }
+
+  // loading of button
+  .ant-btn-loading-icon .anticon {
+    font-size: 24px;
   }
 `;
 
@@ -37,15 +47,32 @@ const CommingSoon = styled.div`
 
 const ButtonTemplate = (
   props: IterableComponent<
-    ButtonOption & { value: string; onSelect: (value: string) => void }
+    ButtonOption & {
+      value: string;
+      onSelect: (value: string) => void;
+      selectedTemplate?: string;
+    }
   >,
 ) => {
-  const { value, disabled, logo, label, onSelect } = props;
+  const {
+    value,
+    disabled,
+    submitting,
+    logo,
+    IconComponent,
+    label,
+    onSelect,
+    selectedTemplate,
+  } = props;
+
+  const loading = selectedTemplate === value;
+
   return (
     <Col span={6} key={value}>
       <ButtonItem
-        className="text-left px-4 py-2 bg-gray-2 gray-8 d-flex justify-space-between align-center"
-        disabled={disabled}
+        className={`text-left px-4 py-2 bg-gray-2 gray-8 d-flex align-center ${loading ? 'flex-start' : 'justify-space-between'}`}
+        disabled={disabled || submitting}
+        loading={loading}
         onClick={() => onSelect(value)}
       >
         <div className="d-flex align-center">
@@ -56,6 +83,12 @@ const ButtonTemplate = (
               alt={label}
               width="40"
               height="40"
+            />
+          ) : IconComponent ? (
+            <Icon
+              component={IconComponent}
+              className="mr-2 p-1"
+              style={{ width: 40, height: 40, fontSize: 32 }}
             />
           ) : (
             <PlainImage className="mr-2" />
@@ -72,7 +105,10 @@ const DataSourceIterator = makeIterable(ButtonTemplate);
 const TemplatesIterator = makeIterable(ButtonTemplate);
 
 export default function Starter(props) {
-  const { onNext } = props;
+  const { onNext, submitting } = props;
+
+  const [template, setTemplate] = useState<SampleDatasetName>();
+
   const dataSources = getDataSources();
   const templates = getTemplates();
 
@@ -81,6 +117,7 @@ export default function Starter(props) {
   };
 
   const onSelectTemplate = (value: string) => {
+    setTemplate(value as SampleDatasetName);
     onNext && onNext({ template: value });
   };
 
@@ -101,7 +138,11 @@ export default function Starter(props) {
         .
       </Typography.Text>
       <Row className="mt-6" gutter={[16, 16]}>
-        <DataSourceIterator data={dataSources} onSelect={onSelectDataSource} />
+        <DataSourceIterator
+          data={dataSources}
+          onSelect={onSelectDataSource}
+          submitting={submitting}
+        />
       </Row>
 
       <div className="py-8" />
@@ -110,7 +151,12 @@ export default function Starter(props) {
         Play around with sample data
       </Typography.Title>
       <Row className="mt-6" gutter={[16, 16]}>
-        <TemplatesIterator data={templates} onSelect={onSelectTemplate} />
+        <TemplatesIterator
+          data={templates}
+          onSelect={onSelectTemplate}
+          submitting={submitting}
+          selectedTemplate={template}
+        />
       </Row>
 
       <div className="py-12" />
