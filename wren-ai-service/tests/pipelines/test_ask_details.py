@@ -18,5 +18,5 @@ def test_generation_pipeline():
     )
 
     assert AskDetailsResultResponse.AskDetailsResponseDetails(
-        **generation_result["sql_details_post_processor"]["post_processing_results"]
+        **generation_result["post_processor"]["results"]
     )
