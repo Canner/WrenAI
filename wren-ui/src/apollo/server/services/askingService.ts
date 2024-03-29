@@ -65,7 +65,6 @@ export interface IAskingService {
   ): Promise<ThreadResponseWithThreadSummary[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   previewData(responseId: number, stepIndex?: number): Promise<QueryResponse>;
-  showFullSql(responseId: number): Promise<string>;
 }
 
 /**
@@ -413,16 +412,6 @@ export class AskingService implements IAskingService {
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps, stepIndex));
     return this.wrenEngineAdaptor.previewData(sql);
-  }
-
-  public async showFullSql(responseId: number): Promise<string> {
-    const response = await this.getResponse(responseId);
-    if (!response) {
-      throw new Error(`Thread response ${responseId} not found`);
-    }
-
-    const steps = response.detail.steps;
-    return format(constructCteSql(steps));
   }
 
   private async getDeployId() {

@@ -241,8 +241,9 @@ const resolvers = {
     deleteThread: askingResolver.deleteThread,
     createThreadResponse: askingResolver.createThreadResponse,
     previewData: askingResolver.previewData,
-    showFullSql: askingResolver.showFullSql,
   },
+  ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
+  DetailStep: askingResolver.getDetailStepNestedResolver(),
 };
 
 const useMockResolvers = process.env.APOLLO_RESOLVER === 'mock';

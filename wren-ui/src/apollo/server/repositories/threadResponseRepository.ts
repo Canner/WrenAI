@@ -7,13 +7,15 @@ import {
 import { camelCase, mapKeys } from 'lodash';
 import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
 
+export interface DetailStep {
+  summary: string;
+  sql: string;
+  cteName: string;
+}
+
 export interface ThreadResponseDetail {
   description: string;
-  steps: Array<{
-    summary: string;
-    sql: string;
-    cteName: string;
-  }>;
+  steps: Array<DetailStep>;
 }
 
 export interface ThreadResponse {

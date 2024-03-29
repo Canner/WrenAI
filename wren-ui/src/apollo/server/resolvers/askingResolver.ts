@@ -1,9 +1,11 @@
 import { WrenAIError, AskResultStatus } from '../adaptors/wrenAIAdaptor';
 import { Thread } from '../repositories/threadRepository';
-import { ThreadResponse } from '../repositories/threadResponseRepository';
+import { DetailStep, ThreadResponse } from '../repositories/threadResponseRepository';
 import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
+import { format } from 'sql-formatter';
+import { constructCteSql } from '../services/askingService';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -217,14 +219,22 @@ export class AskingResolver {
     return data;
   }
 
-  public async showFullSql(
-    _root: any,
-    args: { responseId: number },
-    ctx: IContext,
-  ): Promise<string> {
-    const { responseId } = args;
-    const askingService = ctx.askingService;
-    const sql = await askingService.showFullSql(responseId);
-    return sql;
-  }
+  /**
+   * Nested resolvers
+   */
+  public getThreadResponseNestedResolver = () => ({
+    detail: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
+      // extend sql to detail
+      return {
+        ...parent.detail,
+        sql: format(constructCteSql(parent.detail.steps)),
+      };
+    },
+  });
+
+  public getDetailStepNestedResolver = () => ({
+    sql: (parent: DetailStep, _args: any, _ctx: IContext) => {
+      return format(parent.sql);
+    },
+  });
 }

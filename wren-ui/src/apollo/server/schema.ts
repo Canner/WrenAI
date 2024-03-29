@@ -311,6 +311,7 @@ export const typeDefs = gql`
   }
 
   type ThreadResponseDetail {
+    sql: String
     description: String
     steps: [DetailStep!]!
   }
@@ -390,6 +391,5 @@ export const typeDefs = gql`
       data: CreateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
-    showFullSql(responseId: Int!): String!
   }
 `;
