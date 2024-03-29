@@ -790,7 +790,9 @@ def ask_details():
     query_id = asks_details_response.json()["query_id"]
     asks_details_status = None
 
-    while not asks_details_status or asks_details_status != "finished":
+    while (
+        asks_details_status != "finished" and asks_details_status != "failed"
+    ) or not asks_details_status:
         asks_details_status_response = requests.get(
             f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details/{query_id}/result/"
         )
@@ -803,3 +805,8 @@ def ask_details():
         st.session_state["asks_details_result"] = asks_details_status_response.json()[
             "response"
         ]
+    elif asks_details_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {asks_details_status_response.json()['error']}',
+            icon="🚨",
+        )
