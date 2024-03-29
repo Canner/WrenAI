@@ -336,39 +336,31 @@ def generate_mdl_json(
                         }
                     )
             else:
-                should_add_column = True
                 if "PRIMARY KEY" in part or "primary key" in part:
-                    if "(" not in part and ")" not in part:
-                        primary_key = part.strip().split(" ")[0]
-                        part = (
-                            part.replace("PRIMARY KEY", "")
-                            .replace("primary key", "")
-                            .strip()
-                        )
-                    else:
-                        should_add_column = False
-                        pattern = r'\("(.*?)"\)'
-                        if matches := re.findall(pattern, part):
-                            primary_key = matches[0]
+                    primary_key = part.strip().split(" ")[0]
+                    part = (
+                        part.replace("PRIMARY KEY", "")
+                        .replace("primary key", "")
+                        .strip()
+                    )
 
                 # Splitting the column name and type
-                if should_add_column:
-                    column_def = _parse_column_definition(part.strip())
+                column_def = _parse_column_definition(part.strip())
 
-                    columns.append(
-                        {
-                            "name": column_def["name"].replace('"', ""),
-                            "type": _get_appropriat_column_type(column_def["type"]),
-                            "notNull": column_def[
-                                "not_null"
-                            ],  # Assuming notNull is False by default as not specified in the string
-                            "isCalculated": False,  # Assuming isCalculated is False by default
-                            "expression": column_def["name"].replace(
-                                '"', ""
-                            ),  # Assuming expression is the column name itself
-                            "properties": {},
-                        }
-                    )
+                columns.append(
+                    {
+                        "name": column_def["name"].replace('"', ""),
+                        "type": _get_appropriat_column_type(column_def["type"]),
+                        "notNull": column_def[
+                            "not_null"
+                        ],  # Assuming notNull is False by default as not specified in the string
+                        "isCalculated": False,  # Assuming isCalculated is False by default
+                        "expression": column_def["name"].replace(
+                            '"', ""
+                        ),  # Assuming expression is the column name itself
+                        "properties": {},
+                    }
+                )
 
         if relationships:
             for relationship in relationships:
