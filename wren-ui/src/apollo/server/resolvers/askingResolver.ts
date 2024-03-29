@@ -1,6 +1,9 @@
 import { WrenAIError, AskResultStatus } from '../adaptors/wrenAIAdaptor';
 import { Thread } from '../repositories/threadRepository';
-import { DetailStep, ThreadResponse } from '../repositories/threadResponseRepository';
+import {
+  DetailStep,
+  ThreadResponse,
+} from '../repositories/threadResponseRepository';
 import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
