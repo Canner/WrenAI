@@ -59,17 +59,6 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
         json.dump(eval_context, f)
 
 
-def _build_cte_query(steps) -> str:
-    return "".join(
-        (
-            f"WITH {step['cte_name']} AS ({step['sql']})\n"
-            if step["cte_name"]
-            else step["sql"]
-        )
-        for step in steps
-    )
-
-
 def _prepare_ragas_eval_pipeline() -> Pipeline:
     pipeline = Pipeline()
     evaluator_context = RagasEvaluator(

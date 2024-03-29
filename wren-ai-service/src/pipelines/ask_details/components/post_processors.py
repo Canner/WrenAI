@@ -33,19 +33,13 @@ class GenerationPostProcessor:
                 "results": None,
             }
 
-        sql_with_cte = ""
-        for i, step in enumerate(steps):
-            if i == len(steps) - 1:
-                sql = sql_with_cte + step["sql"]
-            else:
-                sql = step["sql"]
-                sql_with_cte += f'WITH {step["cte_name"]} AS ({sql})\n'
+        sql = _build_cte_query(steps)
 
-            if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
-                return {
-                    "generator": generator,
-                    "results": None,
-                }
+        if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
+            return {
+                "generator": generator,
+                "results": None,
+            }
 
         # make sure the last step has an empty cte_name
         cleaned_generation_result["steps"][-1]["cte_name"] = ""
@@ -54,6 +48,14 @@ class GenerationPostProcessor:
             "generator": generator,
             "results": cleaned_generation_result,
         }
+
+
+def _build_cte_query(steps) -> str:
+    ctes = ",\n".join(
+        f"{step['cte_name']} AS ({step['sql']})" for step in steps if step["cte_name"]
+    )
+
+    return f"WITH {ctes}\n" + steps[-1]["sql"] if ctes else steps[-1]["sql"]
 
 
 def init_generation_post_processor():
