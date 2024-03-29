@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 
 import src.globals as container
 from src.utils import load_env_vars
@@ -41,6 +41,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def validation_exception_handler(request, exc: Exception):
+    return PlainTextResponse(str(exc), status_code=500)
 
 
 @app.get("/")
