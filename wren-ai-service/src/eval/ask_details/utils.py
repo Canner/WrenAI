@@ -112,13 +112,14 @@ class Collector:
 
     def eval(self, pipeline: Pipeline):
         start = time.perf_counter()
-        response = pipeline.run(
+        res = pipeline.run(
             sql=self._result["question"]["sql"],
         )
         self._result["latency"] = time.perf_counter() - start
-        self._result["response"] = json.loads(response["generator"]["replies"][0])
 
-        meta = response["generator"]["meta"][0]
+        (response, meta, results) = self._destruct(res)
+
+        self._result["response"] = json.loads(response)
         self._result["model"] = meta["model"]
         self._result["usage"] = meta["usage"]
         self._cost_analysis()
@@ -126,6 +127,13 @@ class Collector:
         self._ragas_eval()
         self._execution_correctness_eval()
         self._llm_judge()
+
+    def _destruct(self, response: Dict[str, Any]):
+        return (
+            response["post_processor"]["generator"]["replies"][0],
+            response["post_processor"]["generator"]["meta"][0],
+            response["post_processor"]["results"],
+        )
 
     def _cost_analysis(self):
         model_pricing = get_generation_model_pricing(self._result["model"])
