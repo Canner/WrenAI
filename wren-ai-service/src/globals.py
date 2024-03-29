@@ -78,7 +78,7 @@ def init_globals():
     ASK_DETAILS_SERVICE = AskDetailsService(
         pipelines={
             "generation": ask_details_generation_pipeline.Generation(
-                sql_details_generator=sql_details_generator,
+                generator=sql_details_generator,
                 with_trace=with_trace,
             ),
         }

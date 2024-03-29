@@ -26,17 +26,18 @@ if with_trace := os.getenv("ENABLE_TRACE", default=False):
 class Generation(BasicPipeline):
     def __init__(
         self,
-        sql_details_generator: Any,
+        generator: Any,
         with_trace: bool = False,
     ):
         self._pipeline = Pipeline()
-        self._pipeline.add_component("sql_details_generator", sql_details_generator)
+        self._pipeline.add_component("generator", generator)
         self._pipeline.add_component(
             "sql_details_post_processor", init_generation_post_processor()
         )
         self._pipeline.connect(
-            "sql_details_generator.replies", "sql_details_post_processor.inputs"
+            "generator.replies", "sql_details_post_processor.replies"
         )
+        self._pipeline.connect("generator.meta", "sql_details_post_processor.meta")
 
         self.with_trace = with_trace
 
@@ -79,7 +80,7 @@ class Generation(BasicPipeline):
 
 if __name__ == "__main__":
     generation_pipeline = Generation(
-        sql_details_generator=init_generator(),
+        generator=init_generator(),
     )
 
     print("generating generation_pipeline.jpg to outputs/pipelines/ask_details...")
