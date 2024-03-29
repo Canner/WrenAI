@@ -122,8 +122,9 @@ class Collector:
         self._result["response"] = json.loads(response)
         self._result["model"] = meta["model"]
         self._result["usage"] = meta["usage"]
-        self._cost_analysis()
+        self._result["post_process_results"] = results
 
+        self._cost_analysis()
         self._ragas_eval()
         self._execution_correctness_eval()
         self._llm_judge()
@@ -163,9 +164,11 @@ class Collector:
         self._result["accuracy"]["ragas"]["answer_correctness"] = score
 
     def _execution_correctness_eval(self):
-        # todo: call the preview data API to check the execution correctness
-        # cte_sql = _build_cte_query(self._result["response"]["steps"])
-        self._result["accuracy"]["wren"]["execution_correct"] = False
+        result = self._result["post_process_results"]
+
+        self._result["accuracy"]["wren"]["execution_correct"] = (
+            False if result is None else True
+        )
 
     def _llm_judge(self):
         prompt = f"""
