@@ -25,6 +25,8 @@ class GenerationPostProcessor:
                 "results"
             ]
 
+            print(f"cleaned_generation_result: {cleaned_generation_result}")
+
             if isinstance(cleaned_generation_result, dict):
                 cleaned_generation_result = [cleaned_generation_result]
 
@@ -35,6 +37,9 @@ class GenerationPostProcessor:
                 os.getenv("WREN_ENGINE_ENDPOINT"),
                 cleaned_generation_result,
             )
+
+            print(f"valid_generation_results: {valid_generation_results}")
+            print(f"invalid_generation_results: {invalid_generation_results}")
 
             return {
                 "valid_generation_results": valid_generation_results,
