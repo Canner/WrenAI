@@ -4,12 +4,20 @@ import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
 import PromptResult from '@/components/pages/home/prompt/Result';
 import useAskProcessState from '@/hooks/useAskProcessState';
+import {
+  AskingTask,
+  AskingTaskStatus,
+} from '@/apollo/client/graphql/__types__';
 
 interface Props {
+  onSelect: (payload: {
+    sql: string;
+    summary: string;
+    question: string;
+  }) => void;
   onStop: () => void;
   onSubmit: (value: string) => void;
-  data?: { status: string; result: { sql: string; summary: string }[] };
-  error?: any;
+  data?: AskingTask;
 }
 
 const PromptStyle = styled.div`
@@ -24,28 +32,27 @@ const PromptButton = styled(Button)`
   min-width: 72px;
 `;
 
-const convertToProcessState = (status: string) => {
-  return {
-    understanding: PROCESS_STATE.UNDERSTANDING,
-    searching: PROCESS_STATE.SEARCHING,
-    finished: PROCESS_STATE.FINISHED,
-  }[status];
-};
+const convertToProcessState = (data: AskingTask) => {
+  const processState = {
+    [AskingTaskStatus.Understanding]: PROCESS_STATE.UNDERSTANDING,
+    [AskingTaskStatus.Searching]: PROCESS_STATE.SEARCHING,
+    [AskingTaskStatus.Generating]: PROCESS_STATE.GENERATING,
+    [AskingTaskStatus.Finished]: PROCESS_STATE.FINISHED,
+  }[data.status];
 
-const convertToErrorState = (status: string) => {
-  return {
-    understanding: PROCESS_STATE.UNDERSTANDING_FAILED,
-    searching: PROCESS_STATE.SEARCHING_FAILED,
-    finished: PROCESS_STATE.NO_RESULT,
-  }[status];
+  if (processState === PROCESS_STATE.FINISHED && data.candidates.length === 0) {
+    return PROCESS_STATE.NO_RESULT;
+  }
+  return processState;
 };
 
 export default function Prompt(props: Props) {
-  const { data, error, onSubmit, onStop } = props;
+  const { data, onSubmit, onStop, onSelect } = props;
   const [inputValue, setInputValue] = useState('');
   const askProcessState = useAskProcessState();
 
-  const results = useMemo(() => data.result || [], [data]);
+  const candidates = useMemo(() => data?.candidates || [], [data?.candidates]);
+  const error = useMemo(() => data?.error || null, [data?.error]);
   const question = useMemo(() => inputValue.trim(), [inputValue]);
   const isProcessing = useMemo(
     () =>
@@ -57,18 +64,20 @@ export default function Prompt(props: Props) {
 
   useEffect(() => {
     if (data) {
-      const processState = convertToProcessState(data.status);
+      const processState = convertToProcessState(data);
       askProcessState.setState(processState);
     }
   }, [data]);
 
   useEffect(() => {
     if (error) {
-      // TODO: confirm error state
-      const errorState = convertToErrorState(error.status);
-      askProcessState.setState(errorState);
+      askProcessState.setState(PROCESS_STATE.ASKING_FAILED);
     }
   }, [error]);
+
+  const selectResult = (payload) => {
+    onSelect && onSelect({ ...payload, question });
+  };
 
   const closeResult = () => {
     askProcessState.resetState();
@@ -117,9 +126,10 @@ export default function Prompt(props: Props) {
       </PromptButton>
 
       <PromptResult
-        data={results}
+        data={candidates}
         error={error}
         processState={askProcessState}
+        onSelect={selectResult}
         onClose={closeResult}
         onStop={stopProcess}
       />

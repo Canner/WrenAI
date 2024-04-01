@@ -15,6 +15,7 @@ import ViewSQLModal from '@/components/pages/home/prompt/ViewSQLModal';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import useModalAction from '@/hooks/useModalAction';
 import useAskProcessState from '@/hooks/useAskProcessState';
+import { AskingTask } from '@/apollo/client/graphql/__types__';
 
 const ResultStyle = styled.div`
   position: absolute;
@@ -52,16 +53,20 @@ const ResultBlock = styled.div`
 
 interface Props {
   processState: ReturnType<typeof useAskProcessState>;
-  data: any[];
+  data: AskingTask['candidates'];
   error?: any;
+  onSelect: (payload: { sql: string; summary: string }) => void;
   onClose: () => void;
   onStop: () => void;
 }
 
-const ResultTemplate = ({ index, summary, sql, onShowSQL }) => {
+const ResultTemplate = ({ index, summary, sql, onSelect, onShowSQL }) => {
   return (
     <Col span={8}>
-      <ResultBlock className="border border-gray-5 rounded px-3 pt-3 pb-4 cursor-pointer">
+      <ResultBlock
+        className="border border-gray-5 rounded px-3 pt-3 pb-4 cursor-pointer"
+        onClick={() => onSelect({ sql, summary })}
+      >
         <div className="d-flex justify-space-between align-center text-sm mb-3">
           <div className="border border-gray-5 px-2 rounded-pill">
             Result {index + 1}
@@ -69,7 +74,7 @@ const ResultTemplate = ({ index, summary, sql, onShowSQL }) => {
           <Button
             className="adm-btn-no-style gray-6 text-sm px-1"
             type="text"
-            onClick={() => onShowSQL({ sql, summary })}
+            onClick={(event) => onShowSQL(event, { sql, summary })}
           >
             <FunctionOutlined className="-mr-1" />
             View SQL
@@ -104,16 +109,17 @@ const makeProcessing = (text: string) => (props: Props) => {
 };
 
 const makeProcessingError =
-  (config: { icon: ReactNode; title: string; description: string }) =>
+  (config: { icon: ReactNode; title?: string; description?: string }) =>
   (props: Props) => {
     const { onClose, error } = props;
-    const { message } = error || {};
+    const { message, code, title, stacktrace = [] } = error || {};
+    const hasStacktrace = !!stacktrace.length;
     return (
       <div>
         <div className="d-flex justify-space-between text-medium mb-2">
           <div className="d-flex align-center">
             {config.icon}
-            {config.title}
+            {config.title || title || code}
           </div>
           <Button
             className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
@@ -125,8 +131,8 @@ const makeProcessingError =
             Close
           </Button>
         </div>
-        <div className="gray-7">{config.description}</div>
-        {message && (
+        <div className="gray-7">{config.description || message}</div>
+        {hasStacktrace && (
           <StyledCollapse
             ghost
             expandIcon={({ isActive }) => (
@@ -134,7 +140,7 @@ const makeProcessingError =
             )}
           >
             <Collapse.Panel key="1" header="Show error messages">
-              <pre className="mb-0">{message}</pre>
+              <pre className="mb-0">{stacktrace.join('\n')}</pre>
             </Collapse.Panel>
           </StyledCollapse>
         )}
@@ -144,18 +150,8 @@ const makeProcessingError =
 
 const ErrorIcon = () => <CloseCircleFilled className="mr-2 red-5 text-lg" />;
 
-const UnderstandingFailed = makeProcessingError({
+const AskingFailed = makeProcessingError({
   icon: <ErrorIcon />,
-  title: 'Failed to understand',
-  description:
-    'Sorry, I cannot understand your question. Could you please rephrase your question or provide more context?',
-});
-
-const SearchingFailed = makeProcessingError({
-  icon: <ErrorIcon />,
-  title: 'Something went wrong',
-  description:
-    "Sorry, we encountered an error when we're processing your request.",
 });
 
 const NoResult = makeProcessingError({
@@ -167,12 +163,17 @@ const NoResult = makeProcessingError({
 const Understanding = makeProcessing('Understanding question');
 const Searching = makeProcessing('Searching data');
 const Finished = (props: Props) => {
-  const { data, onClose } = props;
+  const { data, onClose, onSelect } = props;
 
   const viewSQLModal = useModalAction();
 
-  const showSQL = (payload: { sql: string; summary: string }) => {
+  const showSQL = (event, payload: { sql: string; summary: string }) => {
     viewSQLModal.openModal(payload);
+    event.stopPropagation();
+  };
+
+  const selectResult = (payload: { sql: string; summary: string }) => {
+    onSelect && onSelect(payload);
   };
 
   return (
@@ -193,7 +194,11 @@ const Finished = (props: Props) => {
         </Button>
       </div>
       <Row gutter={12}>
-        <ResultColumnIterator data={data} onShowSQL={showSQL} />
+        <ResultColumnIterator
+          data={data}
+          onShowSQL={showSQL}
+          onSelect={selectResult}
+        />
       </Row>
       <ViewSQLModal {...viewSQLModal.state} onClose={viewSQLModal.closeModal} />
     </div>
@@ -205,9 +210,10 @@ const getProcessStateComponent = (state: PROCESS_STATE) => {
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
       [PROCESS_STATE.SEARCHING]: Searching,
+      // generating no need to change UI
+      [PROCESS_STATE.GENERATING]: Searching,
       [PROCESS_STATE.FINISHED]: Finished,
-      [PROCESS_STATE.UNDERSTANDING_FAILED]: UnderstandingFailed,
-      [PROCESS_STATE.SEARCHING_FAILED]: SearchingFailed,
+      [PROCESS_STATE.ASKING_FAILED]: AskingFailed,
       [PROCESS_STATE.NO_RESULT]: NoResult,
     }[state] || null
   );

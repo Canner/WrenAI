@@ -1,6 +1,5 @@
-import { Button, Skeleton, Typography } from 'antd';
+import { Skeleton, Typography } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
-import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import StepContent from '@/components/pages/home/StepContent';
 
@@ -8,7 +7,6 @@ const { Title } = Typography;
 
 interface Props {
   loading: boolean;
-  onOpenSaveAsViewModal: (data: { sql: string }) => void;
   question: string;
   description: string;
   answerResultSteps: Array<{
@@ -19,14 +17,7 @@ interface Props {
 }
 
 export default function AnswerResult(props: Props) {
-  const {
-    loading,
-    onOpenSaveAsViewModal,
-    question,
-    description,
-    answerResultSteps,
-    sql,
-  } = props;
+  const { loading, question, description, answerResultSteps, sql } = props;
 
   return (
     <Skeleton active loading={loading}>
@@ -52,15 +43,6 @@ export default function AnswerResult(props: Props) {
             summary={step.summary}
           />
         ))}
-        <Button
-          className="mt-2 gray-6"
-          type="text"
-          size="small"
-          icon={<SaveOutlined />}
-          onClick={() => onOpenSaveAsViewModal({ sql })}
-        >
-          Save as view
-        </Button>
       </Typography>
     </Skeleton>
   );

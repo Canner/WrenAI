@@ -1,40 +1,18 @@
-import { useState } from 'react';
-import { nextTick } from '@/utils/time';
+import { useEffect } from 'react';
 import Image from 'next/image';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
-
-const testData = {
-  status: 'searching',
-  result: [
-    {
-      summary: 'Top 10 customer with most order from global customer in 2024',
-      sql: 'SELECT * FROM customer',
-    },
-    {
-      summary: 'Top 10 customer with most order from global customer in 2024',
-      sql: 'SELECT * FROM customer',
-    },
-    {
-      summary: 'Top 10 customer with most order from global customer in 2024',
-      sql: 'SELECT * FROM customer',
-    },
-  ],
-};
-
-const errorData = undefined;
-// {
-//   message: '',
-//   extensions: {
-//     code: '000',
-//     data: {
-//       status: 'finished',
-//       // message: `Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: 10\n     at Main.main(Main.java:4)`,
-//     },
-//   },
-// };
+import {
+  useAskingTaskLazyQuery,
+  useCancelAskingTaskMutation,
+  useCreateAskingTaskMutation,
+  useCreateThreadMutation,
+} from '@/apollo/client/graphql/home.generated';
+import { AskingTaskStatus } from '@/apollo/client/graphql/__types__';
+import { useRouter } from 'next/router';
+import { Path } from '@/utils/enum';
 
 const demoData = [
   {
@@ -53,30 +31,64 @@ const demoData = [
   },
 ];
 
-export default function Ask() {
+export default function Home() {
+  const router = useRouter();
   const homeSidebar = useHomeSidebar();
+  const [createAskingTask, createAskingTaskResult] =
+    useCreateAskingTaskMutation();
+  const [cancelAskingTask] = useCancelAskingTaskMutation();
+  const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
+    pollInterval: 1000,
+  });
+  const [createThread] = useCreateThreadMutation();
 
-  // TODO: adjust when intergrating with API
-  const [simulateData, setSimulateData] = useState(testData);
+  useEffect(() => {
+    const { askingTask } = askingTaskResult.data || {};
+    if (
+      askingTask?.status &&
+      [
+        AskingTaskStatus.Finished,
+        AskingTaskStatus.Failed,
+        AskingTaskStatus.Stopped,
+      ].includes(askingTask.status)
+    ) {
+      askingTaskResult.stopPolling();
+    }
+  }, [askingTaskResult.data?.askingTask]);
+
   const isDemo = true;
 
   const onDemoSelect = () => {};
 
+  const onSelect = async (payload) => {
+    try {
+      const response = await createThread({ variables: { data: payload } });
+      router.push(Path.Home + `/${response.data.createThread.id}`);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const onStop = () => {
-    // TODO: send stop asking API
+    const taskId = createAskingTaskResult.data?.createAskingTask.id;
+    if (taskId) {
+      cancelAskingTask({
+        variables: { taskId },
+      });
+    }
   };
 
-  const simulateProcess = async () => {
-    setSimulateData({ ...simulateData, status: 'understanding' });
-    await nextTick(3000);
-    setSimulateData({ ...simulateData, status: 'searching' });
-    await nextTick(3000);
-    setSimulateData({ ...simulateData, status: 'finished' });
-  };
-
-  const onSubmit = async (value) => {
-    console.log(value);
-    await simulateProcess();
+  const onSubmit = async (value: string) => {
+    try {
+      const response = await createAskingTask({
+        variables: { data: { question: value } },
+      });
+      await fetchAskingTask({
+        variables: { taskId: response.data.createAskingTask.id },
+      });
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (
@@ -99,8 +111,8 @@ export default function Ask() {
         {isDemo && <DemoPrompt demo={demoData} onSelect={onDemoSelect} />}
       </div>
       <Prompt
-        data={simulateData}
-        error={errorData?.extensions.data}
+        data={askingTaskResult.data?.askingTask}
+        onSelect={onSelect}
         onSubmit={onSubmit}
         onStop={onStop}
       />
