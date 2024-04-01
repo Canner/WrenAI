@@ -14,6 +14,7 @@ import * as demoManifest from './manifest.json';
 import { pick } from 'lodash';
 import { ProjectResolver } from './resolvers/projectResolver';
 import { ModelResolver } from './resolvers/modelResolver';
+import { AskingResolver } from './resolvers/askingResolver';
 
 const mockResolvers = {
   JSON: GraphQLJSON,
@@ -200,6 +201,7 @@ const mockResolvers = {
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
+const askingResolver = new AskingResolver();
 
 const resolvers = {
   JSON: GraphQLJSON,
@@ -211,6 +213,14 @@ const resolvers = {
     manifest: modelResolver.getManifest,
     onboardingStatus: projectResolver.getOnboardingStatus,
     modelSync: modelResolver.checkModelSync,
+
+    // Ask
+    askingTask: askingResolver.getAskingTask,
+
+    // Thread
+    thread: askingResolver.getThread,
+    threads: askingResolver.listThreads,
+    threadResponse: askingResolver.getResponse,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -220,7 +230,20 @@ const resolvers = {
     saveRelations: projectResolver.saveRelations,
     createModel: modelResolver.createModel,
     deleteModel: modelResolver.deleteModel,
+
+    // Ask
+    createAskingTask: askingResolver.createAskingTask,
+    cancelAskingTask: askingResolver.cancelAskingTask,
+
+    // Thread
+    createThread: askingResolver.createThread,
+    updateThread: askingResolver.updateThread,
+    deleteThread: askingResolver.deleteThread,
+    createThreadResponse: askingResolver.createThreadResponse,
+    previewData: askingResolver.previewData,
   },
+  ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
+  DetailStep: askingResolver.getDetailStepNestedResolver(),
 };
 
 const useMockResolvers = process.env.APOLLO_RESOLVER === 'mock';
