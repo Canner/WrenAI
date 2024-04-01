@@ -2,6 +2,10 @@ import { useState } from 'react';
 import copy from 'copy-to-clipboard';
 import { message } from 'antd';
 import { COLLAPSE_CONTENT_TYPE } from '@/utils/enum';
+import {
+  usePreviewDataMutation,
+  PreviewDataMutationResult,
+} from '@/apollo/client/graphql/home.generated';
 
 function getButtonProps({
   isLastStep,
@@ -41,19 +45,31 @@ export default function useAnswerStepContent({
   fullSql,
   isLastStep,
   sql,
+  stepIndex,
+  threadResponseId,
 }: {
   fullSql: string;
   isLastStep: boolean;
   sql: string;
+  stepIndex: number;
+  threadResponseId: number;
 }) {
   const [collapseContentType, setCollapseContentType] =
     useState<COLLAPSE_CONTENT_TYPE>(COLLAPSE_CONTENT_TYPE.NONE);
 
+  const [previewData, previewDataResult] = usePreviewDataMutation({
+    onError: (error) => console.error(error),
+  });
+
   const onViewSQL = () =>
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.VIEW_SQL);
 
-  const onPreviewData = () =>
+  const onPreviewData = () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.PREVIEW_DATA);
+    previewData({
+      variables: { where: { responseId: threadResponseId, stepIndex } },
+    });
+  };
 
   const onCloseCollapse = () =>
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.NONE);
@@ -90,6 +106,11 @@ export default function useAnswerStepContent({
             isViewSQL,
             sql,
           }),
+      previewDataResult: {
+        error: previewDataResult.error,
+        loading: previewDataResult.loading,
+        previewData: previewDataResult?.data?.previewData,
+      } as unknown as PreviewDataMutationResult,
     },
     ...buttonProps,
   };

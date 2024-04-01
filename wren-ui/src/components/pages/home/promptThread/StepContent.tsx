@@ -12,12 +12,14 @@ interface Props {
   fullSql: string;
   isLastStep: boolean;
   sql: string;
-  stepNumber: number;
+  stepIndex: number;
   summary: string;
+  threadResponseId: number;
 }
 
 export default function StepContent(props: Props) {
-  const { fullSql, isLastStep, sql, stepNumber, summary } = props;
+  const { fullSql, isLastStep, sql, stepIndex, summary, threadResponseId } =
+    props;
 
   const {
     collapseContentProps,
@@ -28,7 +30,11 @@ export default function StepContent(props: Props) {
     fullSql,
     isLastStep,
     sql,
+    threadResponseId,
+    stepIndex,
   });
+
+  const stepNumber = stepIndex + 1;
 
   return (
     <Row className="mb-3 bg-gray-2" wrap={false}>

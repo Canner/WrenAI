@@ -10,6 +10,7 @@ type TableColumn = TableColumnProps<any> & { titleText?: string };
 interface Props {
   columns: TableColumn[];
   data: Array<any[]>;
+  loading: boolean;
 }
 
 const getValueByValueType = (value: any) =>
@@ -31,7 +32,7 @@ const convertResultData = (data: Array<any>, columns) => {
 };
 
 export default function PreviewDataContent(props: Props) {
-  const { columns = [], data = [] } = props;
+  const { columns = [], data = [], loading } = props;
   const hasColumns = !!columns.length;
 
   const dynamicWidth = useMemo(() => {
@@ -61,6 +62,7 @@ export default function PreviewDataContent(props: Props) {
       pagination={false}
       size="small"
       scroll={{ y: 280, x: dynamicWidth }}
+      loading={loading}
     />
   );
 }

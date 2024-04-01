@@ -12,7 +12,8 @@ import { COLUMN_TYPE } from './enum';
 
 export const getColumnTypeIcon = (payload: { type: string }, attrs?: any) => {
   const { type } = payload;
-  switch (type.toUpperCase()) {
+  const compareString = type.toUpperCase();
+  switch (compareString) {
     case COLUMN_TYPE.INTEGER:
     case COLUMN_TYPE.TINYINT:
     case COLUMN_TYPE.SMALLINT:
@@ -49,7 +50,16 @@ export const getColumnTypeIcon = (payload: { type: string }, attrs?: any) => {
     case COLUMN_TYPE.MONGO_ROW:
       return <JsonBracesIcon {...attrs} />;
 
-    default:
+    default: {
+      // int* or uint* or float*
+      if (
+        compareString.startsWith('INT') ||
+        compareString.startsWith('UINT') ||
+        compareString.startsWith('FLOAT')
+      ) {
+        return <NumericIcon {...attrs} />;
+      }
       return <ColumnsIcon {...attrs} />;
+    }
   }
 };

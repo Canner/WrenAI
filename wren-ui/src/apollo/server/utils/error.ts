@@ -94,7 +94,7 @@ export const defaultApolloErrorHandler = (error: GraphQLError) => {
       locations: error.locations,
       path: error.path,
       message: error.message,
-      extenstions: {
+      extensions: {
         code,
         message: error.message,
         shortMessage: shortMessages[code],

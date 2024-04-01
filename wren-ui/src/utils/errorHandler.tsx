@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { ErrorResponse } from '@apollo/client/link/error';
+import { ApolloError } from '@apollo/client';
 import { message } from 'antd';
 
 abstract class ErrorHandler {
@@ -97,3 +98,14 @@ const errorHandler = (error: ErrorResponse) => {
 };
 
 export default errorHandler;
+
+export const parseGraphQLError = (error: ApolloError) => {
+  const graphQLErrors: GraphQLError = error.graphQLErrors?.[0];
+  const extensions = graphQLErrors.extensions;
+  return {
+    message: extensions.message as string,
+    shortMessage: extensions.shortMessage as string,
+    code: extensions.code as string,
+    stacktrace: extensions?.stacktrace as Array<string> | undefined,
+  };
+};
