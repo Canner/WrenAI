@@ -112,14 +112,14 @@ const makeProcessingError =
   (config: { icon: ReactNode; title?: string; description?: string }) =>
   (props: Props) => {
     const { onClose, error } = props;
-    const { message, code, title, stacktrace = [] } = error || {};
-    const hasStacktrace = !!stacktrace.length;
+    const { message, shortMessage, stacktrace } = error || {};
+    const hasStacktrace = !!stacktrace;
     return (
       <div>
         <div className="d-flex justify-space-between text-medium mb-2">
           <div className="d-flex align-center">
             {config.icon}
-            {config.title || title || code}
+            {config.title || shortMessage}
           </div>
           <Button
             className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"

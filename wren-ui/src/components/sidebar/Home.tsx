@@ -18,6 +18,8 @@ interface ThreadData {
 export interface Props {
   data: ThreadData[];
   onSelect: (selectKeys) => void;
+  onDelete: (id: string) => Promise<void>;
+  onRename: (id: string, newName: string) => Promise<void>;
 }
 
 const StyledSidebarTree = styled(SidebarTree)`
@@ -39,7 +41,7 @@ const StyledSidebarTree = styled(SidebarTree)`
 `;
 
 export default function Home(props: Props) {
-  const { data, onSelect } = props;
+  const { data, onSelect, onRename, onDelete } = props;
   const router = useRouter();
 
   const getThreadGroupNode = createTreeGroupNode({
@@ -70,13 +72,7 @@ export default function Home(props: Props) {
             <TreeTitle
               threadId={nodeKey}
               title={thread.name}
-              onRename={(newThreadName) => {
-                // TODO: Call API to rename the thread name
-                console.log(
-                  'Call API to rename the thread name:',
-                  newThreadName,
-                );
-              }}
+              onRename={onRename}
               onDelete={onDeleteThread}
             />
           ),
@@ -85,9 +81,8 @@ export default function Home(props: Props) {
     );
   }, [data]);
 
-  const onDeleteThread = (threadId: string) => {
-    // TODO: Call API to delete the thread result
-    console.log('Call delete API:', threadId);
+  const onDeleteThread = async (threadId: string) => {
+    await onDelete(threadId);
     if (router.query.id === threadId) {
       router.push(Path.Home);
     }

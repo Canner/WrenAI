@@ -6,20 +6,24 @@ import '@/components/editor/AceEditor';
 const Block = styled.div<{ inline?: boolean }>`
   position: relative;
   white-space: pre;
+  overflow-x: auto;
   ${(props) =>
     props.inline
       ? `display: inline; border: none; background: transparent !important; padding: 0;`
       : `background: var(--gray-1); padding: 4px;`}
 
-  .line-number {
-    user-select: none;
-    display: inline-block;
-    min-width: 1.5em;
-    text-align: right;
-    margin-right: 1em;
-    color: var(--gray-6);
-    font-weight: 700;
-    font-size: 14px;
+  .adm-code-line {
+    ${(props) => (props.inline ? '' : 'display: block;')}
+    &-number {
+      user-select: none;
+      display: inline-block;
+      min-width: 1.5em;
+      text-align: right;
+      margin-right: 1em;
+      color: var(--gray-6);
+      font-weight: 700;
+      font-size: 14px;
+    }
   }
 `;
 
@@ -77,8 +81,10 @@ export default function CodeBlock(props: Props) {
     });
 
     return (
-      <span className="ace_line" key={`${line}-${index}`}>
-        {showLineNumbers && <span className="line-number">{index + 1}</span>}
+      <span className="adm-code-line ace_line" key={`${line}-${index}`}>
+        {showLineNumbers && (
+          <span className="adm-code-line-number">{index + 1}</span>
+        )}
         {children}
       </span>
     );

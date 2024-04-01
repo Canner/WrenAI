@@ -3,7 +3,9 @@ import { gql } from '@apollo/client';
 const COMMON_ERROR = gql`
   fragment CommonError on Error {
     code
+    shortMessage
     message
+    stacktrace
   }
 `;
 
@@ -13,6 +15,7 @@ const COMMON_RESPONSE = gql`
     question
     status
     detail {
+      sql
       description
       steps {
         summary
@@ -101,5 +104,43 @@ export const CREATE_THREAD = gql`
       sql
       summary
     }
+  }
+`;
+
+export const CREATE_THREAD_RESPONSE = gql`
+  mutation CreateThreadResponse(
+    $threadId: Int!
+    $data: CreateThreadResponseInput!
+  ) {
+    createThreadResponse(threadId: $threadId, data: $data) {
+      ...CommonResponse
+      error {
+        code
+        shortMessage
+        message
+        stacktrace
+      }
+    }
+  }
+  ${COMMON_RESPONSE}
+  ${COMMON_ERROR}
+`;
+
+export const UPDATE_THREAD = gql`
+  mutation UpdateThread(
+    $where: ThreadUniqueWhereInput!
+    $data: UpdateThreadInput!
+  ) {
+    updateThread(where: $where, data: $data) {
+      id
+      sql
+      summary
+    }
+  }
+`;
+
+export const DELETE_THREAD = gql`
+  mutation DeleteThread($where: ThreadUniqueWhereInput!) {
+    deleteThread(where: $where)
   }
 `;

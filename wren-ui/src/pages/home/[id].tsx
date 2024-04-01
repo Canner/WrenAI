@@ -6,16 +6,17 @@ import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import AnswerResult from '@/components/pages/home/AnswerResult';
 import Prompt from '@/components/pages/home/prompt';
+import { makeIterable } from '@/utils/iteration';
 import {
   useAskingTaskLazyQuery,
   useCancelAskingTaskMutation,
   useCreateAskingTaskMutation,
+  useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
-
 import { AskingTaskStatus } from '@/apollo/client/graphql/__types__';
-import { makeIterable } from '@/utils/iteration';
+import { THREAD } from '@/apollo/client/graphql/home';
 
 const AnswerResultsBlock = styled.div`
   width: 768px;
@@ -40,16 +41,23 @@ const AnswerResultsBlock = styled.div`
   }
 `;
 
-const AnswerBlockTemplate = ({ index, id, status, question, detail, sql }) => {
+const checkIsFinished = (status: AskingTaskStatus) =>
+  [
+    AskingTaskStatus.Finished,
+    AskingTaskStatus.Failed,
+    AskingTaskStatus.Stopped,
+  ].includes(status);
+
+const AnswerBlockTemplate = ({ index, id, status, question, detail }) => {
   return (
     <div key={`${id}-${index}`}>
       {index > 0 && <Divider />}
       <AnswerResult
-        answerResultSteps={detail.steps}
-        description={detail.description}
+        answerResultSteps={detail?.steps}
+        description={detail?.description}
         loading={status !== AskingTaskStatus.Finished}
         question={question}
-        sql={sql}
+        fullSql={detail?.sql}
       />
     </div>
   );
@@ -61,38 +69,94 @@ export default function HomeThread({ threadId }) {
   const divRef = useRef<HTMLDivElement>(null);
   const homeSidebar = useHomeSidebar();
 
-  const { data } = useThreadQuery({
+  const { data, client } = useThreadQuery({
     variables: { threadId },
+    fetchPolicy: 'cache-and-network',
   });
 
-  const [fetchThreadResponse] = useThreadResponseLazyQuery({
-    onCompleted(_data) {
-      // update response to thread
-    },
-  });
+  const thread = useMemo(() => data?.thread || null, [data]);
+
   const [createAskingTask, createAskingTaskResult] =
     useCreateAskingTaskMutation();
   const [cancelAskingTask] = useCancelAskingTaskMutation();
   const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
     pollInterval: 1000,
   });
+  const [createThreadResponse] = useCreateThreadResponseMutation({
+    onCompleted(_data) {
+      const threadQuery = {
+        query: THREAD,
+        variables: { threadId },
+      };
+      const current = client.readQuery(threadQuery);
+      client.writeQuery({
+        ...threadQuery,
+        data: {
+          thread: {
+            ...current.thread,
+            responses: [
+              ...current.thread.responses,
+              _data.createThreadResponse,
+            ],
+          },
+        },
+      });
+    },
+  });
+  const [fetchThreadResponse, threadResponseResult] =
+    useThreadResponseLazyQuery({
+      pollInterval: 1000,
+      onCompleted(_data) {
+        const threadQuery = {
+          query: THREAD,
+          variables: { threadId },
+        };
+        const current = client.readQuery(threadQuery);
+        client.writeQuery({
+          ...threadQuery,
+          data: {
+            thread: {
+              ...current.thread,
+              responses: current.thread.responses.map((response) => {
+                if (response.id === _data.threadResponse.id) {
+                  return _data.threadResponse;
+                }
+                return response;
+              }),
+            },
+          },
+        });
+      },
+    });
 
-  const thread = useMemo(() => data?.thread || null, [data]);
-
+  const threadResponse = useMemo(
+    () => threadResponseResult.data?.threadResponse || null,
+    [threadResponseResult.data],
+  );
   useEffect(() => {
     if (!thread) return;
-    const unfinishedRespose = thread.responses.find((response) =>
-      [
-        AskingTaskStatus.Finished,
-        AskingTaskStatus.Failed,
-        AskingTaskStatus.Stopped,
-      ].includes(response.status),
+    const unfinishedRespose = thread.responses.find(
+      (response) => !checkIsFinished(response.status),
     );
 
     if (unfinishedRespose) {
       fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
     }
   }, [thread]);
+
+  useEffect(() => {
+    if (!threadResponse) return;
+    if (threadResponse.status && checkIsFinished(threadResponse.status)) {
+      threadResponseResult.stopPolling();
+    }
+  }, [threadResponse]);
+
+  useEffect(() => {
+    const { askingTask } = askingTaskResult.data || {};
+    if (askingTask?.status && checkIsFinished(askingTask.status)) {
+      askingTaskResult.stopPolling();
+    }
+  }, [askingTaskResult.data?.askingTask]);
 
   useEffect(() => {
     if (divRef.current && thread?.responses.length > 0) {
@@ -113,7 +177,12 @@ export default function HomeThread({ threadId }) {
 
   const onSelect = async (payload) => {
     try {
-      // const response = await createThreadResponse({ variables: { data: payload } });
+      const response = await createThreadResponse({
+        variables: { threadId: thread.id, data: payload },
+      });
+      await fetchThreadResponse({
+        variables: { responseId: response.data.createThreadResponse.id },
+      });
     } catch (error) {
       console.error(error);
     }

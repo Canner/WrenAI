@@ -31,6 +31,13 @@ const demoData = [
   },
 ];
 
+const checkIsFinished = (status: AskingTaskStatus) =>
+  [
+    AskingTaskStatus.Finished,
+    AskingTaskStatus.Failed,
+    AskingTaskStatus.Stopped,
+  ].includes(status);
+
 export default function Home() {
   const router = useRouter();
   const homeSidebar = useHomeSidebar();
@@ -40,18 +47,13 @@ export default function Home() {
   const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
     pollInterval: 1000,
   });
-  const [createThread] = useCreateThreadMutation();
+  const [createThread] = useCreateThreadMutation({
+    onCompleted: () => homeSidebar.refetch(),
+  });
 
   useEffect(() => {
     const { askingTask } = askingTaskResult.data || {};
-    if (
-      askingTask?.status &&
-      [
-        AskingTaskStatus.Finished,
-        AskingTaskStatus.Failed,
-        AskingTaskStatus.Stopped,
-      ].includes(askingTask.status)
-    ) {
+    if (askingTask?.status && checkIsFinished(askingTask.status)) {
       askingTaskResult.stopPolling();
     }
   }, [askingTaskResult.data?.askingTask]);

@@ -1,11 +1,18 @@
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
-import { useThreadsQuery } from '@/apollo/client/graphql/home.generated';
+import {
+  useDeleteThreadMutation,
+  useThreadsQuery,
+  useUpdateThreadMutation,
+} from '@/apollo/client/graphql/home.generated';
 import { useMemo } from 'react';
 
 export default function useHomeSidebar() {
   const router = useRouter();
-  const { data } = useThreadsQuery();
+  const { data, refetch } = useThreadsQuery();
+  const [updateThread] = useUpdateThreadMutation();
+  const [deleteThread] = useDeleteThreadMutation();
+
   const threads = useMemo(
     () =>
       (data?.threads || []).map((thread) => ({
@@ -19,8 +26,23 @@ export default function useHomeSidebar() {
     router.push(`${Path.Home}/${selectKeys[0]}`);
   };
 
+  const onRename = async (id: string, newName: string) => {
+    await updateThread({
+      variables: { where: { id: Number(id) }, data: { summary: newName } },
+    });
+    refetch();
+  };
+
+  const onDelete = async (id) => {
+    await deleteThread({ variables: { where: { id: Number(id) } } });
+    refetch();
+  };
+
   return {
     data: threads,
     onSelect,
+    onRename,
+    onDelete,
+    refetch,
   };
 }

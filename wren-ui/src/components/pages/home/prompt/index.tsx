@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input, Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
@@ -47,6 +47,7 @@ const convertToProcessState = (data: AskingTask) => {
 };
 
 export default function Prompt(props: Props) {
+  const $promptInput = useRef<HTMLTextAreaElement>(null);
   const { data, onSubmit, onStop, onSelect } = props;
   const [inputValue, setInputValue] = useState('');
   const askProcessState = useAskProcessState();
@@ -56,11 +57,19 @@ export default function Prompt(props: Props) {
   const question = useMemo(() => inputValue.trim(), [inputValue]);
   const isProcessing = useMemo(
     () =>
-      [PROCESS_STATE.UNDERSTANDING, PROCESS_STATE.SEARCHING].includes(
-        askProcessState.currentState,
-      ),
+      [
+        PROCESS_STATE.UNDERSTANDING,
+        PROCESS_STATE.GENERATING,
+        PROCESS_STATE.SEARCHING,
+      ].includes(askProcessState.currentState),
     [askProcessState.currentState],
   );
+
+  useEffect(() => {
+    if (!isProcessing) {
+      $promptInput.current?.focus();
+    }
+  }, [isProcessing]);
 
   useEffect(() => {
     if (data) {
@@ -77,10 +86,12 @@ export default function Prompt(props: Props) {
 
   const selectResult = (payload) => {
     onSelect && onSelect({ ...payload, question });
+    closeResult();
   };
 
   const closeResult = () => {
     askProcessState.resetState();
+    setInputValue('');
   };
 
   const stopProcess = () => {
@@ -108,12 +119,14 @@ export default function Prompt(props: Props) {
   return (
     <PromptStyle className="d-flex align-end bg-gray-2 p-3 border border-gray-3 rounded">
       <Input.TextArea
+        ref={$promptInput}
         size="large"
         autoSize
         placeholder="Ask to explore your data"
         value={inputValue}
         onInput={syncInputValue}
         onPressEnter={inputEnter}
+        disabled={isProcessing}
       />
       <PromptButton
         type="primary"

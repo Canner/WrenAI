@@ -3,16 +3,16 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type CommonErrorFragment = { __typename?: 'Error', code?: string | null, message?: string | null };
+export type CommonErrorFragment = { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null };
 
-export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null };
+export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null };
 
 export type AskingTaskQueryVariables = Types.Exact<{
   taskId: Types.Scalars['String'];
 }>;
 
 
-export type AskingTaskQuery = { __typename?: 'Query', askingTask: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, summary: string }>, error?: { __typename?: 'Error', code?: string | null, message?: string | null } | null } };
+export type AskingTaskQuery = { __typename?: 'Query', askingTask: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, summary: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
 
 export type ThreadsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -24,14 +24,14 @@ export type ThreadQueryVariables = Types.Exact<{
 }>;
 
 
-export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, summary: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, message?: string | null } | null, detail?: { __typename?: 'ThreadResponseDetail', description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null }> } };
+export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, summary: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null }> } };
 
 export type ThreadResponseQueryVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
 }>;
 
 
-export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, message?: string | null } | null, detail?: { __typename?: 'ThreadResponseDetail', description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null } };
+export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null } };
 
 export type CreateAskingTaskMutationVariables = Types.Exact<{
   data: Types.AskingTaskInput;
@@ -54,10 +54,35 @@ export type CreateThreadMutationVariables = Types.Exact<{
 
 export type CreateThreadMutation = { __typename?: 'Mutation', createThread: { __typename?: 'Thread', id: number, sql: string, summary: string } };
 
+export type CreateThreadResponseMutationVariables = Types.Exact<{
+  threadId: Types.Scalars['Int'];
+  data: Types.CreateThreadResponseInput;
+}>;
+
+
+export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null } };
+
+export type UpdateThreadMutationVariables = Types.Exact<{
+  where: Types.ThreadUniqueWhereInput;
+  data: Types.UpdateThreadInput;
+}>;
+
+
+export type UpdateThreadMutation = { __typename?: 'Mutation', updateThread: { __typename?: 'Thread', id: number, sql: string, summary: string } };
+
+export type DeleteThreadMutationVariables = Types.Exact<{
+  where: Types.ThreadUniqueWhereInput;
+}>;
+
+
+export type DeleteThreadMutation = { __typename?: 'Mutation', deleteThread: boolean };
+
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
   code
+  shortMessage
   message
+  stacktrace
 }
     `;
 export const CommonResponseFragmentDoc = gql`
@@ -66,6 +91,7 @@ export const CommonResponseFragmentDoc = gql`
   question
   status
   detail {
+    sql
     description
     steps {
       summary
@@ -335,3 +361,110 @@ export function useCreateThreadMutation(baseOptions?: Apollo.MutationHookOptions
 export type CreateThreadMutationHookResult = ReturnType<typeof useCreateThreadMutation>;
 export type CreateThreadMutationResult = Apollo.MutationResult<CreateThreadMutation>;
 export type CreateThreadMutationOptions = Apollo.BaseMutationOptions<CreateThreadMutation, CreateThreadMutationVariables>;
+export const CreateThreadResponseDocument = gql`
+    mutation CreateThreadResponse($threadId: Int!, $data: CreateThreadResponseInput!) {
+  createThreadResponse(threadId: $threadId, data: $data) {
+    ...CommonResponse
+    error {
+      code
+      shortMessage
+      message
+      stacktrace
+    }
+  }
+}
+    ${CommonResponseFragmentDoc}`;
+export type CreateThreadResponseMutationFn = Apollo.MutationFunction<CreateThreadResponseMutation, CreateThreadResponseMutationVariables>;
+
+/**
+ * __useCreateThreadResponseMutation__
+ *
+ * To run a mutation, you first call `useCreateThreadResponseMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateThreadResponseMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createThreadResponseMutation, { data, loading, error }] = useCreateThreadResponseMutation({
+ *   variables: {
+ *      threadId: // value for 'threadId'
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useCreateThreadResponseMutation(baseOptions?: Apollo.MutationHookOptions<CreateThreadResponseMutation, CreateThreadResponseMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreateThreadResponseMutation, CreateThreadResponseMutationVariables>(CreateThreadResponseDocument, options);
+      }
+export type CreateThreadResponseMutationHookResult = ReturnType<typeof useCreateThreadResponseMutation>;
+export type CreateThreadResponseMutationResult = Apollo.MutationResult<CreateThreadResponseMutation>;
+export type CreateThreadResponseMutationOptions = Apollo.BaseMutationOptions<CreateThreadResponseMutation, CreateThreadResponseMutationVariables>;
+export const UpdateThreadDocument = gql`
+    mutation UpdateThread($where: ThreadUniqueWhereInput!, $data: UpdateThreadInput!) {
+  updateThread(where: $where, data: $data) {
+    id
+    sql
+    summary
+  }
+}
+    `;
+export type UpdateThreadMutationFn = Apollo.MutationFunction<UpdateThreadMutation, UpdateThreadMutationVariables>;
+
+/**
+ * __useUpdateThreadMutation__
+ *
+ * To run a mutation, you first call `useUpdateThreadMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateThreadMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateThreadMutation, { data, loading, error }] = useUpdateThreadMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useUpdateThreadMutation(baseOptions?: Apollo.MutationHookOptions<UpdateThreadMutation, UpdateThreadMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UpdateThreadMutation, UpdateThreadMutationVariables>(UpdateThreadDocument, options);
+      }
+export type UpdateThreadMutationHookResult = ReturnType<typeof useUpdateThreadMutation>;
+export type UpdateThreadMutationResult = Apollo.MutationResult<UpdateThreadMutation>;
+export type UpdateThreadMutationOptions = Apollo.BaseMutationOptions<UpdateThreadMutation, UpdateThreadMutationVariables>;
+export const DeleteThreadDocument = gql`
+    mutation DeleteThread($where: ThreadUniqueWhereInput!) {
+  deleteThread(where: $where)
+}
+    `;
+export type DeleteThreadMutationFn = Apollo.MutationFunction<DeleteThreadMutation, DeleteThreadMutationVariables>;
+
+/**
+ * __useDeleteThreadMutation__
+ *
+ * To run a mutation, you first call `useDeleteThreadMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useDeleteThreadMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [deleteThreadMutation, { data, loading, error }] = useDeleteThreadMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *   },
+ * });
+ */
+export function useDeleteThreadMutation(baseOptions?: Apollo.MutationHookOptions<DeleteThreadMutation, DeleteThreadMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<DeleteThreadMutation, DeleteThreadMutationVariables>(DeleteThreadDocument, options);
+      }
+export type DeleteThreadMutationHookResult = ReturnType<typeof useDeleteThreadMutation>;
+export type DeleteThreadMutationResult = Apollo.MutationResult<DeleteThreadMutation>;
+export type DeleteThreadMutationOptions = Apollo.BaseMutationOptions<DeleteThreadMutation, DeleteThreadMutationVariables>;
