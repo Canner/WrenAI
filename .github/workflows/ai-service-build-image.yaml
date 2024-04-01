@@ -2,7 +2,7 @@ name: AI Service Build image
 
 on:
   push:
-    branches: [main, feature/ai-service/*]
+    branches: [main]
   workflow_dispatch:
     inputs:
       docker_image_tag_name:
