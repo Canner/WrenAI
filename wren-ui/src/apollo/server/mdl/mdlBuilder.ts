@@ -189,16 +189,17 @@ export class MDLBuilder implements IMDLBuilder {
     const modelNameDuplicated = model.columns.find(
       (column: any) => column.name === columnData.modelReferenceName,
     );
-
-    model.columns.push({
+    const column = {
       name: modelNameDuplicated
         ? `${columnData.modelReferenceName}_${columnData.columnReferenceName}`
         : columnData.modelReferenceName,
       type: columnData.modelReferenceName,
+      properties: null,
       relationship: columnData.relation,
       isCalculated: false,
       notNull: false,
-    });
+    };
+    model.columns.push(column);
   }
 
   protected getColumnExpression(column: ModelColumn): string {
