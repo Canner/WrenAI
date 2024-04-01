@@ -247,7 +247,9 @@ export const typeDefs = gql`
   # Error
   type Error {
     code: String
+    shortMessage: String
     message: String
+    stacktrace: [String]
   }
 
   # Asking Task

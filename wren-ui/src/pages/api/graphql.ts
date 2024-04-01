@@ -91,7 +91,19 @@ const bootstrapServer = async () => {
     typeDefs,
     resolvers,
     formatError: (error: GraphQLError) => {
-      logger.error(error);
+      // print error stacktrace of graphql error
+      const stacktrace = error.extensions?.exception?.stacktrace;
+      if (stacktrace) {
+        logger.error(stacktrace.join('\n'));
+      }
+
+      // print original error stacktrace
+      const originalError = error.extensions?.originalError as Error;
+      if (originalError) {
+        logger.error(`== original error ==`);
+        // error may not have stack, so print error message if stack is not available
+        logger.error(originalError.stack || originalError.message);
+      }
       return defaultApolloErrorHandler(error);
     },
     introspection: process.env.NODE_ENV !== 'production',

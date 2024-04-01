@@ -1,29 +1,13 @@
 import axios from 'axios';
-import { Manifest } from '../mdl/type';
+import { Manifest } from '@server/mdl/type';
 import { getLogger } from '@server/utils';
+import * as Errors from '@server/utils/error';
 
 const logger = getLogger('WrenAIAdaptor');
 logger.level = 'debug';
 
-export enum WrenAIErrorCode {
-  INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
-  MISLEADING_QUERY = 'MISLEADING_QUERY',
-  NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
-  NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
-}
-
-export const WrenAIErrorMessages = {
-  [WrenAIErrorCode.INTERNAL_SERVER_ERROR]: 'Internal server error',
-  [WrenAIErrorCode.MISLEADING_QUERY]:
-    'The query provided is misleading and may not yield accurate results. Please refine your query.',
-  [WrenAIErrorCode.NO_RELEVANT_DATA]:
-    'No relevant data found for the given query. Please try a different query.',
-  [WrenAIErrorCode.NO_RELEVANT_SQL]:
-    'No relevant SQL found for the given query. Please check your query and try again.',
-};
-
 export interface WrenAIError {
-  code: WrenAIErrorCode;
+  code: Errors.GeneralErrorCodes;
   message: string;
 }
 
@@ -176,7 +160,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return this.transformAskResult(res.data);
     } catch (err: any) {
       logger.debug(`Got error when getting ask result: ${err.message}`);
-      throw err;
+      // throw err;
+      throw Errors.of(Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR, {
+        originalError: err,
+      });
     }
   }
 
@@ -320,8 +307,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   private transformStatusAndError(body: any): {
     status: AskResultStatus;
     error?: {
-      code: WrenAIErrorCode;
+      code: Errors.GeneralErrorCodes;
       message: string;
+      shortMessage: string;
     } | null;
   } {
     // transform status to enum
@@ -333,21 +321,21 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       throw new Error(`Unknown ask status: ${body?.status}`);
     }
 
-    // transform error to WrenAIError
-    // if error code is not in WrenAIErrorCode, use INTERNAL_SERVER_ERROR
-    // if error message is not string, use internal server error message
-    const errorCode = (WrenAIErrorCode[body?.error?.code?.toUpperCase()] ||
-      WrenAIErrorCode.INTERNAL_SERVER_ERROR) as WrenAIErrorCode;
-    const errorMessage = (WrenAIErrorMessages[errorCode] ||
-      WrenAIErrorMessages[WrenAIErrorCode.INTERNAL_SERVER_ERROR]) as string;
-    const error = body?.error && {
-      code: errorCode,
-      message: errorMessage,
-    };
+    // use custom error to transform error
+    const error = body?.error?.code ? Errors.of(body?.error?.code) : null;
+
+    // format custom error into WrenAIError that is used in graphql
+    const formattedError = error
+      ? {
+          code: error.extensions.code as Errors.GeneralErrorCodes,
+          message: error.message,
+          shortMessage: error.extensions.shortMessage as string,
+        }
+      : null;
 
     return {
       status,
-      error,
+      error: formattedError,
     };
   }
 
