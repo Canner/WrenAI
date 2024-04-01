@@ -9,20 +9,27 @@ and a CTE name to link the queries.
 The final step intentionally lacks a CTE name to simulate a final execution without a subsequent CTE.
 
 ### EXAMPLES ###
-- Original SQL Query: WITH user_purchases AS (SELECT user_id, SUM(price) AS total_spent FROM purchases GROUP BY user_id) SELECT name, total_spent FROM users JOIN user_purchases ON users.id = user_purchases.user_id ORDER BY total_spent DESC;
+Original SQL Query:
 
-- Description: First, identify users based in 'New York'. Second, join with the purchases to get products bought by these users. Third, aggregate to count the quantity of each product. Finally, sort by product name.
+SELECT product_id, SUM(sales) AS total_sales
+FROM sales_data
+GROUP BY product_id
+HAVING SUM(sales) > 10000;
+
+Results:
+
+- Description: The breakdown simplifies the process of aggregating sales data by product and filtering for top-selling products. Each step builds upon the previous one, making the final query's logic more accessible.
 - Step 1: 
-    - sql: SELECT id FROM users WHERE location = 'New York'
-    - summary: Select users located in 'New York'.
-    - cte_name: new_york_users
+    - sql: SELECT product_id, sales FROM sales_data
+    - summary: Selects product IDs and their corresponding sales from the sales_data table.
+    - cte_name: basic_sales_data
 - Step 2:
-    - sql: SELECT product, COUNT(*) AS quantity FROM purchases JOIN new_york_users ON purchases.user_id = new_york_users.id GROUP BY product
-    - summary: Count each product purchased by 'New York' users.
-    - cte_name: product_purchases
+    - sql: SELECT product_id, SUM(sales) AS total_sales FROM basic_sales_data GROUP BY product_id
+    - summary: Aggregates sales by product, summing up sales for each product ID.
+    - cte_name: aggregated_sales
 - Step 3:
-    - sql: SELECT product, quantity FROM product_purchases ORDER BY product
-    - summary: List all products bought by 'New York' users with quantity, ordered by product name.
+    - sql: SELECT product_id, total_sales FROM aggregated_sales WHERE total_sales > 10000
+    - summary: Filters the aggregated sales data to only include products whose total sales exceed 10,000.
     - cte_name: 
 
 ### NOTICE ###
