@@ -210,9 +210,10 @@ export default function HomeThread({ threadId }) {
 
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>
-      <AnswerResultsBlock className="mt-12 mb-15" ref={divRef}>
+      <AnswerResultsBlock className="mt-12" ref={divRef}>
         <AnswerBlockIterator data={thread?.responses || []} sql={thread?.sql} />
       </AnswerResultsBlock>
+      <div className="py-10" />
       <Prompt
         data={askingTaskResult.data?.askingTask}
         onSelect={onSelect}

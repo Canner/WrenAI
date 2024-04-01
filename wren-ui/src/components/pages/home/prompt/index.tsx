@@ -24,8 +24,9 @@ const PromptStyle = styled.div`
   position: fixed;
   width: 768px;
   left: 50%;
-  margin-left: calc(-384px + 140px);
+  margin-left: calc(-384px + 133px);
   bottom: 12px;
+  z-index: 999;
 `;
 
 const PromptButton = styled(Button)`
