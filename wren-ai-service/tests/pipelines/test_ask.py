@@ -75,20 +75,22 @@ def test_followup_generation_pipeline():
         text_to_sql_generator=init_generator(),
     )
     generation_result = generation_pipeline.run(
-        "What are the names of authors?",
+        "What are names of the books?",
         contexts=GLOBAL_DATA["contexts"],
         history=AskRequest.AskResponseDetails(
-            sql="SELECT COUNT(*) FROM authors",
-            summary="Retrieve the number of authors",
+            sql="SELECT COUNT(*) FROM book",
+            summary="Retrieve the number of books",
             steps=[
                 SQLExplanation(
-                    sql="SELECT COUNT(*) FROM authors",
-                    summary="Retrieve the number of authors",
+                    sql="SELECT COUNT(*) FROM book",
+                    summary="Retrieve the number of books",
                     cte_name="",
                 )
             ],
         ),
     )
+
+    print(generation_result)
 
     assert AskResultResponse.AskResult(
         **generation_result["post_processor"]["valid_generation_results"][0]
