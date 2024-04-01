@@ -618,22 +618,18 @@ def show_asks_details_results():
     for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
         st.markdown(f"#### Step {i + 1}")
         st.markdown(step["summary"])
-        if i != len(st.session_state["asks_details_result"]["steps"]) - 1:
-            st.code(
-                body=step["sql"],
-                language="sql",
-            )
-            sqls_with_cte.append(
-                "WITH " + step["cte_name"] + " AS (" + step["sql"] + ")"
-            )
-            sqls.append(step["sql"])
-        else:
-            last_step_sql = "\n".join(sqls_with_cte) + "\n\n" + step["sql"]
-            sqls.append(last_step_sql)
-            st.code(
-                body=last_step_sql,
-                language="sql",
-            )
+
+        sql = ""
+        if sqls_with_cte:
+            sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
+        sql += step["sql"]
+        sqls.append(sql)
+
+        st.code(
+            body=sql,
+            language="sql",
+        )
+        sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
         st.button(
             label="Preview Data",
