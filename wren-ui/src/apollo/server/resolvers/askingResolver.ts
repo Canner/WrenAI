@@ -9,10 +9,14 @@ import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
 import { constructCteSql } from '../services/askingService';
+import { SampleDatasetName, getSampleAskQuestions } from '../data';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
 
+export interface AskQuestion {
+  questions: string[];
+}
 export interface Task {
   id: string;
 }
@@ -46,6 +50,21 @@ export class AskingResolver {
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
+    this.getAskQuestions = this.getAskQuestions.bind(this);
+  }
+
+  public async getAskQuestions(
+    _root: any,
+    _args: any,
+    ctx: IContext,
+  ): Promise<AskQuestion> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { sampleDataset } = project;
+    if (!sampleDataset) {
+      return { questions: [] };
+    }
+    const questions = getSampleAskQuestions(sampleDataset as SampleDatasetName);
+    return { questions };
   }
 
   public async createAskingTask(
