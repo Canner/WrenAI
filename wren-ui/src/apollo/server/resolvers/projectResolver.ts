@@ -6,8 +6,14 @@ import {
   SampleDatasetData,
 } from '../types';
 import { getLogger } from '@server/utils';
-import { Model, Project, Relation } from '../repositories';
-import { sampleDatasets } from '@server/data';
+import { Model, ModelColumn, Project, Relation } from '../repositories';
+import {
+  SampleDatasetName,
+  SampleDatasetRelationship,
+  buildInitSql,
+  getRelations,
+  sampleDatasets,
+} from '@server/data';
 import { snakeCase } from 'lodash';
 import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
 
@@ -42,10 +48,14 @@ export class ProjectResolver {
     if (!dataset) {
       throw new Error('Sample dataset not found');
     }
+    if (!(name in SampleDatasetName)) {
+      throw new Error('Invalid sample dataset name');
+    }
 
     // create duckdb datasource
+    const initSql = buildInitSql(name as SampleDatasetName);
     const duckdbDatasourceProperties = {
-      initSql: dataset.initSql,
+      initSql,
       extensions: [],
       configurations: {},
     };
@@ -68,8 +78,21 @@ export class ProjectResolver {
     // save all the tables
     await this.saveTables(_root, { data: { tables: tableNames } }, ctx);
 
+    // save relations
+    const relations = getRelations(name as SampleDatasetName);
+    const models = await ctx.modelRepository.findAll();
+    const columns = await ctx.modelColumnRepository.findAll();
+    const mappedRelations = this.buildRelationInput(relations, models, columns);
+    await this.saveRelations(
+      _root,
+      { data: { relations: mappedRelations } },
+      ctx,
+    );
+
     // mark current project as using sample dataset
-    await ctx.projectRepository.updateOne(project.id, { sampleDataset: name });
+    await ctx.projectRepository.updateOne(project.id, {
+      sampleDataset: name,
+    });
     return { name };
   }
 
@@ -263,5 +286,50 @@ export class ProjectResolver {
     }
     await this.resetCurrentProjectModel(ctx, currentProject.id);
     await ctx.projectRepository.deleteOne(currentProject.id);
+  }
+
+  private buildRelationInput(
+    relations: SampleDatasetRelationship[],
+    models: Model[],
+    columns: ModelColumn[],
+  ) {
+    const relationInput = relations.map((relation) => {
+      const { fromModelName, fromColumnName, toModelName, toColumnName, type } =
+        relation;
+      const fromModelId = models.find(
+        (model) => model.sourceTableName === fromModelName,
+      )?.id;
+      const toModelId = models.find(
+        (model) => model.sourceTableName === toModelName,
+      )?.id;
+      if (!fromModelId || !toModelId) {
+        throw new Error(
+          `Model not found, fromModelName "${fromModelName}" to toModelname: "${toModelName}"`,
+        );
+      }
+
+      const fromColumnId = columns.find(
+        (column) =>
+          column.referenceName === fromColumnName &&
+          column.modelId === fromModelId,
+      )?.id;
+      const toColumnId = columns.find(
+        (column) =>
+          column.referenceName === toColumnName && column.modelId === toModelId,
+      )?.id;
+      if (!fromColumnId || !toColumnId) {
+        throw new Error(
+          `Column not found fromColumnName: ${fromColumnName} toColumnName: ${toColumnName}`,
+        );
+      }
+      return {
+        fromModelId,
+        fromColumnId,
+        toModelId,
+        toColumnId,
+        type,
+      } as RelationData;
+    });
+    return relationInput;
   }
 }
