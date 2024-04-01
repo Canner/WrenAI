@@ -1,4 +1,4 @@
-export enum SampleDataName {
+export enum SampleDatasetName {
   MUSIC = 'MUSIC',
   NBA = 'NBA',
   ECOMMERCE = 'ECOMMERCE',
