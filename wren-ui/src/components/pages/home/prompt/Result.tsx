@@ -155,7 +155,7 @@ const AskingFailed = makeProcessingError({
 });
 
 const NoResult = makeProcessingError({
-  icon: <WarningOutlined className="mr-2 text-lg" />,
+  icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
   title: 'Please try again',
   description: 'No results found. Try providing more details in your question.',
 });
@@ -175,6 +175,8 @@ const Finished = (props: Props) => {
   const selectResult = (payload: { sql: string; summary: string }) => {
     onSelect && onSelect(payload);
   };
+
+  if (data.length === 0) return <NoResult {...props} />;
 
   return (
     <div>
@@ -214,7 +216,6 @@ const getProcessStateComponent = (state: PROCESS_STATE) => {
       [PROCESS_STATE.GENERATING]: Searching,
       [PROCESS_STATE.FINISHED]: Finished,
       [PROCESS_STATE.ASKING_FAILED]: AskingFailed,
-      [PROCESS_STATE.NO_RESULT]: NoResult,
     }[state] || null
   );
 };
