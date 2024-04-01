@@ -161,7 +161,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     } catch (err: any) {
       logger.debug(`Got error when getting ask result: ${err.message}`);
       // throw err;
-      throw Errors.of(Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR, {
+      throw Errors.create(Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR, {
         originalError: err,
       });
     }
@@ -322,7 +322,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }
 
     // use custom error to transform error
-    const error = body?.error?.code ? Errors.of(body?.error?.code) : null;
+    const error = body?.error?.code ? Errors.create(body?.error?.code) : null;
 
     // format custom error into WrenAIError that is used in graphql
     const formattedError = error

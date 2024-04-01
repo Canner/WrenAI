@@ -28,7 +28,7 @@ export const shortMessages = {
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
 };
 
-export const of = (
+export const create = (
   code?: GeneralErrorCodes,
   options?: {
     customMessage?: string;
