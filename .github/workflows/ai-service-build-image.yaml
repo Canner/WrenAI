@@ -1,6 +1,8 @@
 name: AI Service Build image
 
 on:
+  push:
+    branches: [main, feature/ai-service/*]
   workflow_dispatch:
     inputs:
       docker_image_tag_name:
@@ -44,7 +46,14 @@ jobs:
         env:
           TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
         run: |
-          if [ ${{ github.event.inputs.is_latest }} == true ]; then
+          if [ ${{ github.event_name }} == 'push' ]; then
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
+              --tag ghcr.io/canner/wren-ai-service:nightly \
+              --file ./docker/Dockerfile \
+              --push .
+          elif [ ${{ github.event.inputs.is_latest }} == true ]; then
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
               --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
