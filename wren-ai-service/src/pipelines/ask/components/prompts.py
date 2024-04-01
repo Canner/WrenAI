@@ -2,10 +2,12 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 text_to_sql_user_prompt_template = """
 ### TASK ###
-Given a set of user queries that are ambiguous in nature, your task is to interpret these queries in various plausible ways and 
-generate multiple SQL statements that could potentially answer each interpreted version of the queries and within-10-words summary. 
-For each ambiguous user query, provide three different interpretations and corresponding SQL queries that reflect these interpretations. 
-Ensure that your SQL queries are diverse, covering a range of possible meanings behind the ambiguous query. 
+Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and 
+generate three SQL statements that could potentially answer each interpreted version of the queries and within-10-words summary. 
+Provide three different interpretations and corresponding SQL queries that reflect these interpretations. 
+Ensure that your SQL queries are diverse, covering a range of possible meanings behind the ambiguous query.
+
+### EXAMPLES ###
 Consider the structure of a generic database which includes common tables like users, orders, products, and transactions. 
 Here are the ambiguous user queries:
 
