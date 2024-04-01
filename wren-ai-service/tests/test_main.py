@@ -197,3 +197,14 @@ def test_ask_details():
         for step in response.json()["response"]["steps"]:
             assert step["sql"] != ""
             assert step["summary"] != ""
+
+
+def test_web_error_handler():
+    with TestClient(app) as client:
+        response = client.post(
+            url="/v1/semantics-descriptions/",
+            json={},
+        )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] != ""
