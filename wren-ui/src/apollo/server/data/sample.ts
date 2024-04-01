@@ -264,3 +264,8 @@ export const getRelations = (datasetName: SampleDatasetName) => {
   const selectedDataset = sampleDatasets[datasetName.toLowerCase()];
   return selectedDataset.relations;
 };
+
+export const getSampleAskQuestions = (datasetName: SampleDatasetName) => {
+  const selectedDataset = sampleDatasets[datasetName.toLowerCase()];
+  return selectedDataset.questions;
+};

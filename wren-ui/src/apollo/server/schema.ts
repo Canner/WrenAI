@@ -341,6 +341,11 @@ export const typeDefs = gql`
     responses: [ThreadResponse!]!
   }
 
+  # Ask Questions Responses
+  type AskQuestionResponse {
+    questions: [String]!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -357,6 +362,7 @@ export const typeDefs = gql`
 
     # Ask
     askingTask(taskId: String!): AskingTask!
+    askQuestions: AskQuestionResponse!
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!
