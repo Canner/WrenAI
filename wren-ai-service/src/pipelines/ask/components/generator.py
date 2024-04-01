@@ -21,6 +21,7 @@ GENERATION_KWARGS = {
     "n": 1,
     "max_tokens": MAX_TOKENS[MODEL_NAME] if MODEL_NAME in MAX_TOKENS else 4096,
     "top_p": 1,
+    "response_format": {"type": "json_object"},
 }
 
 
