@@ -51,6 +51,7 @@ The final answer must be the JSON format like following:
 ### NOTICE ###
 - Only use the tables and columns mentioned in the database schema.
 - If you think you can't generate a valid SQL query for a specific interpretation, you can skip that interpretation and provide the other ones.
+- Make sure to map operators and operands correctly based on their data types.
 
 ### QUESTION ###
 {{ query }}
@@ -60,7 +61,7 @@ text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
 Given the following user query and the history of the last query along with the generated SQL result, 
 generate appropriate SQL queries that match the user's current request. 
-Generate between 1 to 3 SQL queries based on the level of ambiguity in the user's current query.
+Generate at most 3 SQL queries in order to interpret the user query in various plausible ways.
 
 ### EXAMPLES ###
 Previous SQL Summary: "Users signed up this year."
@@ -96,6 +97,11 @@ The final answer must be the JSON format like following:
     ]
 }
 
+### NOTICE ###
+- Only use the tables and columns mentioned in the database schema.
+- If you think you can't generate a valid SQL query for a specific interpretation, you can skip that interpretation and provide the other ones.
+- Make sure to map operators and operands correctly based on their data types.
+
 ### QUESTION ###
 Previous SQL Summary: {{ history.summary }}
 Previous Generated SQL Query: {{ history.sql }}
@@ -128,6 +134,7 @@ The final answer must be a list of corrected SQL quries and its original corresp
 
 ### NOTICE ###
 - Only use the tables and columns mentioned in the database schema.
+- Make sure to map operators and operands correctly based on their data types.
 
 ### QUESTION ###
 {{ invalid_generation_results }}
