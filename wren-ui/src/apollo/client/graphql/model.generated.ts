@@ -6,14 +6,14 @@ const defaultOptions = {} as const;
 export type ListModelsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type ListModelsQuery = { __typename?: 'Query', listModels: Array<{ __typename?: 'CompactModel', cached: boolean, description?: string | null, name: string, primaryKey?: string | null, refreshTime: string, refSql: string }> };
+export type ListModelsQuery = { __typename?: 'Query', listModels: Array<{ __typename?: 'ModelInfo', id: number, referenceName: string, sourceTableName: string, displayName: string, cached: boolean, primaryKey?: string | null, refreshTime?: string | null, refSql?: string | null, fields: Array<{ __typename?: 'FieldInfo', id: number, referenceName: string } | null> }> };
 
 export type GetModelQueryVariables = Types.Exact<{
   where: Types.ModelWhereInput;
 }>;
 
 
-export type GetModelQuery = { __typename?: 'Query', getModel: { __typename?: 'DetailedModel', name: string, refSql: string, primaryKey?: string | null, cached: boolean, refreshTime: string, description?: string | null, properties: any, columns: Array<{ __typename?: 'DetailedColumn', name: string, type: string, isCalculated: boolean, notNull: boolean, properties: any }> } };
+export type GetModelQuery = { __typename?: 'Query', model: { __typename?: 'DetailedModel', referenceName: string, displayName: string, sourceTableName: string, refSql: string, primaryKey?: string | null, cached: boolean, refreshTime?: string | null, fields?: Array<{ __typename?: 'DetailedColumn', referenceName: string, displayName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean } | null> | null, relations?: Array<{ __typename?: 'DetailedRelation', fromModelId: number, fromColumnId: number, toModelId: number, toColumnId: number, type: Types.RelationType, name: string } | null> | null } };
 
 export type CreateModelMutationVariables = Types.Exact<{
   data: Types.CreateModelInput;
@@ -41,9 +41,15 @@ export type DeleteModelMutation = { __typename?: 'Mutation', deleteModel: boolea
 export const ListModelsDocument = gql`
     query ListModels {
   listModels {
+    id
+    referenceName
+    sourceTableName
+    displayName
+    fields {
+      id
+      referenceName
+    }
     cached
-    description
-    name
     primaryKey
     refreshTime
     refSql
@@ -79,21 +85,30 @@ export type ListModelsLazyQueryHookResult = ReturnType<typeof useListModelsLazyQ
 export type ListModelsQueryResult = Apollo.QueryResult<ListModelsQuery, ListModelsQueryVariables>;
 export const GetModelDocument = gql`
     query GetModel($where: ModelWhereInput!) {
-  getModel(where: $where) {
-    name
+  model(where: $where) {
+    referenceName
+    displayName
+    sourceTableName
     refSql
     primaryKey
     cached
     refreshTime
-    description
-    columns {
-      name
+    fields {
+      referenceName
+      displayName
+      sourceColumnName
       type
       isCalculated
       notNull
-      properties
     }
-    properties
+    relations {
+      fromModelId
+      fromColumnId
+      toModelId
+      toColumnId
+      type
+      name
+    }
   }
 }
     `;

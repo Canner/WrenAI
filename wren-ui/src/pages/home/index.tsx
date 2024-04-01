@@ -55,6 +55,7 @@ const demoData = [
 
 export default function Ask() {
   const homeSidebar = useHomeSidebar();
+
   // TODO: adjust when intergrating with API
   const [simulateData, setSimulateData] = useState(testData);
   const isDemo = true;

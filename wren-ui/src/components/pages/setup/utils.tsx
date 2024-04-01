@@ -1,10 +1,11 @@
+import { merge } from 'lodash';
 import Starter from './Starter';
 import ConnectDataSource from './ConnectDataSource';
 import SelectModels from './SelectModels';
 import DefineRelations from './DefineRelations';
 import { SETUP, DATA_SOURCES, DEMO_TEMPLATES } from '@/utils/enum';
 import BigQueryProperties from './dataSources/BigQueryProperties';
-import { merge } from 'lodash';
+import DuckDBProperties from './dataSources/DuckDBProperties';
 
 type SetupStep = {
   step: number;
@@ -56,7 +57,7 @@ export const DATA_SOURCE_OPTIONS = {
     label: 'DuckDB',
     logo: '/images/dataSource/duckDb.svg',
     guide: '',
-    disabled: true,
+    disabled: false,
   },
   [DATA_SOURCES.PG_SQL]: {
     label: 'PostgreSQL',
@@ -68,6 +69,7 @@ export const DATA_SOURCE_OPTIONS = {
 
 export const DATA_SOURCE_FORM = {
   [DATA_SOURCES.BIG_QUERY]: { component: BigQueryProperties },
+  [DATA_SOURCES.DUCKDB]: { component: DuckDBProperties },
 };
 
 export const TEMPLATE_OPTIONS = {
@@ -93,9 +95,15 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
     DATA_SOURCE_OPTIONS[DATA_SOURCES.BIG_QUERY],
     DATA_SOURCE_FORM[DATA_SOURCES.BIG_QUERY],
   );
-  return ({
-    [DATA_SOURCES.BIG_QUERY]: defaultDataSource,
-  }[dataSource] || defaultDataSource) as typeof defaultDataSource;
+  return (
+    {
+      [DATA_SOURCES.BIG_QUERY]: defaultDataSource,
+      [DATA_SOURCES.DUCKDB]: merge(
+        DATA_SOURCE_OPTIONS[DATA_SOURCES.DUCKDB],
+        DATA_SOURCE_FORM[DATA_SOURCES.DUCKDB],
+      ),
+    }[dataSource] || defaultDataSource
+  );
 };
 
 export const getTemplates = () => {

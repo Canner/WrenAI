@@ -2,9 +2,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button, Typography, Row, Col } from 'antd';
 import styled from 'styled-components';
-import { DATA_SOURCES } from '@/utils/enum';
 import { ButtonOption, getDataSources, getTemplates } from './utils';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
+import { DataSourceName } from '@/apollo/client/graphql/__types__';
 
 const ButtonItem = styled(Button)`
   border: 1px var(--gray-4) solid;
@@ -76,7 +76,7 @@ export default function Starter(props) {
   const dataSources = getDataSources();
   const templates = getTemplates();
 
-  const onSelectDataSource = (value: DATA_SOURCES) => {
+  const onSelectDataSource = (value: DataSourceName) => {
     onNext && onNext({ dataSource: value });
   };
 

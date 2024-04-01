@@ -6,16 +6,24 @@ import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
 import { JOIN_TYPE } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
-import useCombineFieldOptions from '@/hooks/useCombineFieldOptions';
+import useCombineFieldOptions, {
+  convertDefaultValueToIdentifier,
+} from '@/hooks/useCombineFieldOptions';
 import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
 import { SelectedRecommendRelations } from '@/components/pages/setup/DefineRelations';
 
-export type RelationFieldValue = { [key: string]: any } & Pick<
+export interface RelationFormValues {
+  fromField: { model: string; field: string };
+  toField: { model: string; field: string };
+  type: string;
+}
+
+export type RelationFieldValue = Pick<
   RelationsDataType,
-  'name' | 'type' | 'fromField' | 'toField' | 'properties'
+  'type' | 'fromField' | 'toField'
 >;
 
-type Props = ModalAction<RelationFieldValue, RelationsDataType> & {
+type Props = ModalAction<RelationFieldValue, RelationFormValues> & {
   model: string;
   loading?: boolean;
   relations: SelectedRecommendRelations;
@@ -34,8 +42,11 @@ export default function RelationModal(props: Props) {
   const [form] = Form.useForm();
 
   const fromCombineField = useCombineFieldOptions({ model });
+  const modelValue = fromCombineField.modelOptions.find(
+    (m) => m.label === model,
+  )?.value;
 
-  const toFieldModel = defaultValue?.toField.model;
+  const toFieldModel = defaultValue?.toField.modelName;
   const toCombineField = useCombineFieldOptions({
     model: toFieldModel,
     excludeModels: [model],
@@ -44,11 +55,13 @@ export default function RelationModal(props: Props) {
   useEffect(() => {
     if (!visible) return;
     fromCombineField.onModelChange(model);
-    form.setFieldsValue(defaultValue || {});
 
-    if (toFieldModel) {
-      toCombineField.onModelChange(toFieldModel);
-    }
+    if (isEmpty(defaultValue)) return;
+
+    const transformedValue = convertDefaultValueToIdentifier(defaultValue);
+    form.setFieldsValue(transformedValue);
+
+    toCombineField.onModelChange(toFieldModel);
   }, [form, defaultValue, visible]);
 
   const relationTypeOptions = Object.keys(JOIN_TYPE).map((key) => ({
@@ -64,22 +77,23 @@ export default function RelationModal(props: Props) {
           if (modelName === model) {
             acc = [
               ...acc,
-              ...modelRelations.map((relation) => relation.toField.model),
+              ...modelRelations.map((relation) => relation.toField.modelName),
             ];
           } else {
             const toFieldModelList = modelRelations.map(
-              (relation) => relation.toField.model,
+              (relation) => relation.toField.modelName,
             );
             if (toFieldModelList.includes(model)) {
               acc = [...acc, modelName];
             }
           }
+
           return acc;
         },
         [],
       );
 
-      const disabled = modelList.includes(modelOption.value);
+      const disabled = modelList.includes(modelOption.label);
 
       return {
         ...modelOption,
@@ -127,7 +141,7 @@ export default function RelationModal(props: Props) {
               ]}
             >
               <CombineFieldSelector
-                modelValue={model}
+                modelValue={modelValue}
                 modelDisabled={true}
                 onModelChange={fromCombineField.onModelChange}
                 modelOptions={fromCombineField.modelOptions}

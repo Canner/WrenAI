@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 
 import requests
 from dotenv import load_dotenv
+from openai import OpenAI
 
 
 def clean_generation_result(result: str) -> str:
@@ -28,7 +29,15 @@ def load_env_vars() -> str:
     else:
         load_dotenv(".env.prod", override=True)
 
+    _verify_env_vars()
     return "dev" if is_dev_env else "prod"
+
+
+def _verify_env_vars() -> None:
+    """
+    this is a temporary solution to verify that the required environment variables are set
+    """
+    OpenAI().models.list()
 
 
 def classify_invalid_generation_results(

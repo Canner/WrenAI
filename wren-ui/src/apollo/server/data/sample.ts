@@ -24,7 +24,7 @@ export const sampleDatasets = {
     initSql: `
       CREATE TABLE game AS FROM 'https://wrenai-public.s3.amazonaws.com/demo/NBA/game.csv';
       CREATE TABLE line_score AS FROM 'https://wrenai-public.s3.amazonaws.com/demo/NBA/line_score.csv';
-      CREATE TABLE player_games AS FROM 'https://wrenai-public.s3.amazonaws.com/demo/NBA/player_games.csv';
+      CREATE TABLE player_games AS FROM 'https://wrenai-public.s3.amazonaws.com/demo/NBA/player_game.csv';
       CREATE TABLE player AS FROM 'https://wrenai-public.s3.amazonaws.com/demo/NBA/player.csv';
       CREATE TABLE team AS FROM 'https://wrenai-public.s3.amazonaws.com/demo/NBA/team.csv';
     `,

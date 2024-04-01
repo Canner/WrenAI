@@ -3,20 +3,19 @@ import { Button, Col, Form, Row, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ERROR_TEXTS } from '@/utils/error';
 import MultiSelectBox from '@/components/table/MultiSelectBox';
+import { CompactTable } from '@/apollo/client/graphql/__types__';
 
 const { Title, Text } = Typography;
 
-export interface SourceTable {
-  name: string;
-}
-
 interface Props {
-  tables: SourceTable[];
+  fetching: boolean;
+  tables: CompactTable[];
   onNext: (data: { selectedTables: string[] }) => void;
   onBack: () => void;
+  submitting: boolean;
 }
 
-const columns: ColumnsType<SourceTable> = [
+const columns: ColumnsType<CompactTable> = [
   {
     title: 'Table name',
     dataIndex: 'name',
@@ -24,7 +23,7 @@ const columns: ColumnsType<SourceTable> = [
 ];
 
 export default function SelectModels(props: Props) {
-  const { tables, onBack, onNext } = props;
+  const { fetching, tables, onBack, onNext, submitting } = props;
   const [form] = Form.useForm();
 
   const items = tables.map((item) => ({
@@ -68,13 +67,22 @@ export default function SelectModels(props: Props) {
               },
             ]}
           >
-            <MultiSelectBox columns={columns} items={items} />
+            <MultiSelectBox
+              columns={columns}
+              items={items}
+              loading={fetching}
+            />
           </Form.Item>
         </Form>
       </div>
       <Row gutter={16} className="pt-6">
         <Col span={12}>
-          <Button onClick={onBack} size="large" className="adm-onboarding-btn">
+          <Button
+            onClick={onBack}
+            size="large"
+            className="adm-onboarding-btn"
+            disabled={submitting}
+          >
             Back
           </Button>
         </Col>
@@ -84,6 +92,7 @@ export default function SelectModels(props: Props) {
             size="large"
             onClick={submit}
             className="adm-onboarding-btn"
+            loading={submitting}
           >
             Next
           </Button>
