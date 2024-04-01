@@ -1,12 +1,12 @@
+import { useRouter } from 'next/router';
 import Image from 'next/image';
+import { Path } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
-import { useCreateThreadMutation } from '@/apollo/client/graphql/home.generated';
-import { useRouter } from 'next/router';
-import { Path } from '@/utils/enum';
 import useAskPrompt from '@/hooks/useAskPrompt';
+import { useCreateThreadMutation } from '@/apollo/client/graphql/home.generated';
 
 const demoData = [
   {

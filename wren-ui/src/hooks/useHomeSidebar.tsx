@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
 import {
@@ -5,7 +6,6 @@ import {
   useThreadsQuery,
   useUpdateThreadMutation,
 } from '@/apollo/client/graphql/home.generated';
-import { useMemo } from 'react';
 
 export default function useHomeSidebar() {
   const router = useRouter();
