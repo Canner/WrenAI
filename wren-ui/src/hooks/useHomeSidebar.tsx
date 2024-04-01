@@ -1,21 +1,26 @@
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
+import { useThreadsQuery } from '@/apollo/client/graphql/home.generated';
+import { useMemo } from 'react';
 
 export default function useHomeSidebar() {
   const router = useRouter();
-
-  // TODO: call API to get real thread list data
-  const data = [
-    { name: 'aaaa', id: 'aaa' },
-    { name: 'bbbb', id: 'bbb' },
-  ];
+  const { data } = useThreadsQuery();
+  const threads = useMemo(
+    () =>
+      (data?.threads || []).map((thread) => ({
+        id: thread.id.toString(),
+        name: thread.summary,
+      })),
+    [data],
+  );
 
   const onSelect = (selectKeys: string[]) => {
     router.push(`${Path.Home}/${selectKeys[0]}`);
   };
 
   return {
-    data,
+    data: threads,
     onSelect,
   };
 }
