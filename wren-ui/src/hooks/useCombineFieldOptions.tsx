@@ -1,4 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useListModelsQuery } from '@/apollo/client/graphql/model.generated';
+import {
+  convertObjectToIdentifier,
+  convertIdentifierToObject,
+} from '@/utils/enum';
+import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
+import { RelationFormValues } from '@/components/modals/AddRelationModal';
 
 interface Props {
   // The initial base model of model select
@@ -7,84 +14,117 @@ interface Props {
   excludeModels?: string[];
 }
 
+// for identifier keys
+const modelKeys = ['id', 'name'];
+const fieldKeys = ['id', 'referenceName'];
+
+export const convertFormValuesToIdentifier = (
+  relationFormValues: RelationFormValues,
+) => {
+  const fromModel: { id: string; name: string } = convertIdentifierToObject(
+    relationFormValues.fromField.model,
+  );
+
+  const fromField: { id: string; referenceName: string } =
+    convertIdentifierToObject(relationFormValues.fromField.field);
+
+  const toModel: { id: string; name: string } = convertIdentifierToObject(
+    relationFormValues.toField.model,
+  );
+
+  const toField: { id: string; referenceName: string } =
+    convertIdentifierToObject(relationFormValues.toField.field);
+
+  return {
+    ...relationFormValues,
+    fromField: {
+      modelId: fromModel.id,
+      modelName: fromModel.name,
+      fieldId: fromField.id,
+      fieldName: fromField.referenceName,
+    },
+    toField: {
+      modelId: toModel.id,
+      modelName: toModel.name,
+      fieldId: toField.id,
+      fieldName: toField.referenceName,
+    },
+  } as RelationsDataType;
+};
+
+export const convertDefaultValueToIdentifier = (defaultValue) => {
+  const fromField = {
+    model: {
+      id: defaultValue.fromField.modelId,
+      name: defaultValue.fromField.modelName,
+    },
+    field: {
+      id: defaultValue.fromField.fieldId,
+      referenceName: defaultValue.fromField.fieldName,
+    },
+  };
+  const toField = {
+    model: {
+      id: defaultValue.toField.modelId,
+      name: defaultValue.toField.modelName,
+    },
+    field: {
+      id: defaultValue.toField.fieldId,
+      referenceName: defaultValue.toField.fieldName,
+    },
+  };
+  return {
+    fromField: {
+      model: convertObjectToIdentifier(fromField.model, modelKeys),
+      field: convertObjectToIdentifier(fromField.field, fieldKeys),
+    },
+    toField: {
+      model: convertObjectToIdentifier(toField.model, modelKeys),
+      field: convertObjectToIdentifier(toField.field, fieldKeys),
+    },
+    type: defaultValue.type,
+  };
+};
+
 export default function useCombineFieldOptions(props: Props) {
   const { model, excludeModels } = props;
+
   const [baseModel, setBaseModel] = useState<string>(model || '');
 
-  const response = [
-    {
-      name: 'Customer',
-      columns: [
-        {
-          name: 'orders',
-          properties: { type: 'Orders' },
-        },
-        {
-          name: 'custkey',
-        },
-        {
-          name: 'id',
-        },
-      ],
-    },
-    {
-      name: 'Orders',
-      columns: [
-        {
-          name: 'lineitem',
-          properties: { type: 'Lineitem' },
-        },
-        {
-          name: 'orderkey',
-        },
-      ],
-    },
-    {
-      name: 'Lineitem',
-      columns: [
-        {
-          name: 'extendedprice',
-          properties: { type: 'REAL' },
-        },
-        {
-          name: 'discount',
-          properties: { type: 'REAL' },
-        },
-        {
-          name: 'orderkey',
-        },
-      ],
-    },
-    {
-      name: 'trans',
-      columns: [
-        {
-          name: 'custkey',
-        },
-        {
-          name: 'col_a',
-        },
-        {
-          name: 'col_b',
-        },
-      ],
-    },
-  ].filter((item) => !(excludeModels && excludeModels.includes(item.name)));
+  const { data } = useListModelsQuery();
+
+  const allModels = useMemo(() => {
+    if (!data) return [];
+
+    return data.listModels.map((model) => ({
+      id: model.id,
+      name: model.referenceName,
+      fields: model.fields,
+    }));
+  }, [data]);
+
+  const filteredModels = useMemo(
+    () =>
+      allModels.filter(
+        (item) => !(excludeModels && excludeModels.includes(item.name)),
+      ),
+    [excludeModels, baseModel],
+  );
 
   const modelOptions = useMemo(() => {
-    return response.map((item) => ({
-      label: item.name,
-      value: item.name,
+    return filteredModels.map((model) => ({
+      label: model.name,
+      value: convertObjectToIdentifier(model, modelKeys),
     }));
-  }, [response]);
+  }, [filteredModels]);
 
   const fieldOptions = useMemo(() => {
-    const model = response.find((item) => item.name === baseModel);
-    return (model?.columns || []).map((column) => ({
-      label: column.name,
-      value: column.name,
+    const model = filteredModels.find((item) => item.name === baseModel);
+    return (model?.fields || []).map((field) => ({
+      label: field.referenceName,
+      value: convertObjectToIdentifier(field, fieldKeys),
     }));
-  }, [baseModel]);
+  }, [modelOptions, baseModel]);
 
   return { modelOptions, fieldOptions, onModelChange: setBaseModel };
 }

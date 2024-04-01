@@ -3,9 +3,15 @@ import { gql } from '@apollo/client';
 export const LIST_MODELS = gql`
   query ListModels {
     listModels {
+      id
+      referenceName
+      sourceTableName
+      displayName
+      fields {
+        id
+        referenceName
+      }
       cached
-      description
-      name
       primaryKey
       refreshTime
       refSql
@@ -15,21 +21,32 @@ export const LIST_MODELS = gql`
 
 export const GET_MODEL = gql`
   query GetModel($where: ModelWhereInput!) {
-    getModel(where: $where) {
-      name
+    model(where: $where) {
+      referenceName
+      displayName
+      sourceTableName
       refSql
       primaryKey
       cached
       refreshTime
-      description
-      columns {
-        name
+      fields {
+        referenceName
+        displayName
+        sourceColumnName
         type
         isCalculated
         notNull
-        properties
+        # properties
       }
-      properties
+      relations {
+        fromModelId
+        fromColumnId
+        toModelId
+        toColumnId
+        type
+        name
+      }
+      # properties
     }
   }
 `;

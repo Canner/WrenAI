@@ -21,6 +21,10 @@ interface Props {
   visible?: boolean;
 }
 
+export const defaultIndicator = (
+  <LoadingOutlined style={{ fontSize: 36 }} spin />
+);
+
 export default function PageLoading(props: Props) {
   const { visible } = props;
   return (
@@ -28,7 +32,7 @@ export default function PageLoading(props: Props) {
       className={`align-center justify-center${visible ? ' isShow' : ''}`}
     >
       <div className="text-center">
-        <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
+        <Spin indicator={defaultIndicator} />
         <div className="mt-2 geekblue-6">Loading...</div>
       </div>
     </Wrapper>

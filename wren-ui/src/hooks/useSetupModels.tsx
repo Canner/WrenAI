@@ -1,15 +1,28 @@
 import { useState } from 'react';
 import { SETUP } from '@/utils/enum';
 import { useRouter } from 'next/router';
-import { SourceTable } from '@/components/pages/setup/SelectModels';
+import {
+  useListDataSourceTablesQuery,
+  useSaveTablesMutation,
+} from '@/apollo/client/graphql/dataSource.generated';
 
 export default function useSetupModels() {
   const [stepKey] = useState(SETUP.SELECT_MODELS);
 
   const router = useRouter();
 
-  const submitModels = async (_tables: SourceTable[]) => {
-    // TODO: implement submitModels API
+  const { data, loading: fetching } = useListDataSourceTablesQuery({
+    onError: (error) => console.error(error),
+  });
+
+  const [saveTablesMutation, { loading: submitting }] = useSaveTablesMutation();
+
+  const submitModels = async (tables: string[]) => {
+    await saveTablesMutation({
+      variables: {
+        data: { tables },
+      },
+    });
     router.push('/setup/relations');
   };
 
@@ -17,28 +30,16 @@ export default function useSetupModels() {
     router.push('/setup/connection');
   };
 
-  const onNext = (data?: { selectedTables: string[] }) => {
-    const tables = data.selectedTables.map((table) => ({ name: table }));
-    submitModels(tables);
+  const onNext = (data: { selectedTables: string[] }) => {
+    submitModels(data.selectedTables);
   };
 
   return {
+    submitting,
+    fetching,
     stepKey,
-    tables,
     onBack,
     onNext,
+    tables: data?.listDataSourceTables || [],
   };
 }
-
-// TODO: remove it when connecting to backend
-const tables = [
-  {
-    name: 'orders',
-  },
-  {
-    name: 'customers',
-  },
-  {
-    name: 'products',
-  },
-];

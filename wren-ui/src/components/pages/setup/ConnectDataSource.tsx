@@ -16,17 +16,15 @@ const DataSource = styled.div`
 `;
 
 interface Props {
+  connectErrorMessage: string;
   dataSource: DATA_SOURCES;
   onNext: (data: any) => void;
   onBack: () => void;
-  connectInfo?: {
-    connected: boolean;
-    errorMessage?: string;
-  };
+  submitting: boolean;
 }
 
 export default function ConnectDataSource(props: Props) {
-  const { connectInfo, dataSource, onNext, onBack } = props;
+  const { connectErrorMessage, dataSource, submitting, onNext, onBack } = props;
   const [form] = Form.useForm();
   const current = getDataSource(dataSource);
 
@@ -34,7 +32,7 @@ export default function ConnectDataSource(props: Props) {
     form
       .validateFields()
       .then((values) => {
-        onNext && onNext(values);
+        onNext && onNext({ properties: values });
       })
       .catch((error) => {
         console.error(error);
@@ -80,12 +78,10 @@ export default function ConnectDataSource(props: Props) {
         <current.component />
       </StyledForm>
 
-      {connectInfo && !connectInfo.connected && (
+      {connectErrorMessage && (
         <Alert
           message="Failed to connect"
-          description={
-            connectInfo?.errorMessage || 'Cannot connect to data source'
-          }
+          description={connectErrorMessage || 'Cannot connect to data source'}
           type="error"
           showIcon
           className="my-6"
@@ -94,7 +90,12 @@ export default function ConnectDataSource(props: Props) {
 
       <Row gutter={16} className="pt-6">
         <Col span={12}>
-          <Button onClick={onBack} size="large" className="adm-onboarding-btn">
+          <Button
+            onClick={onBack}
+            size="large"
+            className="adm-onboarding-btn"
+            disabled={submitting}
+          >
             Back
           </Button>
         </Col>
@@ -103,6 +104,7 @@ export default function ConnectDataSource(props: Props) {
             type="primary"
             size="large"
             onClick={submit}
+            loading={submitting}
             className="adm-onboarding-btn"
           >
             Next
