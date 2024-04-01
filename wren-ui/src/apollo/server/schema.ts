@@ -60,6 +60,8 @@ export const typeDefs = gql`
 
   enum NodeType {
     MODEL
+    METRIC
+    VIEW
     RELATION
     FIELD
     CALCULATED_FIELD

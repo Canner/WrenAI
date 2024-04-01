@@ -269,8 +269,10 @@ export type MutationUpdateModelArgs = {
 export enum NodeType {
   CALCULATED_FIELD = 'CALCULATED_FIELD',
   FIELD = 'FIELD',
+  METRIC = 'METRIC',
   MODEL = 'MODEL',
-  RELATION = 'RELATION'
+  RELATION = 'RELATION',
+  VIEW = 'VIEW'
 }
 
 export enum OnboardingStatus {

@@ -5,10 +5,10 @@ import { OnboardingStatus } from '@/apollo/client/graphql/__types__';
 import { Path } from '@/utils/enum';
 
 const redirectRoute = {
-  [OnboardingStatus.DatasourceSaved]: Path.OnboardingModels,
-  [OnboardingStatus.NotStarted]: Path.OnboardingConnection,
-  [OnboardingStatus.OnboardingFinished]: Path.Home,
-  [OnboardingStatus.WithSampleDataset]: Path.Home,
+  [OnboardingStatus.DATASOURCE_SAVED]: Path.OnboardingModels,
+  [OnboardingStatus.NOT_STARTED]: Path.OnboardingConnection,
+  [OnboardingStatus.ONBOARDING_FINISHED]: Path.Home,
+  [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Home,
 };
 
 export const useWithOnboarding = () => {
@@ -45,7 +45,7 @@ export const useWithOnboarding = () => {
       // redirect to home page since user using sample dataset
       if (
         pathname === Path.OnboardingRelations &&
-        onboardingStatus === OnboardingStatus.WithSampleDataset
+        onboardingStatus === OnboardingStatus.WITH_SAMPLE_DATASET
       ) {
         router.push(newPath);
         return;

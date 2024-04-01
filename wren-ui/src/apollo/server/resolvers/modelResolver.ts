@@ -1,8 +1,9 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
 import { CreateModelData } from '../models';
 import { Model, ModelColumn, Project } from '../repositories';
-import { CompactTable, IContext } from '../types';
+import { IContext } from '../types';
 import { getLogger } from '@server/utils';
+import { CompactTable } from '../connectors/connector';
 import { BQConnector } from '../connectors/bqConnector';
 import { GenerateReferenceNameData } from '../services/modelService';
 import { DeployResponse } from '../services/deployService';
