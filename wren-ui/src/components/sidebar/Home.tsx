@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { useParams } from 'next/navigation';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { DataNode } from 'antd/es/tree';
@@ -9,7 +10,6 @@ import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import SidebarTree, { useSidebarTreeState } from './SidebarTree';
 import TreeTitle from '@/components/sidebar/home/TreeTitle';
 
-// TODO: update it to real thread data type
 interface ThreadData {
   id: string;
   name: string;
@@ -43,6 +43,7 @@ const StyledSidebarTree = styled(SidebarTree)`
 export default function Home(props: Props) {
   const { data, onSelect, onRename, onDelete } = props;
   const router = useRouter();
+  const params = useParams<{ id: string }>();
 
   const getThreadGroupNode = createTreeGroupNode({
     groupName: 'Thread',
@@ -54,8 +55,8 @@ export default function Home(props: Props) {
   const { treeSelectedKeys, setTreeSelectedKeys } = useSidebarTreeState();
 
   useEffect(() => {
-    router.query.id && setTreeSelectedKeys([router.query.id] as string[]);
-  }, [router.query.id]);
+    params.id && setTreeSelectedKeys([params.id] as string[]);
+  }, [params.id]);
 
   // initial workspace
   useEffect(() => {
@@ -79,11 +80,11 @@ export default function Home(props: Props) {
         };
       }),
     );
-  }, [data]);
+  }, [params.id, data]);
 
   const onDeleteThread = async (threadId: string) => {
     await onDelete(threadId);
-    if (router.query.id === threadId) {
+    if (params.id == threadId) {
       router.push(Path.Home);
     }
   };
