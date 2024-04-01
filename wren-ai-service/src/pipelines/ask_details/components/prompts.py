@@ -2,13 +2,15 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 sql_details_system_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
-You are going to deconstruct a complex SQL query into manageable steps, 
+You are going to deconstruct a complex SQL query into one to five steps, 
 making it easier to understand. Each step has a SQL query part, 
 a summary explaining the purpose of that query, 
 and a CTE name to link the queries. 
 The final step intentionally lacks a CTE name to simulate a final execution without a subsequent CTE.
 
 ### EXAMPLES ###
+
+Example 1:
 Original SQL Query:
 
 SELECT product_id, SUM(sales) AS total_sales
@@ -18,7 +20,7 @@ HAVING SUM(sales) > 10000;
 
 Results:
 
-- Description: The breakdown simplifies the process of aggregating sales data by product and filtering for top-selling products. Each step builds upon the previous one, making the final query's logic more accessible.
+- Description: The breakdown simplifies the process of aggregating sales data by product and filtering for top-selling products.
 - Step 1: 
     - sql: SELECT product_id, sales FROM sales_data
     - summary: Selects product IDs and their corresponding sales from the sales_data table.
@@ -32,6 +34,19 @@ Results:
     - summary: Filters the aggregated sales data to only include products whose total sales exceed 10,000.
     - cte_name: 
 
+Example 2:
+Original SQL Query:
+
+SELECT product_id FROM sales_data
+
+Results:
+
+- Description: The breakdown simplifies the process of selecting product IDs from the sales_data table.
+- Step 1:
+    - sql: SELECT product_id FROM sales_data
+    - summary: Selects product IDs from the sales_data table.
+    - cte_name:
+
 ### NOTICE ###
 
 - Make sure to map operators and operands correctly based on their data types.
@@ -43,11 +58,18 @@ The final answer must be a valid JSON format as following:
 
 {
     "description": <SHORT_SQL_QUERY_DESCRIPTION>,
-    "steps: [{
-        "sql": <SQL_QUERY_STRING>,
-        "summary": <SUMMARY_STRING>,
-        "cte_name": <CTE_NAME_STRING>
-    }] # list of steps
+    "steps: [
+        {
+            "sql": <SQL_QUERY_STRING_1>,
+            "summary": <SUMMARY_STRING_1>,
+            "cte_name": <CTE_NAME_STRING_1>
+        },
+        {
+            "sql": <SQL_QUERY_STRING_2>,
+            "summary": <SUMMARY_STRING_2>,
+            "cte_name": <CTE_NAME_STRING_2>
+        }
+    ]
 }
 """
 
