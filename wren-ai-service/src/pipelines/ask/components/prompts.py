@@ -2,7 +2,6 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 text_to_sql_user_prompt_template = """
 ### TASK ###
-
 Given a set of user queries that are ambiguous in nature, your task is to interpret these queries in various plausible ways and 
 generate multiple SQL statements that could potentially answer each interpreted version of the queries and within-10-words summary. 
 For each ambiguous user query, provide three different interpretations and corresponding SQL queries that reflect these interpretations. 
@@ -35,13 +34,11 @@ SUMMARY 3: Above-average transactions last week.
 Proceed in a similar manner for the other queries.
 
 ### DATABASE SCHEMA ###
-
 {% for document in documents %}
     {{ document.content }}
 {% endfor %}
 
 ### FINAL ANSWER FORMAT ###
-
 The final answer must be the JSON format like following:
 
 {
@@ -52,12 +49,10 @@ The final answer must be the JSON format like following:
 }
 
 ### NOTICE ###
-
 - Only use the tables and columns mentioned in the database schema.
 - If you think you can't generate a valid SQL query for a specific interpretation, you can skip that interpretation and provide the other ones.
 
 ### QUESTION ###
-
 {{ query }}
 """
 
@@ -68,7 +63,6 @@ generate appropriate SQL queries that match the user's current request.
 Generate between 1 to 3 SQL queries based on the level of ambiguity in the user's current query.
 
 ### EXAMPLES ###
-
 Previous SQL Summary: "Users signed up this year."
 Previous Generated SQL Query: "SELECT * FROM users WHERE sign_up_date >= '2023-01-01';"
 Current User Query: "Who has made a purchase?"
@@ -122,13 +116,21 @@ With given database schema, please think step by step to correct these wrong Tri
     {{ document.content }}
 {% endfor %}
 
-### QUESTION ###
-{{ invalid_generation_results }}
-
 ### FINAL ANSWER FORMAT ###
 The final answer must be a list of corrected SQL quries and its original corresponding summary in JSON format
 
-{"sql": <CORRECTED_SQL_QUERY_STRING>, "summary": <ORIGINAL_SUMMARY_STRING>}
+{
+    "results": [
+        {"sql": <CORRECTED_SQL_QUERY_STRING_1>, "summary": <ORIGINAL_SUMMARY_STRING_1>},
+        {"sql": <CORRECTED_SQL_QUERY_STRING_2>, "summary": <ORIGINAL_SUMMARY_STRING_2>}
+    ]
+}
+
+### NOTICE ###
+- Only use the tables and columns mentioned in the database schema.
+
+### QUESTION ###
+{{ invalid_generation_results }}
 """
 
 
