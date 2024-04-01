@@ -33,6 +33,7 @@
     "next": "13.5.6",
     "pg": "^8.8.0",
     "pg-cursor": "^2.7.4",
+    "sql-formatter": "^15.3.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

@@ -239,6 +239,109 @@ export const typeDefs = gql`
     timeGrain: [TimeGrainInput!]!
   }
 
+  # Task
+  type Task {
+    id: String!
+  }
+
+  # Error
+  type Error {
+    code: String
+    shortMessage: String
+    message: String
+    stacktrace: [String]
+  }
+
+  # Asking Task
+  input AskingTaskInput {
+    question: String!
+    # Used for follow-up questions
+    threadId: Int
+  }
+
+  enum AskingTaskStatus {
+    UNDERSTANDING
+    SEARCHING
+    GENERATING
+    FINISHED
+    FAILED
+    STOPPED
+  }
+
+  type ResultCandidate {
+    sql: String!
+    summary: String!
+  }
+
+  type AskingTask {
+    status: AskingTaskStatus!
+    error: Error
+    candidates: [ResultCandidate!]!
+  }
+
+  # Thread
+  input CreateThreadInput {
+    question: String!
+    sql: String!
+    summary: String!
+  }
+
+  input CreateThreadResponseInput {
+    question: String!
+    sql: String!
+    summary: String!
+  }
+
+  input ThreadUniqueWhereInput {
+    id: Int!
+  }
+
+  input UpdateThreadInput {
+    summary: String
+  }
+
+  input PreviewDataInput {
+    responseId: Int!
+    # Optional, only used for preview data of a single step
+    stepIndex: Int
+  }
+
+  type DetailStep {
+    summary: String!
+    sql: String!
+    cteName: String
+  }
+
+  type ThreadResponseDetail {
+    sql: String
+    description: String
+    steps: [DetailStep!]!
+  }
+
+  type ThreadResponse {
+    id: Int!
+    question: String!
+    status: AskingTaskStatus!
+    detail: ThreadResponseDetail
+    error: Error
+  }
+
+  # Thread only consists of basic information of a thread
+  type Thread {
+    id: Int!
+    sql: String!
+    summary: String!
+  }
+
+  # Detailed thread consists of thread and thread responses
+  type DetailedThread {
+    id: Int!
+    sql: String!
+    summary: String!
+    responses: [ThreadResponse!]!
+  }
+
+  # Query and Mutation
   type Query {
     # On Boarding Steps
     usableDataSource: [UsableDataSource!]!
@@ -251,6 +354,12 @@ export const typeDefs = gql`
     listModels: [ModelInfo!]!
     model(where: ModelWhereInput!): DetailedModel!
     modelSync: ModelSyncResponse
+
+    # Ask
+    askingTask(taskId: String!): AskingTask!
+    threads: [Thread!]!
+    thread(threadId: Int!): DetailedThread!
+    threadResponse(responseId: Int!): ThreadResponse!
   }
 
   type Mutation {
@@ -265,5 +374,24 @@ export const typeDefs = gql`
     createModel(data: CreateModelInput!): JSON!
     updateModel(where: ModelWhereInput!, data: UpdateModelInput!): JSON!
     deleteModel(where: ModelWhereInput!): Boolean!
+
+    # Ask
+    createAskingTask(data: AskingTaskInput!): Task!
+    cancelAskingTask(taskId: String!): Boolean!
+
+    # Thread
+    createThread(data: CreateThreadInput!): Thread!
+    updateThread(
+      where: ThreadUniqueWhereInput!
+      data: UpdateThreadInput!
+    ): Thread!
+    deleteThread(where: ThreadUniqueWhereInput!): Boolean!
+
+    # Thread Response
+    createThreadResponse(
+      threadId: Int!
+      data: CreateThreadResponseInput!
+    ): ThreadResponse!
+    previewData(where: PreviewDataInput!): JSON!
   }
 `;
