@@ -1,18 +1,12 @@
-import { useEffect } from 'react';
 import Image from 'next/image';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
-import {
-  useAskingTaskLazyQuery,
-  useCancelAskingTaskMutation,
-  useCreateAskingTaskMutation,
-  useCreateThreadMutation,
-} from '@/apollo/client/graphql/home.generated';
-import { AskingTaskStatus } from '@/apollo/client/graphql/__types__';
+import { useCreateThreadMutation } from '@/apollo/client/graphql/home.generated';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
+import useAskPrompt from '@/hooks/useAskPrompt';
 
 const demoData = [
   {
@@ -31,32 +25,14 @@ const demoData = [
   },
 ];
 
-const checkIsFinished = (status: AskingTaskStatus) =>
-  [
-    AskingTaskStatus.Finished,
-    AskingTaskStatus.Failed,
-    AskingTaskStatus.Stopped,
-  ].includes(status);
-
 export default function Home() {
   const router = useRouter();
   const homeSidebar = useHomeSidebar();
-  const [createAskingTask, createAskingTaskResult] =
-    useCreateAskingTaskMutation();
-  const [cancelAskingTask] = useCancelAskingTaskMutation();
-  const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
-    pollInterval: 1000,
-  });
+  const askPrompt = useAskPrompt();
+
   const [createThread] = useCreateThreadMutation({
     onCompleted: () => homeSidebar.refetch(),
   });
-
-  useEffect(() => {
-    const { askingTask } = askingTaskResult.data || {};
-    if (askingTask?.status && checkIsFinished(askingTask.status)) {
-      askingTaskResult.stopPolling();
-    }
-  }, [askingTaskResult.data?.askingTask]);
 
   const isDemo = true;
 
@@ -66,28 +42,6 @@ export default function Home() {
     try {
       const response = await createThread({ variables: { data: payload } });
       router.push(Path.Home + `/${response.data.createThread.id}`);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const onStop = () => {
-    const taskId = createAskingTaskResult.data?.createAskingTask.id;
-    if (taskId) {
-      cancelAskingTask({
-        variables: { taskId },
-      });
-    }
-  };
-
-  const onSubmit = async (value: string) => {
-    try {
-      const response = await createAskingTask({
-        variables: { data: { question: value } },
-      });
-      await fetchAskingTask({
-        variables: { taskId: response.data.createAskingTask.id },
-      });
     } catch (error) {
       console.error(error);
     }
@@ -113,10 +67,10 @@ export default function Home() {
         {isDemo && <DemoPrompt demo={demoData} onSelect={onDemoSelect} />}
       </div>
       <Prompt
-        data={askingTaskResult.data?.askingTask}
+        data={askPrompt.data}
+        onSubmit={askPrompt.onSubmit}
+        onStop={askPrompt.onStop}
         onSelect={onSelect}
-        onSubmit={onSubmit}
-        onStop={onStop}
       />
     </SiderLayout>
   );

@@ -3,7 +3,9 @@ import { Input, Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
 import PromptResult from '@/components/pages/home/prompt/Result';
-import useAskProcessState from '@/hooks/useAskProcessState';
+import useAskProcessState, {
+  getIsProcessing,
+} from '@/hooks/useAskProcessState';
 import {
   AskingTask,
   AskingTaskStatus,
@@ -33,7 +35,7 @@ const PromptButton = styled(Button)`
   min-width: 72px;
 `;
 
-const convertToProcessState = (data: AskingTask) => {
+const convertAskingTaskToProcessState = (data: AskingTask) => {
   const processState = {
     [AskingTaskStatus.Understanding]: PROCESS_STATE.UNDERSTANDING,
     [AskingTaskStatus.Searching]: PROCESS_STATE.SEARCHING,
@@ -57,24 +59,17 @@ export default function Prompt(props: Props) {
   const error = useMemo(() => data?.error || null, [data?.error]);
   const question = useMemo(() => inputValue.trim(), [inputValue]);
   const isProcessing = useMemo(
-    () =>
-      [
-        PROCESS_STATE.UNDERSTANDING,
-        PROCESS_STATE.GENERATING,
-        PROCESS_STATE.SEARCHING,
-      ].includes(askProcessState.currentState),
+    () => getIsProcessing(askProcessState.currentState),
     [askProcessState.currentState],
   );
 
   useEffect(() => {
-    if (!isProcessing) {
-      $promptInput.current?.focus();
-    }
+    if (!isProcessing) $promptInput.current?.focus();
   }, [isProcessing]);
 
   useEffect(() => {
     if (data) {
-      const processState = convertToProcessState(data);
+      const processState = convertAskingTaskToProcessState(data);
       askProcessState.setState(processState);
     }
   }, [data]);

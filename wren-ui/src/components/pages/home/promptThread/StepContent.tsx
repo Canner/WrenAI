@@ -3,7 +3,7 @@ import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { BinocularsIcon } from '@/utils/icons';
 import CollapseContent, {
   Props as CollapseContentProps,
-} from '@/components/pages/home/CollapseContent';
+} from '@/components/pages/home/promptThread/CollapseContent';
 import useAnswerStepContent from '@/hooks/useAnswerStepContent';
 
 const { Title, Paragraph } = Typography;

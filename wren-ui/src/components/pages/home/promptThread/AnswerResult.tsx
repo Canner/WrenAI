@@ -1,7 +1,7 @@
 import { Skeleton, Typography } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
-import StepContent from '@/components/pages/home/StepContent';
+import StepContent from '@/components/pages/home/promptThread/StepContent';
 
 const { Title } = Typography;
 
