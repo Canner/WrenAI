@@ -14,11 +14,6 @@ export const typeDefs = gql`
     MUSIC
   }
 
-  type UsableDataSource {
-    type: DataSourceName!
-    requiredProperties: [String!]!
-  }
-
   type DataSource {
     type: DataSourceName!
     properties: JSON!
@@ -404,7 +399,6 @@ export const typeDefs = gql`
   # Query and Mutation
   type Query {
     # On Boarding Steps
-    usableDataSource: [UsableDataSource!]!
     listDataSourceTables: [CompactTable!]!
     autoGenerateRelation: [RecommandRelations!]
     onboardingStatus: OnboardingStatusResponse!

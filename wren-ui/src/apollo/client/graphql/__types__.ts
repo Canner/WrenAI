@@ -296,7 +296,6 @@ export type Query = {
   model: DetailedModel;
   modelSync?: Maybe<ModelSyncResponse>;
   onboardingStatus: OnboardingStatusResponse;
-  usableDataSource: Array<UsableDataSource>;
 };
 
 
@@ -379,10 +378,4 @@ export type UpdateModelInput = {
   displayName: Scalars['String'];
   fields: Array<Scalars['String']>;
   refreshTime?: InputMaybe<Scalars['String']>;
-};
-
-export type UsableDataSource = {
-  __typename?: 'UsableDataSource';
-  requiredProperties: Array<Scalars['String']>;
-  type: DataSourceName;
 };
