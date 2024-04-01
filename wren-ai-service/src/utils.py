@@ -23,6 +23,12 @@ def clean_generation_result(result: str) -> str:
 
 
 def load_env_vars() -> str:
+    def _verify_env_vars() -> None:
+        """
+        this is a temporary solution to verify that the required environment variables are set
+        """
+        OpenAI().models.list()
+
     load_dotenv(override=True)
 
     if is_dev_env := os.getenv("ENV") and os.getenv("ENV").lower() == "dev":
@@ -34,11 +40,11 @@ def load_env_vars() -> str:
     return "dev" if is_dev_env else "prod"
 
 
-def _verify_env_vars() -> None:
-    """
-    this is a temporary solution to verify that the required environment variables are set
-    """
-    OpenAI().models.list()
+def remove_limit_statement(sql: str) -> str:
+    pattern = r"\s*LIMIT\s+\d+(\s*;?\s*--.*|\s*;?\s*)$"
+    modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
+
+    return modified_sql
 
 
 def classify_invalid_generation_results(
@@ -52,7 +58,7 @@ def classify_invalid_generation_results(
         response = requests.get(
             f"{api_endpoint}/v1/mdl/preview",
             json={
-                "sql": generation_result["sql"],
+                "sql": remove_limit_statement(generation_result["sql"]),
                 "limit": 1,
             },
         )
@@ -77,7 +83,7 @@ def check_if_sql_executable(
     response = requests.get(
         f"{api_endpoint}/v1/mdl/preview",
         json={
-            "sql": sql,
+            "sql": remove_limit_statement(sql),
             "limit": 1,
         },
     )
