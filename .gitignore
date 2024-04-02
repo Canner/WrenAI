@@ -67,3 +67,6 @@ yarn-error.log*
 ## typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# wren-launcher
+wren-launcher/dist
