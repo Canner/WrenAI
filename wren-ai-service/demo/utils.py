@@ -667,7 +667,7 @@ def generate_mdl_metadata(mdl_model_json: dict):
 
     st.toast(f'Generating MDL metadata for model {mdl_model_json['name']}', icon="⏳")
     generate_mdl_metadata_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-descriptions/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-descriptions",
         json={
             "mdl": mdl_model_json,
             "model": mdl_model_json["name"],
@@ -696,7 +696,7 @@ def generate_mdl_metadata(mdl_model_json: dict):
 
 def prepare_semantics(mdl_json: dict):
     semantics_preparation_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations",
         json={
             "mdl": json.dumps(mdl_json),
             "id": st.session_state["deployment_id"],
@@ -738,7 +738,7 @@ def prepare_semantics(mdl_json: dict):
 def ask(query: str, query_history: Optional[dict] = None):
     st.session_state["query"] = query
     asks_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/asks",
         json={
             "query": query,
             "id": st.session_state["deployment_id"],
@@ -756,7 +756,7 @@ def ask(query: str, query_history: Optional[dict] = None):
         and asks_status != "stopped"
     ):
         asks_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/{query_id}/result/"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/{query_id}/result"
         )
         assert asks_status_response.status_code == 200
         asks_status = asks_status_response.json()["status"]
@@ -774,7 +774,7 @@ def ask(query: str, query_history: Optional[dict] = None):
 
 def ask_details():
     asks_details_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details",
         json={
             "query": st.session_state["chosen_query_result"]["query"],
             "sql": st.session_state["chosen_query_result"]["sql"],

@@ -1,7 +1,10 @@
+import logging
 from typing import List, Literal, Optional
 
 from haystack import Pipeline
 from pydantic import BaseModel
+
+logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 
 
 # POST /v1/semantics-preparations
@@ -183,6 +186,14 @@ class AskService:
                     "post_processor"
                 ]["valid_generation_results"]
 
+            logging.info("Documents:")
+            for document in documents:
+                logging.info(f"score: {document.score}")
+                logging.info(f"content: {document.content}")
+
+            logging.info("Before sql correction:")
+            logging.info(f"valid_generation_results: {valid_generation_results}")
+
             if text_to_sql_generation_results["post_processor"][
                 "invalid_generation_results"
             ]:
@@ -195,6 +206,13 @@ class AskService:
                 valid_generation_results += sql_correction_results["post_processor"][
                     "valid_generation_results"
                 ]
+
+                logging.info(
+                    f'sql_correction_results: {sql_correction_results["post_processor"]}'
+                )
+
+            logging.info("After sql correction:")
+            logging.info(f"valid_generation_results: {valid_generation_results}")
 
             if not valid_generation_results:
                 self.ask_results[query_id] = AskResultResponse(
