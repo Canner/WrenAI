@@ -6,7 +6,7 @@ import {
   SampleDatasetData,
 } from '../types';
 import { getLogger } from '@server/utils';
-import { Model, ModelColumn, Project, Relation } from '../repositories';
+import { Model, ModelColumn, Project } from '../repositories';
 import {
   SampleDatasetName,
   SampleDatasetRelationship,

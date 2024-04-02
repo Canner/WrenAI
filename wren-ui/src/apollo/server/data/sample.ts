@@ -13,11 +13,15 @@ export interface SampleDatasetRelationship {
   toColumnName: string;
   type: RelationType;
 }
+export interface SuggestedQuestion {
+  question: string;
+  label: string;
+}
 
 export interface SampleDataset {
   name: string; // SampleDatasetName
   tables: SampleDatasetTable[];
-  questions?: string[];
+  questions?: SuggestedQuestion[];
   relations?: SampleDatasetRelationship[];
 }
 
@@ -59,9 +63,19 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
     ],
     questions: [
-      'What are the top 5 selling albums in the US',
-      'What is the total revenue generated from each genre',
-      'Which customers have made purchases of tracks from albums in each genre',
+      {
+        question: 'What are the top 5 selling albums in the US',
+        label: 'Ranking ',
+      },
+      {
+        question: 'What is the total revenue generated from each genre',
+        label: 'Aggregation',
+      },
+      {
+        question:
+          'Which customers have made purchases of tracks from albums in each genre',
+        label: 'General',
+      },
     ],
     relations: [
       {
@@ -144,9 +158,21 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
     ],
     questions: [
-      'What are the top 3 value for orders placed by customers in each city',
-      'What is the average score of reviews submitted for orders placed by customers in each city',
-      'What is the total value of payments made by customers from each state',
+      {
+        question:
+          'What are the top 3 value for orders placed by customers in each city',
+        label: 'Ranking',
+      },
+      {
+        question:
+          'What is the average score of reviews submitted for orders placed by customers in each city',
+        label: 'Aggregation',
+      },
+      {
+        question:
+          'What is the total value of payments made by customers from each state',
+        label: 'Aggregation',
+      },
     ],
     relations: [
       {
@@ -213,9 +239,21 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
     ],
     questions: [
-      'How many three-pointers were made by each player in each game',
-      'What is the differences in turnover rates between teams with high and low average scores',
-      'Which teams had the highest average points scored per game throughout the season',
+      {
+        question:
+          'How many three-pointers were made by each player in each game',
+        label: 'Aggregation',
+      },
+      {
+        question:
+          'What is the differences in turnover rates between teams with high and low average scores',
+        label: 'Comparison',
+      },
+      {
+        question:
+          'Which teams had the highest average points scored per game throughout the season',
+        label: 'Ranking',
+      },
     ],
     relations: [
       {

@@ -390,10 +390,13 @@ export const typeDefs = gql`
     summary: String!
     responses: [ThreadResponse!]!
   }
-
+  type SuggestedQuestion {
+    question: String!
+    label: String!
+  }
   # Ask Questions Responses
-  type AskQuestionResponse {
-    questions: [String]!
+  type SuggestedQuestionResponse {
+    questions: [SuggestedQuestion]!
   }
 
   # Query and Mutation
@@ -411,7 +414,7 @@ export const typeDefs = gql`
 
     # Ask
     askingTask(taskId: String!): AskingTask!
-    askQuestions: AskQuestionResponse!
+    suggestedQuestions: SuggestedQuestionResponse!
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!

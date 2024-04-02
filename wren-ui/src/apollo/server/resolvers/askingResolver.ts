@@ -50,10 +50,10 @@ export class AskingResolver {
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
-    this.getAskQuestions = this.getAskQuestions.bind(this);
+    this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
   }
 
-  public async getAskQuestions(
+  public async getSuggestedQuestions(
     _root: any,
     _args: any,
     ctx: IContext,
