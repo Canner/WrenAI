@@ -221,12 +221,18 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="Whether to add semantic description before asking. Default is False.",
     )
+    parser.add_argument(
+        "--custom-semantic-description",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to add customized semantic description before asking. Default is False.",
+    )
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
     EVAL_AFTER_PREDICTION = args.eval_after_prediction
     EVAL_FROM_SCRATCH = args.eval_from_scratch
     ENABLE_SEMANTIC_DESCRIPTION = args.semantic_description
+    CUSTOM_SEMANTIC_DESCRIPTION = args.custom_semantic_description
 
     with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
         ground_truths = [json.loads(line) for line in f]
@@ -286,6 +292,11 @@ if __name__ == "__main__":
         if ENABLE_SEMANTIC_DESCRIPTION:
             with open(
                 f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "r"
+            ) as f:
+                mdl_str = json.dumps(json.load(f))
+        elif CUSTOM_SEMANTIC_DESCRIPTION:
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_custom_semantic_mdl.json", "r"
             ) as f:
                 mdl_str = json.dumps(json.load(f))
         else:
