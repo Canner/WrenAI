@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"regexp"
 
@@ -153,16 +152,6 @@ func RunDockerCompose(projectName string, projectDir string) error {
 	// Run the up command
 	err = apiService.Up(ctx, projectType, api.UpOptions{})
 	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func OpenDockerDaemon() error {
-	// open docker daemon with command
-	cmd := exec.Command("open", "-a", "Docker")
-	if err := cmd.Run(); err != nil {
 		return err
 	}
 

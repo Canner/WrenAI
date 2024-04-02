@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
-	"runtime"
 	"strings"
 	"time"
 
@@ -59,22 +57,6 @@ func askForAPIKey() (string, error) {
 	}
 
 	return result, nil
-}
-
-func openbrowser(url string) error {
-	var err error
-
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		err = exec.Command("open", url).Start()
-	default:
-		err = fmt.Errorf("unsupported platform")
-	}
-	return err
 }
 
 func Launch() {
@@ -149,7 +131,7 @@ func Launch() {
 
 	// open browser
 	pterm.Info.Println("Opening browser")
-	openbrowser("http://localhost:3000")
+	utils.Openbrowser("http://localhost:3000")
 
 	pterm.Info.Println("You can now safely close this terminal window")
 	fmt.Scanf("h")
