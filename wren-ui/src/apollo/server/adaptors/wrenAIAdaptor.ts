@@ -144,7 +144,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   public async cancelAsk(queryId: string): Promise<void> {
     // make PATCH request /v1/asks/:query_id to cancel the query
     try {
-      await axios.patch(`${this.wrenAIBaseEndpoint}/v1/asks/${queryId}`);
+      await axios.patch(`${this.wrenAIBaseEndpoint}/v1/asks/${queryId}`, {
+        status: 'stopped',
+      });
     } catch (err: any) {
       logger.debug(`Got error when canceling ask: ${err.message}`);
       throw err;
