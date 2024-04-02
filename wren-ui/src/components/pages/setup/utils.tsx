@@ -3,13 +3,14 @@ import IconComponentProps from '@ant-design/icons';
 import CustomerServiceOutlined from '@ant-design/icons/CustomerServiceOutlined';
 import ShoppingCartOutlined from '@ant-design/icons/ShoppingCartOutlined';
 import TrophyOutlined from '@ant-design/icons/TrophyOutlined';
-import { SETUP, DATA_SOURCES, DEMO_TEMPLATES } from '@/utils/enum';
+import { SETUP, DATA_SOURCES } from '@/utils/enum';
 import Starter from './Starter';
 import ConnectDataSource from './ConnectDataSource';
 import SelectModels from './SelectModels';
 import DefineRelations from './DefineRelations';
 import BigQueryProperties from './dataSources/BigQueryProperties';
 import DuckDBProperties from './dataSources/DuckDBProperties';
+import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 
 type SetupStep = {
   step: number;
@@ -79,15 +80,15 @@ export const DATA_SOURCE_FORM = {
 };
 
 export const TEMPLATE_OPTIONS = {
-  [DEMO_TEMPLATES.ECORMERCE]: {
+  [SampleDatasetName.ECOMMERCE]: {
     label: 'E-commerce',
     IconComponent: ShoppingCartOutlined,
   },
-  [DEMO_TEMPLATES.MUSIC_STORE]: {
+  [SampleDatasetName.MUSIC]: {
     label: 'Music Store',
     IconComponent: CustomerServiceOutlined,
   },
-  [DEMO_TEMPLATES.NBA]: {
+  [SampleDatasetName.NBA]: {
     label: 'NBA',
     IconComponent: TrophyOutlined,
   },
@@ -121,6 +122,6 @@ export const getTemplates = () => {
     ...TEMPLATE_OPTIONS[key],
     value: key,
   })) as (Omit<ButtonOption, 'guide' | 'disabled'> & {
-    value: DEMO_TEMPLATES;
+    value: SampleDatasetName;
   })[];
 };
