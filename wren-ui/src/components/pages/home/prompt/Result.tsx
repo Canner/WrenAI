@@ -150,7 +150,7 @@ const makeProcessingError =
 
 const ErrorIcon = () => <CloseCircleFilled className="mr-2 red-5 text-lg" />;
 
-const AskingFailed = makeProcessingError({
+const Failed = makeProcessingError({
   icon: <ErrorIcon />,
 });
 
@@ -215,7 +215,7 @@ const getProcessStateComponent = (state: PROCESS_STATE) => {
       // generating no need to change UI
       [PROCESS_STATE.GENERATING]: Searching,
       [PROCESS_STATE.FINISHED]: Finished,
-      [PROCESS_STATE.ASKING_FAILED]: AskingFailed,
+      [PROCESS_STATE.FAILED]: Failed,
     }[state] || null
   );
 };

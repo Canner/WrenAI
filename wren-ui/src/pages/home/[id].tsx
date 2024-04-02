@@ -1,6 +1,6 @@
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -15,7 +15,6 @@ import PromptThread from '@/components/pages/home/promptThread';
 
 export default function HomeThread({ threadId }) {
   const router = useRouter();
-  const divRef = useRef<HTMLDivElement>(null);
   const homeSidebar = useHomeSidebar();
   const askPrompt = useAskPrompt(threadId);
 
@@ -82,23 +81,6 @@ export default function HomeThread({ threadId }) {
   useEffect(() => {
     if (isFinished) threadResponseResult.stopPolling();
   }, [isFinished]);
-
-  useEffect(() => {
-    if (divRef.current && thread?.responses.length > 0) {
-      const contentLayout = divRef.current.parentElement;
-      const lastChild = divRef.current.lastElementChild as HTMLElement;
-      const lastChildDivider = lastChild.firstElementChild as HTMLElement;
-      if (
-        contentLayout.clientHeight <
-        lastChild.offsetTop + lastChild.clientHeight
-      ) {
-        contentLayout.scrollTo({
-          top: lastChildDivider.offsetTop,
-          behavior: 'smooth',
-        });
-      }
-    }
-  }, [divRef, thread]);
 
   const onSelect = async (payload) => {
     try {

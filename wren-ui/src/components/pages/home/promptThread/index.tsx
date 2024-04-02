@@ -57,7 +57,7 @@ const AnswerResultTemplate = ({
         <AnswerResult
           answerResultSteps={detail?.steps}
           description={detail?.description}
-          loading={status !== AskingTaskStatus.Finished}
+          loading={status !== AskingTaskStatus.FINISHED}
           question={question}
           fullSql={detail?.sql}
         />

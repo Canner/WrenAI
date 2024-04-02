@@ -37,10 +37,10 @@ const PromptButton = styled(Button)`
 
 const convertAskingTaskToProcessState = (data: AskingTask) => {
   const processState = {
-    [AskingTaskStatus.Understanding]: PROCESS_STATE.UNDERSTANDING,
-    [AskingTaskStatus.Searching]: PROCESS_STATE.SEARCHING,
-    [AskingTaskStatus.Generating]: PROCESS_STATE.GENERATING,
-    [AskingTaskStatus.Finished]: PROCESS_STATE.FINISHED,
+    [AskingTaskStatus.UNDERSTANDING]: PROCESS_STATE.UNDERSTANDING,
+    [AskingTaskStatus.SEARCHING]: PROCESS_STATE.SEARCHING,
+    [AskingTaskStatus.GENERATING]: PROCESS_STATE.GENERATING,
+    [AskingTaskStatus.FINISHED]: PROCESS_STATE.FINISHED,
   }[data.status];
 
   if (processState === PROCESS_STATE.FINISHED && data.candidates.length === 0) {
@@ -76,7 +76,7 @@ export default function Prompt(props: Props) {
 
   useEffect(() => {
     if (error) {
-      askProcessState.setState(PROCESS_STATE.ASKING_FAILED);
+      askProcessState.setState(PROCESS_STATE.FAILED);
     }
   }, [error]);
 

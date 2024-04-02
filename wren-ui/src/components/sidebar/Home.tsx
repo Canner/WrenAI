@@ -55,8 +55,8 @@ export default function Home(props: Props) {
   const { treeSelectedKeys, setTreeSelectedKeys } = useSidebarTreeState();
 
   useEffect(() => {
-    params.id && setTreeSelectedKeys([params.id] as string[]);
-  }, [params.id]);
+    params?.id && setTreeSelectedKeys([params.id] as string[]);
+  }, [params?.id]);
 
   // initial workspace
   useEffect(() => {
@@ -80,11 +80,11 @@ export default function Home(props: Props) {
         };
       }),
     );
-  }, [params.id, data]);
+  }, [params?.id, data]);
 
   const onDeleteThread = async (threadId: string) => {
     await onDelete(threadId);
-    if (params.id == threadId) {
+    if (params?.id == threadId) {
       router.push(Path.Home);
     }
   };

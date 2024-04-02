@@ -8,9 +8,9 @@ import {
 
 export const getIsFinished = (status: AskingTaskStatus) =>
   [
-    AskingTaskStatus.Finished,
-    AskingTaskStatus.Failed,
-    AskingTaskStatus.Stopped,
+    AskingTaskStatus.FINISHED,
+    AskingTaskStatus.FAILED,
+    AskingTaskStatus.STOPPED,
   ].includes(status);
 
 export default function useAskPrompt(threadId?: number) {
@@ -33,7 +33,9 @@ export default function useAskPrompt(threadId?: number) {
   const onStop = () => {
     const taskId = createAskingTaskResult.data?.createAskingTask.id;
     if (taskId) {
-      cancelAskingTask({ variables: { taskId } });
+      cancelAskingTask({ variables: { taskId } }).catch((error) =>
+        console.error(error),
+      );
     }
   };
 
