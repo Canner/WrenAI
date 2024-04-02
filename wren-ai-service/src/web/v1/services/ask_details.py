@@ -77,9 +77,7 @@ class AskDetailsService:
             sql=ask_details_request.sql,
         )
 
-        ask_details_result = generation_result["sql_details_post_processor"][
-            "post_processing_results"
-        ]
+        ask_details_result = generation_result["post_processor"]["results"]
 
         if ask_details_result is None:
             self.ask_details_results[query_id] = AskDetailsResultResponse(

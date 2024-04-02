@@ -10,7 +10,7 @@ from src.web.v1.services.ask_details import (
 # TODO: finish test_generation_pipeline for ask details pipeline
 def test_generation_pipeline():
     generation_pipeline = Generation(
-        sql_details_generator=init_generator(),
+        generator=init_generator(),
     )
 
     generation_result = generation_pipeline.run(
@@ -18,5 +18,5 @@ def test_generation_pipeline():
     )
 
     assert AskDetailsResultResponse.AskDetailsResponseDetails(
-        **generation_result["sql_details_post_processor"]["post_processing_results"]
+        **generation_result["post_processor"]["results"]
     )

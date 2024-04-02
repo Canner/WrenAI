@@ -1,0 +1,1586 @@
+[
+  {
+    "input": {
+      "query": "what is the full name and id of the college with the largest number of baseball players?",
+      "sql": "SELECT T1.name_full, T1.college_id FROM college AS T1 JOIN player_college AS T2 ON T1.college_id = T2.college_id GROUP BY T1.college_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the full name and college ID of the college with the highest number of players, handling NULL values last.",
+      "steps": [
+        {
+          "sql": "WITH college_players_count AS (SELECT T1.name_full, T1.college_id, COUNT(*) AS player_count FROM college AS T1 JOIN player_college AS T2 ON T1.college_id = T2.college_id GROUP BY T1.name_full, T1.college_id) ",
+          "summary": "Calculate the count of players for each college.",
+          "cte_name": "college_players_count"
+        },
+        {
+          "sql": "SELECT name_full, college_id FROM college_players_count ORDER BY player_count DESC NULLS LAST LIMIT 1",
+          "summary": "Retrieve the full name and college ID of the college with the highest number of players, handling NULL values last.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the full name and id of the college that has the most baseball players.",
+      "sql": "SELECT T1.name_full, T1.college_id FROM college AS T1 JOIN player_college AS T2 ON T1.college_id = T2.college_id GROUP BY T1.college_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the full name and college ID of the college with the highest number of players, handling NULL values last.",
+      "steps": [
+        {
+          "sql": "WITH college_players_count AS (SELECT T1.name_full, T1.college_id, COUNT(*) AS player_count FROM college AS T1 JOIN player_college AS T2 ON T1.college_id = T2.college_id GROUP BY T1.name_full, T1.college_id) ",
+          "summary": "Calculate the count of players for each college.",
+          "cte_name": "college_players_count"
+        },
+        {
+          "sql": "SELECT name_full, college_id FROM college_players_count ORDER BY player_count DESC NULLS LAST LIMIT 1",
+          "summary": "Retrieve the full name and college ID of the college with the highest number of players, handling NULL values last.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is average salary of the players in the team named 'Boston Red Stockings' ?",
+      "sql": "SELECT AVG(T1.player_salary) FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings'",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the average salary of players in the team 'Boston Red Stockings'.",
+      "steps": [
+        {
+          "sql": "WITH salary_cte AS (SELECT * FROM salary), team_cte AS (SELECT * FROM team) SELECT AVG(T1.player_salary) FROM salary_cte AS T1 JOIN team_cte AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings'",
+          "summary": "Calculate the average salary of players in a specific team.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Compute the average salary of the players in the team called 'Boston Red Stockings'.",
+      "sql": "SELECT AVG(T1.salary) FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings'",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the average salary of players in the team 'Boston Red Stockings'.",
+      "steps": [
+        {
+          "sql": "WITH team_salary AS (SELECT AVG(T1.salary) AS avg_salary FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings')",
+          "summary": "Calculate the average salary of players in the team 'Boston Red Stockings'.",
+          "cte_name": "team_salary"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are first and last names of players participating in all star game in 1998?",
+      "sql": "SELECT name_first, name_last FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id WHERE YEAR = 1998",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first and last names of players who were selected as all-stars in the year 1998.",
+      "steps": [
+        {
+          "sql": "SELECT name_first, name_last FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id WHERE YEAR = 1998",
+          "summary": "Selecting the first and last names of players who were all-stars in 1998",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List the first and last name for players who participated in all star game in 1998.",
+      "sql": "SELECT name_first, name_last FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id WHERE YEAR = 1998",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first and last names of players who were all-stars in the year 1998.",
+      "steps": [
+        {
+          "sql": "SELECT name_first, name_last FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id WHERE YEAR = 1998",
+          "summary": "Select the first and last names from the 'player' table and 'all_star' table where the player_id matches and the year is 1998.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the first name, last name and id of the player with the most all star game experiences? Also list the count.",
+      "sql": "SELECT T1.name_first, T1.name_last, T1.player_id, COUNT(*) FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id GROUP BY T1.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name, last name, player ID, and count of appearances in the all-star game for the player with the highest number of appearances.",
+      "steps": [
+        {
+          "sql": "WITH player_all_star_count AS (SELECT T1.name_first, T1.name_last, T1.player_id, COUNT(*) AS appearances FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id GROUP BY T1.name_first, T1.name_last, T1.player_id) ",
+          "summary": "Calculate the count of all-star appearances for each player.",
+          "cte_name": "player_all_star_count"
+        },
+        {
+          "sql": "SELECT name_first, name_last, player_id, appearances FROM player_all_star_count ORDER BY appearances DESC NULLS LAST LIMIT 1",
+          "summary": "Retrieve the first name, last name, player ID, and count of appearances for the player with the highest number of appearances.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which player has the most all star game experiences? Give me the first name, last name and id of the player, as well as the number of times the player participated in all star game.",
+      "sql": "SELECT T1.name_first, T1.name_last, T1.player_id, COUNT(*) FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id GROUP BY T1.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name, last name, player ID, and the count of appearances in the all-star game for the player with the highest number of appearances.",
+      "steps": [
+        {
+          "sql": "WITH player_all_star_count AS (SELECT T1.name_first, T1.name_last, T1.player_id, COUNT(*) AS all_star_count FROM player AS T1 JOIN all_star AS T2 ON T1.player_id = T2.player_id GROUP BY T1.name_first, T1.name_last, T1.player_id) SELECT name_first, name_last, player_id, all_star_count FROM player_all_star_count ORDER BY all_star_count DESC NULLS LAST LIMIT 1",
+          "summary": "Calculate the count of all-star appearances for each player and retrieve the player with the highest count.",
+          "cte_name": "player_all_star_count"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many players enter hall of fame each year?",
+      "sql": "SELECT yearid, COUNT(*) FROM hall_of_fame GROUP BY yearid",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of records in the hall_of_fame table for each year",
+      "steps": [
+        {
+          "sql": "WITH counted_years AS (SELECT yearid, COUNT(*) as total_count FROM hall_of_fame GROUP BY yearid)",
+          "summary": "Count the number of records in the hall_of_fame table for each year and store the result in counted_years",
+          "cte_name": "counted_years"
+        },
+        {
+          "sql": "SELECT * FROM counted_years",
+          "summary": "Retrieve the results from the counted_years CTE",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Count the number of players who enter hall of fame for each year.",
+      "sql": "SELECT yearid, COUNT(*) FROM hall_of_fame GROUP BY yearid",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of records in the hall_of_fame table for each year",
+      "steps": [
+        {
+          "sql": "WITH counted_years AS (SELECT yearid, COUNT(*) as record_count FROM hall_of_fame GROUP BY yearid) SELECT * FROM counted_years",
+          "summary": "Count the number of records in the hall_of_fame table for each year and store the result in a CTE",
+          "cte_name": "counted_years"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the average number of attendance at home games for each year?",
+      "sql": "SELECT YEAR, AVG(attendance) FROM home_game GROUP BY YEAR",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the average attendance per year from the home_game table.",
+      "steps": [
+        {
+          "sql": "WITH home_game_avg_attendance AS (SELECT YEAR, AVG(attendance) AS avg_attendance FROM home_game GROUP BY YEAR)",
+          "summary": "Calculate the average attendance per year from the home_game table.",
+          "cte_name": "home_game_avg_attendance"
+        },
+        {
+          "sql": "SELECT * FROM home_game_avg_attendance",
+          "summary": "Retrieve the average attendance per year from the CTE.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "For each year, return the year and the average number of attendance at home games.",
+      "sql": "SELECT YEAR, AVG(attendance) FROM home_game GROUP BY YEAR",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the average attendance per year from the home_game table.",
+      "steps": [
+        {
+          "sql": "WITH home_game_avg_attendance AS (SELECT YEAR, AVG(attendance) AS avg_attendance FROM home_game GROUP BY YEAR)",
+          "summary": "Calculate the average attendance per year from the home_game table.",
+          "cte_name": "home_game_avg_attendance"
+        },
+        {
+          "sql": "SELECT * FROM home_game_avg_attendance",
+          "summary": "Retrieve the average attendance per year from the CTE.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "In 2014, what are the id and rank of the team that has the largest average number of attendance?",
+      "sql": "SELECT T2.team_id, T2.rank FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id WHERE T1.year = 2014 GROUP BY T1.team_id ORDER BY AVG(T1.attendance) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the team_id and rank of the team with the highest average attendance in home games in the year 2014.",
+      "steps": [
+        {
+          "sql": "WITH home_game_cte AS (SELECT * FROM home_game WHERE year = 2014), team_cte AS (SELECT team_id, rank FROM team) SELECT T2.team_id, T2.rank FROM home_game_cte AS T1 JOIN team_cte AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id ORDER BY AVG(T1.attendance) DESC NULLS LAST LIMIT 1",
+          "summary": "Join home_game and team tables, filter by year 2014, calculate average attendance, and retrieve team_id and rank of the team with highest average attendance.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the id and rank of the team that has the highest average attendance rate in 2014.",
+      "sql": "SELECT T2.team_id, T2.rank FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id WHERE T1.year = 2014 GROUP BY T1.team_id ORDER BY AVG(T1.attendance) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the team_id and rank of the team with the highest average attendance in home games in the year 2014.",
+      "steps": [
+        {
+          "sql": "WITH home_game_cte AS (SELECT * FROM home_game WHERE year = 2014), team_cte AS (SELECT team_id, rank FROM team) SELECT T2.team_id, T2.rank FROM home_game_cte AS T1 JOIN team_cte AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id ORDER BY AVG(T1.attendance) DESC NULLS LAST LIMIT 1",
+          "summary": "Retrieve team_id and rank with highest average attendance in 2014",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the manager's first name, last name and id who won the most manager award?",
+      "sql": "SELECT T1.name_first, T1.name_last, T2.player_id FROM player AS T1 JOIN manager_award AS T2 ON T1.player_id = T2.player_id GROUP BY T2.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first and last names of players along with their player_id who have won the most awards as a manager.",
+      "steps": [
+        {
+          "sql": "WITH player_manager_awards AS (SELECT T1.name_first, T1.name_last, T2.player_id FROM player AS T1 JOIN manager_award AS T2 ON T1.player_id = T2.player_id)",
+          "summary": "Create a CTE to select the first name, last name, and player_id of players who have won awards as a manager.",
+          "cte_name": "player_manager_awards"
+        },
+        {
+          "sql": "SELECT name_first, name_last, player_id FROM player_manager_awards GROUP BY player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+          "summary": "Retrieve the first and last names of players along with their player_id who have won the most awards as a manager, ordered by the count of awards in descending order with NULLs last, and limit the result to 1.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which manager won the most manager award? Give me the manager's first name, last name and id.",
+      "sql": "SELECT T1.name_first, T1.name_last, T2.player_id FROM player AS T1 JOIN manager_award AS T2 ON T1.player_id = T2.player_id GROUP BY T2.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name, last name, and player ID of the player who has won the most manager awards.",
+      "steps": [
+        {
+          "sql": "WITH player_manager_awards AS (SELECT T1.name_first, T1.name_last, T2.player_id FROM player AS T1 JOIN manager_award AS T2 ON T1.player_id = T2.player_id) SELECT name_first, name_last, player_id FROM player_manager_awards GROUP BY player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+          "summary": "Retrieve player details with the most manager awards",
+          "cte_name": "player_manager_awards"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many parks are there in the state of NY?",
+      "sql": "SELECT COUNT(*) FROM park WHERE state = 'NY'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of rows in the 'park' table where the state is 'NY'.",
+      "steps": [
+        {
+          "sql": "WITH park_count AS (SELECT COUNT(*) FROM park WHERE state = 'NY')",
+          "summary": "Create a common table expression (CTE) to count the number of rows in the 'park' table where the state is 'NY'.",
+          "cte_name": "park_count"
+        },
+        {
+          "sql": "SELECT * FROM park_count",
+          "summary": "Retrieve the count of rows from the CTE 'park_count'.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Show me the number of parks the state of NY has.",
+      "sql": "SELECT COUNT(*) FROM park WHERE state = 'NY'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of rows in the 'park' table where the state is 'NY'.",
+      "steps": [
+        {
+          "sql": "SELECT COUNT(*) FROM park WHERE state = 'NY'",
+          "summary": "Count rows in 'park' table with state 'NY'",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which 3 players won the most player awards? List their full name and id.",
+      "sql": "SELECT T1.name_first, T1.name_last, T1.player_id FROM player AS T1 JOIN player_award AS T2 ON T1.player_id = T2.player_id GROUP BY T1.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 3",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name, last name, and player ID of the top 3 players with the most awards, handling NULL values last.",
+      "steps": [
+        {
+          "sql": "WITH player_cte AS (SELECT name_first, name_last, player_id FROM player), player_award_cte AS (SELECT player_id, COUNT(*) AS award_count FROM player_award GROUP BY player_id) SELECT T1.name_first, T1.name_last, T1.player_id FROM player_cte AS T1 JOIN player_award_cte AS T2 ON T1.player_id = T2.player_id GROUP BY T1.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 3",
+          "summary": "Join player and player_award tables, group by player_id, order by award count descending with NULLs last, and limit to top 3 players.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the first name, last name and id for the top three players won the most player awards.",
+      "sql": "SELECT T1.name_first, T1.name_last, T1.player_id FROM player AS T1 JOIN player_award AS T2 ON T1.player_id = T2.player_id GROUP BY T1.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 3",
+      "summary": null
+    },
+    "output": {
+      "description": "Select the first name, last name, and player ID of players who have received awards, group by player ID, order by the count of awards in descending order, and limit the result to top 3 players.",
+      "steps": [
+        {
+          "sql": "WITH player_award_cte AS (SELECT name_first, name_last, player_id FROM player)",
+          "summary": "Create a CTE to select the first name, last name, and player ID from the player table.",
+          "cte_name": "player_award_cte"
+        },
+        {
+          "sql": "SELECT T1.name_first, T1.name_last, T1.player_id FROM player_award_cte AS T1 JOIN player_award AS T2 ON T1.player_id = T2.player_id GROUP BY T1.player_id ORDER BY COUNT(*) DESC NULLS LAST LIMIT 3",
+          "summary": "Join the CTE with the player_award table, group by player ID, order by the count of awards in descending order, and limit the result to top 3 players.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List three countries which are the origins of the least players.",
+      "sql": "SELECT birth_country FROM player GROUP BY birth_country ORDER BY COUNT(*) ASC NULLS FIRST LIMIT 3",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the top 3 birth countries with the fewest number of players from the 'player' table.",
+      "steps": [
+        {
+          "sql": "WITH player_count_cte AS (SELECT birth_country, COUNT(*) AS country_count FROM player GROUP BY birth_country) SELECT birth_country FROM player_count_cte ORDER BY country_count ASC NULLS FIRST LIMIT 3",
+          "summary": "Count the number of players per birth country and retrieve the top 3 countries with the fewest players.",
+          "cte_name": "player_count_cte"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the three countries that the least players are from?",
+      "sql": "SELECT birth_country FROM player GROUP BY birth_country ORDER BY COUNT(*) ASC NULLS FIRST LIMIT 3",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the top 3 birth countries with the least number of players in ascending order, showing NULL values first.",
+      "steps": [
+        {
+          "sql": "WITH player_cte AS (SELECT birth_country FROM player)",
+          "summary": "Create a common table expression (CTE) to select the birth_country from the player table.",
+          "cte_name": "player_cte"
+        },
+        {
+          "sql": "SELECT birth_country, COUNT(*) AS country_count FROM player_cte GROUP BY birth_country ORDER BY country_count ASC NULLS FIRST LIMIT 3",
+          "summary": "Count the number of players for each birth country, order the results in ascending order with NULL values first, and limit the output to 3 rows.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find all the players' first name and last name who have empty death record.",
+      "sql": "SELECT name_first, name_last FROM player WHERE death_year = ''",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name and last name of players who have an empty death year.",
+      "steps": [
+        {
+          "sql": "WITH player_cte AS (SELECT name_first, name_last FROM player WHERE death_year = '')",
+          "summary": "Create a common table expression (CTE) to select the first name and last name from the player table where the death year is empty.",
+          "cte_name": "player_cte"
+        },
+        {
+          "sql": "SELECT name_first, name_last FROM player_cte",
+          "summary": "Retrieve the first name and last name from the player_cte CTE.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the first name and last name of the players whose death record is empty?",
+      "sql": "SELECT name_first, name_last FROM player WHERE death_year = ''",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name and last name of players who have an empty death year.",
+      "steps": [
+        {
+          "sql": "WITH player_cte AS (SELECT name_first, name_last FROM player WHERE death_year = '')",
+          "summary": "Create a common table expression (CTE) to select the first name and last name from the player table where the death year is empty.",
+          "cte_name": "player_cte"
+        },
+        {
+          "sql": "SELECT name_first, name_last FROM player_cte",
+          "summary": "Retrieve the first name and last name from the player CTE.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many players born in USA are right-handed batters? That is, have the batter value 'R'.",
+      "sql": "SELECT COUNT(*) FROM player WHERE birth_country = 'USA' AND bats = 'R'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of players born in the USA who bat right-handed.",
+      "steps": [
+        {
+          "sql": "SELECT COUNT(*) FROM player WHERE birth_country = 'USA' AND bats = 'R'",
+          "summary": "Count players born in the USA who bat right-handed",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Count the number of players who were born in USA and have bats information 'R'.",
+      "sql": "SELECT COUNT(*) FROM player WHERE birth_country = 'USA' AND bats = 'R'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of players born in the USA who bat right-handed.",
+      "steps": [
+        {
+          "sql": "WITH filtered_players AS (SELECT * FROM player WHERE birth_country = 'USA' AND bats = 'R') SELECT COUNT(*) FROM filtered_players",
+          "summary": "Filter players born in the USA who bat right-handed and count them",
+          "cte_name": "filtered_players"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the average height of the players from the college named 'Yale University'?",
+      "sql": "SELECT AVG(T1.height) FROM player AS T1 JOIN player_college AS T2 ON T1.player_id = T2.player_id JOIN college AS T3 ON T3.college_id = T2.college_id WHERE T3.name_full = 'Yale University'",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the average height of players who attended Yale University.",
+      "steps": [
+        {
+          "sql": "WITH player_height AS (SELECT AVG(T1.height) AS avg_height FROM player AS T1 JOIN player_college AS T2 ON T1.player_id = T2.player_id JOIN college AS T3 ON T3.college_id = T2.college_id WHERE T3.name_full = 'Yale University')",
+          "summary": "Calculate the average height of players who attended Yale University.",
+          "cte_name": "player_height"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the average height of the players who belong to the college called 'Yale University'.",
+      "sql": "SELECT AVG(T1.height) FROM player AS T1 JOIN player_college AS T2 ON T1.player_id = T2.player_id JOIN college AS T3 ON T3.college_id = T2.college_id WHERE T3.name_full = 'Yale University'",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the average height of players who attended Yale University.",
+      "steps": [
+        {
+          "sql": "WITH player_height AS (SELECT AVG(T1.height) AS avg_height FROM player AS T1 JOIN player_college AS T2 ON T1.player_id = T2.player_id JOIN college AS T3 ON T3.college_id = T2.college_id WHERE T3.name_full = 'Yale University')",
+          "summary": "Calculate the average height of players who attended Yale University.",
+          "cte_name": "player_height"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the highest salary among each team? List the team name, id and maximum salary.",
+      "sql": "SELECT T1.name, T1.team_id, MAX(T2.player_salary) FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id",
+      "summary": null
+    },
+    "output": {
+      "description": "Find the maximum player salary for each team.",
+      "steps": [
+        {
+          "sql": "WITH team_salary AS (SELECT T1.name, T1.team_id, MAX(T2.player_salary) AS max_salary FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id)",
+          "summary": "Create a common table expression (CTE) to calculate the maximum player salary for each team.",
+          "cte_name": "team_salary"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "For each team, return the team name, id and the maximum salary among the team.",
+      "sql": "SELECT T1.name, T1.team_id, MAX(T2.player_salary) FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id",
+      "summary": null
+    },
+    "output": {
+      "description": "Find the maximum player salary for each team.",
+      "steps": [
+        {
+          "sql": "WITH team_salary AS (SELECT T1.name, T1.team_id, MAX(T2.player_salary) AS max_salary FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id)",
+          "summary": "Create a CTE to calculate the maximum player salary for each team.",
+          "cte_name": "team_salary"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the name and id of the team offering the lowest average salary?",
+      "sql": "SELECT T1.name, T1.team_id FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id ORDER BY AVG(T2.salary) ASC NULLS FIRST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the name and team_id of the team with the lowest average salary, showing NULL values first.",
+      "steps": [
+        {
+          "sql": "WITH team_salary AS (SELECT T1.name, T1.team_id, AVG(T2.salary) AS avg_salary FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.name, T1.team_id) SELECT name, team_id FROM team_salary ORDER BY avg_salary ASC NULLS FIRST LIMIT 1",
+          "summary": "Calculate the average salary for each team, then select the team with the lowest average salary showing NULL values first.",
+          "cte_name": "team_salary"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which team offers the lowest average salary? Give me the name and id of the team.",
+      "sql": "SELECT T1.name, T1.team_id FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.team_id ORDER BY AVG(T2.salary) ASC NULLS FIRST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the name and team_id of the team with the lowest average salary, showing NULL values first.",
+      "steps": [
+        {
+          "sql": "WITH team_salary AS (SELECT T1.name, T1.team_id, AVG(T2.salary) AS avg_salary FROM team AS T1 JOIN salary AS T2 ON T1.team_id = T2.team_id GROUP BY T1.name, T1.team_id) SELECT name, team_id FROM team_salary ORDER BY avg_salary ASC NULLS FIRST LIMIT 1",
+          "summary": "Calculate the average salary for each team and retrieve the team with the lowest average salary, showing NULL values first.",
+          "cte_name": "team_salary"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the players' first name and last name who won award both in 1960 and in 1961.",
+      "sql": "SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1960 INTERSECT SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1961",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first and last names of players who received awards in both 1960 and 1961.",
+      "steps": [
+        {
+          "sql": "WITH player_awards_1960 AS (SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1960), player_awards_1961 AS (SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1961) SELECT name_first, name_last FROM player_awards_1960 INTERSECT SELECT name_first, name_last FROM player_awards_1961",
+          "summary": "Retrieve the first and last names of players who received awards in both 1960 and 1961.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which players won awards in both 1960 and 1961? Return their first names and last names.",
+      "sql": "SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1960 INTERSECT SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1961",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first and last names of players who received awards in both 1960 and 1961.",
+      "steps": [
+        {
+          "sql": "WITH player_awards_1960 AS (SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1960), player_awards_1961 AS (SELECT T1.name_first, T1.name_last FROM player AS T1, player_award AS T2 WHERE T2.year = 1961) SELECT name_first, name_last FROM player_awards_1960 INTERSECT SELECT name_first, name_last FROM player_awards_1961",
+          "summary": "Retrieve the first and last names of players who received awards in both 1960 and 1961.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List players' first name and last name who have weight greater than 220 or height shorter than 75.",
+      "sql": "SELECT name_first, name_last FROM player WHERE weight > 220 OR height < 75",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name and last name of players whose weight is greater than 220 pounds or height is less than 75 inches.",
+      "steps": [
+        {
+          "sql": "WITH player_filter AS (SELECT name_first, name_last FROM player WHERE weight > 220 OR height < 75)",
+          "summary": "Create a common table expression (CTE) to filter players based on weight and height criteria.",
+          "cte_name": "player_filter"
+        },
+        {
+          "sql": "SELECT name_first, name_last FROM player_filter",
+          "summary": "Retrieve the first name and last name of players from the filtered results.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the first name and last name of the players who have weight above 220 or height below 75?",
+      "sql": "SELECT name_first, name_last FROM player WHERE weight > 220 OR height < 75",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first name and last name of players whose weight is greater than 220 or height is less than 75.",
+      "steps": [
+        {
+          "sql": "WITH player_filter AS (SELECT name_first, name_last FROM player WHERE weight > 220 OR height < 75)",
+          "summary": "Create a common table expression (CTE) to filter players based on weight and height criteria.",
+          "cte_name": "player_filter"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List the maximum scores of the team Boston Red Stockings when the team won in postseason?",
+      "sql": "SELECT MAX(T1.wins) FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings'",
+      "summary": null
+    },
+    "output": {
+      "description": "Find the maximum number of wins by the team 'Boston Red Stockings' in the postseason.",
+      "steps": [
+        {
+          "sql": "WITH postseason_wins AS (SELECT MAX(T1.wins) AS max_wins FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings')",
+          "summary": "Create a common table expression (CTE) to find the maximum wins by the team 'Boston Red Stockings' in the postseason.",
+          "cte_name": "postseason_wins"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the maximum scores the team Boston Red Stockings got when the team won in postseason?",
+      "sql": "SELECT MAX(T1.wins) FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings'",
+      "summary": null
+    },
+    "output": {
+      "description": "Find the maximum number of wins in the postseason for the team 'Boston Red Stockings'.",
+      "steps": [
+        {
+          "sql": "WITH postseason_wins AS (SELECT MAX(T1.wins) AS max_wins FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings')",
+          "summary": "Create a common table expression (CTE) to find the maximum number of wins in the postseason for the team 'Boston Red Stockings'.",
+          "cte_name": "postseason_wins"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many times did Boston Red Stockings lose in 2009 postseason?",
+      "sql": "SELECT COUNT(*) FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2009",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of postseason games where the team 'Boston Red Stockings' lost in the year 2009.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT * FROM postseason), team_cte AS (SELECT * FROM team) SELECT COUNT(*) FROM postseason_cte AS T1 JOIN team_cte AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2009",
+          "summary": "Count the number of postseason games where the team 'Boston Red Stockings' lost in the year 2009.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Count the number of times the team \"Boston Red Stockings\" lost in 2009 postseason.",
+      "sql": "SELECT COUNT(*) FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2009",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of postseason games where the team 'Boston Red Stockings' lost in the year 2009.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT * FROM postseason), team_cte AS (SELECT * FROM team) SELECT COUNT(*) FROM postseason_cte AS T1 JOIN team_cte AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2009",
+          "summary": "Count the number of postseason games where the team 'Boston Red Stockings' lost in the year 2009.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the name and id of the team with the most victories in 2008 postseason?",
+      "sql": "SELECT T2.name, T1.team_id_winner FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T1.year = 2008 GROUP BY T1.team_id_winner ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the name of the team and the team ID of the team that won the postseason in the year 2008, with the highest number of wins, from the 'postseason' and 'team' tables.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT * FROM postseason WHERE year = 2008), team_cte AS (SELECT * FROM team) SELECT T2.name, T1.team_id_winner FROM postseason_cte AS T1 JOIN team_cte AS T2 ON T1.team_id_winner = T2.team_id_br GROUP BY T1.team_id_winner ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+          "summary": "Retrieve the team name and team ID of the team that won the postseason in 2008 with the highest number of wins",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the name and id of the team that won the most times in 2008 postseason.",
+      "sql": "SELECT T2.name, T1.team_id_winner FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T1.year = 2008 GROUP BY T1.team_id_winner ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the name of the team and the team ID of the team that won the postseason in the year 2008, with the highest number of wins, from the 'postseason' table joined with the 'team' table.",
+      "steps": [
+        {
+          "sql": "WITH postseason_teams AS (SELECT T2.name, T1.team_id_winner FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T1.year = 2008)",
+          "summary": "Create a CTE to select the team name and team ID of the winning team in the postseason for the year 2008.",
+          "cte_name": "postseason_teams"
+        },
+        {
+          "sql": "SELECT name, team_id_winner FROM postseason_teams GROUP BY team_id_winner ORDER BY COUNT(*) DESC NULLS LAST LIMIT 1",
+          "summary": "Select the team name and team ID of the team with the highest number of wins in the postseason for the year 2008.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the number of wins the team Boston Red Stockings got in the postseasons each year in history?",
+      "sql": "SELECT COUNT(*), T1.year FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' GROUP BY T1.year",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of postseason appearances for the team 'Boston Red Stockings' by year.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT COUNT(*), T1.year FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' GROUP BY T1.year)",
+          "summary": "Create a common table expression (CTE) to count the number of postseason appearances for the team 'Boston Red Stockings' by year.",
+          "cte_name": "postseason_cte"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "For each year, return the year and the number of times the team Boston Red Stockings won in the postseasons.",
+      "sql": "SELECT COUNT(*), T1.year FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' GROUP BY T1.year",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of postseason appearances for the team 'Boston Red Stockings' by year.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT COUNT(*), T1.year FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' GROUP BY T1.year)",
+          "summary": "Create a common table expression (CTE) to count the number of postseason appearances for the team 'Boston Red Stockings' by year.",
+          "cte_name": "postseason_cte"
+        },
+        {
+          "sql": "SELECT * FROM postseason_cte",
+          "summary": "Retrieve the results from the CTE to display the count of postseason appearances for the team 'Boston Red Stockings' by year.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the total number of postseason games that team Boston Red Stockings participated in?",
+      "sql": "SELECT COUNT(*) FROM (SELECT * FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' UNION SELECT * FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings')",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the total number of records where the team 'Boston Red Stockings' participated in the postseason either as a winner or loser.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT * FROM postseason), team_cte AS (SELECT * FROM team) SELECT COUNT(*) FROM (SELECT * FROM postseason_cte AS T1 JOIN team_cte AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' UNION SELECT * FROM postseason_cte AS T1 JOIN team_cte AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings')",
+          "summary": "Count the total number of records where the team 'Boston Red Stockings' participated in the postseason either as a winner or loser.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many times in total did the team Boston Red Stockings participate in postseason games?",
+      "sql": "SELECT COUNT(*) FROM (SELECT * FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' UNION SELECT * FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings')",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the total number of records where the team 'Boston Red Stockings' participated in the postseason either as a winner or loser.",
+      "steps": [
+        {
+          "sql": "WITH postseason_teams AS (SELECT * FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_winner = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' UNION SELECT * FROM postseason AS T1 JOIN team AS T2 ON T1.team_id_loser = T2.team_id_br WHERE T2.name = 'Boston Red Stockings')",
+          "summary": "Create a CTE 'postseason_teams' to select all records where 'Boston Red Stockings' participated in the postseason.",
+          "cte_name": "postseason_teams"
+        },
+        {
+          "sql": "SELECT COUNT(*) FROM postseason_teams",
+          "summary": "Count the total number of records in the CTE 'postseason_teams'.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many games in 1885 postseason resulted in ties (that is, the value of \"ties\" is '1')?",
+      "sql": "SELECT COUNT(*) FROM postseason WHERE YEAR = 1885 AND ties = 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of rows in the 'postseason' table where the year is 1885 and there is a tie.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT * FROM postseason) SELECT COUNT(*) FROM postseason_cte WHERE YEAR = 1885 AND ties = 1",
+          "summary": "Count the number of rows in the 'postseason' table where the year is 1885 and there is a tie.",
+          "cte_name": "postseason_cte"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the number of tied games (the value of \"ties\" is '1') in 1885 postseason.",
+      "sql": "SELECT COUNT(*) FROM postseason WHERE YEAR = 1885 AND ties = 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of rows in the 'postseason' table where the year is 1885 and there is a tie.",
+      "steps": [
+        {
+          "sql": "WITH postseason_cte AS (SELECT * FROM postseason WHERE YEAR = 1885 AND ties = 1) SELECT COUNT(*) FROM postseason_cte",
+          "summary": "Count the number of rows in the 'postseason' table where the year is 1885 and there is a tie.",
+          "cte_name": "postseason_cte"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the total salary paid by team Boston Red Stockings in 2010?",
+      "sql": "SELECT SUM(T1.player_salary) FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2010",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total salary of players from the team 'Boston Red Stockings' in the year 2010.",
+      "steps": [
+        {
+          "sql": "WITH filtered_team AS (SELECT * FROM team WHERE name = 'Boston Red Stockings')",
+          "summary": "Filter the team table to get the team 'Boston Red Stockings'.",
+          "cte_name": "filtered_team"
+        },
+        {
+          "sql": "WITH filtered_salary AS (SELECT * FROM salary WHERE year = 2010)",
+          "summary": "Filter the salary table to get the salaries for the year 2010.",
+          "cte_name": "filtered_salary"
+        },
+        {
+          "sql": "SELECT SUM(T1.player_salary) FROM filtered_salary AS T1 JOIN filtered_team AS T2 ON T1.team_id = T2.team_id_br",
+          "summary": "Join the filtered salary and team tables based on team_id and calculate the total player salary.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the total salary expenses of team Boston Red Stockings in 2010?",
+      "sql": "SELECT SUM(T1.player_salary) FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2010",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total salary of players from the team 'Boston Red Stockings' in the year 2010.",
+      "steps": [
+        {
+          "sql": "WITH filtered_team AS (SELECT * FROM team WHERE name = 'Boston Red Stockings')",
+          "summary": "Filter the team 'Boston Red Stockings'",
+          "cte_name": "filtered_team"
+        },
+        {
+          "sql": "WITH filtered_salary AS (SELECT * FROM salary WHERE year = 2010)",
+          "summary": "Filter the salaries for the year 2010",
+          "cte_name": "filtered_salary"
+        },
+        {
+          "sql": "SELECT SUM(T1.player_salary) FROM filtered_salary AS T1 JOIN filtered_team AS T2 ON T1.team_id = T2.team_id_br",
+          "summary": "Calculate the total salary of players from the filtered team in the filtered year",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many players were in the team Boston Red Stockings in 2000?",
+      "sql": "SELECT COUNT(*) FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2000",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of records from the 'salary' table where the team name is 'Boston Red Stockings' and the year is 2000.",
+      "steps": [
+        {
+          "sql": "WITH filtered_team AS (SELECT * FROM team WHERE name = 'Boston Red Stockings')",
+          "summary": "Filter the 'team' table to get the team with name 'Boston Red Stockings'.",
+          "cte_name": "filtered_team"
+        },
+        {
+          "sql": "WITH filtered_team, filtered_salary AS (SELECT * FROM salary WHERE year = 2000)",
+          "summary": "Filter the 'salary' table to get records with year 2000.",
+          "cte_name": "filtered_salary"
+        },
+        {
+          "sql": "SELECT COUNT(*) FROM filtered_salary AS T1 JOIN filtered_team AS T2 ON T1.team_id = T2.team_id_br",
+          "summary": "Count the number of records from 'salary' table where team name is 'Boston Red Stockings' and year is 2000.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many players did Boston Red Stockings have in 2000?",
+      "sql": "SELECT COUNT(*) FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2000",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of records from the 'salary' table where the team name is 'Boston Red Stockings' and the year is 2000.",
+      "steps": [
+        {
+          "sql": "WITH filtered_data AS (SELECT * FROM salary AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year = 2000) SELECT COUNT(*) FROM filtered_data",
+          "summary": "Count the number of records after filtering data based on team name and year",
+          "cte_name": "filtered_data"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List the 3 highest salaries of the players in 2001?",
+      "sql": "SELECT player_salary FROM salary WHERE YEAR = 2001 ORDER BY player_salary DESC NULLS LAST LIMIT 3",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the top 3 player salaries from the year 2001 in descending order with NULL values at the end.",
+      "steps": [
+        {
+          "sql": "WITH salary_cte AS (SELECT player_salary FROM salary WHERE YEAR = 2001 ORDER BY player_salary DESC NULLS LAST LIMIT 3)",
+          "summary": "Select player salaries from the year 2001, order in descending with NULLs last, and limit to top 3.",
+          "cte_name": "salary_cte"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How much salary did the top 3 well-paid players get in 2001?",
+      "sql": "SELECT player_salary FROM salary WHERE YEAR = 2001 ORDER BY player_salary DESC NULLS LAST LIMIT 3",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the top 3 player salaries from the year 2001 in descending order with NULL values at the end.",
+      "steps": [
+        {
+          "sql": "WITH salary_cte AS (SELECT player_salary FROM salary WHERE YEAR = 2001 ORDER BY player_salary DESC NULLS LAST) SELECT * FROM salary_cte LIMIT 3",
+          "summary": "Retrieve player salaries from the year 2001 in descending order with NULL values at the end and limit to top 3",
+          "cte_name": "salary_cte"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What were all the salary values of players in 2010 and 2001?",
+      "sql": "SELECT player_salary FROM salary WHERE YEAR = 2010 UNION SELECT player_salary FROM salary WHERE YEAR = 2001",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve player salaries from the 'salary' table for the years 2010 and 2001.",
+      "steps": [
+        {
+          "sql": "SELECT player_salary FROM salary WHERE YEAR = 2010",
+          "summary": "Select player salaries for the year 2010 from the 'salary' table.",
+          "cte_name": "cte_step1"
+        },
+        {
+          "sql": "SELECT player_salary FROM salary WHERE YEAR = 2001",
+          "summary": "Select player salaries for the year 2001 from the 'salary' table.",
+          "cte_name": "cte_step2"
+        },
+        {
+          "sql": "SELECT player_salary FROM cte_step1 UNION SELECT player_salary FROM cte_step2",
+          "summary": "Combine player salaries for the years 2010 and 2001 using UNION.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List all the salary values players received in 2010 and 2001.",
+      "sql": "SELECT player_salary FROM salary WHERE YEAR = 2010 UNION SELECT player_salary FROM salary WHERE YEAR = 2001",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve player salaries from the 'salary' table for the years 2010 and 2001.",
+      "steps": [
+        {
+          "sql": "WITH cte_1 AS (SELECT player_salary FROM salary WHERE YEAR = 2010), cte_2 AS (SELECT player_salary FROM salary WHERE YEAR = 2001) SELECT * FROM cte_1 UNION SELECT * FROM cte_2",
+          "summary": "Retrieve player salaries for the years 2010 and 2001 from the 'salary' table.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "In which year did the least people enter hall of fame?",
+      "sql": "SELECT yearid FROM hall_of_fame GROUP BY yearid ORDER BY COUNT(*) ASC NULLS FIRST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the year with the lowest count of records in the hall_of_fame table.",
+      "steps": [
+        {
+          "sql": "WITH hall_of_fame_counts AS (SELECT yearid, COUNT(*) AS record_count FROM hall_of_fame GROUP BY yearid) SELECT yearid FROM hall_of_fame_counts ORDER BY record_count ASC NULLS FIRST LIMIT 1",
+          "summary": "Calculate the count of records for each year in the hall_of_fame table and retrieve the year with the lowest count.",
+          "cte_name": "hall_of_fame_counts"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the year in which the least people enter hall of fame.",
+      "sql": "SELECT yearid FROM hall_of_fame GROUP BY yearid ORDER BY COUNT(*) ASC NULLS FIRST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the year with the lowest count of records in the hall_of_fame table.",
+      "steps": [
+        {
+          "sql": "WITH hall_of_fame_counts AS (SELECT yearid, COUNT(*) AS record_count FROM hall_of_fame GROUP BY yearid) SELECT yearid FROM hall_of_fame_counts ORDER BY record_count ASC NULLS FIRST LIMIT 1",
+          "summary": "Calculate the count of records for each year in the hall_of_fame table and retrieve the year with the lowest count.",
+          "cte_name": "hall_of_fame_counts"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many parks are there in Atlanta city?",
+      "sql": "SELECT COUNT(*) FROM park WHERE city = 'Atlanta'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of rows in the 'park' table where the city is 'Atlanta'.",
+      "steps": [
+        {
+          "sql": "WITH park_count AS (SELECT COUNT(*) FROM park WHERE city = 'Atlanta')",
+          "summary": "Create a common table expression (CTE) to count the number of rows in the 'park' table where the city is 'Atlanta'.",
+          "cte_name": "park_count"
+        },
+        {
+          "sql": "SELECT * FROM park_count",
+          "summary": "Retrieve the count of rows from the CTE 'park_count'.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many parks does Atlanta city have?",
+      "sql": "SELECT COUNT(*) FROM park WHERE city = 'Atlanta'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of rows in the 'park' table where the city is 'Atlanta'.",
+      "steps": [
+        {
+          "sql": "WITH park_count AS (SELECT COUNT(*) FROM park WHERE city = 'Atlanta')",
+          "summary": "Create a common table expression (CTE) to count the number of rows in the 'park' table where the city is 'Atlanta'.",
+          "cte_name": "park_count"
+        },
+        {
+          "sql": "SELECT * FROM park_count",
+          "summary": "Retrieve the count of rows from the CTE 'park_count'.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many games were played in park \"Columbia Park\" in 1907?",
+      "sql": "SELECT COUNT(*) FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 1907 AND T2.park_name = 'Columbia Park'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of home games played at Columbia Park in the year 1907.",
+      "steps": [
+        {
+          "sql": "WITH filtered_home_games AS (SELECT * FROM home_game WHERE year = 1907) SELECT COUNT(*) FROM filtered_home_games AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T2.park_name = 'Columbia Park'",
+          "summary": "Filter home games for the year 1907 and then join with park table to count games at Columbia Park",
+          "cte_name": "filtered_home_games"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Count the number of games taken place in park \"Columbia Park\" in 1907.",
+      "sql": "SELECT COUNT(*) FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 1907 AND T2.park_name = 'Columbia Park'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of home games played at Columbia Park in the year 1907.",
+      "steps": [
+        {
+          "sql": "WITH filtered_games AS (SELECT COUNT(*) FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 1907 AND T2.park_name = 'Columbia Park')",
+          "summary": "Filter home games played at Columbia Park in 1907",
+          "cte_name": "filtered_games"
+        },
+        {
+          "sql": "SELECT * FROM filtered_games",
+          "summary": "Retrieve the count of home games played at Columbia Park in 1907",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many games were played in city Atlanta in 2000?",
+      "sql": "SELECT COUNT(*) FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 2000 AND T2.city = 'Atlanta'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of home games played in Atlanta in the year 2000.",
+      "steps": [
+        {
+          "sql": "SELECT * FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 2000 AND T2.city = 'Atlanta'",
+          "summary": "Retrieve all home games played in Atlanta in the year 2000.",
+          "cte_name": "filtered_games"
+        },
+        {
+          "sql": "SELECT COUNT(*) FROM filtered_games",
+          "summary": "Count the number of home games played in Atlanta in the year 2000.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the number of games taken place in city Atlanta in 2000.",
+      "sql": "SELECT COUNT(*) FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 2000 AND T2.city = 'Atlanta'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of home games played in Atlanta in the year 2000.",
+      "steps": [
+        {
+          "sql": "WITH filtered_games AS (SELECT COUNT(*) FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 2000 AND T2.city = 'Atlanta')",
+          "summary": "Filter home games played in Atlanta in the year 2000",
+          "cte_name": "filtered_games"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What is the total home game attendance of team Boston Red Stockings from 2000 to 2010?",
+      "sql": "SELECT SUM(T1.attendance) FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year BETWEEN 2000 AND 2010",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total attendance of home games for the team 'Boston Red Stockings' between the years 2000 and 2010.",
+      "steps": [
+        {
+          "sql": "WITH filtered_games AS (SELECT T1.attendance FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year BETWEEN 2000 AND 2010) SELECT SUM(attendance) FROM filtered_games",
+          "summary": "Filter home games for the team 'Boston Red Stockings' between 2000 and 2010 and calculate the total attendance.",
+          "cte_name": "filtered_games"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many games in total did team Boston Red Stockings attend from 2000 to 2010?",
+      "sql": "SELECT SUM(T1.attendance) FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year BETWEEN 2000 AND 2010",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total attendance of home games for the team 'Boston Red Stockings' between the years 2000 and 2010.",
+      "steps": [
+        {
+          "sql": "WITH filtered_games AS (SELECT T1.attendance FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year BETWEEN 2000 AND 2010) SELECT SUM(attendance) FROM filtered_games",
+          "summary": "Filter home games for the team 'Boston Red Stockings' between 2000 and 2010, then calculate the total attendance.",
+          "cte_name": "filtered_games"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How much did the the player with first name Len and last name Barker earn between 1985 to 1990 in total?",
+      "sql": "SELECT SUM(T1.player_salary) FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id WHERE T2.name_first = 'Len' AND T2.name_last = 'Barker' AND T1.year BETWEEN 1985 AND 1990",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total salary of a player named Len Barker between the years 1985 and 1990.",
+      "steps": [
+        {
+          "sql": "WITH salary_cte AS (SELECT * FROM salary) , player_cte AS (SELECT * FROM player) SELECT SUM(T1.player_salary) FROM salary_cte AS T1 JOIN player_cte AS T2 ON T1.player_id = T2.player_id WHERE T2.name_first = 'Len' AND T2.name_last = 'Barker' AND T1.year BETWEEN 1985 AND 1990",
+          "summary": "Calculate the total salary of a player named Len Barker between the years 1985 and 1990.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Compute the total salary that the player with first name Len and last name Barker received between 1985 to 1990.",
+      "sql": "SELECT SUM(T1.player_salary) FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id WHERE T2.name_first = 'Len' AND T2.name_last = 'Barker' AND T1.year BETWEEN 1985 AND 1990",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total salary of a player named Len Barker between the years 1985 and 1990.",
+      "steps": [
+        {
+          "sql": "WITH filtered_players AS (SELECT * FROM player WHERE name_first = 'Len' AND name_last = 'Barker'), filtered_salaries AS (SELECT * FROM salary WHERE year BETWEEN 1985 AND 1990) SELECT SUM(T1.player_salary) FROM filtered_salaries AS T1 JOIN filtered_players AS T2 ON T1.player_id = T2.player_id",
+          "summary": "Filter player and salary data for Len Barker between 1985 and 1990, then calculate the total salary.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List players' first name and last name who received salary from team Washington Nationals in both 2005 and 2007.",
+      "sql": "SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2005 AND T3.name = 'Washington Nationals' INTERSECT SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2007 AND T3.name = 'Washington Nationals'",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first and last names of players who played for the Washington Nationals in both 2005 and 2007.",
+      "steps": [
+        {
+          "sql": "WITH salary_player_team AS (SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2005 AND T3.name = 'Washington Nationals')",
+          "summary": "Select players who played for the Washington Nationals in 2005",
+          "cte_name": "salary_player_team_2005"
+        },
+        {
+          "sql": "WITH salary_player_team_2005 AS (SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2005 AND T3.name = 'Washington Nationals'), salary_player_team AS (SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2007 AND T3.name = 'Washington Nationals')",
+          "summary": "Select players who played for the Washington Nationals in 2007",
+          "cte_name": "salary_player_team_2007"
+        },
+        {
+          "sql": "SELECT name_first, name_last FROM salary_player_team_2005 INTERSECT SELECT name_first, name_last FROM salary_player_team_2007",
+          "summary": "Find the players who played for the Washington Nationals in both 2005 and 2007",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "What are the first name and last name of the players who were paid salary by team Washington Nationals in both 2005 and 2007?",
+      "sql": "SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2005 AND T3.name = 'Washington Nationals' INTERSECT SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2007 AND T3.name = 'Washington Nationals'",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the first and last names of players who played for the Washington Nationals in both 2005 and 2007.",
+      "steps": [
+        {
+          "sql": "WITH cte_1 AS (SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2005 AND T3.name = 'Washington Nationals'), cte_2 AS (SELECT T2.name_first, T2.name_last FROM salary AS T1 JOIN player AS T2 ON T1.player_id = T2.player_id JOIN team AS T3 ON T3.team_id_br = T1.team_id WHERE T1.year = 2007 AND T3.name = 'Washington Nationals')",
+          "summary": "Create two CTEs to select player names for 2005 and 2007 for the Washington Nationals team.",
+          "cte_name": "cte_2"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many home games did the team Boston Red Stockings play from 1990 to 2000 in total?",
+      "sql": "SELECT SUM(T1.games) FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year BETWEEN 1990 AND 2000",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total number of games played at home by the team 'Boston Red Stockings' between the years 1990 and 2000.",
+      "steps": [
+        {
+          "sql": "WITH home_games_cte AS (SELECT * FROM home_game WHERE year BETWEEN 1990 AND 2000) SELECT SUM(T1.games) FROM home_games_cte AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings'",
+          "summary": "Calculate the total number of home games played by the team 'Boston Red Stockings' between 1990 and 2000",
+          "cte_name": "home_games_cte"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Count the total number of games the team Boston Red Stockings attended from 1990 to 2000.",
+      "sql": "SELECT SUM(T1.games) FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year BETWEEN 1990 AND 2000",
+      "summary": null
+    },
+    "output": {
+      "description": "Calculate the total number of games played at home by the team 'Boston Red Stockings' between the years 1990 and 2000.",
+      "steps": [
+        {
+          "sql": "WITH filtered_games AS (SELECT T1.games FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T2.name = 'Boston Red Stockings' AND T1.year BETWEEN 1990 AND 2000)",
+          "summary": "Filter the games played at home by the team 'Boston Red Stockings' between 1990 and 2000.",
+          "cte_name": "filtered_games"
+        },
+        {
+          "sql": "SELECT SUM(games) FROM filtered_games",
+          "summary": "Calculate the total number of games played at home by the team 'Boston Red Stockings' between 1990 and 2000.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which team had the least number of attendances in home games in 1980?",
+      "sql": "SELECT T2.name FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T1.year = 1980 ORDER BY T1.attendance ASC NULLS FIRST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the name of the team with the lowest attendance in the home_game table for the year 1980.",
+      "steps": [
+        {
+          "sql": "WITH home_game_teams AS (SELECT T2.name FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T1.year = 1980 ORDER BY T1.attendance ASC NULLS FIRST)",
+          "summary": "Create a CTE to select the team names from home_game table for the year 1980 and order by attendance in ascending order with NULLs first.",
+          "cte_name": "home_game_teams"
+        },
+        {
+          "sql": "SELECT name FROM home_game_teams LIMIT 1",
+          "summary": "Retrieve the name of the team with the lowest attendance from the CTE.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the team that attended the least number of home games in 1980.",
+      "sql": "SELECT T2.name FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T1.year = 1980 ORDER BY T1.attendance ASC NULLS FIRST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the name of the team with the lowest attendance in the home game records for the year 1980.",
+      "steps": [
+        {
+          "sql": "WITH home_game_teams AS (SELECT T2.name FROM home_game AS T1 JOIN team AS T2 ON T1.team_id = T2.team_id_br WHERE T1.year = 1980 ORDER BY T1.attendance ASC NULLS FIRST LIMIT 1)",
+          "summary": "Select the team name with the lowest attendance in home games for the year 1980.",
+          "cte_name": "home_game_teams"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "List the names of states that have more than 2 parks.",
+      "sql": "SELECT state FROM park GROUP BY state HAVING COUNT(*) > 2",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the states from the 'park' table where the count of occurrences is greater than 2 after grouping by state.",
+      "steps": [
+        {
+          "sql": "WITH filtered_parks AS (SELECT state, COUNT(*) as state_count FROM park GROUP BY state) SELECT state FROM filtered_parks WHERE state_count > 2",
+          "summary": "Group the 'park' table by state and filter the states with count greater than 2.",
+          "cte_name": "filtered_parks"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which states have more than 2 parks?",
+      "sql": "SELECT state FROM park GROUP BY state HAVING COUNT(*) > 2",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the states from the 'park' table where the count of occurrences is greater than 2 after grouping by state.",
+      "steps": [
+        {
+          "sql": "WITH park_cte AS (SELECT state FROM park)",
+          "summary": "Create a common table expression (CTE) 'park_cte' to select the 'state' column from the 'park' table.",
+          "cte_name": "park_cte"
+        },
+        {
+          "sql": "SELECT state FROM park_cte GROUP BY state HAVING COUNT(*) > 2",
+          "summary": "Retrieve the states from the 'park_cte' CTE after grouping by state and filtering the count greater than 2.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "How many team franchises are active, with active value 'Y'?",
+      "sql": "SELECT COUNT(*) FROM team_franchise WHERE active = 'Y'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of active team franchises",
+      "steps": [
+        {
+          "sql": "WITH active_team_franchises AS (SELECT * FROM team_franchise WHERE active = 'Y')\nSELECT COUNT(*) FROM active_team_franchises",
+          "summary": "Count the number of active team franchises",
+          "cte_name": "active_team_franchises"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find the number of team franchises that are active (have 'Y' as \"active\" information).",
+      "sql": "SELECT COUNT(*) FROM team_franchise WHERE active = 'Y'",
+      "summary": null
+    },
+    "output": {
+      "description": "Count the number of active team franchises",
+      "steps": [
+        {
+          "sql": "SELECT COUNT(*) FROM team_franchise WHERE active = 'Y'",
+          "summary": "Count the total number of rows in the 'team_franchise' table where the 'active' column is 'Y'",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which cities have 2 to 4 parks?",
+      "sql": "SELECT city FROM park GROUP BY city HAVING COUNT(*) BETWEEN 2 AND 4",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve cities from the park table where the count of occurrences is between 2 and 4 after grouping by city.",
+      "steps": [
+        {
+          "sql": "WITH park_cte AS (SELECT city FROM park)",
+          "summary": "Create a common table expression (CTE) to select cities from the park table.",
+          "cte_name": "park_cte"
+        },
+        {
+          "sql": "SELECT city FROM park_cte GROUP BY city HAVING COUNT(*) BETWEEN 2 AND 4",
+          "summary": "Retrieve cities from the CTE where the count of occurrences is between 2 and 4 after grouping by city.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Find all the cities that have 2 to 4 parks.",
+      "sql": "SELECT city FROM park GROUP BY city HAVING COUNT(*) BETWEEN 2 AND 4",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve cities from the park table where the count of occurrences is between 2 and 4 after grouping by city.",
+      "steps": [
+        {
+          "sql": "WITH filtered_cities AS (SELECT city, COUNT(*) as city_count FROM park GROUP BY city) SELECT city FROM filtered_cities WHERE city_count BETWEEN 2 AND 4",
+          "summary": "Retrieve cities from the park table where the count of occurrences is between 2 and 4 after grouping by city.",
+          "cte_name": "filtered_cities"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which park had most attendances in 2008?",
+      "sql": "SELECT T2.park_name FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 2008 ORDER BY T1.attendance DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the park name with the highest attendance in the year 2008.",
+      "steps": [
+        {
+          "sql": "WITH home_game_cte AS (SELECT * FROM home_game WHERE year = 2008)",
+          "summary": "Create a common table expression (CTE) to filter home_game data for the year 2008.",
+          "cte_name": "home_game_cte"
+        },
+        {
+          "sql": "WITH home_game_cte AS (SELECT * FROM home_game WHERE year = 2008),\nranked_cte AS (SELECT park_name, ROW_NUMBER() OVER (ORDER BY attendance DESC NULLS LAST) AS rnk FROM home_game_cte JOIN park ON home_game_cte.park_id = park.park_id)",
+          "summary": "Create a CTE to rank parks based on attendance in descending order for the year 2008.",
+          "cte_name": "ranked_cte"
+        },
+        {
+          "sql": "WITH home_game_cte AS (SELECT * FROM home_game WHERE year = 2008),\nranked_cte AS (SELECT park_name, ROW_NUMBER() OVER (ORDER BY attendance DESC NULLS LAST) AS rnk FROM home_game_cte JOIN park ON home_game_cte.park_id = park.park_id)\nSELECT park_name FROM ranked_cte WHERE rnk = 1",
+          "summary": "Select the park name with the highest attendance rank for the year 2008.",
+          "cte_name": ""
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "query": "Which park did the most people attend in 2008?",
+      "sql": "SELECT T2.park_name FROM home_game AS T1 JOIN park AS T2 ON T1.park_id = T2.park_id WHERE T1.year = 2008 ORDER BY T1.attendance DESC NULLS LAST LIMIT 1",
+      "summary": null
+    },
+    "output": {
+      "description": "Retrieve the park name with the highest attendance in the year 2008.",
+      "steps": [
+        {
+          "sql": "WITH home_game_cte AS (SELECT * FROM home_game WHERE year = 2008)",
+          "summary": "Create a common table expression (CTE) to filter home_game data for the year 2008.",
+          "cte_name": "home_game_cte"
+        },
+        {
+          "sql": "WITH home_game_cte AS (SELECT * FROM home_game WHERE year = 2008), park_cte AS (SELECT park_name FROM park JOIN home_game_cte ON park.park_id = home_game_cte.park_id ORDER BY home_game_cte.attendance DESC NULLS LAST LIMIT 1)",
+          "summary": "Join the filtered home_game data with park data, order by attendance in descending order with NULLs last, and limit to 1 record.",
+          "cte_name": "park_cte"
+        },
+        {
+          "sql": "SELECT park_name FROM park_cte",
+          "summary": "Retrieve the park name with the highest attendance in the year 2008.",
+          "cte_name": ""
+        }
+      ]
+    }
+  }
+]
