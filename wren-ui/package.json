@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "yarn check-types && next lint",
     "test": "jest",
+    "check-types": "tsc --noEmit",
     "migrate": "yarn knex migrate:latest",
     "rollback": "yarn knex migrate:rollback",
     "generate-gql": "yarn graphql-codegen --config codegen.yaml"
