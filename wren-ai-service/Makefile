@@ -1,3 +1,5 @@
+test_args ?= 
+
 start:
 	poetry run python -m src.__main__
 
@@ -56,5 +58,5 @@ test:
 	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
 	make run-qdrant && \
 	make run-wren-engine && \
-	poetry run pytest -s && \
+	poetry run pytest -s $(test_args) && \
 	make stop-all
