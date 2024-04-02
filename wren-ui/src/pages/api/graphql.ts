@@ -62,7 +62,12 @@ const bootstrapServer = async () => {
   });
 
   const projectService = new ProjectService({ projectRepository });
-  const modelService = new ModelService();
+  const modelService = new ModelService({
+    projectService,
+    modelRepository,
+    modelColumnRepository,
+    relationRepository,
+  });
   const mdlService = new MDLService({
     projectRepository,
     modelRepository,

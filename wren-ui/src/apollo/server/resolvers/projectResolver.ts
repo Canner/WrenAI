@@ -75,24 +75,21 @@ export class ProjectResolver {
     const tables = await this.listDataSourceTables(_root, _arg, ctx);
     const tableNames = tables.map((table) => table.name);
 
-    // save all the tables
-    await this.saveTables(_root, { data: { tables: tableNames } }, ctx);
+    // save tables as model and modelColumns
+    await this.overwriteModelsAndColumns(tableNames, ctx, project);
 
     // save relations
     const relations = getRelations(name as SampleDatasetName);
     const models = await ctx.modelRepository.findAll();
     const columns = await ctx.modelColumnRepository.findAll();
     const mappedRelations = this.buildRelationInput(relations, models, columns);
-    await this.saveRelations(
-      _root,
-      { data: { relations: mappedRelations } },
-      ctx,
-    );
+    await ctx.modelService.saveRelations(mappedRelations);
 
     // mark current project as using sample dataset
     await ctx.projectRepository.updateOne(project.id, {
       sampleDataset: name,
     });
+    await this.deploy(ctx);
     return { name };
   }
 
@@ -158,17 +155,13 @@ export class ProjectResolver {
 
     // get current project
     const project = await ctx.projectService.getCurrentProject();
-    const projectId = project.id;
 
     // delete existing models and columns
-    await this.resetCurrentProjectModel(ctx, projectId);
-
-    // create model and columns
-    const strategy = DataSourceStrategyFactory.create(project.type, {
+    const { models, columns } = await this.overwriteModelsAndColumns(
+      tables,
       ctx,
       project,
-    });
-    const { models, columns } = await strategy.saveModels(tables);
+    );
 
     // async deploy to wren-engine and ai service
     this.deploy(ctx);
@@ -204,46 +197,9 @@ export class ProjectResolver {
     arg: { data: { relations: RelationData[] } },
     ctx: IContext,
   ) {
-    const { relations } = arg.data;
-    const project = await ctx.projectService.getCurrentProject();
-
-    const models = await ctx.modelRepository.findAllBy({
-      projectId: project.id,
-    });
-
-    const columnIds = relations
-      .map(({ fromColumnId, toColumnId }) => [fromColumnId, toColumnId])
-      .flat();
-    const columns = await ctx.modelColumnRepository.findColumnsByIds(columnIds);
-    const relationValues = relations.map((relation) => {
-      const fromColumn = columns.find(
-        (column) => column.id === relation.fromColumnId,
-      );
-      if (!fromColumn) {
-        throw new Error(`Column not found, column Id ${relation.fromColumnId}`);
-      }
-      const toColumn = columns.find(
-        (column) => column.id === relation.toColumnId,
-      );
-      if (!toColumn) {
-        throw new Error(`Column not found, column Id  ${relation.toColumnId}`);
-      }
-      const relationName = this.generateRelationName(relation, models);
-      return {
-        projectId: project.id,
-        name: relationName,
-        fromColumnId: relation.fromColumnId,
-        toColumnId: relation.toColumnId,
-        joinType: relation.type,
-      } as Partial<Relation>;
-    });
-
-    const savedRelations = await Promise.all(
-      relationValues.map((relation) =>
-        ctx.relationRepository.createOne(relation),
-      ),
+    const savedRelations = await ctx.modelService.saveRelations(
+      arg.data.relations,
     );
-
     // async deploy
     this.deploy(ctx);
     return savedRelations;
@@ -331,5 +287,23 @@ export class ProjectResolver {
       } as RelationData;
     });
     return relationInput;
+  }
+
+  private async overwriteModelsAndColumns(
+    tables: string[],
+    ctx: IContext,
+    project: Project,
+  ) {
+    // delete existing models and columns
+    await this.resetCurrentProjectModel(ctx, project.id);
+
+    // create model and columns
+    const strategy = DataSourceStrategyFactory.create(project.type, {
+      ctx,
+      project,
+    });
+    const { models, columns } = await strategy.saveModels(tables);
+
+    return { models, columns };
   }
 }
