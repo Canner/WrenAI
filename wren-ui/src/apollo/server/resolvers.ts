@@ -22,7 +22,7 @@ const resolvers = {
 
     // Ask
     askingTask: askingResolver.getAskingTask,
-    askQuestions: askingResolver.getAskQuestions,
+    suggestedQuestions: askingResolver.getSuggestedQuestions,
 
     // Thread
     thread: askingResolver.getThread,
