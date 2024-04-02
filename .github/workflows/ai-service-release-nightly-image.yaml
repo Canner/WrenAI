@@ -1,4 +1,4 @@
-name: AI Service/release nightly image
+name: AI Service Release nightly image
 
 on:
   push:
