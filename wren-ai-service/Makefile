@@ -42,9 +42,9 @@ stop-all:
 	make stop-wren-engine
 
 # present the evaluation result on the streamlit app
-# example: make streamlit pipeline=src/eval/streamlit_app.py
+# example: make streamlit pipeline=ask_details
 streamlit:
-	poetry run streamlit run $(pipeline)
+	poetry run streamlit run src/eval/${pipeline}/streamlit_app.py
 
 # example: make eval pipeline=ask_details
 eval:
