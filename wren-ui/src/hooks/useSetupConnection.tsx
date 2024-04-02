@@ -52,7 +52,10 @@ export default function useSetupConnection() {
     });
 
   const [startSampleDatasetMutation, { loading: startSampleDatasetLoading }] =
-    useStartSampleDatasetMutation();
+    useStartSampleDatasetMutation({
+      onError: (error) => console.error(error),
+      onCompleted: () => router.push(Path.Home),
+    });
 
   useEffect(() => {
     setConnectErrorMessage(error?.message || '');
@@ -75,7 +78,6 @@ export default function useSetupConnection() {
         data: { name: template },
       },
     });
-    router.push(Path.Home);
   };
 
   const onBack = () => {
