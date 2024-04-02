@@ -2,7 +2,7 @@ name: AI Service/release nightly image
 
 on:
   push:
-    branches: [main, feature/ai-service/44-*]
+    branches: [main]
     paths:
       - 'wren-ai-service/**'
 
