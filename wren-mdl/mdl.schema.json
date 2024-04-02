@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Canner/WrenAI/tree/main/wren-mdl/mdl.schema.json",
+  "title": "WrenMDL Manifest Schema",
+  "description": "A schema for WrenMDL manifest file",
+  "$defs": {
+    "column": {
+      "type": "object",
+      "unevaluatedItems": false,
+      "properties": {
+        "name": {
+          "description": "the name of the column",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "definition": "the type of the column",
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship": {
+          "description": "the relationship used by the column. If the type is a relationship, this field is required",
+          "type": "string"
+        },
+        "isCalculated": {
+          "description": "whether the column is calculated or not. If the column expression used relationship, this field is required",
+          "type": "boolean"
+        },
+        "notNull": {
+          "definition": "whether the column is not null or not",
+          "type": "boolean"
+        },
+        "expression": {
+          "definition": "the expression of the column. If the column is calculated, this field is required",
+          "type": ["string", "null"]
+        },
+        "properties": {
+          "description": "the customize properties of the column",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["name", "type"],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "catalog": {
+      "description": "the catalog name of WrenMDL",
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "description": "the schema name of WrenMDL",
+      "type": "string",
+      "minLength": 1
+    },
+    "models": {
+      "description": "the list of models",
+      "type": "array",
+      "unevaluatedItems": false,
+      "items": {
+        "type": "object",
+        "unevaluatedItems": false,
+        "properties": {
+          "name": {
+            "description": "the name of the model",
+            "type": "string",
+            "minLength": 1
+          },
+          "refSql": {
+            "description": "the sql reference of the model",
+            "type": "string", 
+            "minLength": 1
+          },
+          "baseObject": {
+            "description": "the base object of the model",
+            "type": "string",
+            "minLength": 1
+          },
+          "tableReference": {
+            "definition": "the table reference of the model",
+            "type": "object",
+            "properties": {
+              "catalog": {
+                "type": "string"
+              },
+              "schema": {
+                "type": "string"
+              },
+              "table": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["table"]
+          },
+          "columns": {
+            "description": "the list of columns",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/column"
+            }
+          },
+          "primaryKey": {
+            "definition": "the primary key of the model. It's required if the model is the one side of any OEN_TO_MANY or MANY_TO_ONE relationship",
+            "type": "string"
+          },
+          "cached": {
+            "description": "whether the model is cached or not",
+            "type": "boolean"
+          },
+          "refreshTime": {
+            "description": "the cache refresh time of the model",
+            "type": "string",
+            "pattern": "^\\s*(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)\\s*$"
+          },
+          "properties": {
+            "description": "the customize properties of the model",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["name"],
+        "oneOf": [
+          { "required": ["refSql"] },
+          { "required": ["baseObject"] },
+          { "required": ["tableReference"] }
+        ],
+        "additionalProperties": false
+      }
+    },
+    "relationships": {
+      "description": "the list of relationships",
+      "type": "array",
+      "unevaluatedItems": false,
+      "items": {
+        "type": "object",
+        "unevaluatedItems": false,
+        "properties": {
+          "name": {
+            "description": "the name of the relationship",
+            "type": "string",
+            "minLength": 1
+          },
+          "models": {
+            "description": "the list of models",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "joinType": {
+            "description": "the join type of the relationship",
+            "type": "string",
+            "enum": ["ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE", "MANY_TO_MANY"]
+          },
+          "condition": {
+            "description": "the condition of the relationship",
+            "type": "string",
+            "minLength": 1
+          },
+          "properties": {
+            "description": "the customize properties of the relationship",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["name", "models", "joinType", "condition"]
+      }
+    },
+    "metrics": {
+      "description": "the list of metrics",
+      "type": "array",
+      "unevaluatedItems": false,
+      "items": {
+        "type": "object",
+        "unevaluatedItems": false,
+        "properties": {
+          "name": {
+            "description": "the name of the metric",
+            "type": "string",
+            "minLength": 1
+          },
+          "baseObject": {
+            "description": "the base object of the metric",
+            "type": "string",
+            "minLength": 1
+          },
+          "dimension": {
+            "description": "the list of dimensions",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "$ref": "#/$defs/column"
+              }
+            }
+          },
+          "measure": {
+            "description": "the list of measures",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "$ref": "#/$defs/column"
+              }
+            },
+            "minItems": 1
+          },
+          "timeGrain": {
+            "description": "the time grain fields of the metric",
+            "type": "array",
+            "unevaluatedItems": false,
+            "items": {
+              "description": "the time grain field. It's should belong to the dimension fields",
+              "unevaluatedItems": false,
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "the name of the time grain field",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "refColumn": {
+                  "description": "the reference column name of the time grain field",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "dateParts": {
+                  "description": "the acceptable time units of the time grain field",
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "YEAR",
+                      "QUARTER",
+                      "MONTH",
+                      "WEEK",
+                      "DAY",
+                      "HOUR",
+                      "MINUTE",
+                      "SECOND"
+                    ]
+                  }
+                }
+              },
+              "required": ["name", "refColumn", "dateParts"]
+            }
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "refreshTime": {
+            "type": "string",
+            "description": "the cache refresh time of the metric",
+            "pattern": "^\\s*(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)\\s*$"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["name", "baseObject", "dimension", "measure"]
+      }
+    },
+    "views": {
+      "description": "the list of views",
+      "type": "array",
+      "unevaluatedItems": false,
+      "items": {
+        "type": "object",
+        "unevaluatedItems": false,
+        "properties": {
+          "name": {
+            "description": "the name of the view",
+            "type": "string",
+            "minLength": 1
+          },
+          "statement": {
+            "description": "the sql statement of the view",
+            "type": "string",
+            "minLength": 1
+          },
+          "properties": {
+            "description": "the customize properties of the view",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["name", "statement"]
+      }
+    },
+    "enumDefinitions": {
+      "description": "the list of enum definitions",
+      "type": "array",
+      "unevaluatedItems": false,
+      "items": {
+        "type": "object",
+        "unevaluatedItems": false,
+        "properties": {
+          "name": {
+            "description": "the name of the enum",
+            "type": "string",
+            "minLength": 1
+          },
+          "values": {
+            "type": "array",
+            "unevaluatedItems": false,
+            "items": {
+              "description": "the member of enum",
+              "type": "object",
+              "unevaluatedItems": false,
+              "properties": {
+                "name": {
+                  "description": "the name of the member",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "value": {
+                  "description": "the value of the member. If not provided, the value is the same as the name",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "properties": {
+                  "description": "the customize properties of the member",
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["name"]
+            }
+          },
+          "properties": {
+            "description": "the customize properties of the enum",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["name", "values"]
+      }
+    },
+    "macros": {
+      "description": "the list of macros",
+      "tyep": "array",
+      "unevaluatedItems": false,
+      "items": {
+        "type": "object",
+        "unevaluatedItems": false,
+        "properties": {
+          "name": {
+            "description": "the name of the macro",
+            "type": "string",
+            "minLength": 1
+          },
+          "definition": {
+            "description": "the definition of the macro",
+            "type": "string",
+            "minLength": 1
+          },
+          "properties": {
+            "description": "the customize properties of the macro",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["name", "definition"]
+      }
+    },
+    "cumulativeMetrics": {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "description": "experimental feature. The format is subject to change"
+          }
+    },
+    "dateSpine": {
+        "type": "object",
+        "description": "experimental feature. The format is subject to change"
+    }
+  },
+  "required": ["catalog", "schema"],
+  "unevaluatedItems": false,
+  "additionalProperties": false
+}
