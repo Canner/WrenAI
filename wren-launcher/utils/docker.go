@@ -22,9 +22,15 @@ const (
 	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/c8965ceba6eae274d2eec0595fd12b0989880ba3/.env.example"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, port int) string {
+	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
-	return reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
+	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
+
+	// replace PORT
+	reg = regexp.MustCompile(`HOST_PORT=(.*)`)
+	str = reg.ReplaceAllString(str, "HOST_PORT="+fmt.Sprintf("%d", port))
+	return str
 }
 
 func downloadFile(filepath string, url string) error {
@@ -68,7 +74,7 @@ func CheckDockerDaemonRunning() (bool, error) {
 	return true, nil
 }
 
-func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
+func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -93,7 +99,7 @@ func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
 	}
 
 	// replace the content with regex
-	newEnvFileContent := replaceEnvFileContent(string(envFileContent), OpenaiApiKey)
+	newEnvFileContent := replaceEnvFileContent(string(envFileContent), openaiApiKey, port)
 	newEnvFile := path.Join(projectDir, ".env")
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(newEnvFileContent), 0644)

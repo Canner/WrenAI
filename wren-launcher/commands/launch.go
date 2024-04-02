@@ -106,7 +106,10 @@ func Launch() {
 
 	// download docker-compose file and env file template for WrenAI
 	pterm.Info.Println("Downloading docker-compose file and env file")
-	err = utils.PrepareDockerFiles(apiKey, projectDir)
+	// find an available port
+	defaultPort := 3000
+	port := utils.FindAvailablePort(defaultPort)
+	err = utils.PrepareDockerFiles(apiKey, port, projectDir)
 	if err != nil {
 		panic(err)
 	}
