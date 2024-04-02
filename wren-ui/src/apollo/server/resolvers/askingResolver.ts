@@ -247,10 +247,12 @@ export class AskingResolver {
   public getThreadResponseNestedResolver = () => ({
     detail: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
       // extend sql to detail
-      return {
-        ...parent.detail,
-        sql: format(constructCteSql(parent.detail.steps)),
-      };
+      return parent.detail
+        ? {
+            ...parent.detail,
+            sql: format(constructCteSql(parent.detail.steps)),
+          }
+        : null;
     },
   });
 

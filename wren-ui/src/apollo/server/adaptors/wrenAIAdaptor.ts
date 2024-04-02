@@ -92,6 +92,13 @@ export type AskResult = AskResponse<
   AskResultStatus
 >;
 
+const getAISerciceError = (error: any) => {
+  const { data } = error.response || {};
+  return data?.detail
+    ? `${error.message}, detail: ${data.detail}`
+    : error.message;
+};
+
 export interface IWrenAIAdaptor {
   deploy(deployData: deployData): Promise<WrenAIDeployResponse>;
 
@@ -136,7 +143,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
-      logger.debug(`Got error when asking wren AI: ${err.message}`);
+      logger.debug(`Got error when asking wren AI: ${getAISerciceError(err)}`);
       throw err;
     }
   }
@@ -144,9 +151,11 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   public async cancelAsk(queryId: string): Promise<void> {
     // make PATCH request /v1/asks/:query_id to cancel the query
     try {
-      await axios.patch(`${this.wrenAIBaseEndpoint}/v1/asks/${queryId}`);
+      await axios.patch(`${this.wrenAIBaseEndpoint}/v1/asks/${queryId}`, {
+        status: 'stopped',
+      });
     } catch (err: any) {
-      logger.debug(`Got error when canceling ask: ${err.message}`);
+      logger.debug(`Got error when canceling ask: ${getAISerciceError(err)}`);
       throw err;
     }
   }
@@ -159,7 +168,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       return this.transformAskResult(res.data);
     } catch (err: any) {
-      logger.debug(`Got error when getting ask result: ${err.message}`);
+      logger.debug(
+        `Got error when getting ask result: ${getAISerciceError(err)}`,
+      );
       // throw err;
       throw Errors.create(Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR, {
         originalError: err,
@@ -181,7 +192,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       return { queryId: res.data.query_id };
     } catch (err: any) {
-      logger.debug(`Got error when generating ask detail: ${err.message}`);
+      logger.debug(
+        `Got error when generating ask detail: ${getAISerciceError(err)}`,
+      );
       throw err;
     }
   }
@@ -194,7 +207,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       return this.transformAskDetailResult(res.data);
     } catch (err: any) {
-      logger.debug(`Got error when getting ask detail result: ${err.message}`);
+      logger.debug(
+        `Got error when getting ask detail result: ${getAISerciceError(err)}`,
+      );
       throw err;
     }
   }
@@ -222,7 +237,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       }
     } catch (err: any) {
       logger.debug(
-        `Got error when deploying to wren AI, hash: ${hash}. Error: ${err.message}`,
+        `Got error when deploying to wren AI, hash: ${hash}. Error: ${getAISerciceError(err)}`,
       );
       return {
         status: WrenAIDeployStatusEnum.FAILED,
@@ -269,7 +284,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return res.data?.status.toUpperCase() as WrenAISystemStatus;
     } catch (err: any) {
       logger.debug(
-        `Got error in API /v1/semantics-preparations/${deployId}/status: ${err.message}`,
+        `Got error in API /v1/semantics-preparations/${deployId}/status: ${getAISerciceError(err)}`,
       );
       throw err;
     }

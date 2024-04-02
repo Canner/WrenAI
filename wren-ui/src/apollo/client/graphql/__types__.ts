@@ -14,6 +14,32 @@ export type Scalars = {
   JSON: any;
 };
 
+export type AskQuestionResponse = {
+  __typename?: 'AskQuestionResponse';
+  questions: Array<Maybe<Scalars['String']>>;
+};
+
+export type AskingTask = {
+  __typename?: 'AskingTask';
+  candidates: Array<ResultCandidate>;
+  error?: Maybe<Error>;
+  status: AskingTaskStatus;
+};
+
+export type AskingTaskInput = {
+  question: Scalars['String'];
+  threadId?: InputMaybe<Scalars['Int']>;
+};
+
+export enum AskingTaskStatus {
+  FAILED = 'FAILED',
+  FINISHED = 'FINISHED',
+  GENERATING = 'GENERATING',
+  SEARCHING = 'SEARCHING',
+  STOPPED = 'STOPPED',
+  UNDERSTANDING = 'UNDERSTANDING'
+}
+
 export type CalculatedFieldInput = {
   diagram?: InputMaybe<Scalars['JSON']>;
   expression: Scalars['String'];
@@ -59,6 +85,18 @@ export type CreateSimpleMetricInput = {
   timeGrain: Array<TimeGrainInput>;
 };
 
+export type CreateThreadInput = {
+  question: Scalars['String'];
+  sql: Scalars['String'];
+  summary: Scalars['String'];
+};
+
+export type CreateThreadResponseInput = {
+  question: Scalars['String'];
+  sql: Scalars['String'];
+  summary: Scalars['String'];
+};
+
 export type CustomFieldInput = {
   expression: Scalars['String'];
   name: Scalars['String'];
@@ -79,6 +117,13 @@ export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
   DUCKDB = 'DUCKDB'
 }
+
+export type DetailStep = {
+  __typename?: 'DetailStep';
+  cteName?: Maybe<Scalars['String']>;
+  sql: Scalars['String'];
+  summary: Scalars['String'];
+};
 
 export type DetailedColumn = {
   __typename?: 'DetailedColumn';
@@ -115,6 +160,14 @@ export type DetailedRelation = {
   toColumnId: Scalars['Int'];
   toModelId: Scalars['Int'];
   type: RelationType;
+};
+
+export type DetailedThread = {
+  __typename?: 'DetailedThread';
+  id: Scalars['Int'];
+  responses: Array<ThreadResponse>;
+  sql: Scalars['String'];
+  summary: Scalars['String'];
 };
 
 export type Diagram = {
@@ -175,6 +228,14 @@ export type DimensionInput = {
   type: Scalars['String'];
 };
 
+export type Error = {
+  __typename?: 'Error';
+  code?: Maybe<Scalars['String']>;
+  message?: Maybe<Scalars['String']>;
+  shortMessage?: Maybe<Scalars['String']>;
+  stacktrace?: Maybe<Array<Maybe<Scalars['String']>>>;
+};
+
 export type FieldInfo = {
   __typename?: 'FieldInfo';
   displayName: Scalars['String'];
@@ -220,14 +281,31 @@ export type ModelWhereInput = {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  cancelAskingTask: Scalars['Boolean'];
+  createAskingTask: Task;
   createModel: Scalars['JSON'];
+  createThread: Thread;
+  createThreadResponse: ThreadResponse;
   deleteModel: Scalars['Boolean'];
+  deleteThread: Scalars['Boolean'];
   deploy: Scalars['JSON'];
+  previewData: Scalars['JSON'];
   saveDataSource: DataSource;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
   startSampleDataset: Scalars['JSON'];
   updateModel: Scalars['JSON'];
+  updateThread: Thread;
+};
+
+
+export type MutationCancelAskingTaskArgs = {
+  taskId: Scalars['String'];
+};
+
+
+export type MutationCreateAskingTaskArgs = {
+  data: AskingTaskInput;
 };
 
 
@@ -236,8 +314,29 @@ export type MutationCreateModelArgs = {
 };
 
 
+export type MutationCreateThreadArgs = {
+  data: CreateThreadInput;
+};
+
+
+export type MutationCreateThreadResponseArgs = {
+  data: CreateThreadResponseInput;
+  threadId: Scalars['Int'];
+};
+
+
 export type MutationDeleteModelArgs = {
   where: ModelWhereInput;
+};
+
+
+export type MutationDeleteThreadArgs = {
+  where: ThreadUniqueWhereInput;
+};
+
+
+export type MutationPreviewDataArgs = {
+  where: PreviewDataInput;
 };
 
 
@@ -266,6 +365,12 @@ export type MutationUpdateModelArgs = {
   where: ModelWhereInput;
 };
 
+
+export type MutationUpdateThreadArgs = {
+  data: UpdateThreadInput;
+  where: ThreadUniqueWhereInput;
+};
+
 export enum NodeType {
   CALCULATED_FIELD = 'CALCULATED_FIELD',
   FIELD = 'FIELD',
@@ -287,8 +392,15 @@ export type OnboardingStatusResponse = {
   status?: Maybe<OnboardingStatus>;
 };
 
+export type PreviewDataInput = {
+  responseId: Scalars['Int'];
+  stepIndex?: InputMaybe<Scalars['Int']>;
+};
+
 export type Query = {
   __typename?: 'Query';
+  askQuestions: AskQuestionResponse;
+  askingTask: AskingTask;
   autoGenerateRelation?: Maybe<Array<RecommandRelations>>;
   diagram: Diagram;
   listDataSourceTables: Array<CompactTable>;
@@ -296,11 +408,29 @@ export type Query = {
   model: DetailedModel;
   modelSync?: Maybe<ModelSyncResponse>;
   onboardingStatus: OnboardingStatusResponse;
+  thread: DetailedThread;
+  threadResponse: ThreadResponse;
+  threads: Array<Thread>;
+};
+
+
+export type QueryAskingTaskArgs = {
+  taskId: Scalars['String'];
 };
 
 
 export type QueryModelArgs = {
   where: ModelWhereInput;
+};
+
+
+export type QueryThreadArgs = {
+  threadId: Scalars['Int'];
+};
+
+
+export type QueryThreadResponseArgs = {
+  responseId: Scalars['Int'];
 };
 
 export type RecommandRelations = {
@@ -339,6 +469,12 @@ export enum RelationType {
   ONE_TO_ONE = 'ONE_TO_ONE'
 }
 
+export type ResultCandidate = {
+  __typename?: 'ResultCandidate';
+  sql: Scalars['String'];
+  summary: Scalars['String'];
+};
+
 export type SampleDatasetInput = {
   name: SampleDatasetName;
 };
@@ -365,6 +501,38 @@ export type SimpleMeasureInput = {
   type: Scalars['String'];
 };
 
+export type Task = {
+  __typename?: 'Task';
+  id: Scalars['String'];
+};
+
+export type Thread = {
+  __typename?: 'Thread';
+  id: Scalars['Int'];
+  sql: Scalars['String'];
+  summary: Scalars['String'];
+};
+
+export type ThreadResponse = {
+  __typename?: 'ThreadResponse';
+  detail?: Maybe<ThreadResponseDetail>;
+  error?: Maybe<Error>;
+  id: Scalars['Int'];
+  question: Scalars['String'];
+  status: AskingTaskStatus;
+};
+
+export type ThreadResponseDetail = {
+  __typename?: 'ThreadResponseDetail';
+  description?: Maybe<Scalars['String']>;
+  sql?: Maybe<Scalars['String']>;
+  steps: Array<DetailStep>;
+};
+
+export type ThreadUniqueWhereInput = {
+  id: Scalars['Int'];
+};
+
 export type TimeGrainInput = {
   dateParts: Array<Scalars['String']>;
   name: Scalars['String'];
@@ -378,4 +546,8 @@ export type UpdateModelInput = {
   displayName: Scalars['String'];
   fields: Array<Scalars['String']>;
   refreshTime?: InputMaybe<Scalars['String']>;
+};
+
+export type UpdateThreadInput = {
+  summary?: InputMaybe<Scalars['String']>;
 };

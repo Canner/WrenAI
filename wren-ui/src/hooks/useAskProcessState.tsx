@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { PROCESS_STATE } from '@/utils/enum';
 
+export const getIsProcessing = (status: PROCESS_STATE) =>
+  [
+    PROCESS_STATE.UNDERSTANDING,
+    PROCESS_STATE.GENERATING,
+    PROCESS_STATE.SEARCHING,
+  ].includes(status);
+
 export default function useAskProcessState() {
   const [currentState, setCurrentState] = useState<PROCESS_STATE>(
     PROCESS_STATE.IDLE,
@@ -12,7 +19,6 @@ export default function useAskProcessState() {
 
   const nextState = () => {
     setCurrentState(currentState + 1);
-    console.log(currentState);
   };
 
   const setState = (state: PROCESS_STATE) => {

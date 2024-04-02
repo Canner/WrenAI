@@ -21,7 +21,7 @@ const StyledMenu = styled(Menu)`
 export default function TreeTitle(props: {
   threadId: string;
   onDelete: (threadId: string) => void;
-  onRename: (newName: string) => void;
+  onRename: (threadId: string, newName: string) => void;
   title: string;
 }) {
   const { threadId, onDelete, onRename } = props;
@@ -36,7 +36,7 @@ export default function TreeTitle(props: {
   const onChangeTitle = (newThreadTitle: string) => {
     setIsEditing(false);
     setTitle(newThreadTitle);
-    onRename(newThreadTitle);
+    onRename(threadId, newThreadTitle);
   };
 
   return isEditing ? (

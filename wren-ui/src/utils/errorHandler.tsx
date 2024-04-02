@@ -31,8 +31,61 @@ class SaveRelationsErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateAskingTaskErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create asking task.';
+    }
+  }
+}
+
+class CreateThreadErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create thread.';
+    }
+  }
+}
+
+class UpdateThreadErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update thread.';
+    }
+  }
+}
+
+class DeleteThreadErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete thread.';
+    }
+  }
+}
+
+class CreateThreadResponseErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create thread response.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
+errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
+errorHandlers.set('CreateThread', new CreateThreadErrorHandler());
+errorHandlers.set('UpdateThread', new UpdateThreadErrorHandler());
+errorHandlers.set('DeleteThread', new DeleteThreadErrorHandler());
+errorHandlers.set(
+  'CreateThreadResponse',
+  new CreateThreadResponseErrorHandler(),
+);
 
 const errorHandler = (error: ErrorResponse) => {
   const operationName = error?.operation?.operationName || '';
