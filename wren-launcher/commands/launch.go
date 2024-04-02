@@ -60,6 +60,14 @@ func askForAPIKey() (string, error) {
 }
 
 func Launch() {
+	// recover from panic
+	defer func() {
+		if r := recover(); r != nil {
+			pterm.Error.Println("An error occurred:", r)
+			fmt.Scanf("h")
+		}
+	}()
+
 	// print WrenAI header
 	fmt.Println(strings.Repeat("=", 55))
 	myFigure := figure.NewFigure("WrenAI", "", true)
@@ -72,7 +80,7 @@ func Launch() {
 
 	if err != nil {
 		pterm.Error.Println("Failed to get API key")
-		return
+		panic(err)
 	}
 
 	// check if docker daemon is running, if not, open it and loop to check again

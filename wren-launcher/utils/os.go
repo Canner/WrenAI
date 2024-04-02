@@ -56,8 +56,8 @@ func OpenDockerDaemon() error {
 		// systemctl --user start docker-desktop
 		err = exec.Command("systemctl", "--user", "start", "docker-desktop").Run()
 	case Windows:
-		// run dockerd.exe
-		err = exec.Command("dockerd.exe").Run()
+		// C:\Program Files\Docker\Docker\Docker Desktop.exe
+		err = exec.Command("C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe").Run()
 	case Darwin:
 		cmd := exec.Command("open", "-a", "Docker")
 		err = cmd.Run()
