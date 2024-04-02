@@ -1,4 +1,3 @@
-import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
 import {
   IModelColumnRepository,
   IModelRepository,
@@ -49,18 +48,6 @@ export class ModelService implements IModelService {
       return sourceTableName;
     }
     return `${sourceTableName}_${existedReferenceNames.length + 1}`;
-  }
-
-  public async saveModels(strategy: DataSourceStrategyFactory, tables: any) {
-    const project = await this.projectService.getCurrentProject();
-    const projectId = project.id;
-
-    // delete existing models and columns
-    await this.resetCurrentProjectModel(projectId);
-
-    // create model and columns
-
-    const { models, columns } = await strategy.saveModels(tables);
   }
 
   public async saveRelations(relations: RelationData[]) {
