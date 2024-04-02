@@ -45,12 +45,12 @@ const ModelEdge = ({
     : { stroke: 'var(--gray-5)' };
 
   const relation = useMemo(() => {
-    const fromField = `${data.relation.fromField.model}.${data.relation.fromField.field}`;
-    const toField = `${data.relation.toField.model}.${data.relation.toField.field}`;
+    const fromField = `${data.relation.fromModelName}.${data.relation.fromColumnName}`;
+    const toField = `${data.relation.toModelName}.${data.relation.toColumnName}`;
     return {
       name: data.relation.name,
-      joinType: getJoinTypeText(data.relation.joinType),
-      description: data.relation.properties?.description || '-',
+      joinType: getJoinTypeText(data.relation.type),
+      description: data.relation?.description || '-',
       fromField,
       toField,
     };

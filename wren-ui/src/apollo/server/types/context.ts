@@ -7,6 +7,7 @@ import {
   IRelationRepository,
 } from '../repositories';
 import { IDeployLogRepository } from '../repositories/deployLogRepository';
+import { IAskingService } from '../services/askingService';
 import { IDeployService } from '../services/deployService';
 import { IMDLService } from '../services/mdlService';
 import { IModelService } from '../services/modelService';
@@ -23,6 +24,7 @@ export interface IContext {
   modelService: IModelService;
   mdlService: IMDLService;
   deployService: IDeployService;
+  askingService: IAskingService;
 
   // repository
   projectRepository: IProjectRepository;

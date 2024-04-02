@@ -14,11 +14,6 @@ export const typeDefs = gql`
     MUSIC
   }
 
-  type UsableDataSource {
-    type: DataSourceName!
-    requiredProperties: [String!]!
-  }
-
   type DataSource {
     type: DataSourceName!
     properties: JSON!
@@ -56,6 +51,15 @@ export const typeDefs = gql`
     DATASOURCE_SAVED
     ONBOARDING_FINISHED
     WITH_SAMPLE_DATASET
+  }
+
+  enum NodeType {
+    MODEL
+    METRIC
+    VIEW
+    RELATION
+    FIELD
+    CALCULATED_FIELD
   }
 
   type Relation {
@@ -204,6 +208,52 @@ export const typeDefs = gql`
     isSyncronized: Boolean!
   }
 
+  type Diagram {
+    models: [DiagramModel]!
+  }
+
+  type DiagramModel {
+    id: String!
+    modelId: Int!
+    nodeType: NodeType!
+    displayName: String!
+    referenceName: String!
+    sourceTableName: String!
+    refSql: String!
+    cached: Boolean!
+    refreshTime: String
+    description: String
+    fields: [DiagramModelField]!
+    calculatedFields: [DiagramModelField]!
+    relationFields: [DiagramModelRelationField]!
+  }
+
+  type DiagramModelField {
+    id: String!
+    columnId: Int!
+    nodeType: NodeType!
+    type: String!
+    displayName: String!
+    referenceName: String!
+    description: String
+    isPrimaryKey: Boolean!
+    expression: String
+  }
+
+  type DiagramModelRelationField {
+    id: String!
+    relationId: Int!
+    nodeType: NodeType!
+    type: RelationType!
+    displayName: String!
+    referenceName: String!
+    description: String
+    fromModelName: String!
+    fromColumnName: String!
+    toModelName: String!
+    toColumnName: String!
+  }
+
   input SimpleMeasureInput {
     name: String!
     type: String!
@@ -239,18 +289,132 @@ export const typeDefs = gql`
     timeGrain: [TimeGrainInput!]!
   }
 
+  # Task
+  type Task {
+    id: String!
+  }
+
+  # Error
+  type Error {
+    code: String
+    shortMessage: String
+    message: String
+    stacktrace: [String]
+  }
+
+  # Asking Task
+  input AskingTaskInput {
+    question: String!
+    # Used for follow-up questions
+    threadId: Int
+  }
+
+  enum AskingTaskStatus {
+    UNDERSTANDING
+    SEARCHING
+    GENERATING
+    FINISHED
+    FAILED
+    STOPPED
+  }
+
+  type ResultCandidate {
+    sql: String!
+    summary: String!
+  }
+
+  type AskingTask {
+    status: AskingTaskStatus!
+    error: Error
+    candidates: [ResultCandidate!]!
+  }
+
+  # Thread
+  input CreateThreadInput {
+    question: String!
+    sql: String!
+    summary: String!
+  }
+
+  input CreateThreadResponseInput {
+    question: String!
+    sql: String!
+    summary: String!
+  }
+
+  input ThreadUniqueWhereInput {
+    id: Int!
+  }
+
+  input UpdateThreadInput {
+    summary: String
+  }
+
+  input PreviewDataInput {
+    responseId: Int!
+    # Optional, only used for preview data of a single step
+    stepIndex: Int
+  }
+
+  type DetailStep {
+    summary: String!
+    sql: String!
+    cteName: String
+  }
+
+  type ThreadResponseDetail {
+    sql: String
+    description: String
+    steps: [DetailStep!]!
+  }
+
+  type ThreadResponse {
+    id: Int!
+    question: String!
+    status: AskingTaskStatus!
+    detail: ThreadResponseDetail
+    error: Error
+  }
+
+  # Thread only consists of basic information of a thread
+  type Thread {
+    id: Int!
+    sql: String!
+    summary: String!
+  }
+
+  # Detailed thread consists of thread and thread responses
+  type DetailedThread {
+    id: Int!
+    sql: String!
+    summary: String!
+    responses: [ThreadResponse!]!
+  }
+
+  # Ask Questions Responses
+  type AskQuestionResponse {
+    questions: [String]!
+  }
+
+  # Query and Mutation
   type Query {
     # On Boarding Steps
-    usableDataSource: [UsableDataSource!]!
     listDataSourceTables: [CompactTable!]!
     autoGenerateRelation: [RecommandRelations!]
-    manifest: JSON!
     onboardingStatus: OnboardingStatusResponse!
 
     # Modeling Page
     listModels: [ModelInfo!]!
     model(where: ModelWhereInput!): DetailedModel!
     modelSync: ModelSyncResponse
+    diagram: Diagram!
+
+    # Ask
+    askingTask(taskId: String!): AskingTask!
+    askQuestions: AskQuestionResponse!
+    threads: [Thread!]!
+    thread(threadId: Int!): DetailedThread!
+    threadResponse(responseId: Int!): ThreadResponse!
   }
 
   type Mutation {
@@ -265,5 +429,24 @@ export const typeDefs = gql`
     createModel(data: CreateModelInput!): JSON!
     updateModel(where: ModelWhereInput!, data: UpdateModelInput!): JSON!
     deleteModel(where: ModelWhereInput!): Boolean!
+
+    # Ask
+    createAskingTask(data: AskingTaskInput!): Task!
+    cancelAskingTask(taskId: String!): Boolean!
+
+    # Thread
+    createThread(data: CreateThreadInput!): Thread!
+    updateThread(
+      where: ThreadUniqueWhereInput!
+      data: UpdateThreadInput!
+    ): Thread!
+    deleteThread(where: ThreadUniqueWhereInput!): Boolean!
+
+    # Thread Response
+    createThreadResponse(
+      threadId: Int!
+      data: CreateThreadResponseInput!
+    ): ThreadResponse!
+    previewData(where: PreviewDataInput!): JSON!
   }
 `;

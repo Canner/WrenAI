@@ -1,4 +1,4 @@
-import { CompactTable } from '../types';
+import { CompactTable } from './connector';
 import { IConnector } from './connector';
 import { BigQuery, BigQueryOptions } from '@google-cloud/bigquery';
 

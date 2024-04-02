@@ -5,7 +5,8 @@ name: AI Service CI
 
 on:
   push:
-    branches: [ main ]
+    paths:
+      - 'wren-ai-service/**'
   pull_request:
     types: [ labeled ]
 
@@ -23,7 +24,7 @@ defaults:
 
 jobs:
   ci:
-    if: ${{ github.event.label.name == 'ci/ai-service' || github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event.label.name == 'ci/ai-service' || github.event_name == 'push' }}
     strategy:
       fail-fast: false
       matrix:

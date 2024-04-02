@@ -23,7 +23,7 @@ import { ModelEdge } from './customEdge';
 import Marker from './Marker';
 import { DiagramContext, ClickPayload } from './Context';
 import { trimId, highlightNodes, highlightEdges } from './utils';
-import { AdaptedData } from '@/utils/data';
+import { Diagram as DiagramData } from '@/utils/data';
 import { RefreshIcon } from '@/utils/icons';
 import { EDGE_TYPE, NODE_TYPE } from '@/utils/enum';
 import { DiagramCreator } from '@/utils/diagram';
@@ -43,7 +43,7 @@ const minimapStyle = {
 
 interface Props {
   forwardRef?: ForwardedRef<unknown>;
-  data: AdaptedData;
+  data: DiagramData;
   onMoreClick: (data: ClickPayload) => void;
   onNodeClick: (data: ClickPayload) => void;
 }

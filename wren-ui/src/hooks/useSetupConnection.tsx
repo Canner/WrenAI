@@ -8,7 +8,7 @@ const transformProperties = (
   properties: Record<string, any>,
   dataSource: DataSourceName,
 ) => {
-  if (dataSource === DataSourceName.Duckdb) {
+  if (dataSource === DataSourceName.DUCKDB) {
     const configurations = properties.configurations.reduce((acc, cur) => {
       if (cur.key && cur.value) {
         acc[cur.key] = cur.value;

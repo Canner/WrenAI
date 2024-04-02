@@ -2,7 +2,7 @@ import {
   IWrenEngineAdaptor,
   QueryResponse,
 } from '../adaptors/wrenEngineAdaptor';
-import { CompactTable } from '../types';
+import { CompactTable } from './connector';
 import { IConnector } from './connector';
 import { getLogger } from '@server/utils';
 

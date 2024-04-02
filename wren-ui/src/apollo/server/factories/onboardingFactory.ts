@@ -1,9 +1,8 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
-import { IConnector } from '../connectors/connector';
+import { IConnector, CompactTable } from '../connectors/connector';
 import { Model, ModelColumn, Project } from '../repositories';
 import {
   AnalysisRelationInfo,
-  CompactTable,
   DataSourceName,
   IContext,
   RelationType,

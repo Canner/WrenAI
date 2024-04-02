@@ -3,11 +3,6 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type UsableDataSourcesQueryVariables = Types.Exact<{ [key: string]: never; }>;
-
-
-export type UsableDataSourcesQuery = { __typename?: 'Query', usableDataSource: Array<{ __typename?: 'UsableDataSource', type: Types.DataSourceName, requiredProperties: Array<string> }> };
-
 export type ListDataSourceTablesQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
@@ -40,41 +35,6 @@ export type SaveRelationsMutationVariables = Types.Exact<{
 export type SaveRelationsMutation = { __typename?: 'Mutation', saveRelations: any };
 
 
-export const UsableDataSourcesDocument = gql`
-    query UsableDataSources {
-  usableDataSource {
-    type
-    requiredProperties
-  }
-}
-    `;
-
-/**
- * __useUsableDataSourcesQuery__
- *
- * To run a query within a React component, call `useUsableDataSourcesQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsableDataSourcesQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsableDataSourcesQuery({
- *   variables: {
- *   },
- * });
- */
-export function useUsableDataSourcesQuery(baseOptions?: Apollo.QueryHookOptions<UsableDataSourcesQuery, UsableDataSourcesQueryVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<UsableDataSourcesQuery, UsableDataSourcesQueryVariables>(UsableDataSourcesDocument, options);
-      }
-export function useUsableDataSourcesLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<UsableDataSourcesQuery, UsableDataSourcesQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<UsableDataSourcesQuery, UsableDataSourcesQueryVariables>(UsableDataSourcesDocument, options);
-        }
-export type UsableDataSourcesQueryHookResult = ReturnType<typeof useUsableDataSourcesQuery>;
-export type UsableDataSourcesLazyQueryHookResult = ReturnType<typeof useUsableDataSourcesLazyQuery>;
-export type UsableDataSourcesQueryResult = Apollo.QueryResult<UsableDataSourcesQuery, UsableDataSourcesQueryVariables>;
 export const ListDataSourceTablesDocument = gql`
     query ListDataSourceTables {
   listDataSourceTables {

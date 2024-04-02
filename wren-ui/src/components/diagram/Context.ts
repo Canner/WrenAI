@@ -1,10 +1,10 @@
 import { createContext } from 'react';
-import { ModelData, MetricData, ViewData } from '@/utils/data';
+import { ComposeDiagram } from '@/utils/data';
 
 export interface ClickPayload {
   [key: string]: any;
   title: string;
-  data: ModelData | MetricData | ViewData;
+  data: ComposeDiagram;
 }
 
 type ContextProps = {
