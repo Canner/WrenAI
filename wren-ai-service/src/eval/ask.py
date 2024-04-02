@@ -2,11 +2,10 @@ import argparse
 import json
 import os
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from tqdm import tqdm
 
@@ -35,17 +34,11 @@ from .utils import (
 
 load_env_vars()
 
-if with_trace := os.getenv("ENABLE_TRACE", default=False):
-    from src.pipelines.trace import (
-        langfuse,
-    )
 
-
-def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+def process_item(query: str) -> Dict[str, Any]:
     retrieval_start = time.perf_counter()
     retrieval_result = retrieval_pipeline.run(
         query,
-        user_id=user_id,
     )
     documents = retrieval_result["post_processor"]["documents"]
     retrieval_end = time.perf_counter()
@@ -69,7 +62,6 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     text_to_sql_generation_results = generation_pipeline.run(
         query,
         contexts=documents,
-        user_id=user_id,
     )
     text_to_sql_generation_end = time.perf_counter()
     text_to_sql_generation_time_cost = (
@@ -304,18 +296,13 @@ if __name__ == "__main__":
             dataset_name=DATASET_NAME,
             recreate_index=True,
         )
-        embedder = init_embedder(with_trace=with_trace)
+        embedder = init_embedder()
         retriever = init_retriever(
             document_store=document_store,
-            with_trace=with_trace,
             top_k=10,
         )
-        text_to_sql_generator = init_generator(
-            with_trace=with_trace,
-        )
-        sql_correction_generator = init_generator(
-            with_trace=with_trace,
-        )
+        text_to_sql_generator = init_generator()
+        sql_correction_generator = init_generator()
 
         print("Indexing documents...")
         indexing_pipeline = Indexing(document_store=document_store)
@@ -328,13 +315,11 @@ if __name__ == "__main__":
         retrieval_pipeline = Retrieval(
             embedder=embedder,
             retriever=retriever,
-            with_trace=with_trace,
         )
         retrieval_pipeline_def = retrieval_pipeline._pipe.dumps()
 
         generation_pipeline = Generation(
             text_to_sql_generator=text_to_sql_generator,
-            with_trace=with_trace,
         )
         generation_pipeline_def = generation_pipeline._pipe.dumps()
 
@@ -345,13 +330,8 @@ if __name__ == "__main__":
 
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
-        user_id = str(uuid.uuid4())
-        max_workers = os.cpu_count() // 2 if with_trace else None
-        user_id = str(uuid.uuid4()) if with_trace else None
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            args_list = [
-                (ground_truth["question"], user_id) for ground_truth in ground_truths
-            ]
+        with ThreadPoolExecutor() as executor:
+            args_list = [(ground_truth["question"],) for ground_truth in ground_truths]
             outputs = list(
                 tqdm(
                     executor.map(lambda p: process_item(*p), args_list),
@@ -376,8 +356,6 @@ if __name__ == "__main__":
                 "sql_correction": sql_correction_pipeline_def,
             },
         )
-        if with_trace:
-            langfuse.flush()
 
         if EVAL_AFTER_PREDICTION:
             eval(

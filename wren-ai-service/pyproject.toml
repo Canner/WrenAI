@@ -16,7 +16,6 @@ qdrant-haystack = "^3.0.0"
 backoff = "^2.2.1"
 tqdm = "^4.66.2"
 numpy = "^1.26.4"
-langfuse = "^2.19.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

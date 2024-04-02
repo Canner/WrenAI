@@ -14,25 +14,15 @@ class BasicPipeline(metaclass=ABCMeta):
     def run(self, *args, **kwargs) -> Dict[str, Any]:
         ...
 
-    def save(self, with_trace: bool = False, suffix: str = None) -> Path:
+    def save(self, suffix: str = None) -> Path:
         if suffix:
-            if with_trace:
-                file_path = Path(
-                    f"./outputs/{self.__class__.__name__.lower()}_pipeline_with_trace_{suffix}.yaml"
-                )
-            else:
-                file_path = Path(
-                    f"./outputs/{self.__class__.__name__.lower()}_pipeline_{suffix}.yaml"
-                )
+            file_path = Path(
+                f"./outputs/{self.__class__.__name__.lower()}_pipeline_{suffix}.yaml"
+            )
         else:
-            if with_trace:
-                file_path = Path(
-                    f"./outputs/{self.__class__.__name__.lower()}_pipeline_with_trace.yaml"
-                )
-            else:
-                file_path = Path(
-                    f"./outputs/{self.__class__.__name__.lower()}_pipeline.yaml"
-                )
+            file_path = Path(
+                f"./outputs/{self.__class__.__name__.lower()}_pipeline.yaml"
+            )
 
         with open(file_path, "w") as file:
             self._pipe.dump(file)
