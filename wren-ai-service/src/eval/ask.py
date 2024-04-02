@@ -5,7 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from tqdm import tqdm
 
@@ -35,12 +35,15 @@ from .utils import (
 load_env_vars()
 
 
-def process_item(query: str) -> Dict[str, Any]:
+def process_item(query: str, no_db_schema: Optional[bool]) -> Dict[str, Any]:
     retrieval_start = time.perf_counter()
-    retrieval_result = retrieval_pipeline.run(
-        query,
-    )
-    documents = retrieval_result["post_processor"]["documents"]
+    if not no_db_schema:
+        retrieval_result = retrieval_pipeline.run(
+            query,
+        )
+        documents = retrieval_result["post_processor"]["documents"]
+    else:
+        documents = []
     retrieval_end = time.perf_counter()
 
     valid_generation_results = []
@@ -209,12 +212,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval-after-prediction",
         action=argparse.BooleanOptionalAction,
-        help="Run the evaluation after making predictions.",
+        help="Run the evaluation after making predictions. Default is False.",
     )
     parser.add_argument(
         "--eval-from-scratch",
         action=argparse.BooleanOptionalAction,
-        help="Run the evaluation from scratch.",
+        help="Run the evaluation from scratch. Default is False.",
     )
     parser.add_argument(
         "--semantic-description",
@@ -226,6 +229,23 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="Whether to add customized semantic description before asking. Default is False.",
     )
+    parser.add_argument(
+        "--without-db-schema",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to exclude the database schema information. Default is False.",
+    )
+    parser.add_argument(
+        "--easy-questions",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to use easy questions for evaluation. Default is False.",
+    )
+    parser.add_argument(
+        "--hard-questions",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to use hard questions for evaluation. Default is False.",
+    )
+
+    parser.add_argument
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
@@ -233,9 +253,26 @@ if __name__ == "__main__":
     EVAL_FROM_SCRATCH = args.eval_from_scratch
     ENABLE_SEMANTIC_DESCRIPTION = args.semantic_description
     CUSTOM_SEMANTIC_DESCRIPTION = args.custom_semantic_description
+    NO_DB_SCHEMA = args.without_db_schema
+    EASY_QUESTIONS = args.easy_questions
+    HARD_QUESTIONS = args.hard_questions
 
-    with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
-        ground_truths = [json.loads(line) for line in f]
+    assert not (
+        CUSTOM_SEMANTIC_DESCRIPTION and ENABLE_SEMANTIC_DESCRIPTION
+    ), "Cannot use both custom and general semantic description for evaluation."
+    assert not (
+        EASY_QUESTIONS and HARD_QUESTIONS
+    ), "Cannot use both easy and hard questions for evaluation."
+
+    if EASY_QUESTIONS:
+        with open(f"./src/eval/data/{DATASET_NAME}_data_easy.json", "r") as f:
+            ground_truths = [json.loads(line) for line in f]
+    elif HARD_QUESTIONS:
+        with open(f"./src/eval/data/{DATASET_NAME}_data_hard.json", "r") as f:
+            ground_truths = [json.loads(line) for line in f]
+    else:
+        with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
+            ground_truths = [json.loads(line) for line in f]
 
     if ENABLE_SEMANTIC_DESCRIPTION:
         if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
@@ -342,7 +379,10 @@ if __name__ == "__main__":
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
         with ThreadPoolExecutor() as executor:
-            args_list = [(ground_truth["question"],) for ground_truth in ground_truths]
+            args_list = [
+                (ground_truth["question"], NO_DB_SCHEMA)
+                for ground_truth in ground_truths
+            ]
             outputs = list(
                 tqdm(
                     executor.map(lambda p: process_item(*p), args_list),

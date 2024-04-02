@@ -52,11 +52,6 @@ eval:
 	poetry run python -m src.eval.$(pipeline) $(args)
 	make stop-all
 
-eval-ask-with-custom-semantic:
-	make run-all && \
-	poetry run python -m src.eval.ask $(eval_ask_args) --custom-semantic-description && \
-	make stop-all
-
 test:
 	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
 	make run-qdrant && \
