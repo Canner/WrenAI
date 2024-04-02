@@ -1,11 +1,11 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
 import { CreateModelData } from '../models';
 import { Model, ModelColumn, Project } from '../repositories';
-import { CompactTable, IContext } from '../types';
+import { IContext } from '../types';
 import { getLogger } from '@server/utils';
+import { CompactTable } from '../connectors/connector';
 import { BQConnector } from '../connectors/bqConnector';
 import { GenerateReferenceNameData } from '../services/modelService';
-import { Manifest } from '../mdl/type';
 import { DeployResponse } from '../services/deployService';
 
 const logger = getLogger('ModelResolver');
@@ -17,7 +17,6 @@ export class ModelResolver {
     this.getModel = this.getModel.bind(this);
     this.createModel = this.createModel.bind(this);
     this.deleteModel = this.deleteModel.bind(this);
-    this.getManifest = this.getManifest.bind(this);
     this.deploy = this.deploy.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
   }
@@ -43,15 +42,6 @@ export class ModelResolver {
     const project = await ctx.projectService.getCurrentProject();
     const manifest = await ctx.mdlService.makeCurrentModelMDL();
     return await ctx.deployService.deploy(manifest, project.id);
-  }
-
-  public async getManifest(
-    _root: any,
-    _args: any,
-    ctx: IContext,
-  ): Promise<Manifest> {
-    const manifest = await ctx.mdlService.makeCurrentModelMDL();
-    return manifest;
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {

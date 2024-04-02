@@ -1,4 +1,4 @@
-import { MetricData, ModelData, ViewData } from '@/utils/data';
+import { ComposeDiagram } from '@/utils/data';
 import { LightningIcon } from '@/utils/icons';
 import { Tooltip } from 'antd';
 import { NodeProps } from 'reactflow';
@@ -118,7 +118,7 @@ export const NodeColumn = styled.div`
 export const CachedIcon = ({
   originalData,
 }: {
-  originalData: ModelData | MetricData | ViewData;
+  originalData: ComposeDiagram;
 }) => {
   return originalData.cached ? (
     <Tooltip

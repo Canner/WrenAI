@@ -3,17 +3,23 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
+export type CommonColumnFragment = { __typename?: 'DetailedColumn', displayName: string, referenceName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean, properties: any };
+
+export type CommonFieldFragment = { __typename?: 'FieldInfo', id: number, displayName: string, referenceName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean, expression?: string | null, properties?: any | null };
+
+export type CommonRelationFragment = { __typename?: 'DetailedRelation', fromModelId: number, fromColumnId: number, toModelId: number, toColumnId: number, type: Types.RelationType, name: string };
+
 export type ListModelsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type ListModelsQuery = { __typename?: 'Query', listModels: Array<{ __typename?: 'ModelInfo', id: number, referenceName: string, sourceTableName: string, displayName: string, cached: boolean, primaryKey?: string | null, refreshTime?: string | null, refSql?: string | null, fields: Array<{ __typename?: 'FieldInfo', id: number, referenceName: string } | null> }> };
+export type ListModelsQuery = { __typename?: 'Query', listModels: Array<{ __typename?: 'ModelInfo', id: number, displayName: string, referenceName: string, sourceTableName: string, refSql?: string | null, primaryKey?: string | null, cached: boolean, refreshTime?: string | null, description?: string | null, fields: Array<{ __typename?: 'FieldInfo', id: number, displayName: string, referenceName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean, expression?: string | null, properties?: any | null } | null>, calculatedFields: Array<{ __typename?: 'FieldInfo', id: number, displayName: string, referenceName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean, expression?: string | null, properties?: any | null } | null> }> };
 
 export type GetModelQueryVariables = Types.Exact<{
   where: Types.ModelWhereInput;
 }>;
 
 
-export type GetModelQuery = { __typename?: 'Query', model: { __typename?: 'DetailedModel', referenceName: string, displayName: string, sourceTableName: string, refSql: string, primaryKey?: string | null, cached: boolean, refreshTime?: string | null, fields?: Array<{ __typename?: 'DetailedColumn', referenceName: string, displayName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean } | null> | null, relations?: Array<{ __typename?: 'DetailedRelation', fromModelId: number, fromColumnId: number, toModelId: number, toColumnId: number, type: Types.RelationType, name: string } | null> | null } };
+export type GetModelQuery = { __typename?: 'Query', model: { __typename?: 'DetailedModel', displayName: string, referenceName: string, sourceTableName: string, refSql: string, primaryKey?: string | null, cached: boolean, refreshTime?: string | null, description?: string | null, properties: any, fields?: Array<{ __typename?: 'DetailedColumn', displayName: string, referenceName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean, properties: any } | null> | null, calculatedFields?: Array<{ __typename?: 'DetailedColumn', displayName: string, referenceName: string, sourceColumnName: string, type?: string | null, isCalculated: boolean, notNull: boolean, properties: any } | null> | null, relations?: Array<{ __typename?: 'DetailedRelation', fromModelId: number, fromColumnId: number, toModelId: number, toColumnId: number, type: Types.RelationType, name: string } | null> | null } };
 
 export type CreateModelMutationVariables = Types.Exact<{
   data: Types.CreateModelInput;
@@ -37,25 +43,61 @@ export type DeleteModelMutationVariables = Types.Exact<{
 
 export type DeleteModelMutation = { __typename?: 'Mutation', deleteModel: boolean };
 
-
+export const CommonColumnFragmentDoc = gql`
+    fragment CommonColumn on DetailedColumn {
+  displayName
+  referenceName
+  sourceColumnName
+  type
+  isCalculated
+  notNull
+  properties
+}
+    `;
+export const CommonFieldFragmentDoc = gql`
+    fragment CommonField on FieldInfo {
+  id
+  displayName
+  referenceName
+  sourceColumnName
+  type
+  isCalculated
+  notNull
+  expression
+  properties
+}
+    `;
+export const CommonRelationFragmentDoc = gql`
+    fragment CommonRelation on DetailedRelation {
+  fromModelId
+  fromColumnId
+  toModelId
+  toColumnId
+  type
+  name
+}
+    `;
 export const ListModelsDocument = gql`
     query ListModels {
   listModels {
     id
+    displayName
     referenceName
     sourceTableName
-    displayName
-    fields {
-      id
-      referenceName
-    }
-    cached
-    primaryKey
-    refreshTime
     refSql
+    primaryKey
+    cached
+    refreshTime
+    description
+    fields {
+      ...CommonField
+    }
+    calculatedFields {
+      ...CommonField
+    }
   }
 }
-    `;
+    ${CommonFieldFragmentDoc}`;
 
 /**
  * __useListModelsQuery__
@@ -86,32 +128,28 @@ export type ListModelsQueryResult = Apollo.QueryResult<ListModelsQuery, ListMode
 export const GetModelDocument = gql`
     query GetModel($where: ModelWhereInput!) {
   model(where: $where) {
-    referenceName
     displayName
+    referenceName
     sourceTableName
     refSql
     primaryKey
     cached
     refreshTime
+    description
     fields {
-      referenceName
-      displayName
-      sourceColumnName
-      type
-      isCalculated
-      notNull
+      ...CommonColumn
+    }
+    calculatedFields {
+      ...CommonColumn
     }
     relations {
-      fromModelId
-      fromColumnId
-      toModelId
-      toColumnId
-      type
-      name
+      ...CommonRelation
     }
+    properties
   }
 }
-    `;
+    ${CommonColumnFragmentDoc}
+${CommonRelationFragmentDoc}`;
 
 /**
  * __useGetModelQuery__

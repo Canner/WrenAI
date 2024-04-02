@@ -1,14 +1,5 @@
 import { gql } from '@apollo/client';
 
-export const USABLE_DATA_SOURCES = gql`
-  query UsableDataSources {
-    usableDataSource {
-      type
-      requiredProperties
-    }
-  }
-`;
-
 export const LIST_DATA_SOURCE_TABLES = gql`
   query ListDataSourceTables {
     listDataSourceTables {

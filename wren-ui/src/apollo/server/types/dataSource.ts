@@ -3,14 +3,6 @@ export enum DataSourceName {
   DUCKDB = 'DUCKDB',
 }
 
-interface BaseDataSource {
-  type: DataSourceName;
-}
-
-export interface UsableDataSource extends BaseDataSource {
-  requiredProperties: string[];
-}
-
 export interface DataSource {
   type: DataSourceName;
   properties: any;
