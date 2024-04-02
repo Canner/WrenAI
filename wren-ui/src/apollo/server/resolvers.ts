@@ -216,6 +216,7 @@ const resolvers = {
 
     // Ask
     askingTask: askingResolver.getAskingTask,
+    askQuestions: askingResolver.getAskQuestions,
 
     // Thread
     thread: askingResolver.getThread,
