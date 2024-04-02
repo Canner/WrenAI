@@ -1,8 +1,6 @@
 name: AI Service Release image
 
 on:
-  push:
-    branches: [feature/ai-service/*]
   workflow_dispatch:
     inputs:
       tag_name:
