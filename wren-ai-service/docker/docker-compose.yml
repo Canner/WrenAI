@@ -11,7 +11,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     environment:
-      UVICORN_PORT: ${UVICORN_PORT}
+      WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       QDRANT_HOST: ${QDRANT_HOST}
       WREN_ENGINE_ENDPOINT: ${WREN_ENGINE_ENDPOINT}
@@ -19,7 +19,7 @@ services:
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
     ports:
-      - ${UVICORN_PORT}:80
+      - ${WREN_AI_SERVICE_PORT}:${WREN_AI_SERVICE_PORT}
     depends_on:
       - qdrant
 

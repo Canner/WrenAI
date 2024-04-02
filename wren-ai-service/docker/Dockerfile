@@ -23,4 +23,4 @@ COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 COPY src src
 
-ENTRYPOINT [ "uvicorn", "src.__main__:app", "--host", "0.0.0.0", "--port", "80" ]
+ENTRYPOINT uvicorn src.__main__:app --host 0.0.0.0 --port $WREN_AI_SERVICE_PORT

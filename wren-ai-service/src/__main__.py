@@ -13,11 +13,6 @@ from src.web.v1 import routers
 
 env = load_env_vars()
 
-server_host = os.getenv("UVICORN_HOST") or "127.0.0.1"
-server_port = (
-    int(os.getenv("UVICORN_PORT")) if os.getenv("UVICORN_PORT") is not None else 8000
-)
-
 
 # https://fastapi.tiangolo.com/advanced/events/#lifespan
 @asynccontextmanager
@@ -35,9 +30,7 @@ app = FastAPI(lifespan=lifespan, redoc_url=None)
 app.include_router(routers.router, prefix="/v1")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        f"http://{server_host}:{server_port}",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,6 +59,13 @@ def root():
 
 
 if __name__ == "__main__":
+    server_host = os.getenv("WREN_AI_SERVICE_HOST") or "127.0.0.1"
+    server_port = (
+        int(os.getenv("WREN_AI_SERVICE_PORT"))
+        if os.getenv("WREN_AI_SERVICE_PORT") is not None
+        else 8000
+    )
+
     uvicorn.run(
         "src.__main__:app",
         host=server_host,
