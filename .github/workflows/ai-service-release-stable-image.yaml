@@ -1,8 +1,6 @@
 name: AI Service Release stable image
 
 on:
-  push:
-    branches: [feature/ai-service/*]
   workflow_dispatch:
     inputs:
       version:
@@ -33,8 +31,7 @@ jobs:
           poetry-version: 1.7.1
       - name: Upgrade AI Service version
         run: |
-          # version=${{ github.event.inputs.version }}
-          version='0.1.0-beta.1'
+          version=${{ github.event.inputs.version }}
           poetry version --next-phase $version
           git add pyproject.toml
           git commit -m "Upgrade AI Service version to $version"
@@ -56,10 +53,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push image
         run: |
-          echo "Building image for version ci-demo"
-          # docker buildx build \
-          #   --platform linux/amd64,linux/arm64 \
-          #   --tag ghcr.io/canner/wren-ai-service:${{ github.event.inputs.version }} \
-          #   --tag ghcr.io/canner/wren-ai-service:latest \
-          #   --file ./docker/Dockerfile \
-          #   --push .
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag ghcr.io/canner/wren-ai-service:${{ github.event.inputs.version }} \
+            --tag ghcr.io/canner/wren-ai-service:latest \
+            --file ./docker/Dockerfile \
+            --push .
