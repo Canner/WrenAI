@@ -12,7 +12,8 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Head>
-        <title>Admin ui</title>
+        <title>WrenAI</title>
+        <link rel="icon" href="/favicon.ico" />
       </Head>
       <ApolloProvider client={apolloClient}>
         <main className="app">
