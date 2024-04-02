@@ -23,15 +23,6 @@ run-qdrant:
 stop-qdrant:
 	docker stop qdrant && docker rm qdrant
 
-# present the evaluation result on the streamlit app
-# example: make streamlit pipeline=src/eval/streamlit_app.py
-streamlit:
-	poetry run streamlit run $(pipeline)
-
-# example: make eval pipeline=ask_details
-eval:
-	poetry run python -m src.eval.$(pipeline) $(args)
-
 run-wren-engine:
 	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
 
@@ -50,9 +41,15 @@ stop-all:
 	make stop-qdrant && \
 	make stop-wren-engine
 
-eval-ask:
+# present the evaluation result on the streamlit app
+# example: make streamlit pipeline=src/eval/streamlit_app.py
+streamlit:
+	poetry run streamlit run $(pipeline)
+
+# example: make eval pipeline=ask_details
+eval:
 	make run-all && \
-	poetry run python -m src.eval.ask --eval-from-scratch --eval-after-prediction && \
+	poetry run python -m src.eval.$(pipeline) $(args)
 	make stop-all
 
 test:
