@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
-import { SETUP } from '@/utils/enum';
+import { Path, SETUP } from '@/utils/enum';
 import { useRouter } from 'next/router';
-import { useSaveDataSourceMutation } from '@/apollo/client/graphql/dataSource.generated';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import {
+  useSaveDataSourceMutation,
+  useStartSampleDatasetMutation,
+} from '@/apollo/client/graphql/dataSource.generated';
+import {
+  DataSourceName,
+  SampleDatasetName,
+} from '@/apollo/client/graphql/__types__';
 
 const transformProperties = (
   properties: Record<string, any>,
@@ -42,7 +48,13 @@ export default function useSetupConnection() {
   const [saveDataSourceMutation, { loading, error }] =
     useSaveDataSourceMutation({
       onError: (error) => console.error(error),
-      onCompleted: () => router.push('/setup/models'),
+      onCompleted: () => router.push(Path.OnboardingModels),
+    });
+
+  const [startSampleDatasetMutation, { loading: startSampleDatasetLoading }] =
+    useStartSampleDatasetMutation({
+      onError: (error) => console.error(error),
+      onCompleted: () => router.push(Path.Home),
     });
 
   useEffect(() => {
@@ -60,6 +72,14 @@ export default function useSetupConnection() {
     });
   };
 
+  const submitTemplate = async (template: SampleDatasetName) => {
+    await startSampleDatasetMutation({
+      variables: {
+        data: { name: template },
+      },
+    });
+  };
+
   const onBack = () => {
     if (stepKey === SETUP.CREATE_DATA_SOURCE) {
       setStepKey(SETUP.STARTER);
@@ -68,6 +88,7 @@ export default function useSetupConnection() {
 
   const onNext = (data?: {
     dataSource?: DataSourceName;
+    template?: SampleDatasetName;
     properties?: JSON;
   }) => {
     if (stepKey === SETUP.STARTER) {
@@ -75,7 +96,7 @@ export default function useSetupConnection() {
         setDataSource(data?.dataSource);
         setStepKey(SETUP.CREATE_DATA_SOURCE);
       } else {
-        // TODO: implement template chosen
+        submitTemplate(data.template);
       }
     } else if (stepKey === SETUP.CREATE_DATA_SOURCE) {
       submitDataSource(data.properties);
@@ -87,7 +108,7 @@ export default function useSetupConnection() {
     dataSource,
     onBack,
     onNext,
-    submitting: loading,
+    submitting: loading || startSampleDatasetLoading,
     connectErrorMessage,
   };
 }
