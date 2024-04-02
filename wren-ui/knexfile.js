@@ -14,5 +14,6 @@ if (process.env.DB_TYPE === 'pg') {
   module.exports = {
     client: 'better-sqlite3',
     connection: process.env.SQLITE_FILE || './db.sqlite3',
+    useNullAsDefault: true
   };
 }
