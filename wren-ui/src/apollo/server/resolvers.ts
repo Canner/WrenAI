@@ -51,6 +51,7 @@ const resolvers = {
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),
+  ResultCandidate: askingResolver.getResultCandidateNestedResolver(),
 };
 
 export default resolvers;

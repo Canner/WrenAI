@@ -261,4 +261,10 @@ export class AskingResolver {
       return format(parent.sql);
     },
   });
+
+  public getResultCandidateNestedResolver = () => ({
+    sql: (parent: any, _args: any, _ctx: IContext) => {
+      return format(parent.sql);
+    },
+  });
 }
