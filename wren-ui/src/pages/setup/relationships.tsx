@@ -4,7 +4,7 @@ import ContainerCard from '@/components/pages/setup/ContainerCard';
 import useSetupRelations from '@/hooks/useSetupRelations';
 import { SETUP_STEPS } from '@/components/pages/setup/utils';
 
-export default function SetupRelations() {
+export default function SetupRelationships() {
   const {
     fetching,
     stepKey,

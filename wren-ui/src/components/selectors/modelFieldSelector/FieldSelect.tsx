@@ -79,7 +79,7 @@ export default function FieldSelect(props: IterableComponent<Props>) {
       </FieldHeader>
 
       {selectedField?.nodeType === NODE_TYPE.MODEL && (
-        <div className="gray-7 text-sm px-3 pt-1">Relations</div>
+        <div className="gray-7 text-sm px-3 pt-1">Relationships</div>
       )}
 
       <StyledSelector

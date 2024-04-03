@@ -59,7 +59,7 @@ export const COLUMN = {
     render: (relation) => `${relation.toModelName}.${relation.toColumnName}`,
   },
   RELATION: {
-    title: 'Relation type',
+    title: 'Type',
     dataIndex: 'type',
     key: 'joinType',
     width: 130,

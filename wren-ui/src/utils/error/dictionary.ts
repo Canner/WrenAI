@@ -75,7 +75,7 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please select a field.',
     },
     RELATION_TYPE: {
-      REQUIRED: 'Please select a relation type.',
+      REQUIRED: 'Please select a relationship type.',
     },
   },
   UPDATE_METADATA: {
