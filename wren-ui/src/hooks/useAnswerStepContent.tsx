@@ -7,6 +7,11 @@ import {
   PreviewDataMutationResult,
 } from '@/apollo/client/graphql/home.generated';
 
+const getTextButton = (isActive: boolean) => ({
+  type: 'text',
+  className: `d-inline-flex align-center mr-2 ${isActive ? 'gray-9' : 'gray-6'}`,
+});
+
 function getButtonProps({
   isLastStep,
   isPreviewData,
@@ -16,17 +21,11 @@ function getButtonProps({
 }) {
   const previewDataButtonProps = isLastStep
     ? { type: 'primary', className: 'mr-2' }
-    : {
-        type: 'text',
-        className: `mr-2 ${isPreviewData ? 'gray-9' : 'gray-6'}`,
-      };
+    : getTextButton(isPreviewData);
 
   const [viewSQLButtonText, viewSQLButtonProps] = isLastStep
-    ? ['View Full SQL', { className: 'adm-btn-gray' }]
-    : [
-        'View SQL',
-        { type: 'text', className: isViewSQL ? 'gray-9' : 'gray-6' },
-      ];
+    ? ['View Full SQL']
+    : ['View SQL', getTextButton(isViewSQL)];
 
   return {
     viewSQLButtonText,

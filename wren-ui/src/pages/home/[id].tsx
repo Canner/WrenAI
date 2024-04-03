@@ -98,7 +98,7 @@ export default function HomeThread({ threadId }) {
   return (
     <SiderLayout loading={loading} sidebar={homeSidebar}>
       <PromptThread data={thread} />
-      <div className="py-10" />
+      <div className="py-12" />
       <Prompt
         data={askPrompt.data}
         onSubmit={askPrompt.onSubmit}
