@@ -155,3 +155,9 @@ export const DELETE_THREAD = gql`
     deleteThread(where: $where)
   }
 `;
+
+export const PREVIEW_DATA = gql`
+  mutation PreviewData($where: PreviewDataInput!) {
+    previewData(where: $where)
+  }
+`;

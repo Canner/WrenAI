@@ -14,10 +14,18 @@ interface Props {
     sql: string;
   }>;
   fullSql: string;
+  threadResponseId: number;
 }
 
 export default function AnswerResult(props: Props) {
-  const { loading, question, description, answerResultSteps, fullSql } = props;
+  const {
+    loading,
+    question,
+    description,
+    answerResultSteps,
+    fullSql,
+    threadResponseId,
+  } = props;
 
   return (
     <Skeleton active loading={loading}>
@@ -39,8 +47,9 @@ export default function AnswerResult(props: Props) {
             key={`${step.summary}-${index}`}
             sql={step.sql}
             fullSql={fullSql}
-            stepNumber={index + 1}
+            stepIndex={index}
             summary={step.summary}
+            threadResponseId={threadResponseId}
           />
         ))}
       </Typography>

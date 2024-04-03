@@ -60,6 +60,7 @@ const AnswerResultTemplate = ({
           loading={status !== AskingTaskStatus.FINISHED}
           question={question}
           fullSql={detail?.sql}
+          threadResponseId={id}
         />
       )}
     </div>

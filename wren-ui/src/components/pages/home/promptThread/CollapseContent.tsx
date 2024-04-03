@@ -3,6 +3,7 @@ import { Button, Typography } from 'antd';
 import CopyOutlined from '@ant-design/icons/lib/icons/CopyOutlined';
 import UpCircleOutlined from '@ant-design/icons/UpCircleOutlined';
 import PreviewData from '@/components/pages/home/promptThread/PreviewData';
+import { PreviewDataMutationResult } from '@/apollo/client/graphql/home.generated';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
@@ -17,6 +18,7 @@ export interface Props {
   onCloseCollapse: () => void;
   onCopyFullSQL?: () => void;
   sql: string;
+  previewDataResult: PreviewDataMutationResult;
 }
 
 export default function CollapseContent(props: Props) {
@@ -27,7 +29,9 @@ export default function CollapseContent(props: Props) {
     onCloseCollapse,
     onCopyFullSQL,
     sql,
+    previewDataResult,
   } = props;
+
   return (
     <>
       {(isViewSQL || isViewFullSQL) && (
@@ -37,7 +41,7 @@ export default function CollapseContent(props: Props) {
       )}
       {isPreviewData && (
         <div className="my-2">
-          <PreviewData sql={sql} />
+          <PreviewData {...previewDataResult} />
         </div>
       )}
       {(isViewSQL || isPreviewData) && (
