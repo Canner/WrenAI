@@ -33,9 +33,5 @@ export default function Modeling(props: Props) {
   const { data, onSelect } = props;
   const { models = [] } = data || {};
 
-  return (
-    <>
-      <ModelTree models={models} onSelect={onSelect} selectedKeys={[]} />
-    </>
-  );
+  return <ModelTree models={models} onSelect={onSelect} selectedKeys={[]} />;
 }

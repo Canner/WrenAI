@@ -1,4 +1,4 @@
-import { CACHED_PERIOD, JOIN_TYPE } from '@/utils/enum';
+import { JOIN_TYPE } from '@/utils/enum';
 
 const DefaultText = 'Unknown';
 
@@ -8,11 +8,3 @@ export const getJoinTypeText = (type) =>
     [JOIN_TYPE.ONE_TO_MANY]: 'One-to-many',
     [JOIN_TYPE.ONE_TO_ONE]: 'One-to-one',
   })[type] || DefaultText;
-
-export const getCachePeriodText = (period) =>
-  ({
-    [CACHED_PERIOD.DAY]: 'day(s)',
-    [CACHED_PERIOD.HOUR]: 'hour(s)',
-    [CACHED_PERIOD.MINUTE]: 'minute(s)',
-    [CACHED_PERIOD.SECOND]: 'second(s)',
-  })[period] || DefaultText;
