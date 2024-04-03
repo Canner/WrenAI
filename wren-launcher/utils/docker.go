@@ -14,6 +14,8 @@ import (
 	cmdCompose "github.com/docker/compose/v2/cmd/compose"
 	"github.com/docker/compose/v2/pkg/api"
 	"github.com/docker/compose/v2/pkg/compose"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/pterm/pterm"
 )
 
@@ -162,6 +164,30 @@ func RunDockerCompose(projectName string, projectDir string) error {
 	}
 
 	return nil
+}
+
+func ListProcess() ([]types.Container, error) {
+	ctx := context.Background()
+	dockerCli, err := command.NewDockerCli()
+	if err != nil {
+		return nil, err
+	}
+
+	err = dockerCli.Initialize(flags.NewClientOptions())
+	if err != nil {
+		return nil, err
+	}
+
+	containerListOptions := container.ListOptions{
+		All: true,
+	}
+
+	containers, err := dockerCli.Client().ContainerList(ctx, containerListOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return containers, nil
 }
 
 func CheckWrenAIStarted() error {
