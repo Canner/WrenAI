@@ -193,7 +193,7 @@ def eval(prediction_results_file: Path, dataset_name: str, ground_truths: list[d
 
     timestamp = prediction_results_file.stem.split("_")[-1]
 
-    with open(f"./outputs/{dataset_name}_eval_results_{timestamp}.json", "w") as f:
+    with open(f"./outputs/ask/{dataset_name}_eval_results_{timestamp}.json", "w") as f:
         json.dump(eval_results, f, indent=2)
 
 
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input-file",
         type=str,
-        default=get_latest_prediction_outputs_file(Path("./outputs"), DATASET_NAME),
+        default=get_latest_prediction_outputs_file(Path("./outputs/ask"), DATASET_NAME),
         help="Path to the prediction results file. If not provided, the latest prediction results file will be used. The file should be located in the outputs folder in the root directory of the project.",
     )
     parser.add_argument(
@@ -315,8 +315,8 @@ if __name__ == "__main__":
             ) as f:
                 json.dump(mdl_data, f)
 
-    if not Path("./outputs").exists():
-        Path("./outputs").mkdir()
+    if not Path("./outputs/ask").exists():
+        Path("./outputs/ask").mkdir(parents=True)
 
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
@@ -394,10 +394,10 @@ if __name__ == "__main__":
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         print(
-            f"Write predictions to ./outputs/{DATASET_NAME}_predictions_{timestamp}.json"
+            f"Write predictions to ./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json"
         )
         write_prediction_results(
-            f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json",
+            f"./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json",
             ground_truths,
             outputs,
             {
@@ -410,7 +410,7 @@ if __name__ == "__main__":
 
         if EVAL_AFTER_PREDICTION:
             eval(
-                Path(f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json"),
+                Path(f"./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json"),
                 DATASET_NAME,
                 ground_truths,
             )
