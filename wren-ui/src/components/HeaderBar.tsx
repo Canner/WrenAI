@@ -1,30 +1,32 @@
 import { useRouter } from 'next/router';
+import { Button, Layout, Space } from 'antd';
 import styled from 'styled-components';
-import { Button, ButtonProps, Layout, Space } from 'antd';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 
 const { Header } = Layout;
 
-const StyledButton = styled(Button).attrs<{
-  $isHighlight: boolean;
-}>((props) => ({
-  shape: 'round',
-  size: 'small',
-  style: {
-    background: props.$isHighlight ? 'rgba(255, 255, 255, 0.20)' : '#000',
-    fontWeight: props.$isHighlight ? '700' : 'normal',
-    border: 'none',
-    color: 'var(--gray-1)',
-  },
-}))`` as React.ForwardRefExoticComponent<
-  ButtonProps & React.RefAttributes<HTMLDivElement> & { $isHighlight: boolean }
->;
+const StyledButton = styled(Button)<{ $isHighlight: boolean }>`
+  background: ${(props) =>
+    props.$isHighlight ? 'rgba(255, 255, 255, 0.20)' : 'transparent'};
+  font-weight: ${(props) => (props.$isHighlight ? '700' : 'normal')};
+  border: none;
+  color: var(--gray-1);
+
+  &:hover,
+  &:focus {
+    background: ${(props) =>
+      props.$isHighlight
+        ? 'rgba(255, 255, 255, 0.20)'
+        : 'rgba(255, 255, 255, 0.05)'};
+    color: var(--gray-1);
+  }
+`;
 
 const StyledHeader = styled(Header)`
   height: 48px;
   border-bottom: 1px solid var(--gray-5);
-  background: #000;
+  background: var(--gray-10);
   padding: 10px 16px;
 `;
 
@@ -44,12 +46,16 @@ export default function HeaderBar() {
           {showNav && (
             <Space size={[16, 0]}>
               <StyledButton
+                shape="round"
+                size="small"
                 $isHighlight={pathname.startsWith(Path.Home)}
                 onClick={() => router.push(Path.Home)}
               >
                 Home
               </StyledButton>
               <StyledButton
+                shape="round"
+                size="small"
                 $isHighlight={pathname.startsWith(Path.Modeling)}
                 onClick={() => router.push(Path.Modeling)}
               >
