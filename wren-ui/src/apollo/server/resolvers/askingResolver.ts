@@ -9,14 +9,19 @@ import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
 import { constructCteSql } from '../services/askingService';
-import { SampleDatasetName, getSampleAskQuestions } from '../data';
+import {
+  SuggestedQuestion,
+  SampleDatasetName,
+  getSampleAskQuestions,
+} from '../data';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
 
-export interface AskQuestion {
-  questions: string[];
+export interface SuggestedQuestionResponse {
+  questions: SuggestedQuestion[];
 }
+
 export interface Task {
   id: string;
 }
@@ -57,7 +62,7 @@ export class AskingResolver {
     _root: any,
     _args: any,
     ctx: IContext,
-  ): Promise<AskQuestion> {
+  ): Promise<SuggestedQuestionResponse> {
     const project = await ctx.projectService.getCurrentProject();
     const { sampleDataset } = project;
     if (!sampleDataset) {
