@@ -19,7 +19,7 @@ jobs:
       - name: Prepare tag name
         id: tag-preparation
         run: |
-          if [ -n "${{ github.event.inputs.docker_image_tag_name }}" ]; then
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
             tag_name=${{ github.event.inputs.tag_name }}
           else
             tag_name=commit-$(git log -1 --pretty=%h)
