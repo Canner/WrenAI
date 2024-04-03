@@ -15,7 +15,7 @@ import sqlglot
 import sqlparse
 import streamlit as st
 
-WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5000"
+WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5555"
 WREN_ENGINE_PG_URL = (
     "postgres://localhost:7432/canner-cml?options=--search_path%3Dspider"
 )

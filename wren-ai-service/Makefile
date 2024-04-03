@@ -2,7 +2,7 @@ start:
 	poetry run python -m src.__main__
 
 build:
-	docker compose -f docker/docker-compose.yml build
+	docker compose -f docker/docker-compose.yml --env-file .env.prod build
 
 up:
 	make run-wren-engine && \

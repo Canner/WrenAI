@@ -11,7 +11,7 @@
 
 ## Start the service for development
 
-- execute `make start` to start the service and go to `http://UVICORN_HOST:UVICORN_PORT` to see the API documentation and try the APIs
+- execute `make start` to start the service and go to `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT` to see the API documentation and try the APIs
 
 ## Production Environment Setup
 
