@@ -69,15 +69,24 @@ export default function RelationModal(props: Props) {
     value: JOIN_TYPE[key],
   }));
 
+  // check that only 1 set of relationships can be set up between models
   const toCombineModelOptions = toCombineField.modelOptions.map(
     (modelOption) => {
       const modelList = Object.entries(relations).reduce(
         (acc, [modelName, modelRelations]) => {
-          // For add relation, if the Model option has been selected in the From model relations, the Model option should be disabled
           if (modelName === model) {
+            const toFieldModelList = modelRelations.map(
+              (relation) => relation.toField.modelName,
+            );
+
             acc = [
               ...acc,
-              ...modelRelations.map((relation) => relation.toField.modelName),
+              ...(isEmpty(defaultValue)
+                ? toFieldModelList
+                : toFieldModelList.filter(
+                    (toFieldModel) =>
+                      toFieldModel !== defaultValue.toField.modelName,
+                  )),
             ];
           } else {
             const toFieldModelList = modelRelations.map(
