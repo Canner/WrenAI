@@ -4,6 +4,8 @@ import { makeIterable } from '@/utils/iteration';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 
 const DemoBlock = styled.div`
+  user-select: none;
+  height: 150px;
   &:hover {
     border-color: var(--geekblue-6) !important;
     transition: border-color ease 0.2s;
@@ -15,17 +17,17 @@ interface Props {
   onSelect: (data: any) => void;
 }
 
-const DemoTemplate = ({ title, summary, onSelect }) => {
+const DemoTemplate = ({ label, question, onSelect }) => {
   return (
     <Col span={8}>
       <DemoBlock
         className="border border-gray-5 rounded px-3 pt-3 pb-4 cursor-pointer"
-        onClick={() => onSelect({ title, summary })}
+        onClick={() => onSelect({ label, question })}
       >
         <div className="d-flex justify-space-between align-center text-sm mb-3">
-          <div className="border border-gray-5 px-2 rounded-pill">{title}</div>
+          <div className="border border-gray-5 px-2 rounded-pill">{label}</div>
         </div>
-        <EllipsisWrapper multipleLine={3} text={summary} />
+        <EllipsisWrapper multipleLine={4} text={question} />
       </DemoBlock>
     </Col>
   );

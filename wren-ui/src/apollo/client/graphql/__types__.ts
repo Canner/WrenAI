@@ -14,11 +14,6 @@ export type Scalars = {
   JSON: any;
 };
 
-export type AskQuestionResponse = {
-  __typename?: 'AskQuestionResponse';
-  questions: Array<Maybe<Scalars['String']>>;
-};
-
 export type AskingTask = {
   __typename?: 'AskingTask';
   candidates: Array<ResultCandidate>;
@@ -399,7 +394,6 @@ export type PreviewDataInput = {
 
 export type Query = {
   __typename?: 'Query';
-  askQuestions: AskQuestionResponse;
   askingTask: AskingTask;
   autoGenerateRelation?: Maybe<Array<RecommandRelations>>;
   diagram: Diagram;
@@ -408,6 +402,7 @@ export type Query = {
   model: DetailedModel;
   modelSync?: Maybe<ModelSyncResponse>;
   onboardingStatus: OnboardingStatusResponse;
+  suggestedQuestions: SuggestedQuestionResponse;
   thread: DetailedThread;
   threadResponse: ThreadResponse;
   threads: Array<Thread>;
@@ -499,6 +494,17 @@ export type SimpleMeasureInput = {
   notNull: Scalars['Boolean'];
   properties: Scalars['JSON'];
   type: Scalars['String'];
+};
+
+export type SuggestedQuestion = {
+  __typename?: 'SuggestedQuestion';
+  label: Scalars['String'];
+  question: Scalars['String'];
+};
+
+export type SuggestedQuestionResponse = {
+  __typename?: 'SuggestedQuestionResponse';
+  questions: Array<Maybe<SuggestedQuestion>>;
 };
 
 export type Task = {

@@ -45,6 +45,8 @@ const StyledCollapse = styled(Collapse)`
 `;
 
 const ResultBlock = styled.div`
+  user-select: none;
+  height: 129px;
   &:hover {
     border-color: var(--geekblue-6) !important;
     transition: border-color ease 0.2s;

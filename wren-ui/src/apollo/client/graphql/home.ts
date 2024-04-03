@@ -26,6 +26,17 @@ const COMMON_RESPONSE = gql`
   }
 `;
 
+export const SUGGESTED_QUESTIONS = gql`
+  query SuggestedQuestions {
+    suggestedQuestions {
+      questions {
+        label
+        question
+      }
+    }
+  }
+`;
+
 export const ASKING_TASK = gql`
   query AskingTask($taskId: String!) {
     askingTask(taskId: $taskId) {

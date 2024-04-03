@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import { Input, Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
@@ -20,6 +27,11 @@ interface Props {
   onStop: () => void;
   onSubmit: (value: string) => void;
   data?: AskingTask;
+}
+
+interface Attributes {
+  setValue: (value: string) => void;
+  submit: () => void;
 }
 
 const PromptStyle = styled.div`
@@ -49,7 +61,7 @@ const convertAskingTaskToProcessState = (data: AskingTask) => {
   return processState;
 };
 
-export default function Prompt(props: Props) {
+export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const $promptInput = useRef<HTMLTextAreaElement>(null);
   const { data, onSubmit, onStop, onSelect } = props;
   const [inputValue, setInputValue] = useState('');
@@ -102,15 +114,23 @@ export default function Prompt(props: Props) {
   const inputEnter = (event) => {
     if (event.shiftKey) return;
     event.preventDefault();
-
-    if (!isProcessing) submitAsk();
+    submitAsk();
   };
 
   const submitAsk = async () => {
-    if (question) {
-      onSubmit && (await onSubmit(question));
-    }
+    if (isProcessing || !question) return;
+
+    onSubmit && (await onSubmit(question));
   };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      setValue: (value: string) => setInputValue(value),
+      submit: submitAsk,
+    }),
+    [question, isProcessing, setInputValue],
+  );
 
   return (
     <PromptStyle className="d-flex align-end bg-gray-2 p-3 border border-gray-3 rounded">
@@ -144,4 +164,4 @@ export default function Prompt(props: Props) {
       />
     </PromptStyle>
   );
-}
+});
