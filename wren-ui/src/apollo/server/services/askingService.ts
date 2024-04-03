@@ -108,6 +108,12 @@ export const constructCteSql = (
       // no need to wrap with WITH
       sql += `\n-- ${step.summary}\n`;
       sql += `${step.sql}`;
+    } else if (index === slicedSteps.length - 2) {
+      // if it's the last two steps, remove the trailing comma.
+      // wrap with CTE
+      sql += `${step.cteName} AS`;
+      sql += `\n-- ${step.summary}\n`;
+      sql += `(${step.sql})`;
     } else {
       // if it's not the last step, wrap with CTE
       sql += `${step.cteName} AS`;

@@ -20,7 +20,7 @@ describe('AskingService', () => {
       ];
       const result = constructCteSql(steps);
       expect(result).toBe(
-        `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test),\n-- test2\nSELECT * FROM test2`,
+        `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test)\n-- test2\nSELECT * FROM test2`,
       );
     });
 
@@ -41,7 +41,7 @@ describe('AskingService', () => {
       const result = constructCteSql(steps);
       expect(result).toBe(
         `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test),` +
-          `test2 AS\n-- test2 summary\n(SELECT * FROM test2),\n-- test3\nSELECT * FROM test3`,
+          `test2 AS\n-- test2 summary\n(SELECT * FROM test2)\n-- test3\nSELECT * FROM test3`,
       );
     });
 
@@ -69,7 +69,7 @@ describe('AskingService', () => {
       ];
       const result = constructCteSql(steps, 1);
       expect(result).toBe(
-        `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test),\n-- test2\nSELECT * FROM test2`,
+        `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test)\n-- test2\nSELECT * FROM test2`,
       );
     });
 
@@ -89,7 +89,7 @@ describe('AskingService', () => {
       ];
       const result = constructCteSql(steps, 1);
       expect(result).toBe(
-        `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test),` +
+        `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test)` +
           `\n-- test2 summary\nSELECT * FROM test2`,
       );
     });
