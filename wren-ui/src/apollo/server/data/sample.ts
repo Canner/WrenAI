@@ -64,16 +64,16 @@ export const sampleDatasets: Record<string, SampleDataset> = {
     ],
     questions: [
       {
-        question: 'What are the top 5 selling albums in the US',
-        label: 'Ranking ',
+        question: 'What are the top 5 selling albums in the US?',
+        label: 'Ranking',
       },
       {
-        question: 'What is the total revenue generated from each genre',
+        question: 'What is the total revenue generated from each genre?',
         label: 'Aggregation',
       },
       {
         question:
-          'Which customers have made purchases of tracks from albums in each genre',
+          'Which customers have made purchases of tracks from albums in each genre?',
         label: 'General',
       },
     ],
@@ -160,17 +160,17 @@ export const sampleDatasets: Record<string, SampleDataset> = {
     questions: [
       {
         question:
-          'What are the top 3 value for orders placed by customers in each city',
+          'What are the top 3 value for orders placed by customers in each city?',
         label: 'Ranking',
       },
       {
         question:
-          'What is the average score of reviews submitted for orders placed by customers in each city',
+          'What is the average score of reviews submitted for orders placed by customers in each city?',
         label: 'Aggregation',
       },
       {
         question:
-          'What is the total value of payments made by customers from each state',
+          'What is the total value of payments made by customers from each state?',
         label: 'Aggregation',
       },
     ],
@@ -241,17 +241,17 @@ export const sampleDatasets: Record<string, SampleDataset> = {
     questions: [
       {
         question:
-          'How many three-pointers were made by each player in each game',
+          'How many three-pointers were made by each player in each game?',
         label: 'Aggregation',
       },
       {
         question:
-          'What is the differences in turnover rates between teams with high and low average scores',
+          'What is the differences in turnover rates between teams with high and low average scores?',
         label: 'Comparison',
       },
       {
         question:
-          'Which teams had the highest average points scored per game throughout the season',
+          'Which teams had the highest average points scored per game throughout the season?',
         label: 'Ranking',
       },
     ],

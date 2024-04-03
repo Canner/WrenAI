@@ -7,6 +7,11 @@ export type CommonErrorFragment = { __typename?: 'Error', code?: string | null, 
 
 export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> } | null };
 
+export type SuggestedQuestionsQueryVariables = Types.Exact<{ [key: string]: never; }>;
+
+
+export type SuggestedQuestionsQuery = { __typename?: 'Query', suggestedQuestions: { __typename?: 'SuggestedQuestionResponse', questions: Array<{ __typename?: 'SuggestedQuestion', label: string, question: string } | null> } };
+
 export type AskingTaskQueryVariables = Types.Exact<{
   taskId: Types.Scalars['String'];
 }>;
@@ -101,6 +106,43 @@ export const CommonResponseFragmentDoc = gql`
   }
 }
     `;
+export const SuggestedQuestionsDocument = gql`
+    query SuggestedQuestions {
+  suggestedQuestions {
+    questions {
+      label
+      question
+    }
+  }
+}
+    `;
+
+/**
+ * __useSuggestedQuestionsQuery__
+ *
+ * To run a query within a React component, call `useSuggestedQuestionsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSuggestedQuestionsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSuggestedQuestionsQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useSuggestedQuestionsQuery(baseOptions?: Apollo.QueryHookOptions<SuggestedQuestionsQuery, SuggestedQuestionsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<SuggestedQuestionsQuery, SuggestedQuestionsQueryVariables>(SuggestedQuestionsDocument, options);
+      }
+export function useSuggestedQuestionsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SuggestedQuestionsQuery, SuggestedQuestionsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<SuggestedQuestionsQuery, SuggestedQuestionsQueryVariables>(SuggestedQuestionsDocument, options);
+        }
+export type SuggestedQuestionsQueryHookResult = ReturnType<typeof useSuggestedQuestionsQuery>;
+export type SuggestedQuestionsLazyQueryHookResult = ReturnType<typeof useSuggestedQuestionsLazyQuery>;
+export type SuggestedQuestionsQueryResult = Apollo.QueryResult<SuggestedQuestionsQuery, SuggestedQuestionsQueryVariables>;
 export const AskingTaskDocument = gql`
     query AskingTask($taskId: String!) {
   askingTask(taskId: $taskId) {
