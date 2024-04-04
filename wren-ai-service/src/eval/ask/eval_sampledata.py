@@ -77,6 +77,9 @@ def process_item(query: str):
         ]
 
     return {
+        "question": query,
+        "valid_generation_results": valid_generation_results,
+        "invalid_generation_results": invalid_generation_results,
         "metadata": {
             "generation": {
                 "text_to_sql": text_to_sql_generation_results["text_to_sql_generator"][
@@ -96,8 +99,6 @@ def process_item(query: str):
                 },
             },
         },
-        "valid_generation_results": valid_generation_results,
-        "invalid_generation_results": invalid_generation_results,
     }
 
 
@@ -240,15 +241,25 @@ if __name__ == "__main__":
     end = time.time()
     print(f"Time taken: {end - start:.2f}s")
 
+    results = {
+        "mdl": mdl,
+        "no_valid_generation_count": len(
+            list(
+                filter(
+                    lambda x: (not x["valid_generation_results"])
+                    and x["invalid_generation_results"],
+                    outputs,
+                )
+            )
+        ),
+        "total_invalid_generation_count": sum(
+            map(lambda x: len(x["invalid_generation_results"]), outputs)
+        ),
+        "outputs": outputs,
+    }
+
     with open(
         f"./outputs/ask/sampledata/{SAMPLE_DATASET_NAME}_{datetime.now().strftime("%Y%m%d%H%M%S")}.json",
         "w",
     ) as f:
-        json.dump(
-            {
-                "mdl": mdl,
-                "outputs": outputs,
-            },
-            f,
-            indent=2,
-        )
+        json.dump(results, f, indent=2)
