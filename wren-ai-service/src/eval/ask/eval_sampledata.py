@@ -1,8 +1,12 @@
+import argparse
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 
+import requests
 from tqdm import tqdm
 
 from src.pipelines.ask.components.document_store import init_document_store
@@ -18,18 +22,98 @@ from src.utils import load_env_vars
 load_env_vars()
 
 
-def get_mdl_str_from_wren_engine():
-    pass
+def get_mdl_from_wren_engine():
+    response = requests.get(
+        f'{os.getenv("WREN_ENGINE_ENDPOINT")}/v1/mdl',
+    )
+    assert response.status_code == 200
+
+    return response.json()
 
 
 def process_item(query: str):
-    pass
+    retrieval_start = time.perf_counter()
+    retrieval_result = retrieval_pipeline.run(query)
+    documents = retrieval_result["post_processor"]["documents"]
+    retrieval_end = time.perf_counter()
+
+    valid_generation_results = []
+    invalid_generation_results = []
+
+    text_to_sql_generation_start = time.perf_counter()
+    text_to_sql_generation_results = generation_pipeline.run(
+        query,
+        contexts=documents,
+    )
+    text_to_sql_generation_end = time.perf_counter()
+    text_to_sql_generation_time_cost = (
+        text_to_sql_generation_end - text_to_sql_generation_start
+    )
+
+    if text_to_sql_generation_results["post_processor"]["valid_generation_results"]:
+        valid_generation_results += text_to_sql_generation_results["post_processor"][
+            "valid_generation_results"
+        ]
+
+    sql_correction_results = None
+    sql_correction_generation_time_cost = 0
+    if text_to_sql_generation_results["post_processor"]["invalid_generation_results"]:
+        sql_correction_generation_start = time.perf_counter()
+        sql_correction_results = sql_correction_pipeline.run(
+            contexts=documents,
+            invalid_generation_results=text_to_sql_generation_results["post_processor"][
+                "invalid_generation_results"
+            ],
+        )
+        sql_correction_generation_end = time.perf_counter()
+        sql_correction_generation_time_cost = (
+            sql_correction_generation_end - sql_correction_generation_start
+        )
+        valid_generation_results += sql_correction_results["post_processor"][
+            "valid_generation_results"
+        ]
+        invalid_generation_results += sql_correction_results["post_processor"][
+            "invalid_generation_results"
+        ]
+
+    return {
+        "metadata": {
+            "generation": {
+                "text_to_sql": text_to_sql_generation_results["text_to_sql_generator"][
+                    "meta"
+                ][0],
+                "sql_correction": (
+                    sql_correction_results["sql_correction_generator"]["meta"][0]
+                    if sql_correction_results
+                    else []
+                ),
+            },
+            "latency": {
+                "retrieval": retrieval_end - retrieval_start,
+                "generation": {
+                    "text_to_sql": text_to_sql_generation_time_cost,
+                    "sql_correction": sql_correction_generation_time_cost,
+                },
+            },
+        },
+        "valid_generation_results": valid_generation_results,
+        "invalid_generation_results": invalid_generation_results,
+    }
 
 
 if __name__ == "__main__":
-    SAMPLE_DATASET_NAME = os.getenv("SAMPLE_DATASET_NAME")
-    assert SAMPLE_DATASET_NAME in ["music", "ecommerce", "nba"]
+    parser = argparse.ArgumentParser(
+        description="Evaluate the ask pipeline using the sample dataset: music, ecommerce, nba"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="music",
+        choices=["music", "ecommerce", "nba"],
+    )
+    args = parser.parse_args()
 
+    SAMPLE_DATASET_NAME = args.dataset
     SAMPLE_DATASET_QUESTIONS = {
         "nba": [
             "How many assists were made by each player in each game?",
@@ -103,8 +187,8 @@ if __name__ == "__main__":
         ],
     }
 
-    if not Path("./outputs/sampledata").exists():
-        Path("./outputs/sampledata").mkdir(parents=True)
+    if not Path("./outputs/ask/sampledata").exists():
+        Path("./outputs/ask/sampledata").mkdir(parents=True)
 
     # init ask pipeline
     document_store = init_document_store(
@@ -132,9 +216,9 @@ if __name__ == "__main__":
 
     # indexing
     print("Indexing documents...")
-    mdl_str = get_mdl_str_from_wren_engine()
+    mdl = get_mdl_from_wren_engine()
     indexing_pipeline = Indexing(document_store=document_store)
-    indexing_pipeline.run(mdl_str)
+    indexing_pipeline.run(json.dumps(mdl))
     print(
         f"Finished indexing documents, document count: {document_store.count_documents()}"
     )
@@ -155,4 +239,16 @@ if __name__ == "__main__":
         )
     end = time.time()
     print(f"Time taken: {end - start:.2f}s")
-    print(f"outputs: {outputs}")
+
+    with open(
+        f"./outputs/ask/sampledata/{SAMPLE_DATASET_NAME}_{datetime.now().strftime("%Y%m%d%H%M%S")}.json",
+        "w",
+    ) as f:
+        json.dump(
+            {
+                "mdl": mdl,
+                "outputs": outputs,
+            },
+            f,
+            indent=2,
+        )
