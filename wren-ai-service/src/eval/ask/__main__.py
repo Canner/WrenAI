@@ -245,7 +245,6 @@ if __name__ == "__main__":
         help="Whether to use hard questions for evaluation. Default is False.",
     )
 
-    parser.add_argument
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
