@@ -24,6 +24,7 @@ class SemanticsPreparationStatusRequest(BaseModel):
 
 class SemanticsPreparationStatusResponse(BaseModel):
     status: Literal["indexing", "finished", "failed"]
+    error: Optional[str] = None
 
 
 class SQLExplanation(BaseModel):
@@ -118,10 +119,12 @@ class AskService:
                 prepare_semantics_request.id
             ] = SemanticsPreparationStatusResponse(status="finished")
         except Exception as e:
-            logging.error(f"Failed to prepare semantics: {e}")
             self.prepare_semantics_statuses[
                 prepare_semantics_request.id
-            ] = SemanticsPreparationStatusResponse(status="failed")
+            ] = SemanticsPreparationStatusResponse(
+                status="failed",
+                error=f"Failed to prepare semantics: {e}",
+            )
 
     def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
