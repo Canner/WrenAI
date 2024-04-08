@@ -57,13 +57,13 @@ export const DATA_SOURCE_OPTIONS = {
   [DATA_SOURCES.BIG_QUERY]: {
     label: 'BigQuery',
     logo: '/images/dataSource/bigQuery.svg',
-    guide: '',
+    guide: 'https://docs.getwren.ai/guides/connect/bigquery',
     disabled: false,
   },
   [DATA_SOURCES.DUCKDB]: {
     label: 'DuckDB',
     logo: '/images/dataSource/duckDb.svg',
-    guide: '',
+    guide: 'https://docs.getwren.ai/guides/connect/duckdb',
     disabled: false,
   },
   [DATA_SOURCES.PG_SQL]: {
