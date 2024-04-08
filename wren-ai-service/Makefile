@@ -1,5 +1,3 @@
-test_args ?= 
-
 start:
 	poetry run python -m src.__main__
 
@@ -53,11 +51,6 @@ streamlit:
 eval:
 	make run-all && \
 	poetry run python -m src.eval.$(pipeline) $(args)
-	make stop-all
-
-eval-ask-with-semantic:
-	make run-all && \
-	poetry run python -m src.eval.ask $(eval_ask_args) --semantic-description && \
 	make stop-all
 
 test:
