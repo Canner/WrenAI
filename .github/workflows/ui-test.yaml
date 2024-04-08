@@ -2,14 +2,11 @@
 
 name: Wren-UI Test
 
-on: 
+on:
   pull_request:
     types: [ labeled ]
-    branches: [ main ]
-  push:
-    branches:
-      # in the push event will match any branch, including branches in forked repositories
-      - **  
+    # epic/* is for epic feature
+    branches: [ main, epic/*, feature/* ]
 
 permissions:
   contents: read

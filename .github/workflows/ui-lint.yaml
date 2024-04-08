@@ -3,13 +3,11 @@
 
 name: Wren-UI Lint
 
-on: 
+on:
   pull_request:
     types: [ labeled ]
-  push:
-    branches:
-      # in the push event will match any branch, including branches in forked repositories
-      - **  
+    # epic/* is for epic feature
+    branches: [ main, epic/*, feature/* ]
 
 permissions:
   contents: read
