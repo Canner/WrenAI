@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { isEmpty } from 'lodash';
-import { Modal, Form, Select, Row, Col } from 'antd';
+import { Modal, Form, Select } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
@@ -136,55 +136,49 @@ export default function RelationModal(props: Props) {
       centered
     >
       <Form form={form} preserve={false} layout="vertical">
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              label="From"
-              name="fromField"
-              required
-              rules={[
-                {
-                  required: true,
-                  message: ERROR_TEXTS.ADD_RELATION.FROM_FIELD.REQUIRED,
-                },
-              ]}
-            >
-              <CombineFieldSelector
-                modelValue={modelValue}
-                modelDisabled={true}
-                onModelChange={fromCombineField.onModelChange}
-                modelOptions={fromCombineField.modelOptions}
-                fieldOptions={fromCombineField.fieldOptions}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              label="To"
-              name="toField"
-              required
-              rules={[
-                () => ({
-                  validator(_, value) {
-                    if (!value || !value.field) {
-                      return Promise.reject(
-                        ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED,
-                      );
-                    }
+        <Form.Item
+          label="From"
+          name="fromField"
+          required
+          rules={[
+            {
+              required: true,
+              message: ERROR_TEXTS.ADD_RELATION.FROM_FIELD.REQUIRED,
+            },
+          ]}
+        >
+          <CombineFieldSelector
+            modelValue={modelValue}
+            modelDisabled={true}
+            onModelChange={fromCombineField.onModelChange}
+            modelOptions={fromCombineField.modelOptions}
+            fieldOptions={fromCombineField.fieldOptions}
+          />
+        </Form.Item>
+        <Form.Item
+          label="To"
+          name="toField"
+          required
+          rules={[
+            () => ({
+              validator(_, value) {
+                if (!value || !value.field) {
+                  return Promise.reject(
+                    ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED,
+                  );
+                }
 
-                    return Promise.resolve();
-                  },
-                }),
-              ]}
-            >
-              <CombineFieldSelector
-                onModelChange={toCombineField.onModelChange}
-                modelOptions={toCombineModelOptions}
-                fieldOptions={toCombineField.fieldOptions}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
+                return Promise.resolve();
+              },
+            }),
+          ]}
+        >
+          <CombineFieldSelector
+            onModelChange={toCombineField.onModelChange}
+            modelOptions={toCombineModelOptions}
+            fieldOptions={toCombineField.fieldOptions}
+          />
+        </Form.Item>
         <Form.Item
           label="Relation type"
           name="type"

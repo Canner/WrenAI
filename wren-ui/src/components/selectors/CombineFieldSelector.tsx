@@ -62,7 +62,7 @@ export default function CombineFieldSelector(props: Props) {
   return (
     <Input.Group className="d-flex" compact>
       <Select
-        style={{ width: 120 }}
+        style={{ width: '35%' }}
         options={modelOptions}
         onChange={changeModel}
         placeholder="Model"
