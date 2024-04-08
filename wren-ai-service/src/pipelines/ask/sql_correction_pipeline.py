@@ -15,16 +15,14 @@ from src.pipelines.ask.components.prompts import (
 class SQLCorrection(BasicPipeline):
     def __init__(
         self,
-        sql_correction_generator: Any,
+        generator: Any,
     ):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
             "sql_correction_prompt_builder",
             init_sql_correction_prompt_builder(),
         )
-        self._pipeline.add_component(
-            "sql_correction_generator", sql_correction_generator
-        )
+        self._pipeline.add_component("sql_correction_generator", generator)
         self._pipeline.add_component("post_processor", init_generation_post_processor())
 
         self._pipeline.connect(
@@ -53,7 +51,7 @@ class SQLCorrection(BasicPipeline):
 
 if __name__ == "__main__":
     sql_correction_pipeline = SQLCorrection(
-        sql_correction_generator=init_generator(),
+        generator=init_generator(),
     )
 
     print("generating sql_correction_pipeline.jpg to outputs/pipelines/ask...")

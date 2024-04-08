@@ -14,14 +14,14 @@ load_env_vars()
 class Generation(BasicPipeline):
     def __init__(
         self,
-        text_to_sql_generator: Any,
+        generator: Any,
     ):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
             "text_to_sql_prompt_builder",
             init_text_to_sql_prompt_builder(),
         )
-        self._pipeline.add_component("text_to_sql_generator", text_to_sql_generator)
+        self._pipeline.add_component("text_to_sql_generator", generator)
         self._pipeline.add_component("post_processor", init_generation_post_processor())
 
         self._pipeline.connect(
@@ -49,7 +49,7 @@ class Generation(BasicPipeline):
 
 if __name__ == "__main__":
     generation_pipeline = Generation(
-        text_to_sql_generator=init_generator(),
+        generator=init_generator(),
     )
 
     print("generating generation_pipeline.jpg to outputs/pipelines/ask...")

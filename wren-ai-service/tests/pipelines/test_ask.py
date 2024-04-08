@@ -58,7 +58,7 @@ def test_retrieval_pipeline(document_store: Any):
 
 def test_generation_pipeline():
     generation_pipeline = Generation(
-        text_to_sql_generator=init_generator(),
+        generator=init_generator(),
     )
     generation_result = generation_pipeline.run(
         "How many authors are there?",
@@ -72,7 +72,7 @@ def test_generation_pipeline():
 
 def test_followup_generation_pipeline():
     generation_pipeline = FollowUpGeneration(
-        text_to_sql_generator=init_generator(),
+        generator=init_generator(),
     )
     generation_result = generation_pipeline.run(
         "What are names of the books?",
@@ -99,7 +99,7 @@ def test_followup_generation_pipeline():
 
 def test_sql_correction_pipeline():
     sql_correction_pipeline = SQLCorrection(
-        sql_correction_generator=init_generator(),
+        generator=init_generator(),
     )
 
     sql_correction_result = sql_correction_pipeline.run(

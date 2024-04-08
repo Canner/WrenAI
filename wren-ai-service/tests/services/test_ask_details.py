@@ -18,7 +18,7 @@ def ask_details_service():
     return AskDetailsService(
         {
             "generation": generation_pipeline.Generation(
-                sql_details_generator=sql_details_generator,
+                generator=sql_details_generator,
             ),
         }
     )

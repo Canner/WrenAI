@@ -65,20 +65,20 @@ def init_globals():
                 retriever=retriever,
             ),
             "generation": ask_generation_pipeline.Generation(
-                text_to_sql_generator=text_to_sql_generator,
+                generator=text_to_sql_generator,
             ),
             "sql_correction": ask_sql_correction_pipeline.SQLCorrection(
-                sql_correction_generator=sql_correction_generator,
+                generator=sql_correction_generator,
             ),
             "followup_generation": ask_followup_generation_pipeline.FollowUpGeneration(
-                text_to_sql_generator=text_to_sql_with_followup_generator,
+                generator=text_to_sql_with_followup_generator,
             ),
         }
     )
     ASK_DETAILS_SERVICE = AskDetailsService(
         pipelines={
             "generation": ask_details_generation_pipeline.Generation(
-                sql_details_generator=sql_details_generator,
+                generator=sql_details_generator,
             ),
         }
     )

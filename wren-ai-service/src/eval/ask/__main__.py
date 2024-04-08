@@ -367,12 +367,12 @@ if __name__ == "__main__":
         retrieval_pipeline_def = retrieval_pipeline._pipe.dumps()
 
         generation_pipeline = Generation(
-            text_to_sql_generator=text_to_sql_generator,
+            generator=text_to_sql_generator,
         )
         generation_pipeline_def = generation_pipeline._pipe.dumps()
 
         sql_correction_pipeline = SQLCorrection(
-            sql_correction_generator=sql_correction_generator,
+            generator=sql_correction_generator,
         )
         sql_correction_pipeline_def = sql_correction_pipeline._pipe.dumps()
 

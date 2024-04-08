@@ -19,14 +19,14 @@ load_env_vars()
 class FollowUpGeneration(BasicPipeline):
     def __init__(
         self,
-        text_to_sql_generator: Any,
+        generator: Any,
     ):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
             "text_to_sql_prompt_builder",
             init_text_to_sql_with_followup_prompt_builder(),
         )
-        self._pipeline.add_component("text_to_sql_generator", text_to_sql_generator)
+        self._pipeline.add_component("text_to_sql_generator", generator)
         self._pipeline.add_component("post_processor", init_generation_post_processor())
 
         self._pipeline.connect(
@@ -57,7 +57,7 @@ class FollowUpGeneration(BasicPipeline):
 
 if __name__ == "__main__":
     followup_generation_pipeline = FollowUpGeneration(
-        text_to_sql_generator=init_generator(),
+        generator=init_generator(),
     )
 
     print("generating followup_generation_pipeline.jpg to outputs/pipelines/ask...")
