@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
-	"runtime"
 	"strings"
 	"time"
 
@@ -61,23 +59,15 @@ func askForAPIKey() (string, error) {
 	return result, nil
 }
 
-func openbrowser(url string) error {
-	var err error
-
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		err = exec.Command("open", url).Start()
-	default:
-		err = fmt.Errorf("unsupported platform")
-	}
-	return err
-}
-
 func Launch() {
+	// recover from panic
+	defer func() {
+		if r := recover(); r != nil {
+			pterm.Error.Println("An error occurred:", r)
+			fmt.Scanf("h")
+		}
+	}()
+
 	// print WrenAI header
 	fmt.Println(strings.Repeat("=", 55))
 	myFigure := figure.NewFigure("WrenAI", "", true)
@@ -90,7 +80,7 @@ func Launch() {
 
 	if err != nil {
 		pterm.Error.Println("Failed to get API key")
-		return
+		panic(err)
 	}
 
 	// check if docker daemon is running, if not, open it and loop to check again
@@ -116,7 +106,10 @@ func Launch() {
 
 	// download docker-compose file and env file template for WrenAI
 	pterm.Info.Println("Downloading docker-compose file and env file")
-	err = utils.PrepareDockerFiles(apiKey, projectDir)
+	// find an available port
+	defaultPort := 3000
+	port := utils.FindAvailablePort(defaultPort)
+	err = utils.PrepareDockerFiles(apiKey, port, projectDir)
 	if err != nil {
 		panic(err)
 	}
@@ -131,6 +124,7 @@ func Launch() {
 
 	// wait for 10 seconds
 	pterm.Info.Println("WrenAI is starting, please wait for a moment...")
+	url := fmt.Sprintf("http://localhost:%d", port)
 	// wait until checking if CheckWrenAIStarted return without error
 	// if timeout 2 minutes, panic
 	timeoutTime := time.Now().Add(2 * time.Minute)
@@ -140,7 +134,7 @@ func Launch() {
 		}
 
 		// check if WrenAI is started
-		err = utils.CheckWrenAIStarted()
+		err = utils.CheckWrenAIStarted(url)
 		if err == nil {
 			break
 		}
@@ -149,7 +143,7 @@ func Launch() {
 
 	// open browser
 	pterm.Info.Println("Opening browser")
-	openbrowser("http://localhost:3000")
+	utils.Openbrowser(url)
 
 	pterm.Info.Println("You can now safely close this terminal window")
 	fmt.Scanf("h")
