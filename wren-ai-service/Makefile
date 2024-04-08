@@ -47,6 +47,7 @@ streamlit:
 	poetry run streamlit run src/eval/${pipeline}/streamlit_app.py
 
 # example: make eval pipeline=ask_details
+# example: make eval pipeline=ask args="--help" to check all available arguments
 eval:
 	make run-all && \
 	poetry run python -m src.eval.$(pipeline) $(args)
