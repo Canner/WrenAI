@@ -336,39 +336,31 @@ def generate_mdl_json(
                         }
                     )
             else:
-                should_add_column = True
                 if "PRIMARY KEY" in part or "primary key" in part:
-                    if "(" not in part and ")" not in part:
-                        primary_key = part.strip().split(" ")[0]
-                        part = (
-                            part.replace("PRIMARY KEY", "")
-                            .replace("primary key", "")
-                            .strip()
-                        )
-                    else:
-                        should_add_column = False
-                        pattern = r'\("(.*?)"\)'
-                        if matches := re.findall(pattern, part):
-                            primary_key = matches[0]
+                    primary_key = part.strip().split(" ")[0]
+                    part = (
+                        part.replace("PRIMARY KEY", "")
+                        .replace("primary key", "")
+                        .strip()
+                    )
 
                 # Splitting the column name and type
-                if should_add_column:
-                    column_def = _parse_column_definition(part.strip())
+                column_def = _parse_column_definition(part.strip())
 
-                    columns.append(
-                        {
-                            "name": column_def["name"].replace('"', ""),
-                            "type": _get_appropriat_column_type(column_def["type"]),
-                            "notNull": column_def[
-                                "not_null"
-                            ],  # Assuming notNull is False by default as not specified in the string
-                            "isCalculated": False,  # Assuming isCalculated is False by default
-                            "expression": column_def["name"].replace(
-                                '"', ""
-                            ),  # Assuming expression is the column name itself
-                            "properties": {},
-                        }
-                    )
+                columns.append(
+                    {
+                        "name": column_def["name"].replace('"', ""),
+                        "type": _get_appropriat_column_type(column_def["type"]),
+                        "notNull": column_def[
+                            "not_null"
+                        ],  # Assuming notNull is False by default as not specified in the string
+                        "isCalculated": False,  # Assuming isCalculated is False by default
+                        "expression": column_def["name"].replace(
+                            '"', ""
+                        ),  # Assuming expression is the column name itself
+                        "properties": {},
+                    }
+                )
 
         if relationships:
             for relationship in relationships:
@@ -626,22 +618,18 @@ def show_asks_details_results():
     for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
         st.markdown(f"#### Step {i + 1}")
         st.markdown(step["summary"])
-        if i != len(st.session_state["asks_details_result"]["steps"]) - 1:
-            st.code(
-                body=step["sql"],
-                language="sql",
-            )
-            sqls_with_cte.append(
-                "WITH " + step["cte_name"] + " AS (" + step["sql"] + ")"
-            )
-            sqls.append(step["sql"])
-        else:
-            last_step_sql = "\n".join(sqls_with_cte) + "\n\n" + step["sql"]
-            sqls.append(last_step_sql)
-            st.code(
-                body=last_step_sql,
-                language="sql",
-            )
+
+        sql = ""
+        if sqls_with_cte:
+            sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
+        sql += step["sql"]
+        sqls.append(sql)
+
+        st.code(
+            body=sql,
+            language="sql",
+        )
+        sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
         st.button(
             label="Preview Data",
@@ -679,7 +667,7 @@ def generate_mdl_metadata(mdl_model_json: dict):
 
     st.toast(f'Generating MDL metadata for model {mdl_model_json['name']}', icon="⏳")
     generate_mdl_metadata_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-descriptions/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-descriptions",
         json={
             "mdl": mdl_model_json,
             "model": mdl_model_json["name"],
@@ -708,7 +696,7 @@ def generate_mdl_metadata(mdl_model_json: dict):
 
 def prepare_semantics(mdl_json: dict):
     semantics_preparation_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations",
         json={
             "mdl": json.dumps(mdl_json),
             "id": st.session_state["deployment_id"],
@@ -750,7 +738,7 @@ def prepare_semantics(mdl_json: dict):
 def ask(query: str, query_history: Optional[dict] = None):
     st.session_state["query"] = query
     asks_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/asks",
         json={
             "query": query,
             "id": st.session_state["deployment_id"],
@@ -768,7 +756,7 @@ def ask(query: str, query_history: Optional[dict] = None):
         and asks_status != "stopped"
     ):
         asks_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/{query_id}/result/"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/{query_id}/result"
         )
         assert asks_status_response.status_code == 200
         asks_status = asks_status_response.json()["status"]
@@ -786,7 +774,7 @@ def ask(query: str, query_history: Optional[dict] = None):
 
 def ask_details():
     asks_details_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details/",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details",
         json={
             "query": st.session_state["chosen_query_result"]["query"],
             "sql": st.session_state["chosen_query_result"]["sql"],
@@ -798,7 +786,9 @@ def ask_details():
     query_id = asks_details_response.json()["query_id"]
     asks_details_status = None
 
-    while not asks_details_status or asks_details_status != "finished":
+    while (
+        asks_details_status != "finished" and asks_details_status != "failed"
+    ) or not asks_details_status:
         asks_details_status_response = requests.get(
             f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details/{query_id}/result/"
         )
@@ -811,3 +801,8 @@ def ask_details():
         st.session_state["asks_details_result"] = asks_details_status_response.json()[
             "response"
         ]
+    elif asks_details_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {asks_details_status_response.json()['error']}',
+            icon="🚨",
+        )

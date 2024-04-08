@@ -21,16 +21,12 @@ class GenerationPostProcessor:
     )
     def run(self, replies: List[str]):
         try:
-            cleaned_generation_result = json.loads(clean_generation_result(replies[0]))
+            cleaned_generation_result = json.loads(clean_generation_result(replies[0]))[
+                "results"
+            ]
 
             if isinstance(cleaned_generation_result, dict):
                 cleaned_generation_result = [cleaned_generation_result]
-
-            if cleaned_generation_result[0]["sql"] == "":
-                return {
-                    "valid_generation_results": [],
-                    "invalid_generation_results": [],
-                }
 
             (
                 valid_generation_results,

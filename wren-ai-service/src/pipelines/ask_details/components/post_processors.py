@@ -16,7 +16,7 @@ load_env_vars()
 @component
 class GenerationPostProcessor:
     @component.output_types(
-        post_processing_results=Optional[Dict[str, Any]],
+        results=Optional[Dict[str, Any]],
     )
     def run(self, replies: List[str], meta: List[Dict[str, Any]]) -> Dict[str, Any]:
         generator = {

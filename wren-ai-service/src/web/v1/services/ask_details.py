@@ -41,7 +41,7 @@ class AskDetailsResultResponse(BaseModel):
         steps: List[SQLExplanation]
 
     class AskDetailsError(BaseModel):
-        code: Literal["NO_RELEVANT_SQL"]
+        code: Literal["NO_RELEVANT_SQL", "OTHERS"]
         message: str
 
     status: Literal["understanding", "searching", "generating", "finished", "failed"]
@@ -58,40 +58,49 @@ class AskDetailsService:
         self,
         ask_details_request: AskDetailsRequest,
     ) -> AskDetailsResponse:
-        # ask details status can be understanding, searching, generating, finished, stopped
-        # we will need to handle business logic for each status
-        query_id = ask_details_request.query_id
+        try:
+            # ask details status can be understanding, searching, generating, finished, stopped
+            # we will need to handle business logic for each status
+            query_id = ask_details_request.query_id
 
-        self.ask_details_results[query_id] = AskDetailsResultResponse(
-            status="understanding"
-        )
-        self.ask_details_results[query_id] = AskDetailsResultResponse(
-            status="searching"
-        )
+            self.ask_details_results[query_id] = AskDetailsResultResponse(
+                status="understanding"
+            )
+            self.ask_details_results[query_id] = AskDetailsResultResponse(
+                status="searching"
+            )
 
-        self.ask_details_results[query_id] = AskDetailsResultResponse(
-            status="generating"
-        )
+            self.ask_details_results[query_id] = AskDetailsResultResponse(
+                status="generating"
+            )
 
-        generation_result = self._pipelines["generation"].run(
-            sql=ask_details_request.sql,
-        )
+            generation_result = self._pipelines["generation"].run(
+                sql=ask_details_request.sql,
+            )
 
-        ask_details_result = generation_result["post_processor"]["results"]
+            ask_details_result = generation_result["post_processor"]["results"]
 
-        if ask_details_result is None:
+            if ask_details_result is None:
+                self.ask_details_results[query_id] = AskDetailsResultResponse(
+                    status="failed",
+                    error=AskDetailsResultResponse.AskDetailsError(
+                        code="NO_RELEVANT_SQL",
+                        message="No relevant SQL",
+                    ),
+                )
+            else:
+                self.ask_details_results[query_id] = AskDetailsResultResponse(
+                    status="finished",
+                    response=AskDetailsResultResponse.AskDetailsResponseDetails(
+                        **ask_details_result
+                    ),
+                )
+        except Exception as e:
             self.ask_details_results[query_id] = AskDetailsResultResponse(
                 status="failed",
                 error=AskDetailsResultResponse.AskDetailsError(
-                    code="NO_RELEVANT_SQL",
-                    message="No relevant SQL",
-                ),
-            )
-        else:
-            self.ask_details_results[query_id] = AskDetailsResultResponse(
-                status="finished",
-                response=AskDetailsResultResponse.AskDetailsResponseDetails(
-                    **ask_details_result
+                    code="OTHERS",
+                    message=str(e),
                 ),
             )
 

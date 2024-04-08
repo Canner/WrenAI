@@ -7,11 +7,12 @@ from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
 from src.pipelines.ask.components.retriever import init_retriever
+from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
-from src.web.v1.services.ask import AskResultResponse
+from src.web.v1.services.ask import AskRequest, AskResultResponse, SQLExplanation
 
 GLOBAL_DATA = {
     "contexts": None,
@@ -57,7 +58,7 @@ def test_retrieval_pipeline(document_store: Any):
 
 def test_generation_pipeline():
     generation_pipeline = Generation(
-        text_to_sql_generator=init_generator(),
+        generator=init_generator(),
     )
     generation_result = generation_pipeline.run(
         "How many authors are there?",
@@ -69,9 +70,36 @@ def test_generation_pipeline():
     )
 
 
+def test_followup_generation_pipeline():
+    generation_pipeline = FollowUpGeneration(
+        generator=init_generator(),
+    )
+    generation_result = generation_pipeline.run(
+        "What are names of the books?",
+        contexts=GLOBAL_DATA["contexts"],
+        history=AskRequest.AskResponseDetails(
+            sql="SELECT COUNT(*) FROM book",
+            summary="Retrieve the number of books",
+            steps=[
+                SQLExplanation(
+                    sql="SELECT COUNT(*) FROM book",
+                    summary="Retrieve the number of books",
+                    cte_name="",
+                )
+            ],
+        ),
+    )
+
+    print(generation_result)
+
+    assert AskResultResponse.AskResult(
+        **generation_result["post_processor"]["valid_generation_results"][0]
+    )
+
+
 def test_sql_correction_pipeline():
     sql_correction_pipeline = SQLCorrection(
-        sql_correction_generator=init_generator(),
+        generator=init_generator(),
     )
 
     sql_correction_result = sql_correction_pipeline.run(

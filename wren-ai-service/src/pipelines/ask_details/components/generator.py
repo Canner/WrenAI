@@ -8,8 +8,8 @@ from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 
 from src.utils import load_env_vars
+
 from .prompts import init_sql_details_system_prompt_builder
-from ...trace import TraceGenerationInput, trace_generation
 
 load_env_vars()
 
@@ -37,39 +37,11 @@ class CustomOpenAIGenerator(OpenAIGenerator):
         )
 
 
-@component
-class TracedOpenAIGenerator(CustomOpenAIGenerator):
-    def _run(self, *args, **kwargs):
-        return super(TracedOpenAIGenerator, self).run(*args, **kwargs)
-
-    @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    def run(
-        self,
-        trace_generation_input: TraceGenerationInput,
-        prompt: str,
-        generation_kwargs: Optional[Dict[str, Any]] = None,
-    ):
-        return trace_generation(self._run)(
-            trace_generation_input=trace_generation_input,
-            prompt=prompt,
-            generation_kwargs=generation_kwargs,
-        )
-
-
 def init_generator(
-    with_trace: bool = False,
     model_name: str = _MODEL_NAME,
     generation_kwargs: Optional[Dict[str, Any]] = _GENERATION_KWARGS,
 ) -> Any:
     system_prompt = init_sql_details_system_prompt_builder().run()["prompt"]
-
-    if with_trace:
-        return TracedOpenAIGenerator(
-            api_key=Secret.from_env_var("OPENAI_API_KEY"),
-            model=model_name,
-            generation_kwargs=generation_kwargs,
-            system_prompt=system_prompt,
-        )
 
     return CustomOpenAIGenerator(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),

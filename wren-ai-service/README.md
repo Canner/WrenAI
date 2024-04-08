@@ -22,6 +22,7 @@
 
 ## Pipeline Evaluation(for development)
 
+- install `psql`
 - fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
 - start the docker service
 - run qdrant and wren-engine docker containers: `make run-all`

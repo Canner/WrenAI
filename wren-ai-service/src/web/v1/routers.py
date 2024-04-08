@@ -30,7 +30,7 @@ from src.web.v1.services.semantics import (
 router = APIRouter()
 
 
-@router.post("/semantics-descriptions/")
+@router.post("/semantics-descriptions")
 async def bulk_generate_description(
     bulk_request: BulkGenerateDescriptionRequest,
 ) -> List[GenerateDescriptionResponse]:
@@ -40,7 +40,7 @@ async def bulk_generate_description(
     ]
 
 
-@router.post("/semantics-preparations/")
+@router.post("/semantics-preparations")
 async def prepare_semantics(
     prepare_semantics_request: SemanticsPreparationRequest,
     background_tasks: BackgroundTasks,
@@ -52,7 +52,7 @@ async def prepare_semantics(
     return SemanticsPreparationResponse(id=prepare_semantics_request.id)
 
 
-@router.get("/semantics-preparations/{task_id}/status/")
+@router.get("/semantics-preparations/{task_id}/status")
 async def get_prepare_semantics_status(
     task_id: str,
 ) -> SemanticsPreparationStatusResponse:
@@ -61,7 +61,7 @@ async def get_prepare_semantics_status(
     )
 
 
-@router.post("/asks/")
+@router.post("/asks")
 async def ask(
     ask_request: AskRequest,
     background_tasks: BackgroundTasks,
@@ -89,12 +89,12 @@ async def stop_ask(
     return StopAskResponse(query_id=query_id)
 
 
-@router.get("/asks/{query_id}/result/")
+@router.get("/asks/{query_id}/result")
 async def get_ask_result(query_id: str) -> AskResultResponse:
     return container.ASK_SERVICE.get_ask_result(AskResultRequest(query_id=query_id))
 
 
-@router.post("/ask-details/")
+@router.post("/ask-details")
 async def ask_details(
     ask_details_request: AskDetailsRequest,
     background_tasks: BackgroundTasks,
@@ -108,7 +108,7 @@ async def ask_details(
     return AskDetailsResponse(query_id=query_id)
 
 
-@router.get("/ask-details/{query_id}/result/")
+@router.get("/ask-details/{query_id}/result")
 async def get_ask_details_result(query_id: str) -> AskDetailsResultResponse:
     return container.ASK_DETAILS_SERVICE.get_ask_details_result(
         AskDetailsResultRequest(query_id=query_id)

@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -18,7 +17,12 @@ from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
+from src.pipelines.semantics import description
 from src.utils import load_env_vars
+from src.web.v1.services.semantics import (
+    GenerateDescriptionRequest,
+    SemanticsService,
+)
 
 # from .eval_pipeline import Evaluation
 from .utils import (
@@ -30,19 +34,16 @@ from .utils import (
 
 load_env_vars()
 
-if with_trace := os.getenv("ENABLE_TRACE", default=False):
-    from src.pipelines.trace import (
-        langfuse,
-    )
 
-
-def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+def process_item(query: str, no_db_schema: Optional[bool]) -> Dict[str, Any]:
     retrieval_start = time.perf_counter()
-    retrieval_result = retrieval_pipeline.run(
-        query,
-        user_id=user_id,
-    )
-    documents = retrieval_result["post_processor"]["documents"]
+    if not no_db_schema:
+        retrieval_result = retrieval_pipeline.run(
+            query,
+        )
+        documents = retrieval_result["post_processor"]["documents"]
+    else:
+        documents = []
     retrieval_end = time.perf_counter()
 
     valid_generation_results = []
@@ -64,7 +65,6 @@ def process_item(query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     text_to_sql_generation_results = generation_pipeline.run(
         query,
         contexts=documents,
-        user_id=user_id,
     )
     text_to_sql_generation_end = time.perf_counter()
     text_to_sql_generation_time_cost = (
@@ -193,7 +193,7 @@ def eval(prediction_results_file: Path, dataset_name: str, ground_truths: list[d
 
     timestamp = prediction_results_file.stem.split("_")[-1]
 
-    with open(f"./outputs/{dataset_name}_eval_results_{timestamp}.json", "w") as f:
+    with open(f"./outputs/ask/{dataset_name}_eval_results_{timestamp}.json", "w") as f:
         json.dump(eval_results, f, indent=2)
 
 
@@ -206,54 +206,151 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input-file",
         type=str,
-        default=get_latest_prediction_outputs_file(Path("./outputs"), DATASET_NAME),
+        default=get_latest_prediction_outputs_file(Path("./outputs/ask"), DATASET_NAME),
         help="Path to the prediction results file. If not provided, the latest prediction results file will be used. The file should be located in the outputs folder in the root directory of the project.",
     )
     parser.add_argument(
         "--eval-after-prediction",
         action=argparse.BooleanOptionalAction,
-        help="Whether to run the evaluation after making predictions. Default is True.",
+        help="Run the evaluation after making predictions. Default is False.",
     )
     parser.add_argument(
         "--eval-from-scratch",
         action=argparse.BooleanOptionalAction,
-        help="Whether to run the evaluation from scratch. Default is False.",
+        help="Run the evaluation from scratch. Default is False.",
     )
+    parser.add_argument(
+        "--semantic-description",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to add semantic description before asking. Default is False.",
+    )
+    parser.add_argument(
+        "--custom-semantic-description",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to add customized semantic description before asking. Default is False.",
+    )
+    parser.add_argument(
+        "--without-db-schema",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to exclude the database schema information. Default is False.",
+    )
+    parser.add_argument(
+        "--easy-questions",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to use easy questions for evaluation. Default is False.",
+    )
+    parser.add_argument(
+        "--hard-questions",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to use hard questions for evaluation. Default is False.",
+    )
+
+    parser.add_argument
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
     EVAL_AFTER_PREDICTION = args.eval_after_prediction
+    EVAL_FROM_SCRATCH = args.eval_from_scratch
+    ENABLE_SEMANTIC_DESCRIPTION = args.semantic_description
+    CUSTOM_SEMANTIC_DESCRIPTION = args.custom_semantic_description
+    NO_DB_SCHEMA = args.without_db_schema
+    EASY_QUESTIONS = args.easy_questions
+    HARD_QUESTIONS = args.hard_questions
 
-    with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
-        ground_truths = [json.loads(line) for line in f]
+    assert not (
+        CUSTOM_SEMANTIC_DESCRIPTION and ENABLE_SEMANTIC_DESCRIPTION
+    ), "Cannot use both custom and general semantic description for evaluation."
+    assert not (
+        EASY_QUESTIONS and HARD_QUESTIONS
+    ), "Cannot use both easy and hard questions for evaluation."
+
+    if EASY_QUESTIONS:
+        with open(f"./src/eval/data/{DATASET_NAME}_data_easy.json", "r") as f:
+            ground_truths = [json.loads(line) for line in f]
+    elif HARD_QUESTIONS:
+        with open(f"./src/eval/data/{DATASET_NAME}_data_hard.json", "r") as f:
+            ground_truths = [json.loads(line) for line in f]
+    else:
+        with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
+            ground_truths = [json.loads(line) for line in f]
+
+    if ENABLE_SEMANTIC_DESCRIPTION:
+        if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
+            print(f"Use the existed {DATASET_NAME}_with_semantic_mdl.json...\n")
+        else:
+            print(
+                f"Generating semantic description for the {DATASET_NAME} dataset...\n"
+            )
+            semantics_service = SemanticsService(
+                pipelines={
+                    "generate_description": description.Generation(),
+                }
+            )
+            with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+                mdl_data = json.load(f)
+
+            for model in tqdm(mdl_data["models"]):
+                semantic_desc = semantics_service.generate_description(
+                    GenerateDescriptionRequest(
+                        mdl=model,
+                        model=model["name"],
+                        identifier="model",
+                    )
+                )
+                model["properties"]["description"] = semantic_desc.description
+                model["properties"]["display_name"] = semantic_desc.display_name
+                for column in model["columns"]:
+                    semantic_desc = semantics_service.generate_description(
+                        GenerateDescriptionRequest(
+                            mdl=model,
+                            model=model["name"],
+                            identifier="column@" + column["name"],
+                        )
+                    )
+                    column["properties"]["description"] = semantic_desc.description
+                    column["properties"]["display_name"] = semantic_desc.display_name
+
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "w"
+            ) as f:
+                json.dump(mdl_data, f)
+
+    if not Path("./outputs/ask").exists():
+        Path("./outputs/ask").mkdir(parents=True)
 
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
         PREDICTION_RESULTS_FILE
         and Path(PREDICTION_RESULTS_FILE).exists()
-        and not args.eval_from_scratch
+        and not EVAL_FROM_SCRATCH
     ):
         eval(Path(PREDICTION_RESULTS_FILE), DATASET_NAME, ground_truths)
     else:
-        with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
-            mdl_str = json.dumps(json.load(f))
+        if ENABLE_SEMANTIC_DESCRIPTION:
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "r"
+            ) as f:
+                mdl_str = json.dumps(json.load(f))
+        elif CUSTOM_SEMANTIC_DESCRIPTION:
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_custom_semantic_mdl.json", "r"
+            ) as f:
+                mdl_str = json.dumps(json.load(f))
+        else:
+            with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+                mdl_str = json.dumps(json.load(f))
 
         document_store = init_document_store(
             dataset_name=DATASET_NAME,
             recreate_index=True,
         )
-        embedder = init_embedder(with_trace=with_trace)
+        embedder = init_embedder()
         retriever = init_retriever(
             document_store=document_store,
-            with_trace=with_trace,
             top_k=10,
         )
-        text_to_sql_generator = init_generator(
-            with_trace=with_trace,
-        )
-        sql_correction_generator = init_generator(
-            with_trace=with_trace,
-        )
+        text_to_sql_generator = init_generator()
+        sql_correction_generator = init_generator()
 
         print("Indexing documents...")
         indexing_pipeline = Indexing(document_store=document_store)
@@ -266,29 +363,25 @@ if __name__ == "__main__":
         retrieval_pipeline = Retrieval(
             embedder=embedder,
             retriever=retriever,
-            with_trace=with_trace,
         )
         retrieval_pipeline_def = retrieval_pipeline._pipe.dumps()
 
         generation_pipeline = Generation(
-            text_to_sql_generator=text_to_sql_generator,
-            with_trace=with_trace,
+            generator=text_to_sql_generator,
         )
         generation_pipeline_def = generation_pipeline._pipe.dumps()
 
         sql_correction_pipeline = SQLCorrection(
-            sql_correction_generator=sql_correction_generator,
+            generator=sql_correction_generator,
         )
         sql_correction_pipeline_def = sql_correction_pipeline._pipe.dumps()
 
         print(f"Running predictions for {len(ground_truths)} questions...")
         start = time.time()
-        user_id = str(uuid.uuid4())
-        max_workers = os.cpu_count() // 2 if with_trace else None
-        user_id = str(uuid.uuid4()) if with_trace else None
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor() as executor:
             args_list = [
-                (ground_truth["question"], user_id) for ground_truth in ground_truths
+                (ground_truth["question"], NO_DB_SCHEMA)
+                for ground_truth in ground_truths
             ]
             outputs = list(
                 tqdm(
@@ -300,8 +393,11 @@ if __name__ == "__main__":
         print(f"Time taken: {end - start:.2f}s")
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        print(
+            f"Write predictions to ./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json"
+        )
         write_prediction_results(
-            f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json",
+            f"./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json",
             ground_truths,
             outputs,
             {
@@ -311,12 +407,10 @@ if __name__ == "__main__":
                 "sql_correction": sql_correction_pipeline_def,
             },
         )
-        if with_trace:
-            langfuse.flush()
 
         if EVAL_AFTER_PREDICTION:
             eval(
-                Path(f"./outputs/{DATASET_NAME}_predictions_{timestamp}.json"),
+                Path(f"./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json"),
                 DATASET_NAME,
                 ground_truths,
             )

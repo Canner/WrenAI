@@ -14,7 +14,7 @@ from src.pipelines.ask.components.embedder import (
     EMBEDDING_MODEL_DIMENSION,
     EMBEDDING_MODEL_NAME,
 )
-from src.utils import load_env_vars
+from src.utils import generate_ddls_from_semantics, load_env_vars
 
 load_env_vars()
 
@@ -88,11 +88,13 @@ class Indexing(BasicPipeline):
                 }
             )
 
+        ddl_commands = generate_ddls_from_semantics(
+            semantics["models"],
+            semantics["relationships"],
+        )
+
         embeddings = self._openai_client.embeddings.create(
-            input=[
-                json.dumps(data)
-                for data in semantics["models"] + semantics["relationships"]
-            ],
+            input=ddl_commands,
             model=self.embedding_model_name,
             dimensions=self.embedding_model_dim,
         )
@@ -101,12 +103,10 @@ class Indexing(BasicPipeline):
             Document(
                 id=str(i),
                 meta={"id": str(i)},
-                content=json.dumps(data),
+                content=ddl_command,
                 embedding=embeddings.data[i].embedding,
             )
-            for i, data in enumerate(
-                tqdm(semantics["models"] + semantics["relationships"])
-            )
+            for i, ddl_command in enumerate(tqdm(ddl_commands))
         ]
 
 

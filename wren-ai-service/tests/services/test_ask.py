@@ -39,10 +39,10 @@ def ask_service():
                 retriever=retriever,
             ),
             "generation": generation_pipeline.Generation(
-                text_to_sql_generator=text_to_sql_generator,
+                generator=text_to_sql_generator,
             ),
             "sql_correction": sql_correction_pipeline.SQLCorrection(
-                sql_correction_generator=sql_correction_generator,
+                generator=sql_correction_generator,
             ),
         }
     )

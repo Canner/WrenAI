@@ -8,7 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 fastapi = "^0.109.2"
-uvicorn = "^0.27.1"
+uvicorn = {extras = ["standard"], version = "^0.29.0"}
 python-dotenv = "^1.0.1"
 haystack-ai = "^2.0.0"
 openai = "^1.14.0"
@@ -16,7 +16,6 @@ qdrant-haystack = "^3.0.0"
 backoff = "^2.2.1"
 tqdm = "^4.66.2"
 numpy = "^1.26.4"
-langfuse = "^2.19.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
