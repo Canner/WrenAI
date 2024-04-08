@@ -7,6 +7,7 @@ on:
     types: [ labeled ]
     # epic/* is for epic feature
     branches: [ main, epic/*, feature/* ]
+  push:
 
 permissions:
   contents: read
@@ -22,7 +23,8 @@ defaults:
 
 jobs:
   unit-test:
-    # if: ${{ github.event.label.name == 'ci/ui' || github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    # run this job only if the PR is labeled with "ci/ui"
+    if: ${{ github.event.label.name == 'ci/ui' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

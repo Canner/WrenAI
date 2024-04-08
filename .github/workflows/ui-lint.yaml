@@ -8,6 +8,7 @@ on:
     types: [ labeled ]
     # epic/* is for epic feature
     branches: [ main, epic/*, feature/* ]
+  push:
 
 permissions:
   contents: read
@@ -23,6 +24,8 @@ defaults:
 
 jobs:
   eslint:
+     # run this job only if the PR is labeled with "ci/ui"
+    if: ${{ github.event.label.name == 'ci/ui' }}
     name: runner / eslint
     runs-on: ubuntu-latest
     steps:
@@ -47,3 +50,5 @@ jobs:
         uses: wearerequired/lint-action@v2
         with:
           eslint: true
+          auto_fix: true
+          eslint_extensions: js,jsx,ts,tsx
