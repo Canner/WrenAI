@@ -2,10 +2,10 @@
 
 name: Wren-UI Test
 
-on: push
-  # pull_request:
-  #   types: [ labeled ]
-  #   branches: [ main ]
+on: 
+  pull_request:
+    types: [ labeled ]
+    branches: [ main ]
 
 permissions:
   contents: read

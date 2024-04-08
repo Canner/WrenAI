@@ -3,11 +3,11 @@
 
 name: Wren-UI Lint
 
-on: push
-  # pull_request:
-  #   types: [ labeled ]
-  # push:
-  #   branches: [ main ]
+on: 
+  pull_request:
+    types: [ labeled ]
+  push:
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -22,31 +22,26 @@ defaults:
     working-directory: wren-ui
 
 jobs:
-  lint:
-    # if: ${{ github.event.label.name == 'ci/ui' || github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+  eslint:
+    name: runner / eslint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3 #use v3 for action-yarn v4
         with:
-          node-version: '16'
+          node-version: 16.x
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
-      - uses: actions/cache@v2
+        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v3
         id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
         with:
-          path: | # should cache node_modules as well
-            ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-      - if: ${{ steps.yarn-cache.cache-hit != 'true' }}
-        name: List the state of node modules
-        continue-on-error: true
-        run: yarn list
-      - name: Install dependencies
-        run: npm install
+      - name: Install Node.js dependencies
+        run: yarn install
       - name: Run lint
-        run: npm run lint
+        run: yarn run lint

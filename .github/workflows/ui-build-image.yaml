@@ -40,21 +40,29 @@ jobs:
             tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
           fi
           echo "TAG_NAME=$tag_name" >> $GITHUB_ENV
-      - name: Build and push image
+      - name: Build and push
+        uses: docker/build-push-action@v5
         env:
           TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
-        run: |
-          if [ ${{ github.event.inputs.is_latest }} == true ]; then
-            docker buildx build \
-              --platform linux/amd64,linux/arm64 \
-              --tag ghcr.io/canner/wren-ui:$TAG_NAME \
-              --tag ghcr.io/canner/wren-ui:latest \
-              --file ./docker/Dockerfile \
-              --push .
-          else
-            docker buildx build \
-              --platform linux/amd64,linux/arm64 \
-              --tag ghcr.io/canner/wren-ui:$TAG_NAME \
-              --file ./docker/Dockerfile \
-              --push .
-          fi
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/canner/wren-ui:$TAG_NAME
+      # - name: Build and push image
+      #   env:
+      #     TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
+      #   run: |
+      #     if [ ${{ github.event.inputs.is_latest }} == true ]; then
+      #       docker buildx build \
+      #         --platform linux/amd64,linux/arm64 \
+      #         --tag ghcr.io/canner/wren-ui:$TAG_NAME \
+      #         --tag ghcr.io/canner/wren-ui:latest \
+      #         --file ./docker/Dockerfile \
+      #         --push .
+      #     else
+      #       docker buildx build \
+      #         --platform linux/amd64,linux/arm64 \
+      #         --tag ghcr.io/canner/wren-ui:$TAG_NAME \
+      #         --file ./docker/Dockerfile \
+      #         --push .
+      #     fi
