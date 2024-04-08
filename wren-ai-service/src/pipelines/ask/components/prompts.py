@@ -155,6 +155,11 @@ The final answer must be the JSON format like following:
     ]
 }
 
+### NOTICE ###
+- Only use the tables and columns mentioned in the database schema.
+- If you think you can't generate a valid SQL query for a specific interpretation, you can skip that interpretation and provide the other ones.
+- Make sure to map operators and operands correctly based on their data types.
+
 ### QUESTION ###
 Previous SQL Summary: {{ history.summary }}
 Previous Generated SQL Query: {{ history.sql }}
