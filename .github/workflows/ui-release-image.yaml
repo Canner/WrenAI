@@ -36,12 +36,12 @@ jobs:
           fi
           echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Build and push image
-        env:
-          TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
-        run: |
-          echo "Building image with tag: $TAG_NAME"
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --tag ghcr.io/canner/wren-ui:$TAG_NAME \
-            --file ./Dockerfile \
-            --push .
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./wren-ui/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/canner/wren-ui:${{ steps.tag-preparation.outputs.TAG_NAME }}
+        
