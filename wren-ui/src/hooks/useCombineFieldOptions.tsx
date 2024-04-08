@@ -5,7 +5,7 @@ import {
   convertIdentifierToObject,
 } from '@/utils/enum';
 import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
-import { RelationFormValues } from '@/components/modals/AddRelationModal';
+import { RelationFormValues } from '@/components/modals/RelationModal';
 
 interface Props {
   // The initial base model of model select

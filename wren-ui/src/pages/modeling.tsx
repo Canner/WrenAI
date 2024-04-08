@@ -1,12 +1,9 @@
 import dynamic from 'next/dynamic';
 import { forwardRef, useMemo, useRef } from 'react';
 import styled from 'styled-components';
-import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
+import { MORE_ACTION } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
-import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
-import MetricDrawer from '@/components/pages/modeling/MetricDrawer';
-import ViewDrawer from '@/components/pages/modeling/ViewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { ClickPayload } from '@/components/diagram/Context';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
@@ -33,9 +30,6 @@ export function Modeling() {
   }, [data]);
 
   const metadataDrawer = useDrawerAction();
-  const modelDrawer = useDrawerAction();
-  const metricDrawer = useDrawerAction();
-  const viewDrawer = useDrawerAction();
 
   const onSelect = (selectKeys) => {
     if (diagramRef.current) {
@@ -58,10 +52,7 @@ export function Modeling() {
     const { type, data } = payload;
     const action = {
       [MORE_ACTION.EDIT]: () => {
-        const { nodeType } = data;
-        if (nodeType === NODE_TYPE.MODEL) modelDrawer.openDrawer(data);
-        if (nodeType === NODE_TYPE.METRIC) metricDrawer.openDrawer(data);
-        if (nodeType === NODE_TYPE.VIEW) viewDrawer.openDrawer(data);
+        // TODO: handle edit action
       },
       [MORE_ACTION.DELETE]: () => {
         // TODO: call delete API
@@ -90,27 +81,6 @@ export function Modeling() {
       <MetadataDrawer
         {...metadataDrawer.state}
         onClose={metadataDrawer.closeDrawer}
-      />
-      <ModelDrawer
-        {...modelDrawer.state}
-        onClose={modelDrawer.closeDrawer}
-        onSubmit={async (values) => {
-          console.log(values);
-        }}
-      />
-      <MetricDrawer
-        {...metricDrawer.state}
-        onClose={metricDrawer.closeDrawer}
-        onSubmit={async (values) => {
-          console.log(values);
-        }}
-      />
-      <ViewDrawer
-        {...viewDrawer.state}
-        onClose={viewDrawer.closeDrawer}
-        onSubmit={async (values) => {
-          console.log(values);
-        }}
       />
     </SiderLayout>
   );

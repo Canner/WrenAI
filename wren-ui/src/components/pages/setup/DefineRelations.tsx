@@ -13,7 +13,7 @@ import useModalAction from '@/hooks/useModalAction';
 import RelationModal, {
   RelationFieldValue,
   RelationFormValues,
-} from '@/components/modals/AddRelationModal';
+} from '@/components/modals/RelationModal';
 import { convertFormValuesToIdentifier } from '@/hooks/useCombineFieldOptions';
 
 const { Title, Text } = Typography;
