@@ -28,17 +28,28 @@ jobs:
     if: ${{ github.event.label.name == 'ci/ui' || github.event_name == 'push'}}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
           node-version: '16'
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+      - uses: actions/cache@v2
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: | # should cache node_modules as well
+            ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - if: ${{ steps.yarn-cache.cache-hit != 'true' }}
+        name: List the state of node modules
+        continue-on-error: true
+        run: yarn list
       - name: Install Node.js dependencies
         run: yarn install
-      # ESLint and Prettier must be in `package.json`
-      - name: Run ESLint
-        uses: samuelmeuli/lint-action@v1
-        with:
-          eslint: true
-          auto_fix: true
-          eslint_extensions: js,jsx,ts,tsx
+      - name: Run lint
+        run: yarn lint
+          
