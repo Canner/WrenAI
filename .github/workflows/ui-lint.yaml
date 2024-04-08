@@ -26,31 +26,18 @@ jobs:
   eslint:
      # run this job only if the PR is labeled with "ci/ui"
     if: ${{ github.event.label.name == 'ci/ui' || github.event_name == 'push'}}
-    name: runner / eslint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js
-        uses: actions/setup-node@v3 #use v3 for action-yarn v4
+        uses: actions/setup-node@v2
         with:
-          node-version: 16.x
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v3
-        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          node-version: '16'
       - name: Install Node.js dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
         run: yarn install
-      - name: List installed modules
-        run: yarn list --depth=0
-      - name: Run linters
-        uses: wearerequired/lint-action@v2
+      # ESLint and Prettier must be in `package.json`
+      - name: Run ESLint
+        uses: samuelmeuli/lint-action@v1
         with:
           eslint: true
           auto_fix: true
