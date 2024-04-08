@@ -3,11 +3,11 @@
 name: Wren-UI Test
 
 on:
+  push:
+    paths:
+      - 'wren-ui/**'
   pull_request:
     types: [ labeled ]
-    # epic/* is for epic feature
-    branches: [ main, epic/*, feature/* ]
-  push:
 
 permissions:
   contents: read
@@ -24,7 +24,7 @@ defaults:
 jobs:
   unit-test:
     # run this job only if the PR is labeled with "ci/ui"
-    if: ${{ github.event.label.name == 'ci/ui' }}
+    if: ${{ github.event.label.name == 'ci/ui' || github.event_name == 'push'}}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
