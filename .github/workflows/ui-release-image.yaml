@@ -34,7 +34,6 @@ jobs:
           else
             tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
           fi
-          echo "TAG_NAME=$tag_name"
           echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Build and push image
         env:
@@ -44,5 +43,5 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --tag ghcr.io/canner/wren-ui:$TAG_NAME \
-            --file ./docker/Dockerfile \
+            --file ./Dockerfile \
             --push .
