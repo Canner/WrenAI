@@ -164,10 +164,17 @@ export default function RelationModal(props: Props) {
               name="toField"
               required
               rules={[
-                {
-                  required: true,
-                  message: ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED,
-                },
+                () => ({
+                  validator(_, value) {
+                    if (!value || !value.field) {
+                      return Promise.reject(
+                        ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED,
+                      );
+                    }
+
+                    return Promise.resolve();
+                  },
+                }),
               ]}
             >
               <CombineFieldSelector
