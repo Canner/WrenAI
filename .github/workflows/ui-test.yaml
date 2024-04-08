@@ -48,6 +48,6 @@ jobs:
         continue-on-error: true
         run: yarn list
       - name: Install dependencies
-        run: yarn install
+        run: yarn
       - name: Run tests
         run: yarn test
