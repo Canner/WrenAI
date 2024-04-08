@@ -35,7 +35,7 @@ jobs:
             tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
           fi
           echo "TAG_NAME=$tag_name"
-          echo "TAG_NAME=$tag_name" >> $GITHUB_ENV
+          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Build and push image
         env:
           TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
