@@ -18,13 +18,18 @@ class GenerationPostProcessor:
     @component.output_types(
         results=Optional[Dict[str, Any]],
     )
-    def run(self, replies: List[str]) -> Dict[str, Any]:
+    def run(self, replies: List[str], meta: List[Dict[str, Any]]) -> Dict[str, Any]:
+        generator = {
+            "replies": replies,
+            "meta": meta,
+        }
+
         cleaned_generation_result = json.loads(clean_generation_result(replies[0]))
 
         steps = cleaned_generation_result.get("steps", [])
         if not steps:
             return {
-                "replies": replies,
+                "generator": generator,
                 "results": None,
             }
 
@@ -32,7 +37,7 @@ class GenerationPostProcessor:
 
         if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
             return {
-                "replies": replies,
+                "generator": generator,
                 "results": None,
             }
 
@@ -40,7 +45,7 @@ class GenerationPostProcessor:
         cleaned_generation_result["steps"][-1]["cte_name"] = ""
 
         return {
-            "replies": replies,
+            "generator": generator,
             "results": cleaned_generation_result,
         }
 

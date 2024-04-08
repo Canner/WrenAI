@@ -23,6 +23,7 @@ class Generation(BasicPipeline):
         self._pipeline.add_component("generator", generator)
         self._pipeline.add_component("post_processor", init_generation_post_processor())
         self._pipeline.connect("generator.replies", "post_processor.replies")
+        self._pipeline.connect("generator.meta", "post_processor.meta")
 
         super().__init__(self._pipeline)
 

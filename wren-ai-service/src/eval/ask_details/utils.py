@@ -120,8 +120,8 @@ class Collector:
 
     def _destruct(self, response: Dict[str, Any]):
         return (
-            response["post_processor"]["replies"][0],
-            response["generator"]["meta"][0],
+            response["post_processor"]["generator"]["replies"][0],
+            response["post_processor"]["generator"]["meta"][0],
             response["post_processor"]["results"],
         )
 
