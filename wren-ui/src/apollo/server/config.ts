@@ -33,7 +33,7 @@ const defaultConfig = {
   // sqlite
   sqliteFile: './db.sqlite3',
 
-  persistCredentialDir: process.cwd(),
+  persistCredentialDir: `${process.cwd()}/.tmp`,
 
   // wren engine
   wrenEngineEndpoint: 'http://localhost:8080',
