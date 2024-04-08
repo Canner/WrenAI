@@ -48,7 +48,11 @@ export default function ViewDetailForm(props: {
       </Form.Item>
 
       <Form.Item label="Data preview (50 rows)">
-        <PreviewDataContent columns={previewColumns} data={previewData} />
+        <PreviewDataContent
+          loading={false}
+          columns={previewColumns}
+          data={previewData}
+        />
       </Form.Item>
     </Form>
   );

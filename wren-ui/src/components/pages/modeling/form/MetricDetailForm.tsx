@@ -118,7 +118,11 @@ export default function ModelDetailForm(props: {
       )}
 
       <Form.Item label="Data preview (50 rows)">
-        <PreviewDataContent columns={previewColumns} data={[]} />
+        <PreviewDataContent
+          loading={false}
+          columns={previewColumns}
+          data={[]}
+        />
       </Form.Item>
     </Form>
   );
