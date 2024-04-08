@@ -58,7 +58,7 @@ export const ModelNode = ({ data }: CustomNodeProps<ComposeDiagram>) => {
           ...data.originalData.fields,
           ...data.originalData.calculatedFields,
         ])}
-        {hasRelationTitle ? <ColumnTitle>Relations</ColumnTitle> : null}
+        {hasRelationTitle ? <ColumnTitle>Relationships</ColumnTitle> : null}
         {renderColumns(data.originalData.relationFields)}
       </NodeBody>
     </StyledNode>

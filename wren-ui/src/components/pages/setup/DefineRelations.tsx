@@ -64,7 +64,7 @@ function EditableRelationTable(props: EditableRelationTableProps) {
       width: '35%',
     },
     {
-      title: 'Relation type',
+      title: 'Type',
       dataIndex: 'type',
       key: 'type',
       render: (type, relation) => (
@@ -120,7 +120,7 @@ function EditableRelationTable(props: EditableRelationTableProps) {
               onCollapseOpen(event, modelName);
             }}
             size="small"
-            title="Add relation"
+            title="Add relationship"
           >
             <PlusOutlined />
             Add
@@ -236,13 +236,13 @@ export default function DefineRelations(props: Props) {
   return (
     <div>
       <Title level={1} className="mb-3">
-        Define relations
+        Define relationships
       </Title>
       <Text>
-        You can define the relations among selected tables. We will
-        automatically list suggested relations based on the primary and foreign
-        key you have already defined in your data source. Relations will be
-        added into data models.
+        You can define the relationships among selected tables. We will
+        automatically list suggested relationships based on the primary and
+        foreign key you have already defined in your data source. Relationships
+        will be added into data models.
       </Text>
       <div className="my-6 text-center">
         {Object.entries(relations).map(([modelName, relations = []], index) => (

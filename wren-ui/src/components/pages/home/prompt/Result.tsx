@@ -17,13 +17,15 @@ import useModalAction from '@/hooks/useModalAction';
 import useAskProcessState from '@/hooks/useAskProcessState';
 import { AskingTask } from '@/apollo/client/graphql/__types__';
 
-const ResultStyle = styled.div`
+const StyledResult = styled.div`
   position: absolute;
   bottom: calc(100% + 12px);
   left: 0;
   width: 100%;
   background: white;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    rgba(0, 0, 0, 0.1) 0px 10px 15px -3px,
+    rgba(0, 0, 0, 0.05) 0px 4px 6px -2px;
 `;
 
 const StyledCollapse = styled(Collapse)`
@@ -230,8 +232,8 @@ export default function PromptResult(props: Props) {
   if (StateComponent === null) return null;
 
   return (
-    <ResultStyle className="border border-gray-3 rounded p-4">
+    <StyledResult className="border border-gray-3 rounded p-4">
       <StateComponent {...props} />
-    </ResultStyle>
+    </StyledResult>
   );
 }

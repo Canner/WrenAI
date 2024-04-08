@@ -114,7 +114,7 @@ export default function RelationModal(props: Props) {
 
   return (
     <Modal
-      title={`${isEmpty(defaultValue) ? 'Add' : 'Update'} relation`}
+      title={`${isEmpty(defaultValue) ? 'Add' : 'Update'} relationship`}
       width={750}
       visible={visible}
       okText="Submit"
@@ -170,7 +170,7 @@ export default function RelationModal(props: Props) {
           </Col>
         </Row>
         <Form.Item
-          label="Relation type"
+          label="Type"
           name="type"
           required
           rules={[
@@ -182,7 +182,7 @@ export default function RelationModal(props: Props) {
         >
           <Select
             options={relationTypeOptions}
-            placeholder="Select a relation type"
+            placeholder="Select a relationship type"
           />
         </Form.Item>
       </Form>

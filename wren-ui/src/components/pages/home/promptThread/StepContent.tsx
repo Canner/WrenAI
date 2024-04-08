@@ -1,4 +1,4 @@
-import { Avatar, Button, ButtonProps, Col, Row, Typography } from 'antd';
+import { Button, ButtonProps, Col, Row, Typography } from 'antd';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { BinocularsIcon } from '@/utils/icons';
 import CollapseContent, {
@@ -6,7 +6,7 @@ import CollapseContent, {
 } from '@/components/pages/home/promptThread/CollapseContent';
 import useAnswerStepContent from '@/hooks/useAnswerStepContent';
 
-const { Title, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 interface Props {
   fullSql: string;
@@ -37,20 +37,16 @@ export default function StepContent(props: Props) {
   const stepNumber = stepIndex + 1;
 
   return (
-    <Row className="mb-3 bg-gray-2" wrap={false}>
-      <Col flex="32px" className="p-2">
-        <Avatar
-          alt={`step-${stepNumber}`}
-          className="adm-avatar-xs bg-gray-5 gray-7"
-        >
-          {stepNumber}
-        </Avatar>
+    <Row
+      className={`pb-3${!isLastStep ? ' mb-5 border-b border-gray-3' : ''}`}
+      wrap={false}
+    >
+      <Col className="text-center" flex="28px">
+        <div className="gray-8 text-extra-bold">{stepNumber}.</div>
       </Col>
-      <Col flex="auto" className="pt-2 pl-2 pr-8 pb-4">
+      <Col flex="auto">
         <Paragraph>
-          <Title level={5} style={{ fontWeight: 400 }}>
-            {summary}
-          </Title>
+          <Text>{summary}</Text>
         </Paragraph>
         <Button
           {...(previewDataButtonProps as ButtonProps)}

@@ -44,7 +44,7 @@ export const useWithOnboarding = () => {
 
       // redirect to home page since user using sample dataset
       if (
-        pathname === Path.OnboardingRelations &&
+        pathname === Path.OnboardingRelationships &&
         onboardingStatus === OnboardingStatus.WITH_SAMPLE_DATASET
       ) {
         router.push(newPath);

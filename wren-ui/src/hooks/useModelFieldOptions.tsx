@@ -98,7 +98,7 @@ export default function useModelFieldOptions(
 
   const columns: ModelFieldOption[] = currentModel.columns.map(convertor) || [];
   const relations: ModelFieldOption[] = lineage.length
-    ? [{ label: 'Relations', options: lineage.map(convertor) }]
+    ? [{ label: 'Relationships', options: lineage.map(convertor) }]
     : [];
 
   return [columns, relations].flat();
