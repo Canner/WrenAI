@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "yarn check-types && next lint",
     "test": "jest",
