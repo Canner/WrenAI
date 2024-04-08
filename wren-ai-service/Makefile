@@ -1,3 +1,5 @@
+test_args ?= 
+
 start:
 	poetry run python -m src.__main__
 
