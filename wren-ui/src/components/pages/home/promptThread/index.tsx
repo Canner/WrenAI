@@ -26,10 +26,6 @@ const StyledPromptThread = styled.div`
     border-radius: 4px;
   }
 
-  .ace_editor {
-    border: none;
-  }
-
   button {
     vertical-align: middle;
   }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SETUP } from '@/utils/enum';
+import { Path, SETUP } from '@/utils/enum';
 import { useRouter } from 'next/router';
 import {
   useListDataSourceTablesQuery,
@@ -23,11 +23,11 @@ export default function useSetupModels() {
         data: { tables },
       },
     });
-    router.push('/setup/relations');
+    router.push(Path.OnboardingRelationships);
   };
 
   const onBack = () => {
-    router.push('/setup/connection');
+    router.push(Path.OnboardingConnection);
   };
 
   const onNext = (data: { selectedTables: string[] }) => {

@@ -47,9 +47,11 @@ export default function CombineFieldSelector(props: Props) {
 
   useEffect(syncOnChange, [internalValue]);
 
-  const changeModel = async (model: string, option) => {
+  const changeModel = (model: string, option) => {
     onModelChange && onModelChange(option.label);
-    setInternalValue({ ...internalValue, model });
+    const newInternalValue = { model, field: undefined };
+    setInternalValue(newInternalValue);
+    onChange && onChange(newInternalValue);
   };
 
   const changeField = (field: string, option) => {
@@ -60,7 +62,7 @@ export default function CombineFieldSelector(props: Props) {
   return (
     <Input.Group className="d-flex" compact>
       <Select
-        style={{ width: 120 }}
+        style={{ width: '35%' }}
         options={modelOptions}
         onChange={changeModel}
         placeholder="Model"

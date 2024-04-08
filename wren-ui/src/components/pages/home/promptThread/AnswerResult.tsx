@@ -1,9 +1,23 @@
 import { Skeleton, Typography } from 'antd';
-import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
-import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
+import styled from 'styled-components';
+import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import StepContent from '@/components/pages/home/promptThread/StepContent';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
+
+const StyledAnswer = styled(Typography)`
+  position: relative;
+  border: 1px var(--gray-4) solid;
+  border-radius: 4px;
+
+  .adm-answer-title {
+    font-weight: 500;
+    position: absolute;
+    top: -13px;
+    left: 8px;
+    background: white;
+  }
+`;
 
 interface Props {
   loading: boolean;
@@ -29,18 +43,15 @@ export default function AnswerResult(props: Props) {
 
   return (
     <Skeleton active loading={loading}>
-      <Typography>
-        <Title level={4}>
-          <QuestionCircleOutlined className="mr-2" />
-          {question}
-        </Title>
-        <Title level={4}>
-          <CheckCircleOutlined className="mr-2" />
+      <Title className="mb-6 text-bold gray-10" level={3}>
+        {question}
+      </Title>
+      <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
+        <Text className="adm-answer-title px-2">
+          <CheckCircleFilled className="mr-2 green-6" />
           Answer
-        </Title>
-        <Title level={5} style={{ fontWeight: 400 }}>
-          {description}
-        </Title>
+        </Text>
+        <div className="pl-7 pb-5">{description}</div>
         {(answerResultSteps || []).map((step, index) => (
           <StepContent
             isLastStep={index === answerResultSteps.length - 1}
@@ -52,7 +63,7 @@ export default function AnswerResult(props: Props) {
             threadResponseId={threadResponseId}
           />
         ))}
-      </Typography>
+      </StyledAnswer>
     </Skeleton>
   );
 }

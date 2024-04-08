@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"regexp"
 
@@ -15,6 +14,8 @@ import (
 	cmdCompose "github.com/docker/compose/v2/cmd/compose"
 	"github.com/docker/compose/v2/pkg/api"
 	"github.com/docker/compose/v2/pkg/compose"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/pterm/pterm"
 )
 
@@ -23,9 +24,15 @@ const (
 	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/c8965ceba6eae274d2eec0595fd12b0989880ba3/.env.example"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, port int) string {
+	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
-	return reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
+	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
+
+	// replace PORT
+	reg = regexp.MustCompile(`HOST_PORT=(.*)`)
+	str = reg.ReplaceAllString(str, "HOST_PORT="+fmt.Sprintf("%d", port))
+	return str
 }
 
 func downloadFile(filepath string, url string) error {
@@ -69,7 +76,7 @@ func CheckDockerDaemonRunning() (bool, error) {
 	return true, nil
 }
 
-func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
+func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -94,7 +101,7 @@ func PrepareDockerFiles(OpenaiApiKey string, projectDir string) error {
 	}
 
 	// replace the content with regex
-	newEnvFileContent := replaceEnvFileContent(string(envFileContent), OpenaiApiKey)
+	newEnvFileContent := replaceEnvFileContent(string(envFileContent), openaiApiKey, port)
 	newEnvFile := path.Join(projectDir, ".env")
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(newEnvFileContent), 0644)
@@ -159,19 +166,64 @@ func RunDockerCompose(projectName string, projectDir string) error {
 	return nil
 }
 
-func OpenDockerDaemon() error {
-	// open docker daemon with command
-	cmd := exec.Command("open", "-a", "Docker")
-	if err := cmd.Run(); err != nil {
-		return err
+func listProcess() ([]types.Container, error) {
+	ctx := context.Background()
+	dockerCli, err := command.NewDockerCli()
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	err = dockerCli.Initialize(flags.NewClientOptions())
+	if err != nil {
+		return nil, err
+	}
+
+	containerListOptions := container.ListOptions{
+		All: true,
+	}
+
+	containers, err := dockerCli.Client().ContainerList(ctx, containerListOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return containers, nil
 }
 
-func CheckWrenAIStarted() error {
+func findWrenUIContainer() (types.Container, error) {
+	containers, err := listProcess()
+	if err != nil {
+		return types.Container{}, err
+	}
+
+	for _, container := range containers {
+		// return if com.docker.compose.project == wrenai && com.docker.compose.service=wren-ui
+		if container.Labels["com.docker.compose.project"] == "wrenai" && container.Labels["com.docker.compose.service"] == "wren-ui" {
+			return container, nil
+		}
+	}
+
+	return types.Container{}, fmt.Errorf("WrenUI container not found")
+}
+
+func IfPortUsedByWrenUI(port int) bool {
+	container, err := findWrenUIContainer()
+	if err != nil {
+		return false
+	}
+
+	for _, containerPort := range container.Ports {
+		if containerPort.PublicPort == uint16(port) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func CheckWrenAIStarted(url string) error {
 	// check response from localhost:3000
-	resp, err := http.Get("http://localhost:3000")
+	resp, err := http.Get(url)
 	if err != nil {
 		return err
 	}

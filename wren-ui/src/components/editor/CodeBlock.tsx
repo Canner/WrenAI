@@ -6,18 +6,23 @@ import '@/components/editor/AceEditor';
 const Block = styled.div<{ inline?: boolean }>`
   position: relative;
   white-space: pre;
-  overflow-x: auto;
+  font-size: 14px;
+  border: 1px var(--gray-4) solid;
   ${(props) =>
     props.inline
       ? `display: inline; border: none; background: transparent !important; padding: 0;`
-      : `background: var(--gray-1); padding: 4px;`}
+      : `background: var(--gray-1); padding: 8px;`}
+
+  .adm-code-wrap {
+    overflow-x: auto;
+  }
 
   .adm-code-line {
     ${(props) => (props.inline ? '' : 'display: block;')}
     &-number {
       user-select: none;
       display: inline-block;
-      min-width: 1.5em;
+      min-width: 14px;
       text-align: right;
       margin-right: 1em;
       color: var(--gray-6);
@@ -92,8 +97,10 @@ export default function CodeBlock(props: Props) {
 
   return (
     <Block className="ace_editor ace-tomorrow" inline={inline}>
-      {lines}
-      {copyable && <CopyText copyable>{code}</CopyText>}
+      <div className="adm-code-wrap">
+        {lines}
+        {copyable && <CopyText copyable>{code}</CopyText>}
+      </div>
     </Block>
   );
 }

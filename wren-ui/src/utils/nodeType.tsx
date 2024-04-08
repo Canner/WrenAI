@@ -15,7 +15,7 @@ export const getNodeTypeIcon = (
     case NODE_TYPE.VIEW:
       return <ViewIcon title="View" {...attrs} />;
     case NODE_TYPE.RELATION:
-      return <RelationshipIcon title="Relation" {...attrs} />;
+      return <RelationshipIcon title="Relationship" {...attrs} />;
 
     case NODE_TYPE.FIELD:
       return type ? getColumnTypeIcon({ type }, attrs) : null;

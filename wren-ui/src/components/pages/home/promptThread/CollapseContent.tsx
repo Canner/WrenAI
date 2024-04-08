@@ -35,12 +35,12 @@ export default function CollapseContent(props: Props) {
   return (
     <>
       {(isViewSQL || isViewFullSQL) && (
-        <pre className="p-0 my-2">
+        <pre className="p-0 my-3">
           <CodeBlock code={sql} showLineNumbers />
         </pre>
       )}
       {isPreviewData && (
-        <div className="my-2">
+        <div className="my-3">
           <PreviewData {...previewDataResult} />
         </div>
       )}
@@ -56,7 +56,7 @@ export default function CollapseContent(props: Props) {
             Collapse
           </Button>
           {isPreviewData && (
-            <Text className="gray-6">Showing up to 500 rows</Text>
+            <Text className="text-base gray-6">Showing up to 500 rows</Text>
           )}
         </div>
       )}
