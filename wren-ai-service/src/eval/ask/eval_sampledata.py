@@ -241,20 +241,28 @@ if __name__ == "__main__":
     end = time.time()
     print(f"Time taken: {end - start:.2f}s")
 
+    no_valid_generations = list(
+        filter(
+            lambda x: (not x["valid_generation_results"])
+            and x["invalid_generation_results"],
+            outputs,
+        )
+    )
+
+    total_invalid_generations = list(
+        filter(lambda x: x["invalid_generation_results"], outputs)
+    )
+
     results = {
         "mdl": mdl,
-        "no_valid_generation_count": len(
-            list(
-                filter(
-                    lambda x: (not x["valid_generation_results"])
-                    and x["invalid_generation_results"],
-                    outputs,
-                )
-            )
-        ),
-        "total_invalid_generation_count": sum(
-            map(lambda x: len(x["invalid_generation_results"]), outputs)
-        ),
+        "no_valid_generation": {
+            "count": len(no_valid_generations),
+            "details": no_valid_generations,
+        },
+        "total_invalid_generation": {
+            "count": len(total_invalid_generations),
+            "details": total_invalid_generations,
+        },
         "outputs": outputs,
     }
 
