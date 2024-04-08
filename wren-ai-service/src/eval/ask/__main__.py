@@ -156,6 +156,9 @@ def process_item(query: str, no_db_schema: Optional[bool]) -> Dict[str, Any]:
         },
     }
 
+    print(f"size of valid_generation_results: {len(valid_generation_results)}")
+    print(f"size of invalid_generation_results: {len(invalid_generation_results)}")
+
     return {
         "contexts": documents,
         "prediction": (

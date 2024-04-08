@@ -27,7 +27,10 @@ class PostProcessor:
             isinstance(cleaned_generation_result, dict)
             and cleaned_generation_result["sql"] == ""
         ):
-            return {"results": []}
+            return {
+                "valid_generation_results": [],
+                "invalid_generation_results": [],
+            }
 
         mdl_catalog, mdl_schema = get_mdl_catalog_and_schema(
             os.getenv("WREN_ENGINE_API_ENDPOINT")
@@ -46,3 +49,7 @@ class PostProcessor:
             "valid_generation_results": valid_generation_results,
             "invalid_generation_results": invalid_generation_results,
         }
+
+
+def init_post_processor():
+    return PostProcessor()
