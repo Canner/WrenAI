@@ -129,7 +129,7 @@ export default function Starter(props) {
       <Typography.Text>
         Vote for your preferred data source to be our next option on our{' '}
         <Link
-          href="https://github.com/Canner/WrenAI/issues"
+          href="https://github.com/Canner/WrenAI"
           target="_blank"
           rel="noopener noreferrer"
         >

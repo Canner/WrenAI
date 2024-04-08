@@ -47,7 +47,7 @@ export default function ConnectDataSource(props: Props) {
       <Typography.Text>
         Vote for your preferred data source to be our next option on our{' '}
         <Link
-          href="https://github.com/Canner/WrenAI/issues"
+          href="https://github.com/Canner/WrenAI"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -72,7 +72,14 @@ export default function ConnectDataSource(props: Props) {
           </Col>
           <Col className="text-right" span={12}>
             Learn more information in {current.label}{' '}
-            <Link href={current.guide}>setup guide</Link>.
+            <Link
+              href={current.guide}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              setup guide
+            </Link>
+            .
           </Col>
         </Row>
         <current.component />
