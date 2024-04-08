@@ -7,7 +7,7 @@ import (
 	"github.com/pterm/pterm"
 )
 
-func checkIfPortUsed(port int) bool {
+func ifPortAvailable(port int) bool {
 	// listen on port to check if it's used
 	_, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	return err != nil
@@ -19,8 +19,12 @@ func FindAvailablePort(defaultPort int) int {
 	// until a port is found that is not in use
 	for port := defaultPort; port < defaultPort+100; port++ {
 		pterm.Info.Printf("Checking if port %d is available\n", port)
-		if !checkIfPortUsed(port) {
-			pterm.Info.Printf("Port %d is available\n", port)
+
+		if ifPortAvailable(port) {
+			// Return the port if it's not used
+			return port
+		} else if IfPortUsedByWrenUI(port) {
+			// Return the port if it's used, but used by wrenAI
 			return port
 		}
 	}

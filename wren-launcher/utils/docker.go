@@ -166,7 +166,7 @@ func RunDockerCompose(projectName string, projectDir string) error {
 	return nil
 }
 
-func ListProcess() ([]types.Container, error) {
+func listProcess() ([]types.Container, error) {
 	ctx := context.Background()
 	dockerCli, err := command.NewDockerCli()
 	if err != nil {
@@ -190,9 +190,40 @@ func ListProcess() ([]types.Container, error) {
 	return containers, nil
 }
 
-func CheckWrenAIStarted() error {
+func findWrenUIContainer() (types.Container, error) {
+	containers, err := listProcess()
+	if err != nil {
+		return types.Container{}, err
+	}
+
+	for _, container := range containers {
+		// return if com.docker.compose.project == wrenai && com.docker.compose.service=wren-ui
+		if container.Labels["com.docker.compose.project"] == "wrenai" && container.Labels["com.docker.compose.service"] == "wren-ui" {
+			return container, nil
+		}
+	}
+
+	return types.Container{}, fmt.Errorf("WrenUI container not found")
+}
+
+func IfPortUsedByWrenUI(port int) bool {
+	container, err := findWrenUIContainer()
+	if err != nil {
+		return false
+	}
+
+	for _, containerPort := range container.Ports {
+		if containerPort.PublicPort == uint16(port) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func CheckWrenAIStarted(url string) error {
 	// check response from localhost:3000
-	resp, err := http.Get("http://localhost:3000")
+	resp, err := http.Get(url)
 	if err != nil {
 		return err
 	}

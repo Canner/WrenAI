@@ -124,6 +124,7 @@ func Launch() {
 
 	// wait for 10 seconds
 	pterm.Info.Println("WrenAI is starting, please wait for a moment...")
+	url := fmt.Sprintf("http://localhost:%d", port)
 	// wait until checking if CheckWrenAIStarted return without error
 	// if timeout 2 minutes, panic
 	timeoutTime := time.Now().Add(2 * time.Minute)
@@ -133,7 +134,7 @@ func Launch() {
 		}
 
 		// check if WrenAI is started
-		err = utils.CheckWrenAIStarted()
+		err = utils.CheckWrenAIStarted(url)
 		if err == nil {
 			break
 		}
@@ -142,7 +143,7 @@ func Launch() {
 
 	// open browser
 	pterm.Info.Println("Opening browser")
-	utils.Openbrowser("http://localhost:3000")
+	utils.Openbrowser(url)
 
 	pterm.Info.Println("You can now safely close this terminal window")
 	fmt.Scanf("h")
