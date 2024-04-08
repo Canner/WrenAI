@@ -36,13 +36,11 @@ SUMMARY 3: Above-average transactions last week.
 Proceed in a similar manner for the other queries.
 
 ### DATABASE SCHEMA ###
-
 {% for document in documents %}
     {{ document.content }}
 {% endfor %}
 
 ### FINAL ANSWER FORMAT ###
-
 The final answer must be the JSON format like following:
 
 {
@@ -58,7 +56,6 @@ The final answer must be the JSON format like following:
 - Make sure to map operators and operands correctly based on their data types.
 
 ### QUESTION ###
-
 {{ query }}
 """
 
@@ -125,7 +122,6 @@ Consider the structure of a generic database which includes common tables like u
 Here are the ambiguous user queries:
 
 ### EXAMPLES ###
-
 Previous SQL Summary: "Users signed up this year."
 Previous Generated SQL Query: "SELECT * FROM users WHERE sign_up_date >= '2023-01-01';"
 Current User Query: "Who has made a purchase?"
