@@ -39,7 +39,7 @@ const defaultConfig = {
   wrenEngineEndpoint: 'http://localhost:8080',
 
   // wren AI
-  wrenAIEndpoint: 'http://localhost:5000',
+  wrenAIEndpoint: 'http://localhost:5555',
 
   // encryption
   encryptionPassword: 'sementic',
