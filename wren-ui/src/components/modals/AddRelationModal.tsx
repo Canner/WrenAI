@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { isEmpty } from 'lodash';
-import { Modal, Form, Select, Row, Col } from 'antd';
+import { Modal, Form, Select } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
@@ -69,15 +69,24 @@ export default function RelationModal(props: Props) {
     value: JOIN_TYPE[key],
   }));
 
+  // check that only 1 set of relationships can be set up between models
   const toCombineModelOptions = toCombineField.modelOptions.map(
     (modelOption) => {
       const modelList = Object.entries(relations).reduce(
         (acc, [modelName, modelRelations]) => {
-          // For add relation, if the Model option has been selected in the From model relations, the Model option should be disabled
           if (modelName === model) {
+            const toFieldModelList = modelRelations.map(
+              (relation) => relation.toField.modelName,
+            );
+
             acc = [
               ...acc,
-              ...modelRelations.map((relation) => relation.toField.modelName),
+              ...(isEmpty(defaultValue)
+                ? toFieldModelList
+                : toFieldModelList.filter(
+                    (toFieldModel) =>
+                      toFieldModel !== defaultValue.toField.modelName,
+                  )),
             ];
           } else {
             const toFieldModelList = modelRelations.map(
@@ -127,48 +136,49 @@ export default function RelationModal(props: Props) {
       centered
     >
       <Form form={form} preserve={false} layout="vertical">
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              label="From"
-              name="fromField"
-              required
-              rules={[
-                {
-                  required: true,
-                  message: ERROR_TEXTS.ADD_RELATION.FROM_FIELD.REQUIRED,
-                },
-              ]}
-            >
-              <CombineFieldSelector
-                modelValue={modelValue}
-                modelDisabled={true}
-                onModelChange={fromCombineField.onModelChange}
-                modelOptions={fromCombineField.modelOptions}
-                fieldOptions={fromCombineField.fieldOptions}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              label="To"
-              name="toField"
-              required
-              rules={[
-                {
-                  required: true,
-                  message: ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED,
-                },
-              ]}
-            >
-              <CombineFieldSelector
-                onModelChange={toCombineField.onModelChange}
-                modelOptions={toCombineModelOptions}
-                fieldOptions={toCombineField.fieldOptions}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
+        <Form.Item
+          label="From"
+          name="fromField"
+          required
+          rules={[
+            {
+              required: true,
+              message: ERROR_TEXTS.ADD_RELATION.FROM_FIELD.REQUIRED,
+            },
+          ]}
+        >
+          <CombineFieldSelector
+            modelValue={modelValue}
+            modelDisabled={true}
+            onModelChange={fromCombineField.onModelChange}
+            modelOptions={fromCombineField.modelOptions}
+            fieldOptions={fromCombineField.fieldOptions}
+          />
+        </Form.Item>
+        <Form.Item
+          label="To"
+          name="toField"
+          required
+          rules={[
+            () => ({
+              validator(_, value) {
+                if (!value || !value.field) {
+                  return Promise.reject(
+                    ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED,
+                  );
+                }
+
+                return Promise.resolve();
+              },
+            }),
+          ]}
+        >
+          <CombineFieldSelector
+            onModelChange={toCombineField.onModelChange}
+            modelOptions={toCombineModelOptions}
+            fieldOptions={toCombineField.fieldOptions}
+          />
+        </Form.Item>
         <Form.Item
           label="Type"
           name="type"
