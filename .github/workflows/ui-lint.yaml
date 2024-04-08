@@ -43,5 +43,7 @@ jobs:
             ${{ runner.os }}-yarn-
       - name: Install Node.js dependencies
         run: yarn install
-      - name: Run lint
-        run: yarn run lint
+      - name: Run linters
+        uses: wearerequired/lint-action@v2
+        with:
+          eslint: true
