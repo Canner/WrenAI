@@ -19,7 +19,6 @@ COPY src ./src
 COPY .eslintrc.json ./
 COPY .eslintignore ./
 COPY .prettierrc ./
-COPY next-env.d.ts ./
 COPY next.config.js ./
 COPY tsconfig.json ./
 COPY yarn.lock ./
