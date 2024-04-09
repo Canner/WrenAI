@@ -1,6 +1,9 @@
 name: Wren-UI Release image
 
 on:
+  push:
+    branches:
+      - chore/wren-ui-ci
   workflow_dispatch:
     inputs:
       docker_image_tag_name:
