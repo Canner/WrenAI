@@ -11,10 +11,22 @@ defaults:
   run:
     working-directory: wren-ui
 
+permissions:
+  packages: write
+
 jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
+      - name: Prepare tag name
+        id: tag-preparation
+        run: |
+          if [ -n "${{ github.event.inputs.docker_image_tag_name }}" ]; then
+            tag_name=${{ github.event.inputs.docker_image_tag_name }}
+          else
+            tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
+          fi
+          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -26,15 +38,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Prepare tag name
-        id: tag-preparation
-        run: |
-          if [ -n "${{ github.event.inputs.docker_image_tag_name }}" ]; then
-            tag_name=${{ github.event.inputs.docker_image_tag_name }}
-          else
-            tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
-          fi
-          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Build and push image
         env:
           TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
