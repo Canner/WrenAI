@@ -30,6 +30,7 @@ export interface MDLSyncResponse {
 export interface IDeployService {
   deploy(manifest: Manifest, projectId: number): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<string>;
+  getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest): string;
 }
 
@@ -61,12 +62,19 @@ export class DeployService implements IDeployService {
     return lastDeploy.hash;
   }
 
+  public async getInProgressDeployment(projectId) {
+    return await this.deployLogRepository.findInProgressProjectDeployLog(
+      projectId,
+    );
+  }
+
   public async deploy(manifest, projectId) {
     // generate hash of manifest
     const hash = this.createMDLHash(manifest);
     logger.debug(`Deploying model, hash: ${hash}`);
     logger.debug(manifest);
-    // check if the model has been deployed
+
+    // check if the model current deployment
     const lastDeploy =
       await this.deployLogRepository.findLastProjectDeployLog(projectId);
     if (lastDeploy && lastDeploy.hash === hash) {
@@ -74,7 +82,12 @@ export class DeployService implements IDeployService {
       return { status: DeployStatusEnum.SUCCESS };
     }
 
-    const deployData = { manifest, hash, projectId } as Deploy;
+    const deployData = {
+      manifest,
+      hash,
+      projectId,
+      status: DeployStatusEnum.IN_PROGRESS,
+    } as Deploy;
     const deploy = await this.deployLogRepository.createOne(deployData);
 
     // deploy to wren-engine & AI-service
