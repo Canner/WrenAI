@@ -1,5 +1,5 @@
-import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
+import { useParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
@@ -13,9 +13,11 @@ import {
 import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
 import PromptThread from '@/components/pages/home/promptThread';
 
-export default function HomeThread({ threadId }) {
+export default function HomeThread() {
   const router = useRouter();
+  const params = useParams();
   const homeSidebar = useHomeSidebar();
+  const threadId = useMemo(() => Number(params?.id) || null, [params]);
   const askPrompt = useAskPrompt(threadId);
 
   const {
@@ -25,6 +27,7 @@ export default function HomeThread({ threadId }) {
   } = useThreadQuery({
     variables: { threadId },
     fetchPolicy: 'cache-and-network',
+    skip: threadId === null,
     onError: () => router.push(Path.Home),
   });
   const [createThreadResponse] = useCreateThreadResponseMutation({
@@ -108,11 +111,3 @@ export default function HomeThread({ threadId }) {
     </SiderLayout>
   );
 }
-
-export const getServerSideProps = (async (context) => {
-  return {
-    props: {
-      threadId: Number(context.params.id),
-    },
-  };
-}) as GetServerSideProps<{ threadId: number }>;
