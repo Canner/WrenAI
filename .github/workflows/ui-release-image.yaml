@@ -18,6 +18,7 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Prepare tag name
         id: tag-preparation
         run: |
@@ -27,7 +28,6 @@ jobs:
             tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
           fi
           echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
-      - uses: actions/checkout@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
