@@ -42,8 +42,8 @@ jobs:
           echo "Building image with tag: $TAG_NAME"
           docker buildx build \
             --platform linux/arm64 \
-            --tag ghcr.io/canner/wren-ui:$TAG_NAME \
+            --tag ghcr.io/canner/wren-ui:1 \
             --file ./Dockerfile \
+            --push \
             --cache-to type=gha \
-            --cache-from type=gha, mode=max \
-            --push . 
+            --cache-from type=gha,mode=max .
