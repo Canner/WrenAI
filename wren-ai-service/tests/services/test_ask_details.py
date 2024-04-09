@@ -70,10 +70,11 @@ def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
     # asking details
     query_id = str(uuid.uuid4())
     sql = "SELECT * FROM xxx"
+    summary = "This is a summary"
     ask_details_request = AskDetailsRequest(
         query="How many books are there?'",
         sql=sql,
-        summary="This is a summary",
+        summary=summary,
     )
     ask_details_request.query_id = query_id
     ask_details_service.ask_details(ask_details_request)
@@ -95,5 +96,8 @@ def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
             )
         )
 
-    assert ask_details_result_response.status == "failed"
-    assert ask_details_result_response.error.code == "NO_RELEVANT_SQL"
+    assert ask_details_result_response.status == "finished"
+    assert ask_details_result_response.response.description != ""
+    assert len(ask_details_result_response.response.steps) == 1
+    assert ask_details_result_response.response.steps[0].sql == sql
+    assert ask_details_result_response.response.steps[0].summary != ""

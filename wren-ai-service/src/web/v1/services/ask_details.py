@@ -66,6 +66,7 @@ class AskDetailsService:
             self.ask_details_results[query_id] = AskDetailsResultResponse(
                 status="understanding"
             )
+
             self.ask_details_results[query_id] = AskDetailsResultResponse(
                 status="searching"
             )
@@ -80,12 +81,19 @@ class AskDetailsService:
 
             ask_details_result = generation_result["post_processor"]["results"]
 
-            if ask_details_result is None:
+            if not ask_details_result["steps"]:
+                ask_details_result["steps"] = [
+                    {
+                        "sql": ask_details_request.sql,
+                        "summary": ask_details_request.summary,
+                        "cte_name": "",
+                    }
+                ]
+
                 self.ask_details_results[query_id] = AskDetailsResultResponse(
-                    status="failed",
-                    error=AskDetailsResultResponse.AskDetailsError(
-                        code="NO_RELEVANT_SQL",
-                        message="No relevant SQL",
+                    status="finished",
+                    response=AskDetailsResultResponse.AskDetailsResponseDetails(
+                        **ask_details_result
                     ),
                 )
             else:

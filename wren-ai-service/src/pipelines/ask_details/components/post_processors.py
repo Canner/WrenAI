@@ -25,7 +25,10 @@ class GenerationPostProcessor:
         if not steps:
             return {
                 "replies": replies,
-                "results": None,
+                "results": {
+                    "description": cleaned_generation_result["description"],
+                    "steps": [],
+                },
             }
 
         sql = _build_cte_query(steps)
@@ -33,7 +36,10 @@ class GenerationPostProcessor:
         if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
             return {
                 "replies": replies,
-                "results": None,
+                "results": {
+                    "description": cleaned_generation_result["description"],
+                    "steps": [],
+                },
             }
 
         # make sure the last step has an empty cte_name
