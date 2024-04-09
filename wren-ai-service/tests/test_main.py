@@ -15,7 +15,7 @@ def test_semantics_description():
     # using TestClient as a context manager would trigger startup/shutdown events as well as lifespans.
     with TestClient(app) as client:
         response = client.post(
-            url="/v1/semantics-descriptions/",
+            url="/v1/semantics-descriptions",
             json={
                 "mdl": {
                     "name": "all_star",
@@ -59,7 +59,7 @@ def test_semantics_preparations():
             mdl_str = json.dumps(json.load(f))
 
         response = client.post(
-            url="/v1/semantics-preparations/",
+            url="/v1/semantics-preparations",
             json={
                 "mdl": mdl_str,
                 "id": semantics_preperation_id,
@@ -73,7 +73,7 @@ def test_semantics_preparations():
 
         while status == "indexing":
             response = client.get(
-                url=f"/v1/semantics-preparations/{semantics_preperation_id}/status/"
+                url=f"/v1/semantics-preparations/{semantics_preperation_id}/status"
             )
 
             assert response.status_code == 200
@@ -101,12 +101,12 @@ def test_asks_with_successful_query():
         query_id = response.json()["query_id"]
         GLOBAL_DATA["query_id"] = query_id
 
-        response = client.get(url=f"/v1/asks/{query_id}/result/")
+        response = client.get(url=f"/v1/asks/{query_id}/result")
         while (
             response.json()["status"] != "finished"
             and response.json()["status"] != "failed"
         ):
-            response = client.get(url=f"/v1/asks/{query_id}/result/")
+            response = client.get(url=f"/v1/asks/{query_id}/result")
 
         assert response.status_code == 200
         assert response.json()["status"] == "finished"
@@ -133,12 +133,12 @@ def test_asks_with_failed_query():
         query_id = response.json()["query_id"]
         GLOBAL_DATA["query_id"] = query_id
 
-        response = client.get(url=f"/v1/asks/{query_id}/result/")
+        response = client.get(url=f"/v1/asks/{query_id}/result")
         while (
             response.json()["status"] != "finished"
             and response.json()["status"] != "failed"
         ):
-            response = client.get(url=f"/v1/asks/{query_id}/result/")
+            response = client.get(url=f"/v1/asks/{query_id}/result")
 
         assert response.status_code == 200
         assert response.json()["status"] == "failed"
@@ -162,9 +162,9 @@ def test_stop_asks():
         assert response.status_code == 200
         assert response.json()["query_id"] == query_id
 
-        response = client.get(url=f"/v1/asks/{query_id}/result/")
+        response = client.get(url=f"/v1/asks/{query_id}/result")
         while response.json()["status"] != "stopped":
-            response = client.get(url=f"/v1/asks/{query_id}/result/")
+            response = client.get(url=f"/v1/asks/{query_id}/result")
 
         assert response.status_code == 200
         assert response.json()["status"] == "stopped"
@@ -173,7 +173,7 @@ def test_stop_asks():
 def test_ask_details():
     with TestClient(app) as client:
         response = client.post(
-            url="/v1/ask-details/",
+            url="/v1/ask-details",
             json={
                 "query": "How many books are there?",
                 "sql": "SELECT COUNT(*) FROM book",
@@ -185,9 +185,9 @@ def test_ask_details():
         assert response.json()["query_id"] != ""
 
         query_id = response.json()["query_id"]
-        response = client.get(url=f"/v1/ask-details/{query_id}/result/")
+        response = client.get(url=f"/v1/ask-details/{query_id}/result")
         while response.json()["status"] != "finished":
-            response = client.get(url=f"/v1/ask-details/{query_id}/result/")
+            response = client.get(url=f"/v1/ask-details/{query_id}/result")
 
         assert response.status_code == 200
         assert response.json()["status"] == "finished"
@@ -202,7 +202,7 @@ def test_ask_details():
 def test_web_error_handler():
     with TestClient(app) as client:
         response = client.post(
-            url="/v1/semantics-descriptions/",
+            url="/v1/semantics-descriptions",
             json={},
         )
 

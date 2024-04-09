@@ -245,7 +245,6 @@ if __name__ == "__main__":
         help="Whether to use hard questions for evaluation. Default is False.",
     )
 
-    parser.add_argument
     args = parser.parse_args()
 
     PREDICTION_RESULTS_FILE = args.input_file
@@ -317,6 +316,50 @@ if __name__ == "__main__":
 
     if not Path("./outputs/ask").exists():
         Path("./outputs/ask").mkdir(parents=True)
+
+    if ENABLE_SEMANTIC_DESCRIPTION:
+        if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
+            print(f"Use the existed {DATASET_NAME}_with_semantic_mdl.json...\n")
+        else:
+            print(
+                f"Generating semantic description for the {DATASET_NAME} dataset...\n"
+            )
+            semantics_service = SemanticsService(
+                pipelines={
+                    "generate_description": description.Generation(),
+                }
+            )
+            with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
+                mdl_data = json.load(f)
+
+            for model in tqdm(mdl_data["models"]):
+                semantic_desc = semantics_service.generate_description(
+                    GenerateDescriptionRequest(
+                        mdl=model,
+                        model=model["name"],
+                        identifier="model",
+                    )
+                )
+                model["properties"]["description"] = semantic_desc.description
+                model["properties"]["display_name"] = semantic_desc.display_name
+                for column in model["columns"]:
+                    semantic_desc = semantics_service.generate_description(
+                        GenerateDescriptionRequest(
+                            mdl=model,
+                            model=model["name"],
+                            identifier="column@" + column["name"],
+                        )
+                    )
+                    column["properties"]["description"] = semantic_desc.description
+                    column["properties"]["display_name"] = semantic_desc.display_name
+
+            with open(
+                f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "w"
+            ) as f:
+                json.dump(mdl_data, f)
+
+    if not Path("./outputs").exists():
+        Path("./outputs").mkdir()
 
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (

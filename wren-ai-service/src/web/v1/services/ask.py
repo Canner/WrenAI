@@ -4,6 +4,8 @@ from typing import List, Literal, Optional
 from haystack import Pipeline
 from pydantic import BaseModel
 
+from src.utils import remove_duplicates
+
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 
 
@@ -215,6 +217,9 @@ class AskService:
                     logging.debug(
                         f'sql_correction_results: {sql_correction_results["post_processor"]}'
                     )
+
+                # remove duplicates of valid_generation_results, which consists of a sql and a summary
+                valid_generation_results = remove_duplicates(valid_generation_results)
 
                 logging.debug("After sql correction:")
                 logging.debug(f"valid_generation_results: {valid_generation_results}")
