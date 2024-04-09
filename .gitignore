@@ -70,3 +70,6 @@ next-env.d.ts
 
 # wren-launcher
 wren-launcher/dist
+
+## temporary files
+.tmp

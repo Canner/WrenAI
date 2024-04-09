@@ -11,6 +11,12 @@ import { DeployResponse } from '../services/deployService';
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
 
+export enum SyncStatusEnum {
+  IN_PROGRESS = 'IN_PROGRESS',
+  SYNCRONIZED = 'SYNCRONIZED',
+  UNSYNCRONIZED = 'UNSYNCRONIZED',
+}
+
 export class ModelResolver {
   constructor() {
     this.listModels = this.listModels.bind(this);
@@ -28,10 +34,14 @@ export class ModelResolver {
     const lastDeployHash = await ctx.deployService.getLastDeployment(
       project.id,
     );
-
+    const inProgressDeployment =
+      await ctx.deployService.getInProgressDeployment(project.id);
+    if (inProgressDeployment) {
+      return { status: SyncStatusEnum.IN_PROGRESS };
+    }
     return currentHash == lastDeployHash
-      ? { isSyncronized: true }
-      : { isSyncronized: false };
+      ? { status: SyncStatusEnum.SYNCRONIZED }
+      : { status: SyncStatusEnum.UNSYNCRONIZED };
   }
 
   public async deploy(

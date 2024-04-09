@@ -14,6 +14,12 @@ export const typeDefs = gql`
     MUSIC
   }
 
+  enum SyncStatus {
+    IN_PROGRESS
+    SYNCRONIZED
+    UNSYNCRONIZED
+  }
+
   type DataSource {
     type: DataSourceName!
     properties: JSON!
@@ -204,7 +210,7 @@ export const typeDefs = gql`
   }
 
   type ModelSyncResponse {
-    isSyncronized: Boolean!
+    status: SyncStatus!
   }
 
   type Diagram {

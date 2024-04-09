@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/c8965ceba6eae274d2eec0595fd12b0989880ba3/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/c8965ceba6eae274d2eec0595fd12b0989880ba3/.env.example"
+	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/29ed1c5f2f554aef4c0959095b0c9d3ac66e66df/docker-compose.yaml"
+	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/29ed1c5f2f554aef4c0959095b0c9d3ac66e66df/.env.example"
 )
 
 func replaceEnvFileContent(content string, OpenaiApiKey string, port int) string {
