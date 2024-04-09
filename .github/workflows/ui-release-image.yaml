@@ -21,6 +21,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: 'yarn'
+          cache-dependency-path: 'wren-ui/yarn.lock'
+      - name: yarn build
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+      - name: List file
+        run: |
+          ls -la
+          cd .next
+          ls -la
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -48,7 +64,7 @@ jobs:
           docker buildx build \
             --platform linux/arm64 \
             --tag ghcr.io/canner/wren-ui:$TAG_NAME \
-            --file ./Dockerfile \
+            --file ../docker/wren-ui/Dockerfile \
             --push \
             --cache-to type=gha \
             --cache-from type=gha,mode=max .
