@@ -45,7 +45,7 @@ jobs:
         run: |
           echo "Building image with tag: $TAG_NAME"
           docker buildx build \
-            --platform linux/amd64,linux/arm64 \
+            --platform linux/arm64 \
             --tag ghcr.io/canner/wren-ui:$TAG_NAME \
             --file ./Dockerfile \
             --push .
