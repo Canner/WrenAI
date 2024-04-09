@@ -17,8 +17,8 @@
   <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
     <img alt="" src="https://img.shields.io/github/v/release/canner/WrenAI?logo=github&label=GitHub%20Release&color=blue&style=for-the-badge">
   </a>
-  <a aria-label="License" href="https://github.com/Canner/wrenai/blob/main/LICENSE">
-    <img alt="" src="https://img.shields.io/github/license/canner/wrenai?color=blue&style=for-the-badge">
+  <a aria-label="License" href="https://github.com/Canner/WrenAI/blob/main/LICENSE">
+    <img alt="" src="https://img.shields.io/github/license/canner/WrenAI?color=blue&style=for-the-badge">
   </a>
   <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
     <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20">
