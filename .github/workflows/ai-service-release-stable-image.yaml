@@ -19,21 +19,22 @@ jobs:
   upgrade-ai-service-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-            ref: github-app-demo
       - name: Generate a token
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ vars.CI_APP_ID }}
           private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+            ref: github-app-demo
+            token: ${{ steps.generate-token.outputs.token }}
       - name: Set up Git
         run: |
           git config --global user.email "dev@cannerdata.com"
           git config --global user.name "wren-ai[bot]"
-          git remote set-url origin  \
-            "https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/${{ github.repository }}"
+          # git remote set-url origin  \
+          #   "https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/${{ github.repository }}"
       - name: Set up Python 3.12
         uses: actions/setup-python@v4
         with:
