@@ -12,6 +12,7 @@ defaults:
     working-directory: wren-ui
 
 permissions:
+  contents: read
   packages: write
 
 jobs:
