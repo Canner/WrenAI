@@ -33,5 +33,5 @@ jobs:
             --platform linux/amd64,linux/arm64 \
             --tag ghcr.io/canner/wren-ui:${{ github.event.inputs.version }} \
             --tag ghcr.io/canner/wren-ui:latest \
-            --file ./docker/Dockerfile \
+            --file ./Dockerfile \
             --push .
