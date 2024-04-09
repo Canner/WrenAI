@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* ./
-RUN  yarn --frozen-lockfile
+RUN  yarn install --frozen-lockfile --network-timeout 100000
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -19,7 +19,6 @@ COPY src ./src
 COPY .eslintrc.json ./
 COPY .eslintignore ./
 COPY .prettierrc ./
-COPY next-env.d.ts ./
 COPY next.config.js ./
 COPY tsconfig.json ./
 COPY yarn.lock ./

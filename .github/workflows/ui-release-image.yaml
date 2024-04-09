@@ -1,0 +1,47 @@
+name: Wren-UI Release image
+
+on:
+  workflow_dispatch:
+    inputs:
+      docker_image_tag_name:
+        description: Docker image tag name (optional, default branch name/tag name replaced with hyphens)
+        type: string
+
+defaults:
+  run:
+    working-directory: wren-ui
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare tag name
+        id: tag-preparation
+        run: |
+          if [ -n "${{ github.event.inputs.docker_image_tag_name }}" ]; then
+            tag_name=${{ github.event.inputs.docker_image_tag_name }}
+          else
+            tag_name=$(echo ${{ github.ref_name }} | sed 's/[^a-zA-Z0-9]/-/g')-$(git log -1 --pretty=%h)
+          fi
+          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push image
+        env:
+          TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
+        run: |
+          echo "Building image with tag:$TAG_NAME"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag ghcr.io/canner/wren-ui:$TAG_NAME \
+            --file ./Dockerfile \
+            --push .
