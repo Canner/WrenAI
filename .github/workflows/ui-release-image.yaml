@@ -44,6 +44,6 @@ jobs:
             --platform linux/arm64 \
             --tag ghcr.io/canner/wren-ui:$TAG_NAME \
             --file ./Dockerfile \
-            --push . \
             --cache-to type=gha \
-            --cache-from type=gha, mode=max.
+            --cache-from type=gha, mode=max \
+            --push . 
