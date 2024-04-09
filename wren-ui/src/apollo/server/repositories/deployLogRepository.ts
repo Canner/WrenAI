@@ -11,12 +11,14 @@ export interface Deploy {
 }
 
 export enum DeployStatusEnum {
+  IN_PROGRESS = 'IN_PROGRESS',
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
 }
 
 export interface IDeployLogRepository extends IBasicRepository<Deploy> {
   findLastProjectDeployLog(projectId: number): Promise<Deploy | null>;
+  findInProgressProjectDeployLog(projectId: number): Promise<Deploy | null>;
 }
 
 export class DeployLogRepository
@@ -33,6 +35,21 @@ export class DeployLogRepository
       .from(this.tableName)
       .where(
         this.transformToDBData({ projectId, status: DeployStatusEnum.SUCCESS }),
+      )
+      .orderBy('created_at', 'desc')
+      .first();
+    return (res && this.transformFromDBData(res)) || null;
+  }
+
+  public async findInProgressProjectDeployLog(projectId: number) {
+    const res = await this.knex
+      .select('*')
+      .from(this.tableName)
+      .where(
+        this.transformToDBData({
+          projectId,
+          status: DeployStatusEnum.IN_PROGRESS,
+        }),
       )
       .orderBy('created_at', 'desc')
       .first();
