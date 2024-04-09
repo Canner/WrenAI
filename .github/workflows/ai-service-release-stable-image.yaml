@@ -45,7 +45,7 @@ jobs:
       - name: Upgrade AI Service version
         run: |
           # version=${{ github.event.inputs.version }}
-          version=v0.2.0-rc.1
+          version=0.2.0-rc.2
           poetry version --next-phase $version
           git add pyproject.toml
           git commit -m "Upgrade AI Service version to $version"
