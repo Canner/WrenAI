@@ -1,5 +1,11 @@
 import { isEmpty } from 'lodash';
-import { Model, ModelColumn, Project, RelationInfo } from '../repositories';
+import {
+  Model,
+  ModelColumn,
+  Project,
+  RelationInfo,
+  View,
+} from '../repositories';
 import { Manifest, ModelMDL } from './type';
 import { getLogger } from '@server/utils';
 
@@ -11,6 +17,7 @@ export interface MDLBuilderBuildFromOptions {
   models: Model[];
   columns?: ModelColumn[];
   relations?: RelationInfo[];
+  views: View[];
   relatedModels?: Model[];
   relatedColumns?: ModelColumn[];
   relatedRelations?: RelationInfo[];
@@ -28,6 +35,7 @@ export class MDLBuilder implements IMDLBuilder {
   private readonly models: Model[];
   private readonly columns: ModelColumn[];
   private readonly relations: RelationInfo[];
+  private readonly views: View[];
 
   // related models, columns, and relations are used as the reference to build calculatedField expression or other
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -43,6 +51,7 @@ export class MDLBuilder implements IMDLBuilder {
       models,
       columns,
       relations,
+      views,
       relatedModels,
       relatedColumns,
       relatedRelations,
@@ -51,6 +60,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.models = models;
     this.columns = columns;
     this.relations = relations;
+    this.views = views;
     this.relatedModels = relatedModels;
     this.relatedColumns = relatedColumns;
     this.relatedRelations = relatedRelations;
@@ -64,6 +74,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.addModel();
     this.addColumn();
     this.addRelation();
+    this.addView();
     return this.getManifest();
   }
 
@@ -85,6 +96,19 @@ export class MDLBuilder implements IMDLBuilder {
         properties: JSON.parse(model.properties),
         primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
+    });
+  }
+
+  public addView(): void {
+    if (!isEmpty(this.manifest.views)) {
+      return;
+    }
+    this.manifest.views = this.views.map((view: View) => {
+      return {
+        name: view.name,
+        statement: view.statement,
+        properties: JSON.parse(view.properties),
+      };
     });
   }
 

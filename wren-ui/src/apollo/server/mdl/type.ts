@@ -52,11 +52,11 @@ export interface EnumDefinition {
   };
 }
 
-export interface View {
+export interface ViewMDL {
   name: string;
   statement: string;
-  description?: string;
   properties?: {
+    displayName: string;
     description?: string;
   };
 }
@@ -67,5 +67,5 @@ export interface Manifest {
   models?: ModelMDL[];
   relationships?: RelationMDL[];
   enumDefinitions?: EnumDefinition[];
-  views?: View[];
+  views?: ViewMDL[];
 }
