@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
             ref: github-app-demo
-            token: ${{ steps.generate-token.outputs.token }}
+            # token: ${{ steps.generate-token.outputs.token }}
       - name: Set up Git
         run: |
           git config --global user.email "dev@cannerdata.com"
@@ -46,7 +46,7 @@ jobs:
       - name: Upgrade AI Service version
         run: |
           # version=${{ github.event.inputs.version }}
-          version=0.2.0-rc.3
+          version=0.2.0-rc.4
           poetry version --next-phase $version
           git add pyproject.toml
           git commit -m "Upgrade AI Service version to $version"
