@@ -11,10 +11,6 @@ defaults:
   run:
     working-directory: wren-ui
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   build-image:
     runs-on: ubuntu-latest
@@ -48,6 +44,6 @@ jobs:
             --platform linux/arm64 \
             --tag ghcr.io/canner/wren-ui:$TAG_NAME \
             --file ./Dockerfile \
-            --push .
+            --push . \
             --cache-to type=gha \
             --cache-from type=gha, mode=max.
