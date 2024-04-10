@@ -2,6 +2,7 @@ import dynamic from 'next/dynamic';
 import { forwardRef, useMemo, useRef } from 'react';
 import styled from 'styled-components';
 import { MORE_ACTION } from '@/utils/enum';
+import { Diagram as DiagramData } from '@/utils/data';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
@@ -26,7 +27,7 @@ export function Modeling() {
 
   const diagramData = useMemo(() => {
     if (!data) return null;
-    return data?.diagram;
+    return data?.diagram as DiagramData;
   }, [data]);
 
   const metadataDrawer = useDrawerAction();

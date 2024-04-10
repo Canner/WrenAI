@@ -1,14 +1,19 @@
 import {
+  Diagram as DiagramType,
   DiagramModel,
   DiagramModelField,
   DiagramModelRelationField,
 } from '@/apollo/client/graphql/__types__';
 export type {
-  Diagram,
   DiagramModel,
   DiagramModelField,
   DiagramModelRelationField,
 } from '@/apollo/client/graphql/__types__';
+
+// TODO: remove this when the backend implemented
+export type Diagram = DiagramType & {
+  views: any[];
+};
 
 export type ComposeDiagram = DiagramModel;
 export type ComposeDiagramField = (

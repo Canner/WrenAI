@@ -62,6 +62,8 @@ export class Transformer {
   private readonly config: typeof Config = Config;
   private models: DiagramModel[];
   public nodes: NodeWithData[] = [];
+  // TODO: update TS type
+  private views: any[];
   public edges: Edge[] = [];
   private start: StartPoint = {
     x: 0,
@@ -71,11 +73,12 @@ export class Transformer {
 
   constructor(data: Diagram) {
     this.models = data?.models || [];
+    this.views = data?.views || [];
     this.init();
   }
 
   public init() {
-    const allNodeData = [...this.models];
+    const allNodeData = [...this.models, ...this.views];
     for (const data of allNodeData) {
       this.addOne(data);
     }
