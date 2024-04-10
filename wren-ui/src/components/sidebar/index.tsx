@@ -37,7 +37,9 @@ const StyledButton = styled(Button)`
   }
 `;
 
-type Props = ModelingSidebarProps | HomeSidebarProps;
+type Props = (ModelingSidebarProps | HomeSidebarProps) & {
+  onOpenSettings?: () => void;
+};
 
 const DynamicSidebar = (
   props: Props & {
@@ -62,10 +64,11 @@ const DynamicSidebar = (
 };
 
 export default function Sidebar(props: Props) {
+  const { onOpenSettings } = props;
   const router = useRouter();
 
   const onSettingsClick = (event) => {
-    // TODO: call setting modal
+    onOpenSettings && onOpenSettings();
     event.target.blur();
   };
 

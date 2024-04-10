@@ -6,3 +6,4 @@ export * from './modeling';
 export * from './path';
 export * from './diagram';
 export * from './home';
+export * from './settings';
