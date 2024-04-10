@@ -40,4 +40,15 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please select at least one table.',
     },
   },
+  CACHE: {
+    GCP_BUCKET_NAME: {
+      REQUIRED: 'Please input GCP Cloud storage bucket name.',
+    },
+    GCP_ACCESS_KEY: {
+      REQUIRED: 'Please input GCP access key.',
+    },
+    GCP_SECRET_KEY: {
+      REQUIRED: 'Please input GCP secret key.',
+    },
+  },
 };

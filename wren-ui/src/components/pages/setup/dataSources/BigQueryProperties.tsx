@@ -3,6 +3,11 @@ import { Form, Input, Button, Upload } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
 import { UploadFile } from 'antd/lib/upload/interface';
 import { ERROR_TEXTS } from '@/utils/error';
+import { FORM_MODE } from '@/utils/enum';
+
+interface Props {
+  mode: FORM_MODE;
+}
 
 const UploadCredentials = (props) => {
   const { onChange } = props;
@@ -52,7 +57,10 @@ const UploadCredentials = (props) => {
   );
 };
 
-export default function BigQueryProperties() {
+export default function BigQueryProperties(props: Props) {
+  const { mode } = props;
+  const isEditMode = mode === FORM_MODE.EDIT;
+
   return (
     <>
       <Form.Item
@@ -74,12 +82,12 @@ export default function BigQueryProperties() {
         name="projectId"
         rules={[
           {
-            required: true,
+            required: !isEditMode,
             message: ERROR_TEXTS.CONNECTION.PROJECT_ID.REQUIRED,
           },
         ]}
       >
-        <Input placeholder="The GCP project ID" />
+        <Input placeholder="The GCP project ID" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
         label="Dataset ID"
@@ -87,12 +95,12 @@ export default function BigQueryProperties() {
         name="datasetId"
         rules={[
           {
-            required: true,
+            required: !isEditMode,
             message: ERROR_TEXTS.CONNECTION.DATASET_ID.REQUIRED,
           },
         ]}
       >
-        <Input />
+        <Input disabled={isEditMode} />
       </Form.Item>
       <Form.Item
         label="Credentials"
