@@ -1,6 +1,6 @@
 import { Button, Typography } from 'antd';
 import CodeBlock from '@/components/editor/CodeBlock';
-import PreviewData from '@/components/pages/home/promptThread/PreviewData';
+import PreviewData from '@/components/dataPreview/PreviewData';
 
 export interface Props {
   referenceName: string;

@@ -2,7 +2,7 @@ import dynamic from 'next/dynamic';
 import { Button, Typography } from 'antd';
 import CopyOutlined from '@ant-design/icons/lib/icons/CopyOutlined';
 import UpCircleOutlined from '@ant-design/icons/UpCircleOutlined';
-import PreviewData from '@/components/pages/home/promptThread/PreviewData';
+import PreviewData from '@/components/dataPreview/PreviewData';
 import { PreviewDataMutationResult } from '@/apollo/client/graphql/home.generated';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
