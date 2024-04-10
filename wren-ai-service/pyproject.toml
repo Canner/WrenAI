@@ -2,7 +2,7 @@
 name = "wren-ai-service"
 version = "0.2.1"
 description = ""
-authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>"]
+authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
