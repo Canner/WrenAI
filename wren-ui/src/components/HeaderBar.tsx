@@ -3,6 +3,7 @@ import { Button, Layout, Space } from 'antd';
 import styled from 'styled-components';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
+import Deploy from '@/components/Deploy';
 
 const { Header } = Layout;
 
@@ -34,12 +35,13 @@ export default function HeaderBar() {
   const router = useRouter();
   const { pathname } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
+  const isModeling = pathname.startsWith(Path.Modeling);
 
   return (
     <StyledHeader>
       <div
-        className="d-flex justify-space-between"
-        style={{ marginTop: -2, alignItems: 'self-end' }}
+        className="d-flex justify-space-between align-center"
+        style={{ marginTop: -2 }}
       >
         <Space size={[48, 0]}>
           <LogoBar />
@@ -64,6 +66,7 @@ export default function HeaderBar() {
             </Space>
           )}
         </Space>
+        {isModeling && <Deploy />}
       </div>
     </StyledHeader>
   );
