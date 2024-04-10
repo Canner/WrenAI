@@ -36,7 +36,7 @@ export default function CollapseContent(props: Props) {
     <>
       {(isViewSQL || isViewFullSQL) && (
         <pre className="p-0 my-3">
-          <CodeBlock code={sql} showLineNumbers />
+          <CodeBlock code={sql} showLineNumbers height="300" />
         </pre>
       )}
       {isPreviewData && (
