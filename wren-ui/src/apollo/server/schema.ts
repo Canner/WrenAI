@@ -241,6 +241,16 @@ export const typeDefs = gql`
 
   type Diagram {
     models: [DiagramModel]!
+    views: [DiagramView]!
+  }
+
+  type DiagramView {
+    id: String!
+    viewId: Int!
+    nodeType: NodeType!
+    statement: String!
+    displayName: String!
+    referenceName: String!
   }
 
   type DiagramModel {

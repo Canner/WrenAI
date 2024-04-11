@@ -2,6 +2,7 @@ import { RelationType } from '@server/types';
 
 export enum NodeType {
   MODEL = 'MODEL',
+  VIEW = 'VIEW',
   RELATION = 'RELATION',
   FIELD = 'FIELD',
   CALCULATED_FIELD = 'CALCULATED_FIELD',
@@ -9,6 +10,16 @@ export enum NodeType {
 
 export interface Diagram {
   models: DiagramModel[];
+  views: DiagramView[];
+}
+
+export interface DiagramView {
+  id: string;
+  viewId: number;
+  nodeType: NodeType;
+  statement: string;
+  displayName: string;
+  referenceName: string;
 }
 
 export interface DiagramModel {

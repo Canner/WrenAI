@@ -219,7 +219,7 @@ export class ProjectResolver {
     );
   }
 
-  private async deploy(ctx) {
+  private async deploy(ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
     const manifest = await ctx.mdlService.makeCurrentModelMDL();
     return await ctx.deployService.deploy(manifest, project.id);
