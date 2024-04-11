@@ -14,11 +14,7 @@
   <a aria-label="Canner" href="https://cannerdata.com/">
     <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge">
   </a>
-<<<<<<< HEAD
   <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
-=======
-  <a aria-label="NPM version" href="https://github.com/canner/WrenAI/releases">
->>>>>>> ce26c2b (add readme)
     <img alt="" src="https://img.shields.io/github/v/release/canner/WrenAI?logo=github&label=GitHub%20Release&color=blue&style=for-the-badge">
   </a>
   <a aria-label="License" href="https://github.com/Canner/WrenAI/blob/main/LICENSE">
@@ -27,13 +23,8 @@
   <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
     <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20">
   </a>
-<<<<<<< HEAD
   <a aria-label="Follow us" href="https://x.com/getwrenai">
     <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
-=======
-  <a aria-label="Follow us" href="https://x.com/wrenai">
-    <img alt="" src="https://img.shields.io/badge/-@wrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
->>>>>>> ce26c2b (add readme)
   </a>
 </p>
 
@@ -45,6 +36,20 @@
 ## 🎯 Our Mission
 
 WrenAI is dedicated to reimagining how businesses can interact with and leverage their data through LLM, by bringing comprehension capabilities to small and large data teams.
+
+## 👊 Why WrenAI?
+
+### 1. Reduce Hallucination
+
+> WrenAI offers detailed, explainable responses, ensuring users understand the origins and context of their data, thereby reducing ***hallucinations*** in LLMs.
+
+### 2. Augment Your LLM Knowledge Base
+
+> WrenAI enriches LLMs with your specific business context, with additional metadata for your data schema, such as semantics and relationships.
+
+### 3. Self-Learning Feedback Loop
+
+> WrenAI evolves with every interaction. It learns from user feedback and behavioral patterns, continuously refining its suggestions.
 
 ## 🤔 Benefits using WrenAI
 
@@ -66,11 +71,11 @@ WrenAI leverages Large Language Models (LLM) with Retrieval-Augmented Generation
 
 WrenAI is consist of three core services:
 
-- ***Wren UI:*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within WrenAI's framework.
+- ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within WrenAI's framework.
 
-- ***Wren AI Service:*** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
+- ***[Wren AI Service](https://github.com/Canner/WrenAI/tree/main/wren-ai-service):*** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
 
-- ***Wren Engine:*** Serves as the platform's backbone, managing metadata and connecting to data sources, while preparing for future application integrations.
+- ***[Wren Engine](https://github.com/Canner/wren-engine):*** Serves as the platform's backbone, managing metadata and connecting to data sources, while preparing for future application integrations.
 
 ![wrenai_works](./misc/how_wrenai_works.png)
 
