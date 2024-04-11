@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Model, ModelColumn, RelationInfo } from '@server/repositories';
+import { Model, ModelColumn, RelationInfo, View } from '@server/repositories';
 import {
   Diagram,
   DiagramModel,
@@ -8,6 +8,7 @@ import {
   NodeType,
   IContext,
   RelationType,
+  DiagramView,
 } from '@server/types';
 import { getLogger } from '@server/utils';
 
@@ -34,14 +35,18 @@ export class DiagramResolver {
     const modelRelations = await ctx.relationRepository.findRelationInfoBy({
       columnIds: modelColumns.map((column) => column.id),
     });
+    const views = await ctx.viewRepository.findAllBy({
+      projectId: project.id,
+    });
 
-    return this.buildDiagram(models, modelColumns, modelRelations);
+    return this.buildDiagram(models, modelColumns, modelRelations, views);
   }
 
   private buildDiagram(
     models: Model[],
     modelColumns: ModelColumn[],
     relations: RelationInfo[],
+    views: View[],
   ): Diagram {
     const diagramModels = models.map((model) => {
       const transformedModel = this.transformModel(model);
@@ -73,7 +78,8 @@ export class DiagramResolver {
       return transformedModel;
     });
 
-    return { models: diagramModels };
+    const diagramViews = views.map(this.transformView);
+    return { models: diagramModels, views: diagramViews };
   }
 
   private transformModel(model: Model): DiagramModel {
@@ -139,6 +145,18 @@ export class DiagramResolver {
       fromColumnName: relation.fromColumnName,
       toModelName: relation.toModelName,
       toColumnName: relation.toColumnName,
+    };
+  }
+
+  private transformView(view: View): DiagramView {
+    const properties = JSON.parse(view.properties);
+    return {
+      id: uuidv4(),
+      viewId: view.id,
+      nodeType: NodeType.VIEW,
+      statement: view.statement,
+      referenceName: view.name,
+      displayName: properties?.displayName || view.name,
     };
   }
 }
