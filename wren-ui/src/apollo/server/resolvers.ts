@@ -28,6 +28,10 @@ const resolvers = {
     thread: askingResolver.getThread,
     threads: askingResolver.listThreads,
     threadResponse: askingResolver.getResponse,
+
+    // Views
+    listViews: modelResolver.listViews,
+    view: modelResolver.getView,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -48,6 +52,12 @@ const resolvers = {
     deleteThread: askingResolver.deleteThread,
     createThreadResponse: askingResolver.createThreadResponse,
     previewData: askingResolver.previewData,
+
+    // Views
+    createView: modelResolver.createView,
+    deleteView: modelResolver.deleteView,
+    previewViewData: modelResolver.previewViewData,
+    validateView: modelResolver.validateView,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

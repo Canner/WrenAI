@@ -5,6 +5,7 @@ import {
   IModelRepository,
   IProjectRepository,
   IRelationRepository,
+  IViewRepository,
 } from '../repositories';
 import { IDeployLogRepository } from '../repositories/deployLogRepository';
 import { IAskingService } from '../services/askingService';
@@ -31,5 +32,6 @@ export interface IContext {
   modelRepository: IModelRepository;
   modelColumnRepository: IModelColumnRepository;
   relationRepository: IRelationRepository;
+  viewRepository: IViewRepository;
   deployRepository: IDeployLogRepository;
 }

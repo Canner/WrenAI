@@ -1,4 +1,10 @@
-import { Model, Project, ModelColumn, RelationInfo, View } from '../../repositories';
+import {
+  Model,
+  Project,
+  ModelColumn,
+  RelationInfo,
+  View,
+} from '../../repositories';
 import { MDLBuilder, MDLBuilderBuildFromOptions } from '../mdlBuilder';
 import { ModelMDL, RelationMDL, ViewMDL } from '../type';
 
@@ -144,7 +150,6 @@ describe('MDLBuilder', () => {
               relationship: 'OrderCustomer',
               properties: null,
               notNull: false,
-              properties: null,
             },
           ],
           cached: false,

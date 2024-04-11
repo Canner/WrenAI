@@ -7,6 +7,8 @@ import { CompactTable } from '../connectors/connector';
 import { BQConnector } from '../connectors/bqConnector';
 import { GenerateReferenceNameData } from '../services/modelService';
 import { DeployResponse } from '../services/deployService';
+import { constructCteSql } from '../services/askingService';
+import { format } from 'sql-formatter';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -25,6 +27,12 @@ export class ModelResolver {
     this.deleteModel = this.deleteModel.bind(this);
     this.deploy = this.deploy.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
+    this.listViews = this.listViews.bind(this);
+    this.getView = this.getView.bind(this);
+    this.validateView = this.validateView.bind(this);
+    this.createView = this.createView.bind(this);
+    this.deleteView = this.deleteView.bind(this);
+    this.previewViewData = this.previewViewData.bind(this);
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
@@ -218,6 +226,119 @@ export class ModelResolver {
     await ctx.modelColumnRepository.deleteMany(columnIds);
     await ctx.modelRepository.deleteOne(modelId);
     return true;
+  }
+
+  // list views
+  public async listViews(_root: any, _args: any, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
+    return views;
+  }
+
+  public async getView(_root: any, args: any, ctx: IContext) {
+    const viewId = args.where.id;
+    const view = await ctx.viewRepository.findOneBy({ id: viewId });
+    if (!view) {
+      throw new Error('View not found');
+    }
+    return view;
+  }
+
+  // validate a view name
+  public async validateView(_root: any, args: any, ctx: IContext) {
+    const { name } = args.data;
+    return this.validateViewName(name, ctx);
+  }
+
+  // create view from sql of a response
+  public async createView(_root: any, args: any, ctx: IContext) {
+    const { name, responseId } = args.data;
+
+    // validate view name
+    const validateResult = await this.validateViewName(name, ctx);
+    if (!validateResult.valid) {
+      throw new Error(validateResult.message);
+    }
+
+    // create view
+    const project = await ctx.projectService.getCurrentProject();
+
+    // get sql statement of a response
+    const response = await ctx.askingService.getResponse(responseId);
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    // construct cte sql and format it
+    const steps = response.detail.steps;
+    const statement = format(constructCteSql(steps));
+
+    // properties
+    const properties = {
+      displayName: name,
+    };
+
+    // create view
+    const view = await ctx.viewRepository.createOne({
+      projectId: project.id,
+      name,
+      statement,
+      properties: JSON.stringify(properties),
+    });
+    return view;
+  }
+
+  // delete view
+  public async deleteView(_root: any, args: any, ctx: IContext) {
+    const viewId = args.where.id;
+    const view = await ctx.viewRepository.findOneBy({ id: viewId });
+    if (!view) {
+      throw new Error('View not found');
+    }
+    await ctx.viewRepository.deleteOne(viewId);
+    return true;
+  }
+
+  public async previewViewData(_root: any, args: any, ctx: IContext) {
+    const viewId = args.where.id;
+    const view = await ctx.viewRepository.findOneBy({ id: viewId });
+    if (!view) {
+      throw new Error('View not found');
+    }
+
+    const data = await ctx.wrenEngineAdaptor.previewData(view.statement);
+    return data;
+  }
+
+  // validate view name
+  private async validateViewName(
+    viewName: string,
+    ctx: IContext,
+  ): Promise<{ valid: boolean; message?: string }> {
+    // check if view name is valid
+    // a-z, A-Z, 0-9, _, - are allowed and cannot start with number
+    const regex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+    if (!regex.test(viewName)) {
+      return {
+        valid: false,
+        message:
+          'Only a-z, A-Z, 0-9, _, - are allowed and cannot start with number',
+      };
+    }
+
+    // check if view name is duplicated
+    const project = await ctx.projectService.getCurrentProject();
+    const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
+    if (views.find((v) => v.name === viewName)) {
+      return {
+        valid: false,
+        message: 'View name is duplicated',
+      };
+    }
+
+    return {
+      valid: true,
+    };
   }
 
   private async getBQConnector(project: Project, filePath: string) {

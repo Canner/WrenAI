@@ -205,6 +205,32 @@ export const typeDefs = gql`
     properties: JSON!
   }
 
+  # View
+  type ViewInfo {
+    id: Int!
+    name: String!
+    statement: String!
+  }
+
+  input ViewWhereUniqueInput {
+    id: Int!
+  }
+
+  input CreateViewInput {
+    name: String!
+    responseId: Int!
+  }
+
+  input ValidateViewInput {
+    name: String
+  }
+
+  type ViewValidationResponse {
+    valid: Boolean!
+    message: String
+  }
+
+  # onboarding
   type OnboardingStatusResponse {
     status: OnboardingStatus
   }
@@ -417,6 +443,10 @@ export const typeDefs = gql`
     modelSync: ModelSyncResponse
     diagram: Diagram!
 
+    # View
+    listViews: [ViewInfo!]!
+    view(where: ViewWhereUniqueInput!): ViewInfo!
+
     # Ask
     askingTask(taskId: String!): AskingTask!
     suggestedQuestions: SuggestedQuestionResponse!
@@ -437,6 +467,12 @@ export const typeDefs = gql`
     createModel(data: CreateModelInput!): JSON!
     updateModel(where: ModelWhereInput!, data: UpdateModelInput!): JSON!
     deleteModel(where: ModelWhereInput!): Boolean!
+
+    # View
+    createView(data: CreateViewInput!): ViewInfo!
+    deleteView(where: ViewWhereUniqueInput!): Boolean!
+    previewViewData(where: ViewWhereUniqueInput!): JSON!
+    validateView(data: ValidateViewInput!): ViewValidationResponse!
 
     # Ask
     createAskingTask(data: AskingTaskInput!): Task!
