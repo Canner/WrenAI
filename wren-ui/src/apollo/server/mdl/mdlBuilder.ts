@@ -60,7 +60,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.models = models;
     this.columns = columns;
     this.relations = relations;
-    this.views = views;
+    this.views = views || [];
     this.relatedModels = relatedModels;
     this.relatedColumns = relatedColumns;
     this.relatedRelations = relatedRelations;
