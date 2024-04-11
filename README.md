@@ -104,13 +104,8 @@ Using WrenAI is super simple, you can setup within 3 minutes, and start to inter
 
 ***Start Today And Be 100X More Productive Than Yesterday***
 
-<<<<<<< HEAD
 - Visit our [Installation Guide of WrenAI](http://docs.getwren.ai/installation).
 - Visit the [Usage Guides](http://docs.getwren.ai/guide/connect/overview) to learn more about how to use WrenAI.
-=======
-- Visit our [Installation Guide of WrenAI](https://docs.getwren.ai/).
-- Visit the [Usage Guides](https://docs.getwren.ai/) to learn more about how to use WrenAI.
->>>>>>> ce26c2b (add readme)
 
 ## 📚 Documentation
 
@@ -121,8 +116,4 @@ Visit [WrenAI documentation](https://docs.getwren.ai) to view the full documenta
 - Welcome to our [Discord server](https://discord.gg/5DvshJqG8Z) to give us feedback!
 - If there is any issues, please visit [Github Issues](https://github.com/Canner/WrenAI/issues).
 
-<<<<<<< HEAD
 Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all WrenAI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
-=======
-Do note that our [Code of Conduct](https://github.com/canner/WrenAI/blob/canary/CODE_OF_CONDUCT.md) applies to all WrenAI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
->>>>>>> ce26c2b (add readme)
