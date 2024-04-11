@@ -1,6 +1,7 @@
-import { Skeleton, Typography } from 'antd';
+import { Button, Skeleton, Typography } from 'antd';
 import styled from 'styled-components';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
+import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import StepContent from '@/components/pages/home/promptThread/StepContent';
 
 const { Title, Text } = Typography;
@@ -29,6 +30,7 @@ interface Props {
   }>;
   fullSql: string;
   threadResponseId: number;
+  onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
 }
 
 export default function AnswerResult(props: Props) {
@@ -39,6 +41,7 @@ export default function AnswerResult(props: Props) {
     answerResultSteps,
     fullSql,
     threadResponseId,
+    onOpenSaveAsViewModal,
   } = props;
 
   return (
@@ -64,6 +67,17 @@ export default function AnswerResult(props: Props) {
           />
         ))}
       </StyledAnswer>
+      <Button
+        className="mt-2 gray-6"
+        type="text"
+        size="small"
+        icon={<SaveOutlined />}
+        onClick={() =>
+          onOpenSaveAsViewModal({ sql: fullSql, responseId: threadResponseId })
+        }
+      >
+        Save as View
+      </Button>
     </Skeleton>
   );
 }
