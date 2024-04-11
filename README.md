@@ -14,11 +14,7 @@
   <a aria-label="Canner" href="https://cannerdata.com/">
     <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge">
   </a>
-<<<<<<< HEAD
   <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
-=======
-  <a aria-label="NPM version" href="https://github.com/canner/WrenAI/releases">
->>>>>>> ce26c2b (add readme)
     <img alt="" src="https://img.shields.io/github/v/release/canner/WrenAI?logo=github&label=GitHub%20Release&color=blue&style=for-the-badge">
   </a>
   <a aria-label="License" href="https://github.com/Canner/WrenAI/blob/main/LICENSE">
@@ -27,13 +23,8 @@
   <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
     <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20">
   </a>
-<<<<<<< HEAD
   <a aria-label="Follow us" href="https://x.com/getwrenai">
     <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
-=======
-  <a aria-label="Follow us" href="https://x.com/wrenai">
-    <img alt="" src="https://img.shields.io/badge/-@wrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
->>>>>>> ce26c2b (add readme)
   </a>
 </p>
 
