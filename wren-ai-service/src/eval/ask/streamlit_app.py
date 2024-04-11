@@ -252,7 +252,7 @@ st.set_page_config(layout="wide")
 
 st.title("Ask pipeline prediction evaluation results comparison")
 
-output_dir = Path("outputs")
+output_dir = Path("outputs/ask")
 output_files = list(output_dir.glob("*.json"))
 
 # get dataset names
