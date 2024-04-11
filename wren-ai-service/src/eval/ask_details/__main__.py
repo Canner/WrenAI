@@ -30,7 +30,7 @@ summary = Summary()
 collectors = [Collector(element=element) for element in eval_context]
 
 pipeline = Generation(
-    sql_details_generator=init_generator(),
+    generator=init_generator(),
 )
 
 for collector in collectors:

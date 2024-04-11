@@ -38,7 +38,7 @@ class Generation(BasicPipeline):
 
 if __name__ == "__main__":
     generation_pipeline = Generation(
-        sql_details_generator=init_generator(),
+        generator=init_generator(),
     )
 
     print("generating generation_pipeline.jpg to outputs/pipelines/ask_details...")
