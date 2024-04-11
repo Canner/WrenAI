@@ -106,12 +106,11 @@ class Collector:
         )
         self._result["latency"] = time.perf_counter() - start
 
-        (response, meta, results) = self._destruct(res)
+        (response, meta) = self._destruct(res)
 
-        self._result["response"] = json.loads(response)
+        self._result["response"] = response
         self._result["model"] = meta["model"]
         self._result["usage"] = meta["usage"]
-        self._result["post_process_results"] = results
 
         self._cost_analysis()
         self._ragas_eval()
@@ -120,9 +119,8 @@ class Collector:
 
     def _destruct(self, response: Dict[str, Any]):
         return (
-            response["post_processor"]["replies"][0],
-            response["generator"]["meta"][0],
             response["post_processor"]["results"],
+            response["generator"]["meta"][0],
         )
 
     def _cost_analysis(self):
@@ -153,11 +151,9 @@ class Collector:
         self._result["accuracy"]["ragas"]["answer_correctness"] = score
 
     def _execution_correctness_eval(self):
-        result = self._result["post_process_results"]
+        steps = self._result["response"]["steps"]
 
-        self._result["accuracy"]["wren"]["execution_correct"] = (
-            False if result is None else True
-        )
+        self._result["accuracy"]["wren"]["execution_correct"] = True if steps else False
 
     def _llm_judge(self):
         prompt = f"""
