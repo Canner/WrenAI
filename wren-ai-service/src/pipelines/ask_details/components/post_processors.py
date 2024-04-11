@@ -24,7 +24,6 @@ class GenerationPostProcessor:
         steps = cleaned_generation_result.get("steps", [])
         if not steps:
             return {
-                "replies": replies,
                 "results": {
                     "description": cleaned_generation_result["description"],
                     "steps": [],
@@ -35,7 +34,6 @@ class GenerationPostProcessor:
 
         if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
             return {
-                "replies": replies,
                 "results": {
                     "description": cleaned_generation_result["description"],
                     "steps": [],
@@ -46,7 +44,6 @@ class GenerationPostProcessor:
         cleaned_generation_result["steps"][-1]["cte_name"] = ""
 
         return {
-            "replies": replies,
             "results": cleaned_generation_result,
         }
 
