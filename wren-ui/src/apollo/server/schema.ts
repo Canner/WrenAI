@@ -222,7 +222,7 @@ export const typeDefs = gql`
   }
 
   input ValidateViewInput {
-    name: String
+    name: String!
   }
 
   type ViewValidationResponse {
