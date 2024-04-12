@@ -204,9 +204,7 @@ export class AskingResolver {
     _args: any,
     ctx: IContext,
   ): Promise<Thread[]> {
-    const askingService = ctx.askingService;
-    const project = await ctx.projectService.getCurrentProject();
-    const threads = await askingService.listThreads(project.id);
+    const threads = await ctx.askingService.listThreads();
     return threads;
   }
 

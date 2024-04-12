@@ -55,7 +55,7 @@ export interface IAskingService {
     input: Partial<AskingDetailTaskInput>,
   ): Promise<Thread>;
   deleteThread(threadId: number): Promise<void>;
-  listThreads(projectId: number): Promise<Thread[]>;
+  listThreads(): Promise<Thread[]>;
   createThreadResponse(
     threadId: number,
     input: AskingDetailTaskInput,
@@ -334,8 +334,9 @@ export class AskingService implements IAskingService {
     return thread;
   }
 
-  public async listThreads(projectId): Promise<Thread[]> {
-    return this.threadRepository.listAllTimeDescOrder(projectId);
+  public async listThreads(): Promise<Thread[]> {
+    const project = await this.projectService.getCurrentProject();
+    return await this.threadRepository.listAllTimeDescOrder(project.id);
   }
 
   public async updateThread(
