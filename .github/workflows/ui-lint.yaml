@@ -4,9 +4,6 @@
 name: Wren-UI Lint
 
 on:
-  push:
-    paths:
-      - 'wren-ui/**'
   pull_request:
     types: [ labeled ]
 

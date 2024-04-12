@@ -3,9 +3,6 @@
 name: Wren-UI Test
 
 on:
-  push:
-    paths:
-      - 'wren-ui/**'
   pull_request:
     types: [ labeled ]
 
