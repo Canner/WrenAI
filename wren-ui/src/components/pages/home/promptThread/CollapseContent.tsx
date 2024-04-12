@@ -2,7 +2,7 @@ import dynamic from 'next/dynamic';
 import { Button, Typography } from 'antd';
 import CopyOutlined from '@ant-design/icons/lib/icons/CopyOutlined';
 import UpCircleOutlined from '@ant-design/icons/UpCircleOutlined';
-import PreviewData from '@/components/pages/home/promptThread/PreviewData';
+import PreviewData from '@/components/dataPreview/PreviewData';
 import { PreviewDataMutationResult } from '@/apollo/client/graphql/home.generated';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
@@ -36,7 +36,7 @@ export default function CollapseContent(props: Props) {
     <>
       {(isViewSQL || isViewFullSQL) && (
         <pre className="p-0 my-3">
-          <CodeBlock code={sql} showLineNumbers />
+          <CodeBlock code={sql} showLineNumbers maxHeight="300" />
         </pre>
       )}
       {isPreviewData && (

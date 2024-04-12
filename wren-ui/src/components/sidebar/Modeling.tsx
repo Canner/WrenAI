@@ -2,6 +2,7 @@ import styled from 'styled-components';
 import SidebarTree from './SidebarTree';
 import ModelTree from './modeling/ModelTree';
 import { Diagram } from '@/utils/data';
+import ViewTree from './modeling/ViewTree';
 
 export const StyledSidebarTree = styled(SidebarTree)`
   .ant-tree-title {
@@ -31,7 +32,12 @@ export interface Props {
 
 export default function Modeling(props: Props) {
   const { data, onSelect } = props;
-  const { models = [] } = data || {};
+  const { models = [], views = [] } = data || {};
 
-  return <ModelTree models={models} onSelect={onSelect} selectedKeys={[]} />;
+  return (
+    <>
+      <ModelTree models={models} onSelect={onSelect} selectedKeys={[]} />
+      <ViewTree views={views} onSelect={onSelect} selectedKeys={[]} />
+    </>
+  );
 }

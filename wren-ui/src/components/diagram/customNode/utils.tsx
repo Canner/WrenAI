@@ -64,6 +64,7 @@ export const NodeHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 36px;
 
   &.dragHandle {
     cursor: move;

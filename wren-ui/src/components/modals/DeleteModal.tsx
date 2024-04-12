@@ -65,3 +65,10 @@ export const DeleteThreadModal = makeDeleteModal(DefaultDeleteButton, {
   content:
     'This will permanently delete all results history in this thread, please confirm you want to delete it.',
 });
+
+export const DeleteViewModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'view',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});

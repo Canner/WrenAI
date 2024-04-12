@@ -1,0 +1,68 @@
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { Modal } from 'antd';
+import { DataNode } from 'antd/es/tree';
+import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
+import { Path } from '@/utils/enum';
+import { getNodeTypeIcon } from '@/utils/nodeType';
+import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
+import LabelTitle from '@/components/sidebar/LabelTitle';
+import { StyledSidebarTree } from '@/components/sidebar/Modeling';
+
+export const createViewInfoModalProps = {
+  title: 'How to create a View?',
+  content: (
+    <div>
+      Pose your questions at <Link href={Path.Home}>homepage</Link>, and get
+      some helpful answers to save as views.
+    </div>
+  ),
+};
+
+// TODO: update TS for props
+export default function ViewTree(props) {
+  const { views } = props;
+
+  const getViewGroupNode = createTreeGroupNode({
+    groupName: 'Views',
+    groupKey: 'views',
+    icons: [
+      {
+        key: 'add-view-info',
+        icon: () => (
+          <PlusSquareOutlined
+            onClick={() => Modal.info(createViewInfoModalProps)}
+          />
+        ),
+      },
+    ],
+  });
+
+  const [tree, setTree] = useState<DataNode[]>(getViewGroupNode());
+
+  // initial workspace
+  useEffect(() => {
+    setTree((_tree) =>
+      getViewGroupNode({
+        quotaUsage: views.length,
+        children: views.map((view) => {
+          const nodeKey = view.id;
+          const children = getColumnNode(nodeKey, view.fields || []);
+
+          return {
+            children,
+            className: 'adm-treeNode',
+            icon: getNodeTypeIcon({ nodeType: view.nodeType }),
+            id: nodeKey,
+            isLeaf: false,
+            key: nodeKey,
+            title: <LabelTitle title={view.displayName} />,
+            type: view.nodeType,
+          };
+        }),
+      }),
+    );
+  }, [views]);
+
+  return <StyledSidebarTree {...props} treeData={tree} />;
+}

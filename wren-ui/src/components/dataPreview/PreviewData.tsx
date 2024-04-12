@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Alert, Typography } from 'antd';
 import { ApolloError } from '@apollo/client';
 import { getColumnTypeIcon } from '@/utils/columnType';
-import PreviewDataContent from '@/components/PreviewDataContent';
+import PreviewDataContent from '@/components/dataPreview/PreviewDataContent';
 import { parseGraphQLError } from '@/utils/errorHandler';
 
 const { Text } = Typography;

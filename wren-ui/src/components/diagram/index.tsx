@@ -18,7 +18,7 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
 } from 'reactflow';
-import { ModelNode } from './customNode';
+import { ModelNode, ViewNode } from './customNode';
 import { ModelEdge } from './customEdge';
 import Marker from './Marker';
 import { DiagramContext, ClickPayload } from './Context';
@@ -33,6 +33,7 @@ import 'reactflow/dist/style.css';
 
 const nodeTypes = {
   [NODE_TYPE.MODEL]: ModelNode,
+  [NODE_TYPE.VIEW]: ViewNode,
 };
 const edgeTypes = {
   [EDGE_TYPE.MODEL]: ModelEdge,
@@ -138,7 +139,7 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
   );
 });
 
-export const Diagram = (props: Props) => {
+const Diagram = (props: Props) => {
   return (
     <ReactFlowProvider>
       <ReactFlowDiagram ref={props.forwardRef} {...props} />
