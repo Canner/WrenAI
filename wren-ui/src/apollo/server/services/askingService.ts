@@ -335,7 +335,8 @@ export class AskingService implements IAskingService {
   }
 
   public async listThreads(): Promise<Thread[]> {
-    return this.threadRepository.findAll();
+    const project = await this.projectService.getCurrentProject();
+    return await this.threadRepository.listAllTimeDescOrder(project.id);
   }
 
   public async updateThread(
