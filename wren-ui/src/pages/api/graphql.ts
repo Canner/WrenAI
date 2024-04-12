@@ -26,6 +26,7 @@ import { AskingService } from '@/apollo/server/services/askingService';
 import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
+import { Telemetry } from '@/apollo/server/telemetry/telemetry';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -92,6 +93,8 @@ const bootstrapServer = async () => {
     threadResponseRepository,
   });
 
+  const telemetry = new Telemetry();
+
   // initialize services
   await askingService.initialize();
 
@@ -117,7 +120,7 @@ const bootstrapServer = async () => {
     introspection: process.env.NODE_ENV !== 'production',
     context: (): IContext => ({
       config: serverConfig,
-
+      telemetry,
       // adaptor
       wrenEngineAdaptor,
 
@@ -137,7 +140,7 @@ const bootstrapServer = async () => {
       deployRepository: deployLogRepository,
     }),
   });
-
+  telemetry.send_event('server_start', { time: new Date().toISOString() });
   await apolloServer.start();
   return apolloServer;
 };
