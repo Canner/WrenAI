@@ -1,5 +1,4 @@
 export enum SETTINGS {
   DATA_SOURCE = 'DATA_SOURCE',
-  CACHE = 'CACHE',
   PROJECT = 'PROJECT',
 }

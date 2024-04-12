@@ -6,7 +6,6 @@ import { makeIterable } from '@/utils/iteration';
 import { ModalAction } from '@/hooks/useModalAction';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import DataSourceSettings from './DataSourceSettings';
-import CacheSettings from './CacheSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
 
@@ -38,7 +37,6 @@ const DynamicComponent = ({ menu }: { menu: SETTINGS }) => {
   return (
     {
       [SETTINGS.DATA_SOURCE]: <DataSourceSettings />,
-      [SETTINGS.CACHE]: <CacheSettings />,
       [SETTINGS.PROJECT]: <ProjectSettings />,
     }[menu] || null
   );
