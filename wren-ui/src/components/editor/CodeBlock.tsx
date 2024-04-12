@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import styled from 'styled-components';
 import '@/components/editor/AceEditor';
 
-const Block = styled.div<{ inline?: boolean; height?: string }>`
+const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
   position: relative;
   white-space: pre;
   font-size: 14px;
@@ -15,7 +15,7 @@ const Block = styled.div<{ inline?: boolean; height?: string }>`
 
   .adm-code-wrap {
     overflow: auto;
-    ${(props) => (props.height ? `max-height: ${props.height}px;` : ``)}
+    ${(props) => (props.maxHeight ? `max-height: ${props.maxHeight}px;` : ``)}
   }
 
   .adm-code-line {
@@ -47,7 +47,7 @@ interface Props {
   code: string;
   copyable?: boolean;
   inline?: boolean;
-  height?: string;
+  maxHeight?: string;
   showLineNumbers?: boolean;
 }
 
@@ -64,7 +64,7 @@ const addThemeStyleManually = (cssText) => {
 };
 
 export default function CodeBlock(props: Props) {
-  const { code, copyable, height, inline, showLineNumbers } = props;
+  const { code, copyable, maxHeight, inline, showLineNumbers } = props;
   const { ace } = window as any;
   const { Tokenizer } = ace.require('ace/tokenizer');
   const { SqlHighlightRules } = ace.require(`ace/mode/sql_highlight_rules`);
@@ -98,7 +98,11 @@ export default function CodeBlock(props: Props) {
   });
 
   return (
-    <Block className="ace_editor ace-tomorrow" inline={inline} height={height}>
+    <Block
+      className="ace_editor ace-tomorrow"
+      inline={inline}
+      maxHeight={maxHeight}
+    >
       <div className="adm-code-wrap">
         {lines}
         {copyable && <CopyText copyable>{code}</CopyText>}

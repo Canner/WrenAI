@@ -23,7 +23,7 @@ export default function ViewMetadata(props: Props) {
         <Typography.Text className="d-block gray-7 mb-2">
           SQL statement
         </Typography.Text>
-        <CodeBlock code={refSql} showLineNumbers height="300" />
+        <CodeBlock code={refSql} showLineNumbers maxHeight="300" />
       </div>
 
       <div className="mb-6">
