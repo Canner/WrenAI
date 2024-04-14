@@ -251,6 +251,15 @@ export const typeDefs = gql`
     statement: String!
     displayName: String!
     referenceName: String!
+    fields: [DiagramViewField]!
+  }
+
+  type DiagramViewField {
+    id: String!
+    displayName: String!
+    referenceName: String!
+    type: String!
+    nodeType: NodeType!
   }
 
   type DiagramModel {

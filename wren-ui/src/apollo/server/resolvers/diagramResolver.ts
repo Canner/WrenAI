@@ -150,6 +150,14 @@ export class DiagramResolver {
 
   private transformView(view: View): DiagramView {
     const properties = JSON.parse(view.properties);
+    const fields = (properties?.columns || []).map((column: any) => ({
+      id: uuidv4(),
+      nodeType: NodeType.FIELD,
+      type: column.type,
+      displayName: column.name,
+      referenceName: column.name,
+    }));
+
     return {
       id: uuidv4(),
       viewId: view.id,
@@ -157,6 +165,7 @@ export class DiagramResolver {
       statement: view.statement,
       referenceName: view.name,
       displayName: properties?.displayName || view.name,
+      fields,
     };
   }
 }

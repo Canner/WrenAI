@@ -9,6 +9,7 @@ import { GenerateReferenceNameData } from '../services/modelService';
 import { DeployResponse } from '../services/deployService';
 import { constructCteSql } from '../services/askingService';
 import { format } from 'sql-formatter';
+import { isEmpty } from 'lodash';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -273,9 +274,16 @@ export class ModelResolver {
     const steps = response.detail.steps;
     const statement = format(constructCteSql(steps));
 
+    // describe columns
+    const { columns } = await ctx.wrenEngineAdaptor.desribeStatement(statement);
+    if (isEmpty(columns)) {
+      throw new Error('Failed to describe statement');
+    }
+
     // properties
     const properties = {
       displayName: name,
+      columns,
     };
 
     // create view
