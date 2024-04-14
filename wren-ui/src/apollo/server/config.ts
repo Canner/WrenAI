@@ -1,4 +1,5 @@
 import { pickBy } from 'lodash';
+import path from 'path';
 
 export interface IConfig {
   // database
@@ -20,6 +21,16 @@ export interface IConfig {
   // encryption
   encryptionPassword: string;
   encryptionSalt: string;
+
+  // sql protocol port
+  sqlProtocolPort?: number;
+
+  // username and password
+  username?: string;
+  password?: string;
+
+  // accounts config file path
+  accountsConfigFilepath?: string;
 }
 
 const defaultConfig = {
@@ -44,6 +55,19 @@ const defaultConfig = {
   // encryption
   encryptionPassword: 'sementic',
   encryptionSalt: 'layer',
+
+  // sql protocol port
+  sqlProtocolPort: 7432,
+
+  // username and password
+  username: 'wren-admin',
+  password: 'wren-admin-password',
+
+  // accounts config file path
+  accountsConfigFilepath: path.resolve(
+    process.cwd(),
+    '../docker/data/etc/accounts',
+  ),
 };
 
 const config = {
@@ -74,6 +98,16 @@ const config = {
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,
   encryptionSalt: process.env.ENCRYPTION_SALT,
+
+  // sql protocol port
+  sqlProtocolPort: parseInt(process.env.SQL_PROTOCOL_PORT, 10),
+
+  // username and password
+  username: process.env.ADMIN_USERNAME,
+  password: process.env.ADMIN_PASSWORD,
+
+  // accounts config file path
+  accountsConfigFilepath: process.env.ACCOUNTS_CONFIG_FILEPATH,
 };
 
 export function getConfig(): IConfig {

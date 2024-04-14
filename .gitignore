@@ -73,3 +73,6 @@ wren-launcher/dist
 
 ## temporary files
 .tmp
+
+## Docker
+docker/data

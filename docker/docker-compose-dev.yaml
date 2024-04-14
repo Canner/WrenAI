@@ -1,8 +1,5 @@
 version: '3'
 
-volumes:
-  data:
-
 networks:
   wren:
     driver: bridge
@@ -15,7 +12,7 @@ services:
     environment:
       DATA_PATH: /app/data
     volumes:
-      - data:/app/data
+      - ./data:/app/data
     command: /bin/sh /app/init.sh
 
   wren-engine:
@@ -27,7 +24,7 @@ services:
     ports:
       - ${WREN_ENGINE_PORT}:${WREN_ENGINE_PORT}
     volumes:
-      - data:/usr/src/app/etc
+      - ./data:/usr/src/app/etc
     networks:
       - wren
     depends_on:

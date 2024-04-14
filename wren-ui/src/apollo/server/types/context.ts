@@ -9,6 +9,7 @@ import {
 } from '../repositories';
 import { IDeployLogRepository } from '../repositories/deployLogRepository';
 import { IAskingService } from '../services/askingService';
+import { IConfigService } from '../services/configService';
 import { IDeployService } from '../services/deployService';
 import { IMDLService } from '../services/mdlService';
 import { IModelService } from '../services/modelService';
@@ -26,6 +27,7 @@ export interface IContext {
   mdlService: IMDLService;
   deployService: IDeployService;
   askingService: IAskingService;
+  configService: IConfigService;
 
   // repository
   projectRepository: IProjectRepository;

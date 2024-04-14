@@ -26,6 +26,7 @@ import { AskingService } from '@/apollo/server/services/askingService';
 import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
+import { ConfigService } from '@/apollo/server/services/configService';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -91,9 +92,19 @@ const bootstrapServer = async () => {
     threadRepository,
     threadResponseRepository,
   });
+  const configService = new ConfigService({
+    accounts: [
+      {
+        username: serverConfig.username,
+        password: serverConfig.password,
+      },
+    ],
+    accountsConfigFilepath: serverConfig.accountsConfigFilepath,
+  });
 
   // initialize services
   await askingService.initialize();
+  configService.initialize();
 
   const apolloServer: ApolloServer = new ApolloServer({
     typeDefs,
@@ -127,6 +138,7 @@ const bootstrapServer = async () => {
       mdlService,
       deployService,
       askingService,
+      configService,
 
       // repository
       projectRepository,
