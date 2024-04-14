@@ -42,6 +42,10 @@ export interface QueryResponse {
   data: any[][];
 }
 
+export interface DescribeStatementResponse {
+  columns: ColumnMetadata[];
+}
+
 export interface IWrenEngineAdaptor {
   deploy(deployData: deployData): Promise<DeployResponse>;
   initDatabase(sql: string): Promise<void>;
@@ -49,6 +53,7 @@ export interface IWrenEngineAdaptor {
   queryDuckdb(sql: string): Promise<QueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
   previewData(sql: string, limit?: number): Promise<QueryResponse>;
+  desribeStatement(sql: string): Promise<DescribeStatementResponse>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -181,6 +186,19 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data as QueryResponse;
     } catch (err: any) {
       logger.debug(`Got error when previewing data: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async desribeStatement(
+    sql: string,
+  ): Promise<DescribeStatementResponse> {
+    try {
+      // preview data with limit 1 to get column metadata
+      const res = await this.previewData(sql, 1);
+      return { columns: res.columns };
+    } catch (err: any) {
+      logger.debug(`Got error when describing statement: ${err.message}`);
       throw err;
     }
   }

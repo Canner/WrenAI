@@ -20,6 +20,15 @@ export interface DiagramView {
   statement: string;
   displayName: string;
   referenceName: string;
+  fields: DiagramViewField[];
+}
+
+export interface DiagramViewField {
+  id: string;
+  displayName: string;
+  referenceName: string;
+  type: string;
+  nodeType: NodeType;
 }
 
 export interface DiagramModel {
