@@ -78,6 +78,9 @@ export class ProjectResolver {
     // save tables as model and modelColumns
     await this.overwriteModelsAndColumns(tableNames, ctx, project);
 
+    await ctx.modelService.batchUpdateModelDescription(dataset.tables);
+    await ctx.modelService.batchUpdateColumnDescription(dataset.tables);
+
     // save relations
     const relations = getRelations(name as SampleDatasetName);
     const models = await ctx.modelRepository.findAll();

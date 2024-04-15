@@ -72,7 +72,7 @@ export class DeployService implements IDeployService {
     // generate hash of manifest
     const hash = this.createMDLHash(manifest);
     logger.debug(`Deploying model, hash: ${hash}`);
-    logger.debug(manifest);
+    logger.debug(JSON.stringify(manifest));
 
     // check if the model current deployment
     const lastDeploy =

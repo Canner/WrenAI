@@ -136,12 +136,18 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         tableName: 'customers',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/customers.csv',
+
+        // This column is an example of a column with a description, please modify it to match the dataset
         columns: [
           {
-            name: 'customer_id',
-            description: 'The unique identifier for the customer',
+            name: 'City',
+            description:
+              'The Customer City, where the customer company is located',
           },
         ],
+        // This description is an example, please modify it to match the dataset
+        description:
+          'A table of customers who have made purchases, including their city',
       },
       {
         tableName: 'order_items',
