@@ -17,14 +17,16 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/pterm/pterm"
+
+	"github.com/sethvargo/go-password/password"
 )
 
 const (
-	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/64b45e472ec26fe160aaa9f64faec9c6d2e79034/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/64b45e472ec26fe160aaa9f64faec9c6d2e79034/.env.example"
+	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/d08126960f529e021b69d780d6b84f8ba9bee779/docker-compose.yaml"
+	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/d08126960f529e021b69d780d6b84f8ba9bee779/.env.example"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, port int) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
@@ -32,6 +34,10 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, port int) string
 	// replace PORT
 	reg = regexp.MustCompile(`HOST_PORT=(.*)`)
 	str = reg.ReplaceAllString(str, "HOST_PORT="+fmt.Sprintf("%d", port))
+
+	// replace PG_PASSWORD
+	reg = regexp.MustCompile(`PG_PASSWORD=(.*)`)
+	str = reg.ReplaceAllString(str, "PG_PASSWORD="+pg_password)
 	return str
 }
 
@@ -54,6 +60,35 @@ func downloadFile(filepath string, url string) error {
 	// Write the body to file
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+func getPGPassword(w WrenRC) (string, error) {
+	pgPwdKey := "pg_password"
+	// get the password from rc file if exists
+	// if not exists, generate a new password
+	pgPwd, err := w.Read(pgPwdKey)
+	if err != nil {
+		return "", err
+	}
+
+	if pgPwd == "" {
+		genPwd, err := password.Generate(10, 2, 0, false, false)
+		if err != nil {
+			return "", err
+		}
+
+		// set the password to rc file
+		err = w.Set(pgPwdKey, genPwd, false)
+		if err != nil {
+			return "", err
+		}
+
+		// return the generated password
+		return genPwd, nil
+	}
+
+	// return the password from rc file
+	return pgPwd, nil
 }
 
 func CheckDockerDaemonRunning() (bool, error) {
@@ -85,6 +120,11 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error 
 		return err
 	}
 
+	pg_pwd, err := getPGPassword(WrenRC{projectDir})
+	if err != nil {
+		return err
+	}
+
 	// download env file
 	envFile := path.Join(projectDir, ".env.example")
 	pterm.Info.Println("Downloading env file to", envFile)
@@ -101,7 +141,7 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error 
 	}
 
 	// replace the content with regex
-	newEnvFileContent := replaceEnvFileContent(string(envFileContent), openaiApiKey, port)
+	newEnvFileContent := replaceEnvFileContent(string(envFileContent), openaiApiKey, port, pg_pwd)
 	newEnvFile := path.Join(projectDir, ".env")
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(newEnvFileContent), 0644)
