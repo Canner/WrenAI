@@ -33,7 +33,7 @@ fi
 
 # put a accounts file in data_path if not exists
 # accounts is a file contains the authentication information
-# the format is like: `username: password` per line
+# the format is like: `username password` per line
 if [ ! -f ${data_path}/accounts ]; then
-  echo "${pg_username}: ${pg_password}" > ${data_path}/accounts
+  echo "${pg_username} ${pg_password}" > ${data_path}/accounts
 fi
