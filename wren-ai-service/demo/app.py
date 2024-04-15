@@ -116,7 +116,7 @@ if __name__ == "__main__":
 
     query = st.chat_input(
         "Ask a question about the database",
-        disabled=st.session_state["semantics_preparation_status"] != "finished",
+        # disabled=st.session_state["semantics_preparation_status"] != "finished",
     )
 
     with col2:
