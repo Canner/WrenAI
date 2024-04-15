@@ -1,9 +1,15 @@
 import { RelationType } from '../types';
 import { SampleDatasetName } from './type';
 
+export interface SampleDatasetColumn {
+  name: string;
+  description?: string;
+}
 export interface SampleDatasetTable {
   filePath: string;
   tableName: string;
+  columns?: SampleDatasetColumn[];
+  description?: string;
 }
 
 export interface SampleDatasetRelationship {
@@ -130,6 +136,12 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         tableName: 'customers',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/customers.csv',
+        columns: [
+          {
+            name: 'customer_id',
+            description: 'The unique identifier for the customer',
+          },
+        ],
       },
       {
         tableName: 'order_items',
