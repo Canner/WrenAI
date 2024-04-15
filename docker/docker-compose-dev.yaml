@@ -14,6 +14,8 @@ services:
     platform: ${PLATFORM}
     environment:
       DATA_PATH: /app/data
+      PG_USERNAME: ${PG_USERNAME}
+      PG_PASSWORD: ${PG_PASSWORD}
     volumes:
       - data:/app/data
     command: /bin/sh /app/init.sh
