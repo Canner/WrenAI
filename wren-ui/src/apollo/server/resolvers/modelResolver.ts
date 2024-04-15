@@ -275,7 +275,8 @@ export class ModelResolver {
     const statement = format(constructCteSql(steps));
 
     // describe columns
-    const { columns } = await ctx.wrenEngineAdaptor.desribeStatement(statement);
+    const { columns } =
+      await ctx.wrenEngineAdaptor.describeStatement(statement);
     if (isEmpty(columns)) {
       throw new Error('Failed to describe statement');
     }

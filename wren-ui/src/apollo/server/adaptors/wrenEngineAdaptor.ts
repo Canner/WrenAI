@@ -53,7 +53,7 @@ export interface IWrenEngineAdaptor {
   queryDuckdb(sql: string): Promise<QueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
   previewData(sql: string, limit?: number): Promise<QueryResponse>;
-  desribeStatement(sql: string): Promise<DescribeStatementResponse>;
+  describeStatement(sql: string): Promise<DescribeStatementResponse>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -190,7 +190,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
-  public async desribeStatement(
+  public async describeStatement(
     sql: string,
   ): Promise<DescribeStatementResponse> {
     try {
