@@ -92,6 +92,11 @@ export type CreateThreadResponseInput = {
   summary: Scalars['String'];
 };
 
+export type CreateViewInput = {
+  name: Scalars['String'];
+  responseId: Scalars['Int'];
+};
+
 export type CustomFieldInput = {
   expression: Scalars['String'];
   name: Scalars['String'];
@@ -168,6 +173,7 @@ export type DetailedThread = {
 export type Diagram = {
   __typename?: 'Diagram';
   models: Array<Maybe<DiagramModel>>;
+  views: Array<Maybe<DiagramView>>;
 };
 
 export type DiagramModel = {
@@ -213,6 +219,16 @@ export type DiagramModelRelationField = {
   toColumnName: Scalars['String'];
   toModelName: Scalars['String'];
   type: RelationType;
+};
+
+export type DiagramView = {
+  __typename?: 'DiagramView';
+  displayName: Scalars['String'];
+  id: Scalars['String'];
+  nodeType: NodeType;
+  referenceName: Scalars['String'];
+  statement: Scalars['String'];
+  viewId: Scalars['Int'];
 };
 
 export type DimensionInput = {
@@ -267,7 +283,7 @@ export type ModelInfo = {
 
 export type ModelSyncResponse = {
   __typename?: 'ModelSyncResponse';
-  isSyncronized: Scalars['Boolean'];
+  status: SyncStatus;
 };
 
 export type ModelWhereInput = {
@@ -281,16 +297,20 @@ export type Mutation = {
   createModel: Scalars['JSON'];
   createThread: Thread;
   createThreadResponse: ThreadResponse;
+  createView: ViewInfo;
   deleteModel: Scalars['Boolean'];
   deleteThread: Scalars['Boolean'];
+  deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
   previewData: Scalars['JSON'];
+  previewViewData: Scalars['JSON'];
   saveDataSource: DataSource;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
   startSampleDataset: Scalars['JSON'];
   updateModel: Scalars['JSON'];
   updateThread: Thread;
+  validateView: ViewValidationResponse;
 };
 
 
@@ -320,6 +340,11 @@ export type MutationCreateThreadResponseArgs = {
 };
 
 
+export type MutationCreateViewArgs = {
+  data: CreateViewInput;
+};
+
+
 export type MutationDeleteModelArgs = {
   where: ModelWhereInput;
 };
@@ -330,8 +355,18 @@ export type MutationDeleteThreadArgs = {
 };
 
 
+export type MutationDeleteViewArgs = {
+  where: ViewWhereUniqueInput;
+};
+
+
 export type MutationPreviewDataArgs = {
   where: PreviewDataInput;
+};
+
+
+export type MutationPreviewViewDataArgs = {
+  where: ViewWhereUniqueInput;
 };
 
 
@@ -364,6 +399,11 @@ export type MutationUpdateModelArgs = {
 export type MutationUpdateThreadArgs = {
   data: UpdateThreadInput;
   where: ThreadUniqueWhereInput;
+};
+
+
+export type MutationValidateViewArgs = {
+  data: ValidateViewInput;
 };
 
 export enum NodeType {
@@ -399,6 +439,7 @@ export type Query = {
   diagram: Diagram;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
+  listViews: Array<ViewInfo>;
   model: DetailedModel;
   modelSync?: Maybe<ModelSyncResponse>;
   onboardingStatus: OnboardingStatusResponse;
@@ -406,6 +447,7 @@ export type Query = {
   thread: DetailedThread;
   threadResponse: ThreadResponse;
   threads: Array<Thread>;
+  view: ViewInfo;
 };
 
 
@@ -426,6 +468,11 @@ export type QueryThreadArgs = {
 
 export type QueryThreadResponseArgs = {
   responseId: Scalars['Int'];
+};
+
+
+export type QueryViewArgs = {
+  where: ViewWhereUniqueInput;
 };
 
 export type RecommandRelations = {
@@ -506,6 +553,12 @@ export type SuggestedQuestionResponse = {
   questions: Array<Maybe<SuggestedQuestion>>;
 };
 
+export enum SyncStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  SYNCRONIZED = 'SYNCRONIZED',
+  UNSYNCRONIZED = 'UNSYNCRONIZED'
+}
+
 export type Task = {
   __typename?: 'Task';
   id: Scalars['String'];
@@ -555,4 +608,25 @@ export type UpdateModelInput = {
 
 export type UpdateThreadInput = {
   summary?: InputMaybe<Scalars['String']>;
+};
+
+export type ValidateViewInput = {
+  name: Scalars['String'];
+};
+
+export type ViewInfo = {
+  __typename?: 'ViewInfo';
+  id: Scalars['Int'];
+  name: Scalars['String'];
+  statement: Scalars['String'];
+};
+
+export type ViewValidationResponse = {
+  __typename?: 'ViewValidationResponse';
+  message?: Maybe<Scalars['String']>;
+  valid: Scalars['Boolean'];
+};
+
+export type ViewWhereUniqueInput = {
+  id: Scalars['Int'];
 };
