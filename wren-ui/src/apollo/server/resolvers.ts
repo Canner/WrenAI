@@ -3,11 +3,13 @@ import { ProjectResolver } from './resolvers/projectResolver';
 import { ModelResolver } from './resolvers/modelResolver';
 import { AskingResolver } from './resolvers/askingResolver';
 import { DiagramResolver } from './resolvers/diagramResolver';
+import { ConnectionInfoResolver } from './resolvers/connectionInfoResolver';
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
 const askingResolver = new AskingResolver();
 const diagramResolver = new DiagramResolver();
+const connectionInfoResolver = new ConnectionInfoResolver();
 
 const resolvers = {
   JSON: GraphQLJSON,
@@ -32,6 +34,9 @@ const resolvers = {
     // Views
     listViews: modelResolver.listViews,
     view: modelResolver.getView,
+
+    // Connection Info
+    connectionInfo: connectionInfoResolver.connectionInfo,
   },
   Mutation: {
     deploy: modelResolver.deploy,
