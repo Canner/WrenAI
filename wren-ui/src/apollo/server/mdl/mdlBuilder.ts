@@ -1,4 +1,4 @@
-import { isEmpty } from 'lodash';
+import { isEmpty, pick } from 'lodash';
 import {
   Model,
   ModelColumn,
@@ -104,10 +104,13 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.views = this.views.map((view: View) => {
+      // only pick displayName from properties
+      // if putting properties not string, it will throw error
+      const properties = pick(JSON.parse(view.properties), ['displayName']);
       return {
         name: view.name,
         statement: view.statement,
-        properties: JSON.parse(view.properties),
+        properties,
       };
     });
   }
