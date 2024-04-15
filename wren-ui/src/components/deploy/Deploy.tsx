@@ -1,12 +1,11 @@
+import { useEffect } from 'react';
 import { Button, Space, Typography } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
-import {
-  useDeployMutation,
-  useDeployStatusQuery,
-} from '@/apollo/client/graphql/deploy.generated';
 import { SyncStatus } from '@/apollo/client/graphql/__types__';
+import { useDeployMutation } from '@/apollo/client/graphql/deploy.generated';
+import { useDeployStatusContext } from '@/components/deploy/Context';
 
 const { Text } = Typography;
 
@@ -38,24 +37,34 @@ const getDeployStatus = (deploying: boolean, status: SyncStatus) => {
 };
 
 export default function Deploy() {
+  const deployContext = useDeployStatusContext();
   const [deployMutation, { loading: deploying }] = useDeployMutation();
-  const { data, loading } = useDeployStatusQuery({
-    pollInterval: 1000,
-  });
-  const status = data?.modelSync.status;
+
+  const { data, loading, startPolling, stopPolling } = deployContext;
+
+  const syncStatus = data?.modelSync.status;
+
+  const onDeploy = () => {
+    deployMutation();
+    startPolling(1000);
+  };
+
+  useEffect(() => {
+    if (syncStatus === SyncStatus.SYNCRONIZED) stopPolling();
+  }, [syncStatus]);
 
   const disabled =
     deploying ||
     loading ||
-    [SyncStatus.SYNCRONIZED, SyncStatus.IN_PROGRESS].includes(status);
+    [SyncStatus.SYNCRONIZED, SyncStatus.IN_PROGRESS].includes(syncStatus);
 
   return (
     <Space size={[8, 0]}>
-      {getDeployStatus(deploying, status)}
+      {getDeployStatus(deploying, syncStatus)}
       <Button
         className={`adm-modeling-header-btn ${disabled ? '' : 'gray-10'}`}
         disabled={disabled}
-        onClick={() => deployMutation()}
+        onClick={() => onDeploy()}
         size="small"
       >
         Deploy
