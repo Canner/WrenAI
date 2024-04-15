@@ -56,7 +56,7 @@ export interface ViewMDL {
   name: string;
   statement: string;
   properties?: {
-    displayName: string;
+    displayName?: string;
     description?: string;
   };
 }

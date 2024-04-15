@@ -1,4 +1,4 @@
-import { isEmpty } from 'lodash';
+import { isEmpty, pickBy } from 'lodash';
 import {
   Model,
   ModelColumn,
@@ -6,7 +6,7 @@ import {
   RelationInfo,
   View,
 } from '../repositories';
-import { Manifest, ModelMDL } from './type';
+import { Manifest, ModelMDL, ViewMDL } from './type';
 import { getLogger } from '@server/utils';
 
 const logger = getLogger('MDLBuilder');
@@ -104,10 +104,16 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.views = this.views.map((view: View) => {
+      // if putting properties not string, it will throw error
+      // filter out properties that have string value
+      const properties = pickBy<ViewMDL['properties']>(
+        JSON.parse(view.properties),
+        (value) => typeof value === 'string',
+      );
       return {
         name: view.name,
         statement: view.statement,
-        properties: JSON.parse(view.properties),
+        properties,
       };
     });
   }
