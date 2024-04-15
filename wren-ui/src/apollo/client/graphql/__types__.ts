@@ -224,11 +224,21 @@ export type DiagramModelRelationField = {
 export type DiagramView = {
   __typename?: 'DiagramView';
   displayName: Scalars['String'];
+  fields: Array<Maybe<DiagramViewField>>;
   id: Scalars['String'];
   nodeType: NodeType;
   referenceName: Scalars['String'];
   statement: Scalars['String'];
   viewId: Scalars['Int'];
+};
+
+export type DiagramViewField = {
+  __typename?: 'DiagramViewField';
+  displayName: Scalars['String'];
+  id: Scalars['String'];
+  nodeType: NodeType;
+  referenceName: Scalars['String'];
+  type: Scalars['String'];
 };
 
 export type DimensionInput = {
