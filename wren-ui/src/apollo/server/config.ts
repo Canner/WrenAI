@@ -20,6 +20,10 @@ export interface IConfig {
   // encryption
   encryptionPassword: string;
   encryptionSalt: string;
+
+  // username and password
+  pgUsername?: string;
+  pgPassword?: string;
 }
 
 const defaultConfig = {
@@ -74,6 +78,10 @@ const config = {
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,
   encryptionSalt: process.env.ENCRYPTION_SALT,
+
+  // username and password
+  pgUsername: process.env.PG_USERNAME,
+  pgPassword: process.env.PG_PASSWORD,
 };
 
 export function getConfig(): IConfig {

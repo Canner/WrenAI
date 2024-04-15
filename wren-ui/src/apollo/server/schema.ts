@@ -449,6 +449,15 @@ export const typeDefs = gql`
     questions: [SuggestedQuestion]!
   }
 
+  # SQL protocol connection information
+  type ConnectionInfo {
+    port: Int!
+    database: String!
+    schema: String!
+    username: String
+    password: String
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -472,6 +481,9 @@ export const typeDefs = gql`
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!
+
+    # Connection Info
+    connectionInfo: ConnectionInfo!
   }
 
   type Mutation {
