@@ -81,6 +81,8 @@ export default function Sidebar(props: Props) {
             href="https://discord.com/invite/Qpz6Xxpy"
             target="_blank"
             rel="noopener noreferrer"
+            data-ph-capture="true"
+            data-ph-capture-attribute-name="cta_go_to_discord"
           >
             <DiscordIcon className="mr-1" /> Discord
           </Link>

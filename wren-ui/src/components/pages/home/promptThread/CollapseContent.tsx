@@ -19,6 +19,7 @@ export interface Props {
   onCopyFullSQL?: () => void;
   sql: string;
   previewDataResult: PreviewDataMutationResult;
+  attributes?: any;
 }
 
 export default function CollapseContent(props: Props) {
@@ -30,6 +31,7 @@ export default function CollapseContent(props: Props) {
     onCopyFullSQL,
     sql,
     previewDataResult,
+    attributes,
   } = props;
 
   return (
@@ -77,6 +79,10 @@ export default function CollapseContent(props: Props) {
             size="small"
             icon={<CopyOutlined />}
             onClick={onCopyFullSQL}
+            data-ph-capture="true"
+            data-ph-capture-attribute-name="cta_answer_copy_sql"
+            data-ph-capture-attribute_step={attributes?.stepNumber}
+            data-ph-capture-attribute_is_last_step={attributes?.isLastStep}
           >
             Copy
           </Button>

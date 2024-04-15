@@ -59,6 +59,10 @@ export default function StepContent(props: Props) {
               }}
             />
           }
+          data-ph-capture="true"
+          data-ph-capture-attribute-name="cta_answer_preview_data"
+          data-ph-capture-attribute-step={stepNumber}
+          data-ph-capture-attribute-is_last_step={isLastStep}
         >
           Preview Data
         </Button>
@@ -66,12 +70,17 @@ export default function StepContent(props: Props) {
           {...(viewSQLButtonProps as ButtonProps)}
           size="small"
           icon={<FunctionOutlined />}
+          data-ph-capture="true"
+          data-ph-capture-attribute-name="cta_answer_view_sql"
+          data-ph-capture-attribute-step={stepNumber}
+          data-ph-capture-attribute-is_last_step={isLastStep}
         >
           {viewSQLButtonText}
         </Button>
         <CollapseContent
           {...(collapseContentProps as CollapseContentProps)}
           key={`collapse-${stepNumber}`}
+          attributes={{ stepNumber, isLastStep }}
         />
       </Col>
     </Row>
