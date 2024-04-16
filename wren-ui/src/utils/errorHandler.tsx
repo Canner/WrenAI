@@ -77,6 +77,15 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateViewErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create view.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -87,6 +96,7 @@ errorHandlers.set(
   'CreateThreadResponse',
   new CreateThreadResponseErrorHandler(),
 );
+errorHandlers.set('CreateView', new CreateViewErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   const operationName = error?.operation?.operationName || '';

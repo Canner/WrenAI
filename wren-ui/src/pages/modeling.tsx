@@ -23,7 +23,9 @@ const DiagramWrapper = styled.div`
 export function Modeling() {
   const diagramRef = useRef(null);
 
-  const { data } = useDiagramQuery();
+  const { data } = useDiagramQuery({
+    fetchPolicy: 'cache-and-network',
+  });
 
   const diagramData = useMemo(() => {
     if (!data) return null;

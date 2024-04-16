@@ -10,6 +10,7 @@ import {
 
 interface Props {
   data: DetailedThread;
+  onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
 }
 
 const StyledPromptThread = styled.div`
@@ -38,6 +39,7 @@ const AnswerResultTemplate = ({
   question,
   detail,
   error,
+  onOpenSaveAsViewModal,
 }) => {
   return (
     <div key={`${id}-${index}`}>
@@ -57,6 +59,7 @@ const AnswerResultTemplate = ({
           question={question}
           fullSql={detail?.sql}
           threadResponseId={id}
+          onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         />
       )}
     </div>
@@ -66,7 +69,7 @@ const AnswerResultTemplate = ({
 const AnswerResultIterator = makeIterable(AnswerResultTemplate);
 
 export default function PromptThread(props: Props) {
-  const { data } = props;
+  const { data, onOpenSaveAsViewModal } = props;
   const divRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -88,7 +91,11 @@ export default function PromptThread(props: Props) {
 
   return (
     <StyledPromptThread className="mt-12" ref={divRef}>
-      <AnswerResultIterator data={data?.responses || []} sql={data?.sql} />
+      <AnswerResultIterator
+        data={data?.responses || []}
+        sql={data?.sql}
+        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
+      />
     </StyledPromptThread>
   );
 }

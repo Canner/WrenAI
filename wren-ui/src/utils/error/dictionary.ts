@@ -40,4 +40,9 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please select at least one table.',
     },
   },
+  SAVE_AS_VIEW: {
+    NAME: {
+      REQUIRED: 'Please input view name.',
+    },
+  },
 };

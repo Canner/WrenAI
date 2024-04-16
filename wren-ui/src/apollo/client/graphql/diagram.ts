@@ -1,5 +1,15 @@
 import { gql } from '@apollo/client';
 
+const VIEW_FIELD = gql`
+  fragment ViewField on DiagramViewField {
+    id
+    displayName
+    referenceName
+    type
+    nodeType
+  }
+`;
+
 const RELATION_FIELD = gql`
   fragment RelationField on DiagramModelRelationField {
     id
@@ -53,8 +63,20 @@ export const DIAGRAM = gql`
           ...RelationField
         }
       }
+      views {
+        id
+        viewId
+        nodeType
+        displayName
+        referenceName
+        statement
+        fields {
+          ...ViewField
+        }
+      }
     }
   }
   ${FIELD}
   ${RELATION_FIELD}
+  ${VIEW_FIELD}
 `;

@@ -1,0 +1,105 @@
+import { Button, Form, Input, Modal, Typography } from 'antd';
+import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
+import { ModalAction } from '@/hooks/useModalAction';
+import { ERROR_TEXTS } from '@/utils/error';
+import CodeBlock from '@/components/editor/CodeBlock';
+import { useValidateViewMutation } from '@/apollo/client/graphql/view.generated';
+
+const { Text } = Typography;
+
+type Props = ModalAction<{ sql: string }> & {
+  loading?: boolean;
+  defaultValue: { sql: string; responseId: number };
+};
+
+const createViewTitleValidator =
+  (validateViewMutation: any) => async (_rule: any, value: string) => {
+    if (!value) {
+      return Promise.reject(ERROR_TEXTS.SAVE_AS_VIEW.NAME.REQUIRED);
+    }
+
+    const validateViewResult = await validateViewMutation({
+      variables: { data: { name: value } },
+    });
+
+    const { valid, message } = validateViewResult?.data?.validateView;
+
+    if (!valid) {
+      return Promise.reject(message);
+    }
+
+    return Promise.resolve();
+  };
+
+export default function SaveAsViewModal(props: Props) {
+  const { visible, loading, onSubmit, onClose, defaultValue } = props;
+  const [form] = Form.useForm();
+  const [validateViewMutation] = useValidateViewMutation({
+    fetchPolicy: 'no-cache',
+  });
+
+  const submit = () => {
+    form
+      .validateFields()
+      .then(async (values) => {
+        await onSubmit({ responseId: defaultValue.responseId, ...values });
+        onClose();
+      })
+      .catch(console.error);
+  };
+
+  const sql = defaultValue ? defaultValue.sql : '';
+
+  return (
+    <Modal
+      title="Save as View"
+      centered
+      closable
+      destroyOnClose
+      onCancel={onClose}
+      maskClosable={false}
+      visible={visible}
+      width={600}
+      afterClose={() => form.resetFields()}
+      footer={
+        <div className="d-flex justify-space-between align-center">
+          <div
+            className="d-flex justify-space-between align-center ml-2"
+            style={{ width: 300 }}
+          >
+            <InfoCircleOutlined className="mr-2 text-sm gray-6" />
+            <Text type="secondary" className="text-sm gray-6 text-left">
+              After saving, make sure you go to Modeling to deploy all saved
+              views.
+            </Text>
+          </div>
+          <div>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button type="primary" onClick={submit} loading={loading}>
+              Save
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <Form form={form} preserve={false} layout="vertical">
+        <Form.Item
+          label="Name"
+          name="name"
+          required
+          rules={[
+            {
+              required: true,
+              validator: createViewTitleValidator(validateViewMutation),
+            },
+          ]}
+        >
+          <Input />
+        </Form.Item>
+        <Form.Item label="SQL Statement">
+          <CodeBlock code={sql} showLineNumbers maxHeight="300" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}

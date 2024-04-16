@@ -1,6 +1,7 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
+import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -11,7 +12,10 @@ import {
   useThreadResponseLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
+import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
+import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
+import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 
 export default function HomeThread() {
   const router = useRouter();
@@ -19,6 +23,11 @@ export default function HomeThread() {
   const homeSidebar = useHomeSidebar();
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
   const askPrompt = useAskPrompt(threadId);
+  const saveAsViewModal = useModalAction();
+  const [createViewMutation, { loading: creating }] = useCreateViewMutation({
+    onError: (error) => console.error(error),
+    onCompleted: () => message.success('Successfully created view.'),
+  });
 
   const {
     data,
@@ -100,13 +109,26 @@ export default function HomeThread() {
 
   return (
     <SiderLayout loading={loading} sidebar={homeSidebar}>
-      <PromptThread data={thread} />
+      <PromptThread
+        data={thread}
+        onOpenSaveAsViewModal={saveAsViewModal.openModal}
+      />
       <div className="py-12" />
       <Prompt
         data={askPrompt.data}
         onSubmit={askPrompt.onSubmit}
         onStop={askPrompt.onStop}
         onSelect={onSelect}
+      />
+      <SaveAsViewModal
+        {...saveAsViewModal.state}
+        loading={creating}
+        onClose={saveAsViewModal.closeModal}
+        onSubmit={async (values) => {
+          await createViewMutation({
+            variables: { data: values },
+          });
+        }}
       />
     </SiderLayout>
   );
