@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import shutil
 import sqlite3
 import time
 import zipfile
@@ -16,9 +15,7 @@ import sqlparse
 import streamlit as st
 
 WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5555"
-WREN_ENGINE_PG_URL = (
-    "postgres://localhost:7432/canner-cml?options=--search_path%3Dspider"
-)
+WREN_ENGINE_PG_URL = "postgres://localhost:7432/canner-cml"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 
@@ -45,24 +42,18 @@ def download_spider_data():
     os.remove("spider.zip")
 
 
-def prepare_mdl_json(dataset_name: str):
-    assert Path(
-        f"../src/eval/data/{dataset_name}_mdl.json"
-    ).exists(), f"File not found in src/eval/data: {dataset_name}_mdl.json"
-
-    # move the file to src/eval/wren-engine/etc/mdl
-    shutil.copyfile(
-        f"../src/eval/data/{dataset_name}_mdl.json",
-        f"../src/eval/wren-engine/etc/mdl/{dataset_name}_mdl.json",
+def get_current_manifest_schema():
+    response = requests.get(
+        f"{WREN_ENGINE_API_URL}/v1/mdl",
     )
 
+    assert response.status_code == 200
 
-def rerun_wren_engine(dataset_name: str, mdl_json: Dict):
+    return response.json()["schema"]
+
+
+def rerun_wren_engine(mdl_json: Dict):
     st.toast("Wren Engine is being re-run", icon="⏳")
-
-    # this step is not necessary, since we'll use the wren engine api to directly deploy new mdl json
-    # this step is for consistency
-    prepare_mdl_json(dataset_name)
 
     response = requests.post(
         f"{WREN_ENGINE_API_URL}/v1/mdl/deploy",
@@ -102,7 +93,10 @@ def get_datasets():
 
 
 def save_mdl_json_file(file_name: str, mdl_json: Dict):
-    with open(f"../src/eval/data/{file_name}", "w", encoding="utf-8") as file:
+    if not Path("custom_dataset").exists():
+        Path("custom_dataset").mkdir()
+
+    with open(f"custom_dataset/{file_name}", "w", encoding="utf-8") as file:
         json.dump(mdl_json, file, indent=2)
 
 
@@ -444,28 +438,38 @@ def generate_mdl_json(
     return mdl_json
 
 
-def get_mdl_json(database_name: str):
-    database_schema = get_database_schema(
-        f"spider/database/{database_name}/{database_name}.sqlite",
-        get_table_names(f"spider/database/{database_name}/{database_name}.sqlite"),
-    )
+def get_mdl_json(database_name: str, type: str = "spider"):
+    assert type in ["spider", "demo"]
 
-    relationships = get_table_relationships(
-        f"spider/database/{database_name}/{database_name}.sqlite"
-    )
+    if type == "spider":
+        database_schema = get_database_schema(
+            f"spider/database/{database_name}/{database_name}.sqlite",
+            get_table_names(f"spider/database/{database_name}/{database_name}.sqlite"),
+        )
 
-    generate_text_to_sql_dataset(
-        ["spider/train_spider.json", "spider/train_others.json"],
-        database_name=database_name,
-    )
+        relationships = get_table_relationships(
+            f"spider/database/{database_name}/{database_name}.sqlite"
+        )
 
-    return generate_mdl_json(
-        database_schema,
-        "canner-cml",
-        "spider",
-        database_name,
-        relationships,
-    )
+        generate_text_to_sql_dataset(
+            ["spider/train_spider.json", "spider/train_others.json"],
+            database_name=database_name,
+        )
+
+        return generate_mdl_json(
+            database_schema,
+            "canner-cml",
+            "spider",
+            database_name,
+            relationships,
+        )
+    elif type == "demo":
+        assert database_name in ["music", "nba", "ecommerce"]
+
+        with open(f"sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
+            mdl_json = json.load(f)
+
+        return mdl_json
 
 
 @st.cache_data
@@ -646,9 +650,12 @@ def show_asks_details_results():
             st.markdown(
                 f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
             )
+
+            pg_url = f"{WREN_ENGINE_PG_URL}?options=--search_path%3D{get_current_manifest_schema()}"
+
             st.dataframe(
                 get_data_from_wren_engine(
-                    WREN_ENGINE_PG_URL,
+                    pg_url,
                     st.session_state["preview_sql"],
                 )
             )
@@ -692,6 +699,64 @@ def generate_mdl_metadata(mdl_model_json: dict):
                     ]
 
     return mdl_model_json
+
+
+def prepare_duckdb(dataset_name: str):
+    assert dataset_name in ["music", "nba", "ecommerce"]
+
+    init_sqls = {
+        "music": """
+CREATE TABLE album AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Album.csv',header=true);
+CREATE TABLE artist AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Artist.csv',header=true);
+CREATE TABLE customer AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Customer.csv',header=true);
+CREATE TABLE genre AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Genre.csv',header=true);
+CREATE TABLE invoice AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Invoice.csv',header=true);
+CREATE TABLE invoiceLine AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/InvoiceLine.csv',header=true);
+CREATE TABLE track AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Track.csv',header=true);
+""",
+        "nba": """
+CREATE TABLE game AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/game.csv',header=true);
+CREATE TABLE line_score AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/line_score.csv',header=true);
+CREATE TABLE player_games AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/player_game.csv',header=true);
+CREATE TABLE player AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/player.csv',header=true);
+CREATE TABLE team AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/team.csv',header=true);
+""",
+        "ecommerce": """
+CREATE TABLE customers AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/customers.csv',header=true);
+CREATE TABLE order_items AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/order_items.csv',header=true);
+CREATE TABLE orders AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/orders.csv',header=true);
+CREATE TABLE payments AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/payments.csv',header=true);
+CREATE TABLE products AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/products.csv',header=true);
+CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/reviews.csv',header=true);
+""",
+    }
+
+    api_url = "http://localhost:3000/api/graphql"
+
+    user_data = {
+        "properties": {
+            "displayName": "my-duckdb",
+            "initSql": init_sqls[dataset_name],
+            "configurations": {"threads": 8},
+            "extensions": ["httpfs", "aws"],
+        },
+        "type": "DUCKDB",
+    }
+
+    payload = {
+        "query": """
+        mutation SaveDataSource($data: DataSourceInput!) {
+            saveDataSource(data: $data) {
+                type
+                properties
+            }
+        }
+        """,
+        "variables": {"data": user_data},
+    }
+
+    response = requests.post(api_url, json=payload)
+    assert response.status_code == 200
 
 
 def prepare_semantics(mdl_json: dict):
