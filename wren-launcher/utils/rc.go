@@ -63,47 +63,33 @@ func (w *WrenRC) parseInto() (map[string]string, error) {
 	lineno := 0
 	for {
 		// read the line
-		l, err := r.ReadString('\n')
-		// if the end of the file is reached, break
+		line, err := r.ReadString('\n')
 		if err != nil {
+			if err.Error() != "EOF" {
+				return nil, err // return an error if it's not EOF
+			}
 			break
 		}
-		// increment the line number
 		lineno++
-		// trim the line of any leading or trailing whitespace
-		l = strings.Trim(l, " \t\v\r\n")
+		line = strings.Trim(line, " \t\v\r\n")
 
-		// if the line is empty, continue
-		if len(l) == 0 {
-			continue
-		}
-		// if the line is a comment, continue
-		if l[0] == '#' || l[0] == ';' {
+		// Skip empty lines and comments
+		if line == "" || line[0] == '#' || line[0] == ';' {
 			continue
 		}
 
-		// find the index of the '=' character
-		// if the '=' character is not found, log a syntax error
-		// and exit
-		var i int
-		var c rune
-		for i, c = range l {
-			if c == '=' {
-				break
-			}
-		}
-
-		// if the '=' character is not found, log a syntax error
-		if c != '=' {
+		// Split the line into key and value based on the '=' character
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
 			return nil, fmt.Errorf("syntax error on line %d: no '=' character found", lineno)
 		}
 
-		// trim the key and value of any leading or trailing whitespace
-		k := strings.Trim(l[0:i], " \t\v\r\n")
-		v := strings.TrimLeft(l[i+1:], " \t\v\r\n")
+		// Trim spaces around key and value
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
 
-		// put the key value pair in the map
-		m[k] = v
+		// Store the key-value pair in the map
+		m[key] = value
 	}
 
 	return m, nil
