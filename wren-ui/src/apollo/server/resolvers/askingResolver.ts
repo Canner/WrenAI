@@ -135,6 +135,8 @@ export class AskingResolver {
       sql,
       summary,
     });
+    // telemetry
+    ctx.telemetry.send_event('ask_question', {});
     return thread;
   }
 
@@ -184,6 +186,9 @@ export class AskingResolver {
 
     const askingService = ctx.askingService;
     const thread = await askingService.updateThread(where.id, data);
+
+    // telemetry
+    ctx.telemetry.send_event('update_thread_summary', {});
     return thread;
   }
 
@@ -220,6 +225,7 @@ export class AskingResolver {
 
     const askingService = ctx.askingService;
     const response = await askingService.createThreadResponse(threadId, data);
+    ctx.telemetry.send_event('ask_followup_question', {});
     return response;
   }
 

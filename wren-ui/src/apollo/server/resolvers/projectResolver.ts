@@ -51,6 +51,8 @@ export class ProjectResolver {
     if (!(name in SampleDatasetName)) {
       throw new Error('Invalid sample dataset name');
     }
+    // telemetry
+    ctx.telemetry.send_event('start_sample_dataset', { datasetName: name });
 
     // create duckdb datasource
     const initSql = buildInitSql(name as SampleDatasetName);
@@ -131,6 +133,10 @@ export class ProjectResolver {
     await this.removeCurrentProject(ctx);
     const strategy = DataSourceStrategyFactory.create(type, { ctx });
     await strategy.saveDataSource(properties);
+
+    // telemetry
+    ctx.telemetry.send_event('save_data_source', { dataSourceType: type });
+    ctx.telemetry.send_event('onboarding_step_1', { step: 'save_data_source' });
     return args.data;
   }
 
@@ -162,6 +168,13 @@ export class ProjectResolver {
       ctx,
       project,
     );
+
+    // telemetry
+    ctx.telemetry.send_event('save_tables', {
+      tablesCount: models.length,
+      columnsCount: columns.length,
+    });
+    ctx.telemetry.send_event('onboarding_step_2', { step: 'save_models' });
 
     // async deploy to wren-engine and ai service
     this.deploy(ctx);
@@ -200,6 +213,8 @@ export class ProjectResolver {
     const savedRelations = await ctx.modelService.saveRelations(
       arg.data.relations,
     );
+    ctx.telemetry.send_event('onboarding_step_3', { step: 'save_relation' });
+
     // async deploy
     this.deploy(ctx);
     return savedRelations;
