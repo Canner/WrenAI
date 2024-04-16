@@ -22,8 +22,11 @@ import (
 )
 
 const (
-	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/d9a4fa5b77cf2f1145af60dfa8ed4998912b0872/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/d9a4fa5b77cf2f1145af60dfa8ed4998912b0872/.env.example"
+	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/be79a768a316500143ed5bcb8bb9506401519359/docker-compose.yaml"
+	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/be79a768a316500143ed5bcb8bb9506401519359/.env.example"
+
+	// pg user
+	PG_USERNAME string = "wren-user"
 )
 
 func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string) string {
@@ -38,6 +41,10 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_pas
 	// replace PG_PASSWORD
 	reg = regexp.MustCompile(`PG_PASSWORD=(.*)`)
 	str = reg.ReplaceAllString(str, "PG_PASSWORD="+pg_password)
+
+	// replace PG_USERNAME
+	reg = regexp.MustCompile(`PG_USERNAME=(.*)`)
+	str = reg.ReplaceAllString(str, "PG_USERNAME="+PG_USERNAME)
 	return str
 }
 
