@@ -37,8 +37,8 @@ describe('MDLBuilder', () => {
         projectId: 'bq-project-id',
         datasetId: 'my-dataset',
         credentials: 'my-credential',
-        catalog: 'tbd',
-        schema: 'tbd',
+        catalog: 'wrenai',
+        schema: 'public',
         sampleDataset: null,
       } as Project;
       const models = [
@@ -208,8 +208,8 @@ describe('MDLBuilder', () => {
       projectId: 'bq-project-id',
       datasetId: 'my-dataset',
       credentials: 'my-credential',
-      catalog: 'tbd',
-      schema: 'tbd',
+      catalog: 'wrenai',
+      schema: 'public',
       sampleDataset: null,
     } as Project;
     const models = [
