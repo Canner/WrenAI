@@ -1,9 +1,9 @@
 import { CompactTable } from '../connectors/connector';
 import { Model, ModelColumn } from '../repositories';
-import { AnalysisRelationInfo } from '../types';
+import { AnalysisRelationInfo, DataSourceProperties } from '../types';
 
 export interface IDataSourceStrategy {
-  saveDataSource(properties: any): Promise<any>;
+  saveDataSource(properties: DataSourceProperties): Promise<any>;
   listTable({
     formatToCompactTable,
   }: {

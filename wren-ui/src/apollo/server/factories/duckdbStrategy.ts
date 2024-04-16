@@ -1,6 +1,6 @@
 import { IConnector, CompactTable } from '../connectors/connector';
 import { Model, ModelColumn, Project } from '../repositories';
-import { DataSourceName, IContext } from '../types';
+import { DataSourceName, DuckDBDataSourceProperties, IContext } from '../types';
 import {
   DuckDBConnector,
   DuckDBListTableOptions,
@@ -20,7 +20,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
     this.ctx = ctx;
   }
 
-  public async saveDataSource(properties: any) {
+  public async saveDataSource(properties: DuckDBDataSourceProperties) {
     const { displayName, extensions, configurations } = properties;
     const initSql = this.concatInitSql(properties.initSql, extensions);
     const connector = new DuckDBConnector({

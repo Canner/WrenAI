@@ -37,6 +37,9 @@ const resolvers = {
 
     // Connection Info
     connectionInfo: connectionInfoResolver.connectionInfo,
+
+    // Settings
+    settings: projectResolver.getSettings,
   },
   Mutation: {
     deploy: modelResolver.deploy,

@@ -1,5 +1,5 @@
 import { IDataSourceStrategy } from './dataSourceStrategy';
-import { DataSourceName, IContext } from '../types';
+import { DataSourceName, IContext, PGDataSourceProperties } from '../types';
 import { Model, ModelColumn, Project } from '../repositories';
 import { PGColumnResponse, PGConnector } from '../connectors/pgConnector';
 import { Encryptor } from '../utils';
@@ -13,7 +13,7 @@ export class PGStrategy implements IDataSourceStrategy {
     this.ctx = ctx;
   }
 
-  public async saveDataSource(properties: any) {
+  public async saveDataSource(properties: PGDataSourceProperties) {
     const { displayName, host, port, database, user, password } = properties;
     const connector = new PGConnector(properties);
 

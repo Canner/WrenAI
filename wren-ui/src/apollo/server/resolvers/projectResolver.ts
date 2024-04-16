@@ -1,6 +1,7 @@
 import {
   DataSource,
   DataSourceName,
+  DataSourceProperties,
   IContext,
   RelationData,
   SampleDatasetData,
@@ -29,6 +30,7 @@ export enum OnboardingStatusEnum {
 
 export class ProjectResolver {
   constructor() {
+    this.getSettings = this.getSettings.bind(this);
     this.saveDataSource = this.saveDataSource.bind(this);
     this.listDataSourceTables = this.listDataSourceTables.bind(this);
     this.saveTables = this.saveTables.bind(this);
@@ -36,6 +38,19 @@ export class ProjectResolver {
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
     this.startSampleDataset = this.startSampleDataset.bind(this);
+  }
+
+  public async getSettings(_root: any, _arg, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    const dataSourceType = project.type;
+
+    return {
+      dataSource: {
+        type: dataSourceType,
+        properties: this.getDataSourceProperties(project),
+        sampleDataset: project.sampleDataset,
+      },
+    };
   }
 
   public async startSampleDataset(
@@ -223,20 +238,6 @@ export class ProjectResolver {
     return savedRelations;
   }
 
-  private generateRelationName(relation: RelationData, models: Model[]) {
-    const fromModel = models.find((m) => m.id === relation.fromModelId);
-    const toModel = models.find((m) => m.id === relation.toModelId);
-    if (!fromModel || !toModel) {
-      throw new Error('Model not found');
-    }
-    return (
-      fromModel.sourceTableName.charAt(0).toUpperCase() +
-      fromModel.sourceTableName.slice(1) +
-      toModel.sourceTableName.charAt(0).toUpperCase() +
-      toModel.sourceTableName.slice(1)
-    );
-  }
-
   private async deploy(ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
     const manifest = await ctx.mdlService.makeCurrentModelMDL();
@@ -323,5 +324,28 @@ export class ProjectResolver {
     const { models, columns } = await strategy.saveModels(tables);
 
     return { models, columns };
+  }
+
+  private getDataSourceProperties(project: Project) {
+    const dataSourceType = project.type;
+    const properties = {
+      displayName: project.displayName,
+    } as DataSourceProperties;
+
+    if (dataSourceType === DataSourceName.BIG_QUERY) {
+      properties.projectId = project.projectId;
+      properties.datasetId = project.datasetId;
+    } else if (dataSourceType === DataSourceName.DUCKDB) {
+      properties.initSql = project.initSql;
+      properties.extensions = project.extensions;
+      properties.configurations = project.configurations;
+    } else if (dataSourceType === DataSourceName.PG) {
+      properties.host = project.host;
+      properties.port = project.port;
+      properties.database = project.database;
+      properties.user = project.user;
+    }
+
+    return properties;
   }
 }

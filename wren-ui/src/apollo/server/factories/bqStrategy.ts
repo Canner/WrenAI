@@ -3,6 +3,7 @@ import { IConnector } from '../connectors/connector';
 import { Model, ModelColumn, Project } from '../repositories';
 import {
   AnalysisRelationInfo,
+  BigQueryDataSourceProperties,
   DataSourceName,
   IContext,
   RelationType,
@@ -27,7 +28,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     this.ctx = ctx;
   }
 
-  public async saveDataSource(properties: any) {
+  public async saveDataSource(properties: BigQueryDataSourceProperties) {
     const { displayName, projectId, datasetId, credentials } = properties;
     const { config } = this.ctx;
     let filePath = '';
