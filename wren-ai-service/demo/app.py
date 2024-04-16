@@ -160,7 +160,6 @@ if __name__ == "__main__":
         )
         # Semantics preparation
         if deploy_ok:
-            print(st.session_state["dataset_type"])
             if st.session_state["dataset_type"] == "duckdb":
                 prepare_duckdb(st.session_state["chosen_dataset"])
 
