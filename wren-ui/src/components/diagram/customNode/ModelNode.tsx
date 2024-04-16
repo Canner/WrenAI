@@ -18,13 +18,17 @@ import Column, {
   MoreColumnTip,
 } from '@/components/diagram/customNode/Column';
 import { PrimaryKeyIcon, ModelIcon } from '@/utils/icons';
-import { ComposeDiagram, ComposeDiagramField } from '@/utils/data';
+import {
+  ComposeDiagram,
+  ComposeDiagramField,
+  DiagramModel,
+} from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { makeIterable } from '@/utils/iteration';
 import { Config } from '@/utils/diagram';
 import { NODE_TYPE } from '@/utils/enum';
 
-export const ModelNode = ({ data }: CustomNodeProps<ComposeDiagram>) => {
+export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
   const context = useContext(DiagramContext);
   const onNodeClick = () => {
     context?.onNodeClick({

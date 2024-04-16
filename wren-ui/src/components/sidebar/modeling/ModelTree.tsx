@@ -20,7 +20,6 @@ export default function ModelTree(props: {
 
   const [tree, setTree] = useState<DataNode[]>(getModelGroupNode());
 
-  // initial workspace
   useEffect(() => {
     setTree((_tree) =>
       getModelGroupNode({

@@ -38,7 +38,7 @@ export const LIST_VIEWS = gql`
 
 export const PREVIEW_VIEW_DATA = gql`
   mutation PreviewViewData($where: ViewWhereUniqueInput!) {
-    previewViewData(where: $data)
+    previewViewData(where: $where)
   }
 `;
 

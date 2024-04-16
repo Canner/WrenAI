@@ -2,7 +2,7 @@ import { memo, useCallback, useContext } from 'react';
 import { Button } from 'antd';
 import { MoreIcon, ViewIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
-import { ComposeDiagram, ComposeDiagramField } from '@/utils/data';
+import { ComposeDiagramField, DiagramView } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { DiagramContext } from '../Context';
 import { CustomNodeProps, NodeBody, NodeHeader, StyledNode } from './utils';
@@ -10,7 +10,7 @@ import MarkerHandle from './MarkerHandle';
 import Column from './Column';
 import CustomDropdown from '../CustomDropdown';
 
-export const ViewNode = ({ data }: CustomNodeProps<ComposeDiagram>) => {
+export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
   const context = useContext(DiagramContext);
   const onMoreClick = (type: MORE_ACTION) => {
     context?.onMoreClick({

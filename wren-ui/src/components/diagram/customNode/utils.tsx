@@ -1,4 +1,4 @@
-import { ComposeDiagram } from '@/utils/data';
+import { CachedProps } from '@/utils/data';
 import { LightningIcon } from '@/utils/icons';
 import { Tooltip } from 'antd';
 import { NodeProps } from 'reactflow';
@@ -116,11 +116,7 @@ export const NodeColumn = styled.div`
   }
 `;
 
-export const CachedIcon = ({
-  originalData,
-}: {
-  originalData: ComposeDiagram;
-}) => {
+export const CachedIcon = ({ originalData }: { originalData: CachedProps }) => {
   return originalData.cached ? (
     <Tooltip
       title={

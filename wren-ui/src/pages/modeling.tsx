@@ -3,7 +3,6 @@ import { forwardRef, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
-import { Diagram as DiagramData } from '@/utils/data';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
@@ -25,7 +24,7 @@ const DiagramWrapper = styled.div`
   height: 100%;
 `;
 
-export function Modeling() {
+export default function Modeling() {
   const diagramRef = useRef(null);
 
   const { data } = useDiagramQuery({
@@ -51,7 +50,7 @@ export function Modeling() {
 
   const diagramData = useMemo(() => {
     if (!data) return null;
-    return data?.diagram as DiagramData;
+    return data?.diagram;
   }, [data]);
 
   const metadataDrawer = useDrawerAction();
@@ -123,5 +122,3 @@ export function Modeling() {
     </DeployStatusContext.Provider>
   );
 }
-
-export default Modeling;

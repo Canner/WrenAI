@@ -4,6 +4,7 @@ import { Modal } from 'antd';
 import { DataNode } from 'antd/es/tree';
 import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
 import { Path } from '@/utils/enum';
+import { DiagramView } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
 import LabelTitle from '@/components/sidebar/LabelTitle';
@@ -19,8 +20,10 @@ export const createViewInfoModalProps = {
   ),
 };
 
-// TODO: update TS for props
-export default function ViewTree(props) {
+export default function ViewTree(props: {
+  [key: string]: any;
+  views: DiagramView[];
+}) {
   const { views } = props;
 
   const getViewGroupNode = createTreeGroupNode({
@@ -40,7 +43,6 @@ export default function ViewTree(props) {
 
   const [tree, setTree] = useState<DataNode[]>(getViewGroupNode());
 
-  // initial workspace
   useEffect(() => {
     setTree((_tree) =>
       getViewGroupNode({

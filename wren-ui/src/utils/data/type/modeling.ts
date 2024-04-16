@@ -1,24 +1,24 @@
 import {
-  Diagram as DiagramType,
   DiagramModel,
   DiagramModelField,
   DiagramModelRelationField,
+  DiagramView,
+  DiagramViewField,
 } from '@/apollo/client/graphql/__types__';
 export type {
+  Diagram,
   DiagramModel,
   DiagramModelField,
   DiagramModelRelationField,
+  DiagramView,
 } from '@/apollo/client/graphql/__types__';
 
-// TODO: remove this when the backend implemented
-export type Diagram = DiagramType & {
-  views: any[];
-};
+export type ComposeDiagram = DiagramModel | DiagramView;
 
-export type ComposeDiagram = DiagramModel;
 export type ComposeDiagramField = (
   | DiagramModelField
   | DiagramModelRelationField
+  | DiagramViewField
 ) &
   Partial<Pick<DiagramModelField, 'isPrimaryKey' | 'columnId'>> &
   Partial<
@@ -31,3 +31,8 @@ export type ComposeDiagramField = (
       | 'relationId'
     >
   >;
+
+export type CachedProps = {
+  cached: boolean;
+  refreshTime?: string;
+};
