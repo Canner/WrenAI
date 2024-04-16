@@ -87,8 +87,8 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     // TODO: add displayName, schema, catalog to the DataSource, depends on the MDL structure
     const project = await this.ctx.projectRepository.createOne({
       displayName,
-      schema: 'tbd',
-      catalog: 'tbd',
+      schema: 'public',
+      catalog: 'wrenai',
       type: DataSourceName.BIG_QUERY,
       projectId,
       datasetId,
@@ -332,8 +332,8 @@ export class DuckDBStrategy implements IDataSourceStrategy {
     // save DataSource to database
     const project = await this.ctx.projectRepository.createOne({
       displayName,
-      schema: 'tbd',
-      catalog: 'tbd',
+      schema: 'public',
+      catalog: 'wrenai',
       type: DataSourceName.DUCKDB,
       initSql,
       configurations,
