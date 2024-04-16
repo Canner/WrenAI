@@ -1,16 +1,24 @@
 import { Button, Typography } from 'antd';
 import CodeBlock from '@/components/editor/CodeBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
+import { DiagramView } from '@/utils/data';
+import { usePreviewViewDataMutation } from '@/apollo/client/graphql/view.generated';
 
-export interface Props {
-  referenceName: string;
-  refSql: string;
-}
+export type Props = DiagramView;
 
 export default function ViewMetadata(props: Props) {
-  const { refSql, referenceName } = props || {};
+  const { referenceName, statement, viewId } = props || {};
 
-  // TODO: connect real preview view data API
+  const [previewViewDataMutation, previewViewDataResult] =
+    usePreviewViewDataMutation({
+      onError: (error) => console.error(error),
+    });
+
+  const onPreviewData = () => {
+    previewViewDataMutation({
+      variables: { where: { id: viewId } },
+    });
+  };
 
   return (
     <>
@@ -23,16 +31,24 @@ export default function ViewMetadata(props: Props) {
         <Typography.Text className="d-block gray-7 mb-2">
           SQL statement
         </Typography.Text>
-        <CodeBlock code={refSql} showLineNumbers maxHeight="300" />
+        <CodeBlock code={statement} showLineNumbers maxHeight="300" />
       </div>
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
           Data preview (100 rows)
         </Typography.Text>
-        <Button>Preview data</Button>
+        <Button onClick={onPreviewData} loading={previewViewDataResult.loading}>
+          Preview data
+        </Button>
         <div className="my-3">
-          <PreviewData loading={false} />
+          <PreviewData
+            {...{
+              error: previewViewDataResult.error,
+              loading: previewViewDataResult.loading,
+              previewData: previewViewDataResult?.data?.previewViewData,
+            }}
+          />
         </div>
       </div>
     </>
