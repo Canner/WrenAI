@@ -80,6 +80,11 @@ export const NodeHeader = styled.div`
     + svg {
       cursor: pointer;
     }
+
+    .ant-typography {
+      width: 140px;
+      color: white;
+    }
   }
 `;
 

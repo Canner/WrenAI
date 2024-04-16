@@ -1,4 +1,5 @@
 import { memo, useCallback, useContext } from 'react';
+import { Typography } from 'antd';
 import {
   highlightEdges,
   highlightNodes,
@@ -28,6 +29,8 @@ import { makeIterable } from '@/utils/iteration';
 import { Config } from '@/utils/diagram';
 import { NODE_TYPE } from '@/utils/enum';
 
+const { Text } = Typography;
+
 export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
   const context = useContext(DiagramContext);
   const onNodeClick = () => {
@@ -49,7 +52,9 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
       <NodeHeader className="dragHandle">
         <span className="adm-model-header">
           <ModelIcon />
-          {data.originalData.displayName}
+          <Text ellipsis title={data.originalData.displayName}>
+            {data.originalData.displayName}
+          </Text>
         </span>
         <span>
           <CachedIcon originalData={data.originalData} />
