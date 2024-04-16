@@ -468,7 +468,7 @@ export const typeDefs = gql`
     # Modeling Page
     listModels: [ModelInfo!]!
     model(where: ModelWhereInput!): DetailedModel!
-    modelSync: ModelSyncResponse
+    modelSync: ModelSyncResponse!
     diagram: Diagram!
 
     # View

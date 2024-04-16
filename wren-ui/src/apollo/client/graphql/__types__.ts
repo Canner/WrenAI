@@ -451,7 +451,7 @@ export type Query = {
   listModels: Array<ModelInfo>;
   listViews: Array<ViewInfo>;
   model: DetailedModel;
-  modelSync?: Maybe<ModelSyncResponse>;
+  modelSync: ModelSyncResponse;
   onboardingStatus: OnboardingStatusResponse;
   suggestedQuestions: SuggestedQuestionResponse;
   thread: DetailedThread;

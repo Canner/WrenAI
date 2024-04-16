@@ -7,7 +7,9 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { ClickPayload } from '@/components/diagram/Context';
+import { DeployStatusContext } from '@/components/deploy/Context';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
+import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -25,6 +27,11 @@ export function Modeling() {
 
   const { data } = useDiagramQuery({
     fetchPolicy: 'cache-and-network',
+  });
+
+  // TODO: No matter which operation is performed, we must re-fetch the latest deploy status
+  const deployStatusQueryResult = useDeployStatusQuery({
+    fetchPolicy: 'no-cache',
   });
 
   const diagramData = useMemo(() => {
@@ -66,26 +73,28 @@ export function Modeling() {
   };
 
   return (
-    <SiderLayout
-      loading={diagramData === null}
-      sidebar={{
-        data: diagramData,
-        onSelect,
-      }}
-    >
-      <DiagramWrapper>
-        <ForwardDiagram
-          ref={diagramRef}
-          data={diagramData}
-          onMoreClick={onMoreClick}
-          onNodeClick={onNodeClick}
+    <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
+      <SiderLayout
+        loading={diagramData === null}
+        sidebar={{
+          data: diagramData,
+          onSelect,
+        }}
+      >
+        <DiagramWrapper>
+          <ForwardDiagram
+            ref={diagramRef}
+            data={diagramData}
+            onMoreClick={onMoreClick}
+            onNodeClick={onNodeClick}
+          />
+        </DiagramWrapper>
+        <MetadataDrawer
+          {...metadataDrawer.state}
+          onClose={metadataDrawer.closeDrawer}
         />
-      </DiagramWrapper>
-      <MetadataDrawer
-        {...metadataDrawer.state}
-        onClose={metadataDrawer.closeDrawer}
-      />
-    </SiderLayout>
+      </SiderLayout>
+    </DeployStatusContext.Provider>
   );
 }
 
