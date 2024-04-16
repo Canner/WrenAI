@@ -15,6 +15,7 @@ const {
   wrenEngineVersion,
   wrenUIVersion,
   posthogApiKey,
+  posthogHost,
 } = config;
 
 export class Telemetry {
@@ -28,7 +29,7 @@ export class Telemetry {
         return;
       }
       const client = new PostHog(posthogApiKey, {
-        host: 'https://us.posthog.com',
+        host: posthogHost || 'https://us.posthog.com',
       });
       this.posthog = client;
       this.userId = userId || uuidv4();

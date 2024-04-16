@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"strings"
 
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/flags"
@@ -31,7 +30,7 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string, userUUID string) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string, userUUID string, telemetryConsent bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
@@ -51,6 +50,13 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_pas
 	// replace PG_USERNAME
 	reg = regexp.MustCompile(`PG_USERNAME=(.*)`)
 	str = reg.ReplaceAllString(str, "PG_USERNAME="+PG_USERNAME)
+
+	// replace TELEMETRY_ENABLED
+	reg = regexp.MustCompile(`TELEMETRY_ENABLED=(.*)`)
+	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryConsent))
+
+	fmt.Println("replaced env file")
+	fmt.Println(str)
 	return str
 }
 
@@ -124,37 +130,22 @@ func CheckDockerDaemonRunning() (bool, error) {
 	return true, nil
 }
 
-func getUserUUID(projectDir string) (string, error) {
-	rcFile := path.Join(projectDir, ".wrenrc")
-	rcFileContent, err := os.ReadFile(rcFile)
+func prepareUserUUID(projectDir string) (string, error) {
+	wrenRC := WrenRC{projectDir}
+	err := wrenRC.Set("USER_UUID", uuid.New().String(), false)
 	if err != nil {
 		return "", err
 	}
-	reg := regexp.MustCompile(`USER_UUID=.*`)
-	userUUIDContent := reg.Find(rcFileContent)
-	userUUID := strings.Split(string(userUUIDContent), "=")[1]
+
+	userUUID, err := wrenRC.Read("USER_UUID")
+	if err != nil {
+		return "", err
+	}
+
 	return userUUID, nil
 }
 
-func PrepareRCFiles(projectDir string) error {
-	// check if .wrenrc file exists
-	rcFile := path.Join(projectDir, ".wrenrc")
-	if _, err := os.Stat(rcFile); err == nil {
-		return nil
-	} else if os.IsNotExist(err) {
-		// create .wrenrc file
-		userUUID := uuid.New()
-		rcContent := fmt.Sprintf("USER_UUID=%s", userUUID.String())
-
-		err := os.WriteFile(rcFile, []byte(rcContent), 0644)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error {
+func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, telemetryConsent bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -163,15 +154,12 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error 
 		return err
 	}
 
-	wrenRC := WrenRC{projectDir}
-	err = wrenRC.Set("USER_UUID", uuid.New().String(), false)
-
 	pg_pwd, err := getPGPassword(WrenRC{projectDir})
 	if err != nil {
 		return err
 	}
 
-	userUUID, err := getUserUUID(projectDir)
+	userUUID, err := prepareUserUUID(projectDir)
 	if err != nil {
 		return err
 	}
@@ -191,7 +179,7 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error 
 		return err
 	}
 	// replace the content with regex
-	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, port, pg_pwd, userUUID)
+	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, port, pg_pwd, userUUID, telemetryConsent)
 	newEnvFile := path.Join(projectDir, ".env")
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)

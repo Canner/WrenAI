@@ -30,6 +30,38 @@ func prepareProjectDir() string {
 	return projectDir
 }
 
+func AskForTelemetryConsent() (bool, error) {
+	// let users know we're asking for telemetry consent
+	fmt.Println("WrenAI collects 'ONLY usage data' to improve WrenAI.")
+	fmt.Println("You can read more about what we collected at https://www.wren.ai/privacy-policy")
+
+	validate := func(input string) error {
+		if input == "y" || input == "n" {
+			return nil
+		}
+		return errors.New("invalid input")
+	}
+
+	prompt := promptui.Prompt{
+		Label:    "Do you consent to telemetry data collection? (y/n)",
+		Validate: validate,
+	}
+
+	result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return false, err
+	}
+
+	if result == "y" {
+		fmt.Println("Thank you for sharing your usage information with us.")
+		return true, nil
+	}
+	fmt.Println("You have chosen not to consent to telemetry data collection. WrenAI will not collect any usage data.")
+	return false, nil
+}
+
 func askForAPIKey() (string, error) {
 	// let users know we're asking for an API key
 	fmt.Println("Please provide your OpenAI API key")
@@ -78,6 +110,10 @@ func Launch() {
 	pterm.Print("\n")
 	apiKey, err := askForAPIKey()
 
+	// ask for telemetry consent
+	pterm.Print("\n")
+	telemetryConsent, err := AskForTelemetryConsent()
+
 	if err != nil {
 		pterm.Error.Println("Failed to get API key")
 		panic(err)
@@ -109,7 +145,7 @@ func Launch() {
 	// find an available port
 	defaultPort := 3000
 	port := utils.FindAvailablePort(defaultPort)
-	err = utils.PrepareDockerFiles(apiKey, port, projectDir)
+	err = utils.PrepareDockerFiles(apiKey, port, projectDir, telemetryConsent)
 	if err != nil {
 		panic(err)
 	}
