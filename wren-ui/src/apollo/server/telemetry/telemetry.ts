@@ -9,7 +9,7 @@ logger.level = 'debug';
 const config = getConfig();
 
 const {
-  userId,
+  userUUID,
   telemetryEnabled,
   wrenAIVersion,
   wrenEngineVersion,
@@ -32,7 +32,7 @@ export class Telemetry {
         host: posthogHost || 'https://us.posthog.com',
       });
       this.posthog = client;
-      this.userId = userId || uuidv4();
+      this.userId = userUUID || uuidv4();
       logger.info('Telemetry initialized');
     }
     logger.info('Telemetry not enabled.');

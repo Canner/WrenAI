@@ -29,7 +29,7 @@ export interface IConfig {
   telemetryEnabled?: boolean;
   posthogApiKey?: string;
   posthogHost?: string;
-  userId?: string;
+  userUUID?: string;
   wrenUIVersion?: string;
   wrenEngineVersion?: string;
   wrenAIVersion?: string;
@@ -98,7 +98,7 @@ const config = {
     process.env.TELEMETRY_ENABLED.toLocaleLowerCase() === 'true',
   posthogApiKey: process.env.POSTHOG_API_KEY,
   posthogHost: process.env.POSTHOG_HOST,
-  userId: process.env.USER_ID,
+  userUUID: process.env.USER_UUID,
   wrenUIVersion: process.env.WREN_UI_VERSION,
   wrenEngineVersion: process.env.WREN_ENGINE_VERSION,
   wrenAIVersion: process.env.WREN_AI_SERVICE_VERSION,

@@ -41,6 +41,8 @@ export const config: PageConfig = {
 };
 
 const bootstrapServer = async () => {
+  const telemetry = new Telemetry();
+
   const knex = bootstrapKnex({
     dbType: serverConfig.dbType,
     pgUrl: serverConfig.pgUrl,
@@ -82,6 +84,7 @@ const bootstrapServer = async () => {
     wrenAIAdaptor,
     wrenEngineAdaptor,
     deployLogRepository,
+    telemetry,
   });
 
   const askingService = new AskingService({
@@ -92,8 +95,6 @@ const bootstrapServer = async () => {
     threadRepository,
     threadResponseRepository,
   });
-
-  const telemetry = new Telemetry();
 
   // initialize services
   await askingService.initialize();
