@@ -14,7 +14,7 @@ import sqlglot
 import sqlparse
 import streamlit as st
 
-WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5556"
+WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 
