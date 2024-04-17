@@ -1,12 +1,13 @@
 import logging
 from typing import List, Literal, Optional
 
+import sqlparse
 from haystack import Pipeline
 from pydantic import BaseModel
 
 from src.utils import remove_duplicates
 
-logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
+logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/semantics-preparations
@@ -193,13 +194,13 @@ class AskService:
                         "post_processor"
                     ]["valid_generation_results"]
 
-                logging.debug("Documents:")
+                logger.debug("Documents:")
                 for document in documents:
-                    logging.debug(f"score: {document.score}")
-                    logging.debug(f"content: {document.content}")
+                    logger.debug(f"score: {document.score}")
+                    logger.debug(f"content: {document.content}")
 
-                logging.debug("Before sql correction:")
-                logging.debug(f"valid_generation_results: {valid_generation_results}")
+                logger.debug("Before sql correction:")
+                logger.debug(f"valid_generation_results: {valid_generation_results}")
 
                 if text_to_sql_generation_results["post_processor"][
                     "invalid_generation_results"
@@ -214,15 +215,28 @@ class AskService:
                         "post_processor"
                     ]["valid_generation_results"]
 
-                    logging.debug(
+                    logger.debug(
                         f'sql_correction_results: {sql_correction_results["post_processor"]}'
                     )
+
+                    for results in sql_correction_results["post_processor"][
+                        "invalid_generation_results"
+                    ]:
+                        logger.debug(
+                            f"{sqlparse.format(
+                                results['sql'],
+                                reindent=True,
+                                keyword_case='upper')
+                            }"
+                        )
+                        logger.debug(results["error"])
+                        logger.debug("\n\n")
 
                 # remove duplicates of valid_generation_results, which consists of a sql and a summary
                 valid_generation_results = remove_duplicates(valid_generation_results)
 
-                logging.debug("After sql correction:")
-                logging.debug(f"valid_generation_results: {valid_generation_results}")
+                logger.debug("After sql correction:")
+                logger.debug(f"valid_generation_results: {valid_generation_results}")
 
                 if not valid_generation_results:
                     self.ask_results[query_id] = AskResultResponse(

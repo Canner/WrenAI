@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -8,10 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 import src.globals as container
-from src.utils import load_env_vars
+from src.utils import load_env_vars, setup_custom_logger
 from src.web.v1 import routers
 
 env = load_env_vars()
+setup_custom_logger(
+    "wren-ai-service", level=logging.DEBUG if env == "dev" else logging.INFO
+)
 
 
 # https://fastapi.tiangolo.com/advanced/events/#lifespan

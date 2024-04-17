@@ -16,7 +16,7 @@ import streamlit as st
 from sql_formatter.core import format_sql
 
 WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5555"
-WREN_ENGINE_PG_URL = "postgres://localhost:7432/canner-cml"
+WREN_ENGINE_PG_URL = "postgres://localhost:7432/wrenai"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 
