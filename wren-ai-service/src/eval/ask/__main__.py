@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from haystack import Document
 from tqdm import tqdm
 
 from src.pipelines.ask.components.document_store import init_document_store
@@ -36,16 +37,23 @@ load_env_vars()
 
 
 def process_item(
-    query: str, no_db_schema: Optional[bool], optimal_ddl
+    query: str,
+    no_db_schema: Optional[bool],
+    optimal_ddl,
+    use_optimal_ddl: Optional[bool],
 ) -> Dict[str, Any]:
     retrieval_start = time.perf_counter()
     if not no_db_schema:
         retrieval_result = retrieval_pipeline.run(
             query,
         )
-        print(retrieval_result["post_processor"]["documents"])
-        print(optimal_ddl)
-        documents = optimal_ddl
+        if use_optimal_ddl:
+            documents = [
+                Document(id=i, content=optimal_ddl_content)
+                for i, optimal_ddl_content in enumerate(optimal_ddl)
+            ]
+        else:
+            documents = retrieval_result["post_processor"]["documents"]
     else:
         documents = []
     retrieval_end = time.perf_counter()
@@ -248,6 +256,11 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="Whether to use hard questions for evaluation. Default is False.",
     )
+    parser.add_argument(
+        "--use-optimal-schema",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to use hard questions for evaluation. Default is False.",
+    )
 
     args = parser.parse_args()
 
@@ -257,6 +270,7 @@ if __name__ == "__main__":
     ENABLE_SEMANTIC_DESCRIPTION = args.semantic_description
     CUSTOM_SEMANTIC_DESCRIPTION = args.custom_semantic_description
     NO_DB_SCHEMA = args.without_db_schema
+    USE_OPTIMAL_SCHEMA = args.use_optimal_schema
     EASY_QUESTIONS = args.easy_questions
     HARD_QUESTIONS = args.hard_questions
 
@@ -434,6 +448,7 @@ if __name__ == "__main__":
                     ground_truth["question"],
                     NO_DB_SCHEMA,
                     optimal_ddl[ground_truth["question"]],
+                    USE_OPTIMAL_SCHEMA,
                 )
                 for ground_truth in ground_truths
             ]
