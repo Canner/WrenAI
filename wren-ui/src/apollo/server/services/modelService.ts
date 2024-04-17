@@ -3,6 +3,7 @@ import {
   IModelColumnRepository,
   IModelRepository,
   IRelationRepository,
+  IViewRepository,
   Model,
   ModelColumn,
   Relation,
@@ -19,6 +20,8 @@ export interface IModelService {
   batchUpdateColumnDescription(tables: SampleDatasetTable[]): Promise<void>;
   saveRelations(relations: RelationData[]): Promise<Relation[]>;
   generateReferenceName(data: any): string;
+  deleteAllViewsByProjectId(projectId: number): Promise<void>;
+  deleteAllModelsByProjectId(projectId: number): Promise<void>;
 }
 
 export interface GenerateReferenceNameData {
@@ -28,26 +31,30 @@ export interface GenerateReferenceNameData {
 }
 
 export class ModelService implements IModelService {
-  private projectService: any;
+  private projectService: IProjectService;
   private modelRepository: IModelRepository;
-  private modelColumnRepository: any;
-  private relationRepository: any;
+  private modelColumnRepository: IModelColumnRepository;
+  private relationRepository: IRelationRepository;
+  private viewRepository: IViewRepository;
 
   constructor({
     projectService,
     modelRepository,
     modelColumnRepository,
     relationRepository,
+    viewRepository,
   }: {
     projectService: IProjectService;
     modelRepository: IModelRepository;
     modelColumnRepository: IModelColumnRepository;
     relationRepository: IRelationRepository;
+    viewRepository: IViewRepository;
   }) {
     this.projectService = projectService;
     this.modelRepository = modelRepository;
     this.modelColumnRepository = modelColumnRepository;
     this.relationRepository = relationRepository;
+    this.viewRepository = viewRepository;
   }
 
   public async batchUpdateModelDescription(tables: SampleDatasetTable[]) {
@@ -188,10 +195,16 @@ export class ModelService implements IModelService {
     );
   }
 
-  private async resetCurrentProjectModel(projectId) {
-    const existsModels = await this.modelRepository.findAllBy({ projectId });
-    const modelIds = existsModels.map((m) => m.id);
-    await this.modelColumnRepository.deleteByModelIds(modelIds);
-    await this.modelRepository.deleteMany(modelIds);
+  public async deleteAllViewsByProjectId(projectId: number): Promise<void> {
+    // delete all views
+    await this.viewRepository.deleteAllBy({ projectId });
+  }
+
+  public async deleteAllModelsByProjectId(projectId: number): Promise<void> {
+    // delete all relations
+    await this.relationRepository.deleteAllBy({ projectId });
+
+    // delete all models
+    await this.modelRepository.deleteAllBy({ projectId });
   }
 }

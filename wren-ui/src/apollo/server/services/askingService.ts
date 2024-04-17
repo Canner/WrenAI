@@ -66,6 +66,7 @@ export interface IAskingService {
   ): Promise<ThreadResponseWithThreadSummary[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   previewData(responseId: number, stepIndex?: number): Promise<QueryResponse>;
+  deleteAllByProjectId(projectId: number): Promise<void>;
 }
 
 /**
@@ -435,6 +436,11 @@ export class AskingService implements IAskingService {
     const sql = format(constructCteSql(steps, stepIndex));
     this.telemetry.send_event('preview_data', { sql });
     return this.wrenEngineAdaptor.previewData(sql);
+  }
+
+  public async deleteAllByProjectId(projectId: number): Promise<void> {
+    // delete all threads
+    await this.threadRepository.deleteAllBy({ projectId });
   }
 
   private async getDeployId() {

@@ -31,6 +31,7 @@ export enum OnboardingStatusEnum {
 export class ProjectResolver {
   constructor() {
     this.getSettings = this.getSettings.bind(this);
+    this.resetCurrentProject = this.resetCurrentProject.bind(this);
     this.saveDataSource = this.saveDataSource.bind(this);
     this.listDataSourceTables = this.listDataSourceTables.bind(this);
     this.saveTables = this.saveTables.bind(this);
@@ -40,7 +41,7 @@ export class ProjectResolver {
     this.startSampleDataset = this.startSampleDataset.bind(this);
   }
 
-  public async getSettings(_root: any, _arg, ctx: IContext) {
+  public async getSettings(_root: any, _arg: any, ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
     const dataSourceType = project.type;
 
@@ -51,6 +52,22 @@ export class ProjectResolver {
         sampleDataset: project.sampleDataset,
       },
     };
+  }
+
+  public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {
+    try {
+      const project = await ctx.projectService.getCurrentProject();
+      await ctx.deployService.deleteAllByProjectId(project.id);
+      await ctx.askingService.deleteAllByProjectId(project.id);
+      await ctx.modelService.deleteAllViewsByProjectId(project.id);
+      await ctx.modelService.deleteAllModelsByProjectId(project.id);
+
+      await ctx.projectService.deleteProject(project.id);
+    } catch {
+      // do nothing
+    }
+
+    return true;
   }
 
   public async startSampleDataset(
@@ -148,7 +165,9 @@ export class ProjectResolver {
     ctx: IContext,
   ) {
     const { type, properties } = args.data;
-    await this.removeCurrentProject(ctx);
+    // Curretly only support one data source
+    await this.resetCurrentProject(_root, args, ctx);
+
     const strategy = DataSourceStrategyFactory.create(type, { ctx });
     await strategy.saveDataSource(properties);
 
@@ -244,25 +263,6 @@ export class ProjectResolver {
     return await ctx.deployService.deploy(manifest, project.id);
   }
 
-  private async resetCurrentProjectModel(ctx, projectId) {
-    const existsModels = await ctx.modelRepository.findAllBy({ projectId });
-    const modelIds = existsModels.map((m) => m.id);
-    await ctx.modelColumnRepository.deleteByModelIds(modelIds);
-    await ctx.modelRepository.deleteMany(modelIds);
-  }
-
-  private async removeCurrentProject(ctx) {
-    let currentProject: Project;
-    try {
-      currentProject = await ctx.projectRepository.getCurrentProject();
-    } catch (_err: any) {
-      // no project found
-      return;
-    }
-    await this.resetCurrentProjectModel(ctx, currentProject.id);
-    await ctx.projectRepository.deleteOne(currentProject.id);
-  }
-
   private buildRelationInput(
     relations: SampleDatasetRelationship[],
     models: Model[],
@@ -314,7 +314,7 @@ export class ProjectResolver {
     project: Project,
   ) {
     // delete existing models and columns
-    await this.resetCurrentProjectModel(ctx, project.id);
+    await ctx.modelService.deleteAllModelsByProjectId(project.id);
 
     // create model and columns
     const strategy = DataSourceStrategyFactory.create(project.type, {

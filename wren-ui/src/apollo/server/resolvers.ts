@@ -66,6 +66,9 @@ const resolvers = {
     deleteView: modelResolver.deleteView,
     previewViewData: modelResolver.previewViewData,
     validateView: modelResolver.validateView,
+
+    // Settings
+    resetCurrentProject: projectResolver.resetCurrentProject,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

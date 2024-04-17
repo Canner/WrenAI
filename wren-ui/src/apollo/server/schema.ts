@@ -534,5 +534,8 @@ export const typeDefs = gql`
       data: CreateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+
+    # Settings
+    resetCurrentProject: Boolean!
   }
 `;

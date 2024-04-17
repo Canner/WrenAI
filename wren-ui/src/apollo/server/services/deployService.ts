@@ -33,6 +33,7 @@ export interface IDeployService {
   getLastDeployment(projectId: number): Promise<string>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest): string;
+  deleteAllByProjectId(projectId: number): Promise<void>;
 }
 
 export class DeployService implements IDeployService {
@@ -119,5 +120,10 @@ export class DeployService implements IDeployService {
     const content = JSON.stringify(manifest);
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;
+  }
+
+  public async deleteAllByProjectId(projectId: number): Promise<void> {
+    // delete all deploy logs
+    await this.deployLogRepository.deleteAllBy({ projectId });
   }
 }

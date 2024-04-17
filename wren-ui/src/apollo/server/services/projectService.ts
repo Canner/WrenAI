@@ -18,6 +18,7 @@ export interface IProjectService {
     credentials: JSON,
     persistCredentialDir: string,
   ) => string;
+  deleteProject: (projectId: number) => Promise<void>;
 }
 
 export class ProjectService implements IProjectService {
@@ -67,5 +68,9 @@ export class ProjectService implements IProjectService {
     logger.debug(`Writing credentials to file ${filePath}`);
     fs.writeFileSync(filePath, credentialString);
     return filePath;
+  }
+
+  public async deleteProject(projectId: number): Promise<void> {
+    await this.projectRepository.deleteOne(projectId);
   }
 }
