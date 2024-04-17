@@ -7,7 +7,6 @@ from src.web.v1.services.ask_details import (
 )
 
 
-# TODO: finish test_generation_pipeline for ask details pipeline
 def test_generation_pipeline():
     generation_pipeline = Generation(
         generator=init_generator(),
