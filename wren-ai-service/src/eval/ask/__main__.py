@@ -35,13 +35,17 @@ from .utils import (
 load_env_vars()
 
 
-def process_item(query: str, no_db_schema: Optional[bool]) -> Dict[str, Any]:
+def process_item(
+    query: str, no_db_schema: Optional[bool], optimal_ddl
+) -> Dict[str, Any]:
     retrieval_start = time.perf_counter()
     if not no_db_schema:
         retrieval_result = retrieval_pipeline.run(
             query,
         )
-        documents = retrieval_result["post_processor"]["documents"]
+        print(retrieval_result["post_processor"]["documents"])
+        print(optimal_ddl)
+        documents = optimal_ddl
     else:
         documents = []
     retrieval_end = time.perf_counter()
@@ -270,7 +274,7 @@ if __name__ == "__main__":
         with open(f"./src/eval/data/{DATASET_NAME}_data_hard.json", "r") as f:
             ground_truths = [json.loads(line) for line in f]
     else:
-        with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
+        with open(f"./src/eval/data/{DATASET_NAME}_data_test.json", "r") as f:
             ground_truths = [json.loads(line) for line in f]
 
     if ENABLE_SEMANTIC_DESCRIPTION:
@@ -361,6 +365,9 @@ if __name__ == "__main__":
     if not Path("./outputs").exists():
         Path("./outputs").mkdir()
 
+    with open(f"./src/eval/data/{DATASET_NAME}_optimal_ddl.json", "r") as f:
+        optimal_ddl = json.load(f)
+
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
         PREDICTION_RESULTS_FILE
@@ -423,7 +430,11 @@ if __name__ == "__main__":
         start = time.time()
         with ThreadPoolExecutor() as executor:
             args_list = [
-                (ground_truth["question"], NO_DB_SCHEMA)
+                (
+                    ground_truth["question"],
+                    NO_DB_SCHEMA,
+                    optimal_ddl[ground_truth["question"]],
+                )
                 for ground_truth in ground_truths
             ]
             outputs = list(
