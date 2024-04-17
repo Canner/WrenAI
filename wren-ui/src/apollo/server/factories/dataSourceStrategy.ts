@@ -3,7 +3,8 @@ import { Model, ModelColumn } from '../repositories';
 import { AnalysisRelationInfo, DataSourceProperties } from '../types';
 
 export interface IDataSourceStrategy {
-  saveDataSource(properties: DataSourceProperties): Promise<any>;
+  createDataSource(properties: DataSourceProperties): Promise<any>;
+  updateDataSource(properties: DataSourceProperties): Promise<any>;
   listTable({
     formatToCompactTable,
   }: {

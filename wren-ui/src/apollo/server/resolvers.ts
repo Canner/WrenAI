@@ -69,6 +69,7 @@ const resolvers = {
 
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,
+    updateDataSource: projectResolver.updateDataSource,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

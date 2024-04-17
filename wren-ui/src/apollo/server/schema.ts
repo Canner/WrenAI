@@ -462,6 +462,10 @@ export const typeDefs = gql`
   }
 
   # Settings
+  input UpdateDataSourceInput {
+    properties: JSON!
+  }
+
   type Settings {
     dataSource: DataSource!
   }
@@ -537,5 +541,6 @@ export const typeDefs = gql`
 
     # Settings
     resetCurrentProject: Boolean!
+    updateDataSource(data: UpdateDataSourceInput!): DataSource!
   }
 `;

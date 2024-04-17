@@ -33,6 +33,7 @@ export class ProjectResolver {
     this.getSettings = this.getSettings.bind(this);
     this.resetCurrentProject = this.resetCurrentProject.bind(this);
     this.saveDataSource = this.saveDataSource.bind(this);
+    this.updateDataSource = this.updateDataSource.bind(this);
     this.listDataSourceTables = this.listDataSourceTables.bind(this);
     this.saveTables = this.saveTables.bind(this);
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
@@ -169,12 +170,35 @@ export class ProjectResolver {
     await this.resetCurrentProject(_root, args, ctx);
 
     const strategy = DataSourceStrategyFactory.create(type, { ctx });
-    await strategy.saveDataSource(properties);
+    const project = await strategy.createDataSource(properties);
 
     // telemetry
     ctx.telemetry.send_event('save_data_source', { dataSourceType: type });
     ctx.telemetry.send_event('onboarding_step_1', { step: 'save_data_source' });
-    return args.data;
+
+    return {
+      type: project.type,
+      properties: this.getDataSourceProperties(project),
+    };
+  }
+
+  public async updateDataSource(
+    _root: any,
+    args: { data: DataSource },
+    ctx: IContext,
+  ) {
+    const { properties } = args.data;
+    const project = await ctx.projectService.getCurrentProject();
+
+    const strategy = DataSourceStrategyFactory.create(project.type, {
+      ctx,
+      project,
+    });
+    const nextProject = await strategy.updateDataSource(properties);
+    return {
+      type: nextProject.type,
+      properties: this.getDataSourceProperties(nextProject),
+    };
   }
 
   public async listDataSourceTables(_root: any, _arg, ctx: IContext) {

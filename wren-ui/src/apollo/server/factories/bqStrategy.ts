@@ -28,46 +28,17 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     this.ctx = ctx;
   }
 
-  public async saveDataSource(properties: BigQueryDataSourceProperties) {
+  public async createDataSource(properties: BigQueryDataSourceProperties) {
     const { displayName, projectId, datasetId, credentials } = properties;
     const { config } = this.ctx;
-    let filePath = '';
-    // check DataSource is valid and can connect to it
-    filePath = this.ctx.projectService.writeCredentialFile(
-      credentials,
-      config.persistCredentialDir,
-    );
-    const connectionOption: BigQueryOptions = {
-      projectId,
-      keyFilename: filePath,
-    };
-    const connector = new BQConnector(connectionOption);
-    await connector.prepare();
 
-    // update wren-engine config
-    const wrenEngineConfig = {
-      'wren.datasource.type': 'bigquery',
-      'bigquery.project-id': projectId,
-      'bigquery.credentials-key': toBase64(JSON.stringify(credentials)),
-    };
-    await this.ctx.wrenEngineAdaptor.patchConfig(wrenEngineConfig);
+    await this.testConnection({ projectId, datasetId, credentials });
 
-    // check can connect to bigquery
-    const connected = await connector.connect();
-    if (!connected) {
-      throw new Error('Can not connect to data source');
-    }
-    // check this credential have permission can list dataset table
-    try {
-      await connector.listTables({ datasetId });
-    } catch (_e) {
-      throw new Error('Can not list tables in dataset');
-    }
+    await this.patchConfigToWrenEngine({ projectId, credentials });
+
     // save DataSource to database
     const encryptor = new Encryptor(config);
     const encryptedCredentials = encryptor.encrypt(credentials);
-
-    // TODO: add displayName, schema, catalog to the DataSource, depends on the MDL structure
     const project = await this.ctx.projectRepository.createOne({
       displayName,
       schema: 'public',
@@ -77,6 +48,30 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       datasetId,
       credentials: encryptedCredentials,
     });
+    return project;
+  }
+
+  public async updateDataSource(
+    properties: BigQueryDataSourceProperties,
+  ): Promise<any> {
+    const { displayName, credentials } = properties;
+    const { config } = this.ctx;
+    const { projectId, datasetId } = this.project;
+
+    await this.testConnection({ projectId, datasetId, credentials });
+
+    await this.patchConfigToWrenEngine({ projectId, credentials });
+
+    // update DataSource to database
+    const encryptor = new Encryptor(config);
+    const encryptedCredentials = encryptor.encrypt(credentials);
+    const project = await this.ctx.projectRepository.updateOne(
+      this.project.id,
+      {
+        displayName,
+        credentials: encryptedCredentials,
+      },
+    );
     return project;
   }
 
@@ -180,6 +175,57 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       relations.push(relation);
     }
     return relations;
+  }
+
+  private async testConnection(args: {
+    projectId: string;
+    datasetId: string;
+    credentials: JSON;
+  }) {
+    const { projectId, datasetId, credentials } = args;
+    const { config } = this.ctx;
+
+    // check DataSource is valid and can connect to it
+    const filePath = this.ctx.projectService.writeCredentialFile(
+      credentials,
+      config.persistCredentialDir,
+    );
+
+    const connectionOption: BigQueryOptions = {
+      projectId,
+      keyFilename: filePath,
+    };
+    const connector = new BQConnector(connectionOption);
+    await connector.prepare();
+
+    // check can connect to bigquery
+    const connected = await connector.connect();
+    if (!connected) {
+      throw new Error('Can not connect to data source');
+    }
+    // check this credential have permission can list dataset table
+    try {
+      await connector.listTables({ datasetId });
+    } catch (_e) {
+      throw new Error('Can not list tables in dataset');
+    }
+
+    return true;
+  }
+
+  private async patchConfigToWrenEngine(args: {
+    projectId: string;
+    credentials: JSON;
+  }) {
+    const { projectId, credentials } = args;
+
+    // update wren-engine config
+    const wrenEngineConfig = {
+      'wren.datasource.type': 'bigquery',
+      'bigquery.project-id': projectId,
+      'bigquery.credentials-key': toBase64(JSON.stringify(credentials)),
+    };
+    await this.ctx.wrenEngineAdaptor.patchConfig(wrenEngineConfig);
   }
 
   private async getBQConnector(filePath: string) {
