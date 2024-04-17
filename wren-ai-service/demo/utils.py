@@ -15,7 +15,7 @@ import sqlparse
 import streamlit as st
 from sql_formatter.core import format_sql
 
-WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5555"
+WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 
@@ -807,7 +807,7 @@ def prepare_semantics(mdl_json: dict):
         or st.session_state["semantics_preparation_status"] == "indexing"
     ):
         semantics_preparation_status_response = requests.get(
-            f'{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations/{st.session_state['deployment_id']}/status/'
+            f'{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations/{st.session_state['deployment_id']}/status'
         )
         st.session_state[
             "semantics_preparation_status"
