@@ -32,16 +32,20 @@
 
 ## Demo
 
-- you should stop all services first before running the demo
-- go to the `demo` folder and run `poetry install` to install the dependencies
-- start the docker service
+- prerequisites: install and run the docker service
+- you should stop all WrenAI services first before running the demo
 - go to the `../docker` folder and start the services using the `docker-compose-dev.yaml` file
   - please check the README.md in the `../docker` folder for more information
   - run `docker-compose --env-file .env.local -f docker-compose-dev.yaml up -d` to start the services
 - go to the `../wren-ui` folder and start the UI service
   - please check the README.md in the `../wren-ui` folder for more information
   - run `yarn dev` to start the UI service
-- in the `demo` folder, run `make run` to start the demo
+- go to the `demo` folder and run `poetry install` to install the dependencies
+- in the `demo` folder
+  - in one terminal, run `make prepare` to start the wren-ai-service
+  - in another terminal, run `make run` to start the demo
+- ports of the services:
   - wren-engine: ports should be 8080, 7342
   - wren-ai-service: port should be 5555
   - wren-ui: port should be 3000
+  - qdrant: ports should be 6333, 6334

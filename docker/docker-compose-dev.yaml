@@ -34,30 +34,30 @@ services:
     depends_on:
       - bootstrap
 
-  wren-ai-service:
-    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
-    pull_policy: always
-    platform: ${PLATFORM}
-    ports:
-      - ${WREN_AI_SERVICE_PORT}:${WREN_AI_SERVICE_PORT}
-    environment:
-      WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      QDRANT_HOST: qdrant
-      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
-      # sometimes the console won't show print messages,
-      # using PYTHONUNBUFFERED: 1 can fix this
-      PYTHONUNBUFFERED: 1
-    networks:
-      - wren
-    depends_on:
-      - qdrant
+  # wren-ai-service:
+  #   image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+  #   pull_policy: always
+  #   platform: ${PLATFORM}
+  #   ports:
+  #     - ${WREN_AI_SERVICE_PORT}:${WREN_AI_SERVICE_PORT}
+  #   environment:
+  #     WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
+  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
+  #     QDRANT_HOST: qdrant
+  #     WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+  #     # sometimes the console won't show print messages,
+  #     # using PYTHONUNBUFFERED: 1 can fix this
+  #     PYTHONUNBUFFERED: 1
+  #   networks:
+  #     - wren
+  #   depends_on:
+  #     - qdrant
 
   qdrant:
     image: qdrant/qdrant:v1.7.4
     pull_policy: always
-    expose:
-      - 6333
-      - 6334
+    ports:
+      - 6333:6333
+      - 6334:6334
     networks:
       - wren
