@@ -13,7 +13,6 @@ import requests
 import sqlglot
 import sqlparse
 import streamlit as st
-from sql_formatter.core import format_sql
 
 WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
@@ -591,14 +590,20 @@ def show_query_history():
         with st.expander("Query History", expanded=False):
             st.markdown(st.session_state["query_history"]["summary"])
             st.code(
-                body=format_sql(st.session_state["query_history"]["sql"]),
+                body=sqlparse.format(
+                    st.session_state["query_history"]["sql"],
+                    reindent=True,
+                    keyword_case="upper",
+                ),
                 language="sql",
             )
             for i, step in enumerate(st.session_state["query_history"]["steps"]):
                 st.markdown(f"#### Step {i + 1}")
                 st.markdown(step["summary"])
                 st.code(
-                    body=format_sql(step["sql"]),
+                    body=sqlparse.format(
+                        step["sql"], reindent=True, keyword_case="upper"
+                    ),
                     language="sql",
                 )
 
@@ -616,7 +621,11 @@ def show_asks_results():
         with ask_result_col:
             st.markdown(f"Result {i+1}")
             st.code(
-                body=format_sql(st.session_state["asks_results"][i]["sql"]),
+                body=sqlparse.format(
+                    st.session_state["asks_results"][i]["sql"],
+                    reindent=True,
+                    keyword_case="upper",
+                ),
                 language="sql",
             )
             st.markdown(st.session_state["asks_results"][i]["summary"])
@@ -662,7 +671,7 @@ def show_asks_details_results():
         sqls.append(sql)
 
         st.code(
-            body=format_sql(sql),
+            body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
             language="sql",
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
