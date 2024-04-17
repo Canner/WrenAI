@@ -114,6 +114,7 @@ export type CustomFieldInput = {
 export type DataSource = {
   __typename?: 'DataSource';
   properties: Scalars['JSON'];
+  sampleDataset?: Maybe<SampleDatasetName>;
   type: DataSourceName;
 };
 
@@ -324,10 +325,12 @@ export type Mutation = {
   deploy: Scalars['JSON'];
   previewData: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
+  resetCurrentProject: Scalars['Boolean'];
   saveDataSource: DataSource;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
   startSampleDataset: Scalars['JSON'];
+  updateDataSource: DataSource;
   updateModel: Scalars['JSON'];
   updateThread: Thread;
   validateView: ViewValidationResponse;
@@ -410,6 +413,11 @@ export type MutationStartSampleDatasetArgs = {
 };
 
 
+export type MutationUpdateDataSourceArgs = {
+  data: UpdateDataSourceInput;
+};
+
+
 export type MutationUpdateModelArgs = {
   data: UpdateModelInput;
   where: ModelWhereInput;
@@ -464,6 +472,7 @@ export type Query = {
   model: DetailedModel;
   modelSync: ModelSyncResponse;
   onboardingStatus: OnboardingStatusResponse;
+  settings: Settings;
   suggestedQuestions: SuggestedQuestionResponse;
   thread: DetailedThread;
   threadResponse: ThreadResponse;
@@ -555,6 +564,11 @@ export type SaveTablesInput = {
   tables: Array<Scalars['String']>;
 };
 
+export type Settings = {
+  __typename?: 'Settings';
+  dataSource: DataSource;
+};
+
 export type SimpleMeasureInput = {
   isCalculated: Scalars['Boolean'];
   name: Scalars['String'];
@@ -616,6 +630,10 @@ export type TimeGrainInput = {
   dateParts: Array<Scalars['String']>;
   name: Scalars['String'];
   refColumn: Scalars['String'];
+};
+
+export type UpdateDataSourceInput = {
+  properties: Scalars['JSON'];
 };
 
 export type UpdateModelInput = {

@@ -44,6 +44,15 @@ export const SAVE_DATA_SOURCE = gql`
   }
 `;
 
+export const UPDATE_DATA_SOURCE = gql`
+  mutation UpdateDataSource($data: UpdateDataSourceInput!) {
+    updateDataSource(data: $data) {
+      type
+      properties
+    }
+  }
+`;
+
 export const SAVE_TABLES = gql`
   mutation SaveTables($data: SaveTablesInput!) {
     saveTables(data: $data)
