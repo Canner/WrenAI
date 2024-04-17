@@ -55,8 +55,6 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_pas
 	reg = regexp.MustCompile(`TELEMETRY_ENABLED=(.*)`)
 	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryConsent))
 
-	fmt.Println("replaced env file")
-	fmt.Println(str)
 	return str
 }
 
