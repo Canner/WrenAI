@@ -24,9 +24,9 @@ services:
     image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
     restart: on-failure
     platform: ${PLATFORM}
-    ports:
-      - ${WREN_ENGINE_PORT}:${WREN_ENGINE_PORT}
-      - ${WREN_ENGINE_SQL_PORT}:${WREN_ENGINE_SQL_PORT}
+    expose:
+      - ${WREN_ENGINE_PORT}
+      - ${WREN_ENGINE_SQL_PORT}
     volumes:
       - data:/usr/src/app/etc
     networks:
