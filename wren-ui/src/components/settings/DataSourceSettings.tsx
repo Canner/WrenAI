@@ -3,13 +3,25 @@ import Image from 'next/image';
 import { DATA_SOURCES, FORM_MODE } from '@/utils/enum';
 import { getDataSource } from '@/components/pages/setup/utils';
 
-export default function DataSourceSettings() {
-  const type = DATA_SOURCES.BIG_QUERY;
+interface Props {
+  type: DATA_SOURCES;
+  properties: Record<string, any>;
+  sampleDataset: string;
+}
+
+const SampleDatasetPanel = (props: Props) => {
+  const { sampleDataset } = props;
+  return <div>Sample Dataset: {sampleDataset}</div>;
+};
+
+const DataSourcePanel = (props: Props) => {
+  const { type, properties } = props;
+
   const current = getDataSource(type);
   const [form] = Form.useForm();
 
   const reset = () => {
-    // TODO: reset form to original values
+    form.setFieldsValue({ ...properties });
   };
 
   const submit = () => {
@@ -20,7 +32,7 @@ export default function DataSourceSettings() {
 
   return (
     <>
-      <div className="d-flex align-center py-3 px-4">
+      <div className="d-flex align-center">
         <Image
           className="mr-2"
           src={current.logo}
@@ -43,5 +55,15 @@ export default function DataSourceSettings() {
         </div>
       </Form>
     </>
+  );
+};
+
+export default function DataSourceSettings(props: Props) {
+  const { sampleDataset } = props;
+  const Component = sampleDataset ? SampleDatasetPanel : DataSourcePanel;
+  return (
+    <div className="py-3 px-4">
+      <Component {...props} />
+    </div>
   );
 }
