@@ -13,3 +13,15 @@ export const GET_DEPLOY_STATUS = gql`
     }
   }
 `;
+
+export const CONNECTION_INFO = gql`
+  query ConnectionInfo {
+    connectionInfo {
+      database
+      schema
+      port
+      username
+      password
+    }
+  }
+`;
