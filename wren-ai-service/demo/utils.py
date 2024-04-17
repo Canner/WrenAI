@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import gdown
-import psycopg2
+import pandas as pd
 import requests
 import sqlglot
 import sqlparse
@@ -16,7 +16,6 @@ import streamlit as st
 from sql_formatter.core import format_sql
 
 WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5555"
-WREN_ENGINE_PG_URL = "postgres://localhost:7432/wrenai"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 
@@ -524,16 +523,20 @@ def get_new_mdl_json(chosen_models: List[str]):
 
 
 @st.cache_data
-def get_data_from_wren_engine(pg_url: str, sql: str):
-    conn = psycopg2.connect(dsn=pg_url)
+def get_data_from_wren_engine(sql: str):
+    response = requests.get(
+        f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
+        json={
+            "sql": sql,
+        },
+    )
 
-    with conn.cursor() as cur:
-        cur.execute(sql)
-        data = cur.fetchall()
+    assert response.status_code == 200
 
-    conn.close()
+    data = response.json()
+    column_names = [col["name"] for col in data["columns"]]
 
-    return data
+    return pd.DataFrame(data["data"], columns=column_names)
 
 
 # ui related
@@ -680,11 +683,8 @@ def show_asks_details_results():
                 f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
             )
 
-            pg_url = f"{WREN_ENGINE_PG_URL}?options=--search_path%3D{get_current_manifest_schema()}"
-
             st.dataframe(
                 get_data_from_wren_engine(
-                    pg_url,
                     st.session_state["preview_sql"],
                 )
             )
@@ -884,7 +884,7 @@ def ask_details():
         asks_details_status != "finished" and asks_details_status != "failed"
     ) or not asks_details_status:
         asks_details_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details/{query_id}/result/"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details/{query_id}/result"
         )
         assert asks_details_status_response.status_code == 200
         asks_details_status = asks_details_status_response.json()["status"]
