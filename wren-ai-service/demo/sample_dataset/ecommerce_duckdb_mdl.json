@@ -1,6 +1,6 @@
 {
-  "catalog" : "tbd",
-  "schema" : "tbd",
+  "catalog" : "wrenai",
+  "schema" : "ecommerce",
   "models" : [ {
     "name" : "customers",
     "refSql" : "select * from main.customers",

@@ -13,6 +13,7 @@ import requests
 import sqlglot
 import sqlparse
 import streamlit as st
+from sql_formatter.core import format_sql
 
 WREN_AI_SERVICE_BASE_URL = "http://127.0.0.1:5555"
 WREN_ENGINE_PG_URL = "postgres://localhost:7432/canner-cml"
@@ -50,6 +51,37 @@ def get_current_manifest_schema():
     assert response.status_code == 200
 
     return response.json()["schema"]
+
+
+def get_current_manifest():
+    response = requests.get(
+        f"{WREN_ENGINE_API_URL}/v1/mdl",
+    )
+
+    assert response.status_code == 200
+
+    manifest = response.json()
+
+    if manifest["schema"] == "test_schema" and manifest["catalog"] == "test_catalog":
+        return "None", [], []
+
+    return (
+        f"{manifest['catalog']}.{manifest['schema']}",
+        manifest["models"],
+        manifest["relationships"],
+    )
+
+
+def is_current_manifest_available():
+    response = requests.get(
+        f"{WREN_ENGINE_API_URL}/v1/mdl",
+    )
+
+    assert response.status_code == 200
+
+    manifest = response.json()
+
+    return manifest["catalog"] != "text_catalog" and manifest["schema"] != "test_schema"
 
 
 def rerun_wren_engine(mdl_json: Dict):
@@ -505,10 +537,7 @@ def get_data_from_wren_engine(pg_url: str, sql: str):
 
 
 # ui related
-def show_er_diagram():
-    models = st.session_state["mdl_json"]["models"]
-    relationships = st.session_state["mdl_json"]["relationships"]
-
+def show_er_diagram(models: List[dict], relationships: List[dict]):
     # Start of the Graphviz syntax
     graphviz = "digraph ERD {\n"
     graphviz += '    graph [pad="0.5", nodesep="0.5", ranksep="2"];\n'
@@ -559,14 +588,14 @@ def show_query_history():
         with st.expander("Query History", expanded=False):
             st.markdown(st.session_state["query_history"]["summary"])
             st.code(
-                body=st.session_state["query_history"]["sql"],
+                body=format_sql(st.session_state["query_history"]["sql"]),
                 language="sql",
             )
             for i, step in enumerate(st.session_state["query_history"]["steps"]):
                 st.markdown(f"#### Step {i + 1}")
                 st.markdown(step["summary"])
                 st.code(
-                    body=step["sql"],
+                    body=format_sql(step["sql"]),
                     language="sql",
                 )
 
@@ -584,7 +613,7 @@ def show_asks_results():
         with ask_result_col:
             st.markdown(f"Result {i+1}")
             st.code(
-                body=st.session_state["asks_results"][i]["sql"],
+                body=format_sql(st.session_state["asks_results"][i]["sql"]),
                 language="sql",
             )
             st.markdown(st.session_state["asks_results"][i]["summary"])
@@ -630,7 +659,7 @@ def show_asks_details_results():
         sqls.append(sql)
 
         st.code(
-            body=sql,
+            body=format_sql(sql),
             language="sql",
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")

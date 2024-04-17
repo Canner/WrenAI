@@ -1,6 +1,6 @@
 {
-  "catalog" : "tbd",
-  "schema" : "tbd",
+  "catalog" : "wrenai",
+  "schema" : "music",
   "models" : [ {
     "name" : "album",
     "refSql" : "select * from main.album",

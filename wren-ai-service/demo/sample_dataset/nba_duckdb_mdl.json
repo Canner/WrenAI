@@ -1,6 +1,6 @@
 {
-  "catalog" : "tbd",
-  "schema" : "tbd",
+  "catalog" : "wrenai",
+  "schema" : "nba",
   "models" : [ {
     "name" : "game",
     "refSql" : "select * from main.game",
