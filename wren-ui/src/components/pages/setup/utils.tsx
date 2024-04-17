@@ -58,19 +58,19 @@ export const DATA_SOURCE_OPTIONS = {
   [DATA_SOURCES.BIG_QUERY]: {
     label: 'BigQuery',
     logo: '/images/dataSource/bigQuery.svg',
-    guide: 'https://docs.getwren.ai/guides/connect/bigquery',
+    guide: 'https://docs.getwren.ai/guide/connect/bigquery',
     disabled: false,
   },
   [DATA_SOURCES.DUCKDB]: {
     label: 'DuckDB',
     logo: '/images/dataSource/duckDb.svg',
-    guide: 'https://docs.getwren.ai/guides/connect/duckdb',
+    guide: 'https://docs.getwren.ai/guide/connect/duckdb',
     disabled: false,
   },
   [DATA_SOURCES.PG_SQL]: {
     label: 'PostgreSQL',
     logo: '/images/dataSource/postgreSql.svg',
-    guide: 'https://docs.getwren.ai/guides/connect/postgresql',
+    guide: 'https://docs.getwren.ai/guide/connect/postgresql',
     disabled: false,
   },
 } as { [key: string]: ButtonOption };
