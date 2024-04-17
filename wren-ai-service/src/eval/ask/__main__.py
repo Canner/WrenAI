@@ -447,7 +447,7 @@ if __name__ == "__main__":
                 (
                     ground_truth["question"],
                     NO_DB_SCHEMA,
-                    optimal_ddl[ground_truth["question"]],
+                    optimal_ddl[ground_truth["question"]] if USE_OPTIMAL_SCHEMA else [],
                     USE_OPTIMAL_SCHEMA,
                 )
                 for ground_truth in ground_truths
