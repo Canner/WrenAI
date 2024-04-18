@@ -64,7 +64,7 @@ if __name__ == "__main__":
     col1, col2 = st.columns([2, 4])
 
     with col1:
-        with st.expander("Current Deployed Model"):
+        with st.expander("Current Deployed Model", expanded=True):
             manifest_name, models, relationships = get_current_manifest()
             st.markdown(f"Current Deployed Model: {manifest_name}")
             show_er_diagram(models, relationships)
