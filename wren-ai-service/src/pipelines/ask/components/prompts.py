@@ -1,5 +1,27 @@
 from haystack.components.builders.prompt_builder import PromptBuilder
 
+query_preprocess_user_prompt_template = """
+### TASK ###
+Detect if the input is a valid question or query?
+
+### EXAMPLES ###
+1. "What is the capital of France?" -> {"result": "yes"}
+2. "SELECT * FROM users WHERE age > 18;" -> {"result": "no"}
+3. "I am a student" -> {"result": "no"}
+4. "fdafrfergr" -> {"result": "no"}
+5. "Show me the books" -> {"result": "yes"}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be the JSON format like following:
+    
+{
+    "result": "yes" or "no"
+}
+
+### QUESTION ###
+{{ query }}
+"""
+
 text_to_sql_user_prompt_template = """
 ### TASK ###
 Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and 
@@ -197,6 +219,10 @@ The final answer must be a list of corrected SQL quries and its original corresp
 ### QUESTION ###
 {{ invalid_generation_results }}
 """
+
+
+def init_query_preprocess_prompt_builder():
+    return PromptBuilder(template=query_preprocess_user_prompt_template)
 
 
 def init_text_to_sql_prompt_builder():

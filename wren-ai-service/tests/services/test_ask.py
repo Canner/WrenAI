@@ -6,6 +6,7 @@ import pytest
 from src.pipelines.ask import (
     generation_pipeline,
     indexing_pipeline,
+    query_understanding_pipeline,
     retrieval_pipeline,
     sql_correction_pipeline,
 )
@@ -26,6 +27,7 @@ def ask_service():
     document_store = init_document_store()
     embedder = init_embedder()
     retriever = init_retriever(document_store=document_store)
+    query_understanding_generator = init_generator()
     text_to_sql_generator = init_generator()
     sql_correction_generator = init_generator()
 
@@ -33,6 +35,9 @@ def ask_service():
         {
             "indexing": indexing_pipeline.Indexing(
                 document_store=document_store,
+            ),
+            "query_understanding": query_understanding_pipeline.QueryUnderstanding(
+                generator=query_understanding_generator,
             ),
             "retrieval": retrieval_pipeline.Retrieval(
                 embedder=embedder,
