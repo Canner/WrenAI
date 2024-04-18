@@ -34,14 +34,14 @@ const PlainImage = styled.div`
   height: 40px;
 `;
 
-const CommingSoon = styled.div`
+const ComingSoon = styled.div`
   border: 1px var(--gray-7) solid;
   color: var(gray-7);
   font-size: 8px;
   padding: 2px 6px;
   border-radius: 999px;
   &:before {
-    content: 'COMMING SOON';
+    content: 'COMING SOON';
   }
 `;
 
@@ -95,7 +95,7 @@ const ButtonTemplate = (
           )}
           {label}
         </div>
-        {disabled && <CommingSoon />}
+        {disabled && <ComingSoon />}
       </ButtonItem>
     </Col>
   );
@@ -127,7 +127,7 @@ export default function Starter(props) {
         Connect a data source
       </Typography.Title>
       <Typography.Text>
-        Vote for your preferred data source to be our next option on our{' '}
+        Vote for your favorite data sources on {' '}
         <Link
           href="https://github.com/Canner/WrenAI"
           target="_blank"

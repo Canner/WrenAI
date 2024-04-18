@@ -69,7 +69,7 @@ export default function SaveAsViewModal(props: Props) {
           >
             <InfoCircleOutlined className="mr-2 text-sm gray-6" />
             <Text type="secondary" className="text-sm gray-6 text-left">
-              After saving, make sure you go to Modeling to deploy all saved
+              After saving, make sure you go to "Modeling Page" to deploy all saved
               views.
             </Text>
           </div>
