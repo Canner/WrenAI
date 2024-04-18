@@ -735,7 +735,7 @@ def generate_mdl_json(
             {
                 "name": table["table_name"],
                 "properties": {},
-                "refSql": f"select * from \"{catalog_name}\".{schema_name}.\"{database_name}-{table['table_name']}\"",
+                "refSql": f"select * from wrenai.{schema_name}.\"{database_name}-{table['table_name']}\"",
                 "columns": table_definition["columns"],
                 "primaryKey": table_definition["primary_key"],
             }
