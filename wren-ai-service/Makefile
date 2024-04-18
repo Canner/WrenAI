@@ -61,6 +61,7 @@ setup-envfile:
 # Start all services
 start:
 	@echo "$(YELLOW)Starting all services...$(RESET)"
+	@poetry run python -m src.prepare_mdl_json 	# deprecated?
 	@$(MAKE) start-qdrant
 	@$(MAKE) start-wren-engine
 	@$(MAKE) start-ai
@@ -124,18 +125,22 @@ help:
 	@echo "  $(GREEN)stop-ai$(RESET)           - Stop Wren AI service"
 	@echo "  $(GREEN)psql$(RESET)              - Connect to Wren Engine via psql"
 
+# deprecated?
 build:
 	docker compose -f docker/docker-compose.yml --env-file .env.prod build
 
+# deprecated?
 up:
 	make run-wren-engine && \
 	docker compose -f docker/docker-compose.yml --env-file .env.prod up -d
 
+# deprecated?
 down:
 	make stop-wren-engine && \
 	docker compose -f docker/docker-compose.yml --env-file .env.prod down
 
 run-all:
+	# deprecated?
 	poetry run python -m src.prepare_mdl_json && \
 	make run-qdrant && \
 	make run-wren-engine
@@ -152,6 +157,7 @@ eval:
 	poetry run python -m src.eval.$(pipeline) $(args)
 	make stop-all
 
+# deprecated?
 test:
 	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
 	make run-qdrant && \
