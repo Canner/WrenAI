@@ -56,6 +56,15 @@ export type CompactTable = {
   properties?: Maybe<Scalars['JSON']>;
 };
 
+export type ConnectionInfo = {
+  __typename?: 'ConnectionInfo';
+  database: Scalars['String'];
+  password?: Maybe<Scalars['String']>;
+  port: Scalars['Int'];
+  schema: Scalars['String'];
+  username?: Maybe<Scalars['String']>;
+};
+
 export type CreateModelInput = {
   cached: Scalars['Boolean'];
   calculatedFields?: InputMaybe<Array<CalculatedFieldInput>>;
@@ -446,6 +455,7 @@ export type Query = {
   __typename?: 'Query';
   askingTask: AskingTask;
   autoGenerateRelation?: Maybe<Array<RecommandRelations>>;
+  connectionInfo: ConnectionInfo;
   diagram: Diagram;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;

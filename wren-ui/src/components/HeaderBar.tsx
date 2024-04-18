@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
+import SharePopover from '@/components/SharePopover';
 
 const { Header } = Layout;
 
@@ -66,7 +67,12 @@ export default function HeaderBar() {
             </Space>
           )}
         </Space>
-        {isModeling && <Deploy />}
+        {isModeling && (
+          <Space size={[16, 0]}>
+            <Deploy />
+            <SharePopover />
+          </Space>
+        )}
       </div>
     </StyledHeader>
   );
