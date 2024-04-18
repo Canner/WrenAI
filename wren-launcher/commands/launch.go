@@ -36,14 +36,14 @@ func AskForTelemetryConsent() (bool, error) {
 	fmt.Println("You can read more about what we collected at https://www.wren.ai/privacy-policy")
 
 	validate := func(input string) error {
-		if input == "y" || input == "n" {
+		if input == "y" || input == "n" || input == "" {
 			return nil
 		}
 		return errors.New("invalid input")
 	}
 
 	prompt := promptui.Prompt{
-		Label:    "Do you consent to telemetry data collection? (y/n)",
+		Label:    "Do you agree to help us by sending anonymous usage data? (yes/no, default is y)",
 		Validate: validate,
 	}
 
@@ -54,12 +54,13 @@ func AskForTelemetryConsent() (bool, error) {
 		return false, err
 	}
 
-	if result == "y" {
-		fmt.Println("Thank you for sharing your usage information with us.")
-		return true, nil
+	if result == "n" {
+		fmt.Println("You have chosen not to consent to telemetry data collection. WrenAI will not collect any usage data.")
+		return false, nil
 	}
-	fmt.Println("You have chosen not to consent to telemetry data collection. WrenAI will not collect any usage data.")
-	return false, nil
+
+	fmt.Println("Thank you for sharing your usage information with us.")
+	return true, nil
 }
 
 func askForAPIKey() (string, error) {
