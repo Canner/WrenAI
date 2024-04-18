@@ -2,12 +2,12 @@
 ### Telemetry
 
 WrenAI relies on anonymous usage statistics to continuously improve. That's why we ask you to share your usage data with us.
-WrenAI use [Posthog](https://posthog.com/) as out telemetry tool
+WrenAI uses [Posthog](https://posthog.com/) as out telemetry tool
 
 
 ### How Does Telemetry help WrenAI
 
-Based on the telemetry, we can know which features are frequently used and related to our community or in which step an error occured and block our user.
+Based on the telemetry, we can know what features are frequently used and related to our community or in what step an error occurs and blocks our user.
 We can use these information to imporve our feature and as a reference for deciding on the roadmap.
 
 
@@ -25,6 +25,7 @@ Here is an example event that we will collect:
   "uuid": "018eeb03-85db-73be-b7b6-84b2d735f19c", # the event id
   "event": "server_start", 
   "properties": {
+    # the properties wrenai added
     "wren-ui-version": "telemetry",
     "wren-engine_version": null,
     "wren-ai-service-version": "0.2.1",
@@ -48,6 +49,7 @@ Here is an example event that we will collect:
     "$geoip_disable": true,
     "$sent_at": "2024-04-17T07:44:30.445000+00:00"
   },
+  # some posthog props
   "timestamp": "2024-04-17T07:44:21.060000Z",
   "team_id": 63160,
   "distinct_id": "4007a326-d606-460e-9acc-22f40cf851fb", # randomly generated userId

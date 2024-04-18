@@ -61,7 +61,7 @@ export class Telemetry {
     return {
       // collect services version
       'wren-ui-version': wrenUIVersion || null,
-      'wren-engine_version': wrenEngineVersion || null,
+      'wren-engine-version': wrenEngineVersion || null,
       'wren-ai-service-version': wrenAIVersion || null,
 
       // collect some system info from process module
