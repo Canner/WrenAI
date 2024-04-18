@@ -106,12 +106,23 @@ stop-ai:
 	@pkill -f "python.* src.__main__"
 	@echo "$(GREEN)Wren AI service stopped!$(RESET)"
 
+psql:
+	@echo "$(YELLOW)Connecting to Wren Engine via psql...$(RESET)"
+	@docker exec -it wren-wren-engine-1 bash launch-cli.sh
+
 help:
 	@echo "$(BLUE)Usage: make [target]$(RESET)"
 	@echo "Targets:"
-	@echo "  $(GREEN)setup$(RESET): Setup development environment"
-	@echo "  $(GREEN)start$(RESET): Start all services"
-	@echo "  $(GREEN)stop$(RESET): Stop all services"
+	@echo "  $(GREEN)setup$(RESET)             - Setup development environment"
+	@echo "  $(GREEN)start$(RESET)             - Start all services"
+	@echo "  $(GREEN)stop$(RESET)              - Stop all services"
+	@echo "  $(GREEN)start-qdrant$(RESET)      - Start Qdrant"
+	@echo "  $(GREEN)stop-qdrant$(RESET)       - Stop Qdrant"
+	@echo "  $(GREEN)start-wren-engine$(RESET) - Start Wren Engine"
+	@echo "  $(GREEN)stop-wren-engine$(RESET)  - Stop Wren Engine"
+	@echo "  $(GREEN)start-ai$(RESET)          - Start Wren AI service"
+	@echo "  $(GREEN)stop-ai$(RESET)           - Stop Wren AI service"
+	@echo "  $(GREEN)psql$(RESET)              - Connect to Wren Engine via psql"
 
 build:
 	docker compose -f docker/docker-compose.yml --env-file .env.prod build
@@ -123,9 +134,6 @@ up:
 down:
 	make stop-wren-engine && \
 	docker compose -f docker/docker-compose.yml --env-file .env.prod down
-
-psql:
-	docker exec -it wren-wren-engine-1 bash launch-cli.sh
 
 run-all:
 	poetry run python -m src.prepare_mdl_json && \
