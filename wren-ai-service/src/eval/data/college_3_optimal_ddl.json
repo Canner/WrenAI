@@ -1,0 +1,99 @@
+{
+    "How many courses are there in total?": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY\n);"
+    ],
+    "Count the number of courses.": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY\n);"
+    ],
+    "How many courses have more than 2 credits?": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  Credits INTEGER\n);"
+    ],
+    "Count the number of courses with more than 2 credits.": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  Credits INTEGER\n);"
+    ],
+    "List all names of courses with 1 credit?": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  Credits INTEGER\n);"
+    ],
+    "What are the names of courses with 1 credit?": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  Credits INTEGER\n);"
+    ],
+    "Which courses are taught on days MTW?": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  Days VARCHAR\n);"
+    ],
+    "What are the course names for courses taught on MTW?": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  Days VARCHAR\n);"
+    ],
+    "What is the number of departments in Division \"AS\"?": [
+        "CREATE TABLE Department (\n  DNO INTEGER PRIMARY KEY,\n  Division VARCHAR,\n  DName VARCHAR\n);"
+    ],
+    "How many departments are in the division AS?": [
+        "CREATE TABLE Department (\n  DNO INTEGER PRIMARY KEY,\n  Division VARCHAR,\n  DName VARCHAR\n);"
+    ],
+    "What are the phones of departments in Room 268?": [
+        "CREATE TABLE Department (\n  DPhone INTEGER,\n  Room VARCHAR\n);"
+    ],
+    "Give the phones for departments in room 268.": [
+        "CREATE TABLE Department (\n  DPhone INTEGER,\n  Room VARCHAR\n);"
+    ],
+    "Find the number of students that have at least one grade \"B\".": [
+        "CREATE TABLE Enrolled_in (\n  StuID INTEGER,\n  Grade VARCHAR\n);"
+    ],
+    "How many students have had at least one \"B\" grade?": [
+        "CREATE TABLE Enrolled_in (\n  StuID INTEGER,\n  Grade VARCHAR\n);"
+    ],
+    "Find the max and min grade point for all letter grade.": [
+        "CREATE TABLE Gradeconversion (\n  lettergrade VARCHAR PRIMARY KEY,\n  gradepoint FLOAT\n);"
+    ],
+    "What are the maximum and minumum grade points?": [
+        "CREATE TABLE Gradeconversion (\n  lettergrade VARCHAR PRIMARY KEY,\n  gradepoint FLOAT\n);"
+    ],
+    "Find the first names of students whose first names contain letter \"a\".": [
+        "CREATE TABLE Student (\n  StuID INTEGER PRIMARY KEY,\n  Fname VARCHAR\n);"
+    ],
+    "What are the first names for students who have an \"a\" in their first name?": [
+        "CREATE TABLE Student (\n  StuID INTEGER PRIMARY KEY,\n  Fname VARCHAR\n);"
+    ],
+    "Find the first names and last names of male (sex is M) faculties who live in building NEB.": [
+        "CREATE TABLE Faculty (\n  FacID INTEGER PRIMARY KEY,\n  Lname VARCHAR,\n  Fname VARCHAR,\n  Sex VARCHAR,\n  Building VARCHAR\n);"
+    ],
+    "What are the full names of faculties with sex M and who live in building NEB?": [
+        "CREATE TABLE Faculty (\n  FacID INTEGER PRIMARY KEY,\n  Lname VARCHAR,\n  Fname VARCHAR,\n  Sex VARCHAR,\n  Building VARCHAR\n);"
+    ],
+    "Find the names of courses that have either 3 credits or 1 credit but 4 hours.": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  CName VARCHAR,\n  Credits INTEGER,\n  Hours VARCHAR\n);"
+    ],
+    "What are the names of courses that give either 3 credits, or 1 credit and 4 hours?": [
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  CName VARCHAR,\n  Credits INTEGER,\n  Hours VARCHAR\n);"
+    ],
+    "Find the name of the department that has the biggest number of students minored in?": [
+        "CREATE TABLE Department (\n  DNO INTEGER PRIMARY KEY,\n  DName VARCHAR\n);",
+        "CREATE TABLE Minor_in (\n  DNO INTEGER,\n  FOREIGN KEY (DNO) REFERENCES Department(DNO)\n);"
+    ],
+    "What is the name of the department with the most students minoring in it?": [
+        "CREATE TABLE Department (\n  DNO INTEGER PRIMARY KEY,\n  DName VARCHAR\n);",
+        "CREATE TABLE Minor_in (\n  DNO INTEGER,\n  FOREIGN KEY (DNO) REFERENCES Department(DNO)\n);"
+    ],
+    "Which building does the instructor who teaches the most number of courses live in?": [
+        "CREATE TABLE Faculty (\n  FacID INTEGER PRIMARY KEY,\n  Building VARCHAR\n);",
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  CName VARCHAR,\n  Instructor INTEGER,\n  FOREIGN KEY (Instructor) REFERENCES Faculty(FacID)\n);"
+    ],
+    "Give the building that the instructor who teaches the greatest number of courses lives in.": [
+        "CREATE TABLE Faculty (\n  FacID INTEGER PRIMARY KEY,\n  Building VARCHAR\n);",
+        "CREATE TABLE Course (\n  CID VARCHAR PRIMARY KEY,\n  CName VARCHAR,\n  Instructor INTEGER,\n  FOREIGN KEY (Instructor) REFERENCES Faculty(FacID)\n);"
+    ],
+    "What is the maximum and minimum grade point of students who live in NYC?": [
+        "CREATE TABLE Enrolled_in (\n  StuID INTEGER,\n  Grade VARCHAR,\n  FOREIGN KEY (StuID) REFERENCES Student(StuID),\n  FOREIGN KEY (Grade) REFERENCES Gradeconversion(lettergrade)\n);",
+        "CREATE TABLE Gradeconversion (\n  lettergrade VARCHAR PRIMARY KEY,\n  gradepoint FLOAT\n);",
+        "CREATE TABLE Student (\n  StuID INTEGER PRIMARY KEY,\n  city_code VARCHAR\n);"
+    ],
+    "What are the last names of faculty who are part of the computer science department?": [
+        "CREATE TABLE Department (\n  DNO INTEGER PRIMARY KEY,\n  DName VARCHAR\n);",
+        "CREATE TABLE Faculty (\n  FacID INTEGER PRIMARY KEY,\n  Lname VARCHAR\n);",
+        "CREATE TABLE Member_of (\n  FacID INTEGER,\n  DNO INTEGER,\n  FOREIGN KEY (FacID) REFERENCES Faculty(FacID),\n  FOREIGN KEY (DNO) REFERENCES Department(DNO)\n);"
+    ],
+    "Find the name of the department that has the fewest members.": [
+        "CREATE TABLE Department (\n  DNO INTEGER PRIMARY KEY,\n  DName VARCHAR\n);",
+        "CREATE TABLE Faculty (\n  FacID INTEGER PRIMARY KEY\n);",
+        "CREATE TABLE Member_of (\n  FacID INTEGER,\n  DNO INTEGER,\n  FOREIGN KEY (FacID) REFERENCES Faculty(FacID),\n  FOREIGN KEY (DNO) REFERENCES Department(DNO)\n);"
+    ]
+}
