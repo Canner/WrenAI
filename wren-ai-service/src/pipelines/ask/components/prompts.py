@@ -134,62 +134,6 @@ Current User Query: {{ query }}
 Generated SQL Queries amd Summaries:
 """
 
-text_to_sql_with_followup_user_prompt_template = """
-### TASK ###
-Given a set of user queries that are ambiguous in nature, your task is to interpret these queries in various plausible ways and 
-generate multiple SQL statements that could potentially answer each interpreted version of the queries and within-10-words summary. 
-For each ambiguous user query, provide at least three different interpretations and corresponding SQL queries that reflect these interpretations. 
-Ensure that your SQL queries are diverse, covering a range of possible meanings behind the ambiguous query. 
-Consider the structure of a generic database which includes common tables like users, orders, products, and transactions. 
-Here are the ambiguous user queries:
-
-### EXAMPLES ###
-Previous SQL Summary: "Users signed up this year."
-Previous Generated SQL Query: "SELECT * FROM users WHERE sign_up_date >= '2023-01-01';"
-Current User Query: "Who has made a purchase?"
-
-Generated SQL Queries amd Summaries:
-{
-    "results": [
-        {
-            "sql": "SELECT users.* FROM users JOIN purchases ON users.id = purchases.user_id WHERE users.sign_up_date >= '2023-01-01';",
-            "summary": "Users joined in 2023 with purchases."
-        },
-        {
-            "sql": "SELECT DISTINCT users.* FROM users INNER JOIN purchases ON users.id = purchases.user_id WHERE users.sign_up_date >= '2023-01-01';",
-            "summary": "Unique users with purchases since 2023."
-        }
-    ]
-}
-
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document.content }}
-{% endfor %}
-
-### FINAL ANSWER FORMAT ###
-The final answer must be the JSON format like following:
-
-{
-    "results": [
-        {"sql": <SQL_QUERY_STRING_1>, "summary": <SUMMARY_STRING_1>},
-        {"sql": <SQL_QUERY_STRING2>, "summary": <SUMMARY_STRING_2>}
-    ]
-}
-
-### NOTICE ###
-- Only use the tables and columns mentioned in the database schema.
-- If you think you can't generate a valid SQL query for a specific interpretation, you can skip that interpretation and provide the other ones.
-- Make sure to map operators and operands correctly based on their data types.
-
-### QUESTION ###
-Previous SQL Summary: {{ history.summary }}
-Previous Generated SQL Query: {{ history.sql }}
-Current User Query: {{ query }}
-
-Generated SQL Queries amd Summaries:
-"""
-
 sql_correction_user_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
 
