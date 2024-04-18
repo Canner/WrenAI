@@ -5,9 +5,16 @@ export interface SampleDatasetColumn {
   name: string;
   description?: string;
 }
+
+export interface SampleDatasetSchema {
+  columnName: string;
+  dataType: string;
+}
 export interface SampleDatasetTable {
   filePath: string;
   tableName: string;
+  // the column order in schema definition should be the same as the column in csv file
+  schema?: SampleDatasetSchema[];
   columns?: SampleDatasetColumn[];
   description?: string;
 }
@@ -38,34 +45,91 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       {
         tableName: 'album',
         filePath: 'https://wrenai-public.s3.amazonaws.com/demo/Music/Album.csv',
+        schema: [
+          { columnName: 'AlbumId', dataType: 'int' },
+          { columnName: 'Title', dataType: 'varchar' },
+          { columnName: 'ArtistId', dataType: 'int' },
+        ],
       },
       {
         tableName: 'artist',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/Music/Artist.csv',
+        schema: [
+          { columnName: 'ArtistId', dataType: 'int' },
+          { columnName: 'Name', dataType: 'varchar' },
+        ],
       },
       {
         tableName: 'customer',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/Music/Customer.csv',
+        schema: [
+          { columnName: 'CustomerId', dataType: 'BIGINT' },
+          { columnName: 'FirstName', dataType: 'VARCHAR' },
+          { columnName: 'LastName', dataType: 'VARCHAR' },
+          { columnName: 'Company', dataType: 'VARCHAR' },
+          { columnName: 'Address', dataType: 'VARCHAR' },
+          { columnName: 'City', dataType: 'VARCHAR' },
+          { columnName: 'State', dataType: 'VARCHAR' },
+          { columnName: 'Country', dataType: 'VARCHAR' },
+          { columnName: 'PostalCode', dataType: 'VARCHAR' },
+          { columnName: 'Phone', dataType: 'VARCHAR' },
+          { columnName: 'Fax', dataType: 'VARCHAR' },
+          { columnName: 'Email', dataType: 'VARCHAR' },
+          { columnName: 'SupportRepId', dataType: 'BIGINT' },
+        ],
       },
       {
         tableName: 'genre',
         filePath: 'https://wrenai-public.s3.amazonaws.com/demo/Music/Genre.csv',
+        schema: [
+          { columnName: 'GenreId', dataType: 'BIGINT' },
+          { columnName: 'Name', dataType: 'VARCHAR' },
+        ],
       },
       {
         tableName: 'invoice',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/Music/Invoice.csv',
+        schema: [
+          { columnName: 'InvoiceId', dataType: 'BIGINT' },
+          { columnName: 'CustomerId', dataType: 'BIGINT' },
+          { columnName: 'InvoiceDate', dataType: 'Date' },
+          { columnName: 'BillingAddress', dataType: 'VARCHAR' },
+          { columnName: 'BillingCity', dataType: 'VARCHAR' },
+          { columnName: 'BillingState', dataType: 'VARCHAR' },
+          { columnName: 'BillingCountry', dataType: 'VARCHAR' },
+          { columnName: 'BillingPostalCode', dataType: 'VARCHAR' },
+          { columnName: 'Total', dataType: 'DOUBLE' },
+        ],
       },
       {
         tableName: 'invoiceLine',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/Music/InvoiceLine.csv',
+        schema: [
+          { columnName: 'InvoiceLineId', dataType: 'BIGINT' },
+          { columnName: 'InvoiceId', dataType: 'BIGINT' },
+          { columnName: 'TrackId', dataType: 'BIGINT' },
+          { columnName: 'UnitPrice', dataType: 'DOUBLE' },
+          { columnName: 'Quantity', dataType: 'BIGINT' },
+        ],
       },
       {
         tableName: 'track',
         filePath: 'https://wrenai-public.s3.amazonaws.com/demo/Music/Track.csv',
+        schema: [
+          { columnName: 'TrackId', dataType: 'BIGINT' },
+          { columnName: 'Name', dataType: 'VARCHAR' },
+          { columnName: 'AlbumId', dataType: 'BIGINT' },
+          { columnName: 'MediaTypeId', dataType: 'BIGINT' },
+          { columnName: 'GenreId', dataType: 'BIGINT' },
+          { columnName: 'Composer', dataType: 'VARCHAR' },
+          { columnName: 'Milliseconds', dataType: 'BIGINT' },
+          { columnName: 'Bytes', dataType: 'BIGINT' },
+          { columnName: 'UnitPrice', dataType: 'DOUBLE' },
+        ],
       },
     ],
     questions: [
@@ -308,11 +372,18 @@ export const sampleDatasets: Record<string, SampleDataset> = {
 
 export const buildInitSql = (datasetName: SampleDatasetName) => {
   const selectedDataset = sampleDatasets[datasetName.toLowerCase()];
+
   return selectedDataset.tables
-    .map(
-      (table) =>
-        `CREATE TABLE ${table.tableName} AS FROM read_csv('${table.filePath}',header=true);`,
-    )
+    .map((table) => {
+      const schema = table.schema
+        ?.map(({ columnName, dataType }) => `'${columnName}': '${dataType}'`)
+        .join(', ');
+      if (!schema) {
+        return `CREATE TABLE ${table.tableName} AS FROM read_csv('${table.filePath}',header=true);`;
+      } else {
+        return `CREATE TABLE ${table.tableName} AS FROM read_csv('${table.filePath}',header=true, columns={${schema}});`;
+      }
+    })
     .join('\n');
 };
 
