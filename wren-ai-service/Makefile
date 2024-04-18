@@ -1,3 +1,5 @@
+# Variables
+AI_PORT=5555
 
 # ANSI color codes
 GREEN=\033[0;32m
@@ -56,13 +58,60 @@ setup-envfile:
 		cp .env.example .env; \
 	fi
 
+# Start all services
+start:
+	@echo "$(YELLOW)Starting all services...$(RESET)"
+	@$(MAKE) start-qdrant
+	@$(MAKE) start-wren-engine
+	@$(MAKE) start-ai
+	@echo "$(GREEN)All services started!$(RESET)"
+
+start-qdrant:
+	@echo "$(YELLOW)Starting Qdrant...$(RESET)"
+	@docker run -p 6333:6333 -p 6334:6334 -d --name qdrant qdrant/qdrant:v1.7.4
+	@echo "$(GREEN)Qdrant started!$(RESET)"
+
+start-wren-engine:
+	@echo "$(YELLOW)Starting Wren Engine...$(RESET)"
+	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
+	@echo "$(GREEN)Wren Engine started!$(RESET)"
+
+start-ai:
+	@echo "$(YELLOW)Starting Wren AI service...$(RESET)"
+	@poetry run python -m src.__main__ &
+	@echo "$(YELLOW)Waiting for Wren AI service to start...$(RESET)"
+	@until nc -z localhost $(AI_PORT); do sleep 0.1; done
+	@echo "$(GREEN)Wren AI service started!$(RESET)"
+
+# Stop all services
+stop:
+	@echo "$(YELLOW)Stopping all services...$(RESET)"
+	@$(MAKE) stop-qdrant
+	@$(MAKE) stop-wren-engine
+	@$(MAKE) stop-ai
+	@echo "$(GREEN)All services stopped!$(RESET)"
+
+stop-qdrant:
+	@echo "$(YELLOW)Stopping Qdrant...$(RESET)"
+	@docker stop qdrant > /dev/null
+	@echo "$(YELLOW)Removing Qdrant...$(RESET)"
+	@docker rm qdrant > /dev/null
+
+stop-wren-engine:
+	@echo "$(YELLOW)Stopping Wren Engine...$(RESET)"
+	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env down
+
+stop-ai:
+	@echo "$(YELLOW)Stopping Wren AI service...$(RESET)"
+	@pkill -f "python.* src.__main__"
+	@echo "$(GREEN)Wren AI service stopped!$(RESET)"
+
 help:
 	@echo "$(BLUE)Usage: make [target]$(RESET)"
 	@echo "Targets:"
 	@echo "  $(GREEN)setup$(RESET): Setup development environment"
-
-start:
-	poetry run python -m src.__main__
+	@echo "  $(GREEN)start$(RESET): Start all services"
+	@echo "  $(GREEN)stop$(RESET): Stop all services"
 
 build:
 	docker compose -f docker/docker-compose.yml --env-file .env.prod build
@@ -75,23 +124,6 @@ down:
 	make stop-wren-engine && \
 	docker compose -f docker/docker-compose.yml --env-file .env.prod down
 
-run-qdrant:
-	docker run \
-	-p 6333:6333 \
-	-p 6334:6334 \
-	-d \
-	--name qdrant \
-	qdrant/qdrant:v1.7.4
-
-stop-qdrant:
-	docker stop qdrant && docker rm qdrant
-
-run-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
-
-stop-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env down
-
 psql:
 	docker exec -it wren-wren-engine-1 bash launch-cli.sh
 
@@ -99,10 +131,6 @@ run-all:
 	poetry run python -m src.prepare_mdl_json && \
 	make run-qdrant && \
 	make run-wren-engine
-
-stop-all:
-	make stop-qdrant && \
-	make stop-wren-engine
 
 # present the evaluation result on the streamlit app
 # example: make streamlit pipeline=ask_details
