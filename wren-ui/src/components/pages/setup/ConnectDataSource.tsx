@@ -45,7 +45,7 @@ export default function ConnectDataSource(props: Props) {
         Connect the data source
       </Typography.Title>
       <Typography.Text>
-        Vote for your favorite data sources on {' '}
+        Vote for your favorite data sources on{' '}
         <Link
           href="https://github.com/Canner/WrenAI"
           target="_blank"

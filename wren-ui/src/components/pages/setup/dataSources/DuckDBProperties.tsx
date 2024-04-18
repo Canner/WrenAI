@@ -42,7 +42,8 @@ export default function DuckDBProperties() {
         label="Configuration options"
         extra={
           <>
-            DuckDB offers various configuration options that can modify the system's behavior.{' '}
+            DuckDB offers various configuration options that can modify the
+            system's behavior.{' '}
             <Link
               href="https://duckdb.org/docs/configuration/overview.html"
               target="_blank"
@@ -135,7 +136,8 @@ export default function DuckDBProperties() {
         label="Extensions"
         extra={
           <>
-            DuckDB has an extension mechanism that enables the dynamic loading of extensions.{' '}
+            DuckDB has an extension mechanism that enables the dynamic loading
+            of extensions.{' '}
             <Link
               href="https://duckdb.org/docs/extensions/overview.html"
               target="_blank"

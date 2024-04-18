@@ -239,7 +239,9 @@ export default function DefineRelations(props: Props) {
         Define relationships
       </Title>
       <Text>
-        You can create relationships between selected tables. We provide suggested relationships based on primary and foreign keys defined in your data source. The relationships are then added to data models.
+        You can create relationships between selected tables. We provide
+        suggested relationships based on primary and foreign keys defined in
+        your data source. The relationships are then added to data models.
       </Text>
       <div className="my-6 text-center">
         {Object.entries(relations).map(([modelName, relations = []], index) => (
