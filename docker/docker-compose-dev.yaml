@@ -53,6 +53,7 @@ services:
       - wren
     depends_on:
       - qdrant
+      - wren-engine
 
   qdrant:
     image: qdrant/qdrant:v1.7.4

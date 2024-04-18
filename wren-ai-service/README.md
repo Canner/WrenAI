@@ -32,11 +32,18 @@
 
 ## Demo
 
-- you should stop all services first before running the demo
+- prerequisites
+  - install and run the docker service, and you should stop all WrenAI services first before running the demo
+  - go to the `../docker` folder and prepare the `.env.local` file
+  - make sure the node version is v16.19.0
+  - if you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies of the wren-ui service
 - go to the `demo` folder and run `poetry install` to install the dependencies
-- start the docker service
-- in the `demo` folder, run `make prepare` in one terminal, and `make run` in another terminal to start the demo and go to `http://localhost:8501` to see the demo
-  - `make prepare` will run three other services: qdrant, wren-engine, and wren-ai-service
+- in the `demo` folder, open three terminals
+  - in the first terminal, run `make prepare` to start the docker containers and `make run` to start the demo service
+  - in the second terminal, run `make ui` to start the wren-ui service
+  - in the third terminal, run `make ai` to start the wren-ai service
+- ports of the services:
+  - wren-engine: ports should be 8080
+  - wren-ai-service: port should be 5556
+  - wren-ui: port should be 3000
   - qdrant: ports should be 6333, 6334
-  - wren-engine: ports should be 8080, 7342
-  - wren-ai-service: port should be 5555
