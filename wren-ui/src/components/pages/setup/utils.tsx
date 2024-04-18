@@ -26,11 +26,12 @@ type SetupStep = {
 
 export type ButtonOption = {
   label: string;
-  logo: string;
+  logo?: string;
   IconComponent?: typeof IconComponentProps;
-  guide: string;
-  disabled: boolean;
+  guide?: string;
+  disabled?: boolean;
   submitting?: boolean;
+  value?: string;
 };
 
 export const SETUP_STEPS = {
@@ -100,7 +101,7 @@ export const getDataSources = () => {
   return Object.keys(DATA_SOURCE_OPTIONS).map((key) => ({
     ...DATA_SOURCE_OPTIONS[key],
     value: key,
-  })) as (ButtonOption & { value: DATA_SOURCES })[];
+  })) as ButtonOption[];
 };
 
 export const getDataSource = (dataSource: DATA_SOURCES) => {
@@ -127,7 +128,5 @@ export const getTemplates = () => {
   return Object.keys(TEMPLATE_OPTIONS).map((key) => ({
     ...TEMPLATE_OPTIONS[key],
     value: key,
-  })) as (Omit<ButtonOption, 'guide' | 'disabled'> & {
-    value: SampleDatasetName;
-  })[];
+  })) as ButtonOption[];
 };
