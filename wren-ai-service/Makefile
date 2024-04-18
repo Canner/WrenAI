@@ -61,7 +61,7 @@ setup-envfile:
 # Start all services
 start:
 	@echo "$(YELLOW)Starting all services...$(RESET)"
-	@poetry run python -m src.prepare_mdl_json 	# deprecated?
+	@poetry run python -m src.prepare_mdl_json
 	@$(MAKE) start-qdrant
 	@$(MAKE) start-wren-engine
 	@$(MAKE) start-ai
@@ -69,7 +69,12 @@ start:
 
 start-qdrant:
 	@echo "$(YELLOW)Starting Qdrant...$(RESET)"
-	@docker run -p 6333:6333 -p 6334:6334 -d --name qdrant qdrant/qdrant:v1.7.4
+	@if docker ps --format '{{.Names}}' | grep 'qdrant' 1> /dev/null; then \
+		echo "$(BLUE)Qdrant is already running.$(RESET)"; \
+	else \
+		docker start qdrant > /dev/null 2>&1 || \
+		docker run -p 6333:6333 -p 6334:6334 -d --name qdrant qdrant/qdrant:v1.7.4; \
+	fi
 	@echo "$(GREEN)Qdrant started!$(RESET)"
 
 start-wren-engine:
@@ -123,6 +128,14 @@ streamlit:
 	@echo "$(YELLOW)Starting Streamlit app for ${pipeline}...$(RESET)"
 	@poetry run streamlit run src/eval/${pipeline}/streamlit_app.py
 
+test:
+	@poetry run python -m src.prepare_mdl_json --dataset_name book_2
+	@$(MAKE) start-qdrant
+	@$(MAKE) start-wren-engine
+	@poetry run pytest -s $(args)
+	@$(MAKE) stop-qdrant
+	@$(MAKE) stop-wren-engine
+
 help:
 	@echo "$(BLUE)Usage: make [target]$(RESET)"
 	@echo "Targets:"
@@ -154,13 +167,5 @@ up:
 down:
 	make stop-wren-engine && \
 	docker compose -f docker/docker-compose.yml --env-file .env.prod down
-
-# deprecated?
-test:
-	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
-	make run-qdrant && \
-	make run-wren-engine && \
-	poetry run pytest -s $(args) && \
-	make stop-all
 
 .PHONY: test clean all
