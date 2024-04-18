@@ -49,7 +49,6 @@ Results:
 - YOU MUST BREAK DOWN any SQL query into small steps if there is JOIN operations or sub-queries.
 - ONLY USE the tables and columns mentioned in the original sql query.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- USE COLUMN ALIASES to make sure column names are readble, and not duplicated.
 - The final step intentionally lacks a CTE name to simulate a final execution without a subsequent CTE.
 
 ### FINAL ANSWER FORMAT ###
