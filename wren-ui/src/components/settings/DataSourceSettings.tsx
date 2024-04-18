@@ -1,17 +1,55 @@
-import { Button, Form } from 'antd';
 import Image from 'next/image';
+import { Button, Form, Modal } from 'antd';
+import { makeIterable } from '@/utils/iteration';
 import { DATA_SOURCES, FORM_MODE } from '@/utils/enum';
-import { getDataSource } from '@/components/pages/setup/utils';
+import { getDataSource, getTemplates } from '@/components/pages/setup/utils';
+import ButtonItem from '@/components/pages/setup/ButtonItem';
+import { useStartSampleDatasetMutation } from '@/apollo/client/graphql/dataSource.generated';
+import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 
 interface Props {
   type: DATA_SOURCES;
   properties: Record<string, any>;
-  sampleDataset: string;
+  sampleDataset: SampleDatasetName;
 }
+
+const SampleDatasetIterator = makeIterable(ButtonItem);
 
 const SampleDatasetPanel = (props: Props) => {
   const { sampleDataset } = props;
-  return <div>Sample Dataset: {sampleDataset}</div>;
+  const templates = getTemplates();
+  const [startSampleDataset] = useStartSampleDatasetMutation({
+    refetchQueries: 'active',
+  });
+
+  const onSelect = (name: SampleDatasetName) => {
+    const template = templates.find((item) => item.value === name);
+    Modal.confirm({
+      title: `Are you sure you want to change to "${template.label}" dataset?`,
+      okButtonProps: { danger: true },
+      okText: 'Change',
+      onOk: async () => {
+        await startSampleDataset({ variables: { data: { name } } });
+      },
+    });
+  };
+
+  return (
+    <>
+      <div className="mb-2">Change sample dataset</div>
+      <div className="d-grid grid-columns-3 g-4">
+        <SampleDatasetIterator
+          data={templates}
+          selectedTemplate={sampleDataset}
+          onSelect={onSelect}
+        />
+      </div>
+      <div className="gray-6 mt-1">
+        Please be aware that choosing another sample dataset will delete all
+        thread records in the Home page.
+      </div>
+    </>
+  );
 };
 
 const DataSourcePanel = (props: Props) => {
