@@ -34,11 +34,8 @@ def get_mdl_from_wren_engine():
 def process_item(query: str):
     retrieval_start = time.perf_counter()
     retrieval_result = retrieval_pipeline.run(query)
-    documents = retrieval_result["post_processor"]["documents"]
+    documents = retrieval_result["retriever"]["documents"]
     retrieval_end = time.perf_counter()
-
-    valid_generation_results = []
-    invalid_generation_results = []
 
     text_to_sql_generation_start = time.perf_counter()
     text_to_sql_generation_results = generation_pipeline.run(
@@ -49,6 +46,9 @@ def process_item(query: str):
     text_to_sql_generation_time_cost = (
         text_to_sql_generation_end - text_to_sql_generation_start
     )
+
+    valid_generation_results = []
+    invalid_generation_results = []
 
     if text_to_sql_generation_results["post_processor"]["valid_generation_results"]:
         valid_generation_results += text_to_sql_generation_results["post_processor"][
@@ -209,10 +209,10 @@ if __name__ == "__main__":
         retriever=retriever,
     )
     generation_pipeline = Generation(
-        text_to_sql_generator=text_to_sql_generator,
+        generator=text_to_sql_generator,
     )
     sql_correction_pipeline = SQLCorrection(
-        sql_correction_generator=sql_correction_generator,
+        generator=sql_correction_generator,
     )
 
     # indexing
