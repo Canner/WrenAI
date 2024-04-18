@@ -62,6 +62,11 @@ Proceed in a similar manner for the other queries.
     {{ document.content }}
 {% endfor %}
 
+### ALERT ###
+- ONLY USE the tables and columns mentioned in the database schema.
+- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- YOU MUST USE "JOIN" if you choose columns from multiple tables!
+
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
 
@@ -72,13 +77,10 @@ The final answer must be the JSON format like following:
     ]
 }
 
-### NOTICE ###
-- Only use the tables and columns mentioned in the database schema.
-- If you think you can't generate a valid SQL query for a specific interpretation, you can skip that interpretation and provide the other ones.
-- Make sure to map operators and operands correctly based on their data types.
-
 ### QUESTION ###
 {{ query }}
+
+Think step by step:
 """
 
 text_to_sql_with_followup_user_prompt_template = """
@@ -86,11 +88,6 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the following user query and the history of the last query along with the generated SQL result, 
 generate appropriate SQL queries that match the user's current request. 
 Generate at most 3 SQL queries in order to interpret the user query in various plausible ways.
-
-### EXAMPLES ###
-Previous SQL Summary: "Users signed up this year."
-Previous Generated SQL Query: "SELECT * FROM users WHERE sign_up_date >= '2023-01-01';"
-Current User Query: "Who has made a purchase?"
 
 Generated SQL Queries amd Summaries:
 {
@@ -121,17 +118,17 @@ The final answer must be the JSON format like following:
     ]
 }
 
-### NOTICE ###
-- Only use the tables and columns mentioned in the database schema.
-- If you think you can't generate a valid SQL query for a specific interpretation, you can skip that interpretation and provide the other ones.
-- Make sure to map operators and operands correctly based on their data types.
+### ALERT ###
+- ONLY USE the tables and columns mentioned in the database schema.
+- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- YOU MUST USE "JOIN" if you choose columns from multiple tables!
 
 ### QUESTION ###
 Previous SQL Summary: {{ history.summary }}
 Previous Generated SQL Query: {{ history.sql }}
 Current User Query: {{ query }}
 
-Generated SQL Queries amd Summaries:
+Think step by step:
 """
 
 sql_correction_user_prompt_template = """
@@ -156,12 +153,19 @@ The final answer must be a list of corrected SQL quries and its original corresp
     ]
 }
 
-### NOTICE ###
-- Only use the tables and columns mentioned in the database schema.
-- Make sure to map operators and operands correctly based on their data types.
+### ALERT ###
+- ONLY USE the tables and columns mentioned in the database schema.
+- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- YOU MUST USE "JOIN" if you choose columns from multiple tables!
 
 ### QUESTION ###
-{{ invalid_generation_results }}
+{% for invalid_generation_result in invalid_generation_results %}
+    sql: {{ invalid_generation_result.sql }}
+    summary: {{ invalid_generation_result.summary }}
+    error: {{ invalid_generation_result.error }}
+{% endfor %}
+
+Think step by step:
 """
 
 
