@@ -1,0 +1,428 @@
+{
+  "catalog" : "wrenai",
+  "schema" : "ecommerce",
+  "models" : [ {
+    "name" : "customers",
+    "refSql" : "select * from main.customers",
+    "columns" : [ {
+      "name" : "City",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "2"
+      }
+    }, {
+      "name" : "Id",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "1"
+      }
+    }, {
+      "name" : "State",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "3"
+      }
+    }, {
+      "name" : "orders",
+      "type" : "orders",
+      "relationship" : "CustomersOrders",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    } ],
+    "primaryKey" : "",
+    "cached" : false,
+    "refreshTime" : "30.00m",
+    "properties" : {
+      "schema" : "main",
+      "catalog" : "memory"
+    }
+  }, {
+    "name" : "order_items",
+    "refSql" : "select * from main.order_items",
+    "columns" : [ {
+      "name" : "FreightValue",
+      "type" : "DOUBLE",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "6"
+      }
+    }, {
+      "name" : "ItemNumber",
+      "type" : "BIGINT",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "2"
+      }
+    }, {
+      "name" : "OrderId",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "1"
+      }
+    }, {
+      "name" : "Price",
+      "type" : "DOUBLE",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "5"
+      }
+    }, {
+      "name" : "ProductId",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "3"
+      }
+    }, {
+      "name" : "ShippingLimitDate",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "4"
+      }
+    }, {
+      "name" : "orders",
+      "type" : "orders",
+      "relationship" : "OrdersOrder_items",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    }, {
+      "name" : "products",
+      "type" : "products",
+      "relationship" : "ProductsOrder_items",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    } ],
+    "primaryKey" : "",
+    "cached" : false,
+    "refreshTime" : "30.00m",
+    "properties" : {
+      "schema" : "main",
+      "catalog" : "memory"
+    }
+  }, {
+    "name" : "orders",
+    "refSql" : "select * from main.orders",
+    "columns" : [ {
+      "name" : "ApprovedTimestamp",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "5"
+      }
+    }, {
+      "name" : "CustomerId",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "2"
+      }
+    }, {
+      "name" : "DeliveredCarrierDate",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "6"
+      }
+    }, {
+      "name" : "DeliveredCustomerDate",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "7"
+      }
+    }, {
+      "name" : "EstimatedDeliveryDate",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "8"
+      }
+    }, {
+      "name" : "OrderId",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "1"
+      }
+    }, {
+      "name" : "PurchaseTimestamp",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "4"
+      }
+    }, {
+      "name" : "Status",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "3"
+      }
+    }, {
+      "name" : "customers",
+      "type" : "customers",
+      "relationship" : "CustomersOrders",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    }, {
+      "name" : "order_items",
+      "type" : "order_items",
+      "relationship" : "OrdersOrder_items",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    }, {
+      "name" : "reviews",
+      "type" : "reviews",
+      "relationship" : "OrdersReviews",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    }, {
+      "name" : "payments",
+      "type" : "payments",
+      "relationship" : "PaymentsOrders",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    } ],
+    "primaryKey" : "",
+    "cached" : false,
+    "refreshTime" : "30.00m",
+    "properties" : {
+      "schema" : "main",
+      "catalog" : "memory"
+    }
+  }, {
+    "name" : "payments",
+    "refSql" : "select * from main.payments",
+    "columns" : [ {
+      "name" : "Installments",
+      "type" : "BIGINT",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "4"
+      }
+    }, {
+      "name" : "OrderId",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "1"
+      }
+    }, {
+      "name" : "Sequential",
+      "type" : "BIGINT",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "2"
+      }
+    }, {
+      "name" : "Type",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "3"
+      }
+    }, {
+      "name" : "Value",
+      "type" : "DOUBLE",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "5"
+      }
+    }, {
+      "name" : "orders",
+      "type" : "orders",
+      "relationship" : "PaymentsOrders",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    } ],
+    "primaryKey" : "",
+    "cached" : false,
+    "refreshTime" : "30.00m",
+    "properties" : {
+      "schema" : "main",
+      "catalog" : "memory"
+    }
+  }, {
+    "name" : "products",
+    "refSql" : "select * from main.products",
+    "columns" : [ {
+      "name" : "Category",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "2"
+      }
+    }, {
+      "name" : "Id",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "1"
+      }
+    }, {
+      "name" : "Name",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "3"
+      }
+    }, {
+      "name" : "order_items",
+      "type" : "order_items",
+      "relationship" : "ProductsOrder_items",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    } ],
+    "primaryKey" : "",
+    "cached" : false,
+    "refreshTime" : "30.00m",
+    "properties" : {
+      "schema" : "main",
+      "catalog" : "memory"
+    }
+  }, {
+    "name" : "reviews",
+    "refSql" : "select * from main.reviews",
+    "columns" : [ {
+      "name" : "AnswerTimestamp",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "5"
+      }
+    }, {
+      "name" : "CreationTimestamp",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "4"
+      }
+    }, {
+      "name" : "Id",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "1"
+      }
+    }, {
+      "name" : "OrderId",
+      "type" : "VARCHAR",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "2"
+      }
+    }, {
+      "name" : "Score",
+      "type" : "BIGINT",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : {
+        "ordinalPosition" : "3"
+      }
+    }, {
+      "name" : "orders",
+      "type" : "orders",
+      "relationship" : "OrdersReviews",
+      "isCalculated" : false,
+      "notNull" : false,
+      "properties" : { }
+    } ],
+    "primaryKey" : "",
+    "cached" : false,
+    "refreshTime" : "30.00m",
+    "properties" : {
+      "schema" : "main",
+      "catalog" : "memory"
+    }
+  } ],
+  "relationships" : [ {
+    "name" : "CustomersOrders",
+    "models" : [ "customers", "orders" ],
+    "joinType" : "ONE_TO_MANY",
+    "condition" : "customers.Id = orders.CustomerId",
+    "manySideSortKeys" : [ ],
+    "properties" : { }
+  }, {
+    "name" : "OrdersOrder_items",
+    "models" : [ "orders", "order_items" ],
+    "joinType" : "ONE_TO_MANY",
+    "condition" : "orders.OrderId = order_items.OrderId",
+    "manySideSortKeys" : [ ],
+    "properties" : { }
+  }, {
+    "name" : "ProductsOrder_items",
+    "models" : [ "products", "order_items" ],
+    "joinType" : "ONE_TO_MANY",
+    "condition" : "products.Id = order_items.ProductId",
+    "manySideSortKeys" : [ ],
+    "properties" : { }
+  }, {
+    "name" : "OrdersReviews",
+    "models" : [ "orders", "reviews" ],
+    "joinType" : "ONE_TO_MANY",
+    "condition" : "orders.OrderId = reviews.OrderId",
+    "manySideSortKeys" : [ ],
+    "properties" : { }
+  }, {
+    "name" : "PaymentsOrders",
+    "models" : [ "payments", "orders" ],
+    "joinType" : "ONE_TO_MANY",
+    "condition" : "payments.OrderId = orders.OrderId",
+    "manySideSortKeys" : [ ],
+    "properties" : { }
+  } ],
+  "enumDefinitions" : [ ],
+  "metrics" : [ ],
+  "cumulativeMetrics" : [ ],
+  "views" : [ ],
+  "macros" : [ ],
+  "dateSpine" : {
+    "unit" : "DAY",
+    "start" : "1970-01-01",
+    "end" : "2077-12-31",
+    "properties" : { }
+  }
+}

@@ -95,7 +95,7 @@ function EditableRelationTable(props: EditableRelationTableProps) {
             }
           />
           <Popconfirm
-            title="Sure to delete?"
+            title="Confirm to delete?"
             okText="Delete"
             okButtonProps={{ danger: true }}
             onConfirm={() => onDeleteRow(modelName, record)}
@@ -239,10 +239,9 @@ export default function DefineRelations(props: Props) {
         Define relationships
       </Title>
       <Text>
-        You can define the relationships among selected tables. We will
-        automatically list suggested relationships based on the primary and
-        foreign key you have already defined in your data source. Relationships
-        will be added into data models.
+        You can create relationships between selected tables. We provide
+        suggested relationships based on primary and foreign keys defined in
+        your data source. The relationships are then added to data models.
       </Text>
       <div className="my-6 text-center">
         {Object.entries(relations).map(([modelName, relations = []], index) => (

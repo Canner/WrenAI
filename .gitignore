@@ -18,6 +18,7 @@ wren-ai-service/poetry.lock
 wren-ai-service/assertion.log
 wren-ai-service/demo/spider
 wren-ai-service/demo/poetry.lock
+wren-ai-service/demo/custom_dataset
 
 # cache
 __pycache__

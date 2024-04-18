@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,7 @@ from src.utils import (
 )
 
 load_env_vars()
+logger = logging.getLogger("wren-ai-service")
 
 
 @component
@@ -55,8 +57,12 @@ class RetrievalPostProcessor:
         documents=List[Optional[Document]],
     )
     def run(self, documents: List[Document]):
+        logger.debug(f"documents: {[document.score for document in documents]}")
+
         return {
-            "documents": list(filter(lambda document: document.score >= 0.6, documents))
+            "documents": list(
+                filter(lambda document: document.score >= 0.57, documents)
+            )
         }
 
 
