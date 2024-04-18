@@ -1,3 +1,66 @@
+
+# ANSI color codes
+GREEN=\033[0;32m
+YELLOW=\033[0;33m
+RED=\033[0;31m
+BLUE=\033[0;34m
+RESET=\033[0m
+
+setup:
+	@echo "$(YELLOW)Setting up development environment...$(RESET)"
+	@$(MAKE) check-python
+	@$(MAKE) check-poetry
+	@$(MAKE) install-python-dependencies
+	@$(MAKE) install-precommit-hooks
+	@$(MAKE) setup-envfile
+	@echo "$(GREEN)Development environment setup complete!$(RESET)"
+
+check-python:
+	@echo "$(YELLOW)Checking Python installation...$(RESET)"
+	@if command -v python3 > /dev/null; then \
+		echo "$(BLUE)$(shell python3 --version) is already installed.$(RESET)"; \
+	else \
+		echo "$(RED)Python 3 is not installed. Please install Python 3 to continue.$(RESET)"; \
+		exit 1; \
+	fi
+
+check-poetry:
+	@echo "$(YELLOW)Checking Poetry installation...$(RESET)"
+	@if command -v poetry > /dev/null; then \
+		echo "$(BLUE)$(shell poetry --version) is already installed.$(RESET)"; \
+	else \
+		echo "$(RED)Poetry is not installed. You can install poetry by running the following command," \
+					" then adding Poetry to your PATH:"; \
+		echo "$(RED) curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1$(RESET)"; \
+		echo "$(RED)More detail here: https://python-poetry.org/docs/#installing-with-the-official-installer$(RESET)"; \
+		exit 1; \
+	fi
+
+install-python-dependencies:
+	@echo "$(YELLOW)Installing dependencies...$(RESET)"
+	@poetry install
+	@echo "$(GREEN)Dependencies installed!$(RESET)"
+
+install-precommit-hooks:
+	@echo "$(YELLOW)Installing pre-commit hooks...$(RESET)"
+	@poetry run pre-commit install
+	@poetry run pre-commit run --all-files
+	@echo "$(GREEN)Pre-commit hooks installed!$(RESET)"
+
+setup-envfile:
+	@echo "$(YELLOW)Setting up environment...$(RESET)"
+	@if [ -f ".env" ]; then \
+		echo "$(BLUE)environment file already exists.$(RESET)"; \
+	else \
+		echo "$(YELLOW)Creating .env file...$(RESET)"; \
+		cp .env.example .env; \
+	fi
+
+help:
+	@echo "$(BLUE)Usage: make [target]$(RESET)"
+	@echo "Targets:"
+	@echo "  $(GREEN)setup$(RESET): Setup development environment"
+
 start:
 	poetry run python -m src.__main__
 
@@ -59,3 +122,5 @@ test:
 	make run-wren-engine && \
 	poetry run pytest -s $(args) && \
 	make stop-all
+
+.PHONY: test clean all
