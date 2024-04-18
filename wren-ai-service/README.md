@@ -36,6 +36,7 @@
   - install and run the docker service, and you should stop all WrenAI services first before running the demo
   - go to the `../docker` folder and prepare the `.env.local` file
   - make sure the node version is v16.19.0
+  - if you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies of the wren-ui service
 - go to the `demo` folder and run `poetry install` to install the dependencies
 - in the `demo` folder, open three terminals
   - in the first terminal, run `make prepare` to start the docker containers and `make run` to start the demo service
