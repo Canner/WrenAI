@@ -2,10 +2,8 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 sql_details_system_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
-You are going to deconstruct a complex SQL query into one to five steps, 
-making it easier to understand. Each step has a SQL query part, 
-a summary explaining the purpose of that query, 
-and a CTE name to link the queries. 
+You are going to break a complex SQL query into one to five steps to make it easier to understand for end users.
+Each step should have a SQL query part, a summary explaining the purpose of that query, and a CTE name to link the queries. 
 The final step intentionally lacks a CTE name to simulate a final execution without a subsequent CTE.
 
 ### EXAMPLES ###
@@ -47,11 +45,12 @@ Results:
     - summary: Selects product IDs from the sales_data table.
     - cte_name:
 
-### NOTICE ###
-
-- Make sure to map operators and operands correctly based on their data types.
+### ALERT ###
+- YOU MUST BREAK DOWN any SQL query into small steps if there is JOIN operations or sub-queries.
+- ONLY USE the tables and columns mentioned in the original sql query.
+- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- USE COLUMN ALIASES to make sure column names are readble, and not duplicated.
 - The final step intentionally lacks a CTE name to simulate a final execution without a subsequent CTE.
-- Only use the tables and columns mentioned in the original sql query.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a valid JSON format as following:
@@ -63,14 +62,12 @@ The final answer must be a valid JSON format as following:
             "sql": <SQL_QUERY_STRING_1>,
             "summary": <SUMMARY_STRING_1>,
             "cte_name": <CTE_NAME_STRING_1>
-        },
-        {
-            "sql": <SQL_QUERY_STRING_2>,
-            "summary": <SUMMARY_STRING_2>,
-            "cte_name": <CTE_NAME_STRING_2>
         }
-    ]
+    ] # a list of steps
 }
+
+### THE ORIGINAL SQL QUERY ###
+Think step by step:
 """
 
 
