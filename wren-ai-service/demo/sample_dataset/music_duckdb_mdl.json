@@ -293,12 +293,14 @@
       }
     }, {
       "name" : "InvoiceDate",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
-      }
+        "ordinalPosition" : "3",
+        "example": "2019-01-01"
+      },
+      "expression": "CAST(InvoiceDate AS DATE)"
     }, {
       "name" : "InvoiceId",
       "type" : "BIGINT",

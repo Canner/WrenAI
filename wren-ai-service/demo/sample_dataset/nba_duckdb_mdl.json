@@ -174,12 +174,14 @@
       }
     }, {
       "name" : "GameDate",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
-      }
+        "ordinalPosition" : "4",
+        "example": "2019-10-22"
+      },
+      "expression": "CAST(GameDate AS DATE)"
     }, {
       "name" : "Id",
       "type" : "BIGINT",
@@ -407,12 +409,14 @@
     "refSql" : "select * from main.line_score",
     "columns" : [ {
       "name" : "GameDate",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
-      }
+        "ordinalPosition" : "1",
+        "example": "2019-10-22"
+      },
+      "expression": "CAST(GameDate AS DATE)"
     }, {
       "name" : "GameId",
       "type" : "BIGINT",
@@ -694,7 +698,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
+        "ordinalPosition" : "4",
+        "example": "2019-10-22"
       }
     }, {
       "name" : "FG",
