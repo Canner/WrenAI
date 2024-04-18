@@ -288,7 +288,7 @@ if __name__ == "__main__":
         with open(f"./src/eval/data/{DATASET_NAME}_data_hard.json", "r") as f:
             ground_truths = [json.loads(line) for line in f]
     else:
-        with open(f"./src/eval/data/{DATASET_NAME}_data_test.json", "r") as f:
+        with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
             ground_truths = [json.loads(line) for line in f]
 
     if ENABLE_SEMANTIC_DESCRIPTION:
