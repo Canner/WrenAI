@@ -57,8 +57,8 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.7.4
     pull_policy: always
-    expose:
-      - 6333
-      - 6334
+    ports:
+      - 6333:6333
+      - 6334:6334
     networks:
       - wren
