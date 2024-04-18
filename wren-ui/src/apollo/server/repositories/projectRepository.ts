@@ -12,16 +12,22 @@ export interface Project {
   id: number; // ID
   type: string; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
   displayName: string; // Project display name
+  credentials: string; // Database credentials. General purpose field for storing credentials
 
   // bq
   projectId: string; // BigQuery project id
   datasetId: string; // BigQuery datasetId
-  credentials: string; // Project credentials, big query specific
 
   // duckdb
   initSql: string; // DuckDB init sql
   configurations: Record<string, any>; // DuckDB configurations
   extensions: string[];
+
+  // pg
+  host: string; // Host
+  port: number; // Port
+  database: string; // Database
+  user: string; // User
 
   catalog: string; // Catalog name
   schema: string; // Schema name
