@@ -4,13 +4,6 @@ query_preprocess_user_prompt_template = """
 ### TASK ###
 Detect if the input is a valid question or query?
 
-### EXAMPLES ###
-1. "What is the capital of France?" -> {"result": "yes"}
-2. "SELECT * FROM users WHERE age > 18;" -> {"result": "no"}
-3. "I am a student" -> {"result": "no"}
-4. "fdafrfergr" -> {"result": "no"}
-5. "Show me the books" -> {"result": "yes"}
-
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
     
