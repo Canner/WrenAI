@@ -10,6 +10,9 @@ from src.pipelines.ask import (
     indexing_pipeline as ask_indexing_pipeline,
 )
 from src.pipelines.ask import (
+    query_understanding_pipeline as ask_query_understanding_pipeline,
+)
+from src.pipelines.ask import (
     retrieval_pipeline as ask_retrieval_pipeline,
 )
 from src.pipelines.ask import (
@@ -45,6 +48,7 @@ def init_globals():
     retriever = init_retriever(
         document_store=document_store,
     )
+    query_understanding_generator = init_generator()
     text_to_sql_generator = init_generator()
     text_to_sql_with_followup_generator = init_generator()
     sql_correction_generator = init_generator()
@@ -59,6 +63,9 @@ def init_globals():
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
                 document_store=document_store,
+            ),
+            "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(
+                generator=query_understanding_generator,
             ),
             "retrieval": ask_retrieval_pipeline.Retrieval(
                 embedder=embedder,

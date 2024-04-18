@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from haystack import Document, component
+from haystack import component
 
 from src.utils import (
     classify_invalid_generation_results,
@@ -13,6 +13,31 @@ from src.utils import (
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
+
+
+@component
+class QueryUnderstandingPostProcessor:
+    @component.output_types(
+        is_valid_query=bool,
+    )
+    def run(self, replies: List[str]):
+        try:
+            result = json.loads(replies[0])["result"]
+
+            if result == "yes":
+                return {
+                    "is_valid_query": True,
+                }
+
+            return {
+                "is_valid_query": False,
+            }
+        except Exception as e:
+            logger.error(f"Error in QueryUnderstandingPostProcessor: {e}")
+
+            return {
+                "is_valid_query": True,
+            }
 
 
 @component
@@ -43,7 +68,7 @@ class GenerationPostProcessor:
                 "invalid_generation_results": invalid_generation_results,
             }
         except Exception as e:
-            print(f"Error in PostProcessor: {e}")
+            logger.error(f"Error in GenerationPostProcessor: {e}")
 
             return {
                 "valid_generation_results": [],
@@ -51,24 +76,9 @@ class GenerationPostProcessor:
             }
 
 
-@component
-class RetrievalPostProcessor:
-    @component.output_types(
-        documents=List[Optional[Document]],
-    )
-    def run(self, documents: List[Document]):
-        logger.debug(f"documents: {[document.score for document in documents]}")
-
-        return {
-            "documents": list(
-                filter(lambda document: document.score >= 0.57, documents)
-            )
-        }
+def init_query_understanding_post_processor():
+    return QueryUnderstandingPostProcessor()
 
 
 def init_generation_post_processor():
     return GenerationPostProcessor()
-
-
-def init_retrieval_post_processor():
-    return RetrievalPostProcessor()

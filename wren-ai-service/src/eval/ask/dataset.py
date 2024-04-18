@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from src.eval.utils import (
+from src.eval.ask.utils import (
     download_spider_data,
     generate_mdl_json,
     generate_text_to_sql_dataset,

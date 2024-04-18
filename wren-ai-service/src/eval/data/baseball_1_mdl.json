@@ -5,7 +5,7 @@
     {
       "name": "all_star",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-all_star\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-all_star\"",
       "columns": [
         {
           "name": "player_id",
@@ -77,7 +77,7 @@
     {
       "name": "appearances",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-appearances\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-appearances\"",
       "columns": [
         {
           "name": "year",
@@ -253,7 +253,7 @@
     {
       "name": "batting",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-batting\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-batting\"",
       "columns": [
         {
           "name": "player_id",
@@ -437,7 +437,7 @@
     {
       "name": "batting_postseason",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-batting_postseason\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-batting_postseason\"",
       "columns": [
         {
           "name": "year",
@@ -621,7 +621,7 @@
     {
       "name": "college",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-college\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-college\"",
       "columns": [
         {
           "name": "college_id",
@@ -669,7 +669,7 @@
     {
       "name": "fielding",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-fielding\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-fielding\"",
       "columns": [
         {
           "name": "player_id",
@@ -821,7 +821,7 @@
     {
       "name": "fielding_outfield",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-fielding_outfield\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-fielding_outfield\"",
       "columns": [
         {
           "name": "player_id",
@@ -877,7 +877,7 @@
     {
       "name": "fielding_postseason",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-fielding_postseason\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-fielding_postseason\"",
       "columns": [
         {
           "name": "player_id",
@@ -1021,7 +1021,7 @@
     {
       "name": "hall_of_fame",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-hall_of_fame\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-hall_of_fame\"",
       "columns": [
         {
           "name": "player_id",
@@ -1101,7 +1101,7 @@
     {
       "name": "home_game",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-home_game\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-home_game\"",
       "columns": [
         {
           "name": "year",
@@ -1181,7 +1181,7 @@
     {
       "name": "manager",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-manager\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-manager\"",
       "columns": [
         {
           "name": "player_id",
@@ -1269,7 +1269,7 @@
     {
       "name": "manager_award",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-manager_award\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-manager_award\"",
       "columns": [
         {
           "name": "player_id",
@@ -1325,7 +1325,7 @@
     {
       "name": "manager_award_vote",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-manager_award_vote\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-manager_award_vote\"",
       "columns": [
         {
           "name": "award_id",
@@ -1389,7 +1389,7 @@
     {
       "name": "manager_half",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-manager_half\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-manager_half\"",
       "columns": [
         {
           "name": "player_id",
@@ -1477,7 +1477,7 @@
     {
       "name": "park",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-park\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-park\"",
       "columns": [
         {
           "name": "park_id",
@@ -1533,7 +1533,7 @@
     {
       "name": "pitching",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-pitching\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-pitching\"",
       "columns": [
         {
           "name": "player_id",
@@ -1781,7 +1781,7 @@
     {
       "name": "pitching_postseason",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-pitching_postseason\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-pitching_postseason\"",
       "columns": [
         {
           "name": "player_id",
@@ -2029,7 +2029,7 @@
     {
       "name": "player",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-player\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-player\"",
       "columns": [
         {
           "name": "player_id",
@@ -2229,7 +2229,7 @@
     {
       "name": "player_award",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-player_award\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-player_award\"",
       "columns": [
         {
           "name": "player_id",
@@ -2285,7 +2285,7 @@
     {
       "name": "player_award_vote",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-player_award_vote\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-player_award_vote\"",
       "columns": [
         {
           "name": "award_id",
@@ -2349,7 +2349,7 @@
     {
       "name": "player_college",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-player_college\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-player_college\"",
       "columns": [
         {
           "name": "player_id",
@@ -2381,7 +2381,7 @@
     {
       "name": "postseason",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-postseason\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-postseason\"",
       "columns": [
         {
           "name": "year",
@@ -2461,7 +2461,7 @@
     {
       "name": "salary",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-salary\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-salary\"",
       "columns": [
         {
           "name": "year",
@@ -2509,7 +2509,7 @@
     {
       "name": "team",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-team\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-team\"",
       "columns": [
         {
           "name": "year",
@@ -2901,7 +2901,7 @@
     {
       "name": "team_franchise",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-team_franchise\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-team_franchise\"",
       "columns": [
         {
           "name": "franchise_id",
@@ -2941,7 +2941,7 @@
     {
       "name": "team_half",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"baseball_1-team_half\"",
+      "refSql": "select * from wrenai.spider.\"baseball_1-team_half\"",
       "columns": [
         {
           "name": "year",

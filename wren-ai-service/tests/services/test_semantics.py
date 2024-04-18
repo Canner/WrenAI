@@ -22,7 +22,7 @@ def test_generate_description(semantics_service: SemanticsService):
             mdl={
                 "name": "all_star",
                 "properties": {},
-                "refsql": 'select * from "canner-cml".spider."baseball_1-all_star"',
+                "refsql": 'select * from "wrenai".spider."baseball_1-all_star"',
                 "columns": [
                     {
                         "name": "player_id",
