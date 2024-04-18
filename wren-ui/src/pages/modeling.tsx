@@ -1,15 +1,17 @@
 import dynamic from 'next/dynamic';
 import { forwardRef, useMemo, useRef } from 'react';
+import { message } from 'antd';
 import styled from 'styled-components';
-import { MORE_ACTION } from '@/utils/enum';
-import { Diagram as DiagramData } from '@/utils/data';
+import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
+import { DIAGRAM } from '@/apollo/client/graphql/diagram';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
+import { useDeleteViewMutation } from '@/apollo/client/graphql/view.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -22,7 +24,7 @@ const DiagramWrapper = styled.div`
   height: 100%;
 `;
 
-export function Modeling() {
+export default function Modeling() {
   const diagramRef = useRef(null);
 
   const { data } = useDiagramQuery({
@@ -34,9 +36,21 @@ export function Modeling() {
     fetchPolicy: 'no-cache',
   });
 
+  const [deleteViewMutation] = useDeleteViewMutation({
+    onError: (error) => console.error(error),
+    onCompleted: () => {
+      // refetch to get latest deploy status
+      deployStatusQueryResult.refetch();
+
+      message.success('Successfully deleted view.');
+    },
+    refetchQueries: [{ query: DIAGRAM }],
+    awaitRefetchQueries: true,
+  });
+
   const diagramData = useMemo(() => {
     if (!data) return null;
-    return data?.diagram as DiagramData;
+    return data?.diagram;
   }, [data]);
 
   const metadataDrawer = useDrawerAction();
@@ -64,9 +78,20 @@ export function Modeling() {
       [MORE_ACTION.EDIT]: () => {
         // TODO: handle edit action
       },
-      [MORE_ACTION.DELETE]: () => {
-        // TODO: call delete API
-        console.log(data);
+      [MORE_ACTION.DELETE]: async () => {
+        const { nodeType } = data;
+
+        switch (nodeType) {
+          case NODE_TYPE.VIEW:
+            await deleteViewMutation({
+              variables: { where: { id: data.viewId } },
+            });
+            break;
+
+          default:
+            console.log(data);
+            break;
+        }
       },
     };
     action[type] && action[type]();
@@ -97,5 +122,3 @@ export function Modeling() {
     </DeployStatusContext.Provider>
   );
 }
-
-export default Modeling;

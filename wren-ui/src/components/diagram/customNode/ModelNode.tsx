@@ -1,4 +1,5 @@
 import { memo, useCallback, useContext } from 'react';
+import { Typography } from 'antd';
 import {
   highlightEdges,
   highlightNodes,
@@ -18,13 +19,19 @@ import Column, {
   MoreColumnTip,
 } from '@/components/diagram/customNode/Column';
 import { PrimaryKeyIcon, ModelIcon } from '@/utils/icons';
-import { ComposeDiagram, ComposeDiagramField } from '@/utils/data';
+import {
+  ComposeDiagram,
+  ComposeDiagramField,
+  DiagramModel,
+} from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { makeIterable } from '@/utils/iteration';
 import { Config } from '@/utils/diagram';
 import { NODE_TYPE } from '@/utils/enum';
 
-export const ModelNode = ({ data }: CustomNodeProps<ComposeDiagram>) => {
+const { Text } = Typography;
+
+export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
   const context = useContext(DiagramContext);
   const onNodeClick = () => {
     context?.onNodeClick({
@@ -45,7 +52,9 @@ export const ModelNode = ({ data }: CustomNodeProps<ComposeDiagram>) => {
       <NodeHeader className="dragHandle">
         <span className="adm-model-header">
           <ModelIcon />
-          {data.originalData.displayName}
+          <Text ellipsis title={data.originalData.displayName}>
+            {data.originalData.displayName}
+          </Text>
         </span>
         <span>
           <CachedIcon originalData={data.originalData} />

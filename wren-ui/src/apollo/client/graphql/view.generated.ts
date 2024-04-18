@@ -185,7 +185,7 @@ export type ListViewsLazyQueryHookResult = ReturnType<typeof useListViewsLazyQue
 export type ListViewsQueryResult = Apollo.QueryResult<ListViewsQuery, ListViewsQueryVariables>;
 export const PreviewViewDataDocument = gql`
     mutation PreviewViewData($where: ViewWhereUniqueInput!) {
-  previewViewData(where: $data)
+  previewViewData(where: $where)
 }
     `;
 export type PreviewViewDataMutationFn = Apollo.MutationFunction<PreviewViewDataMutation, PreviewViewDataMutationVariables>;

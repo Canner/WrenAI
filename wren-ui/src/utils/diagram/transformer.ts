@@ -5,6 +5,7 @@ import {
   Diagram,
   DiagramModel,
   DiagramModelRelationField,
+  DiagramView,
 } from '@/utils/data';
 
 export const Config = {
@@ -62,8 +63,7 @@ export class Transformer {
   private readonly config: typeof Config = Config;
   private models: DiagramModel[];
   public nodes: NodeWithData[] = [];
-  // TODO: update TS type
-  private views: any[];
+  private views: DiagramView[];
   public edges: Edge[] = [];
   private start: StartPoint = {
     x: 0,
@@ -133,7 +133,7 @@ export class Transformer {
     // check nodeType and add edge
     switch (nodeType) {
       case NODE_TYPE.MODEL:
-        this.addModelEdge(data);
+        this.addModelEdge(data as DiagramModel);
         break;
       default:
         break;

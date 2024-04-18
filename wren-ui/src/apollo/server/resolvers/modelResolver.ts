@@ -20,6 +20,8 @@ export enum SyncStatusEnum {
   UNSYNCRONIZED = 'UNSYNCRONIZED',
 }
 
+const PREVIEW_MAX_OUTPUT_ROW = 100;
+
 export class ModelResolver {
   constructor() {
     this.listModels = this.listModels.bind(this);
@@ -315,7 +317,10 @@ export class ModelResolver {
       throw new Error('View not found');
     }
 
-    const data = await ctx.wrenEngineAdaptor.previewData(view.statement);
+    const data = await ctx.wrenEngineAdaptor.previewData(
+      view.statement,
+      PREVIEW_MAX_OUTPUT_ROW,
+    );
     return data;
   }
 
