@@ -141,12 +141,8 @@ def test_asks_with_failed_query():
             response = client.get(url=f"/v1/asks/{query_id}/result")
 
         assert response.status_code == 200
-        # TODO: remove comment after fixing the document store score issue
-        # assert response.json()["status"] == "failed"
-        # assert (
-        #     response.json()["error"]["code"] == "NO_RELEVANT_SQL"
-        #     or response.json()["error"]["code"] == "NO_RELEVANT_DATA"
-        # )
+        assert response.json()["status"] == "failed"
+        assert response.json()["error"]["code"] == "MISLEADING_QUERY"
 
 
 def test_stop_asks():

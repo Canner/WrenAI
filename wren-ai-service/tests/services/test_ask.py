@@ -141,9 +141,5 @@ def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):
             )
         )
 
-    # TODO: remove comment after fixing the document store score issue
-    # assert ask_result_response.status == "failed"
-    # assert (
-    #     ask_result_response.error.code == "NO_RELEVANT_SQL"
-    #     or ask_result_response.error.code == "NO_RELEVANT_DATA"
-    # )
+    assert ask_result_response.status == "failed"
+    assert ask_result_response.error.code == "MISLEADING_QUERY"
