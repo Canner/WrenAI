@@ -81,7 +81,7 @@ start-ai:
 	@echo "$(YELLOW)Starting Wren AI service...$(RESET)"
 	@poetry run python -m src.__main__ &
 	@echo "$(YELLOW)Waiting for Wren AI service to start...$(RESET)"
-	@until nc -z localhost $(AI_PORT); do sleep 0.1; done
+	@until nc -z localhost $(AI_PORT); do sleep 1; done
 	@echo "$(GREEN)Wren AI service started!$(RESET)"
 
 # Stop all services
@@ -111,6 +111,18 @@ psql:
 	@echo "$(YELLOW)Connecting to Wren Engine via psql...$(RESET)"
 	@docker exec -it wren-wren-engine-1 bash launch-cli.sh
 
+eval:
+	@$(MAKE) start-qdrant
+	@$(MAKE) start-wren-engine
+	@echo "$(YELLOW)Running evaluation for ${pipeline}...$(RESET)"
+	@poetry run python -m src.eval.${pipeline} ${args}
+	@$(MAKE) stop-qdrant
+	@$(MAKE) stop-wren-engine
+
+streamlit:
+	@echo "$(YELLOW)Starting Streamlit app for ${pipeline}...$(RESET)"
+	@poetry run streamlit run src/eval/${pipeline}/streamlit_app.py
+
 help:
 	@echo "$(BLUE)Usage: make [target]$(RESET)"
 	@echo "Targets:"
@@ -124,6 +136,10 @@ help:
 	@echo "  $(GREEN)start-ai$(RESET)          - Start Wren AI service"
 	@echo "  $(GREEN)stop-ai$(RESET)           - Stop Wren AI service"
 	@echo "  $(GREEN)psql$(RESET)              - Connect to Wren Engine via psql"
+	@echo "  $(GREEN)eval$(RESET)              - Run evaluation pipeline. more available arguments can be found in each pipeline"
+	@echo "                                    - 		Example: make eval pipeline=ask args='--help'"
+	@echo "  $(GREEN)streamlit$(RESET)         - Start Streamlit app for each evaluation pipeline"
+	@echo "                                    - 		Example: make streamlit pipeline=ask"
 
 # deprecated?
 build:
@@ -138,24 +154,6 @@ up:
 down:
 	make stop-wren-engine && \
 	docker compose -f docker/docker-compose.yml --env-file .env.prod down
-
-run-all:
-	# deprecated?
-	poetry run python -m src.prepare_mdl_json && \
-	make run-qdrant && \
-	make run-wren-engine
-
-# present the evaluation result on the streamlit app
-# example: make streamlit pipeline=ask_details
-streamlit:
-	poetry run streamlit run src/eval/${pipeline}/streamlit_app.py
-
-# example: make eval pipeline=ask_details
-# example: make eval pipeline=ask args="--help" to check all available arguments
-eval:
-	make run-all && \
-	poetry run python -m src.eval.$(pipeline) $(args)
-	make stop-all
 
 # deprecated?
 test:
