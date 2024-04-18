@@ -24,7 +24,7 @@ export default function DuckDBProperties() {
       <Form.Item
         label="Initial SQL statements"
         name="initSql"
-        extra="These statements will be executed one time only during initialization."
+        extra="These statements are meant to be executed only once during initialization."
         rules={[
           {
             required: true,
@@ -42,8 +42,8 @@ export default function DuckDBProperties() {
         label="Configuration options"
         extra={
           <>
-            DuckDB has a number of configuration options that can be used to
-            change the behavior of the system.{' '}
+            DuckDB offers various configuration options that can modify the
+            system's behavior.{' '}
             <Link
               href="https://duckdb.org/docs/configuration/overview.html"
               target="_blank"
@@ -136,8 +136,8 @@ export default function DuckDBProperties() {
         label="Extensions"
         extra={
           <>
-            DuckDB has a flexible extension mechanism that allows for
-            dynamically loading extensions.{' '}
+            DuckDB has an extension mechanism that enables the dynamic loading
+            of extensions.{' '}
             <Link
               href="https://duckdb.org/docs/extensions/overview.html"
               target="_blank"
@@ -175,7 +175,7 @@ export default function DuckDBProperties() {
                   block
                   icon={<PlusOutlined />}
                 >
-                  Add an Extension
+                  Add an extension
                 </Button>
               </Form.Item>
             </>

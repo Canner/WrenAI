@@ -35,7 +35,7 @@
 
 ## 🎯 Our Mission
 
-WrenAI is dedicated to reimagining how businesses can interact with and leverage their data through LLM, by bringing comprehension capabilities to small and large data teams.
+WrenAI is reimagining how businesses can interact with and leverage their data through LLM, by bringing comprehension capabilities to small and large data teams.
 
 👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
 
