@@ -10,6 +10,7 @@ from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
+from src.pipelines.ask.query_understanding_pipeline import QueryUnderstanding
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
 from src.web.v1.services.ask import AskRequest, AskResultResponse, SQLExplanation
@@ -40,6 +41,25 @@ def test_indexing_pipeline(mdl_str: str, document_store: Any):
     assert document_store.count_documents() == 2
 
 
+def test_query_understanding_pipeline():
+    query_understanding_pipeline = QueryUnderstanding(
+        generator=init_generator(),
+    )
+
+    assert query_understanding_pipeline.run("How many books are there?")[
+        "post_processor"
+    ]["is_valid_query"]
+    assert not query_understanding_pipeline.run("select * from books")[
+        "post_processor"
+    ]["is_valid_query"]
+    assert not query_understanding_pipeline.run("i am cool")["post_processor"][
+        "is_valid_query"
+    ]
+    assert not query_understanding_pipeline.run("fds dsio me")["post_processor"][
+        "is_valid_query"
+    ]
+
+
 def test_retrieval_pipeline(document_store: Any):
     retrieval_pipeline = Retrieval(
         embedder=init_embedder(),
@@ -51,9 +71,9 @@ def test_retrieval_pipeline(document_store: Any):
     )
 
     assert retrieval_result is not None
-    assert len(retrieval_result["post_processor"]["documents"]) > 0
+    assert len(retrieval_result["retriever"]["documents"]) > 0
 
-    GLOBAL_DATA["contexts"] = retrieval_result["post_processor"]["documents"]
+    GLOBAL_DATA["contexts"] = retrieval_result["retriever"]["documents"]
 
 
 def test_generation_pipeline():

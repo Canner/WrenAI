@@ -5,7 +5,7 @@
     {
       "name": "Course",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Course\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Course\"",
       "columns": [
         {
           "name": "CID",
@@ -85,7 +85,7 @@
     {
       "name": "Department",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Department\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Department\"",
       "columns": [
         {
           "name": "DNO",
@@ -141,7 +141,7 @@
     {
       "name": "Enrolled_in",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Enrolled_in\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Enrolled_in\"",
       "columns": [
         {
           "name": "StuID",
@@ -197,7 +197,7 @@
     {
       "name": "Faculty",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Faculty\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Faculty\"",
       "columns": [
         {
           "name": "FacID",
@@ -269,7 +269,7 @@
     {
       "name": "Gradeconversion",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Gradeconversion\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Gradeconversion\"",
       "columns": [
         {
           "name": "lettergrade",
@@ -293,7 +293,7 @@
     {
       "name": "Member_of",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Member_of\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Member_of\"",
       "columns": [
         {
           "name": "FacID",
@@ -341,7 +341,7 @@
     {
       "name": "Minor_in",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Minor_in\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Minor_in\"",
       "columns": [
         {
           "name": "StuID",
@@ -381,7 +381,7 @@
     {
       "name": "Student",
       "properties": {},
-      "refSql": "select * from \"canner-cml\".spider.\"college_3-Student\"",
+      "refSql": "select * from wrenai.spider.\"college_3-Student\"",
       "columns": [
         {
           "name": "StuID",

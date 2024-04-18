@@ -152,13 +152,27 @@ class AskService:
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="understanding")
 
+                query_understanding_result = self._pipelines["query_understanding"].run(
+                    query=ask_request.query,
+                )
+
+                if not query_understanding_result["post_processor"]["is_valid_query"]:
+                    self.ask_results[query_id] = AskResultResponse(
+                        status="failed",
+                        error=AskResultResponse.AskError(
+                            code="MISLEADING_QUERY",
+                            message="Misleading query, please ask a more specific question.",
+                        ),
+                    )
+                    return
+
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="searching")
 
                 retrieval_result = self._pipelines["retrieval"].run(
                     query=ask_request.query,
                 )
-                documents = retrieval_result["post_processor"]["documents"]
+                documents = retrieval_result["retriever"]["documents"]
 
                 if not documents:
                     self.ask_results[query_id] = AskResultResponse(
