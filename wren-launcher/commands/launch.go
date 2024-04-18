@@ -33,7 +33,7 @@ func prepareProjectDir() string {
 func AskForTelemetryConsent() (bool, error) {
 	// let users know we're asking for telemetry consent
 	fmt.Println("WrenAI collects 'ONLY usage data' to improve WrenAI.")
-	fmt.Println("You can read more about what we collected at https://www.wren.ai/privacy-policy")
+	fmt.Println("You can read more about what we collected at https://docs.getwren.ai/overview/telemetry")
 
 	validate := func(input string) error {
 		if input == "y" || input == "n" || input == "" {
