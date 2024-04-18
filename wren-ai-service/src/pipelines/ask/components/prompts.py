@@ -59,6 +59,7 @@ Proceed in a similar manner for the other queries.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
@@ -115,6 +116,7 @@ The final answer must be the JSON format like following:
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 
 ### QUESTION ###
 Previous SQL Summary: {{ history.summary }}
@@ -150,6 +152,7 @@ The final answer must be a list of corrected SQL quries and its original corresp
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 
 ### QUESTION ###
 {% for invalid_generation_result in invalid_generation_results %}
