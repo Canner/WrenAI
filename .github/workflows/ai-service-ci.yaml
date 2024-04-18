@@ -50,7 +50,7 @@ jobs:
           sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties
           poetry run python -m src.prepare_mdl_json --dataset_name book_2
           docker run -d -p 8080:8080 --name wren-engine -v $(pwd)/src/eval/wren-engine/etc:/usr/src/app/etc ghcr.io/canner/wren-engine:latest
-          make run-qdrant
+          make start-qdrant
           poetry run pytest
           make stop-qdrant
           docker stop wren-engine && docker rm wren-engine
