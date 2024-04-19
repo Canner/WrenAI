@@ -103,6 +103,7 @@ stop-qdrant:
 start-wren-engine:
 	@echo "$(YELLOW)Starting Wren Engine...$(RESET)"
 	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
+	@until docker logs wren-wren-engine-1 2>&1 | grep -i "server started" > /dev/null; do sleep 1; done
 	@echo "$(GREEN)Wren Engine started!$(RESET)"
 
 stop-wren-engine:
