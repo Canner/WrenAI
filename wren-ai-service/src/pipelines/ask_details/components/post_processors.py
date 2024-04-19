@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -10,6 +11,7 @@ from src.utils import (
     load_env_vars,
 )
 
+logger = logging.getLogger("wren-ai-service")
 load_env_vars()
 
 
@@ -31,6 +33,8 @@ class GenerationPostProcessor:
             }
 
         sql = _build_cte_query(steps)
+        logger.debug(f"GenerationPostProcessor: steps: {steps}")
+        logger.debug(f"GenerationPostProcessor: final sql: {sql}")
 
         if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
             return {

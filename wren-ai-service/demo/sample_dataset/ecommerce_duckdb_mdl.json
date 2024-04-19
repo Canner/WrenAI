@@ -10,7 +10,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
+        "ordinalPosition" : "2",
+        "example": "San Jose"
       }
     }, {
       "name" : "Id",
@@ -18,7 +19,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
+        "ordinalPosition" : "1",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "State",
@@ -26,7 +28,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
+        "ordinalPosition" : "3",
+        "example": "CA"
       }
     }, {
       "name" : "orders",
@@ -52,7 +55,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
+        "ordinalPosition" : "6",
+        "example": 1.5
       }
     }, {
       "name" : "ItemNumber",
@@ -60,7 +64,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
+        "ordinalPosition" : "2",
+        "example": 1
       }
     }, {
       "name" : "OrderId",
@@ -68,7 +73,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
+        "ordinalPosition" : "1",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "Price",
@@ -76,7 +82,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
+        "ordinalPosition" : "5",
+        "example": 1.2
       }
     }, {
       "name" : "ProductId",
@@ -84,16 +91,19 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
+        "ordinalPosition" : "3",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "ShippingLimitDate",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
-      }
+        "ordinalPosition" : "4",
+        "example": "2018/01/15"
+      },
+      "expression": "CAST(ShippingLimitDate AS DATE)"
     }, {
       "name" : "orders",
       "type" : "orders",
@@ -121,67 +131,80 @@
     "refSql" : "select * from main.orders",
     "columns" : [ {
       "name" : "ApprovedTimestamp",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
-      }
+        "ordinalPosition" : "5",
+        "example": "2017-10-26"
+      },
+      "expression": "CAST(ApprovedTimestamp AS DATE)"
     }, {
       "name" : "CustomerId",
       "type" : "VARCHAR",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
+        "ordinalPosition" : "2",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "DeliveredCarrierDate",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
-      }
+        "ordinalPosition" : "6",
+        "example": "2017/10/26"
+      },
+      "expression": "CAST(DeliveredCarrierDate AS DATE)"
     }, {
       "name" : "DeliveredCustomerDate",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
-      }
+        "ordinalPosition" : "7",
+        "example": "2017/10/26"
+      },
+      "expression": "CAST(DeliveredCustomerDate AS DATE)"
     }, {
       "name" : "EstimatedDeliveryDate",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "8"
-      }
+        "ordinalPosition" : "8",
+        "example": "2017/10/26"
+      },
+      "expression": "CAST(EstimatedDeliveryDate AS DATE)"
     }, {
       "name" : "OrderId",
       "type" : "VARCHAR",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
+        "ordinalPosition" : "1",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "PurchaseTimestamp",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
-      }
+        "ordinalPosition" : "4",
+        "example": "2017-10-26"
+      },
+      "expression": "CAST(PurchaseTimestamp AS DATE)"
     }, {
       "name" : "Status",
       "type" : "VARCHAR",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
+        "ordinalPosition" : "3",
+        "example": "delivered"
       }
     }, {
       "name" : "customers",
@@ -228,7 +251,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
+        "ordinalPosition" : "4",
+        "example": 1
       }
     }, {
       "name" : "OrderId",
@@ -236,7 +260,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
+        "ordinalPosition" : "1",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "Sequential",
@@ -244,7 +269,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
+        "ordinalPosition" : "2",
+        "example": 1
       }
     }, {
       "name" : "Type",
@@ -252,7 +278,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
+        "ordinalPosition" : "3",
+        "example": "credit_card"
       }
     }, {
       "name" : "Value",
@@ -260,7 +287,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
+        "ordinalPosition" : "5",
+        "example": 1.5
       }
     }, {
       "name" : "orders",
@@ -286,7 +314,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
+        "ordinalPosition" : "2",
+        "example": "electronics"
       }
     }, {
       "name" : "Id",
@@ -294,7 +323,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
+        "ordinalPosition" : "1",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "Name",
@@ -302,7 +332,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
+        "ordinalPosition" : "3",
+        "example": "iphone"
       }
     }, {
       "name" : "order_items",
@@ -324,27 +355,32 @@
     "refSql" : "select * from main.reviews",
     "columns" : [ {
       "name" : "AnswerTimestamp",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
-      }
+        "ordinalPosition" : "5",
+        "example": "2017-10-26"
+      },
+      "expression": "CAST(AnswerTimestamp AS DATE)"
     }, {
       "name" : "CreationTimestamp",
-      "type" : "VARCHAR",
+      "type" : "DATE",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
-      }
+        "ordinalPosition" : "4",
+        "example": "2017-10-26"
+      },
+      "expression": "CAST(CreationTimestamp AS DATE)"
     }, {
       "name" : "Id",
       "type" : "VARCHAR",
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
+        "ordinalPosition" : "1",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "OrderId",
@@ -352,7 +388,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
+        "ordinalPosition" : "2",
+        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
       }
     }, {
       "name" : "Score",
@@ -360,7 +397,8 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
+        "ordinalPosition" : "3",
+        "example": 1
       }
     }, {
       "name" : "orders",

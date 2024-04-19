@@ -8,6 +8,7 @@ from src.pipelines.ask.components.generator import (
 )
 from src.pipelines.ask.components.post_processors import init_generation_post_processor
 from src.pipelines.ask.components.prompts import (
+    TEXT_TO_SQL_RULES,
     init_text_to_sql_with_followup_prompt_builder,
 )
 from src.utils import load_env_vars
@@ -50,6 +51,7 @@ class FollowUpGeneration(BasicPipeline):
                     "query": query,
                     "documents": contexts,
                     "history": history,
+                    "alert": TEXT_TO_SQL_RULES,
                 },
             }
         )

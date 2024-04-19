@@ -53,7 +53,7 @@ def process_item(
                 for i, optimal_ddl_content in enumerate(optimal_ddl)
             ]
         else:
-            documents = retrieval_result["post_processor"]["documents"]
+            documents = retrieval_result["retriever"]["documents"]
     else:
         documents = []
     retrieval_end = time.perf_counter()

@@ -533,7 +533,7 @@ def get_data_from_wren_engine(sql: str):
     assert response.status_code == 200
 
     data = response.json()
-    column_names = [col["name"] for col in data["columns"]]
+    column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]
 
     return pd.DataFrame(data["data"], columns=column_names)
 
