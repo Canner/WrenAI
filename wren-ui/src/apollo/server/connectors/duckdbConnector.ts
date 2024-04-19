@@ -81,6 +81,7 @@ export class DuckDBConnector
         table_schema,
         table_name,
         column_name,
+        _ordinal_position,
         is_nullable,
         data_type,
       ] = row;
