@@ -59,41 +59,43 @@ Ensure you have installed the required tools before proceeding to the next steps
 
 ## Production Environment Setup(might be deprecated in the future)
 
-- copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
+- Copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
 - `make build` to build the docker image
 - `make up` to run the docker container
 - `make down` to stop the docker container
 
 ## Interative the system with Demo application or UI
 
-- go to the `../docker` folder and prepare the `.env.local` file
-- execute the follow command to start the containers and choose App or UI to interact with the system
+- Go to the `../docker` folder and prepare the `.env.local` file
+- Execute the follow command to start the containers and choose App or UI to interact with the system
   ```shell
   make start-demo
   ```
-- there are the ports of the services:
+- To stop the containers, execute the following command:
+  ```shell
+  make stop-demo
+  ```
+- There are the ports of the services:
   - wren-engine: 8080
   - wren-ai-service: 5556
   - wren-ui: 3000
   - qdrant: 6333, 6334
 
-
 ### Run the Demo Application
-  - go to the `demo` folder and run `poetry install` to install the dependencies
-  - if you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies 
+  - Go to the `demo` folder and run `poetry install` to install the dependencies
+  - If you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies 
   of the wren-ui service
-  - execute the following commands to run the demo application:
+  - Execute the following commands to run the demo application:
     ```shell
     make start-app
     ```
 
 ### Run the UI Service
-  - make sure the node version is v16.19.0
-  - execute the following commands to run the UI service:
+  - Make sure the node version is v16.19.0
+  - Execute the following commands to run the UI service:
     ```shell
     make start-ui
     ```
-
 
 ## Helper Commands
 - To run the helper commands, execute the following command and you will see all the available commands:
