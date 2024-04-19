@@ -15,12 +15,12 @@ exports.up = function (knex) {
       .text('expression')
       .comment('Expression for the measure')
       .comment(
-        'the expression of measure, eg: "Sum", "Everage", or customize expression'
+        'the expression of measure, eg: "Sum", "Everage", or customize expression',
       );
     table
       .string('granularity')
       .comment(
-        'Granularity for the measure, eg: "day", "hour", "minute", "year"'
+        'Granularity for the measure, eg: "day", "hour", "minute", "year"',
       )
       .nullable();
     table.timestamps(true, true);
