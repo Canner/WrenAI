@@ -148,6 +148,23 @@ test:
 	@$(MAKE) stop-qdrant
 	@$(MAKE) stop-wren-engine
 
+build:
+	@echo "$(YELLOW)Building Docker images...$(RESET)"
+	@docker-compose -f docker/docker-compose.yml --env-file .env.prod build
+	@echo "$(GREEN)Docker images built!$(RESET)"
+
+up:
+	@echo "$(YELLOW)Starting all services...$(RESET)"
+	@make start-wren-engine
+	@docker-compose -f docker/docker-compose.yml --env-file .env.prod up -d
+	@echo "$(GREEN)All services started!$(RESET)"
+
+down:
+	@echo "$(YELLOW)Stopping all services...$(RESET)"
+	@make stop-wren-engine
+	@docker compose -f docker/docker-compose.yml --env-file .env.prod down
+	@echo "$(GREEN)All services stopped!$(RESET)"
+
 help:
 	@echo "$(BLUE)Usage: make [target]$(RESET)"
 	@echo "Targets:"
@@ -165,19 +182,9 @@ help:
 	@echo "                                    - 		Example: make eval pipeline=ask args='--help'"
 	@echo "  $(GREEN)streamlit$(RESET)         - Start Streamlit app for each evaluation pipeline"
 	@echo "                                    - 		Example: make streamlit pipeline=ask"
-
-# deprecated?
-build:
-	docker compose -f docker/docker-compose.yml --env-file .env.prod build
-
-# deprecated?
-up:
-	make run-wren-engine && \
-	docker compose -f docker/docker-compose.yml --env-file .env.prod up -d
-
-# deprecated?
-down:
-	make stop-wren-engine && \
-	docker compose -f docker/docker-compose.yml --env-file .env.prod down
+	@echo "  $(GREEN)test$(RESET)              - Run tests"
+	@echo "  $(GREEN)build$(RESET)             - Build Docker images(might be deprecated)"
+	@echo "  $(GREEN)up$(RESET)                - Start all services using Docker Compose(might be deprecated)"
+	@echo "  $(GREEN)down$(RESET)              - Stop all services using Docker Compose(might be deprecated)"
 
 .PHONY: test clean all
