@@ -205,17 +205,6 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'City', dataType: 'VARCHAR' },
           { columnName: 'State', dataType: 'VARCHAR' },
         ],
-        // This column is an example of a column with a description, please modify it to match the dataset
-        columns: [
-          {
-            name: 'City',
-            description:
-              'The Customer City, where the customer company is located',
-          },
-        ],
-        // This description is an example, please modify it to match the dataset
-        description:
-          'A table of customers who have made purchases, including their city',
       },
       {
         tableName: 'order_items',
