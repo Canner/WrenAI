@@ -10,11 +10,11 @@ import {
   SampleDatasetName,
 } from '@/apollo/client/graphql/__types__';
 
-const transformProperties = (
+export const transformFormToProperties = (
   properties: Record<string, any>,
-  dataSource: DataSourceName,
+  dataSourceType: DataSourceName,
 ) => {
-  if (dataSource === DataSourceName.DUCKDB) {
+  if (dataSourceType === DataSourceName.DUCKDB) {
     const configurations = properties.configurations.reduce((acc, cur) => {
       if (cur.key && cur.value) {
         acc[cur.key] = cur.value;
@@ -30,6 +30,29 @@ const transformProperties = (
     };
   }
 
+  return properties;
+};
+
+export const transformPropertiesToForm = (
+  properties: Record<string, any>,
+  dataSourceType: DataSourceName,
+) => {
+  if (dataSourceType === DataSourceName.BIG_QUERY) {
+    return { ...properties, credentials: undefined };
+  } else if (dataSourceType === DataSourceName.DUCKDB) {
+    const configurations = Object.entries(properties?.configurations || {}).map(
+      ([key, value]) => ({ key, value }),
+    );
+    const extensions = properties?.extensions || [];
+    return {
+      ...properties,
+      // If there are no configurations or extensions, add an empty one, or the form properties will break
+      configurations: configurations.length
+        ? configurations
+        : [{ key: '', value: '' }],
+      extensions: extensions.length ? extensions : [''],
+    };
+  }
   return properties;
 };
 
@@ -66,7 +89,7 @@ export default function useSetupConnection() {
       variables: {
         data: {
           type: dataSource,
-          properties: transformProperties(properties, dataSource),
+          properties: transformFormToProperties(properties, dataSource),
         },
       },
     });

@@ -7,13 +7,20 @@ import { getDataSource, getTemplates } from '@/components/pages/setup/utils';
 import { FlexLoading } from '@/components/PageLoading';
 import ButtonItem from '@/components/pages/setup/ButtonItem';
 import {
+  transformFormToProperties,
+  transformPropertiesToForm,
+} from '@/hooks/useSetupConnection';
+import {
   useStartSampleDatasetMutation,
   useUpdateDataSourceMutation,
 } from '@/apollo/client/graphql/dataSource.generated';
-import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
+import {
+  DataSourceName,
+  SampleDatasetName,
+} from '@/apollo/client/graphql/__types__';
 
 interface Props {
-  type: DATA_SOURCES;
+  type: DataSourceName;
   properties: Record<string, any>;
   sampleDataset: SampleDatasetName;
   refetchSettings: () => void;
@@ -65,7 +72,7 @@ const SampleDatasetPanel = (props: Props) => {
 const DataSourcePanel = (props: Props) => {
   const { type, properties, refetchSettings } = props;
 
-  const current = getDataSource(type);
+  const current = getDataSource(type as unknown as DATA_SOURCES);
   const [form] = Form.useForm();
 
   const [updateDataSource, { loading }] = useUpdateDataSourceMutation({
@@ -79,14 +86,18 @@ const DataSourcePanel = (props: Props) => {
   useEffect(() => reset(), [properties]);
 
   const reset = () => {
-    form.setFieldsValue({ ...properties, credentials: undefined });
+    form.setFieldsValue(transformPropertiesToForm(properties, type));
   };
 
   const submit = () => {
     form
       .validateFields()
       .then((values) => {
-        updateDataSource({ variables: { data: { properties: values } } });
+        updateDataSource({
+          variables: {
+            data: { properties: transformFormToProperties(values, type) },
+          },
+        });
       })
       .catch((error) => {
         console.error(error);

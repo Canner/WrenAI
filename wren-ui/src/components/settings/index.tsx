@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, Layout, Button } from 'antd';
 import styled from 'styled-components';
-import { DATA_SOURCES, SETTINGS } from '@/utils/enum';
+import { SETTINGS } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
 import { ModalAction } from '@/hooks/useModalAction';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
@@ -51,7 +51,7 @@ const DynamicComponent = ({
     {
       [SETTINGS.DATA_SOURCE]: (
         <DataSourceSettings
-          type={dataSource?.type as unknown as DATA_SOURCES}
+          type={dataSource?.type}
           sampleDataset={dataSource?.sampleDataset}
           properties={dataSource?.properties}
           refetchSettings={refetch}
