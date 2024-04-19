@@ -67,7 +67,7 @@ Ensure you have installed the required tools before proceeding to the next steps
 ## Interative the system with Demo application or UI
 
 - Go to the `../docker` folder and prepare the `.env.local` file
-- Execute the follow command to start the containers and choose App or UI to interact with the system
+- Execute the following command to start the containers and choose App or UI to interact with the system
   ```shell
   make start-demo
   ```
@@ -83,8 +83,6 @@ Ensure you have installed the required tools before proceeding to the next steps
 
 ### Run the Demo Application
   - Go to the `demo` folder and run `poetry install` to install the dependencies
-  - If you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies 
-  of the wren-ui service
   - Execute the following commands to run the demo application:
     ```shell
     make start-app
@@ -92,6 +90,8 @@ Ensure you have installed the required tools before proceeding to the next steps
 
 ### Run the UI Service
   - Make sure the node version is v16.19.0
+  - If you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies 
+  of the wren-ui service
   - Execute the following commands to run the UI service:
     ```shell
     make start-ui
