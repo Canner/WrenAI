@@ -103,10 +103,10 @@ stop-qdrant:
 start-wren-engine:
 	@echo "$(YELLOW)Starting Wren Engine...$(RESET)"
 	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
-	@until curl -L 127.0.0.1:8080 > /dev/null 2>&1; do \
+	@timeout 180 sh -c 'until curl -v localhost:8080 > /dev/null 2>&1; do \
 		echo "$(YELLOW)Waiting for Wren Engine to start...$(RESET)"; \
 		sleep 10; \
-	done
+	done' || true
 	@echo "$(GREEN)Wren Engine started!$(RESET)"
 
 stop-wren-engine:
