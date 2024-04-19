@@ -1,5 +1,5 @@
 # Variables
-AI_PORT=5555
+WREN_AI_SERVICE_PORT=5556
 
 # ANSI color codes
 GREEN=\033[0;32m
@@ -58,7 +58,6 @@ setup-envfile:
 		cp .env.example .env; \
 	fi
 
-# Start all services
 start:
 	@echo "$(YELLOW)Starting all services...$(RESET)"
 	@poetry run python -m src.prepare_mdl_json
@@ -66,6 +65,13 @@ start:
 	@$(MAKE) start-wren-engine
 	@$(MAKE) start-ai
 	@echo "$(GREEN)All services started!$(RESET)"
+
+stop:
+	@echo "$(YELLOW)Stopping all services...$(RESET)"
+	@$(MAKE) stop-qdrant
+	@$(MAKE) stop-wren-engine
+	@$(MAKE) stop-ai
+	@echo "$(GREEN)All services stopped!$(RESET)"
 
 start-qdrant:
 	@echo "$(YELLOW)Starting Qdrant...$(RESET)"
@@ -77,40 +83,46 @@ start-qdrant:
 	fi
 	@echo "$(GREEN)Qdrant started!$(RESET)"
 
+stop-qdrant:
+	@echo "$(YELLOW)Stopping Qdrant...$(RESET)"
+	@if docker ps --format '{{.Names}}' | grep 'qdrant' 1> /dev/null; then \
+		docker stop qdrant > /dev/null; \
+		echo "$(GREEN)Qdrant stopped!$(RESET)"; \
+	else \
+		echo "$(BLUE)Qdrant is not running.$(RESET)"; \
+	fi
+	@echo "$(YELLOW)Removing Qdrant...$(RESET)"
+	@if docker container ls -a --format '{{.Names}}' | grep 'qdrant' 1> /dev/null; then \
+		docker rm qdrant > /dev/null; \
+		echo "$(GREEN)Qdrant container removed!$(RESET)"; \
+	else \
+		echo "$(BLUE)Qdrant container does not exist.$(RESET)"; \
+	fi
+
 start-wren-engine:
 	@echo "$(YELLOW)Starting Wren Engine...$(RESET)"
 	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
 	@echo "$(GREEN)Wren Engine started!$(RESET)"
 
-start-ai:
-	@echo "$(YELLOW)Starting Wren AI service...$(RESET)"
-	@poetry run python -m src.__main__ &
-	@echo "$(YELLOW)Waiting for Wren AI service to start...$(RESET)"
-	@until nc -z localhost $(AI_PORT); do sleep 1; done
-	@echo "$(GREEN)Wren AI service started!$(RESET)"
-
-# Stop all services
-stop:
-	@echo "$(YELLOW)Stopping all services...$(RESET)"
-	@$(MAKE) stop-qdrant
-	@$(MAKE) stop-wren-engine
-	@$(MAKE) stop-ai
-	@echo "$(GREEN)All services stopped!$(RESET)"
-
-stop-qdrant:
-	@echo "$(YELLOW)Stopping Qdrant...$(RESET)"
-	@docker stop qdrant > /dev/null
-	@echo "$(YELLOW)Removing Qdrant...$(RESET)"
-	@docker rm qdrant > /dev/null
-
 stop-wren-engine:
 	@echo "$(YELLOW)Stopping Wren Engine...$(RESET)"
 	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env down
 
+start-ai:
+	@echo "$(YELLOW)Starting Wren AI service...$(RESET)"
+	@poetry run python -m src.__main__ &
+	@echo "$(YELLOW)Waiting for Wren AI service to start...$(RESET)"
+	@until nc -z localhost $(WREN_AI_SERVICE_PORT); do sleep 1; done
+	@echo "$(GREEN)Wren AI service started!$(RESET)"
+
 stop-ai:
 	@echo "$(YELLOW)Stopping Wren AI service...$(RESET)"
-	@pkill -f "python.* src.__main__"
-	@echo "$(GREEN)Wren AI service stopped!$(RESET)"
+	@if pgrep -f "python.* src.__main__" 1> /dev/null; then \
+		pkill -f "python.* src.__main__"; \
+		echo "$(GREEN)Wren AI service stopped!$(RESET)"; \
+	else \
+		echo "$(BLUE)Wren AI service is not running.$(RESET)"; \
+	fi
 
 psql:
 	@echo "$(YELLOW)Connecting to Wren Engine via psql...$(RESET)"
