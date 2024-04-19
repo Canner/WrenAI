@@ -4,6 +4,7 @@ import { Button, Form, Modal, message } from 'antd';
 import { makeIterable } from '@/utils/iteration';
 import { DATA_SOURCES, FORM_MODE } from '@/utils/enum';
 import { getDataSource, getTemplates } from '@/components/pages/setup/utils';
+import { FlexLoading } from '@/components/PageLoading';
 import ButtonItem from '@/components/pages/setup/ButtonItem';
 import {
   useStartSampleDatasetMutation,
@@ -91,6 +92,8 @@ const DataSourcePanel = (props: Props) => {
         console.error(error);
       });
   };
+
+  if (!type) return <FlexLoading align="center" height={150} />;
 
   return (
     <>
