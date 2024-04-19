@@ -6,7 +6,7 @@ export const typeDefs = gql`
   enum DataSourceName {
     BIG_QUERY
     DUCKDB
-    PG
+    POSTGRES
   }
 
   enum SampleDatasetName {

@@ -6,7 +6,7 @@ import { TestingContext, TestingDatabase } from './database';
 import { Client } from 'pg';
 import { getLogger } from '@server/utils';
 
-const logger = getLogger('TestingPG');
+const logger = getLogger('TestingPostgres');
 logger.level = 'debug';
 
 const psqlInitCommands = (dataDir: string) => `
@@ -145,7 +145,9 @@ COPY PARTSUPP FROM '${dataDir}/partsupp.csv' DELIMITER ',' CSV HEADER;
 COPY LINEITEM FROM '${dataDir}/lineitem.csv' DELIMITER ',' CSV HEADER;
 `;
 
-export class TestingPG implements TestingDatabase<StartedPostgreSqlContainer> {
+export class TestingPostgres
+  implements TestingDatabase<StartedPostgreSqlContainer>
+{
   private container: StartedPostgreSqlContainer;
 
   public async initialize(context: TestingContext): Promise<void> {
@@ -153,7 +155,7 @@ export class TestingPG implements TestingDatabase<StartedPostgreSqlContainer> {
     // dataDir that copied into container
     const containerDataDir = '/etc/testing_data';
 
-    logger.info('Initializing TestingPG');
+    logger.info('Initializing TestingPostgres');
     const container = await new PostgreSqlContainer()
       .withExposedPorts({
         container: 5432,

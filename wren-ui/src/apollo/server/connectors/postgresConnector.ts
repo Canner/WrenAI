@@ -5,10 +5,10 @@ import { getLogger } from '@server/utils';
 import pg from 'pg';
 const { Client } = pg;
 
-const logger = getLogger('PGConnector');
+const logger = getLogger('PostgresConnector');
 logger.level = 'debug';
 
-export interface PGConnectionConfig {
+export interface PostgresConnectionConfig {
   user: string;
   password: string;
   host: string;
@@ -16,7 +16,7 @@ export interface PGConnectionConfig {
   port: number;
 }
 
-export interface PGColumnResponse {
+export interface PostgresColumnResponse {
   table_catalog: string;
   table_schema: string;
   table_name: string;
@@ -26,7 +26,7 @@ export interface PGColumnResponse {
   data_type: string;
 }
 
-export interface PGConstraintResponse {
+export interface PostgresConstraintResponse {
   constraintName: string;
   constraintType: string;
   constraintTable: string;
@@ -35,17 +35,17 @@ export interface PGConstraintResponse {
   constraintedColumn: string;
 }
 
-export interface PGListTableOptions {
+export interface PostgresListTableOptions {
   format?: boolean;
 }
 
-export class PGConnector
-  implements IConnector<PGColumnResponse, PGConstraintResponse>
+export class PostgresConnector
+  implements IConnector<PostgresColumnResponse, PostgresConstraintResponse>
 {
-  private config: PGConnectionConfig;
+  private config: PostgresConnectionConfig;
   private client?: pg.Client;
 
-  constructor(config: PGConnectionConfig) {
+  constructor(config: PostgresConnectionConfig) {
     this.config = config;
   }
 
@@ -60,12 +60,12 @@ export class PGConnector
       await this.client.query('SELECT 1;');
       return true;
     } catch (err) {
-      logger.error(`Error connecting to PG: ${err}`);
+      logger.error(`Error connecting to Postgres: ${err}`);
       return false;
     }
   }
 
-  public async listTables(options: PGListTableOptions) {
+  public async listTables(options: PostgresListTableOptions) {
     const sql = `
       SELECT
         t.table_catalog,
@@ -99,7 +99,7 @@ export class PGConnector
         is_nullable: row.is_nullable,
         data_type: row.data_type,
       };
-    }) as PGColumnResponse[];
+    }) as PostgresColumnResponse[];
 
     return options.format ? this.formatToCompactTable(columns) : columns;
   }
@@ -133,44 +133,49 @@ export class PGConnector
         constraintedTable: row.foreign_table_name,
         constraintedColumn: row.foreign_column_name,
       };
-    }) as PGConstraintResponse[];
+    }) as PostgresConstraintResponse[];
     return constraints;
   }
 
-  private formatToCompactTable(columns: PGColumnResponse[]): CompactTable[] {
-    return columns.reduce((acc: CompactTable[], row: PGColumnResponse) => {
-      const {
-        table_catalog,
-        table_schema,
-        table_name,
-        column_name,
-        is_nullable,
-        data_type,
-      } = row;
-      let table = acc.find(
-        (t) => t.name === table_name && t.properties.schema === table_schema,
-      );
-      if (!table) {
-        table = {
-          name: table_name,
+  private formatToCompactTable(
+    columns: PostgresColumnResponse[],
+  ): CompactTable[] {
+    return columns.reduce(
+      (acc: CompactTable[], row: PostgresColumnResponse) => {
+        const {
+          table_catalog,
+          table_schema,
+          table_name,
+          column_name,
+          is_nullable,
+          data_type,
+        } = row;
+        let table = acc.find(
+          (t) => t.name === table_name && t.properties.schema === table_schema,
+        );
+        if (!table) {
+          table = {
+            name: table_name,
+            description: '',
+            columns: [],
+            properties: {
+              schema: table_schema,
+              catalog: table_catalog,
+            },
+          };
+          acc.push(table);
+        }
+        table.columns.push({
+          name: column_name,
+          type: data_type,
+          notNull: is_nullable.toLocaleLowerCase() !== 'yes',
           description: '',
-          columns: [],
-          properties: {
-            schema: table_schema,
-            catalog: table_catalog,
-          },
-        };
-        acc.push(table);
-      }
-      table.columns.push({
-        name: column_name,
-        type: data_type,
-        notNull: is_nullable.toLocaleLowerCase() !== 'yes',
-        description: '',
-        properties: {},
-      });
-      return acc;
-    }, []);
+          properties: {},
+        });
+        return acc;
+      },
+      [],
+    );
   }
 
   public async close() {
