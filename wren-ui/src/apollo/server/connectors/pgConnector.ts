@@ -31,10 +31,11 @@ export interface PGListTableOptions {
 }
 
 export class PGConnector implements IConnector<PGColumnResponse, any[]> {
-  private client: pg.Client;
+  private config: PGConnectionConfig;
+  private client?: pg.Client;
 
   constructor(config: PGConnectionConfig) {
-    this.client = new Client(config);
+    this.config = config;
   }
 
   public async prepare() {
@@ -43,7 +44,7 @@ export class PGConnector implements IConnector<PGColumnResponse, any[]> {
 
   public async connect(): Promise<boolean> {
     try {
-      await this.client.connect();
+      await this.prepareClient();
       // query to check if connection is successful
       await this.client.query('SELECT 1;');
       return true;
@@ -75,7 +76,7 @@ export class PGConnector implements IConnector<PGColumnResponse, any[]> {
         t.table_name,
         c.ordinal_position;
     `;
-    await this.client.connect();
+    await this.prepareClient();
     const res = await this.client.query(sql);
     const columns = res.rows.map((row) => {
       return {
@@ -135,5 +136,21 @@ export class PGConnector implements IConnector<PGColumnResponse, any[]> {
       });
       return acc;
     }, []);
+  }
+
+  public async close() {
+    if (this.client) {
+      await this.client.end();
+      this.client = null;
+    }
+  }
+
+  private async prepareClient() {
+    if (this.client) {
+      return;
+    }
+
+    this.client = new Client(this.config);
+    await this.client.connect();
   }
 }

@@ -53,6 +53,9 @@ export class TestingEnv {
       );
     }
 
+    // close db
+    await db.close();
+
     // set context
     this.context.tpch.dataDir = tmpDir.name;
   }

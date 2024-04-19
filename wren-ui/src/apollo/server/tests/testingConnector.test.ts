@@ -1,10 +1,10 @@
-import { CompactTable, IConnector } from '@server/connectors/connector';
-import { PGConnector } from '@server/connectors/pgConnector';
+import { CompactTable } from '@server/connectors/connector';
+import { PGColumnResponse, PGConnector } from '@server/connectors/pgConnector';
 import { TestingEnv } from './testingEnv';
 import { TestingPG } from './testingPg';
 
 describe('Connector', () => {
-  let connector: IConnector<any, any>;
+  let connector: PGConnector;
   let testingEnv: TestingEnv;
   let testingDatabase: TestingPG;
 
@@ -114,15 +114,23 @@ describe('Connector', () => {
     });
   }, 60000);
 
+  afterAll(async () => {
+    // close connector
+    await connector.close();
+
+    // finalize testing database
+    await testingDatabase.finalize();
+  });
+
   it('should test connect', async () => {
     const connected = await connector.connect();
     expect(connected).toBeTruthy();
   });
 
   it('should list tables with format: true', async () => {
-    const tables = await connector.listTables({
+    const tables = (await connector.listTables({
       format: true,
-    });
+    })) as CompactTable[];
 
     // check if tables include tpch tables
     for (const table of tpchTables) {
@@ -152,9 +160,10 @@ describe('Connector', () => {
   });
 
   it('should list tables with format: false', async () => {
-    const columns = await connector.listTables({
+    const columns = (await connector.listTables({
       format: false,
-    });
+    })) as PGColumnResponse[];
+
     // check if columns not null and has length
     expect(columns).not.toBeNull();
     expect(columns.length).toBeGreaterThan(0);

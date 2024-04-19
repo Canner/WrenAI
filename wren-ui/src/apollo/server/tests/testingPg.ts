@@ -98,14 +98,14 @@ CREATE TABLE LINEITEM (
 );
 
 -- COPY
--- COPY NATION FROM '${dataDir}/nation.csv' DELIMITER ',' CSV HEADER;
--- COPY REGION FROM '${dataDir}/region.csv' DELIMITER ',' CSV HEADER;
--- COPY PART FROM '${dataDir}/part.csv' DELIMITER ',' CSV HEADER;
--- COPY SUPPLIER FROM '${dataDir}/supplier.csv' DELIMITER ',' CSV HEADER;
--- COPY PARTSUPP FROM '${dataDir}/partsupp.csv' DELIMITER ',' CSV HEADER;
--- COPY CUSTOMER FROM '${dataDir}/customer.csv' DELIMITER ',' CSV HEADER;
--- COPY ORDERS FROM '${dataDir}/orders.csv' DELIMITER ',' CSV HEADER;
--- COPY LINEITEM FROM '${dataDir}/lineitem.csv' DELIMITER ',' CSV HEADER;
+COPY NATION FROM '${dataDir}/nation.csv' DELIMITER ',' CSV HEADER;
+COPY REGION FROM '${dataDir}/region.csv' DELIMITER ',' CSV HEADER;
+COPY PART FROM '${dataDir}/part.csv' DELIMITER ',' CSV HEADER;
+COPY SUPPLIER FROM '${dataDir}/supplier.csv' DELIMITER ',' CSV HEADER;
+COPY PARTSUPP FROM '${dataDir}/partsupp.csv' DELIMITER ',' CSV HEADER;
+COPY CUSTOMER FROM '${dataDir}/customer.csv' DELIMITER ',' CSV HEADER;
+COPY ORDERS FROM '${dataDir}/orders.csv' DELIMITER ',' CSV HEADER;
+COPY LINEITEM FROM '${dataDir}/lineitem.csv' DELIMITER ',' CSV HEADER;
 `;
 
 export class TestingPG implements TestingDatabase<StartedPostgreSqlContainer> {
@@ -148,5 +148,10 @@ export class TestingPG implements TestingDatabase<StartedPostgreSqlContainer> {
 
   public getContainer(): StartedPostgreSqlContainer {
     return this.container;
+  }
+
+  public async finalize(): Promise<void> {
+    logger.info('Stopping container');
+    await this.container.stop();
   }
 }
