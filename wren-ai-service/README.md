@@ -4,7 +4,7 @@ This AI service provides the Web APIs to interative with LLM for the WrenAI syst
 you through the environment setup, development, and production deployment of the AI service.
 
 ## Requirements
-- Python >= 3.12
+- Python == 3.12
 - Docker
 - Poetry == 1.7.1 (`curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`)
 
