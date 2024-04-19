@@ -6,7 +6,7 @@ you through the environment setup, development, and production deployment of the
 ## Requirements
 - Python >= 3.12
 - Docker
-- Poetry >= 1.7.1 (`curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`)
+- Poetry == 1.7.1 (`curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`)
 
 Ensure you have installed the required tools before proceeding to the next steps.
 
