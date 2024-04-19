@@ -155,15 +155,35 @@ build:
 
 up:
 	@echo "$(YELLOW)Starting all services...$(RESET)"
-	@make start-wren-engine
+	@$(MAKE) start-wren-engine
 	@docker-compose -f docker/docker-compose.yml --env-file .env.prod up -d
 	@echo "$(GREEN)All services started!$(RESET)"
 
 down:
 	@echo "$(YELLOW)Stopping all services...$(RESET)"
-	@make stop-wren-engine
-	@docker compose -f docker/docker-compose.yml --env-file .env.prod down
+	@$(MAKE) stop-wren-engine
+	@docker-compose -f docker/docker-compose.yml --env-file .env.prod down
 	@echo "$(GREEN)All services stopped!$(RESET)"
+
+### Wren AI Service Demo ###
+start-demo:
+	@echo "$(YELLOW)Preparing demo data...$(RESET)"
+	@cd ../docker; docker-compose --env-file .env.local -f docker-compose-dev.yaml up -d
+	@echo "$(GREEN)Demo services started!$(RESET)"
+
+stop-demo:
+	@echo "$(YELLOW)Stopping demo services...$(RESET)"
+	@cd ../docker; docker-compose --env-file .env.local -f docker-compose-dev.yaml down
+	@echo "$(GREEN)Demo services stopped!$(RESET)"
+
+start-ui:
+	@echo "$(YELLOW)Starting Wren UI...$(RESET)"
+	@cd ../wren-ui; export DB_TYPE=sqlite; export SQLITE_FILE=db.sqlite3;
+	@cd ../wren-ui; yarn && yarn rollback --all && yarn migrate && yarn dev
+
+start-app:
+	@echo "$(YELLOW)Running Wren AI service demo...$(RESET)"
+	@cd demo && poetry run streamlit run app.py
 
 help:
 	@echo "$(BLUE)Usage: make [target]$(RESET)"
@@ -179,12 +199,16 @@ help:
 	@echo "  $(GREEN)stop-ai$(RESET)           - Stop Wren AI service"
 	@echo "  $(GREEN)psql$(RESET)              - Connect to Wren Engine via psql"
 	@echo "  $(GREEN)eval$(RESET)              - Run evaluation pipeline. more available arguments can be found in each pipeline"
-	@echo "                                    - 		Example: make eval pipeline=ask args='--help'"
+	@echo "                      Example: make eval pipeline=ask args='--help'"
 	@echo "  $(GREEN)streamlit$(RESET)         - Start Streamlit app for each evaluation pipeline"
-	@echo "                                    - 		Example: make streamlit pipeline=ask"
+	@echo "                      Example: make streamlit pipeline=ask"
 	@echo "  $(GREEN)test$(RESET)              - Run tests"
 	@echo "  $(GREEN)build$(RESET)             - Build Docker images(might be deprecated)"
 	@echo "  $(GREEN)up$(RESET)                - Start all services using Docker Compose(might be deprecated)"
 	@echo "  $(GREEN)down$(RESET)              - Stop all services using Docker Compose(might be deprecated)"
+	@echo "  $(GREEN)start-demo$(RESET)        - Start demo services"
+	@echo "  $(GREEN)stop-demo$(RESET)         - Stop demo services"
+	@echo "  $(GREEN)start-ui$(RESET)          - Start Wren UI"
+	@echo "  $(GREEN)start-app$(RESET)         - Start Wren AI demo streamlit app"
 
 .PHONY: test clean all
