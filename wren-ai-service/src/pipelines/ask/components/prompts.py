@@ -2,6 +2,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 TEXT_TO_SQL_RULES = """
 ### ALERT ###
+- DON'T USE "*" in SELECT queries.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
