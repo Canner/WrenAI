@@ -41,6 +41,9 @@ export class DuckDBConnector
   }
   public async prepare(prepareOptions: DuckDBPrepareOptions): Promise<void> {
     const { initSql, sessionProps } = prepareOptions;
+
+    // clear previous session props to prevent, invalid session props error from prior saveDataSource action.
+    await this.wrenEngineAdaptor.putSessionProps([]);
     await this.wrenEngineAdaptor.initDatabase(initSql);
     await this.wrenEngineAdaptor.putSessionProps(sessionProps);
   }
