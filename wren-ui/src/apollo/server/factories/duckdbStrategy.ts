@@ -6,6 +6,7 @@ import {
   DuckDBListTableOptions,
   DuckDBPrepareOptions,
 } from '../connectors/duckdbConnector';
+import { trim } from '../utils';
 import { IDataSourceStrategy } from './dataSourceStrategy';
 
 export class DuckDBStrategy implements IDataSourceStrategy {
@@ -143,7 +144,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
     const installExtensions = extensions
       .map((ext) => `INSTALL ${ext};`)
       .join('\n');
-    return `${installExtensions}\n${initSql}`;
+    return trim(`${installExtensions}\n${initSql}`);
   }
 
   private async createModels(tables: string[], compactTables: CompactTable[]) {
