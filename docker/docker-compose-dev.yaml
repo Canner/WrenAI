@@ -63,3 +63,19 @@ services:
       - 6334
     networks:
       - wren
+
+  # If you want to use postgres for testing purpose, uncomment the following block
+  # postgres:
+  #   image: postgres:14-alpine
+  #   platform: ${PLATFORM}
+  #   ports:
+  #     - 9432:5432
+  #   volumes:
+  #     - data:/var/lib/postgresql/data
+  #   environment:
+  #     - POSTGRES_PASSWORD=secret
+  #     - POSTGRES_USER=test
+  #     - POSTGRES_DB=test
+  #     - PGDATA=/var/lib/postgresql/data/pgdata
+  #   networks:
+  #     - wren

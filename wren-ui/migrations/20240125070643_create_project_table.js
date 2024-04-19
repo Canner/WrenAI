@@ -11,16 +11,16 @@ exports.up = function (knex) {
         'project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc',
       );
     table.string('display_name').comment('project display name');
+    table
+      .text('credentials')
+      .nullable()
+      .comment('database connection credentials');
 
     // bq
     table
       .string('project_id')
       .nullable()
       .comment('gcp project id, big query specific');
-    table
-      .text('credentials')
-      .nullable()
-      .comment('project credentials, big query specific');
     table.string('dataset_id').nullable().comment('big query datasetId');
 
     // duckdb

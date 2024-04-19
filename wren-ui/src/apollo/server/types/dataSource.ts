@@ -1,6 +1,7 @@
 export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
   DUCKDB = 'DUCKDB',
+  PG = 'PG',
 }
 
 export interface DataSource {
