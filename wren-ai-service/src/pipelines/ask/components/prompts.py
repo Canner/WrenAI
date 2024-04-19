@@ -3,6 +3,8 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 TEXT_TO_SQL_RULES = """
 ### ALERT ###
 - DON'T USE "*" in SELECT queries.
+- MUST ADD "DOUBLE QUOTES" around the identidiers such as column names, table names, and alias; excluding function names.
+- MUST ADD "SINGLE QUOTES" around the string values.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
