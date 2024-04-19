@@ -113,6 +113,12 @@ Using WrenAI is super simple, you can setup within 3 minutes, and start to inter
 
 Visit [WrenAI documentation](https://docs.getwren.ai) to view the full documentation.
 
+## 📶 Telemetry
+
+WrenAI collects anonymous usage statistics for application components. We receive an event each time these components are initialized or used, allowing us to identify which features are most relevant and valued by our community. These statistics help us improve our features and serve as a reference for deciding on our roadmap.
+
+Read more about telemetry or how you can opt out in [WrenAI doc](https://docs.getwren.ai/overview/telemetry).
+
 ## ⭐️ Community
 
 - Welcome to our [Discord server](https://discord.gg/5DvshJqG8Z) to give us feedback!

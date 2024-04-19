@@ -14,6 +14,7 @@ import {
 import { Manifest } from '../mdl/type';
 import { createHash } from 'node:crypto';
 import { getLogger } from '@server/utils';
+import { Telemetry } from '../telemetry/telemetry';
 
 const logger = getLogger('DeployService');
 logger.level = 'debug';
@@ -38,19 +39,23 @@ export class DeployService implements IDeployService {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private wrenEngineAdaptor: IWrenEngineAdaptor;
   private deployLogRepository: IDeployLogRepository;
+  private telemetry: Telemetry;
 
   constructor({
     wrenAIAdaptor,
     wrenEngineAdaptor,
     deployLogRepository,
+    telemetry,
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
     wrenEngineAdaptor: IWrenEngineAdaptor;
     deployLogRepository: IDeployLogRepository;
+    telemetry: Telemetry;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.wrenEngineAdaptor = wrenEngineAdaptor;
     this.deployLogRepository = deployLogRepository;
+    this.telemetry = telemetry;
   }
 
   public async getLastDeployment(projectId) {
@@ -104,6 +109,9 @@ export class DeployService implements IDeployService {
         : DeployStatusEnum.FAILED;
     const error = engineRes.error || aiRes.error;
     await this.deployLogRepository.updateOne(deploy.id, { status, error });
+    if (status === DeployStatusEnum.SUCCESS) {
+      this.telemetry.send_event('deploy_model', { mdl: manifest });
+    }
     return { status, error };
   }
 

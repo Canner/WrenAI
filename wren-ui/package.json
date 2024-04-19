@@ -34,8 +34,9 @@
     "next": "13.5.6",
     "pg": "^8.8.0",
     "pg-cursor": "^2.7.4",
+    "posthog-node": "^4.0.0",
     "sql-formatter": "^15.3.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@apollo/client": "^3.6.9",

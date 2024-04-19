@@ -16,6 +16,8 @@ import { IProjectService } from '../services/projectService';
 
 export interface IContext {
   config: IConfig;
+  // telemetry
+  telemetry: any;
 
   // adaptor
   wrenEngineAdaptor: IWrenEngineAdaptor;

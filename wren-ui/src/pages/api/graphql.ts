@@ -26,6 +26,7 @@ import { AskingService } from '@/apollo/server/services/askingService';
 import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
+import { Telemetry } from '@/apollo/server/telemetry/telemetry';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -40,6 +41,8 @@ export const config: PageConfig = {
 };
 
 const bootstrapServer = async () => {
+  const telemetry = new Telemetry();
+
   const knex = bootstrapKnex({
     dbType: serverConfig.dbType,
     pgUrl: serverConfig.pgUrl,
@@ -81,9 +84,11 @@ const bootstrapServer = async () => {
     wrenAIAdaptor,
     wrenEngineAdaptor,
     deployLogRepository,
+    telemetry,
   });
 
   const askingService = new AskingService({
+    telemetry,
     wrenAIAdaptor,
     wrenEngineAdaptor,
     deployService,
@@ -112,12 +117,21 @@ const bootstrapServer = async () => {
         // error may not have stack, so print error message if stack is not available
         logger.error(originalError.stack || originalError.message);
       }
+
+      // telemetry: capture internal server error
+      if (!error.extensions?.code) {
+        telemetry.send_event('graphql_error', {
+          originalErrorStack: originalError?.stack,
+          originalErrorMessage: originalError.message,
+          errorMessage: error.message,
+        });
+      }
       return defaultApolloErrorHandler(error);
     },
     introspection: process.env.NODE_ENV !== 'production',
     context: (): IContext => ({
       config: serverConfig,
-
+      telemetry,
       // adaptor
       wrenEngineAdaptor,
 
@@ -137,7 +151,6 @@ const bootstrapServer = async () => {
       deployRepository: deployLogRepository,
     }),
   });
-
   await apolloServer.start();
   return apolloServer;
 };

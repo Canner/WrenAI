@@ -16,23 +16,28 @@ import (
 	"github.com/docker/compose/v2/pkg/compose"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/google/uuid"
 	"github.com/pterm/pterm"
 
 	"github.com/sethvargo/go-password/password"
 )
 
 const (
-	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/be79a768a316500143ed5bcb8bb9506401519359/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/be79a768a316500143ed5bcb8bb9506401519359/.env.example"
+	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/54a481d5915011770f6b8853a82e1b9a4d5ce274/docker-compose.yaml"
+	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/54a481d5915011770f6b8853a82e1b9a4d5ce274/.env.example"
 
 	// pg user
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string, userUUID string, telemetryConsent bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
+
+	// replace USER_UUID
+	reg = regexp.MustCompile(`USER_UUID=(.*)`)
+	str = reg.ReplaceAllString(str, "USER_UUID="+userUUID)
 
 	// replace PORT
 	reg = regexp.MustCompile(`HOST_PORT=(.*)`)
@@ -45,6 +50,11 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_pas
 	// replace PG_USERNAME
 	reg = regexp.MustCompile(`PG_USERNAME=(.*)`)
 	str = reg.ReplaceAllString(str, "PG_USERNAME="+PG_USERNAME)
+
+	// replace TELEMETRY_ENABLED
+	reg = regexp.MustCompile(`TELEMETRY_ENABLED=(.*)`)
+	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryConsent))
+
 	return str
 }
 
@@ -118,7 +128,22 @@ func CheckDockerDaemonRunning() (bool, error) {
 	return true, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error {
+func prepareUserUUID(projectDir string) (string, error) {
+	wrenRC := WrenRC{projectDir}
+	err := wrenRC.Set("USER_UUID", uuid.New().String(), false)
+	if err != nil {
+		return "", err
+	}
+
+	userUUID, err := wrenRC.Read("USER_UUID")
+	if err != nil {
+		return "", err
+	}
+
+	return userUUID, nil
+}
+
+func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, telemetryConsent bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -132,32 +157,36 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string) error 
 		return err
 	}
 
+	userUUID, err := prepareUserUUID(projectDir)
+	if err != nil {
+		return err
+	}
+
 	// download env file
-	envFile := path.Join(projectDir, ".env.example")
-	pterm.Info.Println("Downloading env file to", envFile)
-	err = downloadFile(envFile, DOCKER_COMPOSE_ENV_URL)
+	envExampleFile := path.Join(projectDir, ".env.example")
+	pterm.Info.Println("Downloading env file to", envExampleFile)
+	err = downloadFile(envExampleFile, DOCKER_COMPOSE_ENV_URL)
 	if err != nil {
 		return err
 	}
 
 	// replace OPENAI_API_KEY=sk-xxxxxx with OPENAI_API_KEY=OpenaiApiKey
 	// read the file
-	envFileContent, err := os.ReadFile(envFile)
+	envExampleFileContent, err := os.ReadFile(envExampleFile)
 	if err != nil {
 		return err
 	}
-
 	// replace the content with regex
-	newEnvFileContent := replaceEnvFileContent(string(envFileContent), openaiApiKey, port, pg_pwd)
+	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, port, pg_pwd, userUUID, telemetryConsent)
 	newEnvFile := path.Join(projectDir, ".env")
 	// write the file
-	err = os.WriteFile(newEnvFile, []byte(newEnvFileContent), 0644)
+	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
 	if err != nil {
 		return err
 	}
 
 	// remove the old env file
-	err = os.Remove(envFile)
+	err = os.Remove(envExampleFile)
 	if err != nil {
 		return err
 	}

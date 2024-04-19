@@ -24,6 +24,15 @@ export interface IConfig {
   // username and password
   pgUsername?: string;
   pgPassword?: string;
+
+  // telemetry
+  telemetryEnabled?: boolean;
+  posthogApiKey?: string;
+  posthogHost?: string;
+  userUUID?: string;
+  wrenUIVersion?: string;
+  wrenEngineVersion?: string;
+  wrenAIVersion?: string;
 }
 
 const defaultConfig = {
@@ -82,6 +91,17 @@ const config = {
   // username and password
   pgUsername: process.env.PG_USERNAME,
   pgPassword: process.env.PG_PASSWORD,
+
+  // telemetry
+  telemetryEnabled:
+    process.env.TELEMETRY_ENABLED &&
+    process.env.TELEMETRY_ENABLED.toLocaleLowerCase() === 'true',
+  posthogApiKey: process.env.POSTHOG_API_KEY,
+  posthogHost: process.env.POSTHOG_HOST,
+  userUUID: process.env.USER_UUID,
+  wrenUIVersion: process.env.WREN_UI_VERSION,
+  wrenEngineVersion: process.env.WREN_ENGINE_VERSION,
+  wrenAIVersion: process.env.WREN_AI_SERVICE_VERSION,
 };
 
 export function getConfig(): IConfig {

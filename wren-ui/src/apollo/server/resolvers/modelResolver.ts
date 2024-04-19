@@ -296,6 +296,10 @@ export class ModelResolver {
       statement,
       properties: JSON.stringify(properties),
     });
+
+    // telemetry
+    ctx.telemetry.send_event('create_view', { statement, displayName: name });
+
     return view;
   }
 
