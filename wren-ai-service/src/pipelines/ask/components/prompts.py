@@ -31,6 +31,11 @@ generate three SQL statements that could potentially answer each interpreted ver
 Provide three different interpretations and corresponding SQL queries that reflect these interpretations. 
 Ensure that your SQL queries are diverse, covering a range of possible meanings behind the ambiguous query.
 
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document.content }}
+{% endfor %}
+
 ### EXAMPLES ###
 Consider the structure of a generic database which includes common tables like users, orders, products, and transactions. 
 Here are the ambiguous user queries:
@@ -59,11 +64,6 @@ SUMMARY 3: Above-average transactions last week.
 
 Proceed in a similar manner for the other queries.
 
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document.content }}
-{% endfor %}
-
 {{ alert }}
 
 ### FINAL ANSWER FORMAT ###
@@ -88,6 +88,11 @@ Given the following user query and the history of the last query along with the 
 generate appropriate SQL queries that match the user's current request. 
 Generate at most 3 SQL queries in order to interpret the user query in various plausible ways.
 
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document.content }}
+{% endfor %}
+
 Generated SQL Queries amd Summaries:
 {
     "results": [
@@ -101,11 +106,6 @@ Generated SQL Queries amd Summaries:
         }
     ]
 }
-
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document.content }}
-{% endfor %}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
