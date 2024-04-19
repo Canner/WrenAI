@@ -379,8 +379,9 @@ if __name__ == "__main__":
     if not Path("./outputs").exists():
         Path("./outputs").mkdir()
 
-    with open(f"./src/eval/data/{DATASET_NAME}_optimal_ddl.json", "r") as f:
-        optimal_ddl = json.load(f)
+    if USE_OPTIMAL_SCHEMA:
+        with open(f"./src/eval/data/{DATASET_NAME}_optimal_ddl.json", "r") as f:
+            optimal_ddl = json.load(f)
 
     print(f"Running ask pipeline evaluation for the {DATASET_NAME} dataset...\n")
     if (
