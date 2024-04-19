@@ -81,7 +81,6 @@ export class DuckDBConnector
         table_schema,
         table_name,
         column_name,
-        ordinal_position,
         is_nullable,
         data_type,
       ] = row;
@@ -105,9 +104,7 @@ export class DuckDBConnector
         type: data_type,
         notNull: is_nullable.toLocaleLowerCase() !== 'yes',
         description: '',
-        properties: {
-          ordinalPosition: ordinal_position,
-        },
+        properties: {},
       });
       return acc;
     }, []);
