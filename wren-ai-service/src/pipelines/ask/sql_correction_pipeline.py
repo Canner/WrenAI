@@ -8,6 +8,7 @@ from src.pipelines.ask.components.generator import (
 )
 from src.pipelines.ask.components.post_processors import init_generation_post_processor
 from src.pipelines.ask.components.prompts import (
+    TEXT_TO_SQL_RULES,
     init_sql_correction_prompt_builder,
 )
 
@@ -44,6 +45,7 @@ class SQLCorrection(BasicPipeline):
                 "sql_correction_prompt_builder": {
                     "invalid_generation_results": invalid_generation_results,
                     "documents": contexts,
+                    "alert": TEXT_TO_SQL_RULES,
                 },
             }
         )

@@ -11,6 +11,7 @@ from src.utils import load_env_vars
 
 load_env_vars()
 logging.getLogger("backoff").addHandler(logging.StreamHandler())
+logger = logging.getLogger("wren-ai-service")
 
 MODEL_NAME = "gpt-3.5-turbo"
 MAX_TOKENS = {
@@ -29,6 +30,7 @@ class CustomOpenAIGenerator(OpenAIGenerator):
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
     def run(self, prompt: str, generation_kwargs: Optional[Dict[str, Any]] = None):
+        logger.debug(f"Running OpenAI generator with prompt: {prompt}")
         return super(CustomOpenAIGenerator, self).run(
             prompt=prompt, generation_kwargs=generation_kwargs
         )

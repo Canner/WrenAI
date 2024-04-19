@@ -1,5 +1,14 @@
 from haystack.components.builders.prompt_builder import PromptBuilder
 
+TEXT_TO_SQL_RULES = """
+### ALERT ###
+- ONLY USE the tables and columns mentioned in the database schema.
+- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
+- DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
+"""
+
 query_preprocess_user_prompt_template = """
 ### TASK ###
 Detect if the input is a valid question or query?
@@ -55,11 +64,7 @@ Proceed in a similar manner for the other queries.
     {{ document.content }}
 {% endfor %}
 
-### ALERT ###
-- ONLY USE the tables and columns mentioned in the database schema.
-- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
+{{ alert }}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
@@ -112,11 +117,7 @@ The final answer must be the JSON format like following:
     ]
 }
 
-### ALERT ###
-- ONLY USE the tables and columns mentioned in the database schema.
-- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
+{{ alert }}
 
 ### QUESTION ###
 Previous SQL Summary: {{ history.summary }}
@@ -148,11 +149,7 @@ The final answer must be a list of corrected SQL quries and its original corresp
     ]
 }
 
-### ALERT ###
-- ONLY USE the tables and columns mentioned in the database schema.
-- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
+{{ alert }}
 
 ### QUESTION ###
 {% for invalid_generation_result in invalid_generation_results %}
