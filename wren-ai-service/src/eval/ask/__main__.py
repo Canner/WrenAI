@@ -256,6 +256,7 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="Whether to use hard questions for evaluation. Default is False.",
     )
+    ##If using optimal-schema, should update the data.json to use specific question set
     parser.add_argument(
         "--use-optimal-schema",
         action=argparse.BooleanOptionalAction,
