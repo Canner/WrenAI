@@ -7,10 +7,13 @@ import {
   PGDataSourceProperties,
 } from '../types';
 import { Model, ModelColumn, Project } from '../repositories';
-import { PGColumnResponse, PGConnector } from '../connectors/pgConnector';
+import {
+  PostgresColumnResponse,
+  PostgresConnector,
+} from '../connectors/postgresConnector';
 import { Encryptor } from '../utils';
 
-export class PGStrategy implements IDataSourceStrategy {
+export class PostgresStrategy implements IDataSourceStrategy {
   private project?: Project;
   private ctx: IContext;
 
@@ -35,7 +38,7 @@ export class PGStrategy implements IDataSourceStrategy {
       displayName,
       schema: 'public',
       catalog: 'wrenai',
-      type: DataSourceName.PG,
+      type: DataSourceName.POSTGRES,
       host,
       port,
       database,
@@ -111,14 +114,14 @@ export class PGStrategy implements IDataSourceStrategy {
     const connector = this.getPGConnector();
     const dataSourceColumns = (await connector.listTables({
       format: false,
-    })) as PGColumnResponse[];
+    })) as PostgresColumnResponse[];
 
     const models = await this.createModels(this.project, tables);
     // create columns
     const columns = await this.createColumns(
       tables,
       models,
-      dataSourceColumns as PGColumnResponse[],
+      dataSourceColumns as PostgresColumnResponse[],
     );
     return { models, columns };
   }
@@ -180,7 +183,7 @@ export class PGStrategy implements IDataSourceStrategy {
   }
 
   private async testConnection(properties: any) {
-    const connector = new PGConnector(properties);
+    const connector = new PostgresConnector(properties);
 
     // check DataSource is valid and can connect to it
     const connected = await connector.connect();
@@ -214,7 +217,7 @@ export class PGStrategy implements IDataSourceStrategy {
     const credentials = JSON.parse(encryptor.decrypt(encryptedCredentials));
 
     // connect to data source
-    const connector = new PGConnector({
+    const connector = new PostgresConnector({
       user: this.project.user,
       password: credentials.password,
       host: this.project.host,
@@ -246,7 +249,7 @@ export class PGStrategy implements IDataSourceStrategy {
   private async createColumns(
     tables: string[],
     models: Model[],
-    dataSourceColumns: PGColumnResponse[],
+    dataSourceColumns: PostgresColumnResponse[],
   ) {
     const columnValues = tables.reduce((acc, tableName) => {
       const modelId = models.find((m) => m.sourceTableName === tableName)?.id;

@@ -1,12 +1,15 @@
 import { CompactTable } from '@server/connectors/connector';
-import { PGColumnResponse, PGConnector } from '@server/connectors/pgConnector';
+import {
+  PostgresColumnResponse,
+  PostgresConnector,
+} from '@server/connectors/postgresConnector';
 import { TestingEnv } from './env';
-import { TestingPG } from './testingDatabase/pg';
+import { TestingPostgres } from './testingDatabase/postgres';
 
 describe('Connector', () => {
-  let connector: PGConnector;
+  let connector: PostgresConnector;
   let testingEnv: TestingEnv;
-  let testingDatabase: TestingPG;
+  let testingDatabase: TestingPostgres;
 
   // expected result
   const tpchTables = [
@@ -155,7 +158,7 @@ describe('Connector', () => {
 
   beforeAll(async () => {
     testingEnv = new TestingEnv();
-    testingDatabase = new TestingPG();
+    testingDatabase = new TestingPostgres();
 
     // initialize
     await testingEnv.initialize();
@@ -163,7 +166,7 @@ describe('Connector', () => {
 
     // create connector
     const container = testingDatabase.getContainer();
-    connector = new PGConnector({
+    connector = new PostgresConnector({
       user: container.getUsername(),
       password: container.getPassword(),
       host: container.getHost(),
@@ -220,7 +223,7 @@ describe('Connector', () => {
   it('should list tables with format: false', async () => {
     const columns = (await connector.listTables({
       format: false,
-    })) as PGColumnResponse[];
+    })) as PostgresColumnResponse[];
 
     // check if columns not null and has length
     expect(columns).not.toBeNull();
