@@ -56,6 +56,7 @@ setup-envfile:
 	else \
 		echo "$(YELLOW)Creating .env file...$(RESET)"; \
 		cp .env.example .env; \
+		cp .env.dev.example .env.dev; \
 	fi
 
 start:

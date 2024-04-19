@@ -1,49 +1,102 @@
 # AI Service of WrenAI
 
-## Environment Setup
+This AI service provides the Web APIs to interative with LLM for the WrenAI system. The following sections will guide 
+you through the environment setup, development, and production deployment of the AI service.
 
-- Python 3.12
-- install `poetry` with version 1.7.1: `curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`
-- execute `poetry install` to install the dependencies
-- copy `.env.example` file to `.env`, and `.env.dev.example` file to `.env.dev` and fill in the environment variables
-- [for development] execute `poetry run pre-commit install` to install the pre-commit hooks and `poetry run pre-commit run --all-files` to run the pre-commit checks at the first time to check if everything is set up correctly
-- [for development] to run the tests, execute `make test`
+## Requirements
+- Python >= 3.12
+- Docker
+- Poetry >= 1.7.1 (`curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`)
 
-## Start the service for development
+Ensure you have installed the required tools before proceeding to the next steps.
 
-- execute `make start` to start the service and go to `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT` to see the API documentation and try the APIs
+## Setup the Development Environment
+- Begin by building the environment using the following commands:
+  ```shell
+  make setup
+  ```
+- Fill in the environment variables in the `.env` file and `.env.dev` file.
 
-## Production Environment Setup
+## Start and Stop the Service for Development
+- To run the service and the dependent services, execute the following command in the terminal and go to 
+  `http://localhost:5556` to see the API documentation and try them.
+  ```shell
+  make start
+  ```
+  - If you change the host and port in env file, you could follow the format to access the API documentation and 
+  try the Web APIs. (`http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT`)
+- To stop the services, execute the following command:
+  ```shell
+  make stop
+  ```
+
+## Run all test cases
+- All the test cases are located in the `tests` folder and the following command will run all the test cases:
+  ```shell
+  make test
+  ```
+
+## Pipeline Evaluation
+
+- Copy the `config.properties.example` to `config.properties` in the `src/eval/wren-engine/etc` folder 
+  and fill in the environment variables
+- Execute the following commands to run the evaluation and specify the pipeline name as the argument:
+  ```shell
+  make eval pipeline=[pipeline-name]
+  ```
+  - pipeline-name: `ask`, `ask_detail`
+  - the evaluation results will be saved in the output folder
+- Visualize the evaluation results by executing the following command:
+  ```shell
+  make streamlit pipeline=[pipeline-name]
+  ```
+  - pipeline-name: `ask`, `ask_detail`
+- To run other ask-related evaluation: 
+  ```shell
+  poetry run python -m src.pipelines.ask.[pipeline_name]
+  ``` 
+  - e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`
+
+## Production Environment Setup(might be deprecated in the future)
 
 - copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
 - `make build` to build the docker image
 - `make up` to run the docker container
 - `make down` to stop the docker container
 
-## Pipeline Evaluation(for development)
+## Interative the system with Demo application or UI
 
-- install `psql`
-- fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
-- start the docker service
-- run qdrant and wren-engine docker containers: `make run-all`
-- evaluation: `make eval-ask` and check out the outputs folder
-- `make streamlit` to compare between the evaluation results
-- to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
+- go to the `../docker` folder and prepare the `.env.local` file
+- execute the follow command to start the containers and choose App or UI to interact with the system
+  ```shell
+  make start-demo
+  ```
+- there are the ports of the services:
+  - wren-engine: 8080
+  - wren-ai-service: 5556
+  - wren-ui: 3000
+  - qdrant: 6333, 6334
 
-## Demo
 
-- prerequisites
-  - install and run the docker service, and you should stop all WrenAI services first before running the demo
-  - go to the `../docker` folder and prepare the `.env.local` file
+### Run the Demo Application
+  - go to the `demo` folder and run `poetry install` to install the dependencies
+  - if you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies 
+  of the wren-ui service
+  - execute the following commands to run the demo application:
+    ```shell
+    make start-app
+    ```
+
+### Run the UI Service
   - make sure the node version is v16.19.0
-  - if you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies of the wren-ui service
-- go to the `demo` folder and run `poetry install` to install the dependencies
-- in the `demo` folder, open three terminals
-  - in the first terminal, run `make prepare` to start the docker containers and `make run` to start the demo service
-  - in the second terminal, run `make ui` to start the wren-ui service
-  - in the third terminal, run `make ai` to start the wren-ai service
-- ports of the services:
-  - wren-engine: ports should be 8080
-  - wren-ai-service: port should be 5556
-  - wren-ui: port should be 3000
-  - qdrant: ports should be 6333, 6334
+  - execute the following commands to run the UI service:
+    ```shell
+    make start-ui
+    ```
+
+
+## Helper Commands
+- To run the helper commands, execute the following command and you will see all the available commands:
+  ```shell
+  make help
+  ```
