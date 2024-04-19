@@ -106,7 +106,6 @@ export class PGConnector implements IConnector<PGColumnResponse, any[]> {
         table_schema,
         table_name,
         column_name,
-        ordinal_position,
         is_nullable,
         data_type,
       } = row;
@@ -130,9 +129,7 @@ export class PGConnector implements IConnector<PGColumnResponse, any[]> {
         type: data_type,
         notNull: is_nullable.toLocaleLowerCase() !== 'yes',
         description: '',
-        properties: {
-          ordinalPosition: ordinal_position,
-        },
+        properties: {},
       });
       return acc;
     }, []);

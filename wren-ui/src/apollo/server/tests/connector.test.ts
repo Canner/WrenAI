@@ -153,9 +153,9 @@ describe('Connector', () => {
       // check type, notNull, and ordinalPosition
       expect(found.type).toBe(column.type);
       expect(found.notNull).toBe(column.notNull);
-      expect(found.properties?.ordinalPosition).toBe(
-        column.properties?.ordinalPosition,
-      );
+
+      // properties will be an empty object
+      expect(found.properties).toStrictEqual({});
     }
   });
 
