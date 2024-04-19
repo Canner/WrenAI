@@ -6,7 +6,7 @@ import { IterableComponent } from '@/utils/iteration';
 import { ButtonOption } from './utils';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 
-const StledButton = styled(Button)`
+const StyledButton = styled(Button)`
   border: 2px var(--gray-4) solid;
   background-color: var(--gray-2);
   border-radius: 4px;
@@ -56,7 +56,7 @@ const PlainImage = styled.div`
 
 const ComingSoon = styled.div`
   border: 1px var(--gray-7) solid;
-  color: var(gray-7);
+  color: var(--gray-7);
   font-size: 8px;
   padding: 2px 6px;
   border-radius: 999px;
@@ -86,7 +86,7 @@ export default function ButtonItem(props: IterableComponent<Props>) {
   const loading = isSelected && submitting;
 
   return (
-    <StledButton
+    <StyledButton
       className={[
         'px-4 py-2 gray-8 d-flex align-center',
         loading ? 'flex-start' : 'justify-space-between',
@@ -113,6 +113,6 @@ export default function ButtonItem(props: IterableComponent<Props>) {
         {label}
       </div>
       {disabled && <ComingSoon />}
-    </StledButton>
+    </StyledButton>
   );
 }

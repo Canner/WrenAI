@@ -1,8 +1,9 @@
+import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { Button, Form, Modal, message } from 'antd';
 import { makeIterable } from '@/utils/iteration';
-import { DATA_SOURCES, FORM_MODE } from '@/utils/enum';
+import { DATA_SOURCES, FORM_MODE, Path } from '@/utils/enum';
 import { getDataSource, getTemplates } from '@/components/pages/setup/utils';
 import { FlexLoading } from '@/components/PageLoading';
 import ButtonItem from '@/components/pages/setup/ButtonItem';
@@ -29,10 +30,12 @@ interface Props {
 const SampleDatasetIterator = makeIterable(ButtonItem);
 
 const SampleDatasetPanel = (props: Props) => {
+  const router = useRouter();
   const { sampleDataset } = props;
   const templates = getTemplates();
   const [startSampleDataset] = useStartSampleDatasetMutation({
     onError: (error) => console.error(error),
+    onCompleted: () => router.push(Path.Home),
     refetchQueries: 'active',
   });
 

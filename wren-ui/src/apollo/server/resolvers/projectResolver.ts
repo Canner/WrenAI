@@ -56,17 +56,20 @@ export class ProjectResolver {
   }
 
   public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {
+    let project: Project;
     try {
-      const project = await ctx.projectService.getCurrentProject();
-      await ctx.deployService.deleteAllByProjectId(project.id);
-      await ctx.askingService.deleteAllByProjectId(project.id);
-      await ctx.modelService.deleteAllViewsByProjectId(project.id);
-      await ctx.modelService.deleteAllModelsByProjectId(project.id);
-
-      await ctx.projectService.deleteProject(project.id);
+      project = await ctx.projectService.getCurrentProject();
     } catch {
-      // do nothing
+      // no project found
+      return true;
     }
+
+    await ctx.deployService.deleteAllByProjectId(project.id);
+    await ctx.askingService.deleteAllByProjectId(project.id);
+    await ctx.modelService.deleteAllViewsByProjectId(project.id);
+    await ctx.modelService.deleteAllModelsByProjectId(project.id);
+
+    await ctx.projectService.deleteProject(project.id);
 
     return true;
   }
@@ -166,7 +169,7 @@ export class ProjectResolver {
     ctx: IContext,
   ) {
     const { type, properties } = args.data;
-    // Curretly only support one data source
+    // Currently only can create one project
     await this.resetCurrentProject(_root, args, ctx);
 
     const strategy = DataSourceStrategyFactory.create(type, { ctx });
