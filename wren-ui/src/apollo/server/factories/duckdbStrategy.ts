@@ -22,10 +22,13 @@ export class DuckDBStrategy implements IDataSourceStrategy {
   }
 
   public async createDataSource(properties: DuckDBDataSourceProperties) {
-    const { displayName, extensions, configurations } = properties;
-    const initSql = this.concatInitSql(properties.initSql, extensions);
+    const { displayName, initSql, extensions, configurations } = properties;
+    const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
 
-    await this.testConnection({ initSql, configurations });
+    await this.testConnection({
+      initSql: initSqlWithExtensions,
+      configurations,
+    });
 
     await this.patchConfigToWrenEngine();
 
@@ -35,7 +38,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       schema: 'public',
       catalog: 'wrenai',
       type: DataSourceName.DUCKDB,
-      initSql,
+      initSql: trim(initSql),
       configurations,
       extensions,
     });
@@ -45,10 +48,13 @@ export class DuckDBStrategy implements IDataSourceStrategy {
   public async updateDataSource(
     properties: DuckDBDataSourceProperties,
   ): Promise<any> {
-    const { displayName, extensions, configurations } = properties;
-    const initSql = this.concatInitSql(properties.initSql, extensions);
+    const { displayName, initSql, extensions, configurations } = properties;
+    const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
 
-    await this.testConnection({ initSql, configurations });
+    await this.testConnection({
+      initSql: initSqlWithExtensions,
+      configurations,
+    });
 
     await this.patchConfigToWrenEngine();
 
@@ -56,7 +62,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       this.project.id,
       {
         displayName,
-        initSql,
+        initSql: trim(initSql),
         configurations,
         extensions,
       },
