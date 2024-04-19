@@ -1,7 +1,7 @@
 import { CompactTable } from '@server/connectors/connector';
 import { PGColumnResponse, PGConnector } from '@server/connectors/pgConnector';
-import { TestingEnv } from './testingEnv';
-import { TestingPG } from './testingPg';
+import { TestingEnv } from './env';
+import { TestingPG } from './testingDatabase/pg';
 
 describe('Connector', () => {
   let connector: PGConnector;

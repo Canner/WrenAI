@@ -1,4 +1,4 @@
-import { TestingContext } from './testingDatabase';
+import { TestingContext } from './testingDatabase/database';
 import { Database } from 'duckdb-async';
 import { getLogger } from '@server/utils';
 import * as tmp from 'tmp';

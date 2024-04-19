@@ -2,7 +2,7 @@ import {
   PostgreSqlContainer,
   StartedPostgreSqlContainer,
 } from '@testcontainers/postgresql';
-import { TestingContext, TestingDatabase } from './testingDatabase';
+import { TestingContext, TestingDatabase } from './database';
 import { Client } from 'pg';
 import { getLogger } from '@server/utils';
 
