@@ -48,7 +48,12 @@ jobs:
           mkdir -p src/eval/wren-engine/etc
           cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties
           sed -i "s|bigquery.credentials-key=.*|bigquery.credentials-key=${{ secrets.BIGQUERY_CREDENTIALS_KEY }}|" src/eval/wren-engine/etc/config.properties
+          make create-mdl arg="--dataset_name book_2"
+          make start-qdrant
+          make start-wren-engine
           make test
+          make stop-wren-engine
+          make stop-qdrant
         env:
           ENV: dev
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

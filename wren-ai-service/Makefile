@@ -102,16 +102,37 @@ stop-qdrant:
 
 start-wren-engine:
 	@echo "$(YELLOW)Starting Wren Engine...$(RESET)"
-	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
-	@timeout 180 sh -c 'until curl -v localhost:8080 > /dev/null 2>&1; do \
-		echo "$(YELLOW)Waiting for Wren Engine to start...$(RESET)"; \
-		sleep 10; \
-	done' || true
+	@if docker ps --format '{{.Names}}' | grep 'wren-engine' 1> /dev/null; then \
+		echo "$(BLUE)Wren Engine is already running.$(RESET)"; \
+	else \
+		docker start wren-engine > /dev/null 2>&1 || \
+		docker run -d -p 8080:8080 -p 7432:7432 --name wren-engine \
+			--env-file ./src/eval/wren-engine/.env \
+			-v ./src/eval/wren-engine/etc:/usr/src/app/etc \
+			-v ./src/eval/wren-engine/launch-cli.sh:/usr/src/app/launch-cli.sh \
+			ghcr.io/canner/wren-engine:latest; \
+		timeout 180 sh -c 'until curl -v localhost:8080 > /dev/null 2>&1; do \
+			echo "$(YELLOW)Waiting for Wren Engine to start...$(RESET)"; \
+			sleep 10; \
+			done'; \
+	fi
 	@echo "$(GREEN)Wren Engine started!$(RESET)"
 
 stop-wren-engine:
 	@echo "$(YELLOW)Stopping Wren Engine...$(RESET)"
-	@docker-compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env down
+	@if docker ps --format '{{.Names}}' | grep 'wren-engine' 1> /dev/null; then \
+		docker stop wren-engine > /dev/null; \
+		echo "$(GREEN)Wren Engine stopped!$(RESET)"; \
+	else \
+		echo "$(BLUE)Wren Engine is not running.$(RESET)"; \
+	fi
+	@echo "$(YELLOW)Removing Wren Engine...$(RESET)"
+	@if docker container ls -a --format '{{.Names}}' | grep 'wren-engine' 1> /dev/null; then \
+		docker rm wren-engine > /dev/null; \
+		echo "$(GREEN)Wren Engine container removed!$(RESET)"; \
+	else \
+		echo "$(BLUE)Wren Engine container does not exist.$(RESET)"; \
+	fi
 
 start-ai:
 	@echo "$(YELLOW)Starting Wren AI service...$(RESET)"
@@ -129,9 +150,10 @@ stop-ai:
 		echo "$(BLUE)Wren AI service is not running.$(RESET)"; \
 	fi
 
+container?=wren-engine
 psql:
 	@echo "$(YELLOW)Connecting to Wren Engine via psql...$(RESET)"
-	@docker exec -it wren-wren-engine-1 bash launch-cli.sh
+	@docker exec -it $(container) bash launch-cli.sh
 
 eval:
 	@$(MAKE) start-qdrant
@@ -145,13 +167,13 @@ streamlit:
 	@echo "$(YELLOW)Starting Streamlit app for ${pipeline}...$(RESET)"
 	@poetry run streamlit run src/eval/${pipeline}/streamlit_app.py
 
+create-mdl:
+	@echo "$(YELLOW)Creating MDL JSON file...$(RESET)"
+	@poetry run python -m src.prepare_mdl_json $(arg)
+
 test:
-	@poetry run python -m src.prepare_mdl_json --dataset_name book_2
-	@$(MAKE) start-qdrant
-	@$(MAKE) start-wren-engine
+	@echo "$(YELLOW)Running tests...$(RESET)"
 	@poetry run pytest -s $(args)
-	@$(MAKE) stop-qdrant
-	@$(MAKE) stop-wren-engine
 
 build:
 	@echo "$(YELLOW)Building Docker images...$(RESET)"
@@ -207,6 +229,8 @@ help:
 	@echo "                      Example: make eval pipeline=ask args='--help'"
 	@echo "  $(GREEN)streamlit$(RESET)         - Start Streamlit app for each evaluation pipeline"
 	@echo "                      Example: make streamlit pipeline=ask"
+	@echo "  $(GREEN)create-mdl$(RESET)  - Prepare MDL JSON file"
+	@echo "                      Example: make create-mdl arg='--dataset_name book_2'"
 	@echo "  $(GREEN)test$(RESET)              - Run tests"
 	@echo "  $(GREEN)build$(RESET)             - Build Docker images(might be deprecated)"
 	@echo "  $(GREEN)up$(RESET)                - Start all services using Docker Compose(might be deprecated)"
