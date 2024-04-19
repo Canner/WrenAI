@@ -40,9 +40,11 @@ const StyledButton = styled(Button)`
 const DynamicComponent = ({
   menu,
   data,
+  refetch,
 }: {
   menu: SETTINGS;
   data?: GetSettingsQuery['settings'];
+  refetch: () => void;
 }) => {
   const { dataSource } = data || {};
   return (
@@ -52,6 +54,7 @@ const DynamicComponent = ({
           type={dataSource?.type as unknown as DATA_SOURCES}
           sampleDataset={dataSource?.sampleDataset}
           properties={dataSource?.properties}
+          refetchSettings={refetch}
         />
       ),
       [SETTINGS.PROJECT]: <ProjectSettings />,
@@ -84,7 +87,9 @@ export default function Settings(props: Props) {
     key,
     value: SETTINGS[key],
   }));
-  const [fetchSettings, { data }] = useGetSettingsLazyQuery();
+  const [fetchSettings, { data, refetch }] = useGetSettingsLazyQuery({
+    fetchPolicy: 'cache-and-network',
+  });
 
   useEffect(() => {
     if (visible) fetchSettings();
@@ -122,7 +127,11 @@ export default function Settings(props: Props) {
             {current.label}
           </div>
           <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
-            <DynamicComponent menu={menu} data={data?.settings} />
+            <DynamicComponent
+              menu={menu}
+              data={data?.settings}
+              refetch={refetch}
+            />
           </div>
         </Content>
       </Layout>

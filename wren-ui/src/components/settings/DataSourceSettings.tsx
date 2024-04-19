@@ -1,16 +1,21 @@
 import Image from 'next/image';
-import { Button, Form, Modal } from 'antd';
+import { useEffect } from 'react';
+import { Button, Form, Modal, message } from 'antd';
 import { makeIterable } from '@/utils/iteration';
 import { DATA_SOURCES, FORM_MODE } from '@/utils/enum';
 import { getDataSource, getTemplates } from '@/components/pages/setup/utils';
 import ButtonItem from '@/components/pages/setup/ButtonItem';
-import { useStartSampleDatasetMutation } from '@/apollo/client/graphql/dataSource.generated';
+import {
+  useStartSampleDatasetMutation,
+  useUpdateDataSourceMutation,
+} from '@/apollo/client/graphql/dataSource.generated';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 
 interface Props {
   type: DATA_SOURCES;
   properties: Record<string, any>;
   sampleDataset: SampleDatasetName;
+  refetchSettings: () => void;
 }
 
 const SampleDatasetIterator = makeIterable(ButtonItem);
@@ -19,19 +24,23 @@ const SampleDatasetPanel = (props: Props) => {
   const { sampleDataset } = props;
   const templates = getTemplates();
   const [startSampleDataset] = useStartSampleDatasetMutation({
+    onError: (error) => console.error(error),
     refetchQueries: 'active',
   });
 
   const onSelect = (name: SampleDatasetName) => {
-    const template = templates.find((item) => item.value === name);
-    Modal.confirm({
-      title: `Are you sure you want to change to "${template.label}" dataset?`,
-      okButtonProps: { danger: true },
-      okText: 'Change',
-      onOk: async () => {
-        await startSampleDataset({ variables: { data: { name } } });
-      },
-    });
+    const isCurrentTemplate = sampleDataset === name;
+    if (!isCurrentTemplate) {
+      const template = templates.find((item) => item.value === name);
+      Modal.confirm({
+        title: `Are you sure you want to change to "${template.label}" dataset?`,
+        okButtonProps: { danger: true },
+        okText: 'Change',
+        onOk: async () => {
+          await startSampleDataset({ variables: { data: { name } } });
+        },
+      });
+    }
   };
 
   return (
@@ -53,19 +62,34 @@ const SampleDatasetPanel = (props: Props) => {
 };
 
 const DataSourcePanel = (props: Props) => {
-  const { type, properties } = props;
+  const { type, properties, refetchSettings } = props;
 
   const current = getDataSource(type);
   const [form] = Form.useForm();
 
+  const [updateDataSource, { loading }] = useUpdateDataSourceMutation({
+    onError: (error) => console.error(error),
+    onCompleted: async () => {
+      refetchSettings();
+      message.success('Update successfully.');
+    },
+  });
+
+  useEffect(() => reset(), [properties]);
+
   const reset = () => {
-    form.setFieldsValue({ ...properties });
+    form.setFieldsValue({ ...properties, credentials: undefined });
   };
 
   const submit = () => {
-    form.validateFields().then((values) => {
-      console.log(values);
-    });
+    form
+      .validateFields()
+      .then((values) => {
+        updateDataSource({ variables: { data: { properties: values } } });
+      })
+      .catch((error) => {
+        console.error(error);
+      });
   };
 
   return (
@@ -87,7 +111,12 @@ const DataSourcePanel = (props: Props) => {
           <Button className="mr-2" style={{ width: 80 }} onClick={reset}>
             Cancel
           </Button>
-          <Button type="primary" style={{ width: 80 }} onClick={submit}>
+          <Button
+            type="primary"
+            style={{ width: 80 }}
+            onClick={submit}
+            loading={loading}
+          >
             Save
           </Button>
         </div>

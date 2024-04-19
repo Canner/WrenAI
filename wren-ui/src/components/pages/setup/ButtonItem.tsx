@@ -19,13 +19,17 @@ const StledButton = styled(Button)`
   }
 
   &:hover {
-    border-color: var(--gray-5);
-    background-color: var(--gray-4);
+    border-color: var(--geekblue-6);
+    background-color: var(--gray-2);
   }
 
   &.is-active {
     border-color: var(--geekblue-6) !important;
     background-color: var(--gray-2) !important;
+  }
+
+  &:disabled {
+    opacity: 0.5;
   }
 
   // loading of button
