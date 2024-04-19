@@ -42,8 +42,17 @@ export class PGStrategy implements IDataSourceStrategy {
   public async updateDataSource(
     properties: PGDataSourceProperties,
   ): Promise<any> {
-    const { displayName, user, password } = properties;
-    const { host, port, database } = this.project;
+    const { displayName, user, password: newPassword } = properties;
+    const {
+      host,
+      port,
+      database,
+      credentials: oldEncryptedCredentials,
+    } = this.project;
+
+    const encryptor = new Encryptor(this.ctx.config);
+    const oldPassword = encryptor.decrypt(oldEncryptedCredentials);
+    const password = newPassword || oldPassword;
 
     await this.testConnection({
       ...properties,
@@ -55,7 +64,6 @@ export class PGStrategy implements IDataSourceStrategy {
     await this.patchConfigToWrenEngine(properties);
 
     const credentials = { password } as any;
-    const encryptor = new Encryptor(this.ctx.config);
     const encryptedCredentials = encryptor.encrypt(credentials);
     const project = await this.ctx.projectRepository.updateOne(
       this.project.id,

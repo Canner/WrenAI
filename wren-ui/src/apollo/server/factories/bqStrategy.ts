@@ -54,16 +54,26 @@ export class BigQueryStrategy implements IDataSourceStrategy {
   public async updateDataSource(
     properties: BigQueryDataSourceProperties,
   ): Promise<any> {
-    const { displayName, credentials } = properties;
+    const { displayName, credentials: newCredentials } = properties;
     const { config } = this.ctx;
-    const { projectId, datasetId } = this.project;
+    const {
+      projectId,
+      datasetId,
+      credentials: oldEncryptedCredentials,
+    } = this.project;
+
+    const encryptor = new Encryptor(config);
+    const oldCredentials = JSON.parse(
+      encryptor.decrypt(oldEncryptedCredentials),
+    );
+
+    const credentials = newCredentials || oldCredentials;
 
     await this.testConnection({ projectId, datasetId, credentials });
 
     await this.patchConfigToWrenEngine({ projectId, credentials });
 
     // update DataSource to database
-    const encryptor = new Encryptor(config);
     const encryptedCredentials = encryptor.encrypt(credentials);
     const project = await this.ctx.projectRepository.updateOne(
       this.project.id,

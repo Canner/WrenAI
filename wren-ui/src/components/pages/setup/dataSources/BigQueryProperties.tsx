@@ -108,11 +108,11 @@ export default function BigQueryProperties(props: Props) {
       </Form.Item>
       <Form.Item
         label="Credentials"
-        required
+        required={!isEditMode}
         name="credentials"
         rules={[
           {
-            required: true,
+            required: !isEditMode,
             message: ERROR_TEXTS.CONNECTION.CREDENTIAL.REQUIRED,
           },
         ]}
