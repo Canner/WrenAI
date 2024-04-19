@@ -19,6 +19,7 @@ import {
   QueryResponse,
 } from '../adaptors/wrenEngineAdaptor';
 import { format } from 'sql-formatter';
+import { Telemetry } from '../telemetry/telemetry';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -135,14 +136,18 @@ class BackgroundTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
   private runningJobs = new Set();
+  private telemetry: Telemetry;
 
   constructor({
+    telemetry,
     wrenAIAdaptor,
     threadResponseRepository,
   }: {
+    telemetry: Telemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
   }) {
+    this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
     this.intervalTime = 1000;
@@ -187,6 +192,10 @@ class BackgroundTracker {
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
+            this.telemetry.send_event('question_answered', {
+              question: threadResponse.question,
+              result,
+            });
             logger.debug(`Job ${threadResponse.id} is finalized, removing`);
             delete this.tasks[threadResponse.id];
           }
@@ -225,8 +234,10 @@ export class AskingService implements IAskingService {
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
   private backgroundTracker: BackgroundTracker;
+  private telemetry: Telemetry;
 
   constructor({
+    telemetry,
     wrenAIAdaptor,
     wrenEngineAdaptor,
     deployService,
@@ -234,6 +245,7 @@ export class AskingService implements IAskingService {
     threadRepository,
     threadResponseRepository,
   }: {
+    telemetry: Telemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     wrenEngineAdaptor: IWrenEngineAdaptor;
     deployService: IDeployService;
@@ -247,7 +259,9 @@ export class AskingService implements IAskingService {
     this.projectService = projectService;
     this.threadRepository = threadRepository;
     this.threadResponseRepository = threadResponseRepository;
+    this.telemetry = telemetry;
     this.backgroundTracker = new BackgroundTracker({
+      telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
     });
@@ -292,6 +306,7 @@ export class AskingService implements IAskingService {
   }
 
   public async cancelAskingTask(taskId: string): Promise<void> {
+    this.telemetry.send_event('question_cancelled', {});
     await this.wrenAIAdaptor.cancelAsk(taskId);
   }
 
@@ -418,6 +433,7 @@ export class AskingService implements IAskingService {
 
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps, stepIndex));
+    this.telemetry.send_event('preview_data', { sql });
     return this.wrenEngineAdaptor.previewData(sql);
   }
 

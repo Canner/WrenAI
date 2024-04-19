@@ -188,7 +188,9 @@ export class AskingResolver {
     const thread = await askingService.updateThread(where.id, data);
 
     // telemetry
-    ctx.telemetry.send_event('update_thread_summary', {});
+    ctx.telemetry.send_event('update_thread_summary', {
+      new_summary: data.summary,
+    });
     return thread;
   }
 

@@ -296,7 +296,7 @@ export class ModelResolver {
     });
 
     // telemetry
-    ctx.telemetry.send_event('create_view', {});
+    ctx.telemetry.send_event('create_view', { statement, displayName: name });
 
     return view;
   }

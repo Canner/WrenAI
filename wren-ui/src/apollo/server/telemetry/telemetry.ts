@@ -34,6 +34,7 @@ export class Telemetry {
       this.posthog = client;
       this.userId = userUUID || uuidv4();
       logger.info('Telemetry initialized');
+      return;
     }
     logger.info('Telemetry not enabled.');
   }

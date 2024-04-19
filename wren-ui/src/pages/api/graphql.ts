@@ -88,6 +88,7 @@ const bootstrapServer = async () => {
   });
 
   const askingService = new AskingService({
+    telemetry,
     wrenAIAdaptor,
     wrenEngineAdaptor,
     deployService,
@@ -150,7 +151,6 @@ const bootstrapServer = async () => {
       deployRepository: deployLogRepository,
     }),
   });
-  telemetry.send_event('server_start', { time: new Date().toISOString() });
   await apolloServer.start();
   return apolloServer;
 };
