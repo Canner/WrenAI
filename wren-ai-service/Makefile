@@ -229,7 +229,7 @@ help:
 	@echo "                      Example: make eval pipeline=ask args='--help'"
 	@echo "  $(GREEN)streamlit$(RESET)         - Start Streamlit app for each evaluation pipeline"
 	@echo "                      Example: make streamlit pipeline=ask"
-	@echo "  $(GREEN)create-mdl$(RESET)  - Prepare MDL JSON file"
+	@echo "  $(GREEN)create-mdl$(RESET)        - Prepare MDL JSON file"
 	@echo "                      Example: make create-mdl arg='--dataset_name book_2'"
 	@echo "  $(GREEN)test$(RESET)              - Run tests"
 	@echo "  $(GREEN)build$(RESET)             - Build Docker images(might be deprecated)"
