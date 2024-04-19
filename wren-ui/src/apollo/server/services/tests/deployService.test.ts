@@ -6,8 +6,10 @@ describe('DeployService', () => {
   let mockWrenEngineAdaptor;
   let mockDeployLogRepository;
   let deployService;
+  let mockTelemetry;
 
   beforeEach(() => {
+    mockTelemetry = { send_event: jest.fn() };
     mockWrenAIAdaptor = { deploy: jest.fn() };
     mockWrenEngineAdaptor = { deploy: jest.fn() };
     mockDeployLogRepository = {
@@ -17,6 +19,7 @@ describe('DeployService', () => {
     };
 
     deployService = new DeployService({
+      telemetry: mockTelemetry,
       wrenAIAdaptor: mockWrenAIAdaptor,
       wrenEngineAdaptor: mockWrenEngineAdaptor,
       deployLogRepository: mockDeployLogRepository,
