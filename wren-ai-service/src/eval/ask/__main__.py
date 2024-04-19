@@ -259,7 +259,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use-optimal-schema",
         action=argparse.BooleanOptionalAction,
-        help="Whether to use hard questions for evaluation. Default is False.",
+        help="Whether to use optimal db schema for evaluation. Default is False.",
     )
 
     args = parser.parse_args()
