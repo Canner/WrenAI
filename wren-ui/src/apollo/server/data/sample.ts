@@ -346,7 +346,7 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'SeasonId', dataType: 'BIGINT' },
           { columnName: 'TeamIdHome', dataType: 'BIGINT' },
           { columnName: 'Id', dataType: 'BIGINT' },
-          { columnName: 'GameDate', dataType: 'VARCHAR' },
+          { columnName: 'GameDate', dataType: 'DATE' },
           { columnName: 'WlHome', dataType: 'VARCHAR' },
           { columnName: 'Min', dataType: 'BIGINT' },
           { columnName: 'FgmHome', dataType: 'BIGINT' },
