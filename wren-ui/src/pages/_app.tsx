@@ -32,6 +32,8 @@ if (env.isTelemetryEnabled && typeof window !== 'undefined') {
       if (env.isDevelopment) posthog.debug();
     },
   });
+  // set up distinct id to posthog
+  if (env.userUUID) posthog.identify(env.userUUID);
 }
 
 function App({ Component, pageProps }: AppProps) {
