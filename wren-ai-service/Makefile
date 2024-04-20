@@ -19,10 +19,10 @@ setup:
 
 check-python:
 	@echo "$(YELLOW)Checking Python installation...$(RESET)"
-	@if command -v python3 > /dev/null; then \
+	@if command -v python3 > /dev/null && python3 --version 2>&1 | grep 3.12 > /dev/null; then \
 		echo "$(BLUE)$(shell python3 --version) is already installed.$(RESET)"; \
 	else \
-		echo "$(RED)Python 3 is not installed. Please install Python 3 to continue.$(RESET)"; \
+		echo "$(RED)Python 3.12 is not installed.$(RESET)"; \
 		exit 1; \
 	fi
 
