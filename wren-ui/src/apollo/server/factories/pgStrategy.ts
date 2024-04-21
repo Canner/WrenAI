@@ -1,5 +1,11 @@
 import { IDataSourceStrategy } from './dataSourceStrategy';
-import { DataSourceName, IContext, PGDataSourceProperties } from '../types';
+import {
+  AnalysisRelationInfo,
+  DataSourceName,
+  IContext,
+  RelationType,
+  PGDataSourceProperties,
+} from '../types';
 import { Model, ModelColumn, Project } from '../repositories';
 import { PGColumnResponse, PGConnector } from '../connectors/pgConnector';
 import { Encryptor } from '../utils';
@@ -118,8 +124,60 @@ export class PGStrategy implements IDataSourceStrategy {
     return { models, columns };
   }
 
-  public async analysisRelation(_models: Model[], _columns: ModelColumn[]) {
-    return [];
+  public async analysisRelation(models: Model[], columns: ModelColumn[]) {
+    const connector = this.getPGConnector();
+    const constraints = await connector.listConstraints();
+    const relations = [];
+    for (const constraint of constraints) {
+      const {
+        constraintTable,
+        constraintColumn,
+        constraintedTable,
+        constraintedColumn,
+      } = constraint;
+      // validate tables and columns exists in our models and model columns
+      const fromModel = models.find(
+        (m) => m.sourceTableName === constraintTable,
+      );
+      const toModel = models.find(
+        (m) => m.sourceTableName === constraintedTable,
+      );
+      if (!fromModel || !toModel) {
+        continue;
+      }
+      const fromColumn = columns.find(
+        (c) =>
+          c.modelId === fromModel.id && c.sourceColumnName === constraintColumn,
+      );
+      const toColumn = columns.find(
+        (c) =>
+          c.modelId === toModel.id && c.sourceColumnName === constraintedColumn,
+      );
+      if (!fromColumn || !toColumn) {
+        continue;
+      }
+      // create relation
+      const relation: AnalysisRelationInfo = {
+        // upper case the first letter of the sourceTableName
+        name:
+          fromModel.sourceTableName.charAt(0).toUpperCase() +
+          fromModel.sourceTableName.slice(1) +
+          toModel.sourceTableName.charAt(0).toUpperCase() +
+          toModel.sourceTableName.slice(1),
+        fromModelId: fromModel.id,
+        fromModelReferenceName: fromModel.referenceName,
+        fromColumnId: fromColumn.id,
+        fromColumnReferenceName: fromColumn.referenceName,
+        toModelId: toModel.id,
+        toModelReferenceName: toModel.referenceName,
+        toColumnId: toColumn.id,
+        toColumnReferenceName: toColumn.referenceName,
+        // TODO: add join type
+        type: RelationType.ONE_TO_MANY,
+      };
+      relations.push(relation);
+    }
+    return relations;
   }
 
   private async testConnection(properties: any) {

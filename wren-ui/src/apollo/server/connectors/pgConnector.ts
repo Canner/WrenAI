@@ -26,11 +26,22 @@ export interface PGColumnResponse {
   data_type: string;
 }
 
+export interface PGConstraintResponse {
+  constraintName: string;
+  constraintType: string;
+  constraintTable: string;
+  constraintColumn: string;
+  constraintedTable: string;
+  constraintedColumn: string;
+}
+
 export interface PGListTableOptions {
   format?: boolean;
 }
 
-export class PGConnector implements IConnector<PGColumnResponse, any[]> {
+export class PGConnector
+  implements IConnector<PGColumnResponse, PGConstraintResponse>
+{
   private config: PGConnectionConfig;
   private client?: pg.Client;
 
@@ -93,10 +104,37 @@ export class PGConnector implements IConnector<PGColumnResponse, any[]> {
     return options.format ? this.formatToCompactTable(columns) : columns;
   }
 
-  public async listConstraints(
-    _listConstraintOptions: any,
-  ): Promise<[] | any[][]> {
-    return [];
+  public async listConstraints() {
+    const sql = `
+      SELECT
+        tc.table_schema,
+        tc.constraint_name,
+        tc.table_name,
+        kcu.column_name,
+        ccu.table_schema AS foreign_table_schema,
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name
+      FROM information_schema.table_constraints AS tc
+      JOIN information_schema.key_column_usage AS kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage AS ccu
+        ON ccu.constraint_name = tc.constraint_name
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+    `;
+    await this.prepareClient();
+    const res = await this.client.query(sql);
+    const constraints = res.rows.map((row) => {
+      return {
+        constraintName: row.constraint_name,
+        constraintType: 'FOREIGN KEY',
+        constraintTable: row.table_name,
+        constraintColumn: row.column_name,
+        constraintedTable: row.foreign_table_name,
+        constraintedColumn: row.foreign_column_name,
+      };
+    }) as PGConstraintResponse[];
+    return constraints;
   }
 
   private formatToCompactTable(columns: PGColumnResponse[]): CompactTable[] {
