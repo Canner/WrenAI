@@ -104,7 +104,6 @@ export class PGStrategy implements IDataSourceStrategy {
     };
 
     const tables = await connector.listTables(listTableOptions);
-    console.log('tables', tables);
     return tables;
   }
 
