@@ -201,21 +201,23 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/customers.csv',
         description:
-        'A table of customers who have made purchases, including their city',
+          'A table of customers who have made purchases, including their city',
         columns: [
           {
             name: 'City',
             description:
-              'The Customer City, where the customer company is located. Also called \'customer segment\'. Data example: \"San Jose\".',
+              'The Customer City, where the customer company is located. Also called \'customer segment\'. Data example: "San Jose".',
           },
           {
-              name: 'Id',
-              description: 'A unique identifier for each customer in the data model. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\".'
+            name: 'Id',
+            description:
+              'A unique identifier for each customer in the data model. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7".',
           },
           {
-              name: 'State',
-              description: 'A field indicating the state where the customer is located. Data example: \"CA\".'
-          }
+            name: 'State',
+            description:
+              'A field indicating the state where the customer is located. Data example: "CA".',
+          },
         ],
         schema: [
           { columnName: 'Id', dataType: 'VARCHAR' },
@@ -229,31 +231,38 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/order_items.csv',
         columns: [
           {
-              name: 'FreightValue',
-              description: 'A numerical value representing the cost of shipping for an item in an order. Data example: 1.5'
+            name: 'FreightValue',
+            description:
+              'A numerical value representing the cost of shipping for an item in an order. Data example: 1.5',
           },
           {
-              name: 'ItemNumber',
-              description: 'The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber. Data example: 1'
+            name: 'ItemNumber',
+            description:
+              'The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber. Data example: 1',
           },
           {
-              name: 'OrderId',
-              description: 'A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\".'
+            name: 'OrderId',
+            description:
+              'A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7".',
           },
           {
-              name: 'Price',
-              description: 'A numerical value representing the price of an item in an order. Data example: 1.2'
+            name: 'Price',
+            description:
+              'A numerical value representing the price of an item in an order. Data example: 1.2',
           },
           {
-              name: 'ProductId',
-              description: 'A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\".'
+            name: 'ProductId',
+            description:
+              'A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7".',
           },
           {
-              name: 'ShippingLimitDate',
-              description: 'A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the \'order_items\' model. Data example: \"2018/01/15\"'
-          }
+            name: 'ShippingLimitDate',
+            description:
+              'A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the \'order_items\' model. Data example: "2018/01/15"',
+          },
         ],
-        description: 'The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.',
+        description:
+          'The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.',
         schema: [
           { columnName: 'OrderId', dataType: 'VARCHAR' },
           { columnName: 'ItemNumber', dataType: 'BIGINT' },
@@ -269,37 +278,45 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/orders.csv',
         columns: [
           {
-              name: 'ApprovedTimestamp',
-              description: 'A column that represents the timestamp when the order was approved. Data example: \"2017-10-26\"'
+            name: 'ApprovedTimestamp',
+            description:
+              'A column that represents the timestamp when the order was approved. Data example: "2017-10-26"',
           },
           {
-              name: 'CustomerId',
-              description: 'A unique identifier representing the customer who purchased this order. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\"'
+            name: 'CustomerId',
+            description:
+              'A unique identifier representing the customer who purchased this order. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7"',
           },
           {
-              name: 'DeliveredCarrierDate',
-              description: 'A column that represents the date when the order was delivered by the carrier. Data example: \"2017/10/26\"'
+            name: 'DeliveredCarrierDate',
+            description:
+              'A column that represents the date when the order was delivered by the carrier. Data example: "2017/10/26"',
           },
           {
-              name: 'DeliveredCustomerDate',
-              description: 'A column that represents the date when the order was delivered to the customer. Data example: \"2017/10/26\"'
+            name: 'DeliveredCustomerDate',
+            description:
+              'A column that represents the date when the order was delivered to the customer. Data example: "2017/10/26"',
           },
           {
-              name: 'EstimatedDeliveryDate',
-              description: 'A column that represents the estimated delivery date of the order. Data example: \"2017/10/26\"'
+            name: 'EstimatedDeliveryDate',
+            description:
+              'A column that represents the estimated delivery date of the order. Data example: "2017/10/26"',
           },
           {
-              name: 'OrderId',
-              description: 'A column that represents a unique identifier of this order. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\"'
+            name: 'OrderId',
+            description:
+              'A column that represents a unique identifier of this order. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7"',
           },
           {
-              name: 'PurchaseTimestamp',
-              description: 'A column that represents the timestamp when the order was purchased. Data example: \"2017-10-26\"'
+            name: 'PurchaseTimestamp',
+            description:
+              'A column that represents the timestamp when the order was purchased. Data example: "2017-10-26"',
           },
           {
-              name: 'Status',
-              description: 'A column representing the status of the order. Data example: \"delivered\"'
-          }
+            name: 'Status',
+            description:
+              'A column representing the status of the order. Data example: "delivered"',
+          },
         ],
         description: 'A model representing the orders data.',
         schema: [
@@ -319,27 +336,33 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/payments.csv',
         columns: [
           {
-              name: 'Installments',
-              description: 'A column representing the number of installments in the payments data model. Data example: 1'
+            name: 'Installments',
+            description:
+              'A column representing the number of installments in the payments data model. Data example: 1',
           },
           {
-              name: 'OrderId',
-              description: 'A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\"'
+            name: 'OrderId',
+            description:
+              'A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7"',
           },
           {
-              name: 'Sequential',
-              description: 'A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number. Data example: 1'
+            name: 'Sequential',
+            description:
+              'A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number. Data example: 1',
           },
           {
-              name: 'Type',
-              description: 'A column representing the type of payment in the payments data model. Data example: \"credit_card\"'
+            name: 'Type',
+            description:
+              'A column representing the type of payment in the payments data model. Data example: "credit_card"',
           },
           {
-              name: 'Value',
-              description: 'A column representing the value of the payment in the payments data model. Data example: 1.5'
-          }
+            name: 'Value',
+            description:
+              'A column representing the value of the payment in the payments data model. Data example: 1.5',
+          },
         ],
-        description: 'A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.',
+        description:
+          'A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.',
         schema: [
           { columnName: 'OrderId', dataType: 'VARCHAR' },
           { columnName: 'Sequential', dataType: 'BIGINT' },
@@ -354,19 +377,23 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/products.csv',
         columns: [
           {
-              name: 'Category',
-              description: 'A category that classifies the products in the data model. Data example: \"electronics\"'
+            name: 'Category',
+            description:
+              'A category that classifies the products in the data model. Data example: "electronics"',
           },
           {
-              name: 'Id',
-              description: 'A unique identifier assigned to each product in the data model. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\".'
+            name: 'Id',
+            description:
+              'A unique identifier assigned to each product in the data model. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7".',
           },
           {
-              name: 'Name',
-              description: 'A name of the product in the data model.Data example: \"iphone\"'
-          }
+            name: 'Name',
+            description:
+              'A name of the product in the data model.Data example: "iphone"',
+          },
         ],
-        description: 'A data model containing information about products such as category, ID, and name, with a relationship to order items.',
+        description:
+          'A data model containing information about products such as category, ID, and name, with a relationship to order items.',
         schema: [
           { columnName: 'Id', dataType: 'VARCHAR' },
           { columnName: 'Category', dataType: 'VARCHAR' },
@@ -379,25 +406,30 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/reviews.csv',
         columns: [
           {
-              name: 'AnswerTimestamp',
-              description: 'The date when the answer was provided. Data example: \"2017-10-26\".'
+            name: 'AnswerTimestamp',
+            description:
+              'The date when the answer was provided. Data example: "2017-10-26".',
           },
           {
-              name: 'CreationTimestamp',
-              description: 'The date when the review was created. Data example: \"2017-10-26\".'
+            name: 'CreationTimestamp',
+            description:
+              'The date when the review was created. Data example: "2017-10-26".',
           },
           {
-              name: 'Id',
-              description: 'A unique identifier assigned to each review entry. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\".'
+            name: 'Id',
+            description:
+              'A unique identifier assigned to each review entry. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7".',
           },
           {
-              name: 'OrderId',
-              description: 'The order id of the order which the review belongs to. Data example: \"dfsdaf99e2fba1a1fbc88172c00ba8bc7\".'
+            name: 'OrderId',
+            description:
+              'The order id of the order which the review belongs to. Data example: "dfsdaf99e2fba1a1fbc88172c00ba8bc7".',
           },
           {
-              name: 'Score',
-              description: 'The score associated with each review entry. Data example: 1'
-          }
+            name: 'Score',
+            description:
+              'The score associated with each review entry. Data example: 1',
+          },
         ],
         description: 'A model containing information about review of orders.',
         schema: [
