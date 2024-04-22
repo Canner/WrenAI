@@ -12,6 +12,7 @@ export default function useSetupModels() {
   const router = useRouter();
 
   const { data, loading: fetching } = useListDataSourceTablesQuery({
+    fetchPolicy: 'no-cache',
     onError: (error) => console.error(error),
   });
 
