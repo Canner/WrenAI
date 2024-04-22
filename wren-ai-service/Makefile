@@ -15,6 +15,7 @@ setup:
 	@$(MAKE) install-python-dependencies
 	@$(MAKE) install-precommit-hooks
 	@$(MAKE) setup-envfile
+	@$(MAKE) setup-engine-config
 	@echo "$(GREEN)Development environment setup complete!$(RESET)"
 
 check-python:
@@ -59,6 +60,18 @@ setup-envfile:
 		cp .env.dev.example .env.dev; \
 	fi
 
+setup-engine-config:
+	@if [ ! -d "src/eval/wren-engine/etc" ]; then \
+		mkdir src/eval/wren-engine/etc; \
+	fi
+	@if [ -f "src/eval/wren-engine/etc/config.properties" ]; then \
+		echo "$(BLUE)Wren Engine configuration already exists.$(RESET)"; \
+	else \
+		echo "$(YELLOW)Generating Wren Engine configuration...$(RESET)"; \
+		cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties; \
+		echo "$(GREEN)Wren Engine configuration generated!$(RESET)"; \
+	fi
+
 start:
 	@echo "$(YELLOW)Starting all services...$(RESET)"
 	@poetry run python -m src.prepare_mdl_json
@@ -98,18 +111,6 @@ stop-qdrant:
 		echo "$(GREEN)Qdrant container removed!$(RESET)"; \
 	else \
 		echo "$(BLUE)Qdrant container does not exist.$(RESET)"; \
-	fi
-
-setup-engine-config:
-	@if [ ! -d "src/eval/wren-engine/etc" ]; then \
-		mkdir src/eval/wren-engine/etc; \
-	fi
-	@if [ -f "src/eval/wren-engine/etc/config.properties" ]; then \
-		echo "$(BLUE)Wren Engine configuration already exists.$(RESET)"; \
-	else \
-		echo "$(YELLOW)Generating Wren Engine configuration...$(RESET)"; \
-		cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties; \
-		echo "$(GREEN)Wren Engine configuration generated!$(RESET)"; \
 	fi
 
 start-wren-engine:

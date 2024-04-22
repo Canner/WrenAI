@@ -16,6 +16,7 @@ Ensure you have installed the required tools before proceeding to the next steps
   make setup
   ```
 - Fill in the environment variables in the `.env` file and `.env.dev` file.
+- Fill in the environment variables in the `config.properties` file in the `src/eval/wren-engine/etc` folder.
 
 ## Start and Stop the Service for Development
 - To run the service and the dependent services, execute the following command in the terminal and go to 
