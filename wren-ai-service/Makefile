@@ -100,6 +100,18 @@ stop-qdrant:
 		echo "$(BLUE)Qdrant container does not exist.$(RESET)"; \
 	fi
 
+setup-engine-config:
+	@if [ ! -d "src/eval/wren-engine/etc" ]; then \
+		mkdir src/eval/wren-engine/etc; \
+	fi
+	@if [ -f "src/eval/wren-engine/etc/config.properties" ]; then \
+		echo "$(BLUE)Wren Engine configuration already exists.$(RESET)"; \
+	else \
+		echo "$(YELLOW)Generating Wren Engine configuration...$(RESET)"; \
+		cp src/eval/wren-engine/config.properties.example src/eval/wren-engine/etc/config.properties; \
+		echo "$(GREEN)Wren Engine configuration generated!$(RESET)"; \
+	fi
+
 start-wren-engine:
 	@echo "$(YELLOW)Starting Wren Engine...$(RESET)"
 	@if docker ps --format '{{.Names}}' | grep 'wren-engine' 1> /dev/null; then \
