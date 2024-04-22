@@ -36,7 +36,7 @@ const PlainImage = styled.div`
 
 const ComingSoon = styled.div`
   border: 1px var(--gray-7) solid;
-  color: var(gray-7);
+  color: var(--gray-7);
   font-size: 8px;
   padding: 2px 6px;
   border-radius: 999px;

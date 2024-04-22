@@ -124,7 +124,8 @@ export type DataSourceInput = {
 
 export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
-  DUCKDB = 'DUCKDB'
+  DUCKDB = 'DUCKDB',
+  PG = 'PG'
 }
 
 export type DetailStep = {

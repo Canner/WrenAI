@@ -10,6 +10,7 @@ import SelectModels from './SelectModels';
 import DefineRelations from './DefineRelations';
 import BigQueryProperties from './dataSources/BigQueryProperties';
 import DuckDBProperties from './dataSources/DuckDBProperties';
+import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 
 type SetupStep = {
@@ -57,26 +58,27 @@ export const DATA_SOURCE_OPTIONS = {
   [DATA_SOURCES.BIG_QUERY]: {
     label: 'BigQuery',
     logo: '/images/dataSource/bigQuery.svg',
-    guide: 'https://docs.getwren.ai/guides/connect/bigquery',
+    guide: 'https://docs.getwren.ai/guide/connect/bigquery',
     disabled: false,
   },
   [DATA_SOURCES.DUCKDB]: {
     label: 'DuckDB',
     logo: '/images/dataSource/duckDb.svg',
-    guide: 'https://docs.getwren.ai/guides/connect/duckdb',
+    guide: 'https://docs.getwren.ai/guide/connect/duckdb',
     disabled: false,
   },
   [DATA_SOURCES.PG_SQL]: {
     label: 'PostgreSQL',
     logo: '/images/dataSource/postgreSql.svg',
-    guide: '',
-    disabled: true,
+    guide: 'https://docs.getwren.ai/guide/connect/postgresql',
+    disabled: false,
   },
 } as { [key: string]: ButtonOption };
 
 export const DATA_SOURCE_FORM = {
   [DATA_SOURCES.BIG_QUERY]: { component: BigQueryProperties },
   [DATA_SOURCES.DUCKDB]: { component: DuckDBProperties },
+  [DATA_SOURCES.PG_SQL]: { component: PostgreSQLProperties },
 };
 
 export const TEMPLATE_OPTIONS = {
@@ -112,6 +114,10 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
       [DATA_SOURCES.DUCKDB]: merge(
         DATA_SOURCE_OPTIONS[DATA_SOURCES.DUCKDB],
         DATA_SOURCE_FORM[DATA_SOURCES.DUCKDB],
+      ),
+      [DATA_SOURCES.PG_SQL]: merge(
+        DATA_SOURCE_OPTIONS[DATA_SOURCES.PG_SQL],
+        DATA_SOURCE_FORM[DATA_SOURCES.PG_SQL],
       ),
     }[dataSource] || defaultDataSource
   );

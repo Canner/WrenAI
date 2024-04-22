@@ -23,6 +23,21 @@ export const ERROR_TEXTS = {
         REQUIRED: 'Please input configuration value.',
       },
     },
+    HOST: {
+      REQUIRED: 'Please input host.',
+    },
+    PORT: {
+      REQUIRED: 'Please input port.',
+    },
+    USERNAME: {
+      REQUIRED: 'Please input username.',
+    },
+    PASSWORD: {
+      REQUIRED: 'Please input password.',
+    },
+    DATABASE: {
+      REQUIRED: 'Please input database name.',
+    },
   },
   ADD_RELATION: {
     FROM_FIELD: {

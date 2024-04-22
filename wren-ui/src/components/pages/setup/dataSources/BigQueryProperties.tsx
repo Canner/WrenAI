@@ -6,7 +6,7 @@ import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 
 interface Props {
-  mode: FORM_MODE;
+  mode?: FORM_MODE;
 }
 
 const UploadCredentials = (props) => {
