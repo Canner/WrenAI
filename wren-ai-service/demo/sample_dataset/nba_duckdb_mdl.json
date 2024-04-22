@@ -10,7 +10,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "31"
       }
     }, {
       "name" : "3pHome",
@@ -18,7 +17,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "10"
       }
     }, {
       "name" : "3paAway",
@@ -26,7 +24,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "32"
       }
     }, {
       "name" : "3paHome",
@@ -34,7 +31,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "11"
       }
     }, {
       "name" : "AstAway",
@@ -42,7 +38,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "40"
       }
     }, {
       "name" : "AstHome",
@@ -50,7 +45,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "19"
       }
     }, {
       "name" : "BlkAway",
@@ -58,7 +52,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "42"
       }
     }, {
       "name" : "BlkHome",
@@ -66,7 +59,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "21"
       }
     }, {
       "name" : "DrebAway",
@@ -74,7 +66,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "38"
       }
     }, {
       "name" : "DrebHome",
@@ -82,7 +73,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "17"
       }
     }, {
       "name" : "Fg3_pct_away",
@@ -90,7 +80,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "33"
       }
     }, {
       "name" : "FgPct_home",
@@ -98,7 +87,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "9"
       }
     }, {
       "name" : "FgaAway",
@@ -106,7 +94,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "29"
       }
     }, {
       "name" : "FgaHome",
@@ -114,7 +101,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "8"
       }
     }, {
       "name" : "FgmAway",
@@ -122,7 +108,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "28"
       }
     }, {
       "name" : "FgmHome",
@@ -130,7 +115,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
       }
     }, {
       "name" : "Ft_pct_away",
@@ -138,7 +122,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "36"
       }
     }, {
       "name" : "FtaAway",
@@ -146,7 +129,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "35"
       }
     }, {
       "name" : "FtaHome",
@@ -154,7 +136,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "14"
       }
     }, {
       "name" : "FtmAway",
@@ -162,7 +143,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "34"
       }
     }, {
       "name" : "FtmHome",
@@ -170,7 +150,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "13"
       }
     }, {
       "name" : "GameDate",
@@ -178,7 +157,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4",
         "example": "2019-10-22"
       },
       "expression": "CAST(GameDate AS DATE)"
@@ -188,7 +166,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "Min",
@@ -196,7 +173,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
       }
     }, {
       "name" : "OrebAway",
@@ -204,7 +180,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "37"
       }
     }, {
       "name" : "OrebHome",
@@ -212,7 +187,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "16"
       }
     }, {
       "name" : "PfAway",
@@ -220,7 +194,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "44"
       }
     }, {
       "name" : "PfHome",
@@ -228,7 +201,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "23"
       }
     }, {
       "name" : "PlusMinusAway",
@@ -236,7 +208,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "46"
       }
     }, {
       "name" : "PlusMinusHome",
@@ -244,7 +215,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "25"
       }
     }, {
       "name" : "PtsAway",
@@ -252,7 +222,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "45"
       }
     }, {
       "name" : "PtsHome",
@@ -260,7 +229,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "24"
       }
     }, {
       "name" : "RebAway",
@@ -268,7 +236,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "39"
       }
     }, {
       "name" : "RebHome",
@@ -276,7 +243,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "18"
       }
     }, {
       "name" : "SeasonId",
@@ -284,7 +250,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "SeasonType",
@@ -292,7 +257,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "47"
       }
     }, {
       "name" : "StlAway",
@@ -300,7 +264,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "41"
       }
     }, {
       "name" : "StlHome",
@@ -308,7 +271,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "20"
       }
     }, {
       "name" : "TeamIdAway",
@@ -316,7 +278,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "26"
       }
     }, {
       "name" : "TeamIdHome",
@@ -324,7 +285,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "TovAway",
@@ -332,7 +292,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "43"
       }
     }, {
       "name" : "TovHome",
@@ -340,7 +299,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "22"
       }
     }, {
       "name" : "WlAway",
@@ -348,7 +306,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "27"
       }
     }, {
       "name" : "WlHome",
@@ -356,7 +313,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "fg3_pct_home",
@@ -364,7 +320,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "12"
       }
     }, {
       "name" : "fg_pct_away",
@@ -372,7 +327,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "30"
       }
     }, {
       "name" : "ft_pct_home",
@@ -380,7 +334,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "15"
       }
     }, {
       "name" : "line_score",
@@ -413,7 +366,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1",
         "example": "2019-10-22"
       },
       "expression": "CAST(GameDate AS DATE)"
@@ -423,7 +375,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "GameSequence",
@@ -431,7 +382,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "PtsAway",
@@ -439,7 +389,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "19"
       }
     }, {
       "name" : "PtsHome",
@@ -447,7 +396,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "11"
       }
     }, {
       "name" : "PtsOt1Away",
@@ -455,7 +403,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "18"
       }
     }, {
       "name" : "PtsOt1Home",
@@ -463,7 +410,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "10"
       }
     }, {
       "name" : "PtsQtr1Away",
@@ -471,7 +417,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "14"
       }
     }, {
       "name" : "PtsQtr1Home",
@@ -479,7 +424,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
       }
     }, {
       "name" : "PtsQtr2Away",
@@ -487,7 +431,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "15"
       }
     }, {
       "name" : "PtsQtr2Home",
@@ -495,7 +438,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
       }
     }, {
       "name" : "PtsQtr3Away",
@@ -503,7 +445,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "16"
       }
     }, {
       "name" : "PtsQtr3Home",
@@ -511,7 +452,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "8"
       }
     }, {
       "name" : "PtsQtr4Away",
@@ -519,7 +459,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "17"
       }
     }, {
       "name" : "PtsQtr4Home",
@@ -527,7 +466,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "9"
       }
     }, {
       "name" : "TeamIdHome",
@@ -535,7 +473,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
       }
     }, {
       "name" : "TeamIdaway",
@@ -543,7 +480,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "12"
       }
     }, {
       "name" : "TeamWinsLossesAway",
@@ -551,7 +487,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "13"
       }
     }, {
       "name" : "TeamWinsLossesHome",
@@ -559,7 +494,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "game",
@@ -592,7 +526,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
       }
     }, {
       "name" : "FullName",
@@ -600,7 +533,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "Id",
@@ -608,7 +540,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "LastName",
@@ -616,7 +547,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "TeamId",
@@ -624,7 +554,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "team",
@@ -650,7 +579,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "11"
       }
     }, {
       "name" : "3PA",
@@ -658,7 +586,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "12"
       }
     }, {
       "name" : "AST",
@@ -666,7 +593,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "18"
       }
     }, {
       "name" : "Age",
@@ -674,7 +600,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "BLK",
@@ -682,7 +607,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "20"
       }
     }, {
       "name" : "DRB",
@@ -690,7 +614,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "16"
       }
     }, {
       "name" : "Date",
@@ -698,7 +621,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4",
         "example": "2019-10-22"
       }
     }, {
@@ -707,7 +629,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "9"
       }
     }, {
       "name" : "FGA",
@@ -715,7 +636,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "10"
       }
     }, {
       "name" : "FT",
@@ -723,7 +643,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "13"
       }
     }, {
       "name" : "FTA",
@@ -731,7 +650,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "14"
       }
     }, {
       "name" : "GameID",
@@ -739,7 +657,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "Id",
@@ -747,7 +664,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "MP",
@@ -755,7 +671,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "8"
       }
     }, {
       "name" : "ORB",
@@ -763,7 +678,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "15"
       }
     }, {
       "name" : "Opp",
@@ -771,7 +685,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
       }
     }, {
       "name" : "PF",
@@ -779,7 +692,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "22"
       }
     }, {
       "name" : "PTS",
@@ -787,7 +699,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "23"
       }
     }, {
       "name" : "PlayerID",
@@ -795,7 +706,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "STL",
@@ -803,7 +713,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "19"
       }
     }, {
       "name" : "TOV",
@@ -811,7 +720,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "21"
       }
     }, {
       "name" : "TRB",
@@ -819,7 +727,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "17"
       }
     }, {
       "name" : "Tm",
@@ -827,7 +734,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
       }
     }, {
       "name" : "line_score",
@@ -853,7 +759,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "City",
@@ -861,7 +766,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "FullName",
@@ -869,7 +773,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "Id",
@@ -877,7 +780,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "Nickname",
@@ -885,7 +787,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
       }
     }, {
       "name" : "State",
@@ -893,7 +794,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
       }
     }, {
       "name" : "YearFounded",
@@ -901,7 +801,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
       }
     }, {
       "name" : "player",

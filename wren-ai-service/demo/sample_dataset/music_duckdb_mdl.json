@@ -10,7 +10,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "ArtistId",
@@ -18,7 +17,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "Title",
@@ -26,7 +24,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "artist",
@@ -59,7 +56,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "Name",
@@ -67,7 +63,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "album",
@@ -93,7 +88,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "City",
@@ -101,7 +95,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
       }
     }, {
       "name" : "Company",
@@ -109,7 +102,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
       }
     }, {
       "name" : "Country",
@@ -117,7 +109,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "8"
       }
     }, {
       "name" : "CustomerId",
@@ -125,7 +116,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "Email",
@@ -133,7 +123,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "12"
       }
     }, {
       "name" : "Fax",
@@ -141,7 +130,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "11"
       }
     }, {
       "name" : "FirstName",
@@ -149,7 +137,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "LastName",
@@ -157,7 +144,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "Phone",
@@ -165,7 +151,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "10"
       }
     }, {
       "name" : "PostalCode",
@@ -173,7 +158,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "9"
       }
     }, {
       "name" : "State",
@@ -181,7 +165,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
       }
     }, {
       "name" : "SupportRepId",
@@ -189,7 +172,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "13"
       }
     }, {
       "name" : "invoice",
@@ -215,7 +197,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "Name",
@@ -223,7 +204,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "track",
@@ -249,7 +229,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
       }
     }, {
       "name" : "BillingCity",
@@ -257,7 +236,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "BillingCountry",
@@ -265,7 +243,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
       }
     }, {
       "name" : "BillingPostalCode",
@@ -273,7 +250,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "8"
       }
     }, {
       "name" : "BillingState",
@@ -281,7 +257,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
       }
     }, {
       "name" : "CustomerId",
@@ -289,7 +264,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "InvoiceDate",
@@ -297,7 +271,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3",
         "example": "2019-01-01"
       },
       "expression": "CAST(InvoiceDate AS DATE)"
@@ -307,7 +280,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "Total",
@@ -315,7 +287,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "9"
       }
     }, {
       "name" : "customer",
@@ -348,7 +319,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "InvoiceLineId",
@@ -356,7 +326,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "Quantity",
@@ -364,7 +333,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "TrackId",
@@ -372,7 +340,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "UnitPrice",
@@ -380,7 +347,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
       }
     }, {
       "name" : "invoice",
@@ -413,7 +379,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "3"
       }
     }, {
       "name" : "Bytes",
@@ -421,7 +386,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "8"
       }
     }, {
       "name" : "Composer",
@@ -429,7 +393,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "6"
       }
     }, {
       "name" : "GenreId",
@@ -437,7 +400,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "5"
       }
     }, {
       "name" : "MediaTypeId",
@@ -445,7 +407,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "4"
       }
     }, {
       "name" : "Milliseconds",
@@ -453,7 +414,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "7"
       }
     }, {
       "name" : "Name",
@@ -461,7 +421,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "2"
       }
     }, {
       "name" : "TrackId",
@@ -469,7 +428,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "1"
       }
     }, {
       "name" : "UnitPrice",
@@ -477,7 +435,6 @@
       "isCalculated" : false,
       "notNull" : false,
       "properties" : {
-        "ordinalPosition" : "9"
       }
     }, {
       "name" : "genre",
