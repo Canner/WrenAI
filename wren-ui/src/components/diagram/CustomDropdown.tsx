@@ -13,7 +13,6 @@ export default function CustomDropdown(props: Props) {
   return (
     <Dropdown
       trigger={['click']}
-      getPopupContainer={(trigger) => trigger.parentElement!}
       overlayStyle={{ minWidth: 100, userSelect: 'none' }}
       overlay={
         <Menu

@@ -2,12 +2,14 @@ import { memo, useCallback, useContext } from 'react';
 import { Button, Typography } from 'antd';
 import { MoreIcon, ViewIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
-import { ComposeDiagramField, DiagramView } from '@/utils/data';
+import { ComposeDiagram, ComposeDiagramField, DiagramView } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
+import { Config } from '@/utils/diagram';
+import { makeIterable } from '@/utils/iteration';
 import { DiagramContext } from '../Context';
 import { CustomNodeProps, NodeBody, NodeHeader, StyledNode } from './utils';
 import MarkerHandle from './MarkerHandle';
-import Column from './Column';
+import Column, { MoreColumnTip } from './Column';
 import CustomDropdown from '../CustomDropdown';
 
 const { Text } = Typography;
@@ -28,7 +30,11 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
     });
   };
 
-  const renderColumns = useCallback(getColumns, []);
+  const renderColumns = useCallback(
+    (columns: ComposeDiagramField[]) =>
+      getColumns(columns, data, { limit: Config.columnsLimit }),
+    [data.highlight],
+  );
 
   return (
     <StyledNode onClick={onNodeClick}>
@@ -53,23 +59,35 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
 
         <MarkerHandle id={data.originalData.id} />
       </NodeHeader>
-      {!!data.originalData.fields.length && (
-        <NodeBody draggable={false}>
-          {renderColumns(data.originalData.fields)}
-        </NodeBody>
-      )}
+      <NodeBody draggable={false}>
+        {renderColumns(data.originalData.fields)}
+      </NodeBody>
     </StyledNode>
   );
 };
 
 export default memo(ViewNode);
 
-function getColumns(columns: ComposeDiagramField[]) {
-  return columns.map((column) => (
-    <Column
-      key={column.id}
-      {...column}
-      icon={getColumnTypeIcon({ type: column.type })}
-    />
-  ));
+const ColumnTemplate = (props) => {
+  const { id, type } = props;
+  return <Column {...props} key={id} icon={getColumnTypeIcon({ type })} />;
+};
+
+const ColumnIterator = makeIterable(ColumnTemplate);
+
+function getColumns(
+  columns: ComposeDiagramField[],
+  data: CustomNodeProps<ComposeDiagram>['data'],
+  pagination?: { limit: number },
+) {
+  const moreCount = pagination ? columns.length - pagination.limit : 0;
+  const slicedColumns = pagination
+    ? columns.slice(0, pagination.limit)
+    : columns;
+  return (
+    <>
+      <ColumnIterator data={slicedColumns} highlight={data.highlight} />
+      {moreCount > 0 && <MoreColumnTip count={moreCount} />}
+    </>
+  );
 }
