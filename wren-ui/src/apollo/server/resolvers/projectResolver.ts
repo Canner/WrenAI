@@ -1,6 +1,7 @@
 import {
   DataSource,
   DataSourceName,
+  DataSourceProperties,
   IContext,
   RelationData,
   SampleDatasetData,
@@ -29,13 +30,48 @@ export enum OnboardingStatusEnum {
 
 export class ProjectResolver {
   constructor() {
+    this.getSettings = this.getSettings.bind(this);
+    this.resetCurrentProject = this.resetCurrentProject.bind(this);
     this.saveDataSource = this.saveDataSource.bind(this);
+    this.updateDataSource = this.updateDataSource.bind(this);
     this.listDataSourceTables = this.listDataSourceTables.bind(this);
     this.saveTables = this.saveTables.bind(this);
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
     this.startSampleDataset = this.startSampleDataset.bind(this);
+  }
+
+  public async getSettings(_root: any, _arg: any, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    const dataSourceType = project.type;
+
+    return {
+      dataSource: {
+        type: dataSourceType,
+        properties: this.getDataSourceProperties(project),
+        sampleDataset: project.sampleDataset,
+      },
+    };
+  }
+
+  public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {
+    let project: Project;
+    try {
+      project = await ctx.projectService.getCurrentProject();
+    } catch {
+      // no project found
+      return true;
+    }
+
+    await ctx.deployService.deleteAllByProjectId(project.id);
+    await ctx.askingService.deleteAllByProjectId(project.id);
+    await ctx.modelService.deleteAllViewsByProjectId(project.id);
+    await ctx.modelService.deleteAllModelsByProjectId(project.id);
+
+    await ctx.projectService.deleteProject(project.id);
+
+    return true;
   }
 
   public async startSampleDataset(
@@ -133,14 +169,39 @@ export class ProjectResolver {
     ctx: IContext,
   ) {
     const { type, properties } = args.data;
-    await this.removeCurrentProject(ctx);
+    // Currently only can create one project
+    await this.resetCurrentProject(_root, args, ctx);
+
     const strategy = DataSourceStrategyFactory.create(type, { ctx });
-    await strategy.saveDataSource(properties);
+    const project = await strategy.createDataSource(properties);
 
     // telemetry
     ctx.telemetry.send_event('save_data_source', { dataSourceType: type });
     ctx.telemetry.send_event('onboarding_step_1', { step: 'save_data_source' });
-    return args.data;
+
+    return {
+      type: project.type,
+      properties: this.getDataSourceProperties(project),
+    };
+  }
+
+  public async updateDataSource(
+    _root: any,
+    args: { data: DataSource },
+    ctx: IContext,
+  ) {
+    const { properties } = args.data;
+    const project = await ctx.projectService.getCurrentProject();
+
+    const strategy = DataSourceStrategyFactory.create(project.type, {
+      ctx,
+      project,
+    });
+    const nextProject = await strategy.updateDataSource(properties);
+    return {
+      type: nextProject.type,
+      properties: this.getDataSourceProperties(nextProject),
+    };
   }
 
   public async listDataSourceTables(_root: any, _arg, ctx: IContext) {
@@ -223,43 +284,10 @@ export class ProjectResolver {
     return savedRelations;
   }
 
-  private generateRelationName(relation: RelationData, models: Model[]) {
-    const fromModel = models.find((m) => m.id === relation.fromModelId);
-    const toModel = models.find((m) => m.id === relation.toModelId);
-    if (!fromModel || !toModel) {
-      throw new Error('Model not found');
-    }
-    return (
-      fromModel.sourceTableName.charAt(0).toUpperCase() +
-      fromModel.sourceTableName.slice(1) +
-      toModel.sourceTableName.charAt(0).toUpperCase() +
-      toModel.sourceTableName.slice(1)
-    );
-  }
-
   private async deploy(ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
     const manifest = await ctx.mdlService.makeCurrentModelMDL();
     return await ctx.deployService.deploy(manifest, project.id);
-  }
-
-  private async resetCurrentProjectModel(ctx, projectId) {
-    const existsModels = await ctx.modelRepository.findAllBy({ projectId });
-    const modelIds = existsModels.map((m) => m.id);
-    await ctx.modelColumnRepository.deleteByModelIds(modelIds);
-    await ctx.modelRepository.deleteMany(modelIds);
-  }
-
-  private async removeCurrentProject(ctx) {
-    let currentProject: Project;
-    try {
-      currentProject = await ctx.projectRepository.getCurrentProject();
-    } catch (_err: any) {
-      // no project found
-      return;
-    }
-    await this.resetCurrentProjectModel(ctx, currentProject.id);
-    await ctx.projectRepository.deleteOne(currentProject.id);
   }
 
   private buildRelationInput(
@@ -313,7 +341,7 @@ export class ProjectResolver {
     project: Project,
   ) {
     // delete existing models and columns
-    await this.resetCurrentProjectModel(ctx, project.id);
+    await ctx.modelService.deleteAllModelsByProjectId(project.id);
 
     // create model and columns
     const strategy = DataSourceStrategyFactory.create(project.type, {
@@ -323,5 +351,28 @@ export class ProjectResolver {
     const { models, columns } = await strategy.saveModels(tables);
 
     return { models, columns };
+  }
+
+  private getDataSourceProperties(project: Project) {
+    const dataSourceType = project.type;
+    const properties = {
+      displayName: project.displayName,
+    } as DataSourceProperties;
+
+    if (dataSourceType === DataSourceName.BIG_QUERY) {
+      properties.projectId = project.projectId;
+      properties.datasetId = project.datasetId;
+    } else if (dataSourceType === DataSourceName.DUCKDB) {
+      properties.initSql = project.initSql;
+      properties.extensions = project.extensions;
+      properties.configurations = project.configurations;
+    } else if (dataSourceType === DataSourceName.PG) {
+      properties.host = project.host;
+      properties.port = project.port;
+      properties.database = project.database;
+      properties.user = project.user;
+    }
+
+    return properties;
   }
 }

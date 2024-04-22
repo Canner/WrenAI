@@ -156,7 +156,7 @@ export default function DuckDBProperties() {
                   <Col flex="1 0">
                     <Form.Item
                       {...restField}
-                      name={[key]}
+                      name={name}
                       noStyle
                       style={{ width: '100%' }}
                     >

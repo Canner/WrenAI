@@ -1,5 +1,5 @@
 import { IDataSourceStrategy } from './dataSourceStrategy';
-import { DataSourceName, IContext } from '../types';
+import { DataSourceName, IContext, PGDataSourceProperties } from '../types';
 import { Model, ModelColumn, Project } from '../repositories';
 import { PGColumnResponse, PGConnector } from '../connectors/pgConnector';
 import { Encryptor } from '../utils';
@@ -13,30 +13,12 @@ export class PGStrategy implements IDataSourceStrategy {
     this.ctx = ctx;
   }
 
-  public async saveDataSource(properties: any) {
+  public async createDataSource(properties: PGDataSourceProperties) {
     const { displayName, host, port, database, user, password } = properties;
-    const connector = new PGConnector(properties);
 
-    // update wren-engine config
-    const jdbcUrl = `jdbc:postgresql://${host}:${port}/${database}`;
-    const config = {
-      'postgres.jdbc.url': jdbcUrl,
-      'postgres.user': user,
-      'postgres.password': password,
-    };
-    await this.ctx.wrenEngineAdaptor.patchConfig(config);
+    this.testConnection(properties);
 
-    // check DataSource is valid and can connect to it
-    const connected = await connector.connect();
-    if (!connected) {
-      throw new Error('Can not connect to data source');
-    }
-    // check can list dataset table
-    try {
-      await connector.listTables({ format: false });
-    } catch (_e) {
-      throw new Error('Can not list tables in dataset');
-    }
+    this.patchConfigToWrenEngine(properties);
 
     // save DataSource to database
     const credentials = { password } as any;
@@ -54,6 +36,52 @@ export class PGStrategy implements IDataSourceStrategy {
       user,
       credentials: encryptedCredentials,
     });
+    return project;
+  }
+
+  public async updateDataSource(
+    properties: PGDataSourceProperties,
+  ): Promise<any> {
+    const { displayName, user, password: newPassword } = properties;
+    const {
+      host,
+      port,
+      database,
+      credentials: oldEncryptedCredentials,
+    } = this.project;
+
+    const encryptor = new Encryptor(this.ctx.config);
+    const { password: oldPassword } = JSON.parse(
+      encryptor.decrypt(oldEncryptedCredentials),
+    );
+    const password = newPassword || oldPassword;
+
+    await this.testConnection({
+      host,
+      port,
+      database,
+      user,
+      password,
+    });
+
+    await this.patchConfigToWrenEngine({
+      host,
+      port,
+      database,
+      user,
+      password,
+    });
+
+    const credentials = { password } as any;
+    const encryptedCredentials = encryptor.encrypt(credentials);
+    const project = await this.ctx.projectRepository.updateOne(
+      this.project.id,
+      {
+        displayName,
+        user,
+        credentials: encryptedCredentials,
+      },
+    );
     return project;
   }
 
@@ -92,6 +120,34 @@ export class PGStrategy implements IDataSourceStrategy {
 
   public async analysisRelation(_models: Model[], _columns: ModelColumn[]) {
     return [];
+  }
+
+  private async testConnection(properties: any) {
+    const connector = new PGConnector(properties);
+
+    // check DataSource is valid and can connect to it
+    const connected = await connector.connect();
+    if (!connected) {
+      throw new Error('Can not connect to data source');
+    }
+    // check can list dataset table
+    try {
+      await connector.listTables({ format: false });
+    } catch (_e) {
+      throw new Error('Can not list tables in dataset');
+    }
+  }
+
+  private async patchConfigToWrenEngine(properties: any) {
+    const { host, port, database, user, password } = properties;
+    // update wren-engine config
+    const jdbcUrl = `jdbc:postgresql://${host}:${port}/${database}`;
+    const config = {
+      'postgres.jdbc.url': jdbcUrl,
+      'postgres.user': user,
+      'postgres.password': password,
+    };
+    await this.ctx.wrenEngineAdaptor.patchConfig(config);
   }
 
   private getPGConnector() {

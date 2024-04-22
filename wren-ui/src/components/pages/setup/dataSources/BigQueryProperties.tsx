@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Form, Input, Button, Upload } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
 import { UploadFile } from 'antd/lib/upload/interface';
@@ -10,9 +10,13 @@ interface Props {
 }
 
 const UploadCredentials = (props) => {
-  const { onChange } = props;
+  const { onChange, value } = props;
 
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+
+  useEffect(() => {
+    if (!value) setFileList([]);
+  }, [value]);
 
   const convertFileToJSON = (file: any, callback: (value: JSON) => void) => {
     const reader = new FileReader();
@@ -104,11 +108,11 @@ export default function BigQueryProperties(props: Props) {
       </Form.Item>
       <Form.Item
         label="Credentials"
-        required
+        required={!isEditMode}
         name="credentials"
         rules={[
           {
-            required: true,
+            required: !isEditMode,
             message: ERROR_TEXTS.CONNECTION.CREDENTIAL.REQUIRED,
           },
         ]}

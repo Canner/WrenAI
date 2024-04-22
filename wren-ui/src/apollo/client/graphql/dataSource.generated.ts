@@ -27,6 +27,13 @@ export type SaveDataSourceMutationVariables = Types.Exact<{
 
 export type SaveDataSourceMutation = { __typename?: 'Mutation', saveDataSource: { __typename?: 'DataSource', type: Types.DataSourceName, properties: any } };
 
+export type UpdateDataSourceMutationVariables = Types.Exact<{
+  data: Types.UpdateDataSourceInput;
+}>;
+
+
+export type UpdateDataSourceMutation = { __typename?: 'Mutation', updateDataSource: { __typename?: 'DataSource', type: Types.DataSourceName, properties: any } };
+
 export type SaveTablesMutationVariables = Types.Exact<{
   data: Types.SaveTablesInput;
 }>;
@@ -188,6 +195,40 @@ export function useSaveDataSourceMutation(baseOptions?: Apollo.MutationHookOptio
 export type SaveDataSourceMutationHookResult = ReturnType<typeof useSaveDataSourceMutation>;
 export type SaveDataSourceMutationResult = Apollo.MutationResult<SaveDataSourceMutation>;
 export type SaveDataSourceMutationOptions = Apollo.BaseMutationOptions<SaveDataSourceMutation, SaveDataSourceMutationVariables>;
+export const UpdateDataSourceDocument = gql`
+    mutation UpdateDataSource($data: UpdateDataSourceInput!) {
+  updateDataSource(data: $data) {
+    type
+    properties
+  }
+}
+    `;
+export type UpdateDataSourceMutationFn = Apollo.MutationFunction<UpdateDataSourceMutation, UpdateDataSourceMutationVariables>;
+
+/**
+ * __useUpdateDataSourceMutation__
+ *
+ * To run a mutation, you first call `useUpdateDataSourceMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateDataSourceMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateDataSourceMutation, { data, loading, error }] = useUpdateDataSourceMutation({
+ *   variables: {
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useUpdateDataSourceMutation(baseOptions?: Apollo.MutationHookOptions<UpdateDataSourceMutation, UpdateDataSourceMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UpdateDataSourceMutation, UpdateDataSourceMutationVariables>(UpdateDataSourceDocument, options);
+      }
+export type UpdateDataSourceMutationHookResult = ReturnType<typeof useUpdateDataSourceMutation>;
+export type UpdateDataSourceMutationResult = Apollo.MutationResult<UpdateDataSourceMutation>;
+export type UpdateDataSourceMutationOptions = Apollo.BaseMutationOptions<UpdateDataSourceMutation, UpdateDataSourceMutationVariables>;
 export const SaveTablesDocument = gql`
     mutation SaveTables($data: SaveTablesInput!) {
   saveTables(data: $data)

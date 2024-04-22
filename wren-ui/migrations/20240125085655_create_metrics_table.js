@@ -14,7 +14,7 @@ exports.up = function (knex) {
     table
       .string('refresh_time')
       .comment(
-        'contain a number followed by a time unit (ns, us, ms, s, m, h, d). For example, "2h"'
+        'contain a number followed by a time unit (ns, us, ms, s, m, h, d). For example, "2h"',
       )
       .nullable();
 
@@ -24,7 +24,7 @@ exports.up = function (knex) {
     table
       .text('properties')
       .comment(
-        'metric properties, a json string, the description and displayName should be stored here'
+        'metric properties, a json string, the description and displayName should be stored here',
       )
       .nullable();
     table.timestamps(true, true);

@@ -1,11 +1,12 @@
 import { IConnector, CompactTable } from '../connectors/connector';
 import { Model, ModelColumn, Project } from '../repositories';
-import { DataSourceName, IContext } from '../types';
+import { DataSourceName, DuckDBDataSourceProperties, IContext } from '../types';
 import {
   DuckDBConnector,
   DuckDBListTableOptions,
   DuckDBPrepareOptions,
 } from '../connectors/duckdbConnector';
+import { trim } from '../utils';
 import { IDataSourceStrategy } from './dataSourceStrategy';
 
 export class DuckDBStrategy implements IDataSourceStrategy {
@@ -20,37 +21,16 @@ export class DuckDBStrategy implements IDataSourceStrategy {
     this.ctx = ctx;
   }
 
-  public async saveDataSource(properties: any) {
-    const { displayName, extensions, configurations } = properties;
-    const initSql = this.concatInitSql(properties.initSql, extensions);
-    const connector = new DuckDBConnector({
-      wrenEngineAdaptor: this.ctx.wrenEngineAdaptor,
+  public async createDataSource(properties: DuckDBDataSourceProperties) {
+    const { displayName, initSql, extensions, configurations } = properties;
+    const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
+
+    await this.testConnection({
+      initSql: initSqlWithExtensions,
+      configurations,
     });
 
-    // prepare duckdb environment in wren-engine
-    const prepareOption = {
-      sessionProps: configurations,
-      initSql,
-    } as DuckDBPrepareOptions;
-    await connector.prepare(prepareOption);
-
-    // update wren-engine config
-    const config = {
-      'wren.datasource.type': 'duckdb',
-    };
-    await this.ctx.wrenEngineAdaptor.patchConfig(config);
-
-    // check DataSource is valid and can connect to it
-    const connected = await connector.connect();
-    if (!connected) {
-      throw new Error('Can not connect to data source');
-    }
-    // check can list dataset table
-    try {
-      await connector.listTables({ format: false });
-    } catch (_e) {
-      throw new Error('Can not list tables in dataset');
-    }
+    await this.patchConfigToWrenEngine();
 
     // save DataSource to database
     const project = await this.ctx.projectRepository.createOne({
@@ -58,10 +38,35 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       schema: 'public',
       catalog: 'wrenai',
       type: DataSourceName.DUCKDB,
-      initSql,
+      initSql: trim(initSql),
       configurations,
       extensions,
     });
+    return project;
+  }
+
+  public async updateDataSource(
+    properties: DuckDBDataSourceProperties,
+  ): Promise<any> {
+    const { displayName, initSql, extensions, configurations } = properties;
+    const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
+
+    await this.testConnection({
+      initSql: initSqlWithExtensions,
+      configurations,
+    });
+
+    await this.patchConfigToWrenEngine();
+
+    const project = await this.ctx.projectRepository.updateOne(
+      this.project.id,
+      {
+        displayName,
+        initSql: trim(initSql),
+        configurations,
+        extensions,
+      },
+    );
     return project;
   }
 
@@ -103,11 +108,49 @@ export class DuckDBStrategy implements IDataSourceStrategy {
     return [];
   }
 
+  private async testConnection(args: {
+    configurations: Record<string, any>;
+    initSql: string;
+  }) {
+    const { initSql, configurations } = args;
+
+    const connector = new DuckDBConnector({
+      wrenEngineAdaptor: this.ctx.wrenEngineAdaptor,
+    });
+
+    // prepare duckdb environment in wren-engine
+    const prepareOption = {
+      sessionProps: configurations,
+      initSql,
+    } as DuckDBPrepareOptions;
+    await connector.prepare(prepareOption);
+
+    // check DataSource is valid and can connect to it
+    const connected = await connector.connect();
+    if (!connected) {
+      throw new Error('Can not connect to data source');
+    }
+    // check can list dataset table
+    try {
+      await connector.listTables({ format: false });
+    } catch (_e) {
+      throw new Error('Can not list tables in dataset');
+    }
+  }
+
+  private async patchConfigToWrenEngine() {
+    // update wren-engine config
+    const config = {
+      'wren.datasource.type': 'duckdb',
+    };
+    await this.ctx.wrenEngineAdaptor.patchConfig(config);
+  }
+
   private concatInitSql(initSql: string, extensions: string[]) {
     const installExtensions = extensions
       .map((ext) => `INSTALL ${ext};`)
       .join('\n');
-    return `${installExtensions}\n${initSql}`;
+    return trim(`${installExtensions}\n${initSql}`);
   }
 
   private async createModels(tables: string[], compactTables: CompactTable[]) {

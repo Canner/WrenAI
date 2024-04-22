@@ -24,6 +24,8 @@ export const typeDefs = gql`
   type DataSource {
     type: DataSourceName!
     properties: JSON!
+    # Show the name if the data source setup comes from a sample
+    sampleDataset: SampleDatasetName
   }
 
   input DataSourceInput {
@@ -459,6 +461,15 @@ export const typeDefs = gql`
     password: String
   }
 
+  # Settings
+  input UpdateDataSourceInput {
+    properties: JSON!
+  }
+
+  type Settings {
+    dataSource: DataSource!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -485,6 +496,9 @@ export const typeDefs = gql`
 
     # Connection Info
     connectionInfo: ConnectionInfo!
+
+    # Settings
+    settings: Settings!
   }
 
   type Mutation {
@@ -524,5 +538,9 @@ export const typeDefs = gql`
       data: CreateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+
+    # Settings
+    resetCurrentProject: Boolean!
+    updateDataSource(data: UpdateDataSourceInput!): DataSource!
   }
 `;

@@ -1,14 +1,20 @@
 import { Button, Modal } from 'antd';
-import { nextTick } from '@/utils/time';
+import { useRouter } from 'next/router';
+import { Path } from '@/utils/enum';
+import { useResetCurrentProjectMutation } from '@/apollo/client/graphql/settings.generated';
 
 export default function ProjectSettings() {
+  const router = useRouter();
+  const [resetCurrentProject] = useResetCurrentProjectMutation();
+
   const reset = () => {
     Modal.confirm({
       title: 'Are you sure you want to reset?',
       okButtonProps: { danger: true },
       okText: 'Reset',
       onOk: async () => {
-        await nextTick(2000);
+        await resetCurrentProject();
+        router.push(Path.OnboardingConnection);
       },
     });
   };

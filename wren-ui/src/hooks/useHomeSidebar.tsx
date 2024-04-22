@@ -9,7 +9,9 @@ import {
 
 export default function useHomeSidebar() {
   const router = useRouter();
-  const { data, refetch } = useThreadsQuery();
+  const { data, refetch } = useThreadsQuery({
+    fetchPolicy: 'cache-and-network',
+  });
   const [updateThread] = useUpdateThreadMutation();
   const [deleteThread] = useDeleteThreadMutation();
 

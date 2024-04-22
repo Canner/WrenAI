@@ -38,3 +38,15 @@ export default function PageLoading(props: Props) {
     </Wrapper>
   );
 }
+
+export const FlexLoading = (props) => {
+  const { height } = props;
+  return (
+    <div
+      className="d-flex align-center justify-center geekblue-6"
+      style={{ height: height || '100%' }}
+    >
+      {defaultIndicator}
+    </div>
+  );
+};

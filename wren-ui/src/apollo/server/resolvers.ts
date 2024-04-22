@@ -37,6 +37,9 @@ const resolvers = {
 
     // Connection Info
     connectionInfo: connectionInfoResolver.connectionInfo,
+
+    // Settings
+    settings: projectResolver.getSettings,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -63,6 +66,10 @@ const resolvers = {
     deleteView: modelResolver.deleteView,
     previewViewData: modelResolver.previewViewData,
     validateView: modelResolver.validateView,
+
+    // Settings
+    resetCurrentProject: projectResolver.resetCurrentProject,
+    updateDataSource: projectResolver.updateDataSource,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

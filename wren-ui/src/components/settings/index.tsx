@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Layout, Button } from 'antd';
 import styled from 'styled-components';
 import { SETTINGS } from '@/utils/enum';
@@ -8,6 +8,10 @@ import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import DataSourceSettings from './DataSourceSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
+import {
+  useGetSettingsLazyQuery,
+  GetSettingsQuery,
+} from '@/apollo/client/graphql/settings.generated';
 
 const { Sider, Content } = Layout;
 
@@ -33,10 +37,29 @@ const StyledButton = styled(Button)`
   margin-bottom: 4px;
 `;
 
-const DynamicComponent = ({ menu }: { menu: SETTINGS }) => {
+const DynamicComponent = ({
+  menu,
+  data,
+  refetch,
+  closeModal,
+}: {
+  menu: SETTINGS;
+  data?: GetSettingsQuery['settings'];
+  refetch: () => void;
+  closeModal: () => void;
+}) => {
+  const { dataSource } = data || {};
   return (
     {
-      [SETTINGS.DATA_SOURCE]: <DataSourceSettings />,
+      [SETTINGS.DATA_SOURCE]: (
+        <DataSourceSettings
+          type={dataSource?.type}
+          sampleDataset={dataSource?.sampleDataset}
+          properties={dataSource?.properties}
+          refetchSettings={refetch}
+          closeModal={closeModal}
+        />
+      ),
       [SETTINGS.PROJECT]: <ProjectSettings />,
     }[menu] || null
   );
@@ -63,10 +86,17 @@ export default function Settings(props: Props) {
   const { onClose, visible } = props;
   const [menu, setMenu] = useState<SETTINGS>(SETTINGS.DATA_SOURCE);
   const current = getSettingMenu(menu);
-  const data = Object.keys(SETTINGS).map((key) => ({
+  const menuList = Object.keys(SETTINGS).map((key) => ({
     key,
     value: SETTINGS[key],
   }));
+  const [fetchSettings, { data, refetch }] = useGetSettingsLazyQuery({
+    fetchPolicy: 'cache-and-network',
+  });
+
+  useEffect(() => {
+    if (visible) fetchSettings();
+  }, [visible]);
 
   const onMenuClick = ({ value }) => setMenu(value);
 
@@ -77,7 +107,6 @@ export default function Settings(props: Props) {
       visible={visible}
       footer={null}
       onCancel={onClose}
-      maskClosable={false}
       destroyOnClose
       centered
     >
@@ -89,7 +118,7 @@ export default function Settings(props: Props) {
           </div>
           <div className="p-3">
             <MenuIterator
-              data={data}
+              data={menuList}
               currentMenu={menu}
               onClick={onMenuClick}
             />
@@ -101,7 +130,12 @@ export default function Settings(props: Props) {
             {current.label}
           </div>
           <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
-            <DynamicComponent menu={menu} />
+            <DynamicComponent
+              menu={menu}
+              data={data?.settings}
+              refetch={refetch}
+              closeModal={onClose}
+            />
           </div>
         </Content>
       </Layout>

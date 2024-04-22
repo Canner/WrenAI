@@ -18,6 +18,16 @@ const nextConfig = {
     lessVarsFilePath: path.resolve(__dirname, 'src/styles/antd-variables.less'),
     lessVarsFilePathAppendToEndOfContent: false,
   }),
+  // routes redirect
+  async redirects() {
+    return [
+      {
+        source: '/setup',
+        destination: '/setup/connection',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

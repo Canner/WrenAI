@@ -10,11 +10,13 @@ import {
   SampleDatasetName,
 } from '@/apollo/client/graphql/__types__';
 
-const transformProperties = (
+const PASSWORD_PLACEHOLDER = '************';
+
+export const transformFormToProperties = (
   properties: Record<string, any>,
-  dataSource: DataSourceName,
+  dataSourceType: DataSourceName,
 ) => {
-  if (dataSource === DataSourceName.DUCKDB) {
+  if (dataSourceType === DataSourceName.DUCKDB) {
     const configurations = properties.configurations.reduce((acc, cur) => {
       if (cur.key && cur.value) {
         acc[cur.key] = cur.value;
@@ -28,8 +30,46 @@ const transformProperties = (
       configurations,
       extensions: properties.extensions.filter((i) => i),
     };
+  } else if (dataSourceType === DataSourceName.PG) {
+    return {
+      ...properties,
+      // remove password placeholder if user doesn't change the password
+      password:
+        properties?.password === PASSWORD_PLACEHOLDER
+          ? undefined
+          : properties?.password,
+    };
   }
 
+  return properties;
+};
+
+export const transformPropertiesToForm = (
+  properties: Record<string, any>,
+  dataSourceType: DataSourceName,
+) => {
+  if (dataSourceType === DataSourceName.BIG_QUERY) {
+    return { ...properties, credentials: undefined };
+  } else if (dataSourceType === DataSourceName.DUCKDB) {
+    const configurations = Object.entries(properties?.configurations || {}).map(
+      ([key, value]) => ({ key, value }),
+    );
+    const extensions = properties?.extensions || [];
+    return {
+      ...properties,
+      // If there are no configurations or extensions, add an empty one, or the form properties will break
+      configurations: configurations.length
+        ? configurations
+        : [{ key: '', value: '' }],
+      extensions: extensions.length ? extensions : [''],
+    };
+  } else if (dataSourceType === DataSourceName.PG) {
+    return {
+      ...properties,
+      // provide a password placeholder to UI
+      password: properties?.password || PASSWORD_PLACEHOLDER,
+    };
+  }
   return properties;
 };
 
@@ -66,7 +106,7 @@ export default function useSetupConnection() {
       variables: {
         data: {
           type: dataSource,
-          properties: transformProperties(properties, dataSource),
+          properties: transformFormToProperties(properties, dataSource),
         },
       },
     });

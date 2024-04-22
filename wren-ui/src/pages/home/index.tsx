@@ -19,7 +19,9 @@ export default function Home() {
   const homeSidebar = useHomeSidebar();
   const askPrompt = useAskPrompt();
 
-  const { data: suggestedQuestionsData } = useSuggestedQuestionsQuery();
+  const { data: suggestedQuestionsData } = useSuggestedQuestionsQuery({
+    fetchPolicy: 'cache-and-network',
+  });
   const [createThread] = useCreateThreadMutation({
     onCompleted: () => homeSidebar.refetch(),
   });

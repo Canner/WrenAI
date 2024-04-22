@@ -29,6 +29,9 @@ export default function Modeling() {
 
   const { data } = useDiagramQuery({
     fetchPolicy: 'cache-and-network',
+    onCompleted: () => {
+      diagramRef.current?.fitView();
+    },
   });
 
   // TODO: No matter which operation is performed, we must re-fetch the latest deploy status
