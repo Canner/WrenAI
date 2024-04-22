@@ -7,7 +7,7 @@ stop:
 	cd ..; make stop-qdrant
 
 ui:
-	cd ../../wren-ui; export DB_TYPE=sqlite export SQLITE_FILE=db.sqlite3 yarn && yarn rollback --all && yarn migrate && yarn dev
+	cd ../../wren-ui; export DB_TYPE=sqlite export SQLITE_FILE=db.sqlite3 yarn install && yarn rollback --all && yarn migrate && yarn dev
 
 ai:
 	cd ..; make start
