@@ -82,7 +82,7 @@ const DataSourcePanel = (props: Props) => {
     onError: (error) => console.error(error),
     onCompleted: async () => {
       refetchSettings();
-      message.success('Update successfully.');
+      message.success('Successfully update data source.');
     },
   });
 
