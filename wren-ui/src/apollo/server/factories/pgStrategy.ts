@@ -51,17 +51,26 @@ export class PGStrategy implements IDataSourceStrategy {
     } = this.project;
 
     const encryptor = new Encryptor(this.ctx.config);
-    const oldPassword = encryptor.decrypt(oldEncryptedCredentials);
+    const { password: oldPassword } = JSON.parse(
+      encryptor.decrypt(oldEncryptedCredentials),
+    );
     const password = newPassword || oldPassword;
 
     await this.testConnection({
-      ...properties,
       host,
       port,
       database,
+      user,
+      password,
     });
 
-    await this.patchConfigToWrenEngine(properties);
+    await this.patchConfigToWrenEngine({
+      host,
+      port,
+      database,
+      user,
+      password,
+    });
 
     const credentials = { password } as any;
     const encryptedCredentials = encryptor.encrypt(credentials);

@@ -10,6 +10,8 @@ import {
   SampleDatasetName,
 } from '@/apollo/client/graphql/__types__';
 
+const PASSWORD_PLACEHOLDER = '************';
+
 export const transformFormToProperties = (
   properties: Record<string, any>,
   dataSourceType: DataSourceName,
@@ -27,6 +29,15 @@ export const transformFormToProperties = (
       ...properties,
       configurations,
       extensions: properties.extensions.filter((i) => i),
+    };
+  } else if (dataSourceType === DataSourceName.PG) {
+    return {
+      ...properties,
+      // remove password placeholder if user doesn't change the password
+      password:
+        properties?.password === PASSWORD_PLACEHOLDER
+          ? undefined
+          : properties?.password,
     };
   }
 
@@ -51,6 +62,12 @@ export const transformPropertiesToForm = (
         ? configurations
         : [{ key: '', value: '' }],
       extensions: extensions.length ? extensions : [''],
+    };
+  } else if (dataSourceType === DataSourceName.PG) {
+    return {
+      ...properties,
+      // provide a password placeholder to UI
+      password: properties?.password || PASSWORD_PLACEHOLDER,
     };
   }
   return properties;
