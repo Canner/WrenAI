@@ -53,9 +53,10 @@ export default function PreviewDataContent(props: Props) {
 
   const dataSource = useMemo(() => convertResultData(data, columns), [data]);
 
+  // https://posthog.com/docs/session-replay/privacy#other-elements
   return (
     <Table
-      className={hasColumns ? 'ant-table-has-header' : ''}
+      className={`ph-no-capture ${hasColumns ? 'ant-table-has-header' : ''}`}
       showHeader={hasColumns}
       dataSource={dataSource}
       columns={tableColumns}

@@ -78,7 +78,13 @@ export default function SharePopover() {
 
   return (
     <Popover content={content} trigger="click" placement="bottomRight">
-      <Button size="small" type="primary" className="adm-modeling-header-btn">
+      <Button
+        size="small"
+        type="primary"
+        className="adm-modeling-header-btn"
+        data-ph-capture="true"
+        data-ph-capture-attribute-name="cta_share_btn"
+      >
         Share
       </Button>
     </Popover>

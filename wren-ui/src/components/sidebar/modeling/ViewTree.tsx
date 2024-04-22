@@ -14,10 +14,21 @@ export const createViewInfoModalProps = {
   title: 'How to create a View?',
   content: (
     <div>
-      Pose your questions at <Link href={Path.Home}>homepage</Link>, and get
-      some helpful answers to save as views.
+      Pose your questions at{' '}
+      <Link
+        href={Path.Home}
+        data-ph-capture="true"
+        data-ph-capture-attribute-name="cta_add_view_navigate_to_home"
+      >
+        homepage
+      </Link>
+      , and get some helpful answers to save as views.
     </div>
   ),
+  okButtonProps: {
+    ['data-ph-capture']: true,
+    ['data-ph-capture-attribute-name']: 'cta_add_view_ok_btn',
+  } as any,
 };
 
 export default function ViewTree(props: {
@@ -35,6 +46,8 @@ export default function ViewTree(props: {
         icon: () => (
           <PlusSquareOutlined
             onClick={() => Modal.info(createViewInfoModalProps)}
+            data-ph-capture="true"
+            data-ph-capture-attribute-name="cta_add_view"
           />
         ),
       },
