@@ -25,17 +25,21 @@ interface Props {
   properties: Record<string, any>;
   sampleDataset: SampleDatasetName;
   refetchSettings: () => void;
+  closeModal: () => void;
 }
 
 const SampleDatasetIterator = makeIterable(ButtonItem);
 
 const SampleDatasetPanel = (props: Props) => {
   const router = useRouter();
-  const { sampleDataset } = props;
+  const { sampleDataset, closeModal } = props;
   const templates = getTemplates();
   const [startSampleDataset] = useStartSampleDatasetMutation({
     onError: (error) => console.error(error),
-    onCompleted: () => router.push(Path.Home),
+    onCompleted: () => {
+      router.push(Path.Home);
+      closeModal();
+    },
     refetchQueries: 'active',
   });
 
@@ -86,7 +90,7 @@ const DataSourcePanel = (props: Props) => {
     },
   });
 
-  useEffect(() => reset(), [properties]);
+  useEffect(() => properties && reset(), [properties]);
 
   const reset = () => {
     form.setFieldsValue(transformPropertiesToForm(properties, type));

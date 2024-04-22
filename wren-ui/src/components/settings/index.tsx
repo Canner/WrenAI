@@ -41,10 +41,12 @@ const DynamicComponent = ({
   menu,
   data,
   refetch,
+  closeModal,
 }: {
   menu: SETTINGS;
   data?: GetSettingsQuery['settings'];
   refetch: () => void;
+  closeModal: () => void;
 }) => {
   const { dataSource } = data || {};
   return (
@@ -55,6 +57,7 @@ const DynamicComponent = ({
           sampleDataset={dataSource?.sampleDataset}
           properties={dataSource?.properties}
           refetchSettings={refetch}
+          closeModal={closeModal}
         />
       ),
       [SETTINGS.PROJECT]: <ProjectSettings />,
@@ -131,6 +134,7 @@ export default function Settings(props: Props) {
               menu={menu}
               data={data?.settings}
               refetch={refetch}
+              closeModal={onClose}
             />
           </div>
         </Content>
