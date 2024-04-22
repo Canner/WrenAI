@@ -43,7 +43,7 @@ func AskForTelemetryConsent() (bool, error) {
 	}
 
 	prompt := promptui.Prompt{
-		Label:    "Do you agree to help us by sending anonymous usage data? (yes/no, default is y)",
+		Label:    "Do you agree to help us by sending anonymous usage data? (y/n, default is y)",
 		Validate: validate,
 	}
 
