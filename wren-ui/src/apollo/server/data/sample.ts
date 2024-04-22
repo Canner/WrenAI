@@ -330,7 +330,162 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       {
         tableName: 'game',
         filePath: 'https://wrenai-public.s3.amazonaws.com/demo/NBA/game.csv',
-
+        columns: [
+          {
+            name: 'Id',
+          },
+          {
+            name: 'SeasonId',
+          },
+          {
+            name: 'TeamIdHome',
+          },
+          {
+            name: 'WlHome',
+          },
+          {
+            name: 'Min',
+          },
+          {
+            name: 'FgmHome',
+            description: 'number of field goals made by the home team.',
+          },
+          {
+            name: 'FgaHome',
+            description: 'number of field goals attempted by the home team.',
+          },
+          {
+            name: '3pHome',
+            description:
+              'number of three point field goals made by the home team.',
+          },
+          {
+            name: '3paHome',
+            description:
+              'number of three point field goals attempted by the home team.',
+          },
+          {
+            name: 'FtmHome',
+            description: 'number of free throws made by the home team.',
+          },
+          {
+            name: 'FtaHome',
+            description: 'number of free throws attempted by the home team.',
+          },
+          {
+            name: 'OrebHome',
+            description: 'number of offensive rebounds by the home team.',
+          },
+          {
+            name: 'DrebHome',
+            description: 'number of defensive rebounds by the home team.',
+          },
+          {
+            name: 'RebHome',
+            description: 'number of rebounds by the home team.',
+          },
+          {
+            name: 'AstHome',
+            description: 'number of assists by the home team.',
+          },
+          {
+            name: 'StlHome',
+            description: 'number of steels by the home team.',
+          },
+          {
+            name: 'BlkHome',
+            description: 'number of bloacks by the home team.',
+          },
+          {
+            name: 'TovHome',
+            description: 'number of turnovers by the home team.',
+          },
+          {
+            name: 'PfHome',
+            description: 'number of personal fouls by the home team.',
+          },
+          {
+            name: 'PtsHome',
+            description: 'Total score of the home team.',
+          },
+          {
+            name: 'PlusMimusHome',
+          },
+          {
+            name: 'TeamIdAway',
+          },
+          {
+            name: 'WlAway',
+          },
+          {
+            name: 'FgmAway',
+            description: 'number of field goals made by the away team.',
+          },
+          {
+            name: 'FgaAway',
+            description: 'number of field goals attempted by the away team.',
+          },
+          {
+            name: '3pAway',
+            description:
+              'number of three point field goals made by the away team.',
+          },
+          {
+            name: '3paAway',
+            description:
+              'number of three point field goals attempted by the away team.',
+          },
+          {
+            name: 'FtmAway',
+            description: 'number of free throws made by the away team.',
+          },
+          {
+            name: 'FtaAway',
+            description: 'number of free throws attempted by the away team.',
+          },
+          {
+            name: 'OrebAway',
+            description: 'number of offensive rebounds by the away team.',
+          },
+          {
+            name: 'DrebAway',
+            description: 'number of defensive rebounds by the away team.',
+          },
+          {
+            name: 'RebAway',
+            description: 'number of rebounds by the away team.',
+          },
+          {
+            name: 'AstAway',
+            description: 'number of assists by the away team.',
+          },
+          {
+            name: 'StlAway',
+            description: 'number of steels by the away team.',
+          },
+          {
+            name: 'BlkAway',
+            description: 'number of bloacks by the away team.',
+          },
+          {
+            name: 'TovAway',
+            description: 'number of turnovers by the away team.',
+          },
+          {
+            name: 'PfAway',
+            description: 'number of personal fouls by the away team.',
+          },
+          {
+            name: 'PtsAway',
+            description: 'Total score of the away team.',
+          },
+          {
+            name: 'PlusMimusAway',
+          },
+          {
+            name: 'seasonType',
+          },
+        ],
         schema: [
           { columnName: 'SeasonId', dataType: 'BIGINT' },
           { columnName: 'TeamIdHome', dataType: 'BIGINT' },
@@ -385,6 +540,79 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         tableName: 'line_score',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/NBA/line_score.csv',
+        columns: [
+          {
+            name: 'GameId',
+          },
+          {
+            name: 'GameDate',
+          },
+          {
+            name: 'GameSequence',
+          },
+          {
+            name: 'TeamIdHome',
+          },
+          {
+            name: 'TeamWinsLossesHome',
+          },
+          {
+            name: 'PtsQtr1Home',
+            description: 'The score of the home team in the first quarter.',
+          },
+          {
+            name: 'PtsQtr2Home',
+            description: 'The score of the home team in the second quarter.',
+          },
+          {
+            name: 'PtsQtr3Home',
+            description: 'The score of the home team in the third quarter.',
+          },
+          {
+            name: 'PtsQtr4Home',
+            description: 'The score of the home team in the fourth quarter.',
+          },
+          {
+            name: 'PtsOt1Home',
+            description:
+              'The score of the home team in the overtime. The value of 0 indicates that the game did not go into overtime.',
+          },
+          {
+            name: 'PtsHome',
+            description: 'Total score of the home team.',
+          },
+          {
+            name: 'TeamIdAway',
+          },
+          {
+            name: 'TeamWinsLossesAway',
+          },
+          {
+            name: 'PtsQtr1Away',
+            description: 'The score of the away team in the first quarter.',
+          },
+          {
+            name: 'PtsQtr2Away',
+            description: 'The score of the away team in the second quarter.',
+          },
+          {
+            name: 'PtsQtr3Away',
+            description: 'The score of the away team in the third quarter.',
+          },
+          {
+            name: 'PtsQtr4Away',
+            description: 'The score of the away team in the fourth quarter.',
+          },
+          {
+            name: 'PtsOt1Away',
+            description:
+              'The score of the away team in the overtime. The value of 0 indicates that the game did not go into overtime.',
+          },
+          {
+            name: 'PtsAway',
+            description: 'Total score of the away team.',
+          },
+        ],
         schema: [
           { columnName: 'GameDate', dataType: 'DATE' },
           { columnName: 'GameSequence', dataType: 'BIGINT' },
@@ -411,6 +639,93 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         tableName: 'player_games',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/NBA/player_game.csv',
+        columns: [
+          {
+            name: 'Id',
+          },
+          {
+            name: 'GameId',
+          },
+          {
+            name: 'PlayerId',
+          },
+          {
+            name: 'Date',
+          },
+          {
+            name: 'Age',
+            description: 'player age. The format is "age-days"',
+          },
+          {
+            name: 'Tm',
+            description: 'team affiliation.',
+          },
+          {
+            name: 'Opp',
+            description: 'opposing team.',
+          },
+          {
+            name: 'MP',
+            description: 'minutes played',
+          },
+          {
+            name: 'FG',
+            description: 'number of two point field goals made.',
+          },
+          {
+            name: 'FGA',
+            description:
+              'number of two point field goals attempted (do not include free throws).',
+          },
+          {
+            name: '3P',
+            description: 'number of three point field goals made.',
+          },
+          {
+            name: '3PA',
+            description: 'number of three point field goals attempted.',
+          },
+          {
+            name: 'FT',
+            description: 'number of free throws made.',
+          },
+          {
+            name: 'FTA',
+            description: 'number of free throws attempted.',
+          },
+          {
+            name: 'ORB',
+            description: 'number of offensive rebounds.',
+          },
+          {
+            name: 'DRB',
+            description: 'number of defensive rebounds.',
+          },
+          {
+            name: 'AST',
+            description: 'number of assists.',
+          },
+          {
+            name: 'STL',
+            description: 'number of Steals.',
+          },
+          {
+            name: 'BLK',
+            description: 'number of blocks.',
+          },
+          {
+            name: 'TOV',
+            description: 'number of turnovers allowed',
+          },
+          {
+            name: 'PF',
+            description: 'number of personal fouls',
+          },
+          {
+            name: 'PTS',
+            description: 'total score',
+          },
+        ],
         schema: [
           { columnName: 'Id', dataType: 'BIGINT' },
           { columnName: 'PlayerID', dataType: 'BIGINT' },
@@ -440,6 +755,23 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       {
         tableName: 'player',
         filePath: 'https://wrenai-public.s3.amazonaws.com/demo/NBA/player.csv',
+        columns: [
+          {
+            name: 'Id',
+          },
+          {
+            name: 'TeamId',
+          },
+          {
+            name: 'FullName',
+          },
+          {
+            name: 'FirstName',
+          },
+          {
+            name: 'LastName',
+          },
+        ],
         schema: [
           { columnName: 'Id', dataType: 'BIGINT' },
           { columnName: 'TeamId', dataType: 'BIGINT' },
@@ -451,6 +783,29 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       {
         tableName: 'team',
         filePath: 'https://wrenai-public.s3.amazonaws.com/demo/NBA/team.csv',
+        columns: [
+          {
+            name: 'Id',
+          },
+          {
+            name: 'FullName',
+          },
+          {
+            name: 'Abbreviation',
+          },
+          {
+            name: 'Nickname',
+          },
+          {
+            name: 'City',
+          },
+          {
+            name: 'State',
+          },
+          {
+            name: 'YearFounded',
+          },
+        ],
         schema: [
           { columnName: 'Id', dataType: 'BIGINT' },
           { columnName: 'FullName', dataType: 'VARCHAR' },
