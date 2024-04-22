@@ -1,7 +1,14 @@
 import { Form, Input } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
+import { FORM_MODE } from '@/utils/enum';
 
-export default function PostgreSQLProperties() {
+interface Props {
+  mode?: FORM_MODE;
+}
+
+export default function PostgreSQLProperties(props: Props) {
+  const { mode } = props;
+  const isEditMode = mode === FORM_MODE.EDIT;
   return (
     <>
       <Form.Item
@@ -28,7 +35,7 @@ export default function PostgreSQLProperties() {
           },
         ]}
       >
-        <Input placeholder="10.1.1.1" />
+        <Input placeholder="10.1.1.1" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
         label="Port"
@@ -41,7 +48,7 @@ export default function PostgreSQLProperties() {
           },
         ]}
       >
-        <Input placeholder="5432" />
+        <Input placeholder="5432" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
         label="Username"
@@ -79,7 +86,7 @@ export default function PostgreSQLProperties() {
           },
         ]}
       >
-        <Input placeholder="PostgreSQL database name" />
+        <Input placeholder="PostgreSQL database name" disabled={isEditMode} />
       </Form.Item>
     </>
   );
