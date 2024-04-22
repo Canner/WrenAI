@@ -65,7 +65,7 @@ Ensure you have installed the required tools before proceeding to the next steps
 - `make up` to run the docker container
 - `make down` to stop the docker container
 
-## Interative the system with Demo application or UI
+## Interact the system with Demo application or UI
 
 - Go to the `../docker` folder and prepare the `.env.local` file
 - Execute the following command to start the containers and choose App or UI to interact with the system
