@@ -94,6 +94,64 @@ describe('Connector', () => {
       },
     },
   ];
+  const expectedConstraints = [
+    {
+      constraintName: 'supplier_nation_fkey',
+      constraintType: 'FOREIGN KEY',
+      constraintTable: 'supplier',
+      constraintColumn: 's_nationkey',
+      constraintedTable: 'nation',
+      constraintedColumn: 'n_nationkey',
+    },
+    {
+      constraintName: 'partsupp_part_fkey',
+      constraintType: 'FOREIGN KEY',
+      constraintTable: 'partsupp',
+      constraintColumn: 'ps_partkey',
+      constraintedTable: 'part',
+      constraintedColumn: 'p_partkey',
+    },
+    {
+      constraintName: 'partsupp_supplier_fkey',
+      constraintType: 'FOREIGN KEY',
+      constraintTable: 'partsupp',
+      constraintColumn: 'ps_suppkey',
+      constraintedTable: 'supplier',
+      constraintedColumn: 's_suppkey',
+    },
+    {
+      constraintName: 'customer_nation_fkey',
+      constraintType: 'FOREIGN KEY',
+      constraintTable: 'customer',
+      constraintColumn: 'c_nationkey',
+      constraintedTable: 'nation',
+      constraintedColumn: 'n_nationkey',
+    },
+    {
+      constraintName: 'orders_customer_fkey',
+      constraintType: 'FOREIGN KEY',
+      constraintTable: 'orders',
+      constraintColumn: 'o_custkey',
+      constraintedTable: 'customer',
+      constraintedColumn: 'c_custkey',
+    },
+    {
+      constraintName: 'lineitem_orders_fkey',
+      constraintType: 'FOREIGN KEY',
+      constraintTable: 'lineitem',
+      constraintColumn: 'l_orderkey',
+      constraintedTable: 'orders',
+      constraintedColumn: 'o_orderkey',
+    },
+    {
+      constraintName: 'nation_region_fkey',
+      constraintType: 'FOREIGN KEY',
+      constraintTable: 'nation',
+      constraintColumn: 'n_regionkey',
+      constraintedTable: 'region',
+      constraintedColumn: 'r_regionkey',
+    },
+  ];
 
   beforeAll(async () => {
     testingEnv = new TestingEnv();
@@ -192,5 +250,25 @@ describe('Connector', () => {
     expect(column.ordinal_position).not.toBeNull();
     expect(column.is_nullable).not.toBeNull();
     expect(column.data_type).not.toBeNull();
+  });
+
+  it('should list constraints', async () => {
+    const constraints = await connector.listConstraints();
+
+    // compare the constraints with the expected constraints
+    expect(constraints).not.toBeNull();
+    expect(constraints.length).toBe(expectedConstraints.length);
+    for (const constraint of expectedConstraints) {
+      const found = constraints.find(
+        (c) =>
+          c.constraintName === constraint.constraintName &&
+          c.constraintType === constraint.constraintType &&
+          c.constraintTable === constraint.constraintTable &&
+          c.constraintColumn === constraint.constraintColumn &&
+          c.constraintedTable === constraint.constraintedTable &&
+          c.constraintedColumn === constraint.constraintedColumn,
+      );
+      expect(found).not.toBeNull();
+    }
   });
 });
