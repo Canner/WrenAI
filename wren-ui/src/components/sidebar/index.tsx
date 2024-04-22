@@ -78,7 +78,7 @@ export default function Sidebar(props: Props) {
       <div className="border-t border-gray-4 pt-2">
         <StyledButton type="text" block>
           <Link
-            href="https://discord.com/invite/Qpz6Xxpy"
+            href="https://discord.com/invite/5DvshJqG8Z"
             target="_blank"
             rel="noopener noreferrer"
             data-ph-capture="true"
