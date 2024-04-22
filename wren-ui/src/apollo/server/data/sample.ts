@@ -142,8 +142,16 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           {
             name: 'City',
             description:
-              'The Customer City, where the customer company is located',
+              'The Customer City, where the customer company is located. Also called \'customer segment\'.',
           },
+          {
+              name: 'Id',
+              description: 'A unique identifier for each customer in the data model.'
+          },
+          {
+              name: 'State',
+              description: 'A field indicating the state where the customer is located.'
+          }
         ],
         // This description is an example, please modify it to match the dataset
         description:
@@ -153,26 +161,149 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         tableName: 'order_items',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/order_items.csv',
+        columns: [
+          {
+              name: 'FreightValue',
+              description: 'A numerical value representing the cost of shipping for an item in an order.'
+          },
+          {
+              name: 'ItemNumber',
+              description: 'The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber'
+          },
+          {
+              name: 'OrderId',
+              description: 'A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship'
+          },
+          {
+              name: 'Price',
+              description: 'A numerical value representing the price of an item in an order.'
+          },
+          {
+              name: 'ProductId',
+              description: 'A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship'
+          },
+          {
+              name: 'ShippingLimitDate',
+              description: 'A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the \'order_items\' model.'
+          }
+        ],
+        description: 'The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.',
       },
       {
         tableName: 'orders',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/orders.csv',
+        columns: [
+          {
+              name: 'ApprovedTimestamp',
+              description: 'A column that represents the timestamp when the order was approved.'
+          },
+          {
+              name: 'CustomerId',
+              description: 'A unique identifier representing the customer who purchased this order.'
+          },
+          {
+              name: 'DeliveredCarrierDate',
+              description: 'A column that represents the date when the order was delivered by the carrier.'
+          },
+          {
+              name: 'DeliveredCustomerDate',
+              description: 'A column that represents the date when the order was delivered to the customer.'
+          },
+          {
+              name: 'EstimatedDeliveryDate',
+              description: 'A column that represents the estimated delivery date of the order.'
+          },
+          {
+              name: 'OrderId',
+              description: 'A column that represents a unique identifier of this order.'
+          },
+          {
+              name: 'PurchaseTimestamp',
+              description: 'A column that represents the timestamp when the order was purchased.'
+          },
+          {
+              name: 'Status',
+              description: 'A column representing the status of the order.'
+          }
+        ],
+        description: 'A model representing the orders data.',
       },
       {
         tableName: 'payments',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/payments.csv',
+        columns: [
+          {
+              name: 'Installments',
+              description: 'A column representing the number of installments in the payments data model.'
+          },
+          {
+              name: 'OrderId',
+              description: 'A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship'
+          },
+          {
+              name: 'Sequential',
+              description: 'A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number.'
+          },
+          {
+              name: 'Type',
+              description: 'A column representing the type of payment in the payments data model.'
+          },
+          {
+              name: 'Value',
+              description: 'A column representing the value of the payment in the payments data model.'
+          }
+        ],
+        description: 'A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.',
       },
       {
         tableName: 'products',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/products.csv',
+        columns: [
+          {
+              name: 'Category',
+              description: 'A category that classifies the products in the data model.'
+          },
+          {
+              name: 'Id',
+              description: 'A unique identifier assigned to each product in the data model.'
+          },
+          {
+              name: 'Name',
+              description: 'A name of the product in the data model.'
+          }
+        ],
+        description: 'A data model containing information about products such as category, ID, and name, with a relationship to order items.',
       },
       {
         tableName: 'reviews',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/reviews.csv',
+        columns: [
+          {
+              name: 'AnswerTimestamp',
+              description: 'The date when the answer was provided.'
+          },
+          {
+              name: 'CreationTimestamp',
+              description: 'The date when the review was created.'
+          },
+          {
+              name: 'Id',
+              description: 'A unique identifier assigned to each review entry.'
+          },
+          {
+              name: 'OrderId',
+              description: 'The order id of the order which the review belongs to.'
+          },
+          {
+              name: 'Score',
+              description: 'The score associated with each review entry.'
+          }
+        ],
+        description: 'A model containing information about review of orders.',
       },
     ],
     questions: [
