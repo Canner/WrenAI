@@ -1,16 +1,21 @@
 import { memo, useCallback, useContext } from 'react';
 import { Button, Typography } from 'antd';
 import { MoreIcon, ViewIcon } from '@/utils/icons';
-import { MORE_ACTION } from '@/utils/enum';
+import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import { ComposeDiagram, ComposeDiagramField, DiagramView } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { Config } from '@/utils/diagram';
 import { makeIterable } from '@/utils/iteration';
-import { DiagramContext } from '../Context';
-import { CustomNodeProps, NodeBody, NodeHeader, StyledNode } from './utils';
-import MarkerHandle from './MarkerHandle';
-import Column, { MoreColumnTip } from './Column';
-import CustomDropdown from '../CustomDropdown';
+import { DiagramContext } from '@/components/diagram/Context';
+import {
+  CustomNodeProps,
+  NodeBody,
+  NodeHeader,
+  StyledNode,
+} from '@/components/diagram/customNode/utils';
+import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
+import Column, { MoreColumnTip } from '@/components/diagram/customNode/Column';
+import CustomDropdown from '@/components/diagram/CustomDropdown';
 
 const { Text } = Typography;
 
@@ -46,7 +51,7 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
           </Text>
         </span>
         <span>
-          <CustomDropdown onMoreClick={onMoreClick}>
+          <CustomDropdown nodeType={NODE_TYPE.VIEW} onMoreClick={onMoreClick}>
             <Button
               className="gray-1"
               icon={<MoreIcon />}

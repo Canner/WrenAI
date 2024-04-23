@@ -1,5 +1,5 @@
 import { memo, useCallback, useContext } from 'react';
-import { Typography } from 'antd';
+import { Button, Typography } from 'antd';
 import {
   highlightEdges,
   highlightNodes,
@@ -18,7 +18,7 @@ import Column, {
   ColumnTitle,
   MoreColumnTip,
 } from '@/components/diagram/customNode/Column';
-import { PrimaryKeyIcon, ModelIcon } from '@/utils/icons';
+import { PrimaryKeyIcon, ModelIcon, MoreIcon } from '@/utils/icons';
 import {
   ComposeDiagram,
   ComposeDiagramField,
@@ -27,12 +27,20 @@ import {
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { makeIterable } from '@/utils/iteration';
 import { Config } from '@/utils/diagram';
-import { NODE_TYPE } from '@/utils/enum';
+import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
+import CustomDropdown from '@/components/diagram/CustomDropdown';
 
 const { Text } = Typography;
 
 export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
   const context = useContext(DiagramContext);
+  const onMoreClick = (type: MORE_ACTION) => {
+    context?.onMoreClick({
+      type,
+      title: data.originalData.displayName,
+      data: data.originalData,
+    });
+  };
   const onNodeClick = () => {
     context?.onNodeClick({
       title: data.originalData.displayName,
@@ -58,6 +66,15 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         </span>
         <span>
           <CachedIcon originalData={data.originalData} />
+          <CustomDropdown nodeType={NODE_TYPE.MODEL} onMoreClick={onMoreClick}>
+            <Button
+              className="gray-1"
+              icon={<MoreIcon />}
+              onClick={(event) => event.stopPropagation()}
+              type="text"
+              size="small"
+            />
+          </CustomDropdown>
         </span>
 
         <MarkerHandle id={data.originalData.id.toString()} />
