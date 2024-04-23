@@ -52,7 +52,7 @@ export default function SelectModels(props: Props) {
         understand your data.
         <br />
         <Link
-          href="https://docs.getwren.ai/guides/modeling/models"
+          href="https://docs.getwren.ai/guide/modeling/overview"
           target="_blank"
           rel="noopener noreferrer"
         >

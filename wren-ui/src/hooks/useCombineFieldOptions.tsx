@@ -91,7 +91,9 @@ export default function useCombineFieldOptions(props: Props) {
 
   const [baseModel, setBaseModel] = useState<string>(model || '');
 
-  const { data } = useListModelsQuery();
+  const { data } = useListModelsQuery({
+    fetchPolicy: 'cache-and-network',
+  });
 
   const allModels = useMemo(() => {
     if (!data) return [];

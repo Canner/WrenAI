@@ -71,13 +71,13 @@ export default function ConnectDataSource(props: Props) {
             </DataSource>
           </Col>
           <Col className="text-right" span={12}>
-            Learn more information in {current.label}{' '}
+            Learn more information in the {current.label}{' '}
             <Link
               href={current.guide}
               target="_blank"
               rel="noopener noreferrer"
             >
-              the setup guide
+              setup guide
             </Link>
             .
           </Col>
