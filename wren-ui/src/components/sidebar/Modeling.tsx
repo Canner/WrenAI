@@ -28,15 +28,21 @@ export const StyledSidebarTree = styled(SidebarTree)`
 export interface Props {
   data: Diagram;
   onSelect: (selectKeys) => void;
+  onOpenModelDrawer: () => void;
 }
 
 export default function Modeling(props: Props) {
-  const { data, onSelect } = props;
+  const { data, onSelect, onOpenModelDrawer } = props;
   const { models = [], views = [] } = data || {};
 
   return (
     <>
-      <ModelTree models={models} onSelect={onSelect} selectedKeys={[]} />
+      <ModelTree
+        models={models}
+        onSelect={onSelect}
+        selectedKeys={[]}
+        onOpenModelDrawer={onOpenModelDrawer}
+      />
       <ViewTree views={views} onSelect={onSelect} selectedKeys={[]} />
     </>
   );

@@ -4,18 +4,27 @@ import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
 import LabelTitle from '@/components/sidebar/LabelTitle';
+import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
 
-export default function ModelTree(props: {
+interface Props {
   [key: string]: any;
   models: DiagramModel[];
-}) {
-  const { models } = props;
+  onOpenModelDrawer: () => void;
+}
+
+export default function ModelTree(props: Props) {
+  const { onOpenModelDrawer, models } = props;
 
   const getModelGroupNode = createTreeGroupNode({
     groupName: 'Models',
     groupKey: 'models',
-    icons: [],
+    icons: [
+      {
+        key: 'add-model',
+        icon: () => <PlusSquareOutlined onClick={() => onOpenModelDrawer()} />,
+      },
+    ],
   });
 
   const [tree, setTree] = useState<DataNode[]>(getModelGroupNode());

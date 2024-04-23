@@ -10,6 +10,11 @@ import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
 import LabelTitle from '@/components/sidebar/LabelTitle';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
 
+interface Props {
+  [key: string]: any;
+  views: DiagramView[];
+}
+
 export const createViewInfoModalProps = {
   title: 'How to create a View?',
   content: (
@@ -31,10 +36,7 @@ export const createViewInfoModalProps = {
   } as any,
 };
 
-export default function ViewTree(props: {
-  [key: string]: any;
-  views: DiagramView[];
-}) {
+export default function ViewTree(props: Props) {
   const { views } = props;
 
   const getViewGroupNode = createTreeGroupNode({

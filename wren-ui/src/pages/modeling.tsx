@@ -107,6 +107,10 @@ export default function Modeling() {
         sidebar={{
           data: diagramData,
           onSelect,
+          onOpenModelDrawer: () => {
+            // TODO: open model drawer
+            console.log('open model drawer');
+          },
         }}
       >
         <DiagramWrapper>
