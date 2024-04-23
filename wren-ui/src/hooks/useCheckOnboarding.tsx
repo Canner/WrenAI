@@ -39,7 +39,7 @@ export const useWithOnboarding = () => {
           return;
         }
 
-        // allow reutrn back to previous steps
+        // allow return back to previous steps
         if (
           router.pathname.startsWith(Path.Onboarding) &&
           onboardingStatus !== OnboardingStatus.ONBOARDING_FINISHED
