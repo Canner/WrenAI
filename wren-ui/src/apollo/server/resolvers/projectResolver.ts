@@ -366,7 +366,7 @@ export class ProjectResolver {
       properties.initSql = project.initSql;
       properties.extensions = project.extensions;
       properties.configurations = project.configurations;
-    } else if (dataSourceType === DataSourceName.PG) {
+    } else if (dataSourceType === DataSourceName.POSTGRES) {
       properties.host = project.host;
       properties.port = project.port;
       properties.database = project.database;
