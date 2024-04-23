@@ -101,11 +101,7 @@ class Indexing(BasicPipeline):
             semantics["relationships"],
         )
 
-        # convert view to create view ddl and append into ddl_commands
-        for view in semantics["views"]:
-            ddl_commands.append(
-                f"CREATE VIEW {view['name']} AS {view['statement']} {view['properties']}"
-            )
+        ddl_commands.extend(self._convert_views(semantics["views"]))
 
         embeddings = self._openai_client.embeddings.create(
             input=ddl_commands,
@@ -122,6 +118,16 @@ class Indexing(BasicPipeline):
             )
             for i, ddl_command in enumerate(tqdm(ddl_commands))
         ]
+
+    def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
+        def _format(view: Dict[str, Any]) -> str:
+            return (
+                f"/* {view['properties']} */\nCREATE VIEW {view['name']}\nAS {view['statement']}"
+                if view["properties"]
+                else ""
+            )
+
+        return [_format(view) for view in views]
 
 
 if __name__ == "__main__":
