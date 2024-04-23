@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any, Dict, List
 
@@ -17,6 +18,7 @@ from src.pipelines.ask.components.embedder import (
 from src.utils import generate_ddls_from_semantics, load_env_vars
 
 load_env_vars()
+logger = logging.getLogger("wren-ai-service")
 
 DATASET_NAME = os.getenv("DATASET_NAME")
 
@@ -51,6 +53,8 @@ class Indexing(BasicPipeline):
 
     def _get_documents(self, mdl_str: str) -> List[Document]:
         mdl_json = json.loads(mdl_str)
+
+        logger.debug(f"original mdl_json: {json.dumps(mdl_json, indent=2)}")
 
         for i, _ in enumerate(mdl_json["relationships"]):
             mdl_json["relationships"][i]["type"] = "relationship"
