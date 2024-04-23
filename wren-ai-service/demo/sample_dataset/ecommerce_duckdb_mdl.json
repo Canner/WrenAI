@@ -482,7 +482,15 @@
   "enumDefinitions": [],
   "metrics": [],
   "cumulativeMetrics": [],
-  "views": [],
+  "views": [
+    {
+      "name": "customers_view",
+      "statement": "SELECT 1 as index, * FROM customers",
+      "properties": {
+        "summary": "This view shows all customers"
+      }
+    }
+  ],
   "macros": [],
   "dateSpine": {
     "unit": "DAY",
