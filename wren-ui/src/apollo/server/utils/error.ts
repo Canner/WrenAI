@@ -7,6 +7,11 @@ export enum GeneralErrorCodes {
   MISLEADING_QUERY = 'MISLEADING_QUERY',
   NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
   NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
+
+  // Connector errors
+  // duckdb
+  INIT_SQL_ERROR = 'INIT_SQL_ERROR',
+  SESSION_PROPS_ERROR = 'SESSION_PROPS_ERROR',
 }
 
 export const errorMessages = {
@@ -19,6 +24,13 @@ export const errorMessages = {
     'No relevant data found for the given query. Please try a different query.',
   [GeneralErrorCodes.NO_RELEVANT_SQL]:
     'No relevant SQL found for the given query. Please check your query and try again.',
+
+  // Connector errors
+  // duckdb
+  [GeneralErrorCodes.INIT_SQL_ERROR]:
+    'The initializing SQL seems to be invalid, Please check your SQL and try again.',
+  [GeneralErrorCodes.SESSION_PROPS_ERROR]:
+    'The session properties seem to be invalid, Please check your session properties and try again.',
 };
 
 export const shortMessages = {
@@ -26,6 +38,8 @@ export const shortMessages = {
   [GeneralErrorCodes.MISLEADING_QUERY]: 'Misleading query',
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'No relevant data',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
+  [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
+  [GeneralErrorCodes.SESSION_PROPS_ERROR]: 'Invalid session properties',
 };
 
 export const create = (

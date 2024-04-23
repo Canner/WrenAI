@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
+import * as Errors from '@server/utils/error';
 
 const logger = getLogger('WrenEngineAdaptor');
 logger.level = 'debug';
@@ -103,8 +104,12 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       };
       await axios.put(url.href, sql, { headers });
     } catch (err: any) {
-      logger.debug(`Got error when init database: ${err.message}`);
-      throw err;
+      logger.debug(`Got error when init database: ${err}`);
+      throw Errors.create(Errors.GeneralErrorCodes.INIT_SQL_ERROR, {
+        customMessage:
+          Errors.errorMessages[Errors.GeneralErrorCodes.INIT_SQL_ERROR],
+        originalError: err,
+      });
     }
   }
 
@@ -126,7 +131,11 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       await axios.put(url.href, setSessionStatements, { headers });
     } catch (err: any) {
       logger.debug(`Got error when put session props: ${err.message}`);
-      throw err;
+      throw Errors.create(Errors.GeneralErrorCodes.SESSION_PROPS_ERROR, {
+        customMessage:
+          Errors.errorMessages[Errors.GeneralErrorCodes.SESSION_PROPS_ERROR],
+        originalError: err,
+      });
     }
   }
 
