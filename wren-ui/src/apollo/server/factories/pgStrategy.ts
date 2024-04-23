@@ -22,9 +22,9 @@ export class PGStrategy implements IDataSourceStrategy {
   public async createDataSource(properties: PGDataSourceProperties) {
     const { displayName, host, port, database, user, password } = properties;
 
-    this.testConnection(properties);
+    await this.testConnection(properties);
 
-    this.patchConfigToWrenEngine(properties);
+    await this.patchConfigToWrenEngine(properties);
 
     // save DataSource to database
     const credentials = { password } as any;
