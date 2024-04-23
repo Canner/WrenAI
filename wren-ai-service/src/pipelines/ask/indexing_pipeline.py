@@ -59,7 +59,11 @@ class Indexing(BasicPipeline):
         for i, _ in enumerate(mdl_json["relationships"]):
             mdl_json["relationships"][i]["type"] = "relationship"
 
-        semantics = {"models": [], "relationships": mdl_json["relationships"]}
+        semantics = {
+            "models": [],
+            "relationships": mdl_json["relationships"],
+            "views": mdl_json["views"],
+        }
 
         for model in mdl_json["models"]:
             columns = []
@@ -96,6 +100,12 @@ class Indexing(BasicPipeline):
             semantics["models"],
             semantics["relationships"],
         )
+
+        # convert view to create view ddl and append into ddl_commands
+        for view in semantics["views"]:
+            ddl_commands.append(
+                f"CREATE VIEW {view['name']} AS {view['statement']} {view['properties']}"
+            )
 
         embeddings = self._openai_client.embeddings.create(
             input=ddl_commands,
