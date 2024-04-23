@@ -25,6 +25,16 @@
           }
         },
         {
+          "name": "Id_short",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "example": "dfsda"
+          },
+          "expression": "{{ trim('Id', 5) }}"
+        },
+        {
           "name": "State",
           "type": "VARCHAR",
           "isCalculated": false,
@@ -485,7 +495,13 @@
   "metrics": [],
   "cumulativeMetrics": [],
   "views": [],
-  "macros": [],
+  "macros": [
+    {
+      "name": "trim",
+      "definition": "(column: Expression, length: Expression) => substring({{ column }}, 1, {{ length + 1 }})",
+      "properties": {}
+    }
+  ],
   "dateSpine": {
     "unit": "DAY",
     "start": "1970-01-01",
