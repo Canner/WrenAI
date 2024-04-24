@@ -74,13 +74,23 @@ class Indexing(BasicPipeline):
                         }
                     )
                 else:
-                    columns.append(
-                        {
-                            "name": column["name"],
-                            "properties": column["properties"],
-                            "type": column["type"],
-                        }
-                    )
+                    if "expression" in column:
+                        columns.append(
+                            {
+                                "name": column["name"],
+                                "properties": column["properties"],
+                                "type": column["type"],
+                                "expression": column["expression"],
+                            }
+                        )
+                    else:
+                        columns.append(
+                            {
+                                "name": column["name"],
+                                "properties": column["properties"],
+                                "type": column["type"],
+                            }
+                        )
 
             semantics["models"].append(
                 {
