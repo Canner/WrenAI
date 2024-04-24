@@ -204,6 +204,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
     // update wren-engine config
     const jdbcUrl = `jdbc:postgresql://${host}:${port}/${database}`;
     const config = {
+      'wren.datasource.type': 'postgres',
       'postgres.jdbc.url': jdbcUrl,
       'postgres.user': user,
       'postgres.password': password,
