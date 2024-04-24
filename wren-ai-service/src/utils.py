@@ -5,8 +5,11 @@ import re
 from typing import Any, Dict, List, Optional
 
 import requests
+import sqlglot
 from dotenv import load_dotenv
 from openai import OpenAI
+
+logger = logging.getLogger("wren-ai-service")
 
 
 class CustomFormatter(logging.Formatter):
@@ -83,6 +86,15 @@ def remove_limit_statement(sql: str) -> str:
     return modified_sql
 
 
+def add_quotes(sql: str) -> str:
+    quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
+
+    logger.debug(f"Original SQL: {sql}")
+    logger.debug(f"Quoted SQL: {quoted_sql}")
+
+    return quoted_sql
+
+
 def classify_invalid_generation_results(
     api_endpoint: str,
     generation_results: List[Dict[str, str]],
@@ -94,7 +106,7 @@ def classify_invalid_generation_results(
         response = requests.get(
             f"{api_endpoint}/v1/mdl/preview",
             json={
-                "sql": remove_limit_statement(generation_result["sql"]),
+                "sql": remove_limit_statement(add_quotes(generation_result["sql"])),
                 "limit": 1,
             },
         )

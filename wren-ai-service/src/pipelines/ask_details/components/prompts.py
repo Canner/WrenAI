@@ -66,7 +66,7 @@ The final answer must be a valid JSON format as following:
 }
 
 ### THE ORIGINAL SQL QUERY ###
-Think step by step:
+Let's think step by step.
 """
 
 
