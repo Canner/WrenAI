@@ -48,6 +48,12 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
       data: data.originalData,
     });
   };
+  const onAddClick = (targetNodeType: NODE_TYPE) => {
+    context?.onAddClick({
+      targetNodeType,
+      data: data.originalData,
+    });
+  };
 
   const hasRelationships = !!data.originalData.relationFields.length;
   const hasCalculatedFields = !!data.originalData.calculatedFields.length;
@@ -68,9 +74,9 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         </span>
         <span>
           <CachedIcon originalData={data.originalData} />
-          <CustomDropdown nodeType={NODE_TYPE.MODEL} onMoreClick={onMoreClick}>
+          <ModelDropdown onMoreClick={onMoreClick}>
             <MoreButton className="gray-1" marginRight={-4} />
-          </CustomDropdown>
+          </ModelDropdown>
         </span>
 
         <MarkerHandle id={data.originalData.id.toString()} />
@@ -80,14 +86,26 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         {renderColumns([...data.originalData.fields])}
         <Column.Title
           show={hasCalculatedFields}
-          extra={<AddButton className="gray-8" marginRight={-8} />}
+          extra={
+            <AddButton
+              className="gray-8"
+              marginRight={-8}
+              onClick={() => onAddClick(NODE_TYPE.CALCULATED_FIELD)}
+            />
+          }
         >
           Calculated Fields
         </Column.Title>
         {renderColumns(data.originalData.calculatedFields)}
         <Column.Title
           show={hasRelationships}
-          extra={<AddButton className="gray-8" marginRight={-8} />}
+          extra={
+            <AddButton
+              className="gray-8"
+              marginRight={-8}
+              onClick={() => onAddClick(NODE_TYPE.RELATION)}
+            />
+          }
         >
           Relationships
         </Column.Title>
@@ -104,6 +122,14 @@ const ColumnTemplate = (props) => {
   const isRelationship = nodeType === NODE_TYPE.RELATION;
   const isCalculatedField = nodeType === NODE_TYPE.CALCULATED_FIELD;
   const isMoreButtonShow = isCalculatedField || isRelationship;
+
+  const context = useContext(DiagramContext);
+  const onMoreClick = (type: MORE_ACTION) => {
+    context?.onMoreClick({
+      type,
+      data: props,
+    });
+  };
 
   const onMouseEnter = useCallback((reactflowInstance: any) => {
     if (!isRelationship) return;
