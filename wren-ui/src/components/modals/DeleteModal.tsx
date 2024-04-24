@@ -72,3 +72,24 @@ export const DeleteViewModal = makeDeleteModal(DefaultDeleteButton, {
   content:
     'This will be permanently deleted, please confirm you want to delete it.',
 });
+
+export const DeleteModelModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'model',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});
+
+export const DeleteCalculatedFieldModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'calculated field',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});
+
+export const DeleteRelationshipModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'relationship',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});

@@ -1,8 +1,13 @@
 import { Dropdown, Menu } from 'antd';
 import { ItemType } from 'antd/lib/menu/hooks/useItems';
-import { MORE_ACTION } from '@/utils/enum';
+import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import EditOutlined from '@ant-design/icons/EditOutlined';
-import { DeleteViewModal } from '@/components/modals/DeleteModal';
+import {
+  DeleteCalculatedFieldModal,
+  DeleteRelationshipModal,
+  DeleteModelModal,
+  DeleteViewModal,
+} from '@/components/modals/DeleteModal';
 
 interface Props {
   [key: string]: any;
@@ -44,7 +49,7 @@ export const ModelDropdown = makeDropdown((props: Props) => {
     },
     {
       label: (
-        <DeleteViewModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
+        <DeleteModelModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
       ),
       className: 'red-5',
       key: MORE_ACTION.DELETE,
@@ -71,7 +76,13 @@ export const ViewDropdown = makeDropdown((props: Props) => {
 });
 
 export const ColumnDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick } = props;
+  const { onMoreClick, nodeType } = props;
+
+  const DeleteColumnModal =
+    {
+      [NODE_TYPE.CALCULATED_FIELD]: DeleteCalculatedFieldModal,
+      [NODE_TYPE.RELATION]: DeleteRelationshipModal,
+    }[nodeType] || DeleteCalculatedFieldModal;
 
   const items: ItemType[] = [
     {
@@ -86,7 +97,7 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
     },
     {
       label: (
-        <DeleteViewModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
+        <DeleteColumnModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
       ),
       className: 'red-5',
       key: MORE_ACTION.DELETE,

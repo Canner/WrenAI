@@ -138,7 +138,7 @@ const ColumnTemplate = (props) => {
         <>
           {isPrimaryKey && <PrimaryKeyIcon />}{' '}
           {isMoreButtonShow && (
-            <ColumnDropdown onMoreClick={onMoreClick}>
+            <ColumnDropdown nodeType={nodeType} onMoreClick={onMoreClick}>
               <MoreButton className="gray-8" marginRight={-4} />
             </ColumnDropdown>
           )}
