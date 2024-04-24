@@ -18,7 +18,7 @@ type Config = {
 
 export const makeDeleteModal =
   (Component, config?: Config) => (props: DeleteModalProps) => {
-    const { content, modalProps = {}, onConfirm, ...restProps } = props;
+    const { title, content, modalProps = {}, onConfirm, ...restProps } = props;
 
     return (
       <Component

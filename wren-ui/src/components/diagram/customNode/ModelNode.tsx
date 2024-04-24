@@ -1,5 +1,6 @@
 import { memo, useCallback, useContext } from 'react';
 import { Typography } from 'antd';
+import { useReactFlow } from 'reactflow';
 import {
   highlightEdges,
   highlightNodes,
@@ -72,7 +73,7 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         </span>
         <span>
           <CachedIcon originalData={data.originalData} />
-          <ModelDropdown onMoreClick={onMoreClick}>
+          <ModelDropdown data={data.originalData} onMoreClick={onMoreClick}>
             <MoreButton className="gray-1" marginRight={-4} />
           </ModelDropdown>
         </span>
@@ -120,6 +121,7 @@ const ColumnTemplate = (props) => {
   const isRelationship = nodeType === NODE_TYPE.RELATION;
   const isCalculatedField = nodeType === NODE_TYPE.CALCULATED_FIELD;
   const isMoreButtonShow = isCalculatedField || isRelationship;
+  const reactflowInstance = useReactFlow();
 
   const context = useContext(DiagramContext);
   const onMoreClick = (type: MORE_ACTION) => {
@@ -129,28 +131,55 @@ const ColumnTemplate = (props) => {
     });
   };
 
-  const onMouseEnter = useCallback((reactflowInstance: any) => {
-    if (!isRelationship) return;
-    const { getEdges, setEdges, setNodes } = reactflowInstance;
-    const edges = getEdges();
-    const relatedEdge = edges.find(
-      (edge: any) =>
-        trimId(edge.sourceHandle) === id || trimId(edge.targetHandle) === id,
-    );
-    setEdges(highlightEdges([relatedEdge.id], true));
-    setNodes(
-      highlightNodes(
-        [relatedEdge.source, relatedEdge.target],
-        [trimId(relatedEdge.sourceHandle), trimId(relatedEdge.targetHandle)],
-      ),
-    );
-  }, []);
-  const onMouseLeave = useCallback((reactflowInstance: any) => {
-    if (!isRelationship) return;
-    const { setEdges, setNodes } = reactflowInstance;
-    setEdges(highlightEdges([], false));
-    setNodes(highlightNodes([], []));
-  }, []);
+  const onMouseEnter = useCallback(
+    (_event: React.MouseEvent) => {
+      if (!isRelationship) return;
+      const { getEdges, setEdges, setNodes } = reactflowInstance;
+      const edges = getEdges();
+      const relatedEdge = edges.find(
+        (edge: any) =>
+          trimId(edge.sourceHandle) === id || trimId(edge.targetHandle) === id,
+      );
+      setEdges(highlightEdges([relatedEdge.id], true));
+      setNodes(
+        highlightNodes(
+          [relatedEdge.source, relatedEdge.target],
+          [trimId(relatedEdge.sourceHandle), trimId(relatedEdge.targetHandle)],
+        ),
+      );
+    },
+    [reactflowInstance],
+  );
+  const onMouseLeave = useCallback(
+    (_event: React.MouseEvent) => {
+      if (!isRelationship) return;
+      const { setEdges, setNodes } = reactflowInstance;
+      setEdges(highlightEdges([], false));
+      setNodes(highlightNodes([], []));
+    },
+    [reactflowInstance],
+  );
+
+  const onMoreMouseEnter = useCallback(
+    (event: React.MouseEvent) => {
+      onMouseLeave(event);
+    },
+    [reactflowInstance],
+  );
+
+  const onMoreMouseLeave = useCallback(
+    (event: React.MouseEvent) => {
+      onMouseEnter(event);
+    },
+    [reactflowInstance],
+  );
+
+  const onMenuEnter = useCallback(
+    (event: React.MouseEvent) => {
+      onMouseLeave(event);
+    },
+    [reactflowInstance],
+  );
 
   return (
     <Column
@@ -162,8 +191,17 @@ const ColumnTemplate = (props) => {
         <>
           {isPrimaryKey && <PrimaryKeyIcon />}{' '}
           {isMoreButtonShow && (
-            <ColumnDropdown nodeType={nodeType} onMoreClick={onMoreClick}>
-              <MoreButton className="gray-8" marginRight={-4} />
+            <ColumnDropdown
+              data={props}
+              onMoreClick={onMoreClick}
+              onMenuEnter={onMenuEnter}
+            >
+              <MoreButton
+                className="gray-8"
+                marginRight={-4}
+                onMouseEnter={onMoreMouseEnter}
+                onMouseLeave={onMoreMouseLeave}
+              />
             </ColumnDropdown>
           )}
         </>

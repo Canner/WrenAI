@@ -1,3 +1,4 @@
+import React from 'react';
 import { Dropdown, Menu } from 'antd';
 import { ItemType } from 'antd/lib/menu/hooks/useItems';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
@@ -12,12 +13,13 @@ import {
 interface Props {
   [key: string]: any;
   onMoreClick: (type: MORE_ACTION) => void;
+  onMenuEnter?: (event: React.MouseEvent) => void;
   children: React.ReactNode;
 }
 
 const makeDropdown =
   (getItems: (props: Props) => ItemType[]) => (props: Props) => {
-    const { children } = props;
+    const { children, onMenuEnter } = props;
 
     const items = getItems(props);
 
@@ -26,7 +28,11 @@ const makeDropdown =
         trigger={['click']}
         overlayStyle={{ minWidth: 100, userSelect: 'none' }}
         overlay={
-          <Menu onClick={(e) => e.domEvent.stopPropagation()} items={items} />
+          <Menu
+            onClick={(e) => e.domEvent.stopPropagation()}
+            items={items}
+            onMouseEnter={onMenuEnter}
+          />
         }
       >
         {children}
@@ -36,6 +42,7 @@ const makeDropdown =
 
 export const ModelDropdown = makeDropdown((props: Props) => {
   const { onMoreClick } = props;
+
   const items: ItemType[] = [
     {
       label: (
@@ -76,7 +83,8 @@ export const ViewDropdown = makeDropdown((props: Props) => {
 });
 
 export const ColumnDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick, nodeType } = props;
+  const { onMoreClick, data } = props;
+  const { nodeType } = data;
 
   const DeleteColumnModal =
     {

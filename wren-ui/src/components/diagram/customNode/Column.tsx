@@ -1,5 +1,4 @@
 import React from 'react';
-import { ReactFlowInstance, useReactFlow } from 'reactflow';
 import styled from 'styled-components';
 import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
 
@@ -50,8 +49,8 @@ type ColumnProps = {
   style?: React.CSSProperties;
   icon: React.ReactNode;
   extra?: React.ReactNode;
-  onMouseEnter?: (reactflowInstance: ReactFlowInstance) => void;
-  onMouseLeave?: (reactflowInstance: ReactFlowInstance) => void;
+  onMouseEnter?: (event: React.MouseEvent) => void;
+  onMouseLeave?: (event: React.MouseEvent) => void;
 };
 
 type ColumnTitleProps = {
@@ -71,19 +70,12 @@ export default function Column(props: ColumnProps) {
     icon,
     extra,
   } = props;
-  const reactflowInstance = useReactFlow();
-  const mouseEnter = onMouseEnter
-    ? () => onMouseEnter(reactflowInstance)
-    : undefined;
-  const mouseLeave = onMouseLeave
-    ? () => onMouseLeave(reactflowInstance)
-    : undefined;
 
   const nodeColumn = (
     <NodeColumn
       style={style}
-      onMouseEnter={mouseEnter}
-      onMouseLeave={mouseLeave}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <div className="adm-column-title">
         <span title={type}>{icon}</span>
