@@ -16,7 +16,6 @@ const NodeColumn = styled.div`
   }
 
   svg {
-    cursor: auto;
     flex-shrink: 0;
   }
 

@@ -93,34 +93,6 @@ export const NodeBody = styled.div`
   padding-bottom: 4px;
 `;
 
-export const NodeColumn = styled.div`
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 12px;
-  color: var(--gray-9);
-
-  svg {
-    cursor: auto;
-    flex-shrink: 0;
-  }
-
-  .adm-column-title {
-    display: flex;
-    align-items: center;
-    min-width: 1px;
-    svg {
-      margin-right: 6px;
-    }
-    > span {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-  }
-`;
-
 export const CachedIcon = ({ originalData }: { originalData: CachedProps }) => {
   return originalData.cached ? (
     <Tooltip
