@@ -103,19 +103,26 @@ def classify_invalid_generation_results(
     invalid_generation_results = []
 
     for generation_result in generation_results:
+        quoted_sql = add_quotes(generation_result["sql"])
+
         response = requests.get(
             f"{api_endpoint}/v1/mdl/preview",
             json={
-                "sql": remove_limit_statement(add_quotes(generation_result["sql"])),
+                "sql": remove_limit_statement(quoted_sql),
                 "limit": 1,
             },
         )
         if response.status_code == 200:
-            valid_generation_results.append(generation_result)
+            valid_generation_results.append(
+                {
+                    "sql": quoted_sql,
+                    "summary": generation_result["summary"],
+                }
+            )
         else:
             invalid_generation_results.append(
                 {
-                    "sql": generation_result["sql"],
+                    "sql": quoted_sql,
                     "summary": generation_result["summary"],
                     "error": response.json()["message"],
                 }
