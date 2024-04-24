@@ -138,7 +138,7 @@ def check_if_sql_executable(
     response = requests.get(
         f"{api_endpoint}/v1/mdl/preview",
         json={
-            "sql": remove_limit_statement(sql),
+            "sql": remove_limit_statement(add_quotes(sql)),
             "limit": 1,
         },
     )
