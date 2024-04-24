@@ -3,7 +3,6 @@ import { ComposeDiagram } from '@/utils/data';
 
 export interface ClickPayload {
   [key: string]: any;
-  title: string;
   data: ComposeDiagram;
 }
 

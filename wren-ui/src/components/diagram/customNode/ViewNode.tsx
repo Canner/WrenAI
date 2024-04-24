@@ -24,13 +24,11 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
   const onMoreClick = (type: MORE_ACTION) => {
     context?.onMoreClick({
       type,
-      title: data.originalData.displayName,
       data: data.originalData,
     });
   };
   const onNodeClick = () => {
     context?.onNodeClick({
-      title: data.originalData.displayName,
       data: data.originalData,
     });
   };
