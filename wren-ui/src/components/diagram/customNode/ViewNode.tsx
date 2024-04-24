@@ -1,7 +1,7 @@
 import { memo, useCallback, useContext } from 'react';
 import { Button, Typography } from 'antd';
 import { MoreIcon, ViewIcon } from '@/utils/icons';
-import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
+import { MORE_ACTION } from '@/utils/enum';
 import { ComposeDiagram, ComposeDiagramField, DiagramView } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { Config } from '@/utils/diagram';
@@ -15,7 +15,7 @@ import {
 } from '@/components/diagram/customNode/utils';
 import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
 import Column from '@/components/diagram/customNode/Column';
-import CustomDropdown from '@/components/diagram/CustomDropdown';
+import { ViewDropdown } from '@/components/diagram/CustomDropdown';
 
 const { Text } = Typography;
 
@@ -51,7 +51,7 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
           </Text>
         </span>
         <span>
-          <CustomDropdown nodeType={NODE_TYPE.VIEW} onMoreClick={onMoreClick}>
+          <ViewDropdown onMoreClick={onMoreClick}>
             <Button
               className="gray-1"
               icon={<MoreIcon />}
@@ -59,7 +59,7 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
               type="text"
               size="small"
             />
-          </CustomDropdown>
+          </ViewDropdown>
         </span>
 
         <MarkerHandle id={data.originalData.id} />

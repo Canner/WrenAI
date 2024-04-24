@@ -25,7 +25,10 @@ import { getColumnTypeIcon } from '@/utils/columnType';
 import { makeIterable } from '@/utils/iteration';
 import { Config } from '@/utils/diagram';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
-import CustomDropdown from '@/components/diagram/CustomDropdown';
+import {
+  ModelDropdown,
+  ColumnDropdown,
+} from '@/components/diagram/CustomDropdown';
 import { AddButton, MoreButton } from '@/components/ActionButton';
 
 const { Text } = Typography;
@@ -135,7 +138,9 @@ const ColumnTemplate = (props) => {
         <>
           {isPrimaryKey && <PrimaryKeyIcon />}{' '}
           {isMoreButtonShow && (
-            <MoreButton className="gray-8" marginRight={-4} />
+            <ColumnDropdown onMoreClick={onMoreClick}>
+              <MoreButton className="gray-8" marginRight={-4} />
+            </ColumnDropdown>
           )}
         </>
       }
