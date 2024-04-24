@@ -30,7 +30,7 @@ export const transformFormToProperties = (
       configurations,
       extensions: properties.extensions.filter((i) => i),
     };
-  } else if (dataSourceType === DataSourceName.PG) {
+  } else if (dataSourceType === DataSourceName.POSTGRES) {
     return {
       ...properties,
       // remove password placeholder if user doesn't change the password
@@ -63,7 +63,7 @@ export const transformPropertiesToForm = (
         : [{ key: '', value: '' }],
       extensions: extensions.length ? extensions : [''],
     };
-  } else if (dataSourceType === DataSourceName.PG) {
+  } else if (dataSourceType === DataSourceName.POSTGRES) {
     return {
       ...properties,
       // provide a password placeholder to UI
