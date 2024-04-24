@@ -116,12 +116,13 @@ export class PostgresStrategy implements IDataSourceStrategy {
       format: false,
     })) as PostgresColumnResponse[];
 
-    const models = await this.createModels(this.project, tables);
+    const models = await this.createModels(tables, connector);
     // create columns
     const columns = await this.createColumns(
       tables,
       models,
       dataSourceColumns as PostgresColumnResponse[],
+      connector,
     );
     return { models, columns };
   }
@@ -227,15 +228,19 @@ export class PostgresStrategy implements IDataSourceStrategy {
     return connector;
   }
 
-  private async createModels(project: Project, tables: string[]) {
+  private async createModels(tables: string[], connector: PostgresConnector) {
     const projectId = this.project.id;
-    const modelValues = tables.map((tableName) => {
+    const modelValues = tables.map((compactTableName) => {
+      const { schema, tableName } =
+        connector.parseCompactTableName(compactTableName);
+      // make referenceName = schema + _ + tableName
+      const referenceName = `${schema}_${tableName}`;
       const model = {
         projectId,
-        displayName: tableName, //use table name as displayName, referenceName and tableName
-        referenceName: tableName,
-        sourceTableName: tableName,
-        refSql: `select * from "${project.schema}".${tableName}`,
+        displayName: compactTableName, // use table name as displayName, referenceName and tableName
+        referenceName,
+        sourceTableName: compactTableName,
+        refSql: `select * from "${schema}"."${tableName}"`,
         cached: false,
         refreshTime: null,
       } as Partial<Model>;
@@ -250,15 +255,29 @@ export class PostgresStrategy implements IDataSourceStrategy {
     tables: string[],
     models: Model[],
     dataSourceColumns: PostgresColumnResponse[],
+    connector: PostgresConnector,
   ) {
-    const columnValues = tables.reduce((acc, tableName) => {
-      const modelId = models.find((m) => m.sourceTableName === tableName)?.id;
+    const columnValues = tables.reduce((acc, compactTableName) => {
+      // sourceTableName is the same as compactTableName when we create models
+      const modelId = models.find(
+        (m) => m.sourceTableName === compactTableName,
+      )?.id;
+
       if (!modelId) {
         throw new Error('Model not found');
       }
+
+      // get columns of the table
+      // format the table_name & table_schema of the column to match compactTableName
       const tableColumns = dataSourceColumns.filter(
-        (col) => col.table_name === tableName,
+        (col) =>
+          connector.formatCompactTableName(col.table_name, col.table_schema) ===
+          compactTableName,
       );
+
+      // create column for each column in the table
+      // and add it to accumulated columnValues
+      // columnValues will be used to create columns in database
       for (const tableColumn of tableColumns) {
         const columnName = tableColumn.column_name;
         const columnValue = {
@@ -275,12 +294,8 @@ export class PostgresStrategy implements IDataSourceStrategy {
       }
       return acc;
     }, []);
-    const columns = await Promise.all(
-      columnValues.map(
-        async (column) =>
-          await this.ctx.modelColumnRepository.createOne(column),
-      ),
-    );
+    const columns =
+      await this.ctx.modelColumnRepository.createMany(columnValues);
     return columns;
   }
 }
