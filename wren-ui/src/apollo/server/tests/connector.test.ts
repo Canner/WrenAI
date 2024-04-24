@@ -101,57 +101,57 @@ describe('Connector', () => {
     {
       constraintName: 'supplier_nation_fkey',
       constraintType: 'FOREIGN KEY',
-      constraintTable: 'supplier',
+      constraintTable: 'public.supplier',
       constraintColumn: 's_nationkey',
-      constraintedTable: 'nation',
+      constraintedTable: 'public.nation',
       constraintedColumn: 'n_nationkey',
     },
     {
       constraintName: 'partsupp_part_fkey',
       constraintType: 'FOREIGN KEY',
-      constraintTable: 'partsupp',
+      constraintTable: 'public.partsupp',
       constraintColumn: 'ps_partkey',
-      constraintedTable: 'part',
+      constraintedTable: 'public.part',
       constraintedColumn: 'p_partkey',
     },
     {
       constraintName: 'partsupp_supplier_fkey',
       constraintType: 'FOREIGN KEY',
-      constraintTable: 'partsupp',
+      constraintTable: 'public.partsupp',
       constraintColumn: 'ps_suppkey',
-      constraintedTable: 'supplier',
+      constraintedTable: 'public.supplier',
       constraintedColumn: 's_suppkey',
     },
     {
       constraintName: 'customer_nation_fkey',
       constraintType: 'FOREIGN KEY',
-      constraintTable: 'customer',
+      constraintTable: 'public.customer',
       constraintColumn: 'c_nationkey',
-      constraintedTable: 'nation',
+      constraintedTable: 'public.nation',
       constraintedColumn: 'n_nationkey',
     },
     {
       constraintName: 'orders_customer_fkey',
       constraintType: 'FOREIGN KEY',
-      constraintTable: 'orders',
+      constraintTable: 'public.orders',
       constraintColumn: 'o_custkey',
-      constraintedTable: 'customer',
+      constraintedTable: 'public.customer',
       constraintedColumn: 'c_custkey',
     },
     {
       constraintName: 'lineitem_orders_fkey',
       constraintType: 'FOREIGN KEY',
-      constraintTable: 'lineitem',
+      constraintTable: 'public.lineitem',
       constraintColumn: 'l_orderkey',
-      constraintedTable: 'orders',
+      constraintedTable: 'public.orders',
       constraintedColumn: 'o_orderkey',
     },
     {
       constraintName: 'nation_region_fkey',
       constraintType: 'FOREIGN KEY',
-      constraintTable: 'nation',
+      constraintTable: 'public.nation',
       constraintColumn: 'n_regionkey',
-      constraintedTable: 'region',
+      constraintedTable: 'public.region',
       constraintedColumn: 'r_regionkey',
     },
   ];
@@ -195,22 +195,24 @@ describe('Connector', () => {
 
     // check if tables include tpch tables
     for (const table of tpchTables) {
-      const found = tables.find((t: CompactTable) => t.name === table);
-      expect(found).not.toBeNull();
+      const found = tables.find(
+        (t: CompactTable) => t.name === `public.${table}`,
+      );
+      expect(found).toBeTruthy();
     }
 
     // check if customer table has correct columns
     const customerTable = tables.find(
-      (t: CompactTable) => t.name === 'customer',
+      (t: CompactTable) => t.name === 'public.customer',
     );
-    expect(customerTable).not.toBeNull();
-    expect(customerTable.columns).not.toBeNull();
+    expect(customerTable).toBeTruthy();
+    expect(customerTable.columns).toBeTruthy();
     expect(customerTable.columns.length).toBe(tpchCustomerColumns.length);
     for (const column of tpchCustomerColumns) {
       const found = customerTable.columns.find(
         (c) => c.name === column.name && c.type === column.type,
       );
-      expect(found).not.toBeNull();
+      expect(found).toBeTruthy();
       // check type, notNull, and ordinalPosition
       expect(found.type).toBe(column.type);
       expect(found.notNull).toBe(column.notNull);
@@ -226,7 +228,7 @@ describe('Connector', () => {
     })) as PostgresColumnResponse[];
 
     // check if columns not null and has length
-    expect(columns).not.toBeNull();
+    expect(columns).toBeTruthy();
     expect(columns.length).toBeGreaterThan(0);
 
     // check the format of the columns
@@ -248,18 +250,18 @@ describe('Connector', () => {
     const column = columns[0];
     expect(column.table_catalog).toBe(expectedCatalog);
     expect(column.table_schema).toBe(expectedSchema);
-    expect(column.table_name).not.toBeNull();
-    expect(column.column_name).not.toBeNull();
-    expect(column.ordinal_position).not.toBeNull();
-    expect(column.is_nullable).not.toBeNull();
-    expect(column.data_type).not.toBeNull();
+    expect(column.table_name).toBeTruthy();
+    expect(column.column_name).toBeTruthy();
+    expect(column.ordinal_position).toBeTruthy();
+    expect(column.is_nullable).toBeTruthy();
+    expect(column.data_type).toBeTruthy();
   });
 
   it('should list constraints', async () => {
     const constraints = await connector.listConstraints();
 
     // compare the constraints with the expected constraints
-    expect(constraints).not.toBeNull();
+    expect(constraints).toBeTruthy();
     expect(constraints.length).toBe(expectedConstraints.length);
     for (const constraint of expectedConstraints) {
       const found = constraints.find(
@@ -271,7 +273,7 @@ describe('Connector', () => {
           c.constraintedTable === constraint.constraintedTable &&
           c.constraintedColumn === constraint.constraintedColumn,
       );
-      expect(found).not.toBeNull();
+      expect(found).toBeTruthy();
     }
   });
 });

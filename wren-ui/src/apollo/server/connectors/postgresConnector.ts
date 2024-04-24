@@ -128,9 +128,15 @@ export class PostgresConnector
       return {
         constraintName: row.constraint_name,
         constraintType: 'FOREIGN KEY',
-        constraintTable: row.table_name,
+        constraintTable: this.formatCompactTableName(
+          row.table_name,
+          row.table_schema,
+        ),
         constraintColumn: row.column_name,
-        constraintedTable: row.foreign_table_name,
+        constraintedTable: this.formatCompactTableName(
+          row.foreign_table_name,
+          row.foreign_table_schema,
+        ),
         constraintedColumn: row.foreign_column_name,
       };
     }) as PostgresConstraintResponse[];
@@ -150,12 +156,11 @@ export class PostgresConnector
           is_nullable,
           data_type,
         } = row;
-        let table = acc.find(
-          (t) => t.name === table_name && t.properties.schema === table_schema,
-        );
+        const tableName = this.formatCompactTableName(table_name, table_schema);
+        let table = acc.find((t) => t.name === tableName);
         if (!table) {
           table = {
-            name: table_name,
+            name: tableName,
             description: '',
             columns: [],
             properties: {
@@ -183,6 +188,15 @@ export class PostgresConnector
       await this.client.end();
       this.client = null;
     }
+  }
+
+  public formatCompactTableName(tableName: string, schema: string) {
+    return `${schema}.${tableName}`;
+  }
+
+  public parseCompactTableName(compactTableName: string) {
+    const [schema, tableName] = compactTableName.split('.');
+    return { schema, tableName };
   }
 
   private async prepareClient() {
