@@ -1,5 +1,5 @@
 import { memo, useCallback, useContext } from 'react';
-import { Button, Typography } from 'antd';
+import { Typography } from 'antd';
 import {
   highlightEdges,
   highlightNodes,
@@ -14,11 +14,8 @@ import {
 } from '@/components/diagram/customNode/utils';
 import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
 import { DiagramContext } from '@/components/diagram/Context';
-import Column, {
-  ColumnTitle,
-  MoreColumnTip,
-} from '@/components/diagram/customNode/Column';
-import { PrimaryKeyIcon, ModelIcon, MoreIcon } from '@/utils/icons';
+import Column from '@/components/diagram/customNode/Column';
+import { PrimaryKeyIcon, ModelIcon } from '@/utils/icons';
 import {
   ComposeDiagram,
   ComposeDiagramField,
@@ -29,6 +26,7 @@ import { makeIterable } from '@/utils/iteration';
 import { Config } from '@/utils/diagram';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import CustomDropdown from '@/components/diagram/CustomDropdown';
+import { AddButton, MoreButton } from '@/components/ActionButton';
 
 const { Text } = Typography;
 
@@ -48,7 +46,8 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
     });
   };
 
-  const hasRelationTitle = !!data.originalData.relationFields.length;
+  const hasRelationships = !!data.originalData.relationFields.length;
+  const hasCalculatedFields = !!data.originalData.calculatedFields.length;
   const renderColumns = useCallback(
     (columns: ComposeDiagramField[]) =>
       getColumns(columns, data, { limit: Config.columnsLimit }),
@@ -67,24 +66,28 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         <span>
           <CachedIcon originalData={data.originalData} />
           <CustomDropdown nodeType={NODE_TYPE.MODEL} onMoreClick={onMoreClick}>
-            <Button
-              className="gray-1"
-              icon={<MoreIcon />}
-              onClick={(event) => event.stopPropagation()}
-              type="text"
-              size="small"
-            />
+            <MoreButton className="gray-1" marginRight={-4} />
           </CustomDropdown>
         </span>
 
         <MarkerHandle id={data.originalData.id.toString()} />
       </NodeHeader>
       <NodeBody draggable={false}>
-        {renderColumns([
-          ...data.originalData.fields,
-          ...data.originalData.calculatedFields,
-        ])}
-        {hasRelationTitle ? <ColumnTitle>Relationships</ColumnTitle> : null}
+        <Column.Title show={true}>Columns</Column.Title>
+        {renderColumns([...data.originalData.fields])}
+        <Column.Title
+          show={hasCalculatedFields}
+          extra={<AddButton className="gray-8" marginRight={-8} />}
+        >
+          Calculated Fields
+        </Column.Title>
+        {renderColumns(data.originalData.calculatedFields)}
+        <Column.Title
+          show={hasRelationships}
+          extra={<AddButton className="gray-8" marginRight={-8} />}
+        >
+          Relationships
+        </Column.Title>
         {renderColumns(data.originalData.relationFields)}
       </NodeBody>
     </StyledNode>
@@ -95,10 +98,12 @@ export default memo(ModelNode);
 
 const ColumnTemplate = (props) => {
   const { nodeType, id, type, isPrimaryKey, highlight } = props;
-  const isRelation = nodeType === NODE_TYPE.RELATION;
+  const isRelationship = nodeType === NODE_TYPE.RELATION;
+  const isCalculatedField = nodeType === NODE_TYPE.CALCULATED_FIELD;
+  const isMoreButtonShow = isCalculatedField || isRelationship;
 
   const onMouseEnter = useCallback((reactflowInstance: any) => {
-    if (!isRelation) return;
+    if (!isRelationship) return;
     const { getEdges, setEdges, setNodes } = reactflowInstance;
     const edges = getEdges();
     const relatedEdge = edges.find(
@@ -114,7 +119,7 @@ const ColumnTemplate = (props) => {
     );
   }, []);
   const onMouseLeave = useCallback((reactflowInstance: any) => {
-    if (!isRelation) return;
+    if (!isRelationship) return;
     const { setEdges, setNodes } = reactflowInstance;
     setEdges(highlightEdges([], false));
     setNodes(highlightNodes([], []));
@@ -125,8 +130,15 @@ const ColumnTemplate = (props) => {
       {...props}
       key={id}
       className={highlight.includes(id) ? 'bg-gray-3' : undefined}
-      icon={isRelation ? <ModelIcon /> : getColumnTypeIcon({ type })}
-      append={isPrimaryKey && <PrimaryKeyIcon />}
+      icon={isRelationship ? <ModelIcon /> : getColumnTypeIcon({ type })}
+      extra={
+        <>
+          {isPrimaryKey && <PrimaryKeyIcon />}{' '}
+          {isMoreButtonShow && (
+            <MoreButton className="gray-8" marginRight={-4} />
+          )}
+        </>
+      }
       onMouseLeave={onMouseLeave}
       onMouseEnter={onMouseEnter}
     />
@@ -147,7 +159,7 @@ const getColumns = (
   return (
     <>
       <ColumnIterator data={slicedColumns} highlight={data.highlight} />
-      {moreCount > 0 && <MoreColumnTip count={moreCount} />}
+      {moreCount > 0 && <Column.MoreTip count={moreCount} />}
     </>
   );
 };

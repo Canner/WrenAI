@@ -14,7 +14,7 @@ import {
   StyledNode,
 } from '@/components/diagram/customNode/utils';
 import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
-import Column, { MoreColumnTip } from '@/components/diagram/customNode/Column';
+import Column from '@/components/diagram/customNode/Column';
 import CustomDropdown from '@/components/diagram/CustomDropdown';
 
 const { Text } = Typography;
@@ -92,7 +92,7 @@ function getColumns(
   return (
     <>
       <ColumnIterator data={slicedColumns} highlight={data.highlight} />
-      {moreCount > 0 && <MoreColumnTip count={moreCount} />}
+      {moreCount > 0 && <Column.MoreTip count={moreCount} />}
     </>
   );
 }
