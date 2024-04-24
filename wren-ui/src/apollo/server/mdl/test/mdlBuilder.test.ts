@@ -190,7 +190,7 @@ describe('MDLBuilder', () => {
           name: 'OrderCustomer',
           models: ['order', 'customer'],
           joinType: 'oneToMany',
-          condition: 'order.orderKey = customer.orderKey',
+          condition: '"order".orderKey = "customer".orderKey',
         },
       ] as RelationMDL[];
 
@@ -376,7 +376,7 @@ describe('MDLBuilder', () => {
         name: 'OrderCustomer',
         models: ['order', 'customer'],
         joinType: 'oneToMany',
-        condition: 'order.orderKey = customer.orderKey',
+        condition: '"order".orderKey = "customer".orderKey',
       },
     ] as RelationMDL[];
 
