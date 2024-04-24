@@ -60,4 +60,17 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please input view name.',
     },
   },
+  MODELING_CREATE_MODEL: {
+    TABLE: {
+      REQUIRED: 'Please select a table.',
+    },
+    COLUMNS: {
+      REQUIRED: 'Please select at least one column.',
+    },
+    PRIMARY_KEY: {
+      REQUIRED: 'Please select a column.',
+      INVALID:
+        'Please select again, the primary key must be one of the selected columns.',
+    },
+  },
 };
