@@ -52,7 +52,7 @@ export default function AnswerResult(props: Props) {
       <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
         <Text className="adm-answer-title px-2">
           <CheckCircleFilled className="mr-2 green-6" />
-          Answer
+          Summary
         </Text>
         <div className="pl-7 pb-5">{description}</div>
         {(answerResultSteps || []).map((step, index) => (
