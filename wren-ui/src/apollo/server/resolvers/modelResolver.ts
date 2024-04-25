@@ -1,15 +1,15 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
 import { CreateModelData } from '../models';
-import { Model, ModelColumn, Project } from '../repositories';
+import { Project } from '../repositories';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { CompactTable } from '../connectors/connector';
 import { BQConnector } from '../connectors/bqConnector';
-import { GenerateReferenceNameData } from '../services/modelService';
 import { DeployResponse } from '../services/deployService';
 import { constructCteSql } from '../services/askingService';
 import { format } from 'sql-formatter';
 import { isEmpty } from 'lodash';
+import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -24,17 +24,22 @@ const PREVIEW_MAX_OUTPUT_ROW = 100;
 
 export class ModelResolver {
   constructor() {
+    // model & model column
     this.listModels = this.listModels.bind(this);
     this.getModel = this.getModel.bind(this);
     this.createModel = this.createModel.bind(this);
     this.deleteModel = this.deleteModel.bind(this);
     this.deploy = this.deploy.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
+
+    // view
     this.listViews = this.listViews.bind(this);
     this.getView = this.getView.bind(this);
     this.validateView = this.validateView.bind(this);
     this.createView = this.createView.bind(this);
     this.deleteView = this.deleteView.bind(this);
+
+    // preview
     this.previewViewData = this.previewViewData.bind(this);
   }
 
@@ -130,86 +135,31 @@ export class ModelResolver {
     args: { data: CreateModelData },
     ctx: IContext,
   ) {
-    const {
-      displayName,
-      sourceTableName,
-      refSql,
-      cached,
-      refreshTime,
-      fields,
-      description,
-    } = args.data;
+    const { sourceTableName, fields, primaryKey } = args.data;
 
     const project = await ctx.projectService.getCurrentProject();
-    const filePath = await ctx.projectService.getCredentialFilePath(project);
-    const connector = await this.getBQConnector(project, filePath);
-    const dataSourceTables = <CompactTable[]>await connector.listTables({
-      datasetId: project.datasetId,
-      format: true,
+    const dataSourceType = project.type;
+    const strategyOptions = {
+      ctx,
+      project,
+    };
+    const strategy = DataSourceStrategyFactory.create(
+      dataSourceType,
+      strategyOptions,
+    );
+    const dataSourceTables = await strategy.listTable({
+      formatToCompactTable: true,
     });
     this.validateTableExist(sourceTableName, dataSourceTables);
     this.validateColumnsExist(sourceTableName, fields, dataSourceTables);
 
-    const generateOption = {
-      displayName,
+    const { model, _columns } = await strategy.saveModel(
       sourceTableName,
-      existedReferenceNames: [],
-    } as GenerateReferenceNameData;
-    const referenceName =
-      ctx.modelService.generateReferenceName(generateOption);
-    const modelValue = {
-      projectId: project.id,
-      displayName, //use table name as model name
-      referenceName,
-      sourceTableName,
-      refSql: refSql || `SELECT * FROM ${sourceTableName}`,
-      cached,
-      refreshTime,
-      properties: JSON.stringify({ description }),
-    } as Partial<Model>;
-    const model = await ctx.modelRepository.createOne(modelValue);
-    const modelId = model.id;
-
-    // general fields
-    const dataSourceColumns = dataSourceTables.find(
-      (c) => c.name === sourceTableName,
-    ).columns;
-    const columnValues = fields.map((fieldName) => {
-      const dataSourceColumn = dataSourceColumns.find(
-        (c) => c.name === fieldName,
-      );
-      return {
-        modelId,
-        displayName: fieldName,
-        sourceColumnName: fieldName,
-        referenceName: fieldName,
-        isCalculated: false,
-        isPk: false,
-        notNull: dataSourceColumn.notNull,
-        type: dataSourceColumn.type,
-        properties: JSON.stringify({
-          description: dataSourceColumn.description,
-        }),
-      };
-    }) as ModelColumn[];
-
-    // calculated fields
-    const calculatedFieldsValue = args.data.calculatedFields.map((field) => ({
-      modelId,
-      displayName: field.name,
-      sourceColumnName: field.name,
-      referenceName: field.name,
-      isCalculated: true,
-      isPk: false,
-      notNull: false,
-      aggregation: field.expression,
-      lineage: JSON.stringify(field.lineage),
-      diagram: JSON.stringify(field.diagram),
-      properties: JSON.stringify({ description: '' }),
-    })) as ModelColumn[];
-    await ctx.modelColumnRepository.createMany(
-      columnValues.concat(calculatedFieldsValue),
+      fields,
+      primaryKey,
     );
+    logger.info(`Model created: ${model}`);
+
     return model;
   }
 
@@ -371,7 +321,7 @@ export class ModelResolver {
 
   private validateTableExist(tableName: string, columns: CompactTable[]) {
     if (!columns.find((c) => c.name === tableName)) {
-      throw new Error(`Table ${tableName} not found`);
+      throw new Error(`Table ${tableName} not found in the data Source`);
     }
   }
 
@@ -383,7 +333,9 @@ export class ModelResolver {
     const tableColumns = columns.find((c) => c.name === tableName)?.columns;
     for (const field of fields) {
       if (!tableColumns.find((c) => c.name === field)) {
-        throw new Error(`Column ${field} not found in table ${tableName}`);
+        throw new Error(
+          `Column "${field}" not found in table "${tableName}" in the data Source`,
+        );
       }
     }
   }

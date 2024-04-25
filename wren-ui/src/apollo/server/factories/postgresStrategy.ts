@@ -118,13 +118,35 @@ export class PostgresStrategy implements IDataSourceStrategy {
 
     const models = await this.createModels(tables, connector);
     // create columns
-    const columns = await this.createColumns(
+    const columns = await this.createAllColumns(
       tables,
       models,
       dataSourceColumns as PostgresColumnResponse[],
       connector,
     );
     return { models, columns };
+  }
+
+  public async saveModel(
+    table: string,
+    columns: string[],
+    primaryKey?: string,
+  ) {
+    const connector = this.getPGConnector();
+    const dataSourceColumns = (await connector.listTables({
+      format: false,
+    })) as PGColumnResponse[];
+
+    const models = await this.createModels(this.project, [table]);
+    const model = models[0];
+    // create columns
+    const modelColumns = await this.createColumns(
+      columns,
+      model,
+      dataSourceColumns as PGColumnResponse[],
+      primaryKey,
+    );
+    return { model, columns: modelColumns };
   }
 
   public async analysisRelation(models: Model[], columns: ModelColumn[]) {
@@ -253,6 +275,41 @@ export class PostgresStrategy implements IDataSourceStrategy {
   }
 
   private async createColumns(
+    columns: string[],
+    model: Model,
+    dataSourceColumns: PGColumnResponse[],
+    primaryKey?: string,
+  ) {
+    const columnValues = columns.reduce((acc, columnName) => {
+      const tableColumn = dataSourceColumns.find(
+        (col) => col.column_name === columnName,
+      );
+      if (!tableColumn) {
+        throw new Error(`Column not found: ${columnName}`);
+      }
+      const columnValue = {
+        modelId: model.id,
+        isCalculated: false,
+        displayName: columnName,
+        sourceColumnName: columnName,
+        referenceName: columnName,
+        type: tableColumn?.data_type || 'string',
+        notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
+        isPk: primaryKey === columnName,
+      } as Partial<ModelColumn>;
+      acc.push(columnValue);
+      return acc;
+    }, []);
+    const modelColumns = await Promise.all(
+      columnValues.map(
+        async (column) =>
+          await this.ctx.modelColumnRepository.createOne(column),
+      ),
+    );
+    return modelColumns;
+  }
+
+  private async createAllColumns(
     tables: string[],
     models: Model[],
     dataSourceColumns: PostgresColumnResponse[],

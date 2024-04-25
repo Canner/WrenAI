@@ -124,14 +124,9 @@ export const typeDefs = gql`
   }
 
   input CreateModelInput {
-    displayName: String!
     sourceTableName: String!
-    refSql: String
-    description: String
-    cached: Boolean!
-    refreshTime: String
     fields: [String!]!
-    calculatedFields: [CalculatedFieldInput!]
+    primaryKey: String
   }
 
   input ModelWhereInput {

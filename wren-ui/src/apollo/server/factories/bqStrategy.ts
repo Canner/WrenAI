@@ -117,12 +117,44 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       dataSourceColumns,
     );
     // create columns
-    const columns = await this.createColumns(
+    const columns = await this.createAllColumns(
       tables,
       models,
       dataSourceColumns as BQColumnResponse[],
     );
     return { models, columns };
+  }
+
+  public async saveModel(
+    table: string,
+    columns: string[],
+    primaryKey?: string,
+  ) {
+    const filePath = await this.ctx.projectService.getCredentialFilePath(
+      this.project,
+    );
+    const connector = await this.getBQConnector(filePath);
+    const listTableOptions = {
+      datasetId: this.project.datasetId,
+      format: false,
+    } as BQListTableOptions;
+    const dataSourceColumns = (await connector.listTables(
+      listTableOptions,
+    )) as BQColumnResponse[];
+
+    const models = await this.createModels(
+      this.project,
+      [table],
+      dataSourceColumns,
+    );
+    const model = models[0];
+    const modelColumns = await this.createColumns(
+      columns,
+      model,
+      dataSourceColumns,
+      primaryKey,
+    );
+    return { model, columns: modelColumns };
   }
 
   public async analysisRelation(models, columns) {
@@ -281,6 +313,43 @@ export class BigQueryStrategy implements IDataSourceStrategy {
   }
 
   private async createColumns(
+    columns: string[],
+    model: Model,
+    dataSourceColumns: BQColumnResponse[],
+    primaryKey?: string,
+  ) {
+    const columnValues = columns.reduce((acc, columnName) => {
+      const tableColumn = dataSourceColumns.find(
+        (col) => col.column_name === columnName,
+      );
+      if (!tableColumn) {
+        throw new Error(`Column not found: ${columnName}`);
+      }
+      const properties = tableColumn.column_description
+        ? JSON.stringify({
+            description: tableColumn.column_description,
+          })
+        : null;
+      const columnValue = {
+        modelId: model.id,
+        isCalculated: false,
+        displayName: columnName,
+        sourceColumnName: columnName,
+        referenceName: columnName,
+        type: tableColumn?.data_type || 'string',
+        notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
+        isPk: primaryKey === columnName,
+        properties,
+      } as Partial<ModelColumn>;
+      acc.push(columnValue);
+      return acc;
+    }, []);
+    const modelColumns =
+      await this.ctx.modelColumnRepository.createMany(columnValues);
+    return modelColumns;
+  }
+
+  private async createAllColumns(
     tables: string[],
     models: Model[],
     dataSourceColumns: BQColumnResponse[],
