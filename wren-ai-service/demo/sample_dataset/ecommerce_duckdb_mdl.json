@@ -1,436 +1,493 @@
 {
-  "catalog" : "wrenai",
-  "schema" : "ecommerce",
-  "models" : [ {
-    "name" : "customers",
-    "refSql" : "select * from main.customers",
-    "columns" : [ {
-      "name" : "City",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "San Jose"
+  "catalog": "wrenai",
+  "schema": "ecommerce",
+  "models": [
+    {
+      "name": "customers",
+      "refSql": "select * from main.customers",
+      "columns": [
+        {
+          "name": "City",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "The Customer City, where the customer company is located. Also called 'customer segment'."
+          }
+        },
+        {
+          "name": "Id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A unique identifier for each customer in the data model."
+          }
+        },
+        {
+          "name": "State",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A field indicating the state where the customer is located."
+          }
+        },
+        {
+          "name": "orders",
+          "type": "orders",
+          "relationship": "CustomersOrders",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {
+        "schema": "main",
+        "catalog": "memory",
+        "description": "A table of customers who have made purchases, including their city"
       }
-    }, {
-      "name" : "Id",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
+    },
+    {
+      "name": "order_items",
+      "refSql": "select * from main.order_items",
+      "columns": [
+        {
+          "name": "FreightValue",
+          "type": "DOUBLE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A numerical value representing the cost of shipping for an item in an order."
+          }
+        },
+        {
+          "name": "ItemNumber",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber."
+          }
+        },
+        {
+          "name": "OrderId",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship."
+          }
+        },
+        {
+          "name": "Price",
+          "type": "DOUBLE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A numerical value representing the price of an item in an order."
+          }
+        },
+        {
+          "name": "ProductId",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship."
+          }
+        },
+        {
+          "name": "ShippingLimitDate",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the 'order_items' model."
+          }
+        },
+        {
+          "name": "orders",
+          "type": "orders",
+          "relationship": "OrdersOrder_items",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "products",
+          "type": "products",
+          "relationship": "ProductsOrder_items",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {
+        "schema": "main",
+        "catalog": "memory",
+        "description": "The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables."
       }
-    }, {
-      "name" : "State",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "CA"
+    },
+    {
+      "name": "orders",
+      "refSql": "select * from main.orders",
+      "columns": [
+        {
+          "name": "ApprovedTimestamp",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column that represents the timestamp when the order was approved."
+          }
+        },
+        {
+          "name": "CustomerId",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A unique identifier representing the customer who purchased this order."
+          }
+        },
+        {
+          "name": "DeliveredCarrierDate",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column that represents the date when the order was delivered by the carrier."
+          }
+        },
+        {
+          "name": "DeliveredCustomerDate",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column that represents the date when the order was delivered to the customer."
+          }
+        },
+        {
+          "name": "EstimatedDeliveryDate",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column that represents the estimated delivery date of the order."
+          }
+        },
+        {
+          "name": "OrderId",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column that represents a unique identifier of this order."
+          }
+        },
+        {
+          "name": "PurchaseTimestamp",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column that represents the timestamp when the order was purchased."
+          }
+        },
+        {
+          "name": "Status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column representing the status of the order."
+          }
+        },
+        {
+          "name": "customers",
+          "type": "customers",
+          "relationship": "CustomersOrders",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "order_items",
+          "type": "order_items",
+          "relationship": "OrdersOrder_items",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "reviews",
+          "type": "reviews",
+          "relationship": "OrdersReviews",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "payments",
+          "type": "payments",
+          "relationship": "PaymentsOrders",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {
+        "schema": "main",
+        "catalog": "memory",
+        "description": "A model representing the orders data."
       }
-    }, {
-      "name" : "orders",
-      "type" : "orders",
-      "relationship" : "CustomersOrders",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    } ],
-    "primaryKey" : "",
-    "cached" : false,
-    "refreshTime" : "30.00m",
-    "properties" : {
-      "schema" : "main",
-      "catalog" : "memory"
+    },
+    {
+      "name": "payments",
+      "refSql": "select * from main.payments",
+      "columns": [
+        {
+          "name": "Installments",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column representing the number of installments in the payments data model."
+          }
+        },
+        {
+          "name": "OrderId",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship."
+          }
+        },
+        {
+          "name": "Sequential",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number."
+          }
+        },
+        {
+          "name": "Type",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column representing the type of payment in the payments data model."
+          }
+        },
+        {
+          "name": "Value",
+          "type": "DOUBLE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A column representing the value of the payment in the payments data model."
+          }
+        },
+        {
+          "name": "orders",
+          "type": "orders",
+          "relationship": "PaymentsOrders",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {
+        "schema": "main",
+        "catalog": "memory",
+        "description": "A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders."
+      }
+    },
+    {
+      "name": "products",
+      "refSql": "select * from main.products",
+      "columns": [
+        {
+          "name": "Category",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A category that classifies the products in the data model."
+          }
+        },
+        {
+          "name": "Id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A unique identifier assigned to each product in the data model."
+          }
+        },
+        {
+          "name": "Name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A name of the product in the data model."
+          }
+        },
+        {
+          "name": "order_items",
+          "type": "order_items",
+          "relationship": "ProductsOrder_items",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {
+        "schema": "main",
+        "catalog": "memory",
+        "description": "A data model containing information about products such as category, ID, and name, with a relationship to order items."
+      }
+    },
+    {
+      "name": "reviews",
+      "refSql": "select * from main.reviews",
+      "columns": [
+        {
+          "name": "AnswerTimestamp",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "The date when the answer was provided."
+          }
+        },
+        {
+          "name": "CreationTimestamp",
+          "type": "TIMESTAMP",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "The date when the review was created."
+          }
+        },
+        {
+          "name": "Id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "A unique identifier assigned to each review entry."
+          }
+        },
+        {
+          "name": "OrderId",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "The order id of the order which the review belongs to."
+          }
+        },
+        {
+          "name": "Score",
+          "type": "BIGINT",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "The score associated with each review entry."
+          }
+        },
+        {
+          "name": "orders",
+          "type": "orders",
+          "relationship": "OrdersReviews",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "",
+      "cached": false,
+      "refreshTime": "30.00m",
+      "properties": {
+        "schema": "main",
+        "catalog": "memory",
+        "description": "A model containing information about review of orders."
+      }
     }
-  }, {
-    "name" : "order_items",
-    "refSql" : "select * from main.order_items",
-    "columns" : [ {
-      "name" : "FreightValue",
-      "type" : "DOUBLE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": 1.5
-      }
-    }, {
-      "name" : "ItemNumber",
-      "type" : "BIGINT",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": 1
-      }
-    }, {
-      "name" : "OrderId",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "Price",
-      "type" : "DOUBLE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": 1.2
-      }
-    }, {
-      "name" : "ProductId",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "ShippingLimitDate",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2018/01/15"
-      },
-      "expression": "CAST(ShippingLimitDate AS DATE)"
-    }, {
-      "name" : "orders",
-      "type" : "orders",
-      "relationship" : "OrdersOrder_items",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    }, {
-      "name" : "products",
-      "type" : "products",
-      "relationship" : "ProductsOrder_items",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    } ],
-    "primaryKey" : "",
-    "cached" : false,
-    "refreshTime" : "30.00m",
-    "properties" : {
-      "schema" : "main",
-      "catalog" : "memory"
+  ],
+  "relationships": [
+    {
+      "name": "CustomersOrders",
+      "models": ["customers", "orders"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "customers.Id = orders.CustomerId",
+      "manySideSortKeys": [],
+      "properties": {}
+    },
+    {
+      "name": "OrdersOrder_items",
+      "models": ["orders", "order_items"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "orders.OrderId = order_items.OrderId",
+      "manySideSortKeys": [],
+      "properties": {}
+    },
+    {
+      "name": "ProductsOrder_items",
+      "models": ["products", "order_items"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "products.Id = order_items.ProductId",
+      "manySideSortKeys": [],
+      "properties": {}
+    },
+    {
+      "name": "OrdersReviews",
+      "models": ["orders", "reviews"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "orders.OrderId = reviews.OrderId",
+      "manySideSortKeys": [],
+      "properties": {}
+    },
+    {
+      "name": "PaymentsOrders",
+      "models": ["payments", "orders"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "payments.OrderId = orders.OrderId",
+      "manySideSortKeys": [],
+      "properties": {}
     }
-  }, {
-    "name" : "orders",
-    "refSql" : "select * from main.orders",
-    "columns" : [ {
-      "name" : "ApprovedTimestamp",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2017-10-26"
-      },
-      "expression": "CAST(ApprovedTimestamp AS DATE)"
-    }, {
-      "name" : "CustomerId",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "DeliveredCarrierDate",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2017/10/26"
-      },
-      "expression": "CAST(DeliveredCarrierDate AS DATE)"
-    }, {
-      "name" : "DeliveredCustomerDate",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2017/10/26"
-      },
-      "expression": "CAST(DeliveredCustomerDate AS DATE)"
-    }, {
-      "name" : "EstimatedDeliveryDate",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2017/10/26"
-      },
-      "expression": "CAST(EstimatedDeliveryDate AS DATE)"
-    }, {
-      "name" : "OrderId",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "PurchaseTimestamp",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2017-10-26"
-      },
-      "expression": "CAST(PurchaseTimestamp AS DATE)"
-    }, {
-      "name" : "Status",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "delivered"
-      }
-    }, {
-      "name" : "customers",
-      "type" : "customers",
-      "relationship" : "CustomersOrders",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    }, {
-      "name" : "order_items",
-      "type" : "order_items",
-      "relationship" : "OrdersOrder_items",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    }, {
-      "name" : "reviews",
-      "type" : "reviews",
-      "relationship" : "OrdersReviews",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    }, {
-      "name" : "payments",
-      "type" : "payments",
-      "relationship" : "PaymentsOrders",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    } ],
-    "primaryKey" : "",
-    "cached" : false,
-    "refreshTime" : "30.00m",
-    "properties" : {
-      "schema" : "main",
-      "catalog" : "memory"
-    }
-  }, {
-    "name" : "payments",
-    "refSql" : "select * from main.payments",
-    "columns" : [ {
-      "name" : "Installments",
-      "type" : "BIGINT",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": 1
-      }
-    }, {
-      "name" : "OrderId",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "Sequential",
-      "type" : "BIGINT",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": 1
-      }
-    }, {
-      "name" : "Type",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "credit_card"
-      }
-    }, {
-      "name" : "Value",
-      "type" : "DOUBLE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": 1.5
-      }
-    }, {
-      "name" : "orders",
-      "type" : "orders",
-      "relationship" : "PaymentsOrders",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    } ],
-    "primaryKey" : "",
-    "cached" : false,
-    "refreshTime" : "30.00m",
-    "properties" : {
-      "schema" : "main",
-      "catalog" : "memory"
-    }
-  }, {
-    "name" : "products",
-    "refSql" : "select * from main.products",
-    "columns" : [ {
-      "name" : "Category",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "electronics"
-      }
-    }, {
-      "name" : "Id",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "Name",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "iphone"
-      }
-    }, {
-      "name" : "order_items",
-      "type" : "order_items",
-      "relationship" : "ProductsOrder_items",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    } ],
-    "primaryKey" : "",
-    "cached" : false,
-    "refreshTime" : "30.00m",
-    "properties" : {
-      "schema" : "main",
-      "catalog" : "memory"
-    }
-  }, {
-    "name" : "reviews",
-    "refSql" : "select * from main.reviews",
-    "columns" : [ {
-      "name" : "AnswerTimestamp",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2017-10-26"
-      },
-      "expression": "CAST(AnswerTimestamp AS DATE)"
-    }, {
-      "name" : "CreationTimestamp",
-      "type" : "DATE",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "2017-10-26"
-      },
-      "expression": "CAST(CreationTimestamp AS DATE)"
-    }, {
-      "name" : "Id",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "OrderId",
-      "type" : "VARCHAR",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": "dfsdaf99e2fba1a1fbc88172c00ba8bc7"
-      }
-    }, {
-      "name" : "Score",
-      "type" : "BIGINT",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : {
-        "example": 1
-      }
-    }, {
-      "name" : "orders",
-      "type" : "orders",
-      "relationship" : "OrdersReviews",
-      "isCalculated" : false,
-      "notNull" : false,
-      "properties" : { }
-    } ],
-    "primaryKey" : "",
-    "cached" : false,
-    "refreshTime" : "30.00m",
-    "properties" : {
-      "schema" : "main",
-      "catalog" : "memory"
-    }
-  } ],
-  "relationships" : [ {
-    "name" : "CustomersOrders",
-    "models" : [ "customers", "orders" ],
-    "joinType" : "ONE_TO_MANY",
-    "condition" : "customers.Id = orders.CustomerId",
-    "manySideSortKeys" : [ ],
-    "properties" : { }
-  }, {
-    "name" : "OrdersOrder_items",
-    "models" : [ "orders", "order_items" ],
-    "joinType" : "ONE_TO_MANY",
-    "condition" : "orders.OrderId = order_items.OrderId",
-    "manySideSortKeys" : [ ],
-    "properties" : { }
-  }, {
-    "name" : "ProductsOrder_items",
-    "models" : [ "products", "order_items" ],
-    "joinType" : "ONE_TO_MANY",
-    "condition" : "products.Id = order_items.ProductId",
-    "manySideSortKeys" : [ ],
-    "properties" : { }
-  }, {
-    "name" : "OrdersReviews",
-    "models" : [ "orders", "reviews" ],
-    "joinType" : "ONE_TO_MANY",
-    "condition" : "orders.OrderId = reviews.OrderId",
-    "manySideSortKeys" : [ ],
-    "properties" : { }
-  }, {
-    "name" : "PaymentsOrders",
-    "models" : [ "payments", "orders" ],
-    "joinType" : "ONE_TO_MANY",
-    "condition" : "payments.OrderId = orders.OrderId",
-    "manySideSortKeys" : [ ],
-    "properties" : { }
-  } ],
-  "enumDefinitions" : [ ],
-  "metrics" : [ ],
-  "cumulativeMetrics" : [ ],
-  "views" : [ ],
-  "macros" : [ ],
-  "dateSpine" : {
-    "unit" : "DAY",
-    "start" : "1970-01-01",
-    "end" : "2077-12-31",
-    "properties" : { }
+  ],
+  "enumDefinitions": [],
+  "metrics": [],
+  "cumulativeMetrics": [],
+  "views": [],
+  "macros": [],
+  "dateSpine": {
+    "unit": "DAY",
+    "start": "1970-01-01",
+    "end": "2077-12-31",
+    "properties": {}
   }
 }
