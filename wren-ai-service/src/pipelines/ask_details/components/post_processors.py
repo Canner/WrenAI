@@ -1,11 +1,13 @@
 import json
 import logging
 import os
+from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 from haystack import component
 
 from src.utils import (
+    add_quotes,
     check_if_sql_executable,
     clean_generation_result,
     load_env_vars,
@@ -32,8 +34,11 @@ class GenerationPostProcessor:
                 },
             }
 
+        for step in steps:
+            step["sql"] = add_quotes(step["sql"])
+
         sql = _build_cte_query(steps)
-        logger.debug(f"GenerationPostProcessor: steps: {steps}")
+        logger.debug(f"GenerationPostProcessor: steps: {pformat(steps)}")
         logger.debug(f"GenerationPostProcessor: final sql: {sql}")
 
         if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
@@ -45,10 +50,13 @@ class GenerationPostProcessor:
             }
 
         # make sure the last step has an empty cte_name
-        cleaned_generation_result["steps"][-1]["cte_name"] = ""
+        steps[-1]["cte_name"] = ""
 
         return {
-            "results": cleaned_generation_result,
+            "results": {
+                "description": cleaned_generation_result["description"],
+                "steps": steps,
+            },
         }
 
 
