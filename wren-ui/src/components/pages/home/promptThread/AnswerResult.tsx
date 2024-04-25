@@ -31,6 +31,8 @@ interface Props {
   fullSql: string;
   threadResponseId: number;
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+  isLastThreadResponse: boolean;
+  onTriggerScrollToBottom: () => void;
 }
 
 export default function AnswerResult(props: Props) {
@@ -41,7 +43,9 @@ export default function AnswerResult(props: Props) {
     answerResultSteps,
     fullSql,
     threadResponseId,
+    isLastThreadResponse,
     onOpenSaveAsViewModal,
+    onTriggerScrollToBottom,
   } = props;
 
   return (
@@ -64,6 +68,8 @@ export default function AnswerResult(props: Props) {
             stepIndex={index}
             summary={step.summary}
             threadResponseId={threadResponseId}
+            onTriggerScrollToBottom={onTriggerScrollToBottom}
+            isLastThreadResponse={isLastThreadResponse}
           />
         ))}
       </StyledAnswer>
