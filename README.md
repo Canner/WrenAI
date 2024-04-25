@@ -28,6 +28,8 @@
   </a>
 </p>
 
+https://github.com/Canner/WrenAI/assets/1216029/0f0ead3e-8b5a-4d1e-a3ba-dcbdad8410fe
+
 
 > WrenAI is ***your AI data assistant*** that helps you get results and insights faster by asking questions without writing SQL.
 
