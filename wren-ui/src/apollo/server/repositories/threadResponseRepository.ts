@@ -23,13 +23,13 @@ export interface ThreadResponse {
   threadId: number; // Reference to thread.id
   queryId: string; // Thread response query ID
   question: string; // Thread response question
+  summary: string; // Summary comes from the user's original question
   status: string; // Thread response status
   detail: ThreadResponseDetail; // Thread response detail
   error: object; // Thread response error
 }
 
-export interface ThreadResponseWithThreadSummary extends ThreadResponse {
-  summary: string;
+export interface ThreadResponseWithThreadContext extends ThreadResponse {
   sql: string;
 }
 
@@ -38,7 +38,7 @@ export interface IThreadResponseRepository
   getResponsesWithThread(
     threadId: number,
     limit?: number,
-  ): Promise<ThreadResponseWithThreadSummary[]>;
+  ): Promise<ThreadResponseWithThreadContext[]>;
 }
 
 export class ThreadResponseRepository
@@ -52,7 +52,6 @@ export class ThreadResponseRepository
   public async getResponsesWithThread(threadId: number, limit?: number) {
     const query = this.knex(this.tableName)
       .select('thread_response.*')
-      .select('thread.summary as summary')
       .select('thread.sql as sql')
       .where({ thread_id: threadId })
       .leftJoin('thread', 'thread.id', 'thread_response.thread_id');
@@ -73,7 +72,7 @@ export class ThreadResponseRepository
           detail: res.detail ? JSON.parse(res.detail) : null,
           error: res.error ? JSON.parse(res.error) : null,
         };
-      }) as ThreadResponseWithThreadSummary[];
+      }) as ThreadResponseWithThreadContext[];
   }
 
   public async findOneBy(

@@ -424,6 +424,7 @@ export const typeDefs = gql`
   type ThreadResponse {
     id: Int!
     question: String!
+    summary: String!
     status: AskingTaskStatus!
     detail: ThreadResponseDetail
     error: Error
@@ -440,9 +441,13 @@ export const typeDefs = gql`
   type DetailedThread {
     id: Int!
     sql: String!
+      @deprecated(
+        reason: "doesn't seem to be reasonable to put a sql in a thread"
+      )
     summary: String!
     responses: [ThreadResponse!]!
   }
+
   type SuggestedQuestion {
     question: String!
     label: String!

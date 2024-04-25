@@ -164,6 +164,13 @@ export class AskingResolver {
         acc.responses.push({
           id: response.id,
           question: response.question,
+
+          // we added summary in version 0.3.0.
+          // if summary is not available, we use description and question instead.
+          summary:
+            response.summary ||
+            response.detail?.description ||
+            response.question,
           status: response.status,
           detail: response.detail,
           error: response.error,
@@ -239,7 +246,14 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
-    return response;
+
+    // we added summary in version 0.3.0.
+    // if summary is not available, we use description and question instead.
+    return {
+      ...response,
+      summary:
+        response.summary || response.detail?.description || response.question,
+    };
   }
 
   public async previewData(
