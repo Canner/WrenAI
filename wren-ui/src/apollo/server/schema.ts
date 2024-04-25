@@ -434,6 +434,9 @@ export const typeDefs = gql`
   type Thread {
     id: Int!
     sql: String!
+      @deprecated(
+        reason: "Doesn't seem to be reasonable to put a sql in a thread"
+      )
     summary: String!
   }
 
@@ -442,7 +445,7 @@ export const typeDefs = gql`
     id: Int!
     sql: String!
       @deprecated(
-        reason: "doesn't seem to be reasonable to put a sql in a thread"
+        reason: "Doesn't seem to be reasonable to put a sql in a thread"
       )
     summary: String!
     responses: [ThreadResponse!]!
