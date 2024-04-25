@@ -12,19 +12,19 @@
 
 <p align="center">
   <a aria-label="Canner" href="https://cannerdata.com/">
-    <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge&labelColor=transparent">
+    <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge">
   </a>
   <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
-    <img alt="" src="https://img.shields.io/github/v/release/canner/WrenAI?logo=github&label=GitHub%20Release&color=blue&style=for-the-badge&labelColor=transparent">
+    <img alt="" src="https://img.shields.io/github/v/release/canner/WrenAI?logo=github&label=GitHub%20Release&color=blue&style=for-the-badge">
   </a>
   <a aria-label="License" href="https://github.com/Canner/WrenAI/blob/main/LICENSE">
-    <img alt="" src="https://img.shields.io/github/license/canner/WrenAI?color=blue&style=for-the-badge&labelColor=transparent">
+    <img alt="" src="https://img.shields.io/github/license/canner/WrenAI?color=blue&style=for-the-badge">
   </a>
   <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
-    <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20&labelColor=transparent">
+    <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&color=grey&logoWidth=20">
   </a>
   <a aria-label="Follow us" href="https://x.com/getwrenai">
-    <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20&labelColor=transparent">
+    <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
   </a>
 </p>
 
