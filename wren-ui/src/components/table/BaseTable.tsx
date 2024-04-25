@@ -7,11 +7,10 @@ import { ComposeDiagramField, getJoinTypeText } from '@/utils/data';
 import { makeIterable } from '@/utils/iteration';
 
 export const COLUMN = {
-  DISPLAY_NAME: {
-    title: 'Display name',
+  ALIAS: {
+    title: 'Alias',
     dataIndex: 'displayName',
-    key: 'displayName',
-    width: 140,
+    key: 'alias',
     ellipsis: true,
     render: (name) => name || '-',
   },

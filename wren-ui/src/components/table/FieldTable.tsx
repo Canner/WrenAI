@@ -12,8 +12,9 @@ export default function FieldTable(props: Props) {
       columns={
         columns || [
           COLUMN.REFERENCE_NAME,
+          COLUMN.ALIAS,
           COLUMN.TYPE,
-          { ...COLUMN.DESCRIPTION, width: 280 },
+          COLUMN.DESCRIPTION,
         ]
       }
       expandable={{
