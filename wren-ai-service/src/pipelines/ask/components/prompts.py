@@ -3,8 +3,6 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 TEXT_TO_SQL_RULES = """
 ### ALERT ###
 - DON'T USE "*" in SELECT queries.
-- MUST ADD "DOUBLE QUOTES" around the identidiers such as column names, table names, and alias; excluding function names.
-- MUST ADD "SINGLE QUOTES" around the string values.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
@@ -54,15 +52,15 @@ Remember to include ordering and limit clauses where relevant to address the 're
 Example for the first query:
 
 Interpretation 1: Recent high-value transactions are defined as transactions that occurred in the last 30 days with a value greater than $10,000.
-SQL Query 1: SELECT * FROM transactions WHERE transaction_date >= NOW() - INTERVAL '30 days' AND value > 10000 ORDER BY transaction_date DESC;
+SQL Query 1: SELECT * FROM "transactions" WHERE "transaction_date" >= NOW() - INTERVAL '30 days' AND "value" > 10000 ORDER BY "transaction_date" DESC;
 SUMMARY 1: Recent high-value transactions.
 
 Interpretation 2: High-value transactions are those in the top "10%" of all transactions in terms of value, and 'recent' is defined as the last 3 months.
-SQL Query 2: WITH ranked_transactions AS (SELECT *, NTILE(10) OVER (ORDER BY value DESC) AS percentile_rank FROM transactions WHERE transaction_date >= NOW() - INTERVAL '3 months') SELECT * FROM ranked_transactions WHERE percentile_rank = 1 ORDER BY transaction_date DESC;
+SQL Query 2: WITH "ranked_transactions" AS (SELECT *, NTILE(10) OVER (ORDER BY "value" DESC) AS "percentile_rank" FROM "transactions" WHERE "transaction_date" >= NOW() - INTERVAL '3 months') SELECT * FROM "ranked_transactions" WHERE "percentile_rank" = 1 ORDER BY "transaction_date" DESC;
 SUMMARY 2: Top 10% transactions last 3 months.
 
 Interpretation 3: 'Recent' refers to the last week, and 'high-value' transactions are those above the average transaction value of the past week.
-SQL Query 3: SELECT * FROM transactions WHERE transaction_date >= NOW() - INTERVAL '7 days' AND value > (SELECT AVG(value) FROM transactions WHERE transaction_date >= NOW() - INTERVAL '7 days') ORDER BY transaction_date DESC;
+SQL Query 3: SELECT * FROM "transactions" WHERE "transaction_date" >= NOW() - INTERVAL '7 days' AND "value" > (SELECT AVG("value") FROM "transactions" WHERE "transaction_date" >= NOW() - INTERVAL '7 days') ORDER BY "transaction_date" DESC;
 SUMMARY 3: Above-average transactions last week.
 
 Proceed in a similar manner for the other queries.
@@ -82,7 +80,7 @@ The final answer must be the JSON format like following:
 ### QUESTION ###
 {{ query }}
 
-Think step by step:
+Let's think step by step.
 """
 
 text_to_sql_with_followup_user_prompt_template = """
@@ -127,7 +125,7 @@ Previous SQL Summary: {{ history.summary }}
 Previous Generated SQL Query: {{ history.sql }}
 Current User Query: {{ query }}
 
-Think step by step:
+Let's think step by step.
 """
 
 sql_correction_user_prompt_template = """
@@ -161,7 +159,7 @@ The final answer must be a list of corrected SQL quries and its original corresp
     error: {{ invalid_generation_result.error }}
 {% endfor %}
 
-Think step by step:
+Let's think step by step.
 """
 
 
