@@ -62,6 +62,7 @@ class Indexing(BasicPipeline):
         semantics = {"models": [], "relationships": mdl_json["relationships"]}
 
         for model in mdl_json["models"]:
+            calculated_fields = []
             columns = []
             for column in model["columns"]:
                 if "relationship" in column:
@@ -74,12 +75,10 @@ class Indexing(BasicPipeline):
                         }
                     )
                 else:
-                    if "expression" in column:
-                        columns.append(
+                    if column["isCalculated"]:
+                        calculated_fields.append(
                             {
                                 "name": column["name"],
-                                "properties": column["properties"],
-                                "type": column["type"],
                                 "expression": column["expression"],
                             }
                         )
@@ -91,7 +90,7 @@ class Indexing(BasicPipeline):
                                 "type": column["type"],
                             }
                         )
-
+            model["properties"]["terms"] = calculated_fields
             semantics["models"].append(
                 {
                     "type": "model",
