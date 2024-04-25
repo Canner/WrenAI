@@ -31,6 +31,8 @@
 
 > WrenAI is ***your AI data assistant*** that helps you get results and insights faster by asking questions without writing SQL.
 
+## Video Introduction
+
 [![WrenAI Introduction](https://img.youtube.com/vi/Fw0Wxd2G3jY/maxresdefault.jpg)](https://www.youtube.com/watch?v=Fw0Wxd2G3jY)
 
 
