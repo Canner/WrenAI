@@ -31,7 +31,7 @@
 
 > WrenAI is ***your AI data assistant*** that helps you get results and insights faster by asking questions without writing SQL.
 
-https://github.com/Canner/WrenAI/assets/1216029/8bc91fbb-dda8-4af1-8595-5d4063ffcf12
+[![WrenAI Introduction](https://img.youtube.com/vi/Fw0Wxd2G3jY/0.jpg)](https://www.youtube.com/watch?v=Fw0Wxd2G3jY)
 
 
 ## 🎯 Our Mission
