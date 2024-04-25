@@ -206,10 +206,7 @@ def generate_ddls_from_semantics(
                 else:
                     comment = ""
                 if "expression" in column:
-                    comment = (
-                        comment
-                        + f"-- \"column expression\": {column["expression"]}\n  "
-                    )
+                    comment = comment + f"-- \"expression\": {column["expression"]}\n  "
                 column_name = column["name"]
                 column_type = column["type"]
                 column_ddl = f"{comment}{column_name} {column_type}"
