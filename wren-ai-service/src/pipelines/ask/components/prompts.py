@@ -8,6 +8,8 @@ TEXT_TO_SQL_RULES = """
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 - DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
+- USE THE VIEW TO SIMPLIFY THE QUERY.
+- DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 """
 
 query_preprocess_user_prompt_template = """
@@ -16,7 +18,7 @@ Detect if the input is a valid question or query?
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
-    
+
 {
     "result": "yes" or "no"
 }
@@ -27,9 +29,9 @@ The final answer must be the JSON format like following:
 
 text_to_sql_user_prompt_template = """
 ### TASK ###
-Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and 
-generate three SQL statements that could potentially answer each interpreted version of the queries and within-10-words summary. 
-Provide three different interpretations and corresponding SQL queries that reflect these interpretations. 
+Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and
+generate three SQL statements that could potentially answer each interpreted version of the queries and within-10-words summary.
+Provide three different interpretations and corresponding SQL queries that reflect these interpretations.
 Ensure that your SQL queries are diverse, covering a range of possible meanings behind the ambiguous query.
 
 ### DATABASE SCHEMA ###
@@ -38,15 +40,15 @@ Ensure that your SQL queries are diverse, covering a range of possible meanings 
 {% endfor %}
 
 ### EXAMPLES ###
-Consider the structure of a generic database which includes common tables like users, orders, products, and transactions. 
+Consider the structure of a generic database which includes common tables like users, orders, products, and transactions.
 Here are the ambiguous user queries:
 
 1. "Find the records of recent high-value transactions."
 2. "Show me popular items that are not selling well."
 3. "Retrieve user feedback on products from last month."
 
-For each query, start by explaining the different ways the query can be interpreted. Then, provide SQL queries corresponding to each interpretation. 
-Your SQL statements should include SELECT statements, appropriate WHERE clauses to filter the results, and JOINs if necessary to combine information from different tables. 
+For each query, start by explaining the different ways the query can be interpreted. Then, provide SQL queries corresponding to each interpretation.
+Your SQL statements should include SELECT statements, appropriate WHERE clauses to filter the results, and JOINs if necessary to combine information from different tables.
 Remember to include ordering and limit clauses where relevant to address the 'recent', 'high-value', 'popular', and 'last month' aspects of the queries.
 
 Example for the first query:
@@ -85,8 +87,8 @@ Let's think step by step.
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the following user query and the history of the last query along with the generated SQL result, 
-generate appropriate SQL queries that match the user's current request. 
+Given the following user query and the history of the last query along with the generated SQL result,
+generate appropriate SQL queries that match the user's current request.
 Generate at most 3 SQL queries in order to interpret the user query in various plausible ways.
 
 ### DATABASE SCHEMA ###
