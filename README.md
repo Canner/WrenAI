@@ -31,11 +31,14 @@
 
 > WrenAI is ***your AI data assistant*** that helps you get results and insights faster by asking questions without writing SQL.
 
-![wrenai_overview](./misc/wrenai_overview.png)
+https://github.com/Canner/WrenAI/assets/1216029/8bc91fbb-dda8-4af1-8595-5d4063ffcf12
+
 
 ## 🎯 Our Mission
 
 WrenAI is reimagining how businesses can interact with and leverage their data through LLM, by bringing comprehension capabilities to small and large data teams.
+
+![wrenai_overview](./misc/wrenai_overview.png)
 
 👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
 
