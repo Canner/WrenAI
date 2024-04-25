@@ -3,7 +3,7 @@ import { SampleDatasetName } from './type';
 
 export interface SampleDatasetColumn {
   name: string;
-  description?: string;
+  properties?: Record<string, any>;
 }
 
 export interface SampleDatasetSchema {
@@ -16,7 +16,7 @@ export interface SampleDatasetTable {
   // the column order in schema definition should be the same as the column in csv file
   schema?: SampleDatasetSchema[];
   columns?: SampleDatasetColumn[];
-  description?: string;
+  properties?: Record<string, any>;
 }
 
 export interface SampleDatasetRelationship {
@@ -200,23 +200,31 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         tableName: 'customers',
         filePath:
           'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/customers.csv',
-        description:
-          'A table of customers who have made purchases, including their city',
+        properties: {
+          description:
+            'A table of customers who have made purchases, including their city',
+        },
         columns: [
           {
             name: 'City',
-            description:
-              'The Customer City, where the customer company is located. Also called "customer segment".',
+            properties: {
+              description:
+                'The Customer City, where the customer company is located. Also called "customer segment".',
+            },
           },
           {
             name: 'Id',
-            description:
-              'A unique identifier for each customer in the data model.',
+            properties: {
+              description:
+                'A unique identifier for each customer in the data model.',
+            },
           },
           {
             name: 'State',
-            description:
-              'A field indicating the state where the customer is located.',
+            properties: {
+              description:
+                'A field indicating the state where the customer is located.',
+            },
           },
         ],
         schema: [
@@ -232,37 +240,51 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         columns: [
           {
             name: 'FreightValue',
-            description:
-              'A numerical value representing the cost of shipping for an item in an order.',
+            properties: {
+              description:
+                'A numerical value representing the cost of shipping for an item in an order.',
+            },
           },
           {
             name: 'ItemNumber',
-            description:
-              'The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber.',
+            properties: {
+              description:
+                'The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber.',
+            },
           },
           {
             name: 'OrderId',
-            description:
-              'A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship.',
+            properties: {
+              description:
+                'A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship.',
+            },
           },
           {
             name: 'Price',
-            description:
-              'A numerical value representing the price of an item in an order.',
+            properties: {
+              description:
+                'A numerical value representing the price of an item in an order.',
+            },
           },
           {
             name: 'ProductId',
-            description:
-              'A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship.',
+            properties: {
+              description:
+                'A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship.',
+            },
           },
           {
             name: 'ShippingLimitDate',
-            description:
-              'A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the "order_items" model.',
+            properties: {
+              description:
+                'A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the "order_items" model.',
+            },
           },
         ],
-        description:
-          'The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.',
+        properties: {
+          description:
+            'The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.',
+        },
         schema: [
           { columnName: 'OrderId', dataType: 'VARCHAR' },
           { columnName: 'ItemNumber', dataType: 'BIGINT' },
@@ -279,45 +301,61 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         columns: [
           {
             name: 'ApprovedTimestamp',
-            description:
-              'A column that represents the timestamp when the order was approved.',
+            properties: {
+              description:
+                'A column that represents the timestamp when the order was approved.',
+            },
           },
           {
             name: 'CustomerId',
-            description:
-              'A unique identifier representing the customer who purchased this order.',
+            properties: {
+              description:
+                'A unique identifier representing the customer who purchased this order.',
+            },
           },
           {
             name: 'DeliveredCarrierDate',
-            description:
-              'A column that represents the date when the order was delivered by the carrier.',
+            properties: {
+              description:
+                'A column that represents the date when the order was delivered by the carrier.',
+            },
           },
           {
             name: 'DeliveredCustomerDate',
-            description:
-              'A column that represents the date when the order was delivered to the customer.',
+            properties: {
+              description:
+                'A column that represents the date when the order was delivered to the customer.',
+            },
           },
           {
             name: 'EstimatedDeliveryDate',
-            description:
-              'A column that represents the estimated delivery date of the order.',
+            properties: {
+              description:
+                'A column that represents the estimated delivery date of the order.',
+            },
           },
           {
             name: 'OrderId',
-            description:
-              'A column that represents a unique identifier of this order.',
+            properties: {
+              description:
+                'A column that represents a unique identifier of this order.',
+            },
           },
           {
             name: 'PurchaseTimestamp',
-            description:
-              'A column that represents the timestamp when the order was purchased.',
+            properties: {
+              description:
+                'A column that represents the timestamp when the order was purchased.',
+            },
           },
           {
             name: 'Status',
-            description: 'A column representing the status of the order.',
+            properties: {
+              description: 'A column representing the status of the order.',
+            },
           },
         ],
-        description: 'A model representing the orders data.',
+        properties: { description: 'A model representing the orders data.' },
         schema: [
           { columnName: 'OrderId', dataType: 'VARCHAR' },
           { columnName: 'CustomerId', dataType: 'VARCHAR' },
@@ -336,32 +374,44 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         columns: [
           {
             name: 'Installments',
-            description:
-              'A column representing the number of installments in the payments data model.',
+            properties: {
+              description:
+                'A column representing the number of installments in the payments data model.',
+            },
           },
           {
             name: 'OrderId',
-            description:
-              'A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship.',
+            properties: {
+              description:
+                'A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship.',
+            },
           },
           {
             name: 'Sequential',
-            description:
-              'A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number.',
+            properties: {
+              description:
+                'A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number.',
+            },
           },
           {
             name: 'Type',
-            description:
-              'A column representing the type of payment in the payments data model.',
+            properties: {
+              description:
+                'A column representing the type of payment in the payments data model.',
+            },
           },
           {
             name: 'Value',
-            description:
-              'A column representing the value of the payment in the payments data model.',
+            properties: {
+              description:
+                'A column representing the value of the payment in the payments data model.',
+            },
           },
         ],
-        description:
-          'A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.',
+        properties: {
+          description:
+            'A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.',
+        },
         schema: [
           { columnName: 'OrderId', dataType: 'VARCHAR' },
           { columnName: 'Sequential', dataType: 'BIGINT' },
@@ -377,21 +427,29 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         columns: [
           {
             name: 'Category',
-            description:
-              'A category that classifies the products in the data model.',
+            properties: {
+              description:
+                'A category that classifies the products in the data model.',
+            },
           },
           {
             name: 'Id',
-            description:
-              'A unique identifier assigned to each product in the data model.',
+            properties: {
+              description:
+                'A unique identifier assigned to each product in the data model.',
+            },
           },
           {
             name: 'Name',
-            description: 'A name of the product in the data model.',
+            properties: {
+              description: 'A name of the product in the data model.',
+            },
           },
         ],
-        description:
-          'A data model containing information about products such as category, ID, and name, with a relationship to order items.',
+        properties: {
+          description:
+            'A data model containing information about products such as category, ID, and name, with a relationship to order items.',
+        },
         schema: [
           { columnName: 'Id', dataType: 'VARCHAR' },
           { columnName: 'Category', dataType: 'VARCHAR' },
@@ -405,27 +463,39 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         columns: [
           {
             name: 'AnswerTimestamp',
-            description: 'The date when the answer was provided.',
+            properties: {
+              description: 'The date when the answer was provided.',
+            },
           },
           {
             name: 'CreationTimestamp',
-            description: 'The date when the review was created.',
+            properties: {
+              description: 'The date when the review was created.',
+            },
           },
           {
             name: 'Id',
-            description: 'A unique identifier assigned to each review entry.',
+            properties: {
+              description: 'A unique identifier assigned to each review entry.',
+            },
           },
           {
             name: 'OrderId',
-            description:
-              'The order id of the order which the review belongs to.',
+            properties: {
+              description:
+                'The order id of the order which the review belongs to.',
+            },
           },
           {
             name: 'Score',
-            description: 'The score associated with each review entry.',
+            properties: {
+              description: 'The score associated with each review entry.',
+            },
           },
         ],
-        description: 'A model containing information about review of orders.',
+        properties: {
+          description: 'A model containing information about review of orders.',
+        },
         schema: [
           { columnName: 'Id', dataType: 'VARCHAR' },
           { columnName: 'OrderId', dataType: 'VARCHAR' },
@@ -514,65 +584,85 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           },
           {
             name: 'FgmHome',
-            description: 'number of field goals made by the home team.',
+            properties: {
+              description: 'number of field goals made by the home team.',
+            },
           },
           {
             name: 'FgaHome',
-            description: 'number of field goals attempted by the home team.',
+            properties: {
+              description: 'number of field goals attempted by the home team.',
+            },
           },
           {
             name: 'threepHome',
-            description:
-              'number of three point field goals made by the home team.',
+            properties: {
+              description:
+                'number of three point field goals made by the home team.',
+            },
           },
           {
             name: 'threepaHome',
-            description:
-              'number of three point field goals attempted by the home team.',
+            properties: {
+              description:
+                'number of three point field goals attempted by the home team.',
+            },
           },
           {
             name: 'FtmHome',
-            description: 'number of free throws made by the home team.',
+            properties: {
+              description: 'number of free throws made by the home team.',
+            },
           },
           {
             name: 'FtaHome',
-            description: 'number of free throws attempted by the home team.',
+            properties: {
+              description: 'number of free throws attempted by the home team.',
+            },
           },
           {
             name: 'OrebHome',
-            description: 'number of offensive rebounds by the home team.',
+            properties: {
+              description: 'number of offensive rebounds by the home team.',
+            },
           },
           {
             name: 'DrebHome',
-            description: 'number of defensive rebounds by the home team.',
+            properties: {
+              description: 'number of defensive rebounds by the home team.',
+            },
           },
           {
             name: 'RebHome',
-            description: 'number of rebounds by the home team.',
+            properties: { description: 'number of rebounds by the home team.' },
           },
           {
             name: 'AstHome',
-            description: 'number of assists by the home team.',
+            properties: { description: 'number of assists by the home team.' },
           },
           {
             name: 'StlHome',
-            description: 'number of steels by the home team.',
+            properties: { description: 'number of steels by the home team.' },
           },
           {
             name: 'BlkHome',
-            description: 'number of bloacks by the home team.',
+            properties: { description: 'number of bloacks by the home team.' },
           },
           {
             name: 'TovHome',
-            description: 'number of turnovers by the home team.',
+            properties: {
+              description: 'number of turnovers by the home team.',
+            },
           },
           {
             name: 'PfHome',
-            description: 'number of personal fouls by the home team.',
+            properties: {
+              description: 'number of personal fouls by the home team.',
+            },
           },
           {
             name: 'PtsHome',
-            description: 'Total score of the home team.',
+            properties: { description: 'Total score of the home team.' },
           },
           {
             name: 'PlusMimusHome',
@@ -585,65 +675,85 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           },
           {
             name: 'FgmAway',
-            description: 'number of field goals made by the away team.',
+            properties: {
+              description: 'number of field goals made by the away team.',
+            },
           },
           {
             name: 'FgaAway',
-            description: 'number of field goals attempted by the away team.',
+            properties: {
+              description: 'number of field goals attempted by the away team.',
+            },
           },
           {
             name: 'threepAway',
-            description:
-              'number of three point field goals made by the away team.',
+            properties: {
+              description:
+                'number of three point field goals made by the away team.',
+            },
           },
           {
             name: 'threepaAway',
-            description:
-              'number of three point field goals attempted by the away team.',
+            properties: {
+              description:
+                'number of three point field goals attempted by the away team.',
+            },
           },
           {
             name: 'FtmAway',
-            description: 'number of free throws made by the away team.',
+            properties: {
+              description: 'number of free throws made by the away team.',
+            },
           },
           {
             name: 'FtaAway',
-            description: 'number of free throws attempted by the away team.',
+            properties: {
+              description: 'number of free throws attempted by the away team.',
+            },
           },
           {
             name: 'OrebAway',
-            description: 'number of offensive rebounds by the away team.',
+            properties: {
+              description: 'number of offensive rebounds by the away team.',
+            },
           },
           {
             name: 'DrebAway',
-            description: 'number of defensive rebounds by the away team.',
+            properties: {
+              description: 'number of defensive rebounds by the away team.',
+            },
           },
           {
             name: 'RebAway',
-            description: 'number of rebounds by the away team.',
+            properties: { description: 'number of rebounds by the away team.' },
           },
           {
             name: 'AstAway',
-            description: 'number of assists by the away team.',
+            properties: { description: 'number of assists by the away team.' },
           },
           {
             name: 'StlAway',
-            description: 'number of steels by the away team.',
+            properties: { description: 'number of steels by the away team.' },
           },
           {
             name: 'BlkAway',
-            description: 'number of bloacks by the away team.',
+            properties: { description: 'number of bloacks by the away team.' },
           },
           {
             name: 'TovAway',
-            description: 'number of turnovers by the away team.',
+            properties: {
+              description: 'number of turnovers by the away team.',
+            },
           },
           {
             name: 'PfAway',
-            description: 'number of personal fouls by the away team.',
+            properties: {
+              description: 'number of personal fouls by the away team.',
+            },
           },
           {
             name: 'PtsAway',
-            description: 'Total score of the away team.',
+            properties: { description: 'Total score of the away team.' },
           },
           {
             name: 'PlusMimusAway',
@@ -724,28 +834,38 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           },
           {
             name: 'PtsQtr1Home',
-            description: 'The score of the home team in the first quarter.',
+            properties: {
+              description: 'The score of the home team in the first quarter.',
+            },
           },
           {
             name: 'PtsQtr2Home',
-            description: 'The score of the home team in the second quarter.',
+            properties: {
+              description: 'The score of the home team in the second quarter.',
+            },
           },
           {
             name: 'PtsQtr3Home',
-            description: 'The score of the home team in the third quarter.',
+            properties: {
+              description: 'The score of the home team in the third quarter.',
+            },
           },
           {
             name: 'PtsQtr4Home',
-            description: 'The score of the home team in the fourth quarter.',
+            properties: {
+              description: 'The score of the home team in the fourth quarter.',
+            },
           },
           {
             name: 'PtsOt1Home',
-            description:
-              'The score of the home team in the overtime. The value of 0 indicates that the game did not go into overtime.',
+            properties: {
+              description:
+                'The score of the home team in the overtime. The value of 0 indicates that the game did not go into overtime.',
+            },
           },
           {
             name: 'PtsHome',
-            description: 'Total score of the home team.',
+            properties: { description: 'Total score of the home team.' },
           },
           {
             name: 'TeamIdAway',
@@ -755,28 +875,38 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           },
           {
             name: 'PtsQtr1Away',
-            description: 'The score of the away team in the first quarter.',
+            properties: {
+              description: 'The score of the away team in the first quarter.',
+            },
           },
           {
             name: 'PtsQtr2Away',
-            description: 'The score of the away team in the second quarter.',
+            properties: {
+              description: 'The score of the away team in the second quarter.',
+            },
           },
           {
             name: 'PtsQtr3Away',
-            description: 'The score of the away team in the third quarter.',
+            properties: {
+              description: 'The score of the away team in the third quarter.',
+            },
           },
           {
             name: 'PtsQtr4Away',
-            description: 'The score of the away team in the fourth quarter.',
+            properties: {
+              description: 'The score of the away team in the fourth quarter.',
+            },
           },
           {
             name: 'PtsOt1Away',
-            description:
-              'The score of the away team in the overtime. The value of 0 indicates that the game did not go into overtime.',
+            properties: {
+              description:
+                'The score of the away team in the overtime. The value of 0 indicates that the game did not go into overtime.',
+            },
           },
           {
             name: 'PtsAway',
-            description: 'Total score of the away team.',
+            properties: { description: 'Total score of the away team.' },
           },
         ],
         schema: [
@@ -820,76 +950,84 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           },
           {
             name: 'Age',
-            description: 'player age. The format is "age-days"',
+            properties: { description: 'player age. The format is "age-days"' },
           },
           {
             name: 'Tm',
-            description: 'team affiliation.',
+            properties: { description: 'team affiliation.' },
           },
           {
             name: 'Opp',
-            description: 'opposing team.',
+            properties: { description: 'opposing team.' },
           },
           {
             name: 'MP',
-            description: 'minutes played',
+            properties: { description: 'minutes played' },
           },
           {
             name: 'FG',
-            description: 'number of two point field goals made.',
+            properties: {
+              description: 'number of two point field goals made.',
+            },
           },
           {
             name: 'FGA',
-            description:
-              'number of two point field goals attempted (do not include free throws).',
+            properties: {
+              description:
+                'number of two point field goals attempted (do not include free throws).',
+            },
           },
           {
             name: 'threeP',
-            description: 'number of three point field goals made.',
+            properties: {
+              description: 'number of three point field goals made.',
+            },
           },
           {
             name: 'threePA',
-            description: 'number of three point field goals attempted.',
+            properties: {
+              description: 'number of three point field goals attempted.',
+            },
           },
           {
             name: 'FT',
-            description: 'number of free throws made.',
+            properties: { description: 'number of free throws made.' },
           },
           {
             name: 'FTA',
-            description: 'number of free throws attempted.',
+            properties: { description: 'number of free throws attempted.' },
           },
           {
             name: 'ORB',
-            description: 'number of offensive rebounds.',
+            properties: { description: 'number of offensive rebounds.' },
           },
           {
             name: 'DRB',
-            description: 'number of defensive rebounds.',
+            properties: { description: 'number of defensive rebounds.' },
           },
           {
             name: 'AST',
-            description: 'number of assists.',
+            properties: { description: 'number of assists.' },
           },
           {
             name: 'STL',
-            description: 'number of Steals.',
+            properties: { description: 'number of Steals.' },
           },
           {
             name: 'BLK',
-            description: 'number of blocks.',
+            properties: { description: 'number of blocks.' },
           },
           {
             name: 'TOV',
-            description: 'number of turnovers allowed',
+            properties: { description: 'number of turnovers allowed' },
           },
           {
             name: 'PF',
-            description: 'number of personal fouls',
+            properties: { description: 'number of personal fouls' },
           },
           {
             name: 'PTS',
-            description: 'total score',
+            properties: { description: 'total score' },
           },
         ],
         schema: [
