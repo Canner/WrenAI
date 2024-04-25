@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Button, ButtonProps, Col, Row, Typography } from 'antd';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { BinocularsIcon } from '@/utils/icons';
@@ -5,12 +6,15 @@ import CollapseContent, {
   Props as CollapseContentProps,
 } from '@/components/pages/home/promptThread/CollapseContent';
 import useAnswerStepContent from '@/hooks/useAnswerStepContent';
+import { nextTick } from '@/utils/time';
 
 const { Text, Paragraph } = Typography;
 
 interface Props {
   fullSql: string;
   isLastStep: boolean;
+  isLastThreadResponse: boolean;
+  onTriggerScrollToBottom: () => void;
   sql: string;
   stepIndex: number;
   summary: string;
@@ -18,8 +22,16 @@ interface Props {
 }
 
 export default function StepContent(props: Props) {
-  const { fullSql, isLastStep, sql, stepIndex, summary, threadResponseId } =
-    props;
+  const {
+    fullSql,
+    isLastStep,
+    isLastThreadResponse,
+    onTriggerScrollToBottom,
+    sql,
+    stepIndex,
+    summary,
+    threadResponseId,
+  } = props;
 
   const {
     collapseContentProps,
@@ -35,6 +47,20 @@ export default function StepContent(props: Props) {
   });
 
   const stepNumber = stepIndex + 1;
+
+  const autoTriggerPreviewDataButton = async () => {
+    await nextTick();
+    previewDataButtonProps.onClick();
+    await nextTick(1500);
+    onTriggerScrollToBottom();
+  };
+
+  // when is the last step of the last thread response, auto trigger preview data button
+  useEffect(() => {
+    if (isLastStep && isLastThreadResponse) {
+      autoTriggerPreviewDataButton();
+    }
+  }, [isLastStep, isLastThreadResponse]);
 
   return (
     <Row
