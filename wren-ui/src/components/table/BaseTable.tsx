@@ -78,6 +78,7 @@ export const COLUMN = {
 type BaseTableProps = TableProps<ComposeDiagramField>;
 
 export type Props = BaseTableProps & {
+  showExpandable?: boolean;
   actionColumns?: BaseTableProps['columns'];
 };
 

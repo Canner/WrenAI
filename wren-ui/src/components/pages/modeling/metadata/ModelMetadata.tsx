@@ -49,14 +49,14 @@ export default function ModelMetadata(props: Props) {
         <Typography.Text className="d-block gray-7 mb-2">
           Columns ({fields.length})
         </Typography.Text>
-        <FieldTable dataSource={fields} />
+        <FieldTable dataSource={fields} showExpandable />
       </div>
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
           Relationships ({relationFields.length})
         </Typography.Text>
-        <RelationTable dataSource={relationFields} />
+        <RelationTable dataSource={relationFields} showExpandable />
       </div>
     </>
   );
