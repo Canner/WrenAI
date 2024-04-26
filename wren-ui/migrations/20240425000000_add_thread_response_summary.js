@@ -2,10 +2,9 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
-// add pg related columns to project table
+// add summary column to thread_response table
 exports.up = function (knex) {
   return knex.schema.alterTable('thread_response', (table) => {
-    // pg
     table
       .string('summary')
       .nullable()
