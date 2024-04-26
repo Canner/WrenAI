@@ -13,6 +13,7 @@ const COMMON_RESPONSE = gql`
   fragment CommonResponse on ThreadResponse {
     id
     question
+    summary
     status
     detail {
       sql
@@ -57,7 +58,6 @@ export const THREADS = gql`
   query Threads {
     threads {
       id
-      sql
       summary
     }
   }

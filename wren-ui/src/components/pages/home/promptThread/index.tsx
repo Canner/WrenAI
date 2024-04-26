@@ -42,6 +42,7 @@ const AnswerResultTemplate = ({
   onOpenSaveAsViewModal,
   onTriggerScrollToBottom,
   data,
+  summary,
 }) => {
   const lastResponseId = data[data.length - 1].id;
   const isLastThreadResponse = id === lastResponseId;
@@ -62,6 +63,7 @@ const AnswerResultTemplate = ({
           description={detail?.description}
           loading={status !== AskingTaskStatus.FINISHED}
           question={question}
+          summary={summary}
           fullSql={detail?.sql}
           threadResponseId={id}
           onOpenSaveAsViewModal={onOpenSaveAsViewModal}
@@ -105,7 +107,6 @@ export default function PromptThread(props: Props) {
     <StyledPromptThread className="mt-12" ref={divRef}>
       <AnswerResultIterator
         data={data?.responses || []}
-        sql={data?.sql}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onTriggerScrollToBottom={triggerScrollToBottom}
       />
