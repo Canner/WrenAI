@@ -74,6 +74,8 @@ class Indexing(BasicPipeline):
                     ddl_column["relationship"] = column["relationship"]
                 if "expression" in column:
                     ddl_column["expression"] = column["expression"]
+                if column["isCalculated"]:
+                    ddl_column["isCalculated"] = column["isCalculated"]
 
                 columns.append(ddl_column)
 

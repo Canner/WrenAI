@@ -205,8 +205,12 @@ def generate_ddls_from_semantics(
                     comment = f"-- {json.dumps(column['properties'])}\n  "
                 else:
                     comment = ""
+                if column["isCalculated"]:
+                    comment = comment + "-- This column is a Calculated Field\n  "
                 if "expression" in column:
-                    comment = comment + f"-- \"expression\": {column["expression"]}\n  "
+                    comment = (
+                        comment + f"-- column expression: {column["expression"]}\n  "
+                    )
                 column_name = column["name"]
                 column_type = column["type"]
                 column_ddl = f"{comment}{column_name} {column_type}"
