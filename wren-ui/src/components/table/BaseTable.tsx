@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { Table, TableProps } from 'antd';
+import { Table, TableProps, Row, Col } from 'antd';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import CodeBlock from '@/components/editor/CodeBlock';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { ComposeDiagramField, getJoinTypeText } from '@/utils/data';
+import { makeIterable } from '@/utils/iteration';
 
 export const COLUMN = {
   DISPLAY_NAME: {
@@ -110,5 +111,29 @@ export default function BaseTable(props: Props) {
         size: 'small',
       }}
     />
+  );
+}
+
+const ExpandableRowIterator = makeIterable((props) => {
+  const { title, value, index } = props;
+  return (
+    <>
+      {index > 0 && <div className="border-b border-gray-5" />}
+      <Row wrap={false} className="py-1 px-4">
+        <Col span={6} className="gray-6">
+          {title}
+        </Col>
+        <Col>{value}</Col>
+      </Row>
+    </>
+  );
+});
+
+export function ExpandableRows(props) {
+  const { data } = props;
+  return (
+    <div className="pl-12 text-sm gray-8 -my-1">
+      <ExpandableRowIterator data={data} />
+    </div>
   );
 }
