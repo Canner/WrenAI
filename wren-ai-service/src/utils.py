@@ -87,9 +87,10 @@ def remove_limit_statement(sql: str) -> str:
 
 
 def add_quotes(sql: str) -> str:
+    logger.debug(f"Original SQL: {sql}")
+
     quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
 
-    logger.debug(f"Original SQL: {sql}")
     logger.debug(f"Quoted SQL: {quoted_sql}")
 
     return quoted_sql
@@ -104,6 +105,8 @@ def classify_invalid_generation_results(
 
     for generation_result in generation_results:
         quoted_sql = add_quotes(generation_result["sql"])
+
+        logger.debug(f"Checking if SQL is executable: {quoted_sql}")
 
         response = requests.get(
             f"{api_endpoint}/v1/mdl/preview",
