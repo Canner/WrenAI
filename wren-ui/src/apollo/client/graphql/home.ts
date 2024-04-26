@@ -161,3 +161,9 @@ export const PREVIEW_DATA = gql`
     previewData(where: $where)
   }
 `;
+
+export const GET_NATIVE_SQL = gql`
+  query GetNativeSQL($responseId: Int!) {
+    nativeSql(responseId: $responseId)
+  }
+`;

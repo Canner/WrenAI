@@ -99,7 +99,7 @@ export default function CodeBlock(props: Props) {
 
   return (
     <Block
-      className="ace_editor ace-tomorrow"
+      className="ace_editor ace-tomorrow adm_code-block"
       inline={inline}
       maxHeight={maxHeight}
     >

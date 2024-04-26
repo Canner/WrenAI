@@ -3,9 +3,11 @@ import copy from 'copy-to-clipboard';
 import { message } from 'antd';
 import { COLLAPSE_CONTENT_TYPE } from '@/utils/enum';
 import {
+  useGetNativeSqlLazyQuery,
   usePreviewDataMutation,
   PreviewDataMutationResult,
 } from '@/apollo/client/graphql/home.generated';
+import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 
 const getTextButton = (isActive: boolean) => ({
   type: 'text',
@@ -40,6 +42,19 @@ function getButtonProps({
   };
 }
 
+// we assume that not having a sample dataset means supporting native SQL
+function useNativeSQLInfo() {
+  const { data: settingsQueryResult } = useGetSettingsQuery();
+  const settings = settingsQueryResult?.settings;
+  const dataSourceType = settings?.dataSource.type;
+  const sampleDataset = settings?.dataSource.sampleDataset;
+
+  return {
+    hasNativeSQL: !Boolean(sampleDataset),
+    dataSourceType,
+  };
+}
+
 export default function useAnswerStepContent({
   fullSql,
   isLastStep,
@@ -53,29 +68,50 @@ export default function useAnswerStepContent({
   stepIndex: number;
   threadResponseId: number;
 }) {
+  const nativeSQLInfo = useNativeSQLInfo();
+
   const [collapseContentType, setCollapseContentType] =
     useState<COLLAPSE_CONTENT_TYPE>(COLLAPSE_CONTENT_TYPE.NONE);
+
+  const [nativeSQLMode, setNativeSQLMode] = useState<boolean>(false);
 
   const [previewData, previewDataResult] = usePreviewDataMutation({
     onError: (error) => console.error(error),
   });
+
+  const [
+    fetchNativeSQL,
+    { data: nativeSQLResult, loading: fetchNativeSQLLoading },
+  ] = useGetNativeSqlLazyQuery({
+    fetchPolicy: 'cache-and-network',
+  });
+
+  const nativeSQL = nativeSQLResult?.nativeSql || '';
 
   const onViewSQL = () =>
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.VIEW_SQL);
 
   const onPreviewData = () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.PREVIEW_DATA);
+    setNativeSQLMode(false);
     previewData({
       variables: { where: { responseId: threadResponseId, stepIndex } },
     });
   };
 
-  const onCloseCollapse = () =>
+  const onCloseCollapse = () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.NONE);
+    setNativeSQLMode(false);
+  };
 
   const onCopyFullSQL = () => {
-    copy(fullSql);
+    copy(nativeSQLMode ? nativeSQL : fullSql);
     message.success('Copied SQL to clipboard.');
+  };
+
+  const onGetNativeSQL = async (checked: boolean) => {
+    setNativeSQLMode(checked);
+    checked && fetchNativeSQL({ variables: { responseId: threadResponseId } });
   };
 
   const isViewSQL = collapseContentType === COLLAPSE_CONTENT_TYPE.VIEW_SQL;
@@ -99,7 +135,7 @@ export default function useAnswerStepContent({
       ...(isLastStep
         ? {
             isViewFullSQL: isViewSQL,
-            sql: fullSql,
+            sql: nativeSQLMode ? nativeSQL : fullSql,
           }
         : {
             isViewSQL,
@@ -110,6 +146,12 @@ export default function useAnswerStepContent({
         loading: previewDataResult.loading,
         previewData: previewDataResult?.data?.previewData,
       } as unknown as PreviewDataMutationResult,
+      nativeSQLInfo,
+      onGetNativeSQL,
+      nativeSQLResult: {
+        data: nativeSQL,
+        loading: fetchNativeSQLLoading,
+      },
     },
     ...buttonProps,
   };
