@@ -106,8 +106,6 @@ def classify_invalid_generation_results(
     for generation_result in generation_results:
         quoted_sql = add_quotes(generation_result["sql"])
 
-        logger.debug(f"Checking if SQL is executable: {quoted_sql}")
-
         response = requests.get(
             f"{api_endpoint}/v1/mdl/preview",
             json={
