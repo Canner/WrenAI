@@ -12,6 +12,7 @@ import {
   PostgresConnector,
 } from '../connectors/postgresConnector';
 import { Encryptor } from '../utils';
+import { findColumnsToUpdate, updateModelPrimaryKey } from './util';
 
 export class PostgresStrategy implements IDataSourceStrategy {
   private project?: Project;
@@ -135,18 +136,52 @@ export class PostgresStrategy implements IDataSourceStrategy {
     const connector = this.getPGConnector();
     const dataSourceColumns = (await connector.listTables({
       format: false,
-    })) as PGColumnResponse[];
+    })) as PostgresColumnResponse[];
 
-    const models = await this.createModels(this.project, [table]);
+    const models = await this.createModels([table], connector);
     const model = models[0];
     // create columns
     const modelColumns = await this.createColumns(
       columns,
       model,
-      dataSourceColumns as PGColumnResponse[],
+      dataSourceColumns as PostgresColumnResponse[],
       primaryKey,
     );
     return { model, columns: modelColumns };
+  }
+
+  public async updateModel(
+    model: Model,
+    columns: string[],
+    primaryKey?: string,
+  ) {
+    const connector = this.getPGConnector();
+    const dataSourceColumns = (await connector.listTables({
+      format: false,
+    })) as PostgresColumnResponse[];
+    const existingColumns = await this.ctx.modelColumnRepository.findAllBy({
+      modelId: model.id,
+    });
+    const { toDeleteColumnIds, toCreateColumns } = findColumnsToUpdate(
+      columns,
+      existingColumns,
+    );
+    await updateModelPrimaryKey(
+      this.ctx.modelColumnRepository,
+      model.id,
+      primaryKey,
+    );
+    if (toCreateColumns.length) {
+      await this.createColumns(
+        toCreateColumns,
+        model,
+        dataSourceColumns as PostgresColumnResponse[],
+        primaryKey,
+      );
+    }
+    if (toDeleteColumnIds.length) {
+      await this.ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+    }
   }
 
   public async analysisRelation(models: Model[], columns: ModelColumn[]) {
@@ -277,7 +312,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
   private async createColumns(
     columns: string[],
     model: Model,
-    dataSourceColumns: PGColumnResponse[],
+    dataSourceColumns: PostgresColumnResponse[],
     primaryKey?: string,
   ) {
     const columnValues = columns.reduce((acc, columnName) => {

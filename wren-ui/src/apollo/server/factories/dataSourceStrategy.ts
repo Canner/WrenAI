@@ -26,6 +26,11 @@ export interface IDataSourceStrategy {
     columns: string[],
     primaryKey?: string,
   ): Promise<any>;
+  updateModel(
+    model: Model,
+    columns: string[],
+    primaryKey?: string,
+  ): Promise<any>;
   analysisRelation(
     models: Model[],
     columns: ModelColumn[],

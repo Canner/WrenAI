@@ -15,3 +15,8 @@ export interface CreateModelData {
   fields: [string];
   primaryKey: string;
 }
+
+export interface UpdateModelData {
+  fields: [string];
+  primaryKey: string;
+}

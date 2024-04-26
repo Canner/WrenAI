@@ -134,12 +134,8 @@ export const typeDefs = gql`
   }
 
   input UpdateModelInput {
-    displayName: String!
-    description: String
-    cached: Boolean!
-    refreshTime: String
     fields: [String!]!
-    calculatedFields: [CalculatedFieldInput!]
+    primaryKey: String
   }
 
   type FieldInfo {

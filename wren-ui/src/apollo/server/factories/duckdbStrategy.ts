@@ -8,6 +8,7 @@ import {
 } from '../connectors/duckdbConnector';
 import { trim } from '../utils';
 import { IDataSourceStrategy } from './dataSourceStrategy';
+import { findColumnsToUpdate, updateModelPrimaryKey } from './util';
 
 export class DuckDBStrategy implements IDataSourceStrategy {
   connector: IConnector<any, any>;
@@ -127,6 +128,43 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       primaryKey,
     );
     return { model, columns: modelColumns };
+  }
+
+  public async updateModel(
+    model: Model,
+    columns: string[],
+    primaryKey?: string,
+  ) {
+    const connector = new DuckDBConnector({
+      wrenEngineAdaptor: this.ctx.wrenEngineAdaptor,
+    });
+    const listTableOptions = { format: true } as DuckDBListTableOptions;
+    const dataSourceColumns = (await connector.listTables(
+      listTableOptions,
+    )) as CompactTable[];
+    const existingColumns = await this.ctx.modelColumnRepository.findAllBy({
+      modelId: model.id,
+    });
+    const { toDeleteColumnIds, toCreateColumns } = findColumnsToUpdate(
+      columns,
+      existingColumns,
+    );
+    await updateModelPrimaryKey(
+      this.ctx.modelColumnRepository,
+      model.id,
+      primaryKey,
+    );
+    if (toCreateColumns.length) {
+      await this.createColumns(
+        toCreateColumns,
+        model,
+        dataSourceColumns,
+        primaryKey,
+      );
+    }
+    if (toDeleteColumnIds.length) {
+      await this.ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+    }
   }
 
   public async analysisRelation(_models, _columns) {
