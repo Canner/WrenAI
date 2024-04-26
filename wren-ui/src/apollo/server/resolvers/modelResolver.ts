@@ -1,5 +1,5 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
-import { CreateModelData } from '../models';
+import { CreateModelData, UpdateModelData } from '../models';
 import { Project } from '../repositories';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
@@ -28,6 +28,7 @@ export class ModelResolver {
     this.listModels = this.listModels.bind(this);
     this.getModel = this.getModel.bind(this);
     this.createModel = this.createModel.bind(this);
+    this.updateModel = this.updateModel.bind(this);
     this.deleteModel = this.deleteModel.bind(this);
     this.deploy = this.deploy.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
@@ -158,6 +159,37 @@ export class ModelResolver {
       fields,
       primaryKey,
     );
+    logger.info(`Model created: ${model}`);
+
+    return model;
+  }
+
+  public async updateModel(
+    _root: any,
+    args: { data: UpdateModelData; where: { id: number } },
+    ctx: IContext,
+  ) {
+    const { fields, primaryKey } = args.data;
+
+    const project = await ctx.projectService.getCurrentProject();
+    const dataSourceType = project.type;
+    const strategyOptions = {
+      ctx,
+      project,
+    };
+    const strategy = DataSourceStrategyFactory.create(
+      dataSourceType,
+      strategyOptions,
+    );
+    const dataSourceTables = await strategy.listTable({
+      formatToCompactTable: true,
+    });
+    const model = await ctx.modelRepository.findOneBy({ id: args.where.id });
+    const { sourceTableName } = model;
+    this.validateTableExist(sourceTableName, dataSourceTables);
+    this.validateColumnsExist(sourceTableName, fields, dataSourceTables);
+
+    await strategy.updateModel(model, fields, primaryKey);
     logger.info(`Model created: ${model}`);
 
     return model;

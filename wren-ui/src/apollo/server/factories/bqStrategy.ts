@@ -15,6 +15,7 @@ import {
 } from '../connectors/bqConnector';
 import { Encryptor, toBase64 } from '../utils';
 import { IDataSourceStrategy } from './dataSourceStrategy';
+import { findColumnsToUpdate, updateModelPrimaryKey } from './util';
 
 export class BigQueryStrategy implements IDataSourceStrategy {
   connector: IConnector<any, any>;
@@ -86,10 +87,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
   }
 
   public async listTable({ formatToCompactTable }) {
-    const filePath = await this.ctx.projectService.getCredentialFilePath(
-      this.project,
-    );
-    const connector = await this.getBQConnector(filePath);
+    const connector = await this.getBQConnector();
     const listTableOptions = {
       datasetId: this.project.datasetId,
       format: formatToCompactTable,
@@ -99,10 +97,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
   }
 
   public async saveModels(tables: string[]) {
-    const filePath = await this.ctx.projectService.getCredentialFilePath(
-      this.project,
-    );
-    const connector = await this.getBQConnector(filePath);
+    const connector = await this.getBQConnector();
     const listTableOptions = {
       datasetId: this.project.datasetId,
       format: false,
@@ -130,10 +125,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     columns: string[],
     primaryKey?: string,
   ) {
-    const filePath = await this.ctx.projectService.getCredentialFilePath(
-      this.project,
-    );
-    const connector = await this.getBQConnector(filePath);
+    const connector = await this.getBQConnector();
     const listTableOptions = {
       datasetId: this.project.datasetId,
       format: false,
@@ -157,11 +149,48 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     return { model, columns: modelColumns };
   }
 
-  public async analysisRelation(models, columns) {
-    const filePath = await this.ctx.projectService.getCredentialFilePath(
-      this.project,
+  public async updateModel(
+    model: Model,
+    columns: string[],
+    primaryKey: string,
+  ) {
+    // get current column in the database
+    const existingColumns = await this.ctx.modelColumnRepository.findAllBy({
+      modelId: model.id,
+    });
+    const connector = await this.getBQConnector();
+    const listTableOptions = {
+      datasetId: this.project.datasetId,
+      format: false,
+    } as BQListTableOptions;
+    const dataSourceColumns = (await connector.listTables(
+      listTableOptions,
+    )) as BQColumnResponse[];
+
+    const { toDeleteColumnIds, toCreateColumns } = findColumnsToUpdate(
+      columns,
+      existingColumns,
     );
-    const connector = await this.getBQConnector(filePath);
+    await updateModelPrimaryKey(
+      this.ctx.modelColumnRepository,
+      model.id,
+      primaryKey,
+    );
+    if (toCreateColumns.length) {
+      await this.createColumns(
+        toCreateColumns,
+        model,
+        dataSourceColumns,
+        primaryKey,
+      );
+    }
+    if (toDeleteColumnIds.length) {
+      await this.ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+    }
+  }
+
+  public async analysisRelation(models, columns) {
+    const connector = await this.getBQConnector();
     const listConstraintOptions = {
       datasetId: this.project.datasetId,
     };
@@ -270,7 +299,10 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     await this.ctx.wrenEngineAdaptor.patchConfig(wrenEngineConfig);
   }
 
-  private async getBQConnector(filePath: string) {
+  private async getBQConnector() {
+    const filePath = await this.ctx.projectService.getCredentialFilePath(
+      this.project,
+    );
     // fetch tables
     const { projectId } = this.project;
     const connectionOption: BigQueryOptions = {

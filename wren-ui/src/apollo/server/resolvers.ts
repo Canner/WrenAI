@@ -48,6 +48,7 @@ const resolvers = {
     saveTables: projectResolver.saveTables,
     saveRelations: projectResolver.saveRelations,
     createModel: modelResolver.createModel,
+    updateModel: modelResolver.updateModel,
     deleteModel: modelResolver.deleteModel,
 
     // Ask
