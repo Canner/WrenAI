@@ -5,7 +5,9 @@ import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
+import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
 import useDrawerAction from '@/hooks/useDrawerAction';
+import useModalAction from '@/hooks/useModalAction';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
@@ -59,6 +61,7 @@ export default function Modeling() {
 
   const metadataDrawer = useDrawerAction();
   const modelDrawer = useDrawerAction();
+  const editMetadataModal = useModalAction();
 
   const onSelect = (selectKeys) => {
     if (diagramRef.current) {
@@ -171,6 +174,14 @@ export default function Modeling() {
         <MetadataDrawer
           {...metadataDrawer.state}
           onClose={metadataDrawer.closeDrawer}
+          onEditClick={editMetadataModal.openModal}
+        />
+        <EditMetadataModal
+          {...editMetadataModal.state}
+          onClose={editMetadataModal.closeModal}
+          onSubmit={async (values) => {
+            console.log(values);
+          }}
         />
         <ModelDrawer
           {...modelDrawer.state}
