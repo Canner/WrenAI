@@ -55,6 +55,7 @@ export interface IWrenEngineAdaptor {
   patchConfig(config: Record<string, any>): Promise<void>;
   previewData(sql: string, limit?: number): Promise<QueryResponse>;
   describeStatement(sql: string): Promise<DescribeStatementResponse>;
+  getNativeSQL(sql: string): Promise<string>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -63,6 +64,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private queryDuckdbUrlPath = '/v1/data-source/duckdb/query';
   private initSqlUrlPath = '/v1/data-source/duckdb/settings/init-sql';
   private previewUrlPath = '/v1/mdl/preview';
+  private dryPlanUrlPath = '/v1/mdl/dry-plan';
 
   constructor({ wrenEngineEndpoint }: { wrenEngineEndpoint: string }) {
     this.wrenEngineBaseEndpoint = wrenEngineEndpoint;
@@ -208,6 +210,28 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return { columns: res.columns };
     } catch (err: any) {
       logger.debug(`Got error when describing statement: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async getNativeSQL(sql: string): Promise<string> {
+    try {
+      const url = new URL(this.dryPlanUrlPath, this.wrenEngineBaseEndpoint);
+      const headers = { 'Content-Type': 'application/json' };
+
+      const res = await axios({
+        method: 'get',
+        url: url.href,
+        headers,
+        data: {
+          sql,
+          modelingOnly: false,
+        },
+      });
+
+      return res.data;
+    } catch (err: any) {
+      logger.debug(`Got error when getting native SQL: ${err.message}`);
       throw err;
     }
   }
