@@ -20,6 +20,7 @@ export type ComposeDiagramField = (
   | DiagramModelRelationField
   | DiagramViewField
 ) &
+  Partial<Pick<DiagramModel, 'description'>> &
   Partial<Pick<DiagramModelField, 'isPrimaryKey' | 'columnId'>> &
   Partial<
     Pick<

@@ -58,7 +58,6 @@ export default function Home(props: Props) {
     params?.id && setTreeSelectedKeys([params.id] as string[]);
   }, [params?.id]);
 
-  // initial workspace
   useEffect(() => {
     setTree(
       data.map((thread) => {

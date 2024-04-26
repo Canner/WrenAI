@@ -10,7 +10,7 @@ import { IThreadRepository, Thread } from '../repositories/threadRepository';
 import {
   IThreadResponseRepository,
   ThreadResponse,
-  ThreadResponseWithThreadSummary,
+  ThreadResponseWithThreadContext,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
@@ -63,7 +63,7 @@ export interface IAskingService {
   ): Promise<ThreadResponse>;
   getResponsesWithThread(
     threadId: number,
-  ): Promise<ThreadResponseWithThreadSummary[]>;
+  ): Promise<ThreadResponseWithThreadContext[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   previewData(responseId: number, stepIndex?: number): Promise<QueryResponse>;
   deleteAllByProjectId(projectId: number): Promise<void>;
@@ -336,10 +336,13 @@ export class AskingService implements IAskingService {
       sql: input.sql,
       summary: input.summary,
     });
+
+    // in follow-up questions, we still need to save the summary
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: response.queryId,
       question: input.question,
+      summary: input.summary,
       status: AskResultStatus.UNDERSTANDING,
     });
 
@@ -393,10 +396,12 @@ export class AskingService implements IAskingService {
     });
 
     // 2. create a thread and the first thread response
+    // in follow-up questions, we still need to save the summary
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: response.queryId,
       question: input.question,
+      summary: input.summary,
       status: AskResultStatus.UNDERSTANDING,
     });
 

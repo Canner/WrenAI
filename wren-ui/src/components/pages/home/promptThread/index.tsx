@@ -40,7 +40,13 @@ const AnswerResultTemplate = ({
   detail,
   error,
   onOpenSaveAsViewModal,
+  onTriggerScrollToBottom,
+  data,
+  summary,
 }) => {
+  const lastResponseId = data[data.length - 1].id;
+  const isLastThreadResponse = id === lastResponseId;
+
   return (
     <div key={`${id}-${index}`}>
       {index > 0 && <Divider />}
@@ -57,9 +63,12 @@ const AnswerResultTemplate = ({
           description={detail?.description}
           loading={status !== AskingTaskStatus.FINISHED}
           question={question}
+          summary={summary}
           fullSql={detail?.sql}
           threadResponseId={id}
           onOpenSaveAsViewModal={onOpenSaveAsViewModal}
+          onTriggerScrollToBottom={onTriggerScrollToBottom}
+          isLastThreadResponse={isLastThreadResponse}
         />
       )}
     </div>
@@ -72,20 +81,25 @@ export default function PromptThread(props: Props) {
   const { data, onOpenSaveAsViewModal } = props;
   const divRef = useRef<HTMLDivElement>(null);
 
+  const triggerScrollToBottom = () => {
+    const contentLayout = divRef.current.parentElement;
+    const lastChild = divRef.current.lastElementChild as HTMLElement;
+    const lastChildElement = lastChild.lastElementChild as HTMLElement;
+
+    if (
+      contentLayout.clientHeight <
+      lastChild.offsetTop + lastChild.clientHeight
+    ) {
+      contentLayout.scrollTo({
+        top: lastChildElement.offsetTop,
+        behavior: 'smooth',
+      });
+    }
+  };
+
   useEffect(() => {
     if (divRef.current && data?.responses.length > 0) {
-      const contentLayout = divRef.current.parentElement;
-      const lastChild = divRef.current.lastElementChild as HTMLElement;
-      const lastChildDivider = lastChild.firstElementChild as HTMLElement;
-      if (
-        contentLayout.clientHeight <
-        lastChild.offsetTop + lastChild.clientHeight
-      ) {
-        contentLayout.scrollTo({
-          top: lastChildDivider.offsetTop,
-          behavior: 'smooth',
-        });
-      }
+      triggerScrollToBottom();
     }
   }, [divRef, data]);
 
@@ -93,8 +107,8 @@ export default function PromptThread(props: Props) {
     <StyledPromptThread className="mt-12" ref={divRef}>
       <AnswerResultIterator
         data={data?.responses || []}
-        sql={data?.sql}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
+        onTriggerScrollToBottom={triggerScrollToBottom}
       />
     </StyledPromptThread>
   );

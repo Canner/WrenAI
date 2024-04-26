@@ -177,6 +177,7 @@ export type DetailedThread = {
   __typename?: 'DetailedThread';
   id: Scalars['Int'];
   responses: Array<ThreadResponse>;
+  /** @deprecated Doesn't seem to be reasonable to put a sql in a thread */
   sql: Scalars['String'];
   summary: Scalars['String'];
 };
@@ -602,6 +603,7 @@ export type Task = {
 export type Thread = {
   __typename?: 'Thread';
   id: Scalars['Int'];
+  /** @deprecated Doesn't seem to be reasonable to put a sql in a thread */
   sql: Scalars['String'];
   summary: Scalars['String'];
 };
@@ -613,6 +615,7 @@ export type ThreadResponse = {
   id: Scalars['Int'];
   question: Scalars['String'];
   status: AskingTaskStatus;
+  summary: Scalars['String'];
 };
 
 export type ThreadResponseDetail = {
