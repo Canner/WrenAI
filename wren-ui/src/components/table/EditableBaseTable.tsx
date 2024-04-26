@@ -3,7 +3,7 @@ import { set, cloneDeep, isEmpty } from 'lodash';
 import { COLUMN, Props as BaseTableProps } from '@/components/table/BaseTable';
 import EditableWrapper from '@/components/EditableWrapper';
 
-type Props = BaseTableProps & {
+type Props = Omit<BaseTableProps, 'onChange'> & {
   onChange?: (value: any) => void;
 };
 
@@ -37,7 +37,7 @@ const EditableCell = (props) => {
 
 export const makeEditableBaseTable = (BaseTable: React.FC<BaseTableProps>) => {
   const EditableBaseTable = (props: Props) => {
-    const { columns, dataSource, onChange } = props;
+    const { columns, dataSource, onChange, ...restProps } = props;
     const [data, setData] = useState(dataSource);
     const components = {
       body: { cell: !isEmpty(dataSource) ? EditableCell : undefined },
@@ -73,7 +73,7 @@ export const makeEditableBaseTable = (BaseTable: React.FC<BaseTableProps>) => {
 
     return (
       <BaseTable
-        {...props}
+        {...restProps}
         size="small"
         dataSource={data}
         columns={tableColumns}
