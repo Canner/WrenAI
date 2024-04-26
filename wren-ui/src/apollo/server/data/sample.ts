@@ -521,12 +521,12 @@ export const sampleDatasets: Record<string, SampleDataset> = {
             description: 'number of field goals attempted by the home team.',
           },
           {
-            name: '3pHome',
+            name: 'threepHome',
             description:
               'number of three point field goals made by the home team.',
           },
           {
-            name: '3paHome',
+            name: 'threepaHome',
             description:
               'number of three point field goals attempted by the home team.',
           },
@@ -592,12 +592,12 @@ export const sampleDatasets: Record<string, SampleDataset> = {
             description: 'number of field goals attempted by the away team.',
           },
           {
-            name: '3pAway',
+            name: 'threepAway',
             description:
               'number of three point field goals made by the away team.',
           },
           {
-            name: '3paAway',
+            name: 'threepaAway',
             description:
               'number of three point field goals attempted by the away team.',
           },
@@ -662,8 +662,8 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'FgmHome', dataType: 'BIGINT' },
           { columnName: 'FgaHome', dataType: 'BIGINT' },
           { columnName: 'FgPct_home', dataType: 'DOUBLE' },
-          { columnName: '3pHome', dataType: 'BIGINT' },
-          { columnName: '3paHome', dataType: 'BIGINT' },
+          { columnName: 'threepHome', dataType: 'BIGINT' },
+          { columnName: 'threepaHome', dataType: 'BIGINT' },
           { columnName: 'fg3_pct_home', dataType: 'DOUBLE' },
           { columnName: 'FtmHome', dataType: 'BIGINT' },
           { columnName: 'FtaHome', dataType: 'BIGINT' },
@@ -683,8 +683,8 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'FgmAway', dataType: 'BIGINT' },
           { columnName: 'FgaAway', dataType: 'BIGINT' },
           { columnName: 'fg_pct_away', dataType: 'DOUBLE' },
-          { columnName: '3pAway', dataType: 'BIGINT' },
-          { columnName: '3paAway', dataType: 'BIGINT' },
+          { columnName: 'threepAway', dataType: 'BIGINT' },
+          { columnName: 'threepaAway', dataType: 'BIGINT' },
           { columnName: 'Fg3_pct_away', dataType: 'DOUBLE' },
           { columnName: 'FtmAway', dataType: 'BIGINT' },
           { columnName: 'FtaAway', dataType: 'BIGINT' },
@@ -844,11 +844,11 @@ export const sampleDatasets: Record<string, SampleDataset> = {
               'number of two point field goals attempted (do not include free throws).',
           },
           {
-            name: '3P',
+            name: 'threeP',
             description: 'number of three point field goals made.',
           },
           {
-            name: '3PA',
+            name: 'threePA',
             description: 'number of three point field goals attempted.',
           },
           {
@@ -903,8 +903,8 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'MP', dataType: 'VARCHAR' }, // 37:25:00
           { columnName: 'FG', dataType: 'BIGINT' },
           { columnName: 'FGA', dataType: 'BIGINT' },
-          { columnName: '3P', dataType: 'BIGINT' },
-          { columnName: '3PA', dataType: 'BIGINT' },
+          { columnName: 'threeP', dataType: 'BIGINT' },
+          { columnName: 'threePA', dataType: 'BIGINT' },
           { columnName: 'FT', dataType: 'BIGINT' },
           { columnName: 'FTA', dataType: 'BIGINT' },
           { columnName: 'ORB', dataType: 'BIGINT' },

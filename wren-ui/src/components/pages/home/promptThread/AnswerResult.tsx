@@ -1,6 +1,8 @@
-import { Button, Skeleton, Typography } from 'antd';
+import { useState } from 'react';
+import { Col, Button, Row, Skeleton, Typography } from 'antd';
 import styled from 'styled-components';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
+import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import StepContent from '@/components/pages/home/promptThread/StepContent';
 
@@ -20,6 +22,20 @@ const StyledAnswer = styled(Typography)`
   }
 `;
 
+const StyledQuestion = styled(Row)`
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--gray-6);
+  background-color: var(--gray-3);
+  margin-bottom: 8px;
+  font-size: 14px;
+
+  &:hover {
+    background-color: var(--gray-4) !important;
+    cursor: pointer;
+  }
+`;
+
 interface Props {
   loading: boolean;
   question: string;
@@ -31,6 +47,9 @@ interface Props {
   fullSql: string;
   threadResponseId: number;
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+  isLastThreadResponse: boolean;
+  onTriggerScrollToBottom: () => void;
+  summary: string;
 }
 
 export default function AnswerResult(props: Props) {
@@ -41,18 +60,34 @@ export default function AnswerResult(props: Props) {
     answerResultSteps,
     fullSql,
     threadResponseId,
+    isLastThreadResponse,
     onOpenSaveAsViewModal,
+    onTriggerScrollToBottom,
+    summary,
   } = props;
+
+  const [ellipsis, setEllipsis] = useState(true);
 
   return (
     <Skeleton active loading={loading}>
+      <StyledQuestion wrap={false} onClick={() => setEllipsis(!ellipsis)}>
+        <Col className="text-center" flex="96px">
+          <QuestionCircleOutlined className="mr-2 gray-6" />
+          <Text className="gray-6 text-base text-medium">Question:</Text>
+        </Col>
+        <Col flex="auto">
+          <Text className="gray-6" ellipsis={ellipsis}>
+            {question}
+          </Text>
+        </Col>
+      </StyledQuestion>
       <Title className="mb-6 text-bold gray-10" level={3}>
-        {question}
+        {summary}
       </Title>
       <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
         <Text className="adm-answer-title px-2">
           <CheckCircleFilled className="mr-2 green-6" />
-          Answer
+          Summary
         </Text>
         <div className="pl-7 pb-5">{description}</div>
         {(answerResultSteps || []).map((step, index) => (
@@ -64,6 +99,8 @@ export default function AnswerResult(props: Props) {
             stepIndex={index}
             summary={step.summary}
             threadResponseId={threadResponseId}
+            onTriggerScrollToBottom={onTriggerScrollToBottom}
+            isLastThreadResponse={isLastThreadResponse}
           />
         ))}
       </StyledAnswer>
