@@ -121,11 +121,8 @@ class Indexing(BasicPipeline):
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
         def _format(view: Dict[str, Any]) -> str:
-            return (
-                f"/* {view['properties']} */\nCREATE VIEW {view['name']}\nAS ({view['statement']})"
-                if view["properties"]
-                else ""
-            )
+            properties = view["properties"] if view["properties"] else ""
+            return f"/* {properties} */\nCREATE VIEW {view['name']}\nAS ({view['statement']})"
 
         return [_format(view) for view in views]
 
