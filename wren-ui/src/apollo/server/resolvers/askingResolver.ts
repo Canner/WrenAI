@@ -157,7 +157,7 @@ export class AskingResolver {
         if (!acc.id) {
           acc.id = response.threadId;
           acc.sql = response.sql;
-          acc.summary = response.summary;
+          acc.summary = response.threadSummary;
           acc.responses = [];
         }
 
