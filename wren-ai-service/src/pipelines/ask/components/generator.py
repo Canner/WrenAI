@@ -7,6 +7,7 @@ from haystack import component
 from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 
+from src.pipelines.ask.components.prompts import text_to_sql_system_prompt_template
 from src.utils import load_env_vars
 
 load_env_vars()
@@ -43,5 +44,6 @@ def init_generator(
     return CustomOpenAIGenerator(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
         model=model_name,
+        system_prompt=text_to_sql_system_prompt_template,
         generation_kwargs=generation_kwargs,
     )

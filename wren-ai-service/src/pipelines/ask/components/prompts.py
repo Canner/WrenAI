@@ -25,6 +25,10 @@ The final answer must be the JSON format like following:
 {{ query }}
 """
 
+text_to_sql_system_prompt_template = """
+
+"""
+
 text_to_sql_user_prompt_template = """
 ### TASK ###
 Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and 
