@@ -206,10 +206,9 @@ def generate_ddls_from_semantics(
                 else:
                     comment = ""
                 if column["isCalculated"]:
-                    comment = comment + "-- This column is a Calculated Field\n  "
-                if "expression" in column:
                     comment = (
-                        comment + f"-- column expression: {column["expression"]}\n  "
+                        comment
+                        + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
                     )
                 column_name = column["name"]
                 column_type = column["type"]
