@@ -46,7 +46,7 @@ const TableTransfer = (
   ref: any,
 ) => {
   return (
-    <Transfer {...restProps} showSelectAll={false}>
+    <Transfer {...restProps} showSelectAll={false} listStyle={{ height: 332 }}>
       {({
         direction,
         filteredItems,
@@ -101,7 +101,7 @@ const TableTransfer = (
               rowClassName={({ disabled: itemDisabled }: any) =>
                 itemDisabled ? 'ant-table-row-disabled' : ''
               }
-              scroll={{ y: 220 }}
+              scroll={{ y: 200 }}
               pagination={false}
             />
           </div>
