@@ -72,8 +72,9 @@ export class MDLBuilder implements IMDLBuilder {
   public build(): Manifest {
     this.addProject();
     this.addModel();
-    this.addColumn();
+    this.addNormalField();
     this.addRelation();
+    this.addCalculatedField();
     this.addView();
     return this.getManifest();
   }
@@ -124,53 +125,83 @@ export class MDLBuilder implements IMDLBuilder {
     });
   }
 
-  public addColumn(): void {
+  public addNormalField(): void {
     // should addModel first
     if (isEmpty(this.manifest.models)) {
       logger.debug('No model in manifest, should build model first');
       return;
     }
-    this.columns.forEach((column: ModelColumn) => {
-      // validate manifest.model exist
-      const modelRefName = this.models.find(
-        (model: any) => model.id === column.modelId,
-      )?.referenceName;
-      if (!modelRefName) {
-        logger.debug(
-          `Build MDL Column Error: can not find model, modelId ${column.modelId}, columnId: ${column.id}`,
+    this.columns
+      .filter(({ isCalculated }) => !isCalculated)
+      .forEach((column: ModelColumn) => {
+        // validate manifest.model exist
+        const modelRefName = this.models.find(
+          (model: any) => model.id === column.modelId,
+        )?.referenceName;
+        if (!modelRefName) {
+          logger.debug(
+            `Build MDL Column Error: can not find model, modelId ${column.modelId}, columnId: ${column.id}`,
+          );
+          return;
+        }
+        const model = this.manifest.models.find(
+          (model: any) => model.name === modelRefName,
         );
-        return;
-      }
-      const model = this.manifest.models.find(
-        (model: any) => model.name === modelRefName,
-      );
 
-      // modify model primary key
-      if (column.isPk) {
-        model.primaryKey = column.referenceName;
-      }
+        // modify model primary key
+        if (column.isPk) {
+          model.primaryKey = column.referenceName;
+        }
 
-      // add column into model
-      if (!model.columns) {
-        model.columns = [];
-      }
-      const expression = this.getColumnExpression(column);
-
-      const properties = column.properties ? JSON.parse(column.properties) : {};
-      // put displayName in properties
-      if (column.displayName) {
-        properties.displayName = column.displayName;
-      }
-
-      model.columns.push({
-        name: column.referenceName,
-        type: column.type,
-        isCalculated: column.isCalculated,
-        notNull: column.notNull,
-        expression,
-        properties,
+        // add column into model
+        if (!model.columns) {
+          model.columns = [];
+        }
+        const expression = this.getColumnExpression(column, model);
+        model.columns.push({
+          name: column.referenceName,
+          type: column.type,
+          isCalculated: column.isCalculated,
+          notNull: column.notNull,
+          expression,
+          properties: column.properties ? JSON.parse(column.properties) : {},
+        });
       });
-    });
+  }
+
+  public addCalculatedField(): void {
+    // should addModel first
+    if (isEmpty(this.manifest.models)) {
+      logger.debug('No model in manifest, should build model first');
+      return;
+    }
+    this.columns
+      .filter(({ isCalculated }) => isCalculated)
+      .forEach((column: ModelColumn) => {
+        // validate manifest.model exist
+        const relatedModel = this.relatedModels.find(
+          (model: any) => model.id === column.modelId,
+        );
+        const model = this.manifest.models.find(
+          (model: any) => model.name === relatedModel.referenceName,
+        );
+        if (!model) {
+          logger.debug(
+            `Build MDL Column Error: can not find model, modelId "${column.modelId}", columnId: "${column.id}"`,
+          );
+          return;
+        }
+        const expression = this.getColumnExpression(column, model);
+        const columnValue = {
+          name: column.referenceName,
+          type: column.type,
+          isCalculated: true,
+          expression,
+          notNull: column.notNull,
+          properties: JSON.parse(column.properties),
+        };
+        model.columns.push(columnValue);
+      });
   }
 
   public addRelation(): void {
@@ -251,14 +282,49 @@ export class MDLBuilder implements IMDLBuilder {
     model.columns.push(column);
   }
 
-  protected getColumnExpression(column: ModelColumn): string {
-    if (column.isCalculated) {
-      // calculated field
-      //TODO phase2: implement the expression for calculated field
-      return column.aggregation;
+  protected getColumnExpression(
+    column: ModelColumn,
+    currentModel?: ModelMDL,
+  ): string {
+    if (!column.isCalculated) {
+      return '';
     }
-    // normal field
-    return '';
+    // calculated field
+    const lineage = JSON.parse(column.lineage) as number[];
+    // lineage = [relationId1, relationId2, ..., columnId]
+    const fieldExpression = Object.entries<number>(lineage).reduce(
+      (acc, [index, id]) => {
+        const isLast = parseInt(index) == lineage.length - 1;
+        if (isLast) {
+          // id is columnId
+          const columnReferenceName = this.relatedColumns.find(
+            (relatedColumn) => relatedColumn.id === id,
+          )?.referenceName;
+          acc.push(columnReferenceName);
+          return acc;
+        }
+        // id is relationId
+        const usedRelation = this.relatedRelations.find(
+          (relatedRelation) => relatedRelation.id === id,
+        );
+        const relationColumnName = currentModel!.columns.find(
+          (c) => c.relationship === usedRelation.name,
+        ).name;
+        // move to next model
+        const nextModelName =
+          currentModel.name === usedRelation.fromModelName
+            ? usedRelation.toModelName
+            : usedRelation.fromModelName;
+        const nextModel = this.manifest.models.find(
+          (model) => model.name === nextModelName,
+        );
+        currentModel = nextModel;
+        acc.push(relationColumnName);
+        return acc;
+      },
+      [],
+    );
+    return `${column.aggregation}(${fieldExpression.join('.')})`;
   }
 
   protected getRelationCondition(relation: RelationInfo): string {
