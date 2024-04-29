@@ -72,8 +72,8 @@ export default function EditModelMetadata(props: Props) {
           columns={[
             COLUMN.REFERENCE_NAME,
             COLUMN.ALIAS,
-            COLUMN.TYPE,
-            COLUMN.DESCRIPTION,
+            { ...COLUMN.TYPE, width: 150 },
+            { ...COLUMN.DESCRIPTION, width: 280 },
           ]}
           onChange={handleMetadataChange('fields')}
         />
@@ -86,9 +86,9 @@ export default function EditModelMetadata(props: Props) {
         <CalculatedFieldEditableTable
           dataSource={calculatedFields}
           columns={[
-            COLUMN.REFERENCE_NAME,
+            { ...COLUMN.REFERENCE_NAME, width: 160 },
             COLUMN.EXPRESSION,
-            COLUMN.DESCRIPTION,
+            { ...COLUMN.DESCRIPTION, width: 280 },
           ]}
           onChange={handleMetadataChange('calculatedFields')}
         />
@@ -104,8 +104,8 @@ export default function EditModelMetadata(props: Props) {
             COLUMN.REFERENCE_NAME,
             COLUMN.RELATION_FROM,
             COLUMN.RELATION_TO,
-            COLUMN.RELATION,
-            COLUMN.DESCRIPTION,
+            { ...COLUMN.RELATION, width: 130 },
+            { ...COLUMN.DESCRIPTION, width: 200 },
           ]}
           onChange={handleMetadataChange('relationFields')}
         />
