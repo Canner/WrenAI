@@ -482,7 +482,16 @@
   "enumDefinitions": [],
   "metrics": [],
   "cumulativeMetrics": [],
-  "views": [],
+  "views": [
+    {
+      "name": "total_items_view",
+      "statement": "WITH customer_order_items AS (SELECT c.State, oi.ItemNumber FROM customers c JOIN orders o ON c.Id = o.CustomerId JOIN order_items oi ON o.OrderId = oi.OrderId) SELECT State, COUNT(ItemNumber) AS Total_Items_Purchased FROM customer_order_items GROUP BY State",
+      "properties": {
+        "question": "How many items have been purchased in orders placed by customers in each state?",
+        "description": "The query counts the total number of items purchased by customers in each state."
+      }
+    }
+  ],
   "macros": [],
   "dateSpine": {
     "unit": "DAY",
