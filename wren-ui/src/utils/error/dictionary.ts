@@ -72,4 +72,15 @@ export const ERROR_TEXTS = {
         'Please select again, the primary key must be one of the selected columns.',
     },
   },
+  CALCULATED_FIELD: {
+    NAME: {
+      REQUIRED: 'Please input field name.',
+    },
+    EXPRESSION: {
+      REQUIRED: 'Please select an expression.',
+    },
+    LINEAGE: {
+      REQUIRED: 'Please select a field.',
+    },
+  },
 };
