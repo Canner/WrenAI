@@ -7,12 +7,9 @@ import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import CopyOutlined from '@ant-design/icons/lib/icons/CopyOutlined';
 import UpCircleOutlined from '@ant-design/icons/UpCircleOutlined';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import {
-  PreviewDataMutationResult,
-  GetNativeSqlQueryResult,
-} from '@/apollo/client/graphql/home.generated';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import { PreviewDataMutationResult } from '@/apollo/client/graphql/home.generated';
 import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
+import { NativeSQLResult } from '@/hooks/useNativeSQL';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
@@ -44,12 +41,8 @@ export interface Props {
     stepNumber: number;
     isLastStep: boolean;
   };
-  nativeSQLInfo: {
-    hasNativeSQL: boolean;
-    dataSourceType: DataSourceName;
-  };
-  onGetNativeSQL: (checked: boolean) => void;
-  nativeSQLResult: GetNativeSqlQueryResult;
+  nativeSQLResult: NativeSQLResult;
+  onChangeNativeSQL: (checked: boolean) => void;
 }
 
 export default function CollapseContent(props: Props) {
@@ -62,12 +55,11 @@ export default function CollapseContent(props: Props) {
     sql,
     previewDataResult,
     attributes,
-    nativeSQLInfo,
-    onGetNativeSQL,
+    onChangeNativeSQL,
     nativeSQLResult,
   } = props;
 
-  const { hasNativeSQL, dataSourceType } = nativeSQLInfo;
+  const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = Boolean(attributes.isLastStep) && hasNativeSQL;
 
   return (
@@ -94,7 +86,7 @@ export default function CollapseContent(props: Props) {
                   unCheckedChildren={<CloseOutlined />}
                   className="mr-2"
                   size="small"
-                  onChange={onGetNativeSQL}
+                  onChange={onChangeNativeSQL}
                   loading={nativeSQLResult.loading}
                 />
                 <Text className="gray-8 text-medium text-sm">

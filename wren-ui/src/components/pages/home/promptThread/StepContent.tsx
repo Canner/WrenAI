@@ -104,7 +104,10 @@ export default function StepContent(props: Props) {
           {viewSQLButtonText}
         </Button>
         <CollapseContent
-          {...(collapseContentProps as CollapseContentProps)}
+          {...(collapseContentProps as Omit<
+            CollapseContentProps,
+            'attributes'
+          >)}
           key={`collapse-${stepNumber}`}
           attributes={{ stepNumber, isLastStep }}
         />
