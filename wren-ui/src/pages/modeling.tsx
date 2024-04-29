@@ -99,7 +99,20 @@ export default function Modeling() {
       [MORE_ACTION.EDIT]: () => {
         switch (nodeType) {
           case NODE_TYPE.CALCULATED_FIELD:
-            console.log('edit calculated field');
+            // TODO: integrate with update calculated field modal
+            const sourceModel =
+              diagramData.models.find(
+                (model) => model.modelId === data.modelId,
+              ) || {};
+            calculatedFieldModal.openModal({
+              name: data.referenceName,
+              expression: '',
+              lineage: [],
+              payload: {
+                models: diagramData.models,
+                sourceModel,
+              },
+            });
             break;
           case NODE_TYPE.RELATION:
             console.log('edit relation');
