@@ -77,14 +77,42 @@ export default function Modeling() {
 
   const onMoreClick = (payload) => {
     const { type, data } = payload;
+    const { nodeType } = data;
     const action = {
+      [MORE_ACTION.UPDATE_COLUMNS]: () => {
+        switch (nodeType) {
+          case NODE_TYPE.MODEL:
+            console.log('update columns');
+            break;
+          default:
+            console.log(data);
+            break;
+        }
+      },
       [MORE_ACTION.EDIT]: () => {
-        // TODO: handle edit action
+        switch (nodeType) {
+          case NODE_TYPE.CALCULATED_FIELD:
+            console.log('edit calculated field');
+            break;
+          case NODE_TYPE.RELATION:
+            console.log('edit relation');
+            break;
+          default:
+            console.log(data);
+            break;
+        }
       },
       [MORE_ACTION.DELETE]: async () => {
-        const { nodeType } = data;
-
         switch (nodeType) {
+          case NODE_TYPE.MODEL:
+            console.log('delete model');
+            break;
+          case NODE_TYPE.CALCULATED_FIELD:
+            console.log('delete calculated field');
+            break;
+          case NODE_TYPE.RELATION:
+            console.log('delete relation');
+            break;
           case NODE_TYPE.VIEW:
             await deleteViewMutation({
               variables: { where: { id: data.viewId } },
@@ -100,6 +128,21 @@ export default function Modeling() {
     action[type] && action[type]();
   };
 
+  const onAddClick = (payload) => {
+    const { targetNodeType } = payload;
+    switch (targetNodeType) {
+      case NODE_TYPE.CALCULATED_FIELD:
+        console.log('add calculated field');
+        break;
+      case NODE_TYPE.RELATION:
+        console.log('add relation');
+        break;
+      default:
+        console.log('add', targetNodeType);
+        break;
+    }
+  };
+
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
       <SiderLayout
@@ -107,6 +150,10 @@ export default function Modeling() {
         sidebar={{
           data: diagramData,
           onSelect,
+          onOpenModelDrawer: () => {
+            // TODO: open model drawer
+            console.log('open model drawer');
+          },
         }}
       >
         <DiagramWrapper>
@@ -115,6 +162,7 @@ export default function Modeling() {
             data={diagramData}
             onMoreClick={onMoreClick}
             onNodeClick={onNodeClick}
+            onAddClick={onAddClick}
           />
         </DiagramWrapper>
         <MetadataDrawer

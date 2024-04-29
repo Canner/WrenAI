@@ -36,7 +36,7 @@ export default function ModelMetadata(props: Props) {
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
-          Fields ({fields.length})
+          Columns ({fields.length})
         </Typography.Text>
         <FieldTable dataSource={fields} />
       </div>

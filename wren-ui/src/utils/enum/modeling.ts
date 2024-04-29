@@ -6,4 +6,5 @@ export {
 export enum MORE_ACTION {
   EDIT = 'edit',
   DELETE = 'delete',
+  UPDATE_COLUMNS = 'update_columns',
 }

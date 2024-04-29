@@ -18,7 +18,7 @@ type Config = {
 
 export const makeDeleteModal =
   (Component, config?: Config) => (props: DeleteModalProps) => {
-    const { content, modalProps = {}, onConfirm, ...restProps } = props;
+    const { title, content, modalProps = {}, onConfirm, ...restProps } = props;
 
     return (
       <Component
@@ -69,6 +69,27 @@ export const DeleteThreadModal = makeDeleteModal(DefaultDeleteButton, {
 export const DeleteViewModal = makeDeleteModal(DefaultDeleteButton, {
   icon: <DeleteOutlined className="mr-2" />,
   itemName: 'view',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});
+
+export const DeleteModelModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'model',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});
+
+export const DeleteCalculatedFieldModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'calculated field',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});
+
+export const DeleteRelationshipModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'relationship',
   content:
     'This will be permanently deleted, please confirm you want to delete it.',
 });

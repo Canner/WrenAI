@@ -6,11 +6,16 @@ import { ComposeDiagram, ComposeDiagramField, DiagramView } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { Config } from '@/utils/diagram';
 import { makeIterable } from '@/utils/iteration';
-import { DiagramContext } from '../Context';
-import { CustomNodeProps, NodeBody, NodeHeader, StyledNode } from './utils';
-import MarkerHandle from './MarkerHandle';
-import Column, { MoreColumnTip } from './Column';
-import CustomDropdown from '../CustomDropdown';
+import { DiagramContext } from '@/components/diagram/Context';
+import {
+  CustomNodeProps,
+  NodeBody,
+  NodeHeader,
+  StyledNode,
+} from '@/components/diagram/customNode/utils';
+import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
+import Column from '@/components/diagram/customNode/Column';
+import { ViewDropdown } from '@/components/diagram/CustomDropdown';
 
 const { Text } = Typography;
 
@@ -19,13 +24,11 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
   const onMoreClick = (type: MORE_ACTION) => {
     context?.onMoreClick({
       type,
-      title: data.originalData.displayName,
       data: data.originalData,
     });
   };
   const onNodeClick = () => {
     context?.onNodeClick({
-      title: data.originalData.displayName,
       data: data.originalData,
     });
   };
@@ -46,7 +49,7 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
           </Text>
         </span>
         <span>
-          <CustomDropdown onMoreClick={onMoreClick}>
+          <ViewDropdown onMoreClick={onMoreClick}>
             <Button
               className="gray-1"
               icon={<MoreIcon />}
@@ -54,7 +57,7 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
               type="text"
               size="small"
             />
-          </CustomDropdown>
+          </ViewDropdown>
         </span>
 
         <MarkerHandle id={data.originalData.id} />
@@ -87,7 +90,7 @@ function getColumns(
   return (
     <>
       <ColumnIterator data={slicedColumns} highlight={data.highlight} />
-      {moreCount > 0 && <MoreColumnTip count={moreCount} />}
+      {moreCount > 0 && <Column.MoreTip count={moreCount} />}
     </>
   );
 }
