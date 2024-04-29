@@ -556,7 +556,7 @@ export const sampleDatasets: Record<string, SampleDataset> = {
         fromColumnName: 'OrderId',
         toModelName: 'orders',
         toColumnName: 'OrderId',
-        type: RelationType.ONE_TO_MANY,
+        type: RelationType.MANY_TO_ONE,
       },
     ],
   },
