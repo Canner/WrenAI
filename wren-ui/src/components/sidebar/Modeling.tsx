@@ -27,8 +27,8 @@ export const StyledSidebarTree = styled(SidebarTree)`
 
 export interface Props {
   data: Diagram;
-  onSelect: (selectKeys) => void;
   onOpenModelDrawer: () => void;
+  onSelect: (selectKeys) => void;
 }
 
 export default function Modeling(props: Props) {

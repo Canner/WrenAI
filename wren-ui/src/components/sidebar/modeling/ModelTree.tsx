@@ -36,7 +36,12 @@ export default function ModelTree(props: Props) {
         children: models.map((model) => {
           const nodeKey = model.id;
 
-          const children = getColumnNode(nodeKey, model.fields);
+          const children = [
+            ...getColumnNode(nodeKey, [
+              ...model.fields,
+              ...model.calculatedFields,
+            ]),
+          ];
 
           return {
             children,

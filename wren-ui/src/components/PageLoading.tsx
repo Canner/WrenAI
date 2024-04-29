@@ -21,6 +21,13 @@ interface Props {
   visible?: boolean;
 }
 
+interface LoadingProps {
+  children?: React.ReactNode | null;
+  spinning?: boolean;
+  loading?: boolean;
+  tip?: string;
+}
+
 export const defaultIndicator = (
   <LoadingOutlined style={{ fontSize: 36 }} spin />
 );
@@ -50,3 +57,14 @@ export const FlexLoading = (props) => {
     </div>
   );
 };
+
+export const Loading = ({
+  children = null,
+  spinning = false,
+  loading = false,
+  tip,
+}: LoadingProps) => (
+  <Spin indicator={defaultIndicator} spinning={spinning || loading} tip={tip}>
+    {children}
+  </Spin>
+);
