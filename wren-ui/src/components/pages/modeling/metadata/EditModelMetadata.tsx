@@ -79,37 +79,41 @@ export default function EditModelMetadata(props: Props) {
         />
       </div>
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          Calculated fields ({calculatedFields.length})
-        </Typography.Text>
-        <CalculatedFieldEditableTable
-          dataSource={calculatedFields}
-          columns={[
-            { ...COLUMN.REFERENCE_NAME, width: 160 },
-            COLUMN.EXPRESSION,
-            { ...COLUMN.DESCRIPTION, width: 280 },
-          ]}
-          onChange={handleMetadataChange('calculatedFields')}
-        />
-      </div>
+      {!!calculatedFields.length && (
+        <div className="mb-6">
+          <Typography.Text className="d-block gray-7 mb-2">
+            Calculated fields ({calculatedFields.length})
+          </Typography.Text>
+          <CalculatedFieldEditableTable
+            dataSource={calculatedFields}
+            columns={[
+              { ...COLUMN.REFERENCE_NAME, width: 160 },
+              COLUMN.EXPRESSION,
+              { ...COLUMN.DESCRIPTION, width: 280 },
+            ]}
+            onChange={handleMetadataChange('calculatedFields')}
+          />
+        </div>
+      )}
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          Relationships ({relationFields.length})
-        </Typography.Text>
-        <RelationshipEditableTable
-          dataSource={relationFields}
-          columns={[
-            COLUMN.REFERENCE_NAME,
-            COLUMN.RELATION_FROM,
-            COLUMN.RELATION_TO,
-            { ...COLUMN.RELATION, width: 130 },
-            { ...COLUMN.DESCRIPTION, width: 200 },
-          ]}
-          onChange={handleMetadataChange('relationFields')}
-        />
-      </div>
+      {!!relationFields.length && (
+        <div className="mb-6">
+          <Typography.Text className="d-block gray-7 mb-2">
+            Relationships ({relationFields.length})
+          </Typography.Text>
+          <RelationshipEditableTable
+            dataSource={relationFields}
+            columns={[
+              COLUMN.REFERENCE_NAME,
+              COLUMN.RELATION_FROM,
+              COLUMN.RELATION_TO,
+              { ...COLUMN.RELATION, width: 130 },
+              { ...COLUMN.DESCRIPTION, width: 200 },
+            ]}
+            onChange={handleMetadataChange('relationFields')}
+          />
+        </div>
+      )}
     </>
   );
 }

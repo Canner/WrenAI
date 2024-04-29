@@ -54,19 +54,23 @@ export default function ModelMetadata(props: Props) {
         <FieldTable dataSource={fields} showExpandable />
       </div>
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          Calculated fields ({calculatedFields.length})
-        </Typography.Text>
-        <CalculatedFieldTable dataSource={calculatedFields} showExpandable />
-      </div>
+      {!!calculatedFields.length && (
+        <div className="mb-6">
+          <Typography.Text className="d-block gray-7 mb-2">
+            Calculated fields ({calculatedFields.length})
+          </Typography.Text>
+          <CalculatedFieldTable dataSource={calculatedFields} showExpandable />
+        </div>
+      )}
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          Relationships ({relationFields.length})
-        </Typography.Text>
-        <RelationTable dataSource={relationFields} showExpandable />
-      </div>
+      {!!relationFields.length && (
+        <div className="mb-6">
+          <Typography.Text className="d-block gray-7 mb-2">
+            Relationships ({relationFields.length})
+          </Typography.Text>
+          <RelationTable dataSource={relationFields} showExpandable />
+        </div>
+      )}
     </>
   );
 }
