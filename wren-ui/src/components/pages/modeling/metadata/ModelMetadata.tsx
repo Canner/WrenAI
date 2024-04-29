@@ -1,5 +1,6 @@
 import { Col, Row, Typography } from 'antd';
 import FieldTable from '@/components/table/FieldTable';
+import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
 import RelationTable from '@/components/table/RelationTable';
 
 export interface Props {
@@ -18,6 +19,7 @@ export default function ModelMetadata(props: Props) {
     displayName,
     referenceName,
     fields = [],
+    calculatedFields = [],
     relationFields = [],
     description,
   } = props || {};
@@ -50,6 +52,13 @@ export default function ModelMetadata(props: Props) {
           Columns ({fields.length})
         </Typography.Text>
         <FieldTable dataSource={fields} showExpandable />
+      </div>
+
+      <div className="mb-6">
+        <Typography.Text className="d-block gray-7 mb-2">
+          Calculated fields ({calculatedFields.length})
+        </Typography.Text>
+        <CalculatedFieldTable dataSource={calculatedFields} showExpandable />
       </div>
 
       <div className="mb-6">

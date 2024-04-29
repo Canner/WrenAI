@@ -1,6 +1,7 @@
 import { useContext } from 'react';
 import { Typography } from 'antd';
 import FieldTable from '@/components/table/FieldTable';
+import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
 import RelationTable from '@/components/table/RelationTable';
 import { makeEditableBaseTable } from '@/components/table/EditableBaseTable';
 import { COLUMN } from '@/components/table/BaseTable';
@@ -24,11 +25,14 @@ export default function EditModelMetadata(props: Props) {
     displayName,
     referenceName,
     fields = [],
+    calculatedFields = [],
     relationFields = [],
     description,
   } = props || {};
 
   const FieldEditableTable = makeEditableBaseTable(FieldTable);
+  const CalculatedFieldEditableTable =
+    makeEditableBaseTable(CalculatedFieldTable);
   const RelationshipEditableTable = makeEditableBaseTable(RelationTable);
 
   const form = useContext(EditableContext);
@@ -72,6 +76,21 @@ export default function EditModelMetadata(props: Props) {
             COLUMN.DESCRIPTION,
           ]}
           onChange={handleMetadataChange('fields')}
+        />
+      </div>
+
+      <div className="mb-6">
+        <Typography.Text className="d-block gray-7 mb-2">
+          Calculated fields ({calculatedFields.length})
+        </Typography.Text>
+        <CalculatedFieldEditableTable
+          dataSource={calculatedFields}
+          columns={[
+            COLUMN.REFERENCE_NAME,
+            COLUMN.EXPRESSION,
+            COLUMN.DESCRIPTION,
+          ]}
+          onChange={handleMetadataChange('calculatedFields')}
         />
       </div>
 
