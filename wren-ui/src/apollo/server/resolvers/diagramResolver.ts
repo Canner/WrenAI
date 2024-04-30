@@ -10,7 +10,9 @@ import {
   RelationType,
   DiagramView,
 } from '@server/types';
+import { ColumnMDL, Manifest } from '@server/mdl/type';
 import { getLogger } from '@server/utils';
+import { MDLBuilder } from '../mdl/mdlBuilder';
 
 const logger = getLogger('DiagramResolver');
 logger.level = 'debug';
@@ -39,7 +41,26 @@ export class DiagramResolver {
       projectId: project.id,
     });
 
-    return this.buildDiagram(models, modelColumns, modelRelations, views);
+    const builder = new MDLBuilder({
+      project,
+      models,
+      columns: modelColumns,
+      relations: modelRelations,
+      views,
+      relatedModels: models,
+      relatedColumns: modelColumns,
+      relatedRelations: modelRelations,
+    });
+
+    const manifest = builder.build();
+
+    return this.buildDiagram(
+      models,
+      modelColumns,
+      modelRelations,
+      views,
+      manifest,
+    );
   }
 
   private buildDiagram(
@@ -47,11 +68,15 @@ export class DiagramResolver {
     modelColumns: ModelColumn[],
     relations: RelationInfo[],
     views: View[],
+    manifest: Manifest,
   ): Diagram {
     const diagramModels = models.map((model) => {
       const transformedModel = this.transformModel(model);
       const allColumns = modelColumns.filter(
         (column) => column.modelId === model.id,
+      );
+      const modelMDL = manifest.models.find(
+        (modelMDL) => modelMDL.name === model.referenceName,
       );
       allColumns.forEach((column) => {
         const columnRelations = relations
@@ -75,10 +100,10 @@ export class DiagramResolver {
 
         if (column.isCalculated) {
           transformedModel.calculatedFields.push(
-            this.transformModelField(column),
+            this.transformCalculatedField(column, modelMDL.columns),
           );
         } else {
-          transformedModel.fields.push(this.transformModelField(column));
+          transformedModel.fields.push(this.transformNormalField(column));
         }
       });
       return transformedModel;
@@ -107,7 +132,7 @@ export class DiagramResolver {
     };
   }
 
-  private transformModelField(column: ModelColumn): DiagramModelField {
+  private transformNormalField(column: ModelColumn): DiagramModelField {
     const properties = JSON.parse(column.properties);
     return {
       id: uuidv4(),
@@ -124,6 +149,28 @@ export class DiagramResolver {
     };
   }
 
+  private transformCalculatedField(
+    column: ModelColumn,
+    columnsMDL: ColumnMDL[],
+  ): DiagramModelField {
+    const properties = JSON.parse(column.properties);
+    const columnMDL = columnsMDL.find(
+      ({ name }) => name === column.referenceName,
+    );
+    return {
+      id: uuidv4(),
+      columnId: column.id,
+      nodeType: column.isCalculated
+        ? NodeType.CALCULATED_FIELD
+        : NodeType.FIELD,
+      type: column.type,
+      displayName: column.displayName,
+      referenceName: column.referenceName,
+      description: properties?.description || '',
+      isPrimaryKey: column.isPk,
+      expression: columnMDL.expression,
+    };
+  }
   private transformModelRelationField({
     relation,
     currentModel,
