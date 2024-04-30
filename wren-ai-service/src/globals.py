@@ -49,9 +49,9 @@ def init_globals():
         document_store=document_store,
     )
     query_understanding_generator = init_generator()
-    text_to_sql_generator = init_generator()
-    text_to_sql_with_followup_generator = init_generator()
-    sql_correction_generator = init_generator()
+    text_to_sql_generator = init_generator(enable_system_prompt=True)
+    text_to_sql_with_followup_generator = init_generator(enable_system_prompt=True)
+    sql_correction_generator = init_generator(enable_system_prompt=True)
     sql_details_generator = init_ask_details_generator()
 
     SEMANTIC_SERVICE = SemanticsService(
