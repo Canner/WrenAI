@@ -9,6 +9,27 @@ export const typeDefs = gql`
     POSTGRES
   }
 
+  enum ExpressionName {
+    ABS
+    AVG
+    COUNT
+    COUNT_IF
+    MAX
+    MIN
+    SUM
+    CBRT
+    CEIL
+    CEILING
+    EXP
+    FLOOR
+    LN
+    LOG10
+    ROUND
+    SIGN
+    LENGTH
+    REVERSE
+  }
+
   enum SampleDatasetName {
     ECOMMERCE
     NBA
@@ -128,6 +149,13 @@ export const typeDefs = gql`
     sourceTableName: String!
     fields: [String!]!
     primaryKey: String
+  }
+
+  input CreateCalculatedFieldInput {
+    modelId: Int!
+    name: String!
+    expression: ExpressionName!
+    lineage: [Int!]!
   }
 
   input ModelWhereInput {
@@ -546,6 +574,7 @@ export const typeDefs = gql`
       where: ModelWhereInput!
       data: UpdateModelMetadataInput!
     ): Boolean!
+    createCalculatedField(data: CreateCalculatedFieldInput!): JSON!
 
     # View
     createView(data: CreateViewInput!): ViewInfo!

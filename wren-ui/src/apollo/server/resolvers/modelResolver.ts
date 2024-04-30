@@ -3,6 +3,7 @@ import {
   CreateModelData,
   UpdateModelData,
   UpdateModelMetadataInput,
+  CreateCalculatedFieldData,
 } from '../models';
 import { Project } from '../repositories';
 import { IContext } from '../types';
@@ -48,6 +49,16 @@ export class ModelResolver {
     // preview
     this.previewViewData = this.previewViewData.bind(this);
     this.getNativeSql = this.getNativeSql.bind(this);
+    this.createCalculatedField = this.createCalculatedField.bind(this);
+  }
+
+  public async createCalculatedField(
+    _root: any,
+    _args: { data: CreateCalculatedFieldData },
+    ctx: IContext,
+  ) {
+    const column = await ctx.modelService.createCalculatedField(_args.data);
+    return column;
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
