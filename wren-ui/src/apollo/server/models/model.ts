@@ -72,3 +72,9 @@ export interface CreateCalculatedFieldData {
   expression: ExpressionName;
   lineage: number[];
 }
+
+export interface UpdateCalculatedFieldData {
+  name: string;
+  expression: ExpressionName;
+  lineage: number[];
+}

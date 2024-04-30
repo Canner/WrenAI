@@ -11,7 +11,11 @@ import {
 import { getLogger } from '@server/utils';
 import { RelationData } from '../types';
 import { IProjectService } from './projectService';
-import { CreateCalculatedFieldData, ExpressionName } from '../models';
+import {
+  CreateCalculatedFieldData,
+  ExpressionName,
+  UpdateCalculatedFieldData,
+} from '../models';
 
 const logger = getLogger('ModelService');
 logger.level = 'debug';
@@ -26,10 +30,15 @@ export interface IModelService {
   batchUpdateColumnProperties(tables: SampleDatasetTable[]): Promise<void>;
   saveRelations(relations: RelationData[]): Promise<Relation[]>;
   createCalculatedField(data: CreateCalculatedFieldData): Promise<ModelColumn>;
+  updateCalculatedField(
+    data: UpdateCalculatedFieldData,
+    id: number,
+  ): Promise<ModelColumn>;
   generateReferenceName(data: any): string;
   validateCalculatedField(
     name: string,
     modelId: number,
+    columnId?: number,
   ): Promise<ValidateCalculatedFieldResponse>;
   deleteAllViewsByProjectId(projectId: number): Promise<void>;
   deleteAllModelsByProjectId(projectId: number): Promise<void>;
@@ -104,6 +113,39 @@ export class ModelService implements IModelService {
       properties: JSON.stringify({ description: '' }),
     });
     return column;
+  }
+
+  public async updateCalculatedField(
+    data: UpdateCalculatedFieldData,
+    id: number,
+  ): Promise<ModelColumn> {
+    const { name, expression, lineage } = data;
+    const column = await this.modelColumnRepository.findOneBy({ id });
+    if (!column) {
+      throw new Error('Column not found');
+    }
+    const { valid, message } = await this.validateCalculatedField(
+      name,
+      column.modelId,
+      id,
+    );
+    if (!valid) {
+      throw new Error(message);
+    }
+    const inputFieldId = lineage[lineage.length - 1];
+    const dataType = await this.inferCalculatedFieldDataType(
+      expression,
+      inputFieldId,
+    );
+    const updatedColumn = await this.modelColumnRepository.updateOne(id, {
+      displayName: name,
+      sourceColumnName: name,
+      referenceName: name,
+      type: dataType,
+      aggregation: expression,
+      lineage: JSON.stringify(lineage),
+    });
+    return updatedColumn;
   }
 
   public async batchUpdateModelProperties(tables: SampleDatasetTable[]) {
@@ -236,6 +278,7 @@ export class ModelService implements IModelService {
   public async validateCalculatedField(
     name: string,
     modelId: number,
+    columnId?: number,
   ): Promise<ValidateCalculatedFieldResponse> {
     // only allow uppercase/lowercase english, numbers, underscore and dash
     const regex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
@@ -248,8 +291,14 @@ export class ModelService implements IModelService {
     }
 
     // can not duplicated with existed column
-    const existedColumns =
-      await this.modelColumnRepository.findColumnsByModelIds([modelId]);
+    let existedColumns = await this.modelColumnRepository.findColumnsByModelIds(
+      [modelId],
+    );
+    if (columnId) {
+      existedColumns = existedColumns.filter(
+        (column) => column.id !== columnId,
+      );
+    }
     if (existedColumns.find((column) => column.referenceName === name)) {
       return {
         valid: false,
