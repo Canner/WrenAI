@@ -158,6 +158,16 @@ export const typeDefs = gql`
     lineage: [Int!]!
   }
 
+  input ValidateCalculatedFieldInput {
+    modelId: Int!
+    name: String!
+  }
+
+  type CalculatedFieldValidationResponse {
+    valid: Boolean!
+    message: String
+  }
+
   input ModelWhereInput {
     id: Int!
   }
@@ -574,7 +584,12 @@ export const typeDefs = gql`
       where: ModelWhereInput!
       data: UpdateModelMetadataInput!
     ): Boolean!
+
+    # Calculated field
     createCalculatedField(data: CreateCalculatedFieldInput!): JSON!
+    validateCalculatedField(
+      data: ValidateCalculatedFieldInput!
+    ): CalculatedFieldValidationResponse!
 
     # View
     createView(data: CreateViewInput!): ViewInfo!
