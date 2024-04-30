@@ -333,8 +333,7 @@ export class ModelResolver {
 
     // construct cte sql and format it
     const steps = response.detail.steps;
-    const stepIndex = steps.length - 1;
-    const sql = format(constructCteSql(steps, stepIndex));
+    const sql = format(constructCteSql(steps));
 
     return await ctx.wrenEngineAdaptor.getNativeSQL(sql);
   }
