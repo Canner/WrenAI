@@ -200,6 +200,44 @@ export class ModelService implements IModelService {
     return updatedColumn;
   }
 
+  public async createCalculatedField(
+    data: CreateCalculatedFieldData,
+  ): Promise<ModelColumn> {
+    const { modelId, name, expression, lineage } = data;
+    const model = await this.modelRepository.findOneBy({
+      id: modelId,
+    });
+    if (!model) {
+      throw new Error('Model not found');
+    }
+    const { valid, message } = await this.validateCalculatedField(
+      name,
+      modelId,
+    );
+    if (!valid) {
+      throw new Error(message);
+    }
+    const inputFieldId = lineage[lineage.length - 1];
+    const dataType = await this.inferCalculatedFieldDataType(
+      expression,
+      inputFieldId,
+    );
+    const column = await this.modelColumnRepository.createOne({
+      modelId,
+      displayName: name,
+      sourceColumnName: name,
+      referenceName: name,
+      type: dataType,
+      isCalculated: true,
+      isPk: false,
+      notNull: false,
+      aggregation: expression,
+      lineage: JSON.stringify(lineage),
+      properties: JSON.stringify({ description: '' }),
+    });
+    return column;
+  }
+
   public async batchUpdateModelProperties(tables: SampleDatasetTable[]) {
     logger.debug('start batch update model description');
     const project = await this.projectService.getCurrentProject();
