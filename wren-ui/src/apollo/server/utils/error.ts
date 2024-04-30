@@ -12,6 +12,10 @@ export enum GeneralErrorCodes {
   // duckdb
   INIT_SQL_ERROR = 'INIT_SQL_ERROR',
   SESSION_PROPS_ERROR = 'SESSION_PROPS_ERROR',
+
+  // calculated field validation
+  DUPLICATED_FIELD_NAME = 'DUPLICATED_FIELD_NAME',
+  INVALID_EXPRESSION = 'INVALID_EXPRESSION',
 }
 
 export const errorMessages = {
@@ -31,6 +35,11 @@ export const errorMessages = {
     'The initializing SQL seems to be invalid, Please check your SQL and try again.',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]:
     'The session properties seem to be invalid, Please check your session properties and try again.',
+
+  // calculated field validation
+  [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'This field name already exists',
+  [GeneralErrorCodes.INVALID_EXPRESSION]:
+    'Invalid expression, please check your expression and try again.',
 };
 
 export const shortMessages = {
@@ -40,6 +49,8 @@ export const shortMessages = {
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]: 'Invalid session properties',
+  [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'Duplicated field name',
+  [GeneralErrorCodes.INVALID_EXPRESSION]: 'Invalid expression',
 };
 
 export const create = (
