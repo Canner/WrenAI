@@ -336,57 +336,56 @@ export class ModelService implements IModelService {
   }
 
   /** We currently support expression below, right side is the return type of the calculated field.
-    abs(***x***)** → [same as input]
-    max(***x***)** → [same as input]
-    min(***x***)** → [same as input]
-    sum(***x***)** → [same as input]
-    ceiling(***x***)** → [same as input]
-    floor(***x***)** → [same as input]
-    ceil(***x***)** → [same as input]
-    round(***x***)** → [same as input]
-    sign(***x***)** → [same as input]
-    ln(***x***)** → double
-    exp(***x***)** → double
-    cbrt(***x***)** → double
-    avg(***x***)** → double
-    log10(***x***)** → double
-    count(***x***)** → bigint
-    count_if(***x***)** → bigint
-    length(***binary***)** → bigint
-    reverse(***binary***)** → varbinary
+  Aggregations
+    - **avg(***x***)** → double
+    - **count(***x***)** → bigint
+    - **max(***x***)** → [same as input]
+    - **min(***x***)** → [same as input]
+    - **sum(***x***)** → [same as input]
+  Math functions
+    - **abs(***x***)** → [same as input]
+    - **cbrt(***x***)** → double
+    - **ceil(***x***)** → [same as input]
+    - **exp(***x***)** → double
+    - **floor(***x***)** → [same as input]
+    - **ln(***x***)** → double
+    - **log10(***x***)** → double
+    - **round(***x***)** → [same as input]
+    - **sign(***x***)** → [same as input]
+
+  String functions
+    - **length(***string***)** → bigint
+    - **reverse(**string**)** → varbinary
   */
   private async inferCalculatedFieldDataType(
     expression: ExpressionName,
     inputFieldId: number,
   ) {
     let type = null;
-    const project = await this.projectService.getCurrentProject();
-    const dataSourceType = project.type;
-    const usingPG = dataSourceType.toUpperCase() === 'POSTGRES';
     switch (expression) {
-      case ExpressionName.AVG:
       case ExpressionName.CEIL:
-      case ExpressionName.CEILING:
-      case ExpressionName.COUNT:
-      case ExpressionName.COUNT_IF:
       case ExpressionName.FLOOR:
-      case ExpressionName.LOG10:
       case ExpressionName.ROUND:
       case ExpressionName.SIGN:
       case ExpressionName.SUM:
+      case ExpressionName.MAX:
+      case ExpressionName.MIN:
+      case ExpressionName.ABS:
         type = await this.getFieldDataType(inputFieldId);
         break;
-      case ExpressionName.ABS:
       case ExpressionName.CBRT:
       case ExpressionName.EXP:
+      case ExpressionName.AVG:
       case ExpressionName.LN:
-        type = usingPG ? 'double precision' : 'DOUBLE';
+      case ExpressionName.LOG10:
+        type = 'DOUBLE';
         break;
+      case ExpressionName.COUNT:
       case ExpressionName.LENGTH:
-        type = usingPG ? 'bigint' : 'BIGINT';
+        type = 'BIGINT';
         break;
       case ExpressionName.REVERSE:
-        type = usingPG ? 'bytea' : 'VARBINARY';
+        type = 'VARBINARY';
         break;
       default:
         throw new Error('Unsupported expression');
