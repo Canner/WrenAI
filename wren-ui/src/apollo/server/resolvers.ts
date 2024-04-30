@@ -59,6 +59,9 @@ const resolvers = {
     updateCalculatedField: modelResolver.updateCalculatedField,
     deleteCalculatedField: modelResolver.deleteCalculatedField,
 
+    // calculated field
+    createCalculatedField: modelResolver.createCalculatedField,
+
     // Ask
     createAskingTask: askingResolver.createAskingTask,
     cancelAskingTask: askingResolver.cancelAskingTask,
