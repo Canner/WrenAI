@@ -72,7 +72,7 @@ export default function EditableWrapper(props: Props) {
     </Form.Item>
   ) : (
     <div
-      className="editable-cell-value-wrap p"
+      className="editable-cell-value-wrap"
       style={{ paddingRight: 24 }}
       onClick={toggleEdit}
     >
