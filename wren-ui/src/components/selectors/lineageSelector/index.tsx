@@ -112,14 +112,14 @@ export const getLineageOptions = (
             { nodeType: field.nodeType, type: field.type },
             { className: 'mr-1 flex-shrink-0' },
           )}
-          {field.referenceName}
+          {field.displayName}
         </div>
       ),
       value,
       title: isRelationshipWithoutPrimaryKey
         ? 'Please set a primary key within this model to use it in a calculated field.'
         : isInUsedRelationship
-          ? 'This relationship is in used.'
+          ? 'This relationship is in use.'
           : undefined,
       disabled: isRelationshipWithoutPrimaryKey || isInUsedRelationship,
     };
