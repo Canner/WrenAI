@@ -7,8 +7,13 @@ import {
   IViewRepository,
 } from '../repositories';
 import { Manifest } from '../mdl/type';
+
+export interface MakeCurrentModelMDLResult {
+  manifest: Manifest;
+  mdlBuilder: MDLBuilder;
+}
 export interface IMDLService {
-  makeCurrentModelMDL(): Promise<Manifest>;
+  makeCurrentModelMDL(): Promise<MakeCurrentModelMDLResult>;
 }
 
 export class MDLService implements IMDLService {
@@ -62,6 +67,6 @@ export class MDLService implements IMDLService {
       relatedColumns,
       relatedRelations,
     });
-    return mdlBuilder.build();
+    return { manifest: mdlBuilder.build(), mdlBuilder };
   }
 }

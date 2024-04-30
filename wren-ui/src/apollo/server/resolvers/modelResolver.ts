@@ -66,7 +66,7 @@ export class ModelResolver {
 
   public async validateCalculatedField(_root: any, args: any, ctx: IContext) {
     const { name, modelId, columnId } = args.data;
-    return await ctx.modelService.validateCalculatedField(
+    return await ctx.modelService.validateCalculatedFieldNaming(
       name,
       modelId,
       columnId,
@@ -96,7 +96,7 @@ export class ModelResolver {
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
-    const manifest = await ctx.mdlService.makeCurrentModelMDL();
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const currentHash = ctx.deployService.createMDLHash(manifest);
     const lastDeployHash = await ctx.deployService.getLastDeployment(
       project.id,
@@ -117,7 +117,7 @@ export class ModelResolver {
     ctx: IContext,
   ): Promise<DeployResponse> {
     const project = await ctx.projectService.getCurrentProject();
-    const manifest = await ctx.mdlService.makeCurrentModelMDL();
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     return await ctx.deployService.deploy(manifest, project.id);
   }
 

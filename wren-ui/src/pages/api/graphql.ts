@@ -67,19 +67,21 @@ const bootstrapServer = async () => {
   });
 
   const projectService = new ProjectService({ projectRepository });
-  const modelService = new ModelService({
-    projectService,
-    modelRepository,
-    modelColumnRepository,
-    relationRepository,
-    viewRepository,
-  });
   const mdlService = new MDLService({
     projectRepository,
     modelRepository,
     modelColumnRepository,
     relationRepository,
     viewRepository,
+  });
+  const modelService = new ModelService({
+    projectService,
+    modelRepository,
+    modelColumnRepository,
+    relationRepository,
+    viewRepository,
+    mdlService,
+    wrenEngineAdaptor,
   });
   const deployService = new DeployService({
     wrenAIAdaptor,
