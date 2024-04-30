@@ -72,7 +72,7 @@ export default function CollapseContent(props: Props) {
       {(isViewSQL || isViewFullSQL) && (
         <StyledPre className="p-0 my-3" showNativeSQL={showNativeSQL}>
           {showNativeSQL && (
-            <StyledToolBar className="d-flex justify-space-between">
+            <StyledToolBar className="d-flex justify-space-between text-family-base">
               <div>
                 <Image
                   className="mr-2"
