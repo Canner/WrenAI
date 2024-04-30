@@ -95,7 +95,12 @@ export default function CollapseContent(props: Props) {
               </div>
             </StyledToolBar>
           )}
-          <CodeBlock code={sql} showLineNumbers maxHeight="300" />
+          <CodeBlock
+            code={sql}
+            showLineNumbers
+            maxHeight="300"
+            loading={nativeSQLResult.loading}
+          />
         </StyledPre>
       )}
       {isPreviewData && (
