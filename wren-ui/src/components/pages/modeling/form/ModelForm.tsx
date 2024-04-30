@@ -27,13 +27,7 @@ type Props = Pick<DrawerAction, 'defaultValue' | 'formMode'> & {
 
 const primaryKeyValidator =
   (selectedColumns: string[]) => async (_rule: any, value: string) => {
-    if (!value) {
-      return Promise.reject(
-        ERROR_TEXTS.MODELING_CREATE_MODEL.PRIMARY_KEY.REQUIRED,
-      );
-    }
-
-    if (!selectedColumns.includes(value)) {
+    if (value && !selectedColumns.includes(value)) {
       return Promise.reject(
         ERROR_TEXTS.MODELING_CREATE_MODEL.PRIMARY_KEY.INVALID,
       );
@@ -197,7 +191,12 @@ export default function ModelForm(props: Props) {
             },
           ]}
         >
-          <Select placeholder="Select a column">
+          <Select
+            getPopupContainer={(trigger) => trigger.parentElement!}
+            placeholder="Select a column"
+            showSearch
+            allowClear
+          >
             {selectedColumns.map((column) => (
               <Option key={column} value={column}>
                 {column}

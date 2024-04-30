@@ -68,7 +68,6 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please select at least one column.',
     },
     PRIMARY_KEY: {
-      REQUIRED: 'Please select a column.',
       INVALID:
         'Please select again, the primary key must be one of the selected columns.',
     },
