@@ -61,6 +61,7 @@ const resolvers = {
 
     // calculated field
     createCalculatedField: modelResolver.createCalculatedField,
+    validateCalculatedField: modelResolver.validateCalculatedField,
 
     // Ask
     createAskingTask: askingResolver.createAskingTask,
