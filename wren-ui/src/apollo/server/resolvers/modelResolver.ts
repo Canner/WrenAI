@@ -1,15 +1,13 @@
-import { BigQueryOptions } from '@google-cloud/bigquery';
 import {
   CreateModelData,
   UpdateModelData,
   UpdateModelMetadataInput,
   CreateCalculatedFieldData,
+  UpdateCalculatedFieldData,
 } from '../models';
-import { Project } from '../repositories';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { CompactTable } from '../connectors/connector';
-import { BQConnector } from '../connectors/bqConnector';
 import { DeployResponse } from '../services/deployService';
 import { constructCteSql } from '../services/askingService';
 import { format } from 'sql-formatter';
@@ -53,6 +51,7 @@ export class ModelResolver {
     // calculated field
     this.createCalculatedField = this.createCalculatedField.bind(this);
     this.validateCalculatedField = this.validateCalculatedField.bind(this);
+    this.updateCalculatedField = this.updateCalculatedField.bind(this);
   }
 
   public async createCalculatedField(
@@ -65,8 +64,22 @@ export class ModelResolver {
   }
 
   public async validateCalculatedField(_root: any, args: any, ctx: IContext) {
-    const { name, modelId } = args.data;
-    return await this.validateCalculatedFieldName(name, modelId, ctx);
+    const { name, modelId, columnId } = args.data;
+    return await ctx.modelService.validateCalculatedField(
+      name,
+      modelId,
+      columnId,
+    );
+  }
+
+  public async updateCalculatedField(
+    _root: any,
+    _args: { data: UpdateCalculatedFieldData; where: { id: number } },
+    ctx: IContext,
+  ) {
+    const { data, where } = _args;
+    const column = await ctx.modelService.updateCalculatedField(data, where.id);
+    return column;
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
@@ -522,42 +535,6 @@ export class ModelResolver {
       return {
         valid: false,
         message: 'View name is duplicated',
-      };
-    }
-
-    return {
-      valid: true,
-    };
-  }
-
-  private async validateCalculatedFieldName(
-    calculatedFieldName: string,
-    modelId: number,
-    ctx: IContext,
-  ): Promise<{ valid: boolean; message?: string }> {
-    // check if calculated field name is valid
-    // a-z, A-Z, 0-9, _, - are allowed and cannot start with number
-    const regex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
-    if (!regex.test(calculatedFieldName)) {
-      return {
-        valid: false,
-        message:
-          'Only a-z, A-Z, 0-9, _, - are allowed and cannot start with number',
-      };
-    }
-
-    // check if calculated field name is duplicated
-    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
-      modelId,
-    ]);
-    if (
-      modelColumns.find(
-        ({ referenceName }) => referenceName === calculatedFieldName,
-      )
-    ) {
-      return {
-        valid: false,
-        message: 'Calculated field name is duplicated',
       };
     }
 

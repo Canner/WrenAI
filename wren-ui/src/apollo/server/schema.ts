@@ -158,9 +158,20 @@ export const typeDefs = gql`
     lineage: [Int!]!
   }
 
-  input ValidateCalculatedFieldInput {
-    modelId: Int!
+  input UpdateCalculatedFieldInput {
     name: String!
+    expression: ExpressionName!
+    lineage: [Int!]!
+  }
+
+  input UpdateCalculatedFieldWhere {
+    id: Int!
+  }
+
+  input ValidateCalculatedFieldInput {
+    name: String!
+    modelId: Int!
+    columnId: Int
   }
 
   type CalculatedFieldValidationResponse {
@@ -587,6 +598,10 @@ export const typeDefs = gql`
 
     # Calculated field
     createCalculatedField(data: CreateCalculatedFieldInput!): JSON!
+    updateCalculatedField(
+      data: UpdateCalculatedFieldInput!
+      where: UpdateCalculatedFieldWhere
+    ): JSON!
     validateCalculatedField(
       data: ValidateCalculatedFieldInput!
     ): CalculatedFieldValidationResponse!
