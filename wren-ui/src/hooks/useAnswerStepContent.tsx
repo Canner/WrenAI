@@ -54,8 +54,7 @@ export default function useAnswerStepContent({
   stepIndex: number;
   threadResponseId: number;
 }) {
-  const { nativeSQLMode, setNativeSQLMode, fetchNativeSQL, nativeSQLResult } =
-    useNativeSQL();
+  const { fetchNativeSQL, nativeSQLResult } = useNativeSQL();
 
   const [collapseContentType, setCollapseContentType] =
     useState<COLLAPSE_CONTENT_TYPE>(COLLAPSE_CONTENT_TYPE.NONE);
@@ -69,7 +68,7 @@ export default function useAnswerStepContent({
 
   const onPreviewData = () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.PREVIEW_DATA);
-    setNativeSQLMode(false);
+    nativeSQLResult.setNativeSQLMode(false);
     previewData({
       variables: { where: { responseId: threadResponseId, stepIndex } },
     });
@@ -77,16 +76,16 @@ export default function useAnswerStepContent({
 
   const onCloseCollapse = () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.NONE);
-    setNativeSQLMode(false);
+    nativeSQLResult.setNativeSQLMode(false);
   };
 
   const onCopyFullSQL = () => {
-    copy(nativeSQLMode ? nativeSQLResult.data : fullSql);
+    copy(nativeSQLResult.nativeSQLMode ? nativeSQLResult.data : fullSql);
     message.success('Copied SQL to clipboard.');
   };
 
   const onChangeNativeSQL = async (checked: boolean) => {
-    setNativeSQLMode(checked);
+    nativeSQLResult.setNativeSQLMode(checked);
     checked && fetchNativeSQL({ variables: { responseId: threadResponseId } });
   };
 
@@ -111,7 +110,7 @@ export default function useAnswerStepContent({
       ...(isLastStep
         ? {
             isViewFullSQL: isViewSQL,
-            sql: nativeSQLMode ? nativeSQLResult.data : fullSql,
+            sql: fullSql,
           }
         : {
             isViewSQL,

@@ -8,6 +8,8 @@ export interface NativeSQLResult {
   dataSourceType: DataSourceName;
   hasNativeSQL: boolean;
   loading: boolean;
+  nativeSQLMode: boolean;
+  setNativeSQLMode: (value: boolean) => void;
 }
 
 // we assume that not having a sample dataset means supporting native SQL
@@ -37,11 +39,11 @@ export default function useNativeSQL() {
     ...nativeSQLInfo,
     data: nativeSQL,
     loading,
+    nativeSQLMode,
+    setNativeSQLMode,
   };
 
   return {
-    nativeSQLMode,
-    setNativeSQLMode,
     fetchNativeSQL,
     nativeSQLResult,
   };

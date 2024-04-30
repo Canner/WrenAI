@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Typography } from 'antd';
 import styled from 'styled-components';
 import '@/components/editor/AceEditor';
-import { FlexLoading } from '@/components/PageLoading';
+import { Loading } from '@/components/PageLoading';
 
 const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
   position: relative;
@@ -105,14 +105,12 @@ export default function CodeBlock(props: Props) {
       inline={inline}
       maxHeight={maxHeight}
     >
-      {loading ? (
-        <FlexLoading align="center" height={150} />
-      ) : (
+      <Loading spinning={loading}>
         <div className="adm-code-wrap">
           {lines}
           {copyable && <CopyText copyable>{code}</CopyText>}
         </div>
-      )}
+      </Loading>
     </Block>
   );
 }

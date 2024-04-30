@@ -62,6 +62,11 @@ export default function CollapseContent(props: Props) {
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = Boolean(attributes.isLastStep) && hasNativeSQL;
 
+  const sqls =
+    nativeSQLResult.nativeSQLMode && nativeSQLResult.loading === false
+      ? nativeSQLResult.data
+      : sql;
+
   return (
     <>
       {(isViewSQL || isViewFullSQL) && (
@@ -96,7 +101,7 @@ export default function CollapseContent(props: Props) {
             </StyledToolBar>
           )}
           <CodeBlock
-            code={sql}
+            code={sqls}
             showLineNumbers
             maxHeight="300"
             loading={nativeSQLResult.loading}
