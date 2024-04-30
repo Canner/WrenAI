@@ -5,7 +5,7 @@ import BaseTable, {
 } from '@/components/table/BaseTable';
 
 export default function RelationTable(props: Props) {
-  const { columns } = props;
+  const { columns, showExpandable } = props;
   return (
     <BaseTable
       {...props}
@@ -18,13 +18,19 @@ export default function RelationTable(props: Props) {
           { ...COLUMN.DESCRIPTION, width: 150 },
         ]
       }
-      expandable={{
-        expandedRowRender: (record) => (
-          <ExpandableRows
-            data={[{ title: 'Description', value: record.description || '-' }]}
-          />
-        ),
-      }}
+      expandable={
+        showExpandable
+          ? {
+              expandedRowRender: (record) => (
+                <ExpandableRows
+                  data={[
+                    { title: 'Description', value: record.description || '-' },
+                  ]}
+                />
+              ),
+            }
+          : null
+      }
     />
   );
 }
