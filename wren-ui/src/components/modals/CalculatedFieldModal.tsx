@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { Modal, Form, Input, Typography } from 'antd';
-import Link from 'next/link';
+import { Modal, Form, Input, Typography, Button } from 'antd';
+import LinkOutlined from '@ant-design/icons/LinkOutlined';
 import { omit } from 'lodash';
 import { ERROR_TEXTS } from '@/utils/error';
 import { DiagramModel } from '@/utils/data/type';
@@ -80,13 +80,32 @@ export default function AddCalculatedFieldModal(props: Props) {
       title="Add calculated field"
       width={750}
       visible={visible}
-      okText="Submit"
-      onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
       maskClosable={false}
       destroyOnClose
       afterClose={() => form.resetFields()}
+      footer={
+        <div className="d-flex justify-space-between align-center">
+          <div className="text-sm ml-2">
+            <LinkOutlined className="gray-6 mr-2" />
+            <Typography.Link
+              type="secondary"
+              href=""
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              How to set primary key in a model.
+            </Typography.Link>
+          </div>
+          <div>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button type="primary" onClick={submit} loading={loading}>
+              Save
+            </Button>
+          </div>
+        </div>
+      }
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
@@ -148,7 +167,6 @@ export default function AddCalculatedFieldModal(props: Props) {
           />
         </Form.Item>
       </Form>
-      <Link href="">How to set primary key in a model.</Link>
     </Modal>
   );
 }

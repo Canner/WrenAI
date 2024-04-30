@@ -1,1 +1,1 @@
-export * from './LineageSelectorValidator';
+export * from './lineageSelectorValidator';
