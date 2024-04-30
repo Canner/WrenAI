@@ -30,6 +30,7 @@ const resolvers = {
     thread: askingResolver.getThread,
     threads: askingResolver.listThreads,
     threadResponse: askingResolver.getResponse,
+    nativeSql: modelResolver.getNativeSql,
 
     // Views
     listViews: modelResolver.listViews,

@@ -42,6 +42,7 @@ export class ModelResolver {
 
     // preview
     this.previewViewData = this.previewViewData.bind(this);
+    this.getNativeSql = this.getNativeSql.bind(this);
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
@@ -308,6 +309,33 @@ export class ModelResolver {
       PREVIEW_MAX_OUTPUT_ROW,
     );
     return data;
+  }
+
+  public async getNativeSql(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<string> {
+    const { responseId } = args;
+
+    // If using a sample dataset, native SQL is not supported
+    const project = await ctx.projectService.getCurrentProject();
+    const sampleDataset = project.sampleDataset;
+    if (sampleDataset) {
+      throw new Error(`Doesn't support Native SQL`);
+    }
+
+    // get sql statement of a response
+    const response = await ctx.askingService.getResponse(responseId);
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    // construct cte sql and format it
+    const steps = response.detail.steps;
+    const sql = format(constructCteSql(steps));
+
+    return await ctx.wrenEngineAdaptor.getNativeSQL(sql);
   }
 
   // validate view name

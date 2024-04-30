@@ -5,7 +5,7 @@ import { useResetCurrentProjectMutation } from '@/apollo/client/graphql/settings
 
 export default function ProjectSettings() {
   const router = useRouter();
-  const [resetCurrentProject] = useResetCurrentProjectMutation();
+  const [resetCurrentProject, { client }] = useResetCurrentProjectMutation();
 
   const reset = () => {
     Modal.confirm({
@@ -14,6 +14,7 @@ export default function ProjectSettings() {
       okText: 'Reset',
       onOk: async () => {
         await resetCurrentProject();
+        client.clearStore();
         router.push(Path.OnboardingConnection);
       },
     });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import copy from 'copy-to-clipboard';
 import { message } from 'antd';
 import { COLLAPSE_CONTENT_TYPE } from '@/utils/enum';
+import useNativeSQL from '@/hooks/useNativeSQL';
 import {
   usePreviewDataMutation,
   PreviewDataMutationResult,
@@ -53,6 +54,8 @@ export default function useAnswerStepContent({
   stepIndex: number;
   threadResponseId: number;
 }) {
+  const { fetchNativeSQL, nativeSQLResult } = useNativeSQL();
+
   const [collapseContentType, setCollapseContentType] =
     useState<COLLAPSE_CONTENT_TYPE>(COLLAPSE_CONTENT_TYPE.NONE);
 
@@ -65,17 +68,25 @@ export default function useAnswerStepContent({
 
   const onPreviewData = () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.PREVIEW_DATA);
+    nativeSQLResult.setNativeSQLMode(false);
     previewData({
       variables: { where: { responseId: threadResponseId, stepIndex } },
     });
   };
 
-  const onCloseCollapse = () =>
+  const onCloseCollapse = () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.NONE);
+    nativeSQLResult.setNativeSQLMode(false);
+  };
 
   const onCopyFullSQL = () => {
-    copy(fullSql);
+    copy(nativeSQLResult.nativeSQLMode ? nativeSQLResult.data : fullSql);
     message.success('Copied SQL to clipboard.');
+  };
+
+  const onChangeNativeSQL = async (checked: boolean) => {
+    nativeSQLResult.setNativeSQLMode(checked);
+    checked && fetchNativeSQL({ variables: { responseId: threadResponseId } });
   };
 
   const isViewSQL = collapseContentType === COLLAPSE_CONTENT_TYPE.VIEW_SQL;
@@ -110,6 +121,8 @@ export default function useAnswerStepContent({
         loading: previewDataResult.loading,
         previewData: previewDataResult?.data?.previewData,
       } as unknown as PreviewDataMutationResult,
+      nativeSQLResult,
+      onChangeNativeSQL,
     },
     ...buttonProps,
   };

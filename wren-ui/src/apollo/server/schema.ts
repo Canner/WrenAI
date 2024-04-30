@@ -492,6 +492,7 @@ export const typeDefs = gql`
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!
+    nativeSql(responseId: Int!): String!
 
     # Connection Info
     connectionInfo: ConnectionInfo!

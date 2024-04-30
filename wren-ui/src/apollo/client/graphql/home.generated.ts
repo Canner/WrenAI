@@ -89,6 +89,13 @@ export type PreviewDataMutationVariables = Types.Exact<{
 
 export type PreviewDataMutation = { __typename?: 'Mutation', previewData: any };
 
+export type GetNativeSqlQueryVariables = Types.Exact<{
+  responseId: Types.Scalars['Int'];
+}>;
+
+
+export type GetNativeSqlQuery = { __typename?: 'Query', nativeSql: string };
+
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
   code
@@ -548,3 +555,36 @@ export function usePreviewDataMutation(baseOptions?: Apollo.MutationHookOptions<
 export type PreviewDataMutationHookResult = ReturnType<typeof usePreviewDataMutation>;
 export type PreviewDataMutationResult = Apollo.MutationResult<PreviewDataMutation>;
 export type PreviewDataMutationOptions = Apollo.BaseMutationOptions<PreviewDataMutation, PreviewDataMutationVariables>;
+export const GetNativeSqlDocument = gql`
+    query GetNativeSQL($responseId: Int!) {
+  nativeSql(responseId: $responseId)
+}
+    `;
+
+/**
+ * __useGetNativeSqlQuery__
+ *
+ * To run a query within a React component, call `useGetNativeSqlQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGetNativeSqlQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useGetNativeSqlQuery({
+ *   variables: {
+ *      responseId: // value for 'responseId'
+ *   },
+ * });
+ */
+export function useGetNativeSqlQuery(baseOptions: Apollo.QueryHookOptions<GetNativeSqlQuery, GetNativeSqlQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<GetNativeSqlQuery, GetNativeSqlQueryVariables>(GetNativeSqlDocument, options);
+      }
+export function useGetNativeSqlLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetNativeSqlQuery, GetNativeSqlQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<GetNativeSqlQuery, GetNativeSqlQueryVariables>(GetNativeSqlDocument, options);
+        }
+export type GetNativeSqlQueryHookResult = ReturnType<typeof useGetNativeSqlQuery>;
+export type GetNativeSqlLazyQueryHookResult = ReturnType<typeof useGetNativeSqlLazyQuery>;
+export type GetNativeSqlQueryResult = Apollo.QueryResult<GetNativeSqlQuery, GetNativeSqlQueryVariables>;
