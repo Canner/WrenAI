@@ -602,6 +602,7 @@ export const typeDefs = gql`
       data: UpdateCalculatedFieldInput!
       where: UpdateCalculatedFieldWhere
     ): JSON!
+    deleteCalculatedField(where: UpdateCalculatedFieldWhere): Boolean!
     validateCalculatedField(
       data: ValidateCalculatedFieldInput!
     ): CalculatedFieldValidationResponse!

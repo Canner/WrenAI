@@ -52,6 +52,7 @@ export class ModelResolver {
     this.createCalculatedField = this.createCalculatedField.bind(this);
     this.validateCalculatedField = this.validateCalculatedField.bind(this);
     this.updateCalculatedField = this.updateCalculatedField.bind(this);
+    this.deleteCalculatedField = this.deleteCalculatedField.bind(this);
   }
 
   public async createCalculatedField(
@@ -80,6 +81,17 @@ export class ModelResolver {
     const { data, where } = _args;
     const column = await ctx.modelService.updateCalculatedField(data, where.id);
     return column;
+  }
+
+  public async deleteCalculatedField(_root: any, args: any, ctx: IContext) {
+    const columnId = args.where.id;
+    // check column exist and is calculated field
+    const column = await ctx.modelColumnRepository.findOneBy({ id: columnId });
+    if (!column || !column.isCalculated) {
+      throw new Error('Calculated field not found');
+    }
+    await ctx.modelColumnRepository.deleteOne(columnId);
+    return true;
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
