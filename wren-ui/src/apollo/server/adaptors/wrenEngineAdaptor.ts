@@ -47,6 +47,25 @@ export interface DescribeStatementResponse {
   columns: ColumnMetadata[];
 }
 
+export enum WrenEngineValidateStatusEnum {
+  PASS = 'PASS',
+  ERROR = 'ERROR',
+  FAIL = 'FAIL',
+  WARN = 'WARN',
+  SKIP = 'SKIP',
+}
+
+export interface WrenEngineValidateResponse {
+  duration: string;
+  name: string;
+  status: WrenEngineValidateStatusEnum;
+}
+
+export interface ValidationResponse {
+  valid: boolean;
+  message?: string;
+}
+
 export interface IWrenEngineAdaptor {
   deploy(deployData: deployData): Promise<DeployResponse>;
   initDatabase(sql: string): Promise<void>;
@@ -56,6 +75,11 @@ export interface IWrenEngineAdaptor {
   previewData(sql: string, limit?: number): Promise<QueryResponse>;
   describeStatement(sql: string): Promise<DescribeStatementResponse>;
   getNativeSQL(sql: string): Promise<string>;
+  validateColumnIsValid(
+    manifest: Manifest,
+    modelName: string,
+    columnName: string,
+  ): Promise<ValidationResponse>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -65,9 +89,50 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private initSqlUrlPath = '/v1/data-source/duckdb/settings/init-sql';
   private previewUrlPath = '/v1/mdl/preview';
   private dryPlanUrlPath = '/v1/mdl/dry-plan';
+  private validateUrlPath = '/v1/mdl/validate';
 
   constructor({ wrenEngineEndpoint }: { wrenEngineEndpoint: string }) {
     this.wrenEngineBaseEndpoint = wrenEngineEndpoint;
+  }
+
+  public async validateColumnIsValid(
+    manifest: Manifest,
+    modelName: string,
+    columnName: string,
+  ) {
+    const model = manifest.models.find((m) => m.name === modelName);
+    if (!model) {
+      return {
+        valid: false,
+        message: `Model ${modelName} not found in the manifest`,
+      };
+    }
+    const column = model.columns.find((c) => c.name === columnName);
+    if (!column) {
+      return {
+        valid: false,
+        message: `Column ${columnName} not found in model ${modelName} in the manifest`,
+      };
+    }
+    try {
+      const payload = {
+        manifest,
+        parameters: { modelName, columnName },
+      };
+      const res = await axios.post(
+        `${this.wrenEngineBaseEndpoint}${this.validateUrlPath}/column_is_valid`,
+        payload,
+      );
+      const result = res.data[0] as WrenEngineValidateResponse;
+      if (result.status === WrenEngineValidateStatusEnum.PASS) {
+        return { valid: true };
+      } else {
+        return { valid: false, message: JSON.stringify(result) };
+      }
+    } catch (err: any) {
+      logger.debug(`Got error when validating column: ${err.message}`);
+      return { valid: false, message: err.message };
+    }
   }
 
   public async deploy(deployData: deployData): Promise<DeployResponse> {

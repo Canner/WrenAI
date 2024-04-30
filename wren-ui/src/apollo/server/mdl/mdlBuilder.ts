@@ -204,6 +204,37 @@ export class MDLBuilder implements IMDLBuilder {
       });
   }
 
+  public insertCalculatedField(
+    modelName: string,
+    calculatedField: ModelColumn,
+  ) {
+    const model = this.manifest.models.find(
+      (model: any) => model.name === modelName,
+    );
+    if (!model) {
+      logger.debug(`Can not find model "${modelName}" to add calculated field`);
+      return;
+    }
+    // if calculated field is already in the model, skip
+    if (
+      model.columns.find(
+        (column: any) => column.name === calculatedField.referenceName,
+      )
+    ) {
+      return;
+    }
+    const expression = this.getColumnExpression(calculatedField, model);
+    const columnValue = {
+      name: calculatedField.referenceName,
+      type: calculatedField.type,
+      isCalculated: true,
+      expression,
+      notNull: calculatedField.notNull,
+      properties: JSON.parse(calculatedField.properties),
+    };
+    model.columns.push(columnValue);
+  }
+
   public addRelation(): void {
     this.manifest.relationships = this.relations.map(
       (relation: RelationInfo) => {
@@ -300,7 +331,7 @@ export class MDLBuilder implements IMDLBuilder {
           const columnReferenceName = this.relatedColumns.find(
             (relatedColumn) => relatedColumn.id === id,
           )?.referenceName;
-          acc.push(columnReferenceName);
+          acc.push(`\"${columnReferenceName}\"`);
           return acc;
         }
         // id is relationId

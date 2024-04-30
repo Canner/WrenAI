@@ -627,6 +627,8 @@ describe('MDLBuilder', () => {
     const totalPaymentColumn = customerModel.columns.find(
       (c) => c.name === 'total_payment',
     );
-    expect(totalPaymentColumn.expression).toEqual('sum(order.payment.amount)');
+    expect(totalPaymentColumn.expression).toEqual(
+      'sum(order.payment."amount")',
+    );
   });
 });

@@ -16,6 +16,8 @@ import {
   ExpressionName,
   UpdateCalculatedFieldData,
 } from '../models';
+import { IMDLService } from './mdlService';
+import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 
 const logger = getLogger('ModelService');
 logger.level = 'debug';
@@ -35,7 +37,7 @@ export interface IModelService {
     id: number,
   ): Promise<ModelColumn>;
   generateReferenceName(data: any): string;
-  validateCalculatedField(
+  validateCalculatedFieldNaming(
     name: string,
     modelId: number,
     columnId?: number,
@@ -56,6 +58,8 @@ export class ModelService implements IModelService {
   private modelColumnRepository: IModelColumnRepository;
   private relationRepository: IRelationRepository;
   private viewRepository: IViewRepository;
+  private mdlService: IMDLService;
+  private wrenEngineAdaptor: IWrenEngineAdaptor;
 
   constructor({
     projectService,
@@ -63,18 +67,24 @@ export class ModelService implements IModelService {
     modelColumnRepository,
     relationRepository,
     viewRepository,
+    mdlService,
+    wrenEngineAdaptor,
   }: {
     projectService: IProjectService;
     modelRepository: IModelRepository;
     modelColumnRepository: IModelColumnRepository;
     relationRepository: IRelationRepository;
     viewRepository: IViewRepository;
+    mdlService: IMDLService;
+    wrenEngineAdaptor: IWrenEngineAdaptor;
   }) {
     this.projectService = projectService;
     this.modelRepository = modelRepository;
     this.modelColumnRepository = modelColumnRepository;
     this.relationRepository = relationRepository;
     this.viewRepository = viewRepository;
+    this.mdlService = mdlService;
+    this.wrenEngineAdaptor = wrenEngineAdaptor;
   }
 
   public async createCalculatedField(
@@ -87,17 +97,36 @@ export class ModelService implements IModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    const { valid, message } = await this.validateCalculatedField(
+    const { valid, message } = await this.validateCalculatedFieldNaming(
       name,
       modelId,
     );
+    logger.debug(
+      `creating calculated field ${name} : validateCalculatedFieldNaming: ${valid}, ${message}`,
+    );
     if (!valid) {
       throw new Error(message);
+    }
+    const canQuery = await this.checkCalculatedFieldCanQuery(
+      modelId,
+      model.referenceName,
+      data,
+    );
+    logger.debug(
+      `creating calculated field ${name} : checkCalculatedFieldCanQuery: ${canQuery}`,
+    );
+    if (!canQuery) {
+      throw new Error(
+        'Can not execute a query when using this calculated field',
+      );
     }
     const inputFieldId = lineage[lineage.length - 1];
     const dataType = await this.inferCalculatedFieldDataType(
       expression,
       inputFieldId,
+    );
+    logger.debug(
+      `creating calculated field ${name} : inferCalculatedFieldDataType: ${dataType}`,
     );
     const column = await this.modelColumnRepository.createOne({
       modelId,
@@ -124,18 +153,41 @@ export class ModelService implements IModelService {
     if (!column) {
       throw new Error('Column not found');
     }
-    const { valid, message } = await this.validateCalculatedField(
+    const model = await this.modelRepository.findOneBy({
+      id: column.modelId,
+    });
+    const { valid, message } = await this.validateCalculatedFieldNaming(
       name,
       column.modelId,
       id,
     );
+    logger.debug(
+      `updating calculated field: ${id} : validateCalculatedFieldNaming: ${valid}, ${message}`,
+    );
     if (!valid) {
       throw new Error(message);
+    }
+    logger.debug({ id: model.id, modelName: model.referenceName, data });
+    const canQuery = await this.checkCalculatedFieldCanQuery(
+      model.id,
+      model.referenceName,
+      data,
+    );
+    logger.debug(
+      `updating calculated field: ${id} :checkCalculatedFieldCanQuery: ${canQuery}`,
+    );
+    if (!canQuery) {
+      throw new Error(
+        'Can not execute a query when using this calculated field',
+      );
     }
     const inputFieldId = lineage[lineage.length - 1];
     const dataType = await this.inferCalculatedFieldDataType(
       expression,
       inputFieldId,
+    );
+    logger.debug(
+      `updating calculated field: ${id} :inferCalculatedFieldDataType: ${dataType}`,
     );
     const updatedColumn = await this.modelColumnRepository.updateOne(id, {
       displayName: name,
@@ -275,7 +327,7 @@ export class ModelService implements IModelService {
     return savedRelations;
   }
 
-  public async validateCalculatedField(
+  public async validateCalculatedFieldNaming(
     name: string,
     modelId: number,
     columnId?: number,
@@ -399,5 +451,45 @@ export class ModelService implements IModelService {
       throw new Error('Field not found');
     }
     return field.type;
+  }
+
+  private async checkCalculatedFieldCanQuery(
+    modelId: number,
+    modelName: string,
+    data: CreateCalculatedFieldData | UpdateCalculatedFieldData,
+  ) {
+    const { mdlBuilder } = await this.mdlService.makeCurrentModelMDL();
+    const { name: columnName, expression, lineage } = data;
+    const inputFieldId = lineage[lineage.length - 1];
+    const dataType = await this.inferCalculatedFieldDataType(
+      expression,
+      inputFieldId,
+    );
+    const modelColumn = {
+      id: 99999999,
+      modelId,
+      displayName: columnName,
+      sourceColumnName: columnName,
+      referenceName: columnName,
+      type: dataType,
+      isCalculated: true,
+      isPk: false,
+      notNull: false,
+      aggregation: expression,
+      lineage: JSON.stringify(lineage),
+      properties: JSON.stringify({ description: '' }),
+    } as ModelColumn;
+    mdlBuilder.insertCalculatedField(modelName, modelColumn);
+    const manifest = mdlBuilder.getManifest();
+    const { valid, message } =
+      await this.wrenEngineAdaptor.validateColumnIsValid(
+        manifest,
+        modelName,
+        columnName,
+      );
+    if (!valid) {
+      logger.debug(`Calculated field can not query: ${message}`);
+    }
+    return valid;
   }
 }
