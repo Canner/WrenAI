@@ -49,7 +49,10 @@ export class ModelResolver {
     // preview
     this.previewViewData = this.previewViewData.bind(this);
     this.getNativeSql = this.getNativeSql.bind(this);
+
+    // calculated field
     this.createCalculatedField = this.createCalculatedField.bind(this);
+    this.validateCalculatedField = this.validateCalculatedField.bind(this);
   }
 
   public async createCalculatedField(
@@ -59,6 +62,11 @@ export class ModelResolver {
   ) {
     const column = await ctx.modelService.createCalculatedField(_args.data);
     return column;
+  }
+
+  public async validateCalculatedField(_root: any, args: any, ctx: IContext) {
+    const { name, modelId } = args.data;
+    return await this.validateCalculatedFieldName(name, modelId, ctx);
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
@@ -522,14 +530,40 @@ export class ModelResolver {
     };
   }
 
-  private async getBQConnector(project: Project, filePath: string) {
-    // fetch tables
-    const { projectId } = project;
-    const connectionOption: BigQueryOptions = {
-      projectId,
-      keyFilename: filePath,
+  private async validateCalculatedFieldName(
+    calculatedFieldName: string,
+    modelId: number,
+    ctx: IContext,
+  ): Promise<{ valid: boolean; message?: string }> {
+    // check if calculated field name is valid
+    // a-z, A-Z, 0-9, _, - are allowed and cannot start with number
+    const regex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+    if (!regex.test(calculatedFieldName)) {
+      return {
+        valid: false,
+        message:
+          'Only a-z, A-Z, 0-9, _, - are allowed and cannot start with number',
+      };
+    }
+
+    // check if calculated field name is duplicated
+    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
+      modelId,
+    ]);
+    if (
+      modelColumns.find(
+        ({ referenceName }) => referenceName === calculatedFieldName,
+      )
+    ) {
+      return {
+        valid: false,
+        message: 'Calculated field name is duplicated',
+      };
+    }
+
+    return {
+      valid: true,
     };
-    return new BQConnector(connectionOption);
   }
 
   private validateTableExist(tableName: string, columns: CompactTable[]) {
