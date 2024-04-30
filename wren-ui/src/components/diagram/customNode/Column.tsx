@@ -1,4 +1,4 @@
-import { ReactFlowInstance, useReactFlow } from 'reactflow';
+import React from 'react';
 import styled from 'styled-components';
 import MarkerHandle from '@/components/diagram/customNode/MarkerHandle';
 
@@ -15,7 +15,6 @@ const NodeColumn = styled.div`
   }
 
   svg {
-    cursor: auto;
     flex-shrink: 0;
   }
 
@@ -34,7 +33,10 @@ const NodeColumn = styled.div`
   }
 `;
 
-export const ColumnTitle = styled.div`
+const Title = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   color: var(--gray-8);
   padding: 4px 12px;
   cursor: default;
@@ -46,10 +48,17 @@ type ColumnProps = {
   displayName: string;
   style?: React.CSSProperties;
   icon: React.ReactNode;
-  append?: React.ReactNode;
-  onMouseEnter?: (reactflowInstance: ReactFlowInstance) => void;
-  onMouseLeave?: (reactflowInstance: ReactFlowInstance) => void;
+  extra?: React.ReactNode;
+  onMouseEnter?: (event: React.MouseEvent) => void;
+  onMouseLeave?: (event: React.MouseEvent) => void;
 };
+
+type ColumnTitleProps = {
+  show: boolean;
+  extra?: React.ReactNode;
+  children: React.ReactNode;
+};
+
 export default function Column(props: ColumnProps) {
   const {
     id,
@@ -59,27 +68,20 @@ export default function Column(props: ColumnProps) {
     displayName,
     style = {},
     icon,
-    append,
+    extra,
   } = props;
-  const reactflowInstance = useReactFlow();
-  const mouseEnter = onMouseEnter
-    ? () => onMouseEnter(reactflowInstance)
-    : undefined;
-  const mouseLeave = onMouseLeave
-    ? () => onMouseLeave(reactflowInstance)
-    : undefined;
 
   const nodeColumn = (
     <NodeColumn
       style={style}
-      onMouseEnter={mouseEnter}
-      onMouseLeave={mouseLeave}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <div className="adm-column-title">
         <span title={type}>{icon}</span>
         <span title={displayName}>{displayName}</span>
       </div>
-      {append}
+      {extra}
       <MarkerHandle id={id.toString()} />
     </NodeColumn>
   );
@@ -87,6 +89,21 @@ export default function Column(props: ColumnProps) {
   return nodeColumn;
 }
 
-export const MoreColumnTip = (props: { count: number }) => {
+const MoreColumnTip = (props: { count: number }) => {
   return <div className="text-sm gray-7 px-3 py-1">and {props.count} more</div>;
 };
+
+const ColumnTitle = (props: ColumnTitleProps) => {
+  const { show, extra, children } = props;
+  if (!show) return null;
+
+  return (
+    <Title>
+      {children}
+      <span>{extra}</span>
+    </Title>
+  );
+};
+
+Column.Title = ColumnTitle;
+Column.MoreTip = MoreColumnTip;

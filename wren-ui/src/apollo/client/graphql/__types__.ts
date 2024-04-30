@@ -472,6 +472,7 @@ export type Query = {
   listViews: Array<ViewInfo>;
   model: DetailedModel;
   modelSync: ModelSyncResponse;
+  nativeSql: Scalars['String'];
   onboardingStatus: OnboardingStatusResponse;
   settings: Settings;
   suggestedQuestions: SuggestedQuestionResponse;
@@ -489,6 +490,11 @@ export type QueryAskingTaskArgs = {
 
 export type QueryModelArgs = {
   where: ModelWhereInput;
+};
+
+
+export type QueryNativeSqlArgs = {
+  responseId: Scalars['Int'];
 };
 
 

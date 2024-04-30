@@ -47,13 +47,14 @@ interface Props {
   data: DiagramData;
   onMoreClick: (data: ClickPayload) => void;
   onNodeClick: (data: ClickPayload) => void;
+  onAddClick: (data: ClickPayload) => void;
 }
 
 const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
   props: Props,
   ref,
 ) {
-  const { data, onMoreClick, onNodeClick } = props;
+  const { data, onMoreClick, onNodeClick, onAddClick } = props;
   const [forceRender, setForceRender] = useState(false);
   const reactFlowInstance = useReactFlow();
   useImperativeHandle(ref, () => reactFlowInstance, [reactFlowInstance]);
@@ -110,7 +111,7 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
 
   return (
     <>
-      <DiagramContext.Provider value={{ onMoreClick, onNodeClick }}>
+      <DiagramContext.Provider value={{ onMoreClick, onNodeClick, onAddClick }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}

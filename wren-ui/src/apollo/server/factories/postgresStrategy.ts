@@ -12,6 +12,7 @@ import {
   PostgresConnector,
 } from '../connectors/postgresConnector';
 import { Encryptor } from '../utils';
+import { findColumnsToUpdate, updateModelPrimaryKey } from './util';
 
 export class PostgresStrategy implements IDataSourceStrategy {
   private project?: Project;
@@ -118,13 +119,69 @@ export class PostgresStrategy implements IDataSourceStrategy {
 
     const models = await this.createModels(tables, connector);
     // create columns
-    const columns = await this.createColumns(
+    const columns = await this.createAllColumns(
       tables,
       models,
       dataSourceColumns as PostgresColumnResponse[],
       connector,
     );
     return { models, columns };
+  }
+
+  public async saveModel(
+    table: string,
+    columns: string[],
+    primaryKey?: string,
+  ) {
+    const connector = this.getPGConnector();
+    const dataSourceColumns = (await connector.listTables({
+      format: false,
+    })) as PostgresColumnResponse[];
+
+    const models = await this.createModels([table], connector);
+    const model = models[0];
+    // create columns
+    const modelColumns = await this.createColumns(
+      columns,
+      model,
+      dataSourceColumns as PostgresColumnResponse[],
+      primaryKey,
+    );
+    return { model, columns: modelColumns };
+  }
+
+  public async updateModel(
+    model: Model,
+    columns: string[],
+    primaryKey?: string,
+  ) {
+    const connector = this.getPGConnector();
+    const dataSourceColumns = (await connector.listTables({
+      format: false,
+    })) as PostgresColumnResponse[];
+    const existingColumns = await this.ctx.modelColumnRepository.findAllBy({
+      modelId: model.id,
+    });
+    const { toDeleteColumnIds, toCreateColumns } = findColumnsToUpdate(
+      columns,
+      existingColumns,
+    );
+    await updateModelPrimaryKey(
+      this.ctx.modelColumnRepository,
+      model.id,
+      primaryKey,
+    );
+    if (toCreateColumns.length) {
+      await this.createColumns(
+        toCreateColumns,
+        model,
+        dataSourceColumns as PostgresColumnResponse[],
+        primaryKey,
+      );
+    }
+    if (toDeleteColumnIds.length) {
+      await this.ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+    }
   }
 
   public async analysisRelation(models: Model[], columns: ModelColumn[]) {
@@ -253,6 +310,41 @@ export class PostgresStrategy implements IDataSourceStrategy {
   }
 
   private async createColumns(
+    columns: string[],
+    model: Model,
+    dataSourceColumns: PostgresColumnResponse[],
+    primaryKey?: string,
+  ) {
+    const columnValues = columns.reduce((acc, columnName) => {
+      const tableColumn = dataSourceColumns.find(
+        (col) => col.column_name === columnName,
+      );
+      if (!tableColumn) {
+        throw new Error(`Column not found: ${columnName}`);
+      }
+      const columnValue = {
+        modelId: model.id,
+        isCalculated: false,
+        displayName: columnName,
+        sourceColumnName: columnName,
+        referenceName: columnName,
+        type: tableColumn?.data_type || 'string',
+        notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
+        isPk: primaryKey === columnName,
+      } as Partial<ModelColumn>;
+      acc.push(columnValue);
+      return acc;
+    }, []);
+    const modelColumns = await Promise.all(
+      columnValues.map(
+        async (column) =>
+          await this.ctx.modelColumnRepository.createOne(column),
+      ),
+    );
+    return modelColumns;
+  }
+
+  private async createAllColumns(
     tables: string[],
     models: Model[],
     dataSourceColumns: PostgresColumnResponse[],

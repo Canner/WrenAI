@@ -1,7 +1,8 @@
-import { Typography } from 'antd';
 import { useEffect } from 'react';
+import { Typography } from 'antd';
 import styled from 'styled-components';
 import '@/components/editor/AceEditor';
+import { Loading } from '@/components/PageLoading';
 
 const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
   position: relative;
@@ -47,6 +48,7 @@ interface Props {
   code: string;
   copyable?: boolean;
   inline?: boolean;
+  loading?: boolean;
   maxHeight?: string;
   showLineNumbers?: boolean;
 }
@@ -64,7 +66,7 @@ const addThemeStyleManually = (cssText) => {
 };
 
 export default function CodeBlock(props: Props) {
-  const { code, copyable, maxHeight, inline, showLineNumbers } = props;
+  const { code, copyable, maxHeight, inline, loading, showLineNumbers } = props;
   const { ace } = window as any;
   const { Tokenizer } = ace.require('ace/tokenizer');
   const { SqlHighlightRules } = ace.require(`ace/mode/sql_highlight_rules`);
@@ -99,14 +101,16 @@ export default function CodeBlock(props: Props) {
 
   return (
     <Block
-      className="ace_editor ace-tomorrow"
+      className="ace_editor ace-tomorrow adm_code-block"
       inline={inline}
       maxHeight={maxHeight}
     >
-      <div className="adm-code-wrap">
-        {lines}
-        {copyable && <CopyText copyable>{code}</CopyText>}
-      </div>
+      <Loading spinning={loading}>
+        <div className="adm-code-wrap">
+          {lines}
+          {copyable && <CopyText copyable>{code}</CopyText>}
+        </div>
+      </Loading>
     </Block>
   );
 }

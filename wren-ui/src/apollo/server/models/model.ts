@@ -1,9 +1,9 @@
-enum ModelType {
+enum _ModelType {
   TABLE = 'TABLE',
   CUSTOM = 'CUSTOM',
 }
 
-interface CalculatedFieldData {
+interface _CalculatedFieldData {
   name: string;
   expression: string;
   lineage: number[];
@@ -11,13 +11,12 @@ interface CalculatedFieldData {
 }
 
 export interface CreateModelData {
-  type: ModelType;
-  displayName: string;
   sourceTableName: string;
-  refSql: string;
-  description: string;
-  cached: boolean;
-  refreshTime?: string;
   fields: [string];
-  calculatedFields?: [CalculatedFieldData];
+  primaryKey: string;
+}
+
+export interface UpdateModelData {
+  fields: [string];
+  primaryKey: string;
 }

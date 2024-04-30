@@ -124,14 +124,9 @@ export const typeDefs = gql`
   }
 
   input CreateModelInput {
-    displayName: String!
     sourceTableName: String!
-    refSql: String
-    description: String
-    cached: Boolean!
-    refreshTime: String
     fields: [String!]!
-    calculatedFields: [CalculatedFieldInput!]
+    primaryKey: String
   }
 
   input ModelWhereInput {
@@ -139,12 +134,8 @@ export const typeDefs = gql`
   }
 
   input UpdateModelInput {
-    displayName: String!
-    description: String
-    cached: Boolean!
-    refreshTime: String
     fields: [String!]!
-    calculatedFields: [CalculatedFieldInput!]
+    primaryKey: String
   }
 
   type FieldInfo {
@@ -501,6 +492,7 @@ export const typeDefs = gql`
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!
+    nativeSql(responseId: Int!): String!
 
     # Connection Info
     connectionInfo: ConnectionInfo!

@@ -16,8 +16,8 @@ const logger = getLogger('ModelService');
 logger.level = 'debug';
 
 export interface IModelService {
-  batchUpdateModelDescription(tables: SampleDatasetTable[]): Promise<void>;
-  batchUpdateColumnDescription(tables: SampleDatasetTable[]): Promise<void>;
+  batchUpdateModelProperties(tables: SampleDatasetTable[]): Promise<void>;
+  batchUpdateColumnProperties(tables: SampleDatasetTable[]): Promise<void>;
   saveRelations(relations: RelationData[]): Promise<Relation[]>;
   generateReferenceName(data: any): string;
   deleteAllViewsByProjectId(projectId: number): Promise<void>;
@@ -57,7 +57,7 @@ export class ModelService implements IModelService {
     this.viewRepository = viewRepository;
   }
 
-  public async batchUpdateModelDescription(tables: SampleDatasetTable[]) {
+  public async batchUpdateModelProperties(tables: SampleDatasetTable[]) {
     logger.debug('start batch update model description');
     const project = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
@@ -72,8 +72,8 @@ export class ModelService implements IModelService {
           return;
         }
         const properties = model.properties
-          ? { ...JSON.parse(model.properties), description: table.description }
-          : { description: table.description };
+          ? { ...JSON.parse(model.properties), ...table.properties }
+          : { ...table.properties };
         await this.modelRepository.updateOne(model.id, {
           properties: JSON.stringify(properties),
         });
@@ -81,7 +81,7 @@ export class ModelService implements IModelService {
     ]);
   }
 
-  public async batchUpdateColumnDescription(tables: SampleDatasetTable[]) {
+  public async batchUpdateColumnProperties(tables: SampleDatasetTable[]) {
     logger.debug('start batch update column description');
     const project = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
@@ -103,6 +103,9 @@ export class ModelService implements IModelService {
 
     await Promise.all([
       transformedColumns.map(async (column) => {
+        if (!column.properties) {
+          return;
+        }
         const model = models.find(
           (m) => m.sourceTableName === column.tableName,
         );
@@ -120,7 +123,7 @@ export class ModelService implements IModelService {
         const properties = sourceColumn.properties
           ? {
               ...JSON.parse(sourceColumn.properties),
-              description: column.description,
+              ...column.properties,
             }
           : { description: column.description };
         await this.modelColumnRepository.updateOne(sourceColumn.id, {

@@ -5,13 +5,16 @@ import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
+import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
 import useDrawerAction from '@/hooks/useDrawerAction';
+import useModalAction from '@/hooks/useModalAction';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
 import { useDeleteViewMutation } from '@/apollo/client/graphql/view.generated';
+import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -57,6 +60,8 @@ export default function Modeling() {
   }, [data]);
 
   const metadataDrawer = useDrawerAction();
+  const modelDrawer = useDrawerAction();
+  const editMetadataModal = useModalAction();
 
   const onSelect = (selectKeys) => {
     if (diagramRef.current) {
@@ -77,14 +82,46 @@ export default function Modeling() {
 
   const onMoreClick = (payload) => {
     const { type, data } = payload;
+    const { nodeType } = data;
     const action = {
+      [MORE_ACTION.UPDATE_COLUMNS]: () => {
+        switch (nodeType) {
+          case NODE_TYPE.MODEL:
+            console.log('update columns');
+            break;
+          default:
+            console.log(data);
+            break;
+        }
+      },
       [MORE_ACTION.EDIT]: () => {
-        // TODO: handle edit action
+        switch (nodeType) {
+          case NODE_TYPE.CALCULATED_FIELD:
+            console.log('edit calculated field');
+            break;
+          case NODE_TYPE.RELATION:
+            console.log('edit relation');
+            break;
+
+          case NODE_TYPE.MODEL:
+            modelDrawer.openDrawer(data);
+            break;
+          default:
+            console.log(data);
+            break;
+        }
       },
       [MORE_ACTION.DELETE]: async () => {
-        const { nodeType } = data;
-
         switch (nodeType) {
+          case NODE_TYPE.MODEL:
+            console.log('delete model');
+            break;
+          case NODE_TYPE.CALCULATED_FIELD:
+            console.log('delete calculated field');
+            break;
+          case NODE_TYPE.RELATION:
+            console.log('delete relation');
+            break;
           case NODE_TYPE.VIEW:
             await deleteViewMutation({
               variables: { where: { id: data.viewId } },
@@ -100,12 +137,28 @@ export default function Modeling() {
     action[type] && action[type]();
   };
 
+  const onAddClick = (payload) => {
+    const { targetNodeType } = payload;
+    switch (targetNodeType) {
+      case NODE_TYPE.CALCULATED_FIELD:
+        console.log('add calculated field');
+        break;
+      case NODE_TYPE.RELATION:
+        console.log('add relation');
+        break;
+      default:
+        console.log('add', targetNodeType);
+        break;
+    }
+  };
+
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
       <SiderLayout
         loading={diagramData === null}
         sidebar={{
           data: diagramData,
+          onOpenModelDrawer: modelDrawer.openDrawer,
           onSelect,
         }}
       >
@@ -115,11 +168,27 @@ export default function Modeling() {
             data={diagramData}
             onMoreClick={onMoreClick}
             onNodeClick={onNodeClick}
+            onAddClick={onAddClick}
           />
         </DiagramWrapper>
         <MetadataDrawer
           {...metadataDrawer.state}
           onClose={metadataDrawer.closeDrawer}
+          onEditClick={editMetadataModal.openModal}
+        />
+        <EditMetadataModal
+          {...editMetadataModal.state}
+          onClose={editMetadataModal.closeModal}
+          onSubmit={async (values) => {
+            console.log(values);
+          }}
+        />
+        <ModelDrawer
+          {...modelDrawer.state}
+          onClose={modelDrawer.closeDrawer}
+          onSubmit={async (values) => {
+            console.log(values);
+          }}
         />
       </SiderLayout>
     </DeployStatusContext.Provider>

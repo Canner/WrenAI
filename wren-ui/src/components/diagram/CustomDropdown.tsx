@@ -1,38 +1,117 @@
+import React from 'react';
 import { Dropdown, Menu } from 'antd';
-import { MORE_ACTION } from '@/utils/enum';
-import { DeleteViewModal } from '@/components/modals/DeleteModal';
+import { ItemType } from 'antd/lib/menu/hooks/useItems';
+import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
+import EditOutlined from '@ant-design/icons/EditOutlined';
+import {
+  DeleteCalculatedFieldModal,
+  DeleteRelationshipModal,
+  DeleteModelModal,
+  DeleteViewModal,
+} from '@/components/modals/DeleteModal';
 
 interface Props {
+  [key: string]: any;
   onMoreClick: (type: MORE_ACTION) => void;
+  onMenuEnter?: (event: React.MouseEvent) => void;
   children: React.ReactNode;
 }
 
-export default function CustomDropdown(props: Props) {
-  const { onMoreClick, children } = props;
+const makeDropdown =
+  (getItems: (props: Props) => ItemType[]) => (props: Props) => {
+    const { children, onMenuEnter } = props;
 
-  return (
-    <Dropdown
-      trigger={['click']}
-      overlayStyle={{ minWidth: 100, userSelect: 'none' }}
-      overlay={
-        <Menu
-          onClick={(e) => e.domEvent.stopPropagation()}
-          items={[
-            {
-              label: (
-                <DeleteViewModal
-                  onConfirm={() => onMoreClick(MORE_ACTION.DELETE)}
-                />
-              ),
-              className: 'red-5',
-              key: MORE_ACTION.DELETE,
-              onClick: ({ domEvent }) => domEvent.stopPropagation(),
-            },
-          ]}
-        />
-      }
-    >
-      {children}
-    </Dropdown>
-  );
-}
+    const items = getItems(props);
+
+    return (
+      <Dropdown
+        trigger={['click']}
+        overlayStyle={{ minWidth: 100, userSelect: 'none' }}
+        overlay={
+          <Menu
+            onClick={(e) => e.domEvent.stopPropagation()}
+            items={items}
+            onMouseEnter={onMenuEnter}
+          />
+        }
+      >
+        {children}
+      </Dropdown>
+    );
+  };
+
+export const ModelDropdown = makeDropdown((props: Props) => {
+  const { onMoreClick } = props;
+
+  const items: ItemType[] = [
+    {
+      label: (
+        <>
+          <EditOutlined className="gray-8 mr-2" />
+          Update Columns
+        </>
+      ),
+      key: MORE_ACTION.UPDATE_COLUMNS,
+      onClick: () => onMoreClick(MORE_ACTION.UPDATE_COLUMNS),
+    },
+    {
+      label: (
+        <DeleteModelModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
+      ),
+      className: 'red-5',
+      key: MORE_ACTION.DELETE,
+      onClick: ({ domEvent }) => domEvent.stopPropagation(),
+    },
+  ];
+
+  return items;
+});
+
+export const ViewDropdown = makeDropdown((props: Props) => {
+  const { onMoreClick } = props;
+  const items: ItemType[] = [
+    {
+      label: (
+        <DeleteViewModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
+      ),
+      className: 'red-5',
+      key: MORE_ACTION.DELETE,
+      onClick: ({ domEvent }) => domEvent.stopPropagation(),
+    },
+  ];
+  return items;
+});
+
+export const ColumnDropdown = makeDropdown((props: Props) => {
+  const { onMoreClick, data } = props;
+  const { nodeType } = data;
+
+  const DeleteColumnModal =
+    {
+      [NODE_TYPE.CALCULATED_FIELD]: DeleteCalculatedFieldModal,
+      [NODE_TYPE.RELATION]: DeleteRelationshipModal,
+    }[nodeType] || DeleteCalculatedFieldModal;
+
+  const items: ItemType[] = [
+    {
+      label: (
+        <>
+          <EditOutlined className="gray-8 mr-2" />
+          Edit
+        </>
+      ),
+      key: MORE_ACTION.EDIT,
+      onClick: () => onMoreClick(MORE_ACTION.EDIT),
+    },
+    {
+      label: (
+        <DeleteColumnModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
+      ),
+      className: 'red-5',
+      key: MORE_ACTION.DELETE,
+      onClick: ({ domEvent }) => domEvent.stopPropagation(),
+    },
+  ];
+
+  return items;
+});
