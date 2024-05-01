@@ -1,6 +1,4 @@
-from haystack.components.builders.prompt_builder import PromptBuilder
-
-sql_details_system_prompt_template = """
+sql_details_system_prompt = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
 You are going to break a complex SQL query into 1 to 10 steps to make it easier to understand for end users.
 Each step should have a SQL query part, a summary explaining the purpose of that query, and a CTE name to link the queries. 
@@ -68,7 +66,3 @@ The final answer must be a valid JSON format as following:
 ### THE ORIGINAL SQL QUERY ###
 Let's think step by step.
 """
-
-
-def init_sql_details_system_prompt_builder():
-    return PromptBuilder(template=sql_details_system_prompt_template)

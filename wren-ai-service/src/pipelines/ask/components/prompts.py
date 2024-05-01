@@ -27,7 +27,7 @@ The final answer must be the JSON format like following:
 {{ query }}
 """
 
-text_to_sql_system_prompt_template = """
+text_to_sql_system_prompt = """
 You are a Trino SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
 Before the main task, you need to learn about some specific structures in the given DB schema.
 One of the structures is the special column marked as "Calculated Field". You need to interpret the purpose and calculation basis for these columns, then utilize them in the following text-to-sql generation tasks.
