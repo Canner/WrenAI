@@ -21,6 +21,7 @@ from src.pipelines.ask import (
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
 from src.pipelines.ask.components.generator import init_generator
+from src.pipelines.ask.components.prompts import text_to_sql_system_prompt_template
 from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask_details import (
     generation_pipeline as ask_details_generation_pipeline,
@@ -49,9 +50,15 @@ def init_globals():
         document_store=document_store,
     )
     query_understanding_generator = init_generator()
-    text_to_sql_generator = init_generator(enable_system_prompt=True)
-    text_to_sql_with_followup_generator = init_generator(enable_system_prompt=True)
-    sql_correction_generator = init_generator(enable_system_prompt=True)
+    text_to_sql_generator = init_generator(
+        system_prompt=text_to_sql_system_prompt_template
+    )
+    text_to_sql_with_followup_generator = init_generator(
+        system_prompt=text_to_sql_system_prompt_template
+    )
+    sql_correction_generator = init_generator(
+        system_prompt=text_to_sql_system_prompt_template
+    )
     sql_details_generator = init_ask_details_generator()
 
     SEMANTIC_SERVICE = SemanticsService(
