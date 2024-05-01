@@ -68,23 +68,20 @@ class Indexing(BasicPipeline):
         for model in mdl_json["models"]:
             columns = []
             for column in model["columns"]:
+                ddl_column = {
+                    "name": column["name"],
+                    "properties": column["properties"],
+                    "type": column["type"],
+                    "isCalculated": column["isCalculated"],
+                }
                 if "relationship" in column:
-                    columns.append(
-                        {
-                            "name": column["name"],
-                            "properties": column["properties"],
-                            "type": column["type"],
-                            "relationship": column["relationship"],
-                        }
-                    )
-                else:
-                    columns.append(
-                        {
-                            "name": column["name"],
-                            "properties": column["properties"],
-                            "type": column["type"],
-                        }
-                    )
+                    ddl_column["relationship"] = column["relationship"]
+                if "expression" in column:
+                    ddl_column["expression"] = column["expression"]
+                if column["isCalculated"]:
+                    ddl_column["isCalculated"] = column["isCalculated"]
+
+                columns.append(ddl_column)
 
             semantics["models"].append(
                 {

@@ -39,9 +39,11 @@ class CustomOpenAIGenerator(OpenAIGenerator):
 def init_generator(
     model_name: str = MODEL_NAME,
     generation_kwargs: Optional[Dict[str, Any]] = GENERATION_KWARGS,
+    system_prompt: Optional[str] = None,
 ):
     return CustomOpenAIGenerator(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
         model=model_name,
+        system_prompt=system_prompt,
         generation_kwargs=generation_kwargs,
     )

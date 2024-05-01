@@ -106,8 +106,6 @@ def classify_invalid_generation_results(
     for generation_result in generation_results:
         quoted_sql = add_quotes(generation_result["sql"])
 
-        logger.debug(f"Checking if SQL is executable: {quoted_sql}")
-
         response = requests.get(
             f"{api_endpoint}/v1/mdl/preview",
             json={
@@ -207,6 +205,11 @@ def generate_ddls_from_semantics(
                     comment = f"-- {json.dumps(column['properties'])}\n  "
                 else:
                     comment = ""
+                if column["isCalculated"]:
+                    comment = (
+                        comment
+                        + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
+                    )
                 column_name = column["name"]
                 column_type = column["type"]
                 column_ddl = f"{comment}{column_name} {column_type}"

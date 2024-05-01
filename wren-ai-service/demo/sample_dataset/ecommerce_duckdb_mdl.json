@@ -42,7 +42,7 @@
           "properties": {}
         }
       ],
-      "primaryKey": "",
+      "primaryKey": "Id",
       "cached": false,
       "refreshTime": "30.00m",
       "properties": {
@@ -244,7 +244,7 @@
           "properties": {}
         }
       ],
-      "primaryKey": "",
+      "primaryKey": "OrderId",
       "cached": false,
       "refreshTime": "30.00m",
       "properties": {
@@ -360,7 +360,7 @@
           "properties": {}
         }
       ],
-      "primaryKey": "",
+      "primaryKey": "Id",
       "cached": false,
       "refreshTime": "30.00m",
       "properties": {
