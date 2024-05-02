@@ -547,7 +547,16 @@
   "enumDefinitions": [],
   "metrics": [],
   "cumulativeMetrics": [],
-  "views": [],
+  "views": [
+    {
+      "name": "artist_track_count",
+      "statement": "SELECT \"a\".\"Name\", COUNT(\"t\".\"TrackId\") AS \"Track_Count\" FROM \"artist\" AS \"a\" JOIN \"album\" AS \"al\" ON \"a\".\"ArtistId\" = \"al\".\"ArtistId\" JOIN \"track\" AS \"t\" ON \"al\".\"AlbumId\" = \"t\".\"AlbumId\" GROUP BY \"a\".\"Name\"",
+      "properties": {
+        "question": "How many tracks does each artist have in the database?",
+        "description": "The breakdown simplifies the process of counting the number of tracks for each artist."
+      }
+    }
+  ],
   "macros": [],
   "dateSpine": {
     "unit": "DAY",
