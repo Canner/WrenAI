@@ -160,9 +160,7 @@ export class DiagramResolver {
     return {
       id: uuidv4(),
       columnId: column.id,
-      nodeType: column.isCalculated
-        ? NodeType.CALCULATED_FIELD
-        : NodeType.FIELD,
+      nodeType: NodeType.CALCULATED_FIELD,
       type: column.type,
       displayName: column.displayName,
       referenceName: column.referenceName,
