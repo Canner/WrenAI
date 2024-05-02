@@ -223,7 +223,11 @@ const getColumns = (
     : columns;
   return (
     <>
-      <ColumnIterator data={slicedColumns} highlight={data.highlight} />
+      <ColumnIterator
+        data={slicedColumns}
+        highlight={data.highlight}
+        modelId={data.originalData.modelId}
+      />
       {moreCount > 0 && <Column.MoreTip count={moreCount} />}
     </>
   );

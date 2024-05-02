@@ -7,12 +7,12 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
 import CalculatedFieldModal from '@/components/modals/CalculatedFieldModal';
+import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
-import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
 import { useDeleteViewMutation } from '@/apollo/client/graphql/view.generated';
@@ -27,6 +27,7 @@ import {
   useUpdateCalculatedFieldMutation,
   useDeleteCalculatedFieldMutation,
 } from '@/apollo/client/graphql/calculatedField.generated';
+import { editCalculatedField } from '@/utils/modelingHelper';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -188,21 +189,10 @@ export default function Modeling() {
       [MORE_ACTION.EDIT]: () => {
         switch (nodeType) {
           case NODE_TYPE.CALCULATED_FIELD:
-            // TODO: integrate with update calculated field modal
-            const sourceModel =
-              diagramData.models.find(
-                (model) => model.modelId === data.modelId,
-              ) || {};
-            calculatedFieldModal.openModal({
-              columnId: data.columnId,
-              name: data.referenceName,
-              expression: data.expression,
-              lineage: [],
-              payload: {
-                models: diagramData.models,
-                sourceModel,
-              },
-            });
+            editCalculatedField(
+              { ...payload, diagramData },
+              calculatedFieldModal.openModal,
+            );
             break;
           case NODE_TYPE.RELATION:
             console.log('edit relation');
