@@ -5,7 +5,7 @@ import {
   CreateCalculatedFieldData,
   UpdateCalculatedFieldData,
 } from '../models';
-import { IContext } from '../types';
+import { IContext, RelationData, UpdateRelationData } from '../types';
 import { getLogger } from '@server/utils';
 import { CompactTable } from '../connectors/connector';
 import { DeployResponse } from '../services/deployService';
@@ -53,6 +53,41 @@ export class ModelResolver {
     this.validateCalculatedField = this.validateCalculatedField.bind(this);
     this.updateCalculatedField = this.updateCalculatedField.bind(this);
     this.deleteCalculatedField = this.deleteCalculatedField.bind(this);
+
+    // relation
+    this.createRelation = this.createRelation.bind(this);
+    this.updateRelation = this.updateRelation.bind(this);
+    this.deleteRelation = this.deleteRelation.bind(this);
+  }
+
+  public async createRelation(
+    _root: any,
+    args: { data: RelationData },
+    ctx: IContext,
+  ) {
+    const { data } = args;
+    const relation = await ctx.modelService.createRelation(data);
+    return relation;
+  }
+
+  public async updateRelation(
+    _root: any,
+    args: { data: UpdateRelationData; where: { id: number } },
+    ctx: IContext,
+  ) {
+    const { data, where } = args;
+    const relation = await ctx.modelService.updateRelation(data, where.id);
+    return relation;
+  }
+
+  public async deleteRelation(
+    _root: any,
+    args: { where: { id: number } },
+    ctx: IContext,
+  ) {
+    const relationId = args.where.id;
+    await ctx.modelService.deleteRelation(relationId);
+    return true;
   }
 
   public async createCalculatedField(

@@ -5,6 +5,11 @@ export interface RelationData {
   toColumnId: number;
   type: RelationType;
 }
+
+export interface UpdateRelationData {
+  type: RelationType;
+}
+
 export interface AnalysisRelationInfo {
   name: string;
   fromModelId: number;

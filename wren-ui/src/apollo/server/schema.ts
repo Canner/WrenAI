@@ -49,6 +49,10 @@ export const typeDefs = gql`
     sampleDataset: SampleDatasetName
   }
 
+  input WhereIdInput {
+    id: Int!
+  }
+
   input DataSourceInput {
     type: DataSourceName!
     properties: JSON!
@@ -116,6 +120,10 @@ export const typeDefs = gql`
     fromColumnId: Int!
     toModelId: Int!
     toColumnId: Int!
+    type: RelationType!
+  }
+
+  input UpdateRelationInput {
     type: RelationType!
   }
 
@@ -595,6 +603,11 @@ export const typeDefs = gql`
       where: ModelWhereInput!
       data: UpdateModelMetadataInput!
     ): Boolean!
+
+    # Relation
+    createRelation(data: RelationInput!): JSON!
+    updateRelation(data: UpdateRelationInput!, where: WhereIdInput): JSON!
+    deleteRelation(where: WhereIdInput!): Boolean!
 
     # Calculated field
     createCalculatedField(data: CreateCalculatedFieldInput!): JSON!
