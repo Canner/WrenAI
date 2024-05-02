@@ -28,6 +28,7 @@ export interface SelectedRecommendRelations {
 interface Props {
   fetching: boolean;
   recommendRelations: SelectedRecommendRelations;
+  recommendNameMappping: Record<string, string>;
   onNext: (data: { relations: SelectedRecommendRelations }) => void;
   onBack: () => void;
   onSkip: () => void;
@@ -43,10 +44,18 @@ interface EditableRelationTableProps {
   }) => void;
   onDeleteRow: (modelName: string, selectedRelation: RelationsDataType) => void;
   relations: RelationsDataType[];
+  recommendNameMappping: Record<string, string>;
 }
 
 function EditableRelationTable(props: EditableRelationTableProps) {
-  const { index, modelName, onSetRelation, onDeleteRow, relations } = props;
+  const {
+    index,
+    modelName,
+    onSetRelation,
+    onDeleteRow,
+    relations,
+    recommendNameMappping,
+  } = props;
 
   const columns: ColumnsType<RelationsDataType> = [
     {
@@ -112,12 +121,12 @@ function EditableRelationTable(props: EditableRelationTableProps) {
       <ModelRelationSelectionTable
         columns={columns}
         dataSource={relations}
-        tableTitle={modelName}
+        tableTitle={recommendNameMappping[modelName]}
         extra={(onCollapseOpen) => (
           <Button
             onClick={(event) => {
               onSetRelation({ modelName });
-              onCollapseOpen(event, modelName);
+              onCollapseOpen(event, recommendNameMappping[modelName]);
             }}
             size="small"
             title="Add relationship"
@@ -135,8 +144,15 @@ function EditableRelationTable(props: EditableRelationTableProps) {
 }
 
 export default function DefineRelations(props: Props) {
-  const { fetching, recommendRelations, onBack, onNext, onSkip, submitting } =
-    props;
+  const {
+    fetching,
+    recommendRelations,
+    recommendNameMappping,
+    onBack,
+    onNext,
+    onSkip,
+    submitting,
+  } = props;
 
   const [relations, setRelations] =
     useState<SelectedRecommendRelations>(recommendRelations);
@@ -244,16 +260,19 @@ export default function DefineRelations(props: Props) {
         your data source. The relationships are then added to data models.
       </Text>
       <div className="my-6 text-center">
-        {Object.entries(relations).map(([modelName, relations = []], index) => (
-          <EditableRelationTable
-            key={`${modelName}-${relations.length}`}
-            index={index}
-            modelName={modelName}
-            relations={relations}
-            onSetRelation={onSetRelation}
-            onDeleteRow={onDeleteRow}
-          />
-        ))}
+        {Object.entries(relations).map(
+          ([modelReferenceName, relations = []], index) => (
+            <EditableRelationTable
+              key={`${modelReferenceName}-${relations.length}`}
+              index={index}
+              modelName={modelReferenceName}
+              relations={relations}
+              onSetRelation={onSetRelation}
+              onDeleteRow={onDeleteRow}
+              recommendNameMappping={recommendNameMappping}
+            />
+          ),
+        )}
         <Spin spinning={fetching} tip="Loading..." className="my-15" />
       </div>
       <Row gutter={16} className="pt-6">

@@ -8,7 +8,7 @@ export default function SetupRelationships() {
   const {
     fetching,
     stepKey,
-    recommendRelations,
+    recommendRelationsResult,
     onNext,
     onBack,
     onSkip,
@@ -22,7 +22,7 @@ export default function SetupRelationships() {
       <ContainerCard step={current.step} maxWidth={current.maxWidth}>
         <current.component
           fetching={fetching}
-          recommendRelations={recommendRelations}
+          {...recommendRelationsResult}
           onNext={onNext}
           onBack={onBack}
           onSkip={onSkip}

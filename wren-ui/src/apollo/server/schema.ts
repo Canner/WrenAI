@@ -83,9 +83,10 @@ export const typeDefs = gql`
     name: String!
   }
 
-  type RecommandRelations {
-    name: String!
+  type RecommendRelations {
     id: Int!
+    displayName: String!
+    referenceName: String!
     relations: [Relation]!
   }
 
@@ -473,7 +474,7 @@ export const typeDefs = gql`
   type Query {
     # On Boarding Steps
     listDataSourceTables: [CompactTable!]!
-    autoGenerateRelation: [RecommandRelations!]
+    autoGenerateRelation: [RecommendRelations!]!
     onboardingStatus: OnboardingStatusResponse!
 
     # Modeling Page

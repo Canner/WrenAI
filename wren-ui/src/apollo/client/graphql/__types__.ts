@@ -464,7 +464,7 @@ export type PreviewDataInput = {
 export type Query = {
   __typename?: 'Query';
   askingTask: AskingTask;
-  autoGenerateRelation?: Maybe<Array<RecommandRelations>>;
+  autoGenerateRelation: Array<RecommendRelations>;
   connectionInfo: ConnectionInfo;
   diagram: Diagram;
   listDataSourceTables: Array<CompactTable>;
@@ -512,10 +512,11 @@ export type QueryViewArgs = {
   where: ViewWhereUniqueInput;
 };
 
-export type RecommandRelations = {
-  __typename?: 'RecommandRelations';
+export type RecommendRelations = {
+  __typename?: 'RecommendRelations';
+  displayName: Scalars['String'];
   id: Scalars['Int'];
-  name: Scalars['String'];
+  referenceName: Scalars['String'];
   relations: Array<Maybe<Relation>>;
 };
 
