@@ -5,13 +5,17 @@ import { omit } from 'lodash';
 import { ERROR_TEXTS } from '@/utils/error';
 import { DiagramModel } from '@/utils/data/type';
 import { ModalAction } from '@/hooks/useModalAction';
-import { lineageSelectorValidator } from '@/utils/validator';
+import {
+  createLineageSelectorNameValidator,
+  lineageSelectorValidator,
+} from '@/utils/validator';
 import { FieldValue } from '@/components/selectors/lineageSelector/FieldSelect';
 import useExpressionFieldOptions from '@/hooks/useExpressionFieldOptions';
 import LineageSelector, {
   getLineageOptions,
 } from '@/components/selectors/lineageSelector';
 import DescriptiveSelector from '@/components/selectors/DescriptiveSelector';
+import { useValidateCalculatedFieldMutation } from '@/apollo/client/graphql/calculatedField.generated';
 
 export type CalculatedFieldValue = {
   [key: string]: any;
@@ -41,6 +45,21 @@ export default function AddCalculatedFieldModal(props: Props) {
   const sourceModel = useMemo(
     () => defaultValue?.payload?.sourceModel,
     [defaultValue],
+  );
+
+  const [validateCalculatedField] = useValidateCalculatedFieldMutation();
+  const validateCalculatedFieldName = useCallback(
+    async (name: string) =>
+      await validateCalculatedField({
+        variables: {
+          data: {
+            name,
+            modelId: sourceModel.modelId,
+            columnId: defaultValue?.columnId,
+          },
+        },
+      }),
+    [sourceModel, defaultValue],
   );
 
   useEffect(() => {
@@ -114,8 +133,9 @@ export default function AddCalculatedFieldModal(props: Props) {
           required
           rules={[
             {
-              required: true,
-              message: ERROR_TEXTS.CALCULATED_FIELD.NAME.REQUIRED,
+              validator: createLineageSelectorNameValidator(
+                validateCalculatedFieldName,
+              ),
             },
           ]}
         >
@@ -155,9 +175,7 @@ export default function AddCalculatedFieldModal(props: Props) {
           name="lineage"
           rules={[
             {
-              validator: lineageSelectorValidator(
-                ERROR_TEXTS.CALCULATED_FIELD.LINEAGE,
-              ),
+              validator: lineageSelectorValidator,
             },
           ]}
         >
