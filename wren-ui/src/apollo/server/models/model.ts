@@ -20,3 +20,27 @@ export interface UpdateModelData {
   fields: [string];
   primaryKey: string;
 }
+
+export interface ColumnMetadataInput {
+  id: number;
+  displayName: string;
+  description: string;
+}
+
+export interface CalculatedFieldMetadataInput {
+  id: number;
+  description: string;
+}
+
+export interface RelationshipMetadataInput {
+  id: number;
+  description: string;
+}
+
+export interface UpdateModelMetadataInput {
+  displayName: string;
+  description: string;
+  columns: Array<ColumnMetadataInput>;
+  calculatedFields: Array<CalculatedFieldMetadataInput>;
+  relationships: Array<RelationshipMetadataInput>;
+}

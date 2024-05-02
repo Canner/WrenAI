@@ -51,6 +51,7 @@ const resolvers = {
     createModel: modelResolver.createModel,
     updateModel: modelResolver.updateModel,
     deleteModel: modelResolver.deleteModel,
+    updateModelMetadata: modelResolver.updateModelMetadata,
 
     // Ask
     createAskingTask: askingResolver.createAskingTask,
