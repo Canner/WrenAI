@@ -1,6 +1,7 @@
 import { useContext } from 'react';
 import { Typography } from 'antd';
 import FieldTable from '@/components/table/FieldTable';
+import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
 import RelationTable from '@/components/table/RelationTable';
 import { makeEditableBaseTable } from '@/components/table/EditableBaseTable';
 import { COLUMN } from '@/components/table/BaseTable';
@@ -24,11 +25,14 @@ export default function EditModelMetadata(props: Props) {
     displayName,
     referenceName,
     fields = [],
+    calculatedFields = [],
     relationFields = [],
     description,
   } = props || {};
 
   const FieldEditableTable = makeEditableBaseTable(FieldTable);
+  const CalculatedFieldEditableTable =
+    makeEditableBaseTable(CalculatedFieldTable);
   const RelationshipEditableTable = makeEditableBaseTable(RelationTable);
 
   const form = useContext(EditableContext);
@@ -68,29 +72,48 @@ export default function EditModelMetadata(props: Props) {
           columns={[
             COLUMN.REFERENCE_NAME,
             COLUMN.ALIAS,
-            COLUMN.TYPE,
-            COLUMN.DESCRIPTION,
+            { ...COLUMN.TYPE, width: 150 },
+            { ...COLUMN.DESCRIPTION, width: 280 },
           ]}
           onChange={handleMetadataChange('fields')}
         />
       </div>
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          Relationships ({relationFields.length})
-        </Typography.Text>
-        <RelationshipEditableTable
-          dataSource={relationFields}
-          columns={[
-            COLUMN.REFERENCE_NAME,
-            COLUMN.RELATION_FROM,
-            COLUMN.RELATION_TO,
-            COLUMN.RELATION,
-            COLUMN.DESCRIPTION,
-          ]}
-          onChange={handleMetadataChange('relationFields')}
-        />
-      </div>
+      {!!calculatedFields.length && (
+        <div className="mb-6">
+          <Typography.Text className="d-block gray-7 mb-2">
+            Calculated fields ({calculatedFields.length})
+          </Typography.Text>
+          <CalculatedFieldEditableTable
+            dataSource={calculatedFields}
+            columns={[
+              { ...COLUMN.REFERENCE_NAME, width: 160 },
+              COLUMN.EXPRESSION,
+              { ...COLUMN.DESCRIPTION, width: 280 },
+            ]}
+            onChange={handleMetadataChange('calculatedFields')}
+          />
+        </div>
+      )}
+
+      {!!relationFields.length && (
+        <div className="mb-6">
+          <Typography.Text className="d-block gray-7 mb-2">
+            Relationships ({relationFields.length})
+          </Typography.Text>
+          <RelationshipEditableTable
+            dataSource={relationFields}
+            columns={[
+              COLUMN.REFERENCE_NAME,
+              COLUMN.RELATION_FROM,
+              COLUMN.RELATION_TO,
+              { ...COLUMN.RELATION, width: 130 },
+              { ...COLUMN.DESCRIPTION, width: 200 },
+            ]}
+            onChange={handleMetadataChange('relationFields')}
+          />
+        </div>
+      )}
     </>
   );
 }

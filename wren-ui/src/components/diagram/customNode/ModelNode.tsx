@@ -54,8 +54,6 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
     });
   };
 
-  const hasRelationships = !!data.originalData.relationFields.length;
-  const hasCalculatedFields = !!data.originalData.calculatedFields.length;
   const renderColumns = useCallback(
     (columns: ComposeDiagramField[]) =>
       getColumns(columns, data, { limit: Config.columnsLimit }),
@@ -84,7 +82,7 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         <Column.Title show={true}>Columns</Column.Title>
         {renderColumns([...data.originalData.fields])}
         <Column.Title
-          show={hasCalculatedFields}
+          show={true}
           extra={
             <AddButton
               className="gray-8"
@@ -97,7 +95,7 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         </Column.Title>
         {renderColumns(data.originalData.calculatedFields)}
         <Column.Title
-          show={hasRelationships}
+          show={true}
           extra={
             <AddButton
               className="gray-8"

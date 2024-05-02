@@ -6,6 +6,7 @@ import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
+import CalculatedFieldModal from '@/components/modals/CalculatedFieldModal';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
 import { ClickPayload } from '@/components/diagram/Context';
@@ -62,6 +63,7 @@ export default function Modeling() {
   const metadataDrawer = useDrawerAction();
   const modelDrawer = useDrawerAction();
   const editMetadataModal = useModalAction();
+  const calculatedFieldModal = useModalAction();
 
   const onSelect = (selectKeys) => {
     if (diagramRef.current) {
@@ -97,7 +99,20 @@ export default function Modeling() {
       [MORE_ACTION.EDIT]: () => {
         switch (nodeType) {
           case NODE_TYPE.CALCULATED_FIELD:
-            console.log('edit calculated field');
+            // TODO: integrate with update calculated field modal
+            const sourceModel =
+              diagramData.models.find(
+                (model) => model.modelId === data.modelId,
+              ) || {};
+            calculatedFieldModal.openModal({
+              name: data.referenceName,
+              expression: '',
+              lineage: [],
+              payload: {
+                models: diagramData.models,
+                sourceModel,
+              },
+            });
             break;
           case NODE_TYPE.RELATION:
             console.log('edit relation');
@@ -138,10 +153,15 @@ export default function Modeling() {
   };
 
   const onAddClick = (payload) => {
-    const { targetNodeType } = payload;
+    const { targetNodeType, data } = payload;
     switch (targetNodeType) {
       case NODE_TYPE.CALCULATED_FIELD:
-        console.log('add calculated field');
+        calculatedFieldModal.openModal({
+          payload: {
+            models: diagramData.models,
+            sourceModel: data,
+          },
+        });
         break;
       case NODE_TYPE.RELATION:
         console.log('add relation');
@@ -186,6 +206,13 @@ export default function Modeling() {
         <ModelDrawer
           {...modelDrawer.state}
           onClose={modelDrawer.closeDrawer}
+          onSubmit={async (values) => {
+            console.log(values);
+          }}
+        />
+        <CalculatedFieldModal
+          {...calculatedFieldModal.state}
+          onClose={calculatedFieldModal.closeModal}
           onSubmit={async (values) => {
             console.log(values);
           }}

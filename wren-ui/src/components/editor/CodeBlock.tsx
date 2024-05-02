@@ -9,18 +9,22 @@ const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
   white-space: pre;
   font-size: 14px;
   border: 1px var(--gray-4) solid;
+  border-radius: 4px;
   ${(props) =>
     props.inline
-      ? `display: inline; border: none; background: transparent !important; padding: 0;`
+      ? `
+      display: inline; border: none; background: transparent !important; padding: 0;
+      * { display: inline !important; }
+      `
       : `background: var(--gray-1); padding: 8px;`}
 
   .adm-code-wrap {
-    overflow: auto;
+    ${(props) => (props.inline ? '' : 'overflow: auto;')}
     ${(props) => (props.maxHeight ? `max-height: ${props.maxHeight}px;` : ``)}
   }
 
   .adm-code-line {
-    ${(props) => (props.inline ? '' : 'display: block;')}
+    display: block;
     &-number {
       user-select: none;
       display: inline-block;
@@ -78,7 +82,7 @@ export default function CodeBlock(props: Props) {
     addThemeStyleManually(cssText);
   }, []);
 
-  const lines = code.split('\n').map((line, index) => {
+  const lines = (code || '').split('\n').map((line, index) => {
     const tokens = tokenizer.getLineTokens(line).tokens;
     const children = tokens.map((token, index) => {
       const classNames = token.type.split('.').map((name) => `ace_${name}`);
