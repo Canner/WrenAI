@@ -16,6 +16,7 @@ import LineageSelector, {
 } from '@/components/selectors/lineageSelector';
 import DescriptiveSelector from '@/components/selectors/DescriptiveSelector';
 import { useValidateCalculatedFieldMutation } from '@/apollo/client/graphql/calculatedField.generated';
+import { CreateCalculatedFieldInput } from '@/apollo/client/graphql/__types__';
 
 export type CalculatedFieldValue = {
   [key: string]: any;
@@ -29,7 +30,7 @@ export type CalculatedFieldValue = {
   };
 };
 
-type Props = ModalAction<CalculatedFieldValue> & {
+type Props = ModalAction<CalculatedFieldValue, CreateCalculatedFieldInput> & {
   loading?: boolean;
 };
 
@@ -83,11 +84,13 @@ export default function AddCalculatedFieldModal(props: Props) {
       .validateFields()
       .then(async (values) => {
         await onSubmit({
-          ...values,
-          sourceModel: {
-            modelId: sourceModel.modelId,
-            referenceName: sourceModel.referenceName,
-          },
+          modelId: sourceModel.modelId,
+          expression: values.expression,
+          name: values.name,
+          // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId
+          lineage: values.lineage.map(
+            (field) => field.relationId || field.columnId,
+          ),
         });
         onClose();
       })

@@ -22,6 +22,7 @@ import {
   useUpdateModelMutation,
 } from '@/apollo/client/graphql/model.generated';
 import { useUpdateModelMetadataMutation } from '@/apollo/client/graphql/metadata.generated';
+import { useCreateCalculatedFieldMutation } from '@/apollo/client/graphql/calculatedField.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -63,6 +64,15 @@ export default function Modeling() {
       },
     };
   };
+
+  const [createCalculatedField, { loading: calculatedFieldCreating }] =
+    useCreateCalculatedFieldMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully created calculated field.');
+        },
+      }),
+    );
 
   const [createModelMutation, createModelResult] = useCreateModelMutation(
     getBaseOptions({
@@ -230,6 +240,8 @@ export default function Modeling() {
     }
   };
 
+  const calculatedFieldLoading = calculatedFieldCreating;
+
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
       <SiderLayout
@@ -276,8 +288,9 @@ export default function Modeling() {
         <CalculatedFieldModal
           {...calculatedFieldModal.state}
           onClose={calculatedFieldModal.closeModal}
+          loading={calculatedFieldLoading}
           onSubmit={async (values) => {
-            console.log(values);
+            await createCalculatedField({ variables: { data: values } });
           }}
         />
       </SiderLayout>
