@@ -70,4 +70,5 @@ export interface DiagramModelRelationField {
   fromColumnName: string;
   toModelName: string;
   toColumnName: string;
+  description: string;
 }

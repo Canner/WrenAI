@@ -13,6 +13,7 @@ export interface Relation {
   condition: string; // Join condition, ex: "OrdersModel.custkey = CustomerModel.custkey"
   fromColumnId: number; // from column id, "{fromColumn} {joinType} {toColumn}"
   toColumnId: number; // to column id, "{fromColumn} {joinType} {toColumn}"
+  properties: string | null; // Model properties, a json string, the description should be stored here
 }
 
 export interface ExtraRelationInfo {
@@ -29,6 +30,10 @@ export type RelationInfo = Relation & ExtraRelationInfo;
 export interface IRelationRepository extends IBasicRepository<Relation> {
   findRelationsBy(
     filter: { columnIds?: number[]; modelIds?: number[] },
+    queryOptions?: IQueryOptions,
+  ): Promise<Relation[]>;
+  findRelationsByIds(
+    ids: number[],
     queryOptions?: IQueryOptions,
   ): Promise<Relation[]>;
   deleteRelationsByColumnIds(
@@ -94,6 +99,20 @@ export class RelationRepository
     );
     return result.map((r) => this.transformFromDBData(r));
   }
+
+  public async findRelationsByIds(ids: number[], queryOptions?: IQueryOptions) {
+    let executer = this.knex;
+    if (queryOptions && queryOptions.tx) {
+      const { tx } = queryOptions;
+      executer = tx;
+    }
+
+    const result = await executer(this.tableName)
+      .whereIn('id', ids)
+      .select('*');
+    return result.map((r) => this.transformFromDBData(r));
+  }
+
   public async deleteRelationsByColumnIds(
     columnIds: number[],
     queryOptions?: IQueryOptions,

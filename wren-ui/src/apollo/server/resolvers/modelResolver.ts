@@ -1,5 +1,9 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
-import { CreateModelData, UpdateModelData } from '../models';
+import {
+  CreateModelData,
+  UpdateModelData,
+  UpdateModelMetadataInput,
+} from '../models';
 import { Project } from '../repositories';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
@@ -30,6 +34,7 @@ export class ModelResolver {
     this.createModel = this.createModel.bind(this);
     this.updateModel = this.updateModel.bind(this);
     this.deleteModel = this.deleteModel.bind(this);
+    this.updateModelMetadata = this.updateModelMetadata.bind(this);
     this.deploy = this.deploy.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
 
@@ -120,7 +125,9 @@ export class ModelResolver {
     relations = relations.map((r) => ({
       ...r,
       type: r.joinType,
+      properties: r.properties ? JSON.parse(r.properties) : {},
     }));
+
     return {
       ...model,
       fields: modelColumns.filter((c) => !c.isCalculated),
@@ -211,6 +218,126 @@ export class ModelResolver {
     await ctx.relationRepository.deleteRelationsByColumnIds(columnIds);
     await ctx.modelColumnRepository.deleteMany(columnIds);
     await ctx.modelRepository.deleteOne(modelId);
+    return true;
+  }
+
+  // update model metadata
+  public async updateModelMetadata(
+    _root: any,
+    args: { where: { id: number }; data: UpdateModelMetadataInput },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const modelId = args.where.id;
+    const data = args.data;
+
+    // check if model exists
+    const model = await ctx.modelRepository.findOneBy({ id: modelId });
+    if (!model) {
+      throw new Error('Model not found');
+    }
+
+    // update model metadata
+    const modelMetadata: any = {};
+
+    if (data.displayName) {
+      modelMetadata.displayName = data.displayName;
+    }
+
+    // check if description is empty
+    // if description is empty, skip the update
+    // if description is not empty, update the description in model properties
+    if (data.description) {
+      const properties = JSON.parse(model.properties);
+      properties.description = data.description;
+      modelMetadata.properties = JSON.stringify(properties);
+    }
+
+    if (!isEmpty(modelMetadata)) {
+      await ctx.modelRepository.updateOne(modelId, modelMetadata);
+    }
+
+    // todo: considering using update ... from statement to do a batch update
+    // update column metadata
+    if (!isEmpty(data.columns)) {
+      // find the columns that match the user requested columns
+      const columnIds = data.columns.map((c) => c.id);
+      const modelColumns =
+        await ctx.modelColumnRepository.findColumnsByIds(columnIds);
+      for (const col of modelColumns) {
+        const requestedMetadata = data.columns.find((c) => c.id === col.id);
+
+        // update metadata
+        const columnMetadata: any = {};
+
+        if (requestedMetadata.displayName) {
+          columnMetadata.displayName = requestedMetadata.displayName;
+        }
+
+        // check if description is empty
+        // if description is empty, skip the update
+        // if description is not empty, update the description in properties
+        if (requestedMetadata.description) {
+          const properties = col.properties ? JSON.parse(col.properties) : {};
+          properties.description = requestedMetadata.description;
+          columnMetadata.properties = JSON.stringify(properties);
+        }
+
+        if (!isEmpty(columnMetadata)) {
+          await ctx.modelColumnRepository.updateOne(col.id, columnMetadata);
+        }
+      }
+    }
+
+    // update calculated field metadata
+    if (!isEmpty(data.calculatedFields)) {
+      const calculatedFieldIds = data.calculatedFields.map((c) => c.id);
+      const modelColumns =
+        await ctx.modelColumnRepository.findColumnsByIds(calculatedFieldIds);
+      for (const col of modelColumns) {
+        const requestedMetadata = data.calculatedFields.find(
+          (c) => c.id === col.id,
+        );
+
+        const columnMetadata: any = {};
+        // check if description is empty
+        // if description is empty, skip the update
+        // if description is not empty, update the description in properties
+        if (requestedMetadata.description) {
+          const properties = col.properties ? JSON.parse(col.properties) : {};
+          properties.description = requestedMetadata.description;
+          columnMetadata.properties = JSON.stringify(properties);
+        }
+
+        if (!isEmpty(columnMetadata)) {
+          await ctx.modelColumnRepository.updateOne(col.id, columnMetadata);
+        }
+      }
+    }
+
+    // update relationship metadata
+    if (!isEmpty(data.relationships)) {
+      const relationshipIds = data.relationships.map((r) => r.id);
+      const relationships =
+        await ctx.relationRepository.findRelationsByIds(relationshipIds);
+      for (const rel of relationships) {
+        const requestedMetadata = data.relationships.find(
+          (r) => r.id === rel.id,
+        );
+
+        const relationMetadata: any = {};
+
+        if (requestedMetadata.description) {
+          const properties = rel.properties ? JSON.parse(rel.properties) : {};
+          properties.description = requestedMetadata.description;
+          relationMetadata.properties = JSON.stringify(properties);
+        }
+
+        if (!isEmpty(relationMetadata)) {
+          await ctx.relationRepository.updateOne(rel.id, relationMetadata);
+        }
+      }
+    }
+
     return true;
   }
 

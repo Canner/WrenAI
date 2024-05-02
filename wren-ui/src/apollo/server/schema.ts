@@ -138,6 +138,31 @@ export const typeDefs = gql`
     primaryKey: String
   }
 
+  # Metadata related
+  input UpdateColumnMetadataInput {
+    id: Int!
+    displayName: String
+    description: String
+  }
+
+  input UpdateCalculatedFieldMetadataInput {
+    id: Int!
+    description: String
+  }
+
+  input UpdateRelationshipMetadataInput {
+    id: Int!
+    description: String
+  }
+
+  input UpdateModelMetadataInput {
+    displayName: String # Model display name, i,e, the alias of the model
+    description: String # Model description
+    columns: [UpdateColumnMetadataInput!] # Update column metadata
+    calculatedFields: [UpdateCalculatedFieldMetadataInput!] # Update calculated field metadata
+    relationships: [UpdateRelationshipMetadataInput!] # Update relationship metadata
+  }
+
   type FieldInfo {
     id: Int!
     displayName: String!
@@ -182,6 +207,7 @@ export const typeDefs = gql`
     toColumnId: Int!
     type: RelationType!
     name: String!
+    properties: JSON!
   }
 
   type DetailedModel {
@@ -513,6 +539,12 @@ export const typeDefs = gql`
     createModel(data: CreateModelInput!): JSON!
     updateModel(where: ModelWhereInput!, data: UpdateModelInput!): JSON!
     deleteModel(where: ModelWhereInput!): Boolean!
+
+    # Metadata
+    updateModelMetadata(
+      where: ModelWhereInput!
+      data: UpdateModelMetadataInput!
+    ): Boolean!
 
     # View
     createView(data: CreateViewInput!): ViewInfo!

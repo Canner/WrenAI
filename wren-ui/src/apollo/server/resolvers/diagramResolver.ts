@@ -140,6 +140,7 @@ export class DiagramResolver {
     const displayName = models.find(
       (model) => model.referenceName === referenceName,
     )?.displayName;
+    const properties = JSON.parse(relation.properties);
     return {
       id: uuidv4(),
       relationId: relation.id,
@@ -151,6 +152,7 @@ export class DiagramResolver {
       fromColumnName: relation.fromColumnName,
       toModelName: relation.toModelName,
       toColumnName: relation.toColumnName,
+      description: properties?.description || '',
     };
   }
 
