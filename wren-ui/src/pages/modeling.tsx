@@ -25,6 +25,7 @@ import { useUpdateModelMetadataMutation } from '@/apollo/client/graphql/metadata
 import {
   useCreateCalculatedFieldMutation,
   useUpdateCalculatedFieldMutation,
+  useDeleteCalculatedFieldMutation,
 } from '@/apollo/client/graphql/calculatedField.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
@@ -81,6 +82,14 @@ export default function Modeling() {
     getBaseOptions({
       onCompleted: () => {
         message.success('Successfully updated calculated field.');
+      },
+    }),
+  );
+
+  const [deleteCalculatedField] = useDeleteCalculatedFieldMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully deleted calculated field.');
       },
     }),
   );
@@ -212,7 +221,9 @@ export default function Modeling() {
             });
             break;
           case NODE_TYPE.CALCULATED_FIELD:
-            console.log('delete calculated field');
+            await deleteCalculatedField({
+              variables: { where: { id: data.columnId } },
+            });
             break;
           case NODE_TYPE.RELATION:
             console.log('delete relation');
