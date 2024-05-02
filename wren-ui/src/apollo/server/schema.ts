@@ -612,8 +612,8 @@ export const typeDefs = gql`
     # Calculated field
     createCalculatedField(data: CreateCalculatedFieldInput!): JSON!
     updateCalculatedField(
+      where: UpdateCalculatedFieldWhere!
       data: UpdateCalculatedFieldInput!
-      where: UpdateCalculatedFieldWhere
     ): JSON!
     deleteCalculatedField(where: UpdateCalculatedFieldWhere): Boolean!
     validateCalculatedField(

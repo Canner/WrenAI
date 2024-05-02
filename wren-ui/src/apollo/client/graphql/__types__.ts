@@ -474,7 +474,7 @@ export type MutationStartSampleDatasetArgs = {
 
 export type MutationUpdateCalculatedFieldArgs = {
   data: UpdateCalculatedFieldInput;
-  where?: InputMaybe<UpdateCalculatedFieldWhere>;
+  where: UpdateCalculatedFieldWhere;
 };
 
 
