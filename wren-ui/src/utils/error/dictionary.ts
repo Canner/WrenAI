@@ -81,6 +81,7 @@ export const ERROR_TEXTS = {
     },
     LINEAGE: {
       REQUIRED: 'Please select a field.',
+      INVALID_STRING_TYPE: 'Please select a string type field.',
     },
   },
 };

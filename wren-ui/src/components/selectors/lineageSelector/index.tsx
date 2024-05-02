@@ -16,6 +16,8 @@ import {
 } from 'antd/lib/form/context';
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
+import { ExpressionName } from '@/apollo/client/graphql/__types__';
+import { checkStringFunctionAllowType } from '@/utils/validator';
 
 interface Props {
   sourceModel: DiagramModel;
@@ -86,10 +88,12 @@ export default function LineageSelector(props: Props) {
   );
 }
 
-export const getLineageOptions = (
-  model: DiagramModel,
-  values: FieldValue[] = [],
-) => {
+export const getLineageOptions = (data: {
+  model: DiagramModel;
+  expression: ExpressionName;
+  values: FieldValue[];
+}) => {
+  const { model, expression, values = [] } = data;
   const hasPrimaryKey = model.fields.some((field) => field.isPrimaryKey);
 
   const convertor = (field) => {
@@ -105,14 +109,24 @@ export const getLineageOptions = (
     // The relationship options available only if the model has a primary key
     const isRelationshipWithoutPrimaryKey = isRelationship && !hasPrimaryKey;
 
+    // check if the field type is valid for the expression
+    let isInvalidType = false;
+    let invalidTypeMessage = '';
+    if (!checkStringFunctionAllowType(expression, value)) {
+      isInvalidType = true;
+      invalidTypeMessage = 'Please select a string type field.';
+    }
+
     return {
       label: (
         <div className="d-flex align-center">
           {getNodeTypeIcon(
             { nodeType: field.nodeType, type: field.type },
-            { className: 'mr-1 flex-shrink-0' },
+            { className: 'mr-1 flex-shrink-0', title: field.type },
           )}
-          {field.displayName}
+          <div title={field.displayName} className="text-truncate">
+            {field.displayName}
+          </div>
         </div>
       ),
       value,
@@ -120,8 +134,13 @@ export const getLineageOptions = (
         ? 'Please set a primary key within this model to use it in a calculated field.'
         : isInUsedRelationship
           ? 'This relationship is in use.'
-          : undefined,
-      disabled: isRelationshipWithoutPrimaryKey || isInUsedRelationship,
+          : isInvalidType
+            ? invalidTypeMessage
+            : undefined,
+      disabled:
+        isRelationshipWithoutPrimaryKey ||
+        isInUsedRelationship ||
+        isInvalidType,
     };
   };
   const fields = [...(model?.fields || [])].map(convertor);

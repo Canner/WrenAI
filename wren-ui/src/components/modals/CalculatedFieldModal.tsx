@@ -7,7 +7,7 @@ import { DiagramModel } from '@/utils/data/type';
 import { ModalAction } from '@/hooks/useModalAction';
 import {
   createLineageSelectorNameValidator,
-  lineageSelectorValidator,
+  createLineageSelectorValidator,
 } from '@/utils/validator';
 import { FieldValue } from '@/components/selectors/lineageSelector/FieldSelect';
 import useExpressionFieldOptions from '@/hooks/useExpressionFieldOptions';
@@ -41,6 +41,7 @@ export default function AddCalculatedFieldModal(props: Props) {
   const { visible, loading, onSubmit, onClose, defaultValue } = props;
 
   const [form] = Form.useForm();
+  const expression = Form.useWatch('expression', form);
   const lineage = Form.useWatch('lineage', form);
 
   const expressionOptions = useExpressionFieldOptions();
@@ -77,9 +78,13 @@ export default function AddCalculatedFieldModal(props: Props) {
         (model) => model.referenceName === value.referenceName,
       );
       // use current model options when initial
-      return getLineageOptions(selectedModel, lineage);
+      return getLineageOptions({
+        model: selectedModel,
+        expression,
+        values: lineage,
+      });
     },
-    [models, lineage],
+    [models, lineage, expression],
   );
 
   const submit = () => {
@@ -181,19 +186,21 @@ export default function AddCalculatedFieldModal(props: Props) {
           />
         </Form.Item>
         <div className="py-1" />
-        <Form.Item
-          name="lineage"
-          rules={[
-            {
-              validator: lineageSelectorValidator,
-            },
-          ]}
-        >
-          <LineageSelector
-            sourceModel={sourceModel}
-            onFetchOptions={fetchOptions}
-          />
-        </Form.Item>
+        {!!expression && (
+          <Form.Item
+            name="lineage"
+            rules={[
+              {
+                validator: createLineageSelectorValidator(expression),
+              },
+            ]}
+          >
+            <LineageSelector
+              sourceModel={sourceModel}
+              onFetchOptions={fetchOptions}
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   );

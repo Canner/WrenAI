@@ -62,7 +62,6 @@ export interface FieldValue {
   type?: string;
   relationId?: number;
   columnId?: number;
-  modelId?: number;
 }
 
 type Props = FieldValue & {
@@ -71,15 +70,14 @@ type Props = FieldValue & {
   onFetchOptions?: (item: any, index: number) => Promise<FieldOption[]>;
 };
 
-export const getFieldValue = (field) => {
+export const getFieldValue = (field): FieldValue => {
   return {
-    nodeType: field?.nodeType,
+    nodeType: field.nodeType,
     referenceName: field.referenceName,
     displayName: field.displayName,
     type: field.type,
     relationId: field?.relationId,
     columnId: field?.columnId,
-    modelId: field?.modelId,
   };
 };
 
