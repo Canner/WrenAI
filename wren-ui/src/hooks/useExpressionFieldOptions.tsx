@@ -1,39 +1,39 @@
+import { ExpressionName } from '@/apollo/client/graphql/__types__';
+import { getExpressionTexts } from '@/utils/data';
+import {
+  aggregations,
+  mathFunctions,
+  stringFunctions,
+} from '@/utils/expressionType';
 import { useMemo } from 'react';
 
 export default function useExpressionFieldOptions() {
   const expressionOptions = useMemo(() => {
+    const convertor = (name: ExpressionName) => {
+      const texts = getExpressionTexts(name);
+      return {
+        label: texts.name,
+        value: name,
+        content: {
+          title: texts.syntax,
+          description: texts.description,
+          expression: texts.syntax,
+        },
+      };
+    };
+
     return [
       {
         label: 'Aggregation',
-        options: [
-          {
-            label: 'Sum',
-            value: 'sum',
-            content: {
-              title: 'Sum(column)',
-              description: 'Adds up all the value of the column.',
-              expression: 'Sum([order.price])',
-            },
-          },
-          {
-            label: 'Average',
-            value: 'average',
-            content: {
-              title: 'Average(column)',
-              description: 'Adds up all the value of the column.',
-              expression: 'Average([order.price])',
-            },
-          },
-          {
-            label: 'Count',
-            value: 'count',
-            content: {
-              title: 'Count(column)',
-              description: 'Adds up all the value of the column.',
-              expression: 'count([order.price])',
-            },
-          },
-        ],
+        options: aggregations.map(convertor),
+      },
+      {
+        label: 'Math functions',
+        options: mathFunctions.map(convertor),
+      },
+      {
+        label: 'String functions',
+        options: stringFunctions.map(convertor),
       },
     ];
   }, []);
