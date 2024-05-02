@@ -1,9 +1,9 @@
+import { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { NODE_TYPE } from '@/utils/enum';
 import { ModelIcon } from '@/utils/icons';
 import { IterableComponent } from '@/utils/iteration';
 import Selector, { Option } from '@/components/selectors/Selector';
-import { useState } from 'react';
 
 const FieldBox = styled.div`
   user-select: none;
@@ -99,10 +99,19 @@ export default function FieldSelect(props: IterableComponent<Props>) {
   ].includes(nodeType);
   const [options, setOptions] = useState([]);
 
-  const onDropdownVisibleChange = async (open: boolean) => {
-    if (!open) return;
+  const getOptions = async () => {
     const result = onFetchOptions && (await onFetchOptions(props, index));
     setOptions(result || []);
+  };
+
+  // Get options when field select has value at the beginning (edit mode)
+  useEffect(() => {
+    if (selectedValue) getOptions();
+  }, []);
+
+  const onDropdownVisibleChange = async (open: boolean) => {
+    if (!open) return;
+    getOptions();
   };
 
   return isModelOrRelationshipNode ? (
