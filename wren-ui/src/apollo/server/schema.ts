@@ -366,6 +366,8 @@ export const typeDefs = gql`
     description: String
     isPrimaryKey: Boolean!
     expression: String
+    aggregation: String
+    lineage: [Int!]
   }
 
   type DiagramModelRelationField {

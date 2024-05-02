@@ -309,7 +309,7 @@ export class ProjectResolver {
       )?.id;
       if (!fromModelId || !toModelId) {
         throw new Error(
-          `Model not found, fromModelName "${fromModelName}" to toModelname: "${toModelName}"`,
+          `Model not found, fromModelName "${fromModelName}" to toModelName: "${toModelName}"`,
         );
       }
 

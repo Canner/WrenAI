@@ -216,12 +216,14 @@ export type DiagramModel = {
 
 export type DiagramModelField = {
   __typename?: 'DiagramModelField';
+  aggregation?: Maybe<Scalars['String']>;
   columnId: Scalars['Int'];
   description?: Maybe<Scalars['String']>;
   displayName: Scalars['String'];
   expression?: Maybe<Scalars['String']>;
   id: Scalars['String'];
   isPrimaryKey: Scalars['Boolean'];
+  lineage?: Maybe<Array<Scalars['Int']>>;
   nodeType: NodeType;
   referenceName: Scalars['String'];
   type: Scalars['String'];
