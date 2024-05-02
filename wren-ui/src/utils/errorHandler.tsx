@@ -161,6 +161,33 @@ class UpdateModelMetdataErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateCalculatedFieldErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create calculated field.';
+    }
+  }
+}
+
+class UpdateCalculatedFieldErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update calculated field.';
+    }
+  }
+}
+
+class DeleteCalculatedFieldErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete calculated field.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -177,6 +204,18 @@ errorHandlers.set('CreateModel', new CreateModelErrorHandler());
 errorHandlers.set('UpdateModel', new UpdateModelErrorHandler());
 errorHandlers.set('DeleteModel', new DeleteModelErrorHandler());
 errorHandlers.set('UpdateModelMetadata', new UpdateModelMetdataErrorHandler());
+errorHandlers.set(
+  'CreateCalculatedField',
+  new CreateCalculatedFieldErrorHandler(),
+);
+errorHandlers.set(
+  'UpdateCalculatedField',
+  new UpdateCalculatedFieldErrorHandler(),
+);
+errorHandlers.set(
+  'DeleteCalculatedField',
+  new DeleteCalculatedFieldErrorHandler(),
+);
 
 const errorHandler = (error: ErrorResponse) => {
   const operationName = error?.operation?.operationName || '';
