@@ -12,10 +12,15 @@ import useModalAction from '@/hooks/useModalAction';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
+import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
 import { useDeleteViewMutation } from '@/apollo/client/graphql/view.generated';
-import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
+import {
+  useCreateModelMutation,
+  useDeleteModelMutation,
+  useUpdateModelMutation,
+} from '@/apollo/client/graphql/model.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -43,17 +48,52 @@ export default function Modeling() {
     fetchPolicy: 'no-cache',
   });
 
-  const [deleteViewMutation] = useDeleteViewMutation({
-    onError: (error) => console.error(error),
-    onCompleted: () => {
-      // refetch to get latest deploy status
-      deployStatusQueryResult.refetch();
+  const getBaseOptions = (options) => {
+    return {
+      onError: (error) => console.error(error),
+      refetchQueries: [{ query: DIAGRAM }],
+      awaitRefetchQueries: true,
+      ...options,
+      onCompleted: () => {
+        // refetch to get latest deploy status
+        deployStatusQueryResult.refetch();
 
-      message.success('Successfully deleted view.');
-    },
-    refetchQueries: [{ query: DIAGRAM }],
-    awaitRefetchQueries: true,
-  });
+        options.onCompleted && options.onCompleted();
+      },
+    };
+  };
+
+  const [createModelMutation, createModelResult] = useCreateModelMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully created model.');
+      },
+    }),
+  );
+
+  const [deleteModelMutation] = useDeleteModelMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully deleted model.');
+      },
+    }),
+  );
+
+  const [updateModelMutation, updateModelResult] = useUpdateModelMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully updated model.');
+      },
+    }),
+  );
+
+  const [deleteViewMutation] = useDeleteViewMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully deleted view.');
+      },
+    }),
+  );
 
   const diagramData = useMemo(() => {
     if (!data) return null;
@@ -89,7 +129,7 @@ export default function Modeling() {
       [MORE_ACTION.UPDATE_COLUMNS]: () => {
         switch (nodeType) {
           case NODE_TYPE.MODEL:
-            console.log('update columns');
+            modelDrawer.openDrawer(data);
             break;
           default:
             console.log(data);
@@ -118,9 +158,6 @@ export default function Modeling() {
             console.log('edit relation');
             break;
 
-          case NODE_TYPE.MODEL:
-            modelDrawer.openDrawer(data);
-            break;
           default:
             console.log(data);
             break;
@@ -129,7 +166,9 @@ export default function Modeling() {
       [MORE_ACTION.DELETE]: async () => {
         switch (nodeType) {
           case NODE_TYPE.MODEL:
-            console.log('delete model');
+            await deleteModelMutation({
+              variables: { where: { id: data.modelId } },
+            });
             break;
           case NODE_TYPE.CALCULATED_FIELD:
             console.log('delete calculated field');
@@ -206,8 +245,13 @@ export default function Modeling() {
         <ModelDrawer
           {...modelDrawer.state}
           onClose={modelDrawer.closeDrawer}
-          onSubmit={async (values) => {
-            console.log(values);
+          submitting={createModelResult.loading || updateModelResult.loading}
+          onSubmit={async ({ id, data }) => {
+            if (id) {
+              await updateModelMutation({ variables: { where: { id }, data } });
+            } else {
+              await createModelMutation({ variables: { data } });
+            }
           }}
         />
         <CalculatedFieldModal
