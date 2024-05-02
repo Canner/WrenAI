@@ -19,10 +19,10 @@ import { useValidateCalculatedFieldMutation } from '@/apollo/client/graphql/calc
 import { CreateCalculatedFieldInput } from '@/apollo/client/graphql/__types__';
 
 export type CalculatedFieldValue = {
-  [key: string]: any;
   name: string;
   expression: string;
   lineage: FieldValue[];
+  columnId?: number;
 
   payload: {
     models: DiagramModel[];
@@ -30,7 +30,10 @@ export type CalculatedFieldValue = {
   };
 };
 
-type Props = ModalAction<CalculatedFieldValue, CreateCalculatedFieldInput> & {
+type Props = ModalAction<
+  CalculatedFieldValue,
+  CreateCalculatedFieldInput & { id?: number }
+> & {
   loading?: boolean;
 };
 
@@ -83,8 +86,12 @@ export default function AddCalculatedFieldModal(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
+        const id = defaultValue?.columnId;
+        const modelId = !id ? sourceModel.modelId : undefined;
+
         await onSubmit({
-          modelId: sourceModel.modelId,
+          id,
+          modelId,
           expression: values.expression,
           name: values.name,
           // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId

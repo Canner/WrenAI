@@ -22,7 +22,10 @@ import {
   useUpdateModelMutation,
 } from '@/apollo/client/graphql/model.generated';
 import { useUpdateModelMetadataMutation } from '@/apollo/client/graphql/metadata.generated';
-import { useCreateCalculatedFieldMutation } from '@/apollo/client/graphql/calculatedField.generated';
+import {
+  useCreateCalculatedFieldMutation,
+  useUpdateCalculatedFieldMutation,
+} from '@/apollo/client/graphql/calculatedField.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -73,6 +76,14 @@ export default function Modeling() {
         },
       }),
     );
+
+  const [updateCalculatedField] = useUpdateCalculatedFieldMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully updated calculated field.');
+      },
+    }),
+  );
 
   const [createModelMutation, createModelResult] = useCreateModelMutation(
     getBaseOptions({
@@ -174,8 +185,9 @@ export default function Modeling() {
                 (model) => model.modelId === data.modelId,
               ) || {};
             calculatedFieldModal.openModal({
+              columnId: data.columnId,
               name: data.referenceName,
-              expression: '',
+              expression: data.expression,
               lineage: [],
               payload: {
                 models: diagramData.models,
@@ -289,8 +301,14 @@ export default function Modeling() {
           {...calculatedFieldModal.state}
           onClose={calculatedFieldModal.closeModal}
           loading={calculatedFieldLoading}
-          onSubmit={async (values) => {
-            await createCalculatedField({ variables: { data: values } });
+          onSubmit={async ({ id, ...values }) => {
+            if (id) {
+              await updateCalculatedField({
+                variables: { where: { id }, data: values },
+              });
+            } else {
+              await createCalculatedField({ variables: { data: values } });
+            }
           }}
         />
       </SiderLayout>
