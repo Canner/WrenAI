@@ -13,7 +13,9 @@ export interface Model {
   properties: string | null; // Model properties, a json string, the description and displayName should be stored here
 }
 
-export interface IModelRepository extends IBasicRepository<Model> {}
+export interface IModelRepository extends IBasicRepository<Model> {
+  findAllByIds(ids: number[]): Promise<Model[]>;
+}
 
 export class ModelRepository
   extends BaseRepository<Model>
@@ -22,4 +24,8 @@ export class ModelRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'model' });
   }
+  findAllByIds = async (ids: number[]) => {
+    const res = await this.knex<Model>(this.tableName).whereIn('id', ids);
+    return res.map((r) => this.transformFromDBData(r));
+  };
 }

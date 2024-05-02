@@ -9,7 +9,7 @@ import {
   Relation,
 } from '../repositories';
 import { getLogger } from '@server/utils';
-import { RelationData } from '../types';
+import { RelationData, UpdateRelationData } from '../types';
 import { IProjectService } from './projectService';
 import {
   CreateCalculatedFieldData,
@@ -30,7 +30,11 @@ export interface ValidateCalculatedFieldResponse {
 export interface IModelService {
   batchUpdateModelProperties(tables: SampleDatasetTable[]): Promise<void>;
   batchUpdateColumnProperties(tables: SampleDatasetTable[]): Promise<void>;
+  // saveRelations was used in the onboarding process, we assume there is not existing relation in the project
   saveRelations(relations: RelationData[]): Promise<Relation[]>;
+  createRelation(relation: RelationData): Promise<Relation>;
+  updateRelation(relation: UpdateRelationData, id: number): Promise<Relation>;
+  deleteRelation(id: number): Promise<void>;
   createCalculatedField(data: CreateCalculatedFieldData): Promise<ModelColumn>;
   updateCalculatedField(
     data: UpdateCalculatedFieldData,
@@ -319,12 +323,79 @@ export class ModelService implements IModelService {
       } as Partial<Relation>;
     });
 
-    const savedRelations = await Promise.all(
-      relationValues.map((relation) =>
-        this.relationRepository.createOne(relation),
-      ),
-    );
+    const savedRelations =
+      await this.relationRepository.createMany(relationValues);
+
     return savedRelations;
+  }
+
+  public async createRelation(relation: RelationData): Promise<Relation> {
+    const project = await this.projectService.getCurrentProject();
+    const modelIds = [relation.fromModelId, relation.toModelId];
+    const models = await this.modelRepository.findAllByIds(modelIds);
+    const columnIds = [relation.fromColumnId, relation.toColumnId];
+    const columns =
+      await this.modelColumnRepository.findColumnsByIds(columnIds);
+
+    const { valid, message } = await this.validateCreateRelation(
+      models,
+      columns,
+      relation,
+    );
+    if (!valid) {
+      throw new Error(message);
+    }
+    const relationName = this.generateRelationName(relation, models);
+    const savedRelation = await this.relationRepository.createOne({
+      projectId: project.id,
+      name: relationName,
+      fromColumnId: relation.fromColumnId,
+      toColumnId: relation.toColumnId,
+      joinType: relation.type,
+    });
+    return savedRelation;
+  }
+
+  public async updateRelation(
+    relation: UpdateRelationData,
+    id: number,
+  ): Promise<Relation> {
+    const updatedRelation = await this.relationRepository.updateOne(id, {
+      joinType: relation.type,
+    });
+    return updatedRelation;
+  }
+
+  public async deleteRelation(id: number): Promise<void> {
+    const relation = await this.relationRepository.findOneBy({ id });
+    if (!relation) {
+      throw new Error('Relation not found');
+    }
+    const calculatedFields = await this.getCalculatedFieldByRelation(id);
+    if (calculatedFields.length > 0) {
+      // delete related calculated fields
+      await this.modelColumnRepository.deleteMany(
+        calculatedFields.map((f) => f.id),
+      );
+    }
+    await this.relationRepository.deleteOne(id);
+  }
+
+  public async getCalculatedFieldByRelation(
+    relationId: number,
+  ): Promise<ModelColumn[]> {
+    const calculatedFields = await this.modelColumnRepository.findAllBy({
+      isCalculated: true,
+    });
+    const relatedCalculatedFields = calculatedFields.reduce((acc, field) => {
+      const lineage = JSON.parse(field.lineage);
+      const relationIds = lineage.slice(0, lineage.length - 1);
+      if (relationIds.includes(relationId)) {
+        acc.push(field);
+      }
+      return acc;
+    }, []);
+    return relatedCalculatedFields;
   }
 
   public async validateCalculatedFieldNaming(
@@ -492,5 +563,71 @@ export class ModelService implements IModelService {
       logger.debug(`Calculated field can not query: ${message}`);
     }
     return valid;
+  }
+
+  private async validateCreateRelation(
+    models: Model[],
+    columns: ModelColumn[],
+    relation: RelationData,
+  ) {
+    const { fromModelId, fromColumnId, toModelId, toColumnId } = relation;
+    const fromModel = models.find((m) => m.id === fromModelId);
+    const toModel = models.find((m) => m.id === toModelId);
+    // model should exist
+    if (!fromModel) {
+      return {
+        valid: false,
+        message: `Model not found: fromModelId ${fromModelId}`,
+      };
+    }
+    if (!toModel) {
+      return {
+        valid: false,
+        message: `Model not found: toModelId ${toModelId}`,
+      };
+    }
+    // column should exist
+    const fromColumn = columns.find((column) => column.id === fromColumnId);
+    const toColumn = columns.find((column) => column.id === toColumnId);
+    if (!fromColumn) {
+      return {
+        valid: false,
+        message: `Column not found, column Id ${fromColumnId}`,
+      };
+    }
+    if (!toColumn) {
+      return {
+        valid: false,
+        message: `Column not found, column Id ${toColumnId}`,
+      };
+    }
+
+    // column should belong to the model
+    if (toColumn.modelId != toModelId) {
+      return {
+        valid: false,
+        message: `Column not belong to the model, column Id ${toColumnId}`,
+      };
+    }
+    if (fromColumn.modelId != fromModelId) {
+      return {
+        valid: false,
+        message: `Column not belong to the model, column Id ${fromColumnId}`,
+      };
+    }
+
+    // only one relation between two models
+    const existedRelations =
+      await this.relationRepository.findDuplicateRelationBetweenModels([
+        fromModelId,
+        toModelId,
+      ]);
+    if (existedRelations.length > 0) {
+      return {
+        valid: false,
+        message: 'Only one relation between two models',
+      };
+    }
+    return { valid: true };
   }
 }
