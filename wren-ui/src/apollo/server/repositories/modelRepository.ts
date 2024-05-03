@@ -24,8 +24,8 @@ export class ModelRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'model' });
   }
-  findAllByIds = async (ids: number[]) => {
+  public async findAllByIds(ids: number[]) {
     const res = await this.knex<Model>(this.tableName).whereIn('id', ids);
     return res.map((r) => this.transformFromDBData(r));
-  };
+  }
 }

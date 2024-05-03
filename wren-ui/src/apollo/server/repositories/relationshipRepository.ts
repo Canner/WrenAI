@@ -48,7 +48,7 @@ export interface IRelationRepository extends IBasicRepository<Relation> {
     },
     queryOptions?: IQueryOptions,
   ): Promise<RelationInfo[]>;
-  findDuplicateRelationBetweenModels(modelIds): Promise<RelationInfo[]>;
+  findExistedRelationBetweenModels(modelIds): Promise<RelationInfo[]>;
 }
 
 export class RelationRepository
@@ -180,7 +180,7 @@ export class RelationRepository
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
   }
 
-  public async findDuplicateRelationBetweenModels(modelIds) {
+  public async findExistedRelationBetweenModels(modelIds) {
     const query = this.knex(this.tableName)
       .join(
         'model_column AS fmc',

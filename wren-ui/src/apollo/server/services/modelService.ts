@@ -618,7 +618,7 @@ export class ModelService implements IModelService {
 
     // only one relation between two models
     const existedRelations =
-      await this.relationRepository.findDuplicateRelationBetweenModels([
+      await this.relationRepository.findExistedRelationBetweenModels([
         fromModelId,
         toModelId,
       ]);
