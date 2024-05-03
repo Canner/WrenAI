@@ -499,7 +499,7 @@ export type MutationUpdateModelMetadataArgs = {
 
 export type MutationUpdateRelationArgs = {
   data: UpdateRelationInput;
-  where?: InputMaybe<WhereIdInput>;
+  where: WhereIdInput;
 };
 
 
