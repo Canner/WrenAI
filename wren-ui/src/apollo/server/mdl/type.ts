@@ -6,6 +6,7 @@ export interface ColumnMDL {
   relationship?: string; //eg: OrdersCustomer
   properties?: {
     description?: string; // eg: "the key of each order"
+    displayName?: string; // eg: "Order Key"
   };
   expression?: string; // eg: "SUM(orders.totalprice)"
 }
@@ -19,6 +20,7 @@ export interface ModelMDL {
   refreshTime?: string; // eg: "30.00m"
   properties?: {
     description?: string; // eg: "tpch tiny orders table"
+    displayName?: string; // eg: "Orders"
   };
 }
 

@@ -87,13 +87,19 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.models = this.models.map((model: Model) => {
+      const properties = model.properties ? JSON.parse(model.properties) : {};
+      // put displayName in properties
+      if (model.displayName) {
+        properties.displayName = model.displayName;
+      }
+
       return {
         name: model.referenceName,
         columns: [],
         refSql: model.refSql,
         cached: model.cached,
         refreshTime: model.refreshTime,
-        properties: JSON.parse(model.properties),
+        properties,
         primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
     });
@@ -149,13 +155,20 @@ export class MDLBuilder implements IMDLBuilder {
         model.columns = [];
       }
       const expression = this.getColumnExpression(column);
+
+      const properties = column.properties ? JSON.parse(column.properties) : {};
+      // put displayName in properties
+      if (column.displayName) {
+        properties.displayName = column.displayName;
+      }
+
       model.columns.push({
         name: column.referenceName,
         type: column.type,
         isCalculated: column.isCalculated,
         notNull: column.notNull,
         expression,
-        properties: JSON.parse(column.properties),
+        properties,
       });
     });
   }
@@ -182,11 +195,17 @@ export class MDLBuilder implements IMDLBuilder {
           columnReferenceName: fromColumnName,
           relation: name,
         });
+
+        const properties = relation.properties
+          ? JSON.parse(relation.properties)
+          : {};
+
         return {
           name: name,
           models: [fromModelName, toModelName],
           joinType: joinType,
           condition,
+          properties,
         };
       },
     );
