@@ -106,8 +106,11 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
         _update_wren_engine_configs(
             [
                 {"name": "wren.datasource.type", "value": "BIGQUERY"},
-                {"name": "bigquery.project-id", "value": "wrenai"},
-                {"name": "bigquery.location", "value": "asia-east1"},
+                {
+                    "name": "bigquery.project-id",
+                    "value": os.getenv("bigquery.project-id"),
+                },
+                {"name": "bigquery.location", "value": os.getenv("bigquery.location")},
                 {"name": "bigquery.credentials-key", "value": BIGQUERY_CREDENTIALS},
             ]
         )
