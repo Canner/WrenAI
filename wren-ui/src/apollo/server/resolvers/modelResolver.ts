@@ -12,7 +12,7 @@ import { BQConnector } from '../connectors/bqConnector';
 import { DeployResponse } from '../services/deployService';
 import { constructCteSql } from '../services/askingService';
 import { format } from 'sql-formatter';
-import { isEmpty } from 'lodash';
+import { isEmpty, isNil } from 'lodash';
 import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
 
 const logger = getLogger('ModelResolver');
@@ -239,16 +239,15 @@ export class ModelResolver {
     // update model metadata
     const modelMetadata: any = {};
 
-    if (data.displayName) {
-      modelMetadata.displayName = data.displayName;
+    // if displayName is not null, or undefined, update the displayName
+    if (!isNil(data.displayName)) {
+      modelMetadata.displayName = this.determineMetadataValue(data.displayName);
     }
 
-    // check if description is empty
-    // if description is empty, skip the update
-    // if description is not empty, update the description in model properties
-    if (data.description) {
+    // if description is not null, or undefined, update the description in properties
+    if (!isNil(data.description)) {
       const properties = JSON.parse(model.properties);
-      properties.description = data.description;
+      properties.description = this.determineMetadataValue(data.description);
       modelMetadata.properties = JSON.stringify(properties);
     }
 
@@ -269,16 +268,17 @@ export class ModelResolver {
         // update metadata
         const columnMetadata: any = {};
 
-        if (requestedMetadata.displayName) {
-          columnMetadata.displayName = requestedMetadata.displayName;
+        if (!isNil(requestedMetadata.displayName)) {
+          columnMetadata.displayName = this.determineMetadataValue(
+            requestedMetadata.displayName,
+          );
         }
 
-        // check if description is empty
-        // if description is empty, skip the update
-        // if description is not empty, update the description in properties
-        if (requestedMetadata.description) {
+        if (!isNil(requestedMetadata.description)) {
           const properties = col.properties ? JSON.parse(col.properties) : {};
-          properties.description = requestedMetadata.description;
+          properties.description = this.determineMetadataValue(
+            requestedMetadata.description,
+          );
           columnMetadata.properties = JSON.stringify(properties);
         }
 
@@ -302,9 +302,11 @@ export class ModelResolver {
         // check if description is empty
         // if description is empty, skip the update
         // if description is not empty, update the description in properties
-        if (requestedMetadata.description) {
+        if (!isNil(requestedMetadata.description)) {
           const properties = col.properties ? JSON.parse(col.properties) : {};
-          properties.description = requestedMetadata.description;
+          properties.description = this.determineMetadataValue(
+            requestedMetadata.description,
+          );
           columnMetadata.properties = JSON.stringify(properties);
         }
 
@@ -326,9 +328,11 @@ export class ModelResolver {
 
         const relationMetadata: any = {};
 
-        if (requestedMetadata.description) {
+        if (!isNil(requestedMetadata.description)) {
           const properties = rel.properties ? JSON.parse(rel.properties) : {};
-          properties.description = requestedMetadata.description;
+          properties.description = this.determineMetadataValue(
+            requestedMetadata.description,
+          );
           relationMetadata.properties = JSON.stringify(properties);
         }
 
@@ -463,6 +467,21 @@ export class ModelResolver {
     const sql = format(constructCteSql(steps));
 
     return await ctx.wrenEngineAdaptor.getNativeSQL(sql);
+  }
+
+  private determineMetadataValue(value: string) {
+    // if it's empty string, meaning users want to remove the value
+    // so we return null
+    if (value === '') {
+      return null;
+    }
+
+    // otherwise, return the value
+    return value;
+  }
+
+  private isMetadataValueEmpty(metadata: Record<string, string>) {
+    return Object.values(metadata).every((value) => value === undefined);
   }
 
   // validate view name
