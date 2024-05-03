@@ -481,6 +481,7 @@ export class ModelService implements IModelService {
     } as ModelColumn;
     mdlBuilder.insertCalculatedField(modelName, modelColumn);
     const manifest = mdlBuilder.getManifest();
+    logger.debug(`Calculated field MDL: ${JSON.stringify(manifest)}`);
     const { valid, message } =
       await this.wrenEngineAdaptor.validateColumnIsValid(
         manifest,
