@@ -13,10 +13,13 @@ import requests
 import sqlglot
 import sqlparse
 import streamlit as st
+from dotenv import load_dotenv
 
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
+
+load_dotenv()
 
 
 def download_spider_data():
@@ -82,7 +85,37 @@ def is_current_manifest_available():
     return manifest["catalog"] != "text_catalog" and manifest["schema"] != "test_schema"
 
 
-def rerun_wren_engine(mdl_json: Dict):
+def _update_wren_engine_configs(configs: list[dict]):
+    response = requests.patch(
+        f"{WREN_ENGINE_API_URL}/v1/config",
+        json=configs,
+    )
+
+    assert response.status_code == 200
+
+
+def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
+    assert dataset_type in ["bigquery", "duckdb"]
+
+    if dataset_type == "bigquery":
+        BIGQUERY_CREDENTIALS = os.getenv("bigquery.credentials-key")
+        assert (
+            BIGQUERY_CREDENTIALS is not None
+        ), "bigquery.credentials-key is not set in .env"
+
+        _update_wren_engine_configs(
+            [
+                {"name": "wren.datasource.type", "value": "BIGQUERY"},
+                {"name": "bigquery.project-id", "value": "wrenai"},
+                {"name": "bigquery.location", "value": "asia-east1"},
+                {"name": "bigquery.credentials-key", "value": BIGQUERY_CREDENTIALS},
+            ]
+        )
+    elif dataset_type == "duckdb":
+        _update_wren_engine_configs(
+            [{"name": "wren.datasource.type", "value": "DUCKDB"}]
+        )
+
     st.toast("Wren Engine is being re-run", icon="⏳")
 
     response = requests.post(
@@ -468,38 +501,13 @@ def generate_mdl_json(
     return mdl_json
 
 
-def get_mdl_json(database_name: str, type: str = "spider"):
-    assert type in ["spider", "demo"]
+def get_mdl_json(database_name: str):
+    assert database_name in ["music", "nba", "ecommerce"]
 
-    if type == "spider":
-        database_schema = get_database_schema(
-            f"spider/database/{database_name}/{database_name}.sqlite",
-            get_table_names(f"spider/database/{database_name}/{database_name}.sqlite"),
-        )
+    with open(f"sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
+        mdl_json = json.load(f)
 
-        relationships = get_table_relationships(
-            f"spider/database/{database_name}/{database_name}.sqlite"
-        )
-
-        generate_text_to_sql_dataset(
-            ["spider/train_spider.json", "spider/train_others.json"],
-            database_name=database_name,
-        )
-
-        return generate_mdl_json(
-            database_schema,
-            "canner-cml",
-            "spider",
-            database_name,
-            relationships,
-        )
-    elif type == "demo":
-        assert database_name in ["music", "nba", "ecommerce"]
-
-        with open(f"sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
-            mdl_json = json.load(f)
-
-        return mdl_json
+    return mdl_json
 
 
 @st.cache_data

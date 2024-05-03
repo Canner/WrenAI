@@ -14,6 +14,7 @@ sqlparse = "^0.4.4"
 streamlit = "^1.32.2"
 watchdog = "^4.0.0"
 sqlglot = "^22.5.0"
+python-dotenv = "^1.0.1"
 
 
 [build-system]
