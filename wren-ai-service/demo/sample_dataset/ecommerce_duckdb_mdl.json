@@ -502,12 +502,7 @@
         {
           "name": "Price",
           "type": "DOUBLE",
-          "expression": "sum(order_items.Price)"
-        },
-        {
-          "name": "MoM_Price",
-          "type": "DOUBLE",
-          "expression": "{{ MoM('sum(order_items.Price)', 'date_trunc(\\'MONTH\\', PurchaseTimestamp)') }}"
+          "expression": "sum(order_items.Price) - COALESCE(LAG(sum(order_items.Price)) OVER (ORDER BY date_trunc('MONTH', PurchaseTimestamp)), 0) / COALESCE(LAG(sum(order_items.Price)) OVER (ORDER BY date_trunc('MONTH', PurchaseTimestamp)), 1)"
         }
       ],
       "timeGrain": [
@@ -535,10 +530,6 @@
     }
   ],
   "macros": [
-    {
-      "name": "MoM",
-      "definition": "(calculation: Expression, timestamp: Expression) => ({{ calculation }} - COALESCE(LAG({{ calculation }}) OVER (ORDER BY {{ timestamp }}), 0)) / COALESCE(LAG({{ calculation }}) OVER (ORDER BY {{ timestamp }}), 1)"
-    }
   ],
   "dateSpine": {
     "unit": "DAY",
