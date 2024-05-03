@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
+DATA_SOURCES = ["duckdb", "bigquery", "postgresql"]
 
 load_dotenv()
 
@@ -59,7 +60,7 @@ def _update_wren_engine_configs(configs: list[dict]):
 
 
 def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
-    assert dataset_type in ["bigquery", "duckdb"]
+    assert dataset_type in DATA_SOURCES
 
     if dataset_type == "bigquery":
         BIGQUERY_CREDENTIALS = os.getenv("bigquery.credentials-key")
@@ -81,6 +82,15 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
     elif dataset_type == "duckdb":
         _update_wren_engine_configs(
             [{"name": "wren.datasource.type", "value": "DUCKDB"}]
+        )
+    elif dataset_type == "postgresql":
+        _update_wren_engine_configs(
+            [
+                {"name": "wren.datasource.type", "value": "POSTGRES"},
+                {"name": "postgres.user", "value": os.getenv("postgres.user")},
+                {"name": "postgres.password", "value": os.getenv("postgres.password")},
+                {"name": "postgres.jdbc.url", "value": os.getenv("postgres.jdbc.url")},
+            ]
         )
 
     st.toast("Wren Engine is being re-run", icon="⏳")

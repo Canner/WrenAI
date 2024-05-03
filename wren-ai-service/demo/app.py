@@ -1,8 +1,10 @@
 import json
+import re
 import uuid
 
 import streamlit as st
 from utils import (
+    DATA_SOURCES,
     ask,
     ask_details,
     get_current_manifest,
@@ -63,7 +65,7 @@ if __name__ == "__main__":
             show_er_diagram(models, relationships)
         with st.expander("Deploy New Model"):
             uploaded_file = st.file_uploader(
-                "Upload an MDL json file, and the file name must be [xxx]_bigquery_mdl.json or [xxx]_duckdb_mdl.json",
+                f"Upload an MDL json file, and the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}",
                 type="json",
             )
             st.markdown("or")
@@ -76,12 +78,12 @@ if __name__ == "__main__":
             )
 
             if uploaded_file is not None:
-                if (
-                    "_duckdb_mdl.json" not in uploaded_file.name
-                    and "_bigquery_mdl.json" not in uploaded_file.name
+                if not re.match(
+                    r".+_(" + "|".join(DATA_SOURCES) + r")_mdl\.json$",
+                    uploaded_file.name,
                 ):
                     st.error(
-                        "File name must be [xxx]_duckdb_mdl.json or [xxx]_bigquery_mdl.json"
+                        f"the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}"
                     )
                     st.stop()
 
@@ -90,19 +92,21 @@ if __name__ == "__main__":
                         "_duckdb_mdl.json"
                     )[0]
                     st.session_state["dataset_type"] = "duckdb"
-                    st.session_state["mdl_json"] = json.loads(
-                        uploaded_file.getvalue().decode("utf-8")
-                    )
-                    save_mdl_json_file(uploaded_file.name, st.session_state["mdl_json"])
                 elif "_bigquery_mdl.json" in uploaded_file.name:
                     st.session_state["chosen_dataset"] = uploaded_file.name.split(
                         "_bigquery_mdl.json"
                     )[0]
                     st.session_state["dataset_type"] = "bigquery"
-                    st.session_state["mdl_json"] = json.loads(
-                        uploaded_file.getvalue().decode("utf-8")
-                    )
-                    save_mdl_json_file(uploaded_file.name, st.session_state["mdl_json"])
+                elif "_postgresql_mdl.json" in uploaded_file.name:
+                    st.session_state["chosen_dataset"] = uploaded_file.name.split(
+                        "_postgresql_mdl.json"
+                    )[0]
+                    st.session_state["dataset_type"] = "postgresql"
+
+                st.session_state["mdl_json"] = json.loads(
+                    uploaded_file.getvalue().decode("utf-8")
+                )
+                save_mdl_json_file(uploaded_file.name, st.session_state["mdl_json"])
             elif (
                 chosen_demo_dataset
                 and st.session_state["chosen_dataset"] == chosen_demo_dataset
