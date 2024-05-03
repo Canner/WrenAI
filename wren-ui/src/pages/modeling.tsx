@@ -1,5 +1,5 @@
 import dynamic from 'next/dynamic';
-import { forwardRef, useMemo, useRef } from 'react';
+import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
@@ -113,6 +113,16 @@ export default function Modeling() {
   const modelDrawer = useDrawerAction();
   const editMetadataModal = useModalAction();
   const calculatedFieldModal = useModalAction();
+
+  useEffect(() => {
+    if (metadataDrawer.state.visible) {
+      const data = metadataDrawer.state.defaultValue;
+      const currentModel = diagramData.models.find(
+        (model) => model.modelId === data.modelId,
+      );
+      metadataDrawer.updateState(currentModel);
+    }
+  }, [diagramData]);
 
   const onSelect = (selectKeys) => {
     if (diagramRef.current) {
