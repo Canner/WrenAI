@@ -42,6 +42,12 @@ export type CalculatedFieldInput = {
   name: Scalars['String'];
 };
 
+export type CalculatedFieldValidationResponse = {
+  __typename?: 'CalculatedFieldValidationResponse';
+  message?: Maybe<Scalars['String']>;
+  valid: Scalars['Boolean'];
+};
+
 export type CompactColumn = {
   __typename?: 'CompactColumn';
   name: Scalars['String'];
@@ -63,6 +69,13 @@ export type ConnectionInfo = {
   port: Scalars['Int'];
   schema: Scalars['String'];
   username?: Maybe<Scalars['String']>;
+};
+
+export type CreateCalculatedFieldInput = {
+  expression: ExpressionName;
+  lineage: Array<Scalars['Int']>;
+  modelId: Scalars['Int'];
+  name: Scalars['String'];
 };
 
 export type CreateModelInput = {
@@ -163,6 +176,7 @@ export type DetailedRelation = {
   fromColumnId: Scalars['Int'];
   fromModelId: Scalars['Int'];
   name: Scalars['String'];
+  properties: Scalars['JSON'];
   toColumnId: Scalars['Int'];
   toModelId: Scalars['Int'];
   type: RelationType;
@@ -264,6 +278,27 @@ export type Error = {
   stacktrace?: Maybe<Array<Maybe<Scalars['String']>>>;
 };
 
+export enum ExpressionName {
+  ABS = 'ABS',
+  AVG = 'AVG',
+  CBRT = 'CBRT',
+  CEIL = 'CEIL',
+  CEILING = 'CEILING',
+  COUNT = 'COUNT',
+  COUNT_IF = 'COUNT_IF',
+  EXP = 'EXP',
+  FLOOR = 'FLOOR',
+  LENGTH = 'LENGTH',
+  LN = 'LN',
+  LOG10 = 'LOG10',
+  MAX = 'MAX',
+  MIN = 'MIN',
+  REVERSE = 'REVERSE',
+  ROUND = 'ROUND',
+  SIGN = 'SIGN',
+  SUM = 'SUM'
+}
+
 export type FieldInfo = {
   __typename?: 'FieldInfo';
   displayName: Scalars['String'];
@@ -311,11 +346,15 @@ export type Mutation = {
   __typename?: 'Mutation';
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
+  createCalculatedField: Scalars['JSON'];
   createModel: Scalars['JSON'];
+  createRelation: Scalars['JSON'];
   createThread: Thread;
   createThreadResponse: ThreadResponse;
   createView: ViewInfo;
+  deleteCalculatedField: Scalars['Boolean'];
   deleteModel: Scalars['Boolean'];
+  deleteRelation: Scalars['Boolean'];
   deleteThread: Scalars['Boolean'];
   deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
@@ -326,9 +365,13 @@ export type Mutation = {
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
   startSampleDataset: Scalars['JSON'];
+  updateCalculatedField: Scalars['JSON'];
   updateDataSource: DataSource;
   updateModel: Scalars['JSON'];
+  updateModelMetadata: Scalars['Boolean'];
+  updateRelation: Scalars['JSON'];
   updateThread: Thread;
+  validateCalculatedField: CalculatedFieldValidationResponse;
   validateView: ViewValidationResponse;
 };
 
@@ -343,8 +386,18 @@ export type MutationCreateAskingTaskArgs = {
 };
 
 
+export type MutationCreateCalculatedFieldArgs = {
+  data: CreateCalculatedFieldInput;
+};
+
+
 export type MutationCreateModelArgs = {
   data: CreateModelInput;
+};
+
+
+export type MutationCreateRelationArgs = {
+  data: RelationInput;
 };
 
 
@@ -364,8 +417,18 @@ export type MutationCreateViewArgs = {
 };
 
 
+export type MutationDeleteCalculatedFieldArgs = {
+  where?: InputMaybe<UpdateCalculatedFieldWhere>;
+};
+
+
 export type MutationDeleteModelArgs = {
   where: ModelWhereInput;
+};
+
+
+export type MutationDeleteRelationArgs = {
+  where: WhereIdInput;
 };
 
 
@@ -409,6 +472,12 @@ export type MutationStartSampleDatasetArgs = {
 };
 
 
+export type MutationUpdateCalculatedFieldArgs = {
+  data: UpdateCalculatedFieldInput;
+  where?: InputMaybe<UpdateCalculatedFieldWhere>;
+};
+
+
 export type MutationUpdateDataSourceArgs = {
   data: UpdateDataSourceInput;
 };
@@ -420,9 +489,26 @@ export type MutationUpdateModelArgs = {
 };
 
 
+export type MutationUpdateModelMetadataArgs = {
+  data: UpdateModelMetadataInput;
+  where: ModelWhereInput;
+};
+
+
+export type MutationUpdateRelationArgs = {
+  data: UpdateRelationInput;
+  where?: InputMaybe<WhereIdInput>;
+};
+
+
 export type MutationUpdateThreadArgs = {
   data: UpdateThreadInput;
   where: ThreadUniqueWhereInput;
+};
+
+
+export type MutationValidateCalculatedFieldArgs = {
+  data: ValidateCalculatedFieldInput;
 };
 
 
@@ -637,6 +723,27 @@ export type TimeGrainInput = {
   refColumn: Scalars['String'];
 };
 
+export type UpdateCalculatedFieldInput = {
+  expression: ExpressionName;
+  lineage: Array<Scalars['Int']>;
+  name: Scalars['String'];
+};
+
+export type UpdateCalculatedFieldMetadataInput = {
+  description?: InputMaybe<Scalars['String']>;
+  id: Scalars['Int'];
+};
+
+export type UpdateCalculatedFieldWhere = {
+  id: Scalars['Int'];
+};
+
+export type UpdateColumnMetadataInput = {
+  description?: InputMaybe<Scalars['String']>;
+  displayName?: InputMaybe<Scalars['String']>;
+  id: Scalars['Int'];
+};
+
 export type UpdateDataSourceInput = {
   properties: Scalars['JSON'];
 };
@@ -646,8 +753,31 @@ export type UpdateModelInput = {
   primaryKey?: InputMaybe<Scalars['String']>;
 };
 
+export type UpdateModelMetadataInput = {
+  calculatedFields?: InputMaybe<Array<UpdateCalculatedFieldMetadataInput>>;
+  columns?: InputMaybe<Array<UpdateColumnMetadataInput>>;
+  description?: InputMaybe<Scalars['String']>;
+  displayName?: InputMaybe<Scalars['String']>;
+  relationships?: InputMaybe<Array<UpdateRelationshipMetadataInput>>;
+};
+
+export type UpdateRelationInput = {
+  type: RelationType;
+};
+
+export type UpdateRelationshipMetadataInput = {
+  description?: InputMaybe<Scalars['String']>;
+  id: Scalars['Int'];
+};
+
 export type UpdateThreadInput = {
   summary?: InputMaybe<Scalars['String']>;
+};
+
+export type ValidateCalculatedFieldInput = {
+  columnId?: InputMaybe<Scalars['Int']>;
+  modelId: Scalars['Int'];
+  name: Scalars['String'];
 };
 
 export type ValidateViewInput = {
@@ -668,5 +798,9 @@ export type ViewValidationResponse = {
 };
 
 export type ViewWhereUniqueInput = {
+  id: Scalars['Int'];
+};
+
+export type WhereIdInput = {
   id: Scalars['Int'];
 };
