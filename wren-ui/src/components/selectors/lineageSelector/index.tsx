@@ -17,7 +17,10 @@ import {
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import { ExpressionName } from '@/apollo/client/graphql/__types__';
-import { checkStringFunctionAllowType } from '@/utils/validator';
+import {
+  checkStringFunctionAllowType,
+  checkNumberFunctionAllowType,
+} from '@/utils/validator';
 
 interface Props {
   sourceModel: DiagramModel;
@@ -115,7 +118,13 @@ export const getLineageOptions = (data: {
     if (!checkStringFunctionAllowType(expression, value)) {
       isInvalidType = true;
       invalidTypeMessage = 'Please select a string type field.';
+    } else if (!checkNumberFunctionAllowType(expression, value)) {
+      isInvalidType = true;
+      invalidTypeMessage = 'Please select a number type field.';
     }
+
+    const disabled =
+      isRelationshipWithoutPrimaryKey || isInUsedRelationship || isInvalidType;
 
     return {
       label: (
@@ -124,7 +133,11 @@ export const getLineageOptions = (data: {
             { nodeType: field.nodeType, type: field.type },
             { className: 'mr-1 flex-shrink-0', title: field.type },
           )}
-          <div title={field.displayName} className="text-truncate">
+          <div
+            // only show column full title when it's not disabled
+            title={!disabled ? field.displayName : null}
+            className="text-truncate"
+          >
             {field.displayName}
           </div>
         </div>
@@ -137,10 +150,7 @@ export const getLineageOptions = (data: {
           : isInvalidType
             ? invalidTypeMessage
             : undefined,
-      disabled:
-        isRelationshipWithoutPrimaryKey ||
-        isInUsedRelationship ||
-        isInvalidType,
+      disabled,
     };
   };
   const fields = [...(model?.fields || [])].map(convertor);

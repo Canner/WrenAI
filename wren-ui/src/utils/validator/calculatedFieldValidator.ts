@@ -1,6 +1,6 @@
 import { COLUMN_TYPE, NODE_TYPE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
-import { stringFunctions } from '@/utils/expressionType';
+import { mathFunctions, stringFunctions } from '@/utils/expressionType';
 import { ExpressionName } from '@/apollo/client/graphql/__types__';
 
 export const createLineageSelectorNameValidator =
@@ -20,27 +20,37 @@ export const createLineageSelectorNameValidator =
     return Promise.resolve();
   };
 
-export const checkStringFunctionAllowType = (
-  expression: ExpressionName,
-  value,
-) => {
-  const isField = [NODE_TYPE.FIELD, NODE_TYPE.CALCULATED_FIELD].includes(
-    value.nodeType,
-  );
-  const allowTypes = [
-    COLUMN_TYPE.VARCHAR,
-    COLUMN_TYPE.CHAR,
-    COLUMN_TYPE.TEXT,
-    COLUMN_TYPE.STRING,
-  ];
+const makeCheckAllowType =
+  (functions: ExpressionName[], allowTypes: COLUMN_TYPE[]) =>
+  (expression: ExpressionName, value) => {
+    const isField = [NODE_TYPE.FIELD, NODE_TYPE.CALCULATED_FIELD].includes(
+      value.nodeType,
+    );
 
-  // ignore if not a column or not a string function
-  if (!isField || !stringFunctions.includes(expression)) {
-    return true;
-  }
+    // ignore if not a column or not a string function
+    if (!isField || !functions.includes(expression)) {
+      return true;
+    }
 
-  return allowTypes.includes(value.type.toLocaleUpperCase());
-};
+    return allowTypes.includes(value.type.toLocaleUpperCase());
+  };
+
+export const checkStringFunctionAllowType = makeCheckAllowType(
+  stringFunctions,
+  [COLUMN_TYPE.VARCHAR, COLUMN_TYPE.CHAR, COLUMN_TYPE.TEXT, COLUMN_TYPE.STRING],
+);
+
+export const checkNumberFunctionAllowType = makeCheckAllowType(mathFunctions, [
+  COLUMN_TYPE.INTEGER,
+  COLUMN_TYPE.TINYINT,
+  COLUMN_TYPE.SMALLINT,
+  COLUMN_TYPE.BIGINT,
+  COLUMN_TYPE.INT,
+  COLUMN_TYPE.DECIMAL,
+  COLUMN_TYPE.DOUBLE,
+  COLUMN_TYPE.REAL,
+  COLUMN_TYPE.NUMBER,
+]);
 
 export const createLineageSelectorValidator =
   (expression: ExpressionName) =>
@@ -64,6 +74,12 @@ export const createLineageSelectorValidator =
     if (!checkStringFunctionAllowType(expression, lastValue)) {
       return Promise.reject(
         new Error(ERROR_TEXTS.CALCULATED_FIELD.LINEAGE.INVALID_STRING_TYPE),
+      );
+    }
+
+    if (!checkNumberFunctionAllowType(expression, lastValue)) {
+      return Promise.reject(
+        new Error(ERROR_TEXTS.CALCULATED_FIELD.LINEAGE.INVALID_NUMBER_TYPE),
       );
     }
 
