@@ -233,13 +233,17 @@ export type DiagramModelRelationField = {
   __typename?: 'DiagramModelRelationField';
   description?: Maybe<Scalars['String']>;
   displayName: Scalars['String'];
+  fromColumnId: Scalars['Int'];
   fromColumnName: Scalars['String'];
+  fromModelId: Scalars['Int'];
   fromModelName: Scalars['String'];
   id: Scalars['String'];
   nodeType: NodeType;
   referenceName: Scalars['String'];
   relationId: Scalars['Int'];
+  toColumnId: Scalars['Int'];
   toColumnName: Scalars['String'];
+  toModelId: Scalars['Int'];
   toModelName: Scalars['String'];
   type: RelationType;
 };

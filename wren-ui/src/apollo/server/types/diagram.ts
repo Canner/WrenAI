@@ -68,9 +68,13 @@ export interface DiagramModelRelationField {
   nodeType: NodeType;
   displayName: string;
   referenceName: string;
+  fromModelId: number;
   fromModelName: string;
+  fromColumnId: number;
   fromColumnName: string;
+  toModelId: number;
   toModelName: string;
+  toColumnId: number;
   toColumnName: string;
   description: string;
 }

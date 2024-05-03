@@ -378,9 +378,13 @@ export const typeDefs = gql`
     displayName: String!
     referenceName: String!
     description: String
+    fromModelId: Int!
     fromModelName: String!
+    fromColumnId: Int!
     fromColumnName: String!
+    toModelId: Int!
     toModelName: String!
+    toColumnId: Int!
     toColumnName: String!
   }
 
