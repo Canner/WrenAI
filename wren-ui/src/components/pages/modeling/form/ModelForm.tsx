@@ -3,6 +3,7 @@ import { Form, FormInstance, Select } from 'antd';
 import { TransferItem } from 'antd/es/transfer';
 import { isEmpty } from 'lodash';
 import { FORM_MODE } from '@/utils/enum';
+import { DiagramModelField } from '@/utils/data';
 import { ERROR_TEXTS } from '@/utils/error';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { Loading } from '@/components/PageLoading';
@@ -81,11 +82,16 @@ export default function ModelForm(props: Props) {
   useEffect(() => {
     if (defaultValue) {
       const fields: string[] = defaultValue.fields.map(
-        (field) => field.referenceName,
+        (field: DiagramModelField) => field.referenceName,
       );
+
+      const primaryKeyField = defaultValue.fields.find(
+        (field: DiagramModelField) => field.isPrimaryKey,
+      );
+
       form.setFieldsValue({
-        [FormFieldKey.PRIMARY_KEY]: defaultValue.primaryKey,
         [FormFieldKey.COLUMNS]: fields,
+        [FormFieldKey.PRIMARY_KEY]: primaryKeyField?.referenceName,
       });
 
       setSourceTableName(defaultValue.sourceTableName);

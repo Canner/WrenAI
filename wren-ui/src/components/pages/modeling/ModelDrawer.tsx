@@ -3,7 +3,9 @@ import { FORM_MODE } from '@/utils/enum';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import ModelForm from './form/ModelForm';
 
-type Props = DrawerAction;
+type Props = DrawerAction & {
+  submitting: boolean;
+};
 
 const getDrawerTitle = (formMode: FORM_MODE, name?: string) =>
   ({
@@ -12,7 +14,8 @@ const getDrawerTitle = (formMode: FORM_MODE, name?: string) =>
   })[formMode];
 
 export default function ModelDrawer(props: Props) {
-  const { visible, formMode, defaultValue, onClose, onSubmit } = props;
+  const { visible, formMode, defaultValue, submitting, onClose, onSubmit } =
+    props;
   const [form] = Form.useForm();
 
   const afterVisibleChange = (visible: boolean) => {
@@ -25,7 +28,7 @@ export default function ModelDrawer(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
-        await onSubmit(values);
+        await onSubmit({ data: values, id: defaultValue?.modelId });
         onClose();
       })
       .catch(console.error);
@@ -42,8 +45,15 @@ export default function ModelDrawer(props: Props) {
       onClose={onClose}
       footer={
         <Space className="d-flex justify-end">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button type="primary" onClick={submit}>
+          <Button onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            type="primary"
+            onClick={submit}
+            loading={submitting}
+            disabled={submitting}
+          >
             Submit
           </Button>
         </Space>

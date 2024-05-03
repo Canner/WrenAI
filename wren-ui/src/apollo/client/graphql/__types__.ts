@@ -66,13 +66,8 @@ export type ConnectionInfo = {
 };
 
 export type CreateModelInput = {
-  cached: Scalars['Boolean'];
-  calculatedFields?: InputMaybe<Array<CalculatedFieldInput>>;
-  description?: InputMaybe<Scalars['String']>;
-  displayName: Scalars['String'];
   fields: Array<Scalars['String']>;
-  refSql?: InputMaybe<Scalars['String']>;
-  refreshTime?: InputMaybe<Scalars['String']>;
+  primaryKey?: InputMaybe<Scalars['String']>;
   sourceTableName: Scalars['String'];
 };
 
@@ -647,12 +642,8 @@ export type UpdateDataSourceInput = {
 };
 
 export type UpdateModelInput = {
-  cached: Scalars['Boolean'];
-  calculatedFields?: InputMaybe<Array<CalculatedFieldInput>>;
-  description?: InputMaybe<Scalars['String']>;
-  displayName: Scalars['String'];
   fields: Array<Scalars['String']>;
-  refreshTime?: InputMaybe<Scalars['String']>;
+  primaryKey?: InputMaybe<Scalars['String']>;
 };
 
 export type UpdateThreadInput = {
