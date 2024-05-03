@@ -152,6 +152,15 @@ class DeleteModelErrorHandler extends ErrorHandler {
   }
 }
 
+class UpdateModelMetdataErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update model metadata.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -167,6 +176,7 @@ errorHandlers.set('UpdateDataSource', new UpdateDataSourceErrorHandler());
 errorHandlers.set('CreateModel', new CreateModelErrorHandler());
 errorHandlers.set('UpdateModel', new UpdateModelErrorHandler());
 errorHandlers.set('DeleteModel', new DeleteModelErrorHandler());
+errorHandlers.set('UpdateModelMetadata', new UpdateModelMetdataErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   const operationName = error?.operation?.operationName || '';
