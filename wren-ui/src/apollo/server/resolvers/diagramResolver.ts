@@ -154,6 +154,7 @@ export class DiagramResolver {
     columnsMDL: ColumnMDL[],
   ): DiagramModelField {
     const properties = JSON.parse(column.properties);
+    const lineage = JSON.parse(column.lineage);
     const columnMDL = columnsMDL.find(
       ({ name }) => name === column.referenceName,
     );
@@ -161,6 +162,8 @@ export class DiagramResolver {
       id: uuidv4(),
       columnId: column.id,
       nodeType: NodeType.CALCULATED_FIELD,
+      aggregation: column.aggregation,
+      lineage,
       type: column.type,
       displayName: column.displayName,
       referenceName: column.referenceName,

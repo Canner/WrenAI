@@ -57,6 +57,8 @@ export interface DiagramModelField {
   description: string;
   isPrimaryKey?: boolean;
   expression?: string;
+  lineage?: string;
+  aggregation?: string;
 }
 
 export interface DiagramModelRelationField {
