@@ -157,6 +157,13 @@ export class MDLBuilder implements IMDLBuilder {
         if (!model.columns) {
           model.columns = [];
         }
+        const properties = column.properties
+          ? JSON.parse(column.properties)
+          : {};
+        // put displayName in properties
+        if (column.displayName) {
+          properties.displayName = column.displayName;
+        }
         const expression = this.getColumnExpression(column, model);
         model.columns.push({
           name: column.referenceName,
@@ -164,7 +171,7 @@ export class MDLBuilder implements IMDLBuilder {
           isCalculated: column.isCalculated,
           notNull: column.notNull,
           expression,
-          properties: column.properties ? JSON.parse(column.properties) : {},
+          properties: properties,
         });
       });
   }
