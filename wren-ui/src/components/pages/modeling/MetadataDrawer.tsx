@@ -19,6 +19,8 @@ type Props = DrawerAction<Metadata> & { onEditClick: (value?: any) => void };
 export default function MetadataDrawer(props: Props) {
   const { visible, defaultValue, onClose, onEditClick } = props;
   const { referenceName, nodeType = NODE_TYPE.MODEL } = defaultValue || {};
+  const isModel = nodeType === NODE_TYPE.MODEL;
+  const isView = nodeType === NODE_TYPE.VIEW;
 
   return (
     <Drawer
@@ -29,16 +31,18 @@ export default function MetadataDrawer(props: Props) {
       destroyOnClose
       onClose={onClose}
       extra={
-        <Button
-          icon={<EditOutlined />}
-          onClick={() => onEditClick(defaultValue)}
-        >
-          Edit
-        </Button>
+        isModel && (
+          <Button
+            icon={<EditOutlined />}
+            onClick={() => onEditClick(defaultValue)}
+          >
+            Edit
+          </Button>
+        )
       }
     >
-      {nodeType === NODE_TYPE.MODEL && <ModelMetadata {...defaultValue} />}
-      {nodeType === NODE_TYPE.VIEW && <ViewMetadata {...defaultValue} />}
+      {isModel && <ModelMetadata {...defaultValue} />}
+      {isView && <ViewMetadata {...defaultValue} />}
     </Drawer>
   );
 }
