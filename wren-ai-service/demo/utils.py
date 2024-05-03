@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
-DATA_SOURCES = ["duckdb", "bigquery", "postgresql"]
+DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
 
 load_dotenv()
 
@@ -70,7 +70,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
 
         _update_wren_engine_configs(
             [
-                {"name": "wren.datasource.type", "value": "BIGQUERY"},
+                {"name": "wren.datasource.type", "value": "bigquery"},
                 {
                     "name": "bigquery.project-id",
                     "value": os.getenv("bigquery.project-id"),
@@ -81,12 +81,12 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
         )
     elif dataset_type == "duckdb":
         _update_wren_engine_configs(
-            [{"name": "wren.datasource.type", "value": "DUCKDB"}]
+            [{"name": "wren.datasource.type", "value": "duckdb"}]
         )
     elif dataset_type == "postgresql":
         _update_wren_engine_configs(
             [
-                {"name": "wren.datasource.type", "value": "POSTGRES"},
+                {"name": "wren.datasource.type", "value": "postgres"},
                 {"name": "postgres.user", "value": os.getenv("postgres.user")},
                 {"name": "postgres.password", "value": os.getenv("postgres.password")},
                 {"name": "postgres.jdbc.url", "value": os.getenv("postgres.jdbc.url")},

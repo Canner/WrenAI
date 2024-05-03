@@ -78,31 +78,21 @@ if __name__ == "__main__":
             )
 
             if uploaded_file is not None:
-                if not re.match(
+                match = re.match(
                     r".+_(" + "|".join(DATA_SOURCES) + r")_mdl\.json$",
                     uploaded_file.name,
-                ):
+                )
+                if not match:
                     st.error(
                         f"the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}"
                     )
                     st.stop()
 
-                if "_duckdb_mdl.json" in uploaded_file.name:
-                    st.session_state["chosen_dataset"] = uploaded_file.name.split(
-                        "_duckdb_mdl.json"
-                    )[0]
-                    st.session_state["dataset_type"] = "duckdb"
-                elif "_bigquery_mdl.json" in uploaded_file.name:
-                    st.session_state["chosen_dataset"] = uploaded_file.name.split(
-                        "_bigquery_mdl.json"
-                    )[0]
-                    st.session_state["dataset_type"] = "bigquery"
-                elif "_postgresql_mdl.json" in uploaded_file.name:
-                    st.session_state["chosen_dataset"] = uploaded_file.name.split(
-                        "_postgresql_mdl.json"
-                    )[0]
-                    st.session_state["dataset_type"] = "postgresql"
-
+                data_source = match.group(1)
+                st.session_state["chosen_dataset"] = uploaded_file.name.split(
+                    f"_{data_source}_mdl.json"
+                )[0]
+                st.session_state["dataset_type"] = data_source
                 st.session_state["mdl_json"] = json.loads(
                     uploaded_file.getvalue().decode("utf-8")
                 )

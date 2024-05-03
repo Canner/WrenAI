@@ -1,0 +1,542 @@
+{
+  "catalog": "canner-cml",
+  "schema": "spider",
+  "models": [
+    {
+      "name": "Course",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Course\"",
+      "columns": [
+        {
+          "name": "CID",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "CID",
+          "properties": {}
+        },
+        {
+          "name": "CName",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "CName",
+          "properties": {}
+        },
+        {
+          "name": "Credits",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Credits",
+          "properties": {}
+        },
+        {
+          "name": "Instructor",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Instructor",
+          "properties": {}
+        },
+        {
+          "name": "Days",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Days",
+          "properties": {}
+        },
+        {
+          "name": "Hours",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Hours",
+          "properties": {}
+        },
+        {
+          "name": "DNO",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "DNO",
+          "properties": {}
+        },
+        {
+          "name": "Faculty",
+          "type": "Faculty",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Course_Faculty",
+          "properties": {}
+        },
+        {
+          "name": "Department",
+          "type": "Department",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Course_Department",
+          "properties": {}
+        }
+      ],
+      "primaryKey": "CID"
+    },
+    {
+      "name": "Department",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Department\"",
+      "columns": [
+        {
+          "name": "DNO",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "DNO",
+          "properties": {}
+        },
+        {
+          "name": "Division",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Division",
+          "properties": {}
+        },
+        {
+          "name": "DName",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "DName",
+          "properties": {}
+        },
+        {
+          "name": "Room",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Room",
+          "properties": {}
+        },
+        {
+          "name": "Building",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Building",
+          "properties": {}
+        },
+        {
+          "name": "DPhone",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "DPhone",
+          "properties": {}
+        }
+      ],
+      "primaryKey": "DNO"
+    },
+    {
+      "name": "Enrolled_in",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Enrolled_in\"",
+      "columns": [
+        {
+          "name": "StuID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "StuID",
+          "properties": {}
+        },
+        {
+          "name": "CID",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "CID",
+          "properties": {}
+        },
+        {
+          "name": "Grade",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Grade",
+          "properties": {}
+        },
+        {
+          "name": "Student",
+          "type": "Student",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Enrolled_in_Student",
+          "properties": {}
+        },
+        {
+          "name": "Course",
+          "type": "Course",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Enrolled_in_Course",
+          "properties": {}
+        },
+        {
+          "name": "Gradeconversion",
+          "type": "Gradeconversion",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Enrolled_in_Gradeconversion",
+          "properties": {}
+        }
+      ],
+      "primaryKey": ""
+    },
+    {
+      "name": "Faculty",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Faculty\"",
+      "columns": [
+        {
+          "name": "FacID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "FacID",
+          "properties": {}
+        },
+        {
+          "name": "Lname",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Lname",
+          "properties": {}
+        },
+        {
+          "name": "Fname",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Fname",
+          "properties": {}
+        },
+        {
+          "name": "Rank",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Rank",
+          "properties": {}
+        },
+        {
+          "name": "Sex",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Sex",
+          "properties": {}
+        },
+        {
+          "name": "Phone",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Phone",
+          "properties": {}
+        },
+        {
+          "name": "Room",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Room",
+          "properties": {}
+        },
+        {
+          "name": "Building",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Building",
+          "properties": {}
+        }
+      ],
+      "primaryKey": "FacID"
+    },
+    {
+      "name": "Gradeconversion",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Gradeconversion\"",
+      "columns": [
+        {
+          "name": "lettergrade",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "lettergrade",
+          "properties": {}
+        },
+        {
+          "name": "gradepoint",
+          "type": "FLOAT",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "gradepoint",
+          "properties": {}
+        }
+      ],
+      "primaryKey": "lettergrade"
+    },
+    {
+      "name": "Member_of",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Member_of\"",
+      "columns": [
+        {
+          "name": "FacID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "FacID",
+          "properties": {}
+        },
+        {
+          "name": "DNO",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "DNO",
+          "properties": {}
+        },
+        {
+          "name": "Appt_Type",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Appt_Type",
+          "properties": {}
+        },
+        {
+          "name": "Faculty",
+          "type": "Faculty",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Member_of_Faculty",
+          "properties": {}
+        },
+        {
+          "name": "Department",
+          "type": "Department",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Member_of_Department",
+          "properties": {}
+        }
+      ],
+      "primaryKey": ""
+    },
+    {
+      "name": "Minor_in",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Minor_in\"",
+      "columns": [
+        {
+          "name": "StuID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "StuID",
+          "properties": {}
+        },
+        {
+          "name": "DNO",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "DNO",
+          "properties": {}
+        },
+        {
+          "name": "Student",
+          "type": "Student",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Minor_in_Student",
+          "properties": {}
+        },
+        {
+          "name": "Department",
+          "type": "Department",
+          "notNull": true,
+          "isCalculated": false,
+          "relationship": "Minor_in_Department",
+          "properties": {}
+        }
+      ],
+      "primaryKey": ""
+    },
+    {
+      "name": "Student",
+      "properties": {},
+      "refSql": "select * from wrenai.spider.\"college_3-Student\"",
+      "columns": [
+        {
+          "name": "StuID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "StuID",
+          "properties": {}
+        },
+        {
+          "name": "LName",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "LName",
+          "properties": {}
+        },
+        {
+          "name": "Fname",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Fname",
+          "properties": {}
+        },
+        {
+          "name": "Age",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Age",
+          "properties": {}
+        },
+        {
+          "name": "Sex",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Sex",
+          "properties": {}
+        },
+        {
+          "name": "Major",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Major",
+          "properties": {}
+        },
+        {
+          "name": "Advisor",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Advisor",
+          "properties": {}
+        },
+        {
+          "name": "city_code",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "city_code",
+          "properties": {}
+        }
+      ],
+      "primaryKey": "StuID"
+    }
+  ],
+  "relationships": [
+    {
+      "name": "Course_Faculty",
+      "models": [
+        "Course",
+        "Faculty"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Course.Instructor = Faculty.FacID"
+    },
+    {
+      "name": "Course_Department",
+      "models": [
+        "Course",
+        "Department"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Course.DNO = Department.DNO"
+    },
+    {
+      "name": "Enrolled_in_Student",
+      "models": [
+        "Enrolled_in",
+        "Student"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Enrolled_in.StuID = Student.StuID"
+    },
+    {
+      "name": "Enrolled_in_Course",
+      "models": [
+        "Enrolled_in",
+        "Course"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Enrolled_in.CID = Course.CID"
+    },
+    {
+      "name": "Enrolled_in_Gradeconversion",
+      "models": [
+        "Enrolled_in",
+        "Gradeconversion"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Enrolled_in.Grade = Gradeconversion.lettergrade"
+    },
+    {
+      "name": "Member_of_Faculty",
+      "models": [
+        "Member_of",
+        "Faculty"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Member_of.FacID = Faculty.FacID"
+    },
+    {
+      "name": "Member_of_Department",
+      "models": [
+        "Member_of",
+        "Department"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Member_of.DNO = Department.DNO"
+    },
+    {
+      "name": "Minor_in_Student",
+      "models": [
+        "Minor_in",
+        "Student"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Minor_in.StuID = Student.StuID"
+    },
+    {
+      "name": "Minor_in_Department",
+      "models": [
+        "Minor_in",
+        "Department"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "Minor_in.DNO = Department.DNO"
+    }
+  ],
+  "metrics": [],
+  "cumulativeMetrics": [],
+  "enumDefinitions": [],
+  "views": [],
+  "macros": []
+}
