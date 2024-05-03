@@ -113,6 +113,9 @@ describe('MDLBuilder', () => {
           toModelId: 2,
           toModelName: 'customer',
           toColumnName: 'orderKey',
+          properties: JSON.stringify({
+            description: 'the relationship between orders and customers',
+          }),
         },
       ] as RelationInfo[];
       const builderOptions = {
@@ -141,7 +144,7 @@ describe('MDLBuilder', () => {
               type: 'STRING',
               isCalculated: false,
               notNull: true,
-              properties: { description: 'bar' },
+              properties: { description: 'bar', displayName: 'orderKey' },
             },
             {
               name: 'customer',
@@ -155,7 +158,7 @@ describe('MDLBuilder', () => {
           cached: false,
           refreshTime: null,
           primaryKey: 'orderKey',
-          properties: { description: 'foo table' },
+          properties: { description: 'foo table', displayName: 'order' },
         },
         {
           name: 'customer',
@@ -167,7 +170,7 @@ describe('MDLBuilder', () => {
               type: 'STRING',
               isCalculated: false,
               notNull: true,
-              properties: null,
+              properties: { displayName: 'orderKey' },
             },
             {
               name: 'order',
@@ -181,7 +184,7 @@ describe('MDLBuilder', () => {
           primaryKey: '',
           cached: false,
           refreshTime: null,
-          properties: null,
+          properties: { displayName: 'customer' },
         },
       ] as ModelMDL[];
 
@@ -191,6 +194,9 @@ describe('MDLBuilder', () => {
           models: ['order', 'customer'],
           joinType: 'oneToMany',
           condition: '"order".orderKey = "customer".orderKey',
+          properties: {
+            description: 'the relationship between orders and customers',
+          },
         },
       ] as RelationMDL[];
 
@@ -284,6 +290,9 @@ describe('MDLBuilder', () => {
         toModelId: 2,
         toModelName: 'customer',
         toColumnName: 'orderKey',
+        properties: JSON.stringify({
+          description: 'the relationship between orders and customers',
+        }),
       },
     ] as RelationInfo[];
     const views = [
@@ -327,7 +336,7 @@ describe('MDLBuilder', () => {
             type: 'STRING',
             isCalculated: false,
             notNull: true,
-            properties: { description: 'bar' },
+            properties: { description: 'bar', displayName: 'orderKey' },
           },
           {
             name: 'customer',
@@ -341,7 +350,7 @@ describe('MDLBuilder', () => {
         cached: false,
         refreshTime: null,
         primaryKey: 'orderKey',
-        properties: { description: 'foo table' },
+        properties: { description: 'foo table', displayName: 'order' },
       },
       {
         name: 'customer',
@@ -353,7 +362,7 @@ describe('MDLBuilder', () => {
             type: 'STRING',
             isCalculated: false,
             notNull: true,
-            properties: null,
+            properties: { displayName: 'orderKey' },
           },
           {
             name: 'order',
@@ -367,7 +376,7 @@ describe('MDLBuilder', () => {
         primaryKey: '',
         cached: false,
         refreshTime: null,
-        properties: null,
+        properties: { displayName: 'customer' },
       },
     ] as ModelMDL[];
 
@@ -377,6 +386,9 @@ describe('MDLBuilder', () => {
         models: ['order', 'customer'],
         joinType: 'oneToMany',
         condition: '"order".orderKey = "customer".orderKey',
+        properties: {
+          description: 'the relationship between orders and customers',
+        },
       },
     ] as RelationMDL[];
 
