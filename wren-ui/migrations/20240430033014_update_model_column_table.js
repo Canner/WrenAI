@@ -3,6 +3,7 @@
  * @returns { Promise<void> }
  */
 exports.up = function (knex) {
+  // Drop this column FE is no longer using it.
   return knex.schema.table('model_column', function (table) {
     table.dropColumn('diagram');
   });

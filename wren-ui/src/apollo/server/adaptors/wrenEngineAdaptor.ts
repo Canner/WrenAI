@@ -47,7 +47,7 @@ export interface DescribeStatementResponse {
   columns: ColumnMetadata[];
 }
 
-export enum WrenEngineValidateStatusEnum {
+export enum WrenEngineValidateStatus {
   PASS = 'PASS',
   ERROR = 'ERROR',
   FAIL = 'FAIL',
@@ -58,7 +58,7 @@ export enum WrenEngineValidateStatusEnum {
 export interface WrenEngineValidateResponse {
   duration: string;
   name: string;
-  status: WrenEngineValidateStatusEnum;
+  status: WrenEngineValidateStatus;
 }
 
 export interface ValidationResponse {
@@ -124,7 +124,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         payload,
       );
       const result = res.data[0] as WrenEngineValidateResponse;
-      if (result.status === WrenEngineValidateStatusEnum.PASS) {
+      if (result.status === WrenEngineValidateStatus.PASS) {
         return { valid: true };
       } else {
         return { valid: false, message: JSON.stringify(result) };

@@ -14,7 +14,6 @@ export interface ModelColumn {
   sourceColumnName: string; // The column name in the datasource
   aggregation?: string; // Expression for the column, could be custom field or calculated field expression
   lineage?: string; // The selected field in calculated field, array of ids
-  diagram?: string; // For FE to store the calculated field diagram
   customExpression?: string; // For custom field or custom expression of calculated field
   type: string; // Data type, refer to the column type in the datasource
   notNull: boolean; // Is not null
