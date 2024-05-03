@@ -172,8 +172,14 @@ export class Transformer {
       )!;
       const targetField = targetModel.relationFields.find(
         (field) =>
-          [field.fromColumnName, field.toColumnName].toString() ===
-          [relationField.fromColumnName, relationField.toColumnName].toString(),
+          [
+            `${field.fromModelName}.${field.fromColumnName}`,
+            `${field.toModelName}.${field.toColumnName}`,
+          ].toString() ===
+          [
+            `${relationField.fromModelName}.${relationField.fromColumnName}`,
+            `${relationField.toModelName}.${relationField.toColumnName}`,
+          ].toString(),
       );
 
       // check what source and target relation order

@@ -54,17 +54,23 @@ export class DiagramResolver {
         (column) => column.modelId === model.id,
       );
       allColumns.forEach((column) => {
-        const relation = relations.find((relation) =>
-          [relation.fromColumnId, relation.toColumnId].includes(column.id),
-        );
+        const columnRelations = relations
+          .map((relation) =>
+            [relation.fromColumnId, relation.toColumnId].includes(column.id)
+              ? relation
+              : null,
+          )
+          .filter((relation) => !!relation);
 
-        if (relation) {
-          const transformedRelationField = this.transformModelRelationField({
-            relation,
-            currentModel: model,
-            models,
+        if (columnRelations.length > 0) {
+          columnRelations.forEach((relation) => {
+            const transformedRelationField = this.transformModelRelationField({
+              relation,
+              currentModel: model,
+              models,
+            });
+            transformedModel.relationFields.push(transformedRelationField);
           });
-          transformedModel.relationFields.push(transformedRelationField);
         }
 
         if (column.isCalculated) {
