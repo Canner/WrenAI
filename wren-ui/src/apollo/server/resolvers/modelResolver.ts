@@ -480,10 +480,6 @@ export class ModelResolver {
     return value;
   }
 
-  private isMetadataValueEmpty(metadata: Record<string, string>) {
-    return Object.values(metadata).every((value) => value === undefined);
-  }
-
   // validate view name
   private async validateViewName(
     viewName: string,
