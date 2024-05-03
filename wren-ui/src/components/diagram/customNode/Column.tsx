@@ -9,6 +9,7 @@ const NodeColumn = styled.div`
   justify-content: space-between;
   padding: 4px 8px;
   color: var(--gray-9);
+  line-height: 24px;
 
   &:hover {
     background-color: var(--gray-3);
@@ -78,7 +79,9 @@ export default function Column(props: ColumnProps) {
       onMouseLeave={onMouseLeave}
     >
       <div className="adm-column-title">
-        <span title={type}>{icon}</span>
+        <span className="d-inline-flex flex-shrink-0" title={type}>
+          {icon}
+        </span>
         <span title={displayName}>{displayName}</span>
       </div>
       {extra}
