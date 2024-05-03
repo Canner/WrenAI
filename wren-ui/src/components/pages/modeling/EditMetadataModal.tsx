@@ -7,6 +7,7 @@ import EditModelMetadata, {
 import { EditableContext } from '@/components/EditableWrapper';
 
 type DefaultValue = EditModelProps & {
+  modelId: number;
   nodeType: NODE_TYPE;
 };
 
@@ -24,7 +25,7 @@ export default function EditMetadataModal(props: Props) {
 
   const submit = async () => {
     const values = form.getFieldValue(formNamespace);
-    await onSubmit(values);
+    await onSubmit({ data: values, id: defaultValue?.modelId });
     onClose();
   };
 

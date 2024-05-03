@@ -21,6 +21,7 @@ import {
   useDeleteModelMutation,
   useUpdateModelMutation,
 } from '@/apollo/client/graphql/model.generated';
+import { useUpdateModelMetadataMutation } from '@/apollo/client/graphql/metadata.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -91,6 +92,14 @@ export default function Modeling() {
     getBaseOptions({
       onCompleted: () => {
         message.success('Successfully deleted view.');
+      },
+    }),
+  );
+
+  const [updateModelMetadata] = useUpdateModelMetadataMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully updated model metadata.');
       },
     }),
   );
@@ -238,8 +247,8 @@ export default function Modeling() {
         <EditMetadataModal
           {...editMetadataModal.state}
           onClose={editMetadataModal.closeModal}
-          onSubmit={async (values) => {
-            console.log(values);
+          onSubmit={async ({ id, data }) => {
+            await updateModelMetadata({ variables: { where: { id }, data } });
           }}
         />
         <ModelDrawer
