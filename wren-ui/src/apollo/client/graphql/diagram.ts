@@ -22,6 +22,7 @@ const RELATION_FIELD = gql`
     fromColumnName
     toModelName
     toColumnName
+    description
   }
 `;
 
