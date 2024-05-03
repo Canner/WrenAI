@@ -19,6 +19,12 @@ export interface Props {
   properties: Record<string, any>;
 }
 
+const FIELDS_NAME = {
+  FIELDS: 'columns',
+  CALCULATED_FIELDS: 'calculatedFields',
+  RELATIONSHIPS: 'relationships',
+};
+
 export default function EditModelMetadata(props: Props) {
   const {
     formNamespace,
@@ -50,8 +56,12 @@ export default function EditModelMetadata(props: Props) {
     // bind changeable metadata values
     onChange({
       [fieldsName]: value.map((item) => ({
-        displayName: item.displayName,
+        id: item.relationId || item.columnId,
         description: item.description,
+        // Only models & fields have alias
+        ...(fieldsName === FIELDS_NAME.FIELDS
+          ? { displayName: item.displayName }
+          : {}),
       })),
     });
   };
@@ -75,7 +85,7 @@ export default function EditModelMetadata(props: Props) {
             { ...COLUMN.TYPE, width: 150 },
             { ...COLUMN.DESCRIPTION, width: 280 },
           ]}
-          onChange={handleMetadataChange('fields')}
+          onChange={handleMetadataChange(FIELDS_NAME.FIELDS)}
         />
       </div>
 
@@ -91,7 +101,7 @@ export default function EditModelMetadata(props: Props) {
               COLUMN.EXPRESSION,
               { ...COLUMN.DESCRIPTION, width: 280 },
             ]}
-            onChange={handleMetadataChange('calculatedFields')}
+            onChange={handleMetadataChange(FIELDS_NAME.CALCULATED_FIELDS)}
           />
         </div>
       )}
@@ -110,7 +120,7 @@ export default function EditModelMetadata(props: Props) {
               { ...COLUMN.RELATION, width: 130 },
               { ...COLUMN.DESCRIPTION, width: 200 },
             ]}
-            onChange={handleMetadataChange('relationFields')}
+            onChange={handleMetadataChange(FIELDS_NAME.RELATIONSHIPS)}
           />
         </div>
       )}
