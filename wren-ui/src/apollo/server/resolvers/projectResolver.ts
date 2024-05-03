@@ -262,9 +262,10 @@ export class ProjectResolver {
       ctx,
     });
     const relations = await strategy.analysisRelation(models, columns);
-    return models.map(({ id, sourceTableName }) => ({
+    return models.map(({ id, displayName, referenceName }) => ({
       id,
-      name: sourceTableName,
+      displayName,
+      referenceName,
       relations: relations.filter((relation) => relation.fromModelId === id),
     }));
   }
