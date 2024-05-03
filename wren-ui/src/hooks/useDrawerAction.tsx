@@ -27,6 +27,10 @@ export default function useDrawerAction() {
     setFormMode(FORM_MODE.CREATE);
   };
 
+  const updateState = (value?: any) => {
+    setDefaultValue(value);
+  };
+
   return {
     state: {
       visible,
@@ -35,5 +39,6 @@ export default function useDrawerAction() {
     },
     openDrawer,
     closeDrawer,
+    updateState,
   };
 }
