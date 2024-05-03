@@ -125,7 +125,7 @@ export class DiagramResolver {
       refSql: model.refSql,
       refreshTime: model.refreshTime,
       cached: model.cached,
-      description: properties?.description || '',
+      description: properties?.description,
       fields: [],
       calculatedFields: [],
       relationFields: [],
@@ -143,7 +143,7 @@ export class DiagramResolver {
       type: column.type,
       displayName: column.displayName,
       referenceName: column.referenceName,
-      description: properties?.description || '',
+      description: properties?.description,
       isPrimaryKey: column.isPk,
       expression: column.aggregation,
     };
@@ -167,7 +167,7 @@ export class DiagramResolver {
       type: column.type,
       displayName: column.displayName,
       referenceName: column.referenceName,
-      description: properties?.description || '',
+      description: properties?.description,
       isPrimaryKey: column.isPk,
       expression: columnMDL.expression,
     };
@@ -202,7 +202,7 @@ export class DiagramResolver {
       fromColumnName: relation.fromColumnName,
       toModelName: relation.toModelName,
       toColumnName: relation.toColumnName,
-      description: properties?.description || '',
+      description: properties?.description,
     };
   }
 
