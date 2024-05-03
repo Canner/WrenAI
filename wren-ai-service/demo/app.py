@@ -6,7 +6,6 @@ from utils import (
     ask,
     ask_details,
     get_current_manifest,
-    get_datasets,
     get_mdl_json,
     get_new_mdl_json,
     is_current_manifest_available,
@@ -55,8 +54,6 @@ def onchange_demo_dataset():
 
 
 if __name__ == "__main__":
-    datasets = get_datasets()
-
     col1, col2 = st.columns([2, 4])
 
     with col1:
