@@ -188,6 +188,33 @@ class DeleteCalculatedFieldErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateRelationshipErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create relationship.';
+    }
+  }
+}
+
+class UpdateRelationshipErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update relationship.';
+    }
+  }
+}
+
+class DeleteRelationshipErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete relationship.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -216,6 +243,11 @@ errorHandlers.set(
   'DeleteCalculatedField',
   new DeleteCalculatedFieldErrorHandler(),
 );
+
+// Relationship
+errorHandlers.set('CreateRelationship', new CreateRelationshipErrorHandler());
+errorHandlers.set('UpdateRelationship', new UpdateRelationshipErrorHandler());
+errorHandlers.set('DeleteRelationship', new DeleteRelationshipErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   const operationName = error?.operation?.operationName || '';
