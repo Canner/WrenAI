@@ -9,8 +9,8 @@ import {
 } from '@/utils/data';
 
 export const Config = {
-  // the number of model in one row
-  modelsInRow: 4,
+  // the number of nodes in one row
+  nodesInRow: 4,
   // the width of the model
   width: 200,
   // height should be calculated depending on the number of columns
@@ -18,9 +18,7 @@ export const Config = {
   // the height of the model header
   headerHeight: 32,
   // the height of the model column
-  columnHeight: 28,
-  // the height of the subtitle
-  subtitleHeight: 28,
+  columnHeight: 32,
   // the height of more tip
   moreTipHeight: 25,
   // the columns limit
@@ -31,11 +29,15 @@ export const Config = {
   marginX: 100,
   // the margin y between the model and the other models
   marginY: 50,
+  // the model preserved height, for example: the model has 3 subtitles
+  modelNodePreservedHeight: 32 * 3,
+  // the view preserved height, for example: the view has 1 subtitle
+  viewNodePreservedHeight: 32 * 1,
 };
 
 const convertBooleanToNumber = (value) => (value ? 1 : 0);
 
-const getLimitedColumnsLengthProps = (columns: any[]) => {
+const getLimitedColumnsLengthProps = (columns: any[] = []) => {
   const isOverLimit = columns.length > Config.columnsLimit;
   const limitedLength = isOverLimit ? Config.columnsLimit : columns.length;
   return {
@@ -102,18 +104,29 @@ export class Transformer {
     const width = this.getNodeWidth();
     let floorHeight = 0;
     const { length } = this.nodes;
-    const { marginX, marginY, modelsInRow } = this.config;
-    const isNextFloor = length % modelsInRow === 0;
+    const { marginX, marginY, nodesInRow } = this.config;
+    const isNextFloor = length % nodesInRow === 0;
     if (isNextFloor) {
       this.start.floor++;
-      const lastFloorIndex = modelsInRow * (this.start.floor - 1);
-      const models = this.models.slice(lastFloorIndex, lastFloorIndex + 4);
+      const lastFloorIndex = nodesInRow * (this.start.floor - 1);
+      const composeDiagrams: ComposeDiagram[] = [
+        ...this.models,
+        ...this.views,
+      ].slice(lastFloorIndex, lastFloorIndex + 4);
 
-      const modelWithMostColumns = models.reduce((prev, current) => {
-        const prevColumns = [...prev.fields, ...prev.calculatedFields];
-        const currentColumns = [...current.fields, ...current.calculatedFields];
+      const modelWithMostColumns = composeDiagrams.reduce((prev, current) => {
+        const prevColumns = [
+          ...prev.fields,
+          ...(prev?.calculatedFields || []),
+          ...(current?.relationFields || []),
+        ];
+        const currentColumns = [
+          ...current.fields,
+          ...(current?.calculatedFields || []),
+          ...(current?.relationFields || []),
+        ];
         return prevColumns.length > currentColumns.length ? prev : current;
-      }, models[0]);
+      }, composeDiagrams[0]);
 
       floorHeight = this.getNodeHeight(modelWithMostColumns) + marginY;
     }
@@ -157,10 +170,11 @@ export class Transformer {
     for (const relationField of relationFields) {
       // check if edge already exist
       const hasEdgeExist = this.edges.some((edge) => {
-        const [id] = (edge.targetHandle || '').split('_');
-        return id === relationField.id;
+        // the edge should be unique as relationId
+        const edgeRelationId = edge.data?.relation?.relationId;
+        return edgeRelationId === relationField.relationId;
       });
-      if (hasEdgeExist) break;
+      if (hasEdgeExist) continue;
 
       // prepare to add new edge
       const targetModel = this.models.find(
@@ -259,8 +273,8 @@ export class Transformer {
   }
 
   private getFloorIndex(index: number): number {
-    const { modelsInRow } = this.config;
-    return index % modelsInRow;
+    const { nodesInRow } = this.config;
+    return index % nodesInRow;
   }
 
   private detectEdgePosition(source: string, target: string) {
@@ -307,42 +321,56 @@ export class Transformer {
     return this.config.width;
   }
 
-  private getNodeHeight(model: DiagramModel) {
+  private getNodeHeight(composeDiagram: ComposeDiagram) {
     const {
       height: nodeHeight,
       headerHeight,
       columnHeight,
-      subtitleHeight,
       moreTipHeight,
+      modelNodePreservedHeight,
+      viewNodePreservedHeight,
     } = this.config;
 
+    // get preserved height setting
+    const preservedHeightMap = {
+      [NODE_TYPE.MODEL]: modelNodePreservedHeight,
+      [NODE_TYPE.VIEW]: viewNodePreservedHeight,
+    };
+    const preservedHeight = preservedHeightMap[composeDiagram.nodeType];
+
+    // check if columns limit is reached
     const { limitedLength: fieldsLength, isOverLimit: isFieldsOverLimit } =
-      getLimitedColumnsLengthProps(model.fields);
+      getLimitedColumnsLengthProps(composeDiagram.fields);
+    const {
+      limitedLength: calculatedFieldsLength,
+      isOverLimit: isCalculatedFieldsOverLimit,
+    } = getLimitedColumnsLengthProps(composeDiagram?.calculatedFields);
     const {
       limitedLength: relationFieldsLength,
       isOverLimit: isRelationsOverLimit,
-    } = getLimitedColumnsLengthProps(model.relationFields);
+    } = getLimitedColumnsLengthProps(composeDiagram?.relationFields);
 
-    // currently only support relation subtitle
-    const subtitleCount = convertBooleanToNumber(relationFieldsLength !== 0);
+    // count more tip
     const moreTipCount =
       convertBooleanToNumber(isFieldsOverLimit) +
+      convertBooleanToNumber(isCalculatedFieldsOverLimit) +
       convertBooleanToNumber(isRelationsOverLimit);
 
     // calculate all block height
     const displayHeaderHeight = headerHeight;
-    const displaySubtitleHeight = subtitleHeight * subtitleCount;
     const displayColumnHeight =
-      nodeHeight || columnHeight * (fieldsLength + relationFieldsLength);
+      nodeHeight ||
+      columnHeight *
+        (fieldsLength + calculatedFieldsLength + relationFieldsLength);
     const displayMoreTipHeight = moreTipHeight * moreTipCount;
     // padding remain
     const paddingHeight = 4;
 
     return (
       displayHeaderHeight +
-      displaySubtitleHeight +
       displayColumnHeight +
       displayMoreTipHeight +
+      preservedHeight +
       paddingHeight
     );
   }
