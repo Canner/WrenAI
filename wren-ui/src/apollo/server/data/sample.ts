@@ -13,6 +13,7 @@ export interface SampleDatasetSchema {
 export interface SampleDatasetTable {
   filePath: string;
   tableName: string;
+  primaryKey?: string;
   // the column order in schema definition should be the same as the column in csv file
   schema?: SampleDatasetSchema[];
   columns?: SampleDatasetColumn[];
@@ -198,8 +199,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
     tables: [
       {
         tableName: 'customers',
+        primaryKey: 'Id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/customers.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/customers.csv',
         properties: {
           description:
             'A table of customers who have made purchases, including their city',
@@ -235,8 +237,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'order_items',
+        primaryKey: 'Id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/order_items.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/order_items.csv',
         columns: [
           {
             name: 'FreightValue',
@@ -286,6 +289,7 @@ export const sampleDatasets: Record<string, SampleDataset> = {
             'The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.',
         },
         schema: [
+          { columnName: 'Id', dataType: 'VARCHAR' },
           { columnName: 'OrderId', dataType: 'VARCHAR' },
           { columnName: 'ItemNumber', dataType: 'BIGINT' },
           { columnName: 'ProductId', dataType: 'VARCHAR' },
@@ -296,8 +300,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'orders',
+        primaryKey: 'OrderId',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/orders.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/orders.csv',
         columns: [
           {
             name: 'ApprovedTimestamp',
@@ -369,8 +374,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'payments',
+        primaryKey: 'Id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/payments.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/payments.csv',
         columns: [
           {
             name: 'Installments',
@@ -413,6 +419,7 @@ export const sampleDatasets: Record<string, SampleDataset> = {
             'A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.',
         },
         schema: [
+          { columnName: 'Id', dataType: 'VARCHAR' },
           { columnName: 'OrderId', dataType: 'VARCHAR' },
           { columnName: 'Sequential', dataType: 'BIGINT' },
           { columnName: 'Type', dataType: 'VARCHAR' },
@@ -422,8 +429,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'products',
+        primaryKey: 'Id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/products.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/products.csv',
         columns: [
           {
             name: 'Category',
@@ -458,8 +466,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'reviews',
+        primaryKey: 'Id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/reviews.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/reviews.csv',
         columns: [
           {
             name: 'AnswerTimestamp',
@@ -565,7 +574,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
     tables: [
       {
         tableName: 'game',
-        filePath: 'https://wrenai-public.s3.amazonaws.com/demo/NBA/game.csv',
+        primaryKey: 'Id',
+        filePath:
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/NBA/game.csv',
         columns: [
           {
             name: 'Id',
@@ -814,8 +825,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'line_score',
+        primaryKey: 'GameId',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/NBA/line_score.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/NBA/line_score.csv',
         columns: [
           {
             name: 'GameId',
@@ -933,8 +945,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'player_games',
+        primaryKey: 'Id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/NBA/player_game.csv',
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/NBA/player_game.csv',
         columns: [
           {
             name: 'Id',
@@ -1058,7 +1071,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'player',
-        filePath: 'https://wrenai-public.s3.amazonaws.com/demo/NBA/player.csv',
+        primaryKey: 'Id',
+        filePath:
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/NBA/player.csv',
         columns: [
           {
             name: 'Id',
@@ -1086,7 +1101,9 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
       {
         tableName: 'team',
-        filePath: 'https://wrenai-public.s3.amazonaws.com/demo/NBA/team.csv',
+        primaryKey: 'Id',
+        filePath:
+          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/NBA/team.csv',
         columns: [
           {
             name: 'Id',
