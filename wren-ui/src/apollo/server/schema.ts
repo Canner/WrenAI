@@ -366,6 +366,8 @@ export const typeDefs = gql`
     description: String
     isPrimaryKey: Boolean!
     expression: String
+    aggregation: String
+    lineage: [Int!]
   }
 
   type DiagramModelRelationField {
@@ -612,8 +614,8 @@ export const typeDefs = gql`
     # Calculated field
     createCalculatedField(data: CreateCalculatedFieldInput!): JSON!
     updateCalculatedField(
+      where: UpdateCalculatedFieldWhere!
       data: UpdateCalculatedFieldInput!
-      where: UpdateCalculatedFieldWhere
     ): JSON!
     deleteCalculatedField(where: UpdateCalculatedFieldWhere): Boolean!
     validateCalculatedField(

@@ -13,7 +13,20 @@ export type {
   DiagramView,
 } from '@/apollo/client/graphql/__types__';
 
-export type ComposeDiagram = DiagramModel | DiagramView;
+export type ComposeDiagram = (DiagramModel | DiagramView) &
+  Partial<
+    Pick<
+      DiagramModel,
+      | 'modelId'
+      | 'calculatedFields'
+      | 'relationFields'
+      | 'refSql'
+      | 'refreshTime'
+      | 'cached'
+      | 'sourceTableName'
+    >
+  > &
+  Partial<Pick<DiagramView, 'viewId' | 'statement'>>;
 
 export type ComposeDiagramField = (
   | DiagramModelField

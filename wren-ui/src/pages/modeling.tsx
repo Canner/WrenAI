@@ -7,12 +7,12 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
 import CalculatedFieldModal from '@/components/modals/CalculatedFieldModal';
+import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
-import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
 import { useDeleteViewMutation } from '@/apollo/client/graphql/view.generated';
@@ -22,6 +22,12 @@ import {
   useUpdateModelMutation,
 } from '@/apollo/client/graphql/model.generated';
 import { useUpdateModelMetadataMutation } from '@/apollo/client/graphql/metadata.generated';
+import {
+  useCreateCalculatedFieldMutation,
+  useUpdateCalculatedFieldMutation,
+  useDeleteCalculatedFieldMutation,
+} from '@/apollo/client/graphql/calculatedField.generated';
+import { editCalculatedField } from '@/utils/modelingHelper';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -63,6 +69,31 @@ export default function Modeling() {
       },
     };
   };
+
+  const [createCalculatedField, { loading: calculatedFieldCreating }] =
+    useCreateCalculatedFieldMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully created calculated field.');
+        },
+      }),
+    );
+
+  const [updateCalculatedField] = useUpdateCalculatedFieldMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully updated calculated field.');
+      },
+    }),
+  );
+
+  const [deleteCalculatedField] = useDeleteCalculatedFieldMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully deleted calculated field.');
+      },
+    }),
+  );
 
   const [createModelMutation, createModelResult] = useCreateModelMutation(
     getBaseOptions({
@@ -158,20 +189,10 @@ export default function Modeling() {
       [MORE_ACTION.EDIT]: () => {
         switch (nodeType) {
           case NODE_TYPE.CALCULATED_FIELD:
-            // TODO: integrate with update calculated field modal
-            const sourceModel =
-              diagramData.models.find(
-                (model) => model.modelId === data.modelId,
-              ) || {};
-            calculatedFieldModal.openModal({
-              name: data.referenceName,
-              expression: '',
-              lineage: [],
-              payload: {
-                models: diagramData.models,
-                sourceModel,
-              },
-            });
+            editCalculatedField(
+              { ...payload, diagramData },
+              calculatedFieldModal.openModal,
+            );
             break;
           case NODE_TYPE.RELATION:
             console.log('edit relation');
@@ -190,7 +211,9 @@ export default function Modeling() {
             });
             break;
           case NODE_TYPE.CALCULATED_FIELD:
-            console.log('delete calculated field');
+            await deleteCalculatedField({
+              variables: { where: { id: data.columnId } },
+            });
             break;
           case NODE_TYPE.RELATION:
             console.log('delete relation');
@@ -229,6 +252,8 @@ export default function Modeling() {
         break;
     }
   };
+
+  const calculatedFieldLoading = calculatedFieldCreating;
 
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
@@ -276,8 +301,15 @@ export default function Modeling() {
         <CalculatedFieldModal
           {...calculatedFieldModal.state}
           onClose={calculatedFieldModal.closeModal}
-          onSubmit={async (values) => {
-            console.log(values);
+          loading={calculatedFieldLoading}
+          onSubmit={async ({ id, ...values }) => {
+            if (id) {
+              await updateCalculatedField({
+                variables: { where: { id }, data: values },
+              });
+            } else {
+              await createCalculatedField({ variables: { data: values } });
+            }
           }}
         />
       </SiderLayout>

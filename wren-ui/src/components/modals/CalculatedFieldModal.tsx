@@ -5,19 +5,24 @@ import { omit } from 'lodash';
 import { ERROR_TEXTS } from '@/utils/error';
 import { DiagramModel } from '@/utils/data/type';
 import { ModalAction } from '@/hooks/useModalAction';
-import { lineageSelectorValidator } from '@/utils/validator';
+import {
+  createLineageSelectorNameValidator,
+  createLineageSelectorValidator,
+} from '@/utils/validator';
 import { FieldValue } from '@/components/selectors/lineageSelector/FieldSelect';
 import useExpressionFieldOptions from '@/hooks/useExpressionFieldOptions';
 import LineageSelector, {
   getLineageOptions,
 } from '@/components/selectors/lineageSelector';
 import DescriptiveSelector from '@/components/selectors/DescriptiveSelector';
+import { useValidateCalculatedFieldMutation } from '@/apollo/client/graphql/calculatedField.generated';
+import { CreateCalculatedFieldInput } from '@/apollo/client/graphql/__types__';
 
 export type CalculatedFieldValue = {
-  [key: string]: any;
   name: string;
   expression: string;
   lineage: FieldValue[];
+  columnId?: number;
 
   payload: {
     models: DiagramModel[];
@@ -25,7 +30,10 @@ export type CalculatedFieldValue = {
   };
 };
 
-type Props = ModalAction<CalculatedFieldValue> & {
+type Props = ModalAction<
+  CalculatedFieldValue,
+  CreateCalculatedFieldInput & { id?: number }
+> & {
   loading?: boolean;
 };
 
@@ -33,6 +41,7 @@ export default function AddCalculatedFieldModal(props: Props) {
   const { visible, loading, onSubmit, onClose, defaultValue } = props;
 
   const [form] = Form.useForm();
+  const expression = Form.useWatch('expression', form);
   const lineage = Form.useWatch('lineage', form);
 
   const expressionOptions = useExpressionFieldOptions();
@@ -41,6 +50,21 @@ export default function AddCalculatedFieldModal(props: Props) {
   const sourceModel = useMemo(
     () => defaultValue?.payload?.sourceModel,
     [defaultValue],
+  );
+
+  const [validateCalculatedField] = useValidateCalculatedFieldMutation();
+  const validateCalculatedFieldName = useCallback(
+    async (name: string) =>
+      await validateCalculatedField({
+        variables: {
+          data: {
+            name,
+            modelId: sourceModel.modelId,
+            columnId: defaultValue?.columnId,
+          },
+        },
+      }),
+    [sourceModel, defaultValue],
   );
 
   useEffect(() => {
@@ -54,21 +78,32 @@ export default function AddCalculatedFieldModal(props: Props) {
         (model) => model.referenceName === value.referenceName,
       );
       // use current model options when initial
-      return getLineageOptions(selectedModel, lineage);
+      return getLineageOptions({
+        model: selectedModel,
+        sourceModel,
+        expression,
+        values: lineage,
+      });
     },
-    [models, lineage],
+    [models, lineage, expression],
   );
 
   const submit = () => {
     form
       .validateFields()
       .then(async (values) => {
+        const id = defaultValue?.columnId;
+        const modelId = !id ? sourceModel.modelId : undefined;
+
         await onSubmit({
-          ...values,
-          sourceModel: {
-            modelId: sourceModel.modelId,
-            referenceName: sourceModel.referenceName,
-          },
+          id,
+          modelId,
+          expression: values.expression,
+          name: values.name,
+          // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId
+          lineage: values.lineage.map(
+            (field) => field.relationId || field.columnId,
+          ),
         });
         onClose();
       })
@@ -114,8 +149,9 @@ export default function AddCalculatedFieldModal(props: Props) {
           required
           rules={[
             {
-              required: true,
-              message: ERROR_TEXTS.CALCULATED_FIELD.NAME.REQUIRED,
+              validator: createLineageSelectorNameValidator(
+                validateCalculatedFieldName,
+              ),
             },
           ]}
         >
@@ -151,21 +187,21 @@ export default function AddCalculatedFieldModal(props: Props) {
           />
         </Form.Item>
         <div className="py-1" />
-        <Form.Item
-          name="lineage"
-          rules={[
-            {
-              validator: lineageSelectorValidator(
-                ERROR_TEXTS.CALCULATED_FIELD.LINEAGE,
-              ),
-            },
-          ]}
-        >
-          <LineageSelector
-            sourceModel={sourceModel}
-            onFetchOptions={fetchOptions}
-          />
-        </Form.Item>
+        {!!expression && (
+          <Form.Item
+            name="lineage"
+            rules={[
+              {
+                validator: createLineageSelectorValidator(expression),
+              },
+            ]}
+          >
+            <LineageSelector
+              sourceModel={sourceModel}
+              onFetchOptions={fetchOptions}
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   );

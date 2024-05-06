@@ -37,6 +37,8 @@ const FIELD = gql`
     description
     isPrimaryKey
     expression
+    aggregation
+    lineage
   }
 `;
 
