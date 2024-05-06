@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 import pytest
+from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
 from src.pipelines.ask.components.document_store import init_document_store
 from src.pipelines.ask.components.embedder import init_embedder
@@ -39,6 +40,33 @@ def test_indexing_pipeline(mdl_str: str, document_store: Any):
     indexing_pipeline.run(mdl_str)
 
     assert document_store.count_documents() == 2
+
+
+def test_clear_documents(mdl_str: str):
+    store = QdrantDocumentStore(
+        ":memory:",
+        index="test_clear_documents",
+        embedding_dim=3072,
+        recreate_index=True,
+        return_embedding=True,
+        wait_result_from_api=True,
+    )
+
+    indexing_pipeline = Indexing(
+        document_store=store,
+    )
+
+    indexing_pipeline.run(mdl_str)
+    assert store.count_documents() == 2
+
+    indexing_pipeline.run(
+        """
+        {"models": [], "relationships": [], "views": [
+          {"name": "book", "statement": "SELECT * FROM book", "properties": {}}
+        ]}
+        """
+    )
+    assert store.count_documents() == 1
 
 
 def test_query_understanding_pipeline():
