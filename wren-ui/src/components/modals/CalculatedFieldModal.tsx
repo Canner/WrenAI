@@ -80,6 +80,7 @@ export default function AddCalculatedFieldModal(props: Props) {
       // use current model options when initial
       return getLineageOptions({
         model: selectedModel,
+        sourceModel,
         expression,
         values: lineage,
       });

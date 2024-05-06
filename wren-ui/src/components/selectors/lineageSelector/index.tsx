@@ -16,6 +16,7 @@ import {
 } from 'antd/lib/form/context';
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
+import { aggregations } from '@/utils/expressionType';
 import { ExpressionName } from '@/apollo/client/graphql/__types__';
 import {
   checkStringFunctionAllowType,
@@ -93,16 +94,21 @@ export default function LineageSelector(props: Props) {
 
 export const getLineageOptions = (data: {
   model: DiagramModel;
+  sourceModel: DiagramModel;
   expression: ExpressionName;
   values: FieldValue[];
 }) => {
-  const { model, expression, values = [] } = data;
+  const { model, sourceModel, expression, values = [] } = data;
   const hasPrimaryKey = model.fields.some((field) => field.isPrimaryKey);
+  const isSourceModel = model.modelId === sourceModel.modelId;
 
   const convertor = (field) => {
     const value = compactObject(getFieldValue(field));
     const isRelationship = field.nodeType === NODE_TYPE.RELATION;
 
+    // check if user select aggregation functions, then the source model fields cannot be selected
+    const isSourceModelFieldsWithAggregation =
+      aggregations.includes(expression) && isSourceModel && !isRelationship;
     // check if the relationship is in used
     const isInUsedRelationship =
       isRelationship &&
@@ -124,7 +130,23 @@ export const getLineageOptions = (data: {
     }
 
     const disabled =
-      isRelationshipWithoutPrimaryKey || isInUsedRelationship || isInvalidType;
+      isSourceModelFieldsWithAggregation ||
+      isRelationshipWithoutPrimaryKey ||
+      isInUsedRelationship ||
+      isInvalidType;
+
+    let title = undefined;
+    if (isSourceModelFieldsWithAggregation) {
+      title =
+        "Aggregation functions don't allow selecting from source model fields to prevent unexpected outcomes.";
+    } else if (isRelationshipWithoutPrimaryKey) {
+      title =
+        'Please set a primary key within this model to use it in a calculated field.';
+    } else if (isInUsedRelationship) {
+      title = 'This relationship is in use.';
+    } else if (isInvalidType) {
+      title = invalidTypeMessage;
+    }
 
     return {
       label: (
@@ -143,13 +165,7 @@ export const getLineageOptions = (data: {
         </div>
       ),
       value,
-      title: isRelationshipWithoutPrimaryKey
-        ? 'Please set a primary key within this model to use it in a calculated field.'
-        : isInUsedRelationship
-          ? 'This relationship is in use.'
-          : isInvalidType
-            ? invalidTypeMessage
-            : undefined,
+      title,
       disabled,
     };
   };
