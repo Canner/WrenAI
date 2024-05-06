@@ -28,6 +28,7 @@ export interface ValidateCalculatedFieldResponse {
 }
 
 export interface IModelService {
+  updatePrimaryKeys(tables: SampleDatasetTable[]): Promise<void>;
   batchUpdateModelProperties(tables: SampleDatasetTable[]): Promise<void>;
   batchUpdateColumnProperties(tables: SampleDatasetTable[]): Promise<void>;
   // saveRelations was used in the onboarding process, we assume there is not existing relation in the project
@@ -202,6 +203,25 @@ export class ModelService implements IModelService {
       lineage: JSON.stringify(lineage),
     });
     return updatedColumn;
+  }
+
+  public async updatePrimaryKeys(tables: SampleDatasetTable[]) {
+    logger.debug('start update primary keys');
+    const project = await this.projectService.getCurrentProject();
+    const models = await this.modelRepository.findAllBy({
+      projectId: project.id,
+    });
+    const tableToUpdate = tables.filter((t) => t.primaryKey);
+    for (const table of tableToUpdate) {
+      const model = models.find((m) => m.sourceTableName === table.tableName);
+      if (!model) {
+        logger.debug(`Model not found, table name: ${table.tableName}`);
+      }
+      await this.modelColumnRepository.setModelPrimaryKey(
+        model.id,
+        table.primaryKey,
+      );
+    }
   }
 
   public async batchUpdateModelProperties(tables: SampleDatasetTable[]) {

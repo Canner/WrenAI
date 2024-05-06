@@ -92,6 +92,7 @@ export class ProjectResolver {
 
     // create duckdb datasource
     const initSql = buildInitSql(name as SampleDatasetName);
+    logger.debug({ initSql });
     const duckdbDatasourceProperties = {
       initSql,
       extensions: [],
@@ -116,6 +117,7 @@ export class ProjectResolver {
     // save tables as model and modelColumns
     await this.overwriteModelsAndColumns(tableNames, ctx, project);
 
+    await ctx.modelService.updatePrimaryKeys(dataset.tables);
     await ctx.modelService.batchUpdateModelProperties(dataset.tables);
     await ctx.modelService.batchUpdateColumnProperties(dataset.tables);
 
