@@ -22,18 +22,23 @@ def store():
 def test_overwrite(store: QdrantDocumentStore):
     store.write_documents(
         [
-            Document(id=str(1), content="This is first", embedding=[0.0] * 5),
+            Document(id=str(0), content="This is first", embedding=[0.0] * 5),
             Document(
-                id=str(2), content="This is second", embedding=[0.1, 0.2, 0.3, 0.4, 0.5]
+                id=str(1), content="This is second", embedding=[0.1, 0.2, 0.3, 0.4, 0.5]
             ),
+            Document(id=str(2), content="This is third", embedding=[0.0] * 5),
         ]
     )
 
     LOGGER.info(store.count_documents())
 
+    ids = [str(i) for i in range(store.count_documents())]
+    LOGGER.info(ids)
+    store.delete_documents(ids)
+
     store.write_documents(
         [
-            Document(id=str(1), content="This is first hey", embedding=[0.0] * 5),
+            Document(id=str(0), content="This is first hey", embedding=[0.0] * 5),
         ],
         policy=DuplicatePolicy.OVERWRITE,
     )
