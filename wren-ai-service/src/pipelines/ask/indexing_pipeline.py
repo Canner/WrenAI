@@ -30,6 +30,7 @@ class Indexing(BasicPipeline):
         embedding_model_name: str = EMBEDDING_MODEL_NAME,
         embedding_model_dim: int = EMBEDDING_MODEL_DIMENSION,
     ) -> None:
+        self._document_store = document_store
         self._pipeline = Pipeline()
         # TODO: add a component to remove existing documents to fully delete old documents
         self._pipeline.add_component(
@@ -47,9 +48,14 @@ class Indexing(BasicPipeline):
         super().__init__(self._pipeline)
 
     def run(self, mdl_str: str) -> Dict[str, Any]:
+        self._clear_documents()
         return self._pipeline.run(
             {"writer": {"documents": self._get_documents(mdl_str)}}
         )
+
+    def _clear_documents(self) -> None:
+        ids = [str(i) for i in range(self._document_store.count_documents())]
+        self._document_store.delete_documents(ids)
 
     def _get_documents(self, mdl_str: str) -> List[Document]:
         mdl_json = json.loads(mdl_str)
