@@ -25,6 +25,11 @@ const FIELDS_NAME = {
   RELATIONSHIPS: 'relationships',
 };
 
+const FieldEditableTable = makeEditableBaseTable(FieldTable);
+const CalculatedFieldEditableTable =
+  makeEditableBaseTable(CalculatedFieldTable);
+const RelationshipEditableTable = makeEditableBaseTable(RelationTable);
+
 export default function EditModelMetadata(props: Props) {
   const {
     formNamespace,
@@ -35,11 +40,6 @@ export default function EditModelMetadata(props: Props) {
     relationFields = [],
     description,
   } = props || {};
-
-  const FieldEditableTable = makeEditableBaseTable(FieldTable);
-  const CalculatedFieldEditableTable =
-    makeEditableBaseTable(CalculatedFieldTable);
-  const RelationshipEditableTable = makeEditableBaseTable(RelationTable);
 
   const form = useContext(EditableContext);
 
