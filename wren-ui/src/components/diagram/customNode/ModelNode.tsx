@@ -80,7 +80,7 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
       </NodeHeader>
       <NodeBody draggable={false}>
         <Column.Title show={true}>Columns</Column.Title>
-        {renderColumns([...data.originalData.fields])}
+        {renderColumns(data.originalData.fields)}
         <Column.Title
           show={true}
           extra={
