@@ -55,7 +55,8 @@ class Indexing(BasicPipeline):
 
     def _clear_documents(self) -> None:
         ids = [str(i) for i in range(self._document_store.count_documents())]
-        self._document_store.delete_documents(ids)
+        if ids:
+            self._document_store.delete_documents(ids)
 
     def _get_documents(self, mdl_str: str) -> List[Document]:
         mdl_json = json.loads(mdl_str)
