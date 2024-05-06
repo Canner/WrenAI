@@ -378,9 +378,13 @@ export const typeDefs = gql`
     displayName: String!
     referenceName: String!
     description: String
+    fromModelId: Int!
     fromModelName: String!
+    fromColumnId: Int!
     fromColumnName: String!
+    toModelId: Int!
     toModelName: String!
+    toColumnId: Int!
     toColumnName: String!
   }
 
@@ -608,7 +612,7 @@ export const typeDefs = gql`
 
     # Relation
     createRelation(data: RelationInput!): JSON!
-    updateRelation(data: UpdateRelationInput!, where: WhereIdInput): JSON!
+    updateRelation(data: UpdateRelationInput!, where: WhereIdInput!): JSON!
     deleteRelation(where: WhereIdInput!): Boolean!
 
     # Calculated field

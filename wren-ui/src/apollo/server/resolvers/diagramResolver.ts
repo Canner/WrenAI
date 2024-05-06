@@ -198,9 +198,13 @@ export class DiagramResolver {
       displayName,
       referenceName,
       type: relation.joinType as RelationType,
+      fromModelId: relation.fromModelId,
       fromModelName: relation.fromModelName,
+      fromColumnId: relation.fromColumnId,
       fromColumnName: relation.fromColumnName,
+      toModelId: relation.toModelId,
       toModelName: relation.toModelName,
+      toColumnId: relation.toColumnId,
       toColumnName: relation.toColumnName,
       description: properties?.description,
     };

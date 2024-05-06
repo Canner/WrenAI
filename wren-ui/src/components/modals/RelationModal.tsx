@@ -4,7 +4,7 @@ import { Modal, Form, Select } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
-import { JOIN_TYPE } from '@/utils/enum';
+import { JOIN_TYPE, FORM_MODE } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
 import useCombineFieldOptions, {
   convertDefaultValueToIdentifier,
@@ -38,8 +38,12 @@ export default function RelationModal(props: Props) {
     onSubmit,
     relations,
     visible,
+    formMode,
   } = props;
   const [form] = Form.useForm();
+
+  // only suitable use for modeling page
+  const isUpdateMode = formMode === FORM_MODE.EDIT;
 
   const fromCombineField = useCombineFieldOptions({ model });
   const modelValue = fromCombineField.modelOptions.find(
@@ -150,6 +154,7 @@ export default function RelationModal(props: Props) {
           <CombineFieldSelector
             modelValue={modelValue}
             modelDisabled={true}
+            fieldDisabled={isUpdateMode}
             onModelChange={fromCombineField.onModelChange}
             modelOptions={fromCombineField.modelOptions}
             fieldOptions={fromCombineField.fieldOptions}
@@ -177,6 +182,8 @@ export default function RelationModal(props: Props) {
             onModelChange={toCombineField.onModelChange}
             modelOptions={toCombineModelOptions}
             fieldOptions={toCombineField.fieldOptions}
+            modelDisabled={isUpdateMode}
+            fieldDisabled={isUpdateMode}
           />
         </Form.Item>
         <Form.Item

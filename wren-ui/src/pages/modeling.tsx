@@ -3,16 +3,23 @@ import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
+import { editCalculatedField } from '@/utils/modelingHelper';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
 import CalculatedFieldModal from '@/components/modals/CalculatedFieldModal';
 import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
+import RelationModal, {
+  RelationFormValues,
+} from '@/components/modals/RelationModal';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
+import useRelationshipModal from '@/hooks/useRelationshipModal';
+import { convertFormValuesToIdentifier } from '@/hooks/useCombineFieldOptions';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
+import { LIST_MODELS } from '@/apollo/client/graphql/model';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
 import { useDeleteViewMutation } from '@/apollo/client/graphql/view.generated';
@@ -27,7 +34,11 @@ import {
   useUpdateCalculatedFieldMutation,
   useDeleteCalculatedFieldMutation,
 } from '@/apollo/client/graphql/calculatedField.generated';
-import { editCalculatedField } from '@/utils/modelingHelper';
+import {
+  useCreateRelationshipMutation,
+  useDeleteRelationshipMutation,
+  useUpdateRelationshipMutation,
+} from '@/apollo/client/graphql/relationship.generated';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -55,10 +66,12 @@ export default function Modeling() {
     fetchPolicy: 'no-cache',
   });
 
+  const refetchQueries = [{ query: DIAGRAM }];
+  const refetchQueriesForModel = [...refetchQueries, { query: LIST_MODELS }];
   const getBaseOptions = (options) => {
     return {
       onError: (error) => console.error(error),
-      refetchQueries: [{ query: DIAGRAM }],
+      refetchQueries,
       awaitRefetchQueries: true,
       ...options,
       onCompleted: () => {
@@ -100,6 +113,7 @@ export default function Modeling() {
       onCompleted: () => {
         message.success('Successfully created model.');
       },
+      refetchQueries: refetchQueriesForModel,
     }),
   );
 
@@ -108,6 +122,7 @@ export default function Modeling() {
       onCompleted: () => {
         message.success('Successfully deleted model.');
       },
+      refetchQueries: refetchQueriesForModel,
     }),
   );
 
@@ -116,6 +131,7 @@ export default function Modeling() {
       onCompleted: () => {
         message.success('Successfully updated model.');
       },
+      refetchQueries: refetchQueriesForModel,
     }),
   );
 
@@ -135,6 +151,30 @@ export default function Modeling() {
     }),
   );
 
+  const [createRelationshipMutation] = useCreateRelationshipMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully created relationship.');
+      },
+    }),
+  );
+
+  const [deleteRelationshipMutation] = useDeleteRelationshipMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully deleted relationship.');
+      },
+    }),
+  );
+
+  const [updateRelationshipMutation] = useUpdateRelationshipMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully updated relationship.');
+      },
+    }),
+  );
+
   const diagramData = useMemo(() => {
     if (!data) return null;
     return data?.diagram;
@@ -144,6 +184,7 @@ export default function Modeling() {
   const modelDrawer = useDrawerAction();
   const editMetadataModal = useModalAction();
   const calculatedFieldModal = useModalAction();
+  const relationshipModal = useRelationshipModal(diagramData);
 
   useEffect(() => {
     if (metadataDrawer.state.visible) {
@@ -195,7 +236,7 @@ export default function Modeling() {
             );
             break;
           case NODE_TYPE.RELATION:
-            console.log('edit relation');
+            relationshipModal.openModal(data);
             break;
 
           default:
@@ -216,7 +257,9 @@ export default function Modeling() {
             });
             break;
           case NODE_TYPE.RELATION:
-            console.log('delete relation');
+            await deleteRelationshipMutation({
+              variables: { where: { id: data.relationId } },
+            });
             break;
           case NODE_TYPE.VIEW:
             await deleteViewMutation({
@@ -245,7 +288,7 @@ export default function Modeling() {
         });
         break;
       case NODE_TYPE.RELATION:
-        console.log('add relation');
+        relationshipModal.openModal(data);
         break;
       default:
         console.log('add', targetNodeType);
@@ -309,6 +352,35 @@ export default function Modeling() {
               });
             } else {
               await createCalculatedField({ variables: { data: values } });
+            }
+          }}
+        />
+        <RelationModal
+          {...relationshipModal.state}
+          onClose={relationshipModal.onClose}
+          onSubmit={async (
+            values: RelationFormValues & { relationId?: number },
+          ) => {
+            const relation = convertFormValuesToIdentifier(values);
+            if (values.relationId) {
+              await updateRelationshipMutation({
+                variables: {
+                  where: { id: values.relationId },
+                  data: { type: relation.type },
+                },
+              });
+            } else {
+              await createRelationshipMutation({
+                variables: {
+                  data: {
+                    fromModelId: Number(relation.fromField.modelId),
+                    fromColumnId: Number(relation.fromField.fieldId),
+                    toModelId: Number(relation.toField.modelId),
+                    toColumnId: Number(relation.toField.fieldId),
+                    type: relation.type,
+                  },
+                },
+              });
             }
           }}
         />

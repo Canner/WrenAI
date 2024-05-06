@@ -246,7 +246,7 @@ export class ModelResolver {
       fields,
       primaryKey,
     );
-    logger.info(`Model created: ${model}`);
+    logger.info(`Model created: ${JSON.stringify(model)}`);
 
     return model;
   }
@@ -277,7 +277,7 @@ export class ModelResolver {
     this.validateColumnsExist(sourceTableName, fields, dataSourceTables);
 
     await strategy.updateModel(model, fields, primaryKey);
-    logger.info(`Model created: ${model}`);
+    logger.info(`Model created: ${JSON.stringify(model)}`);
 
     return model;
   }

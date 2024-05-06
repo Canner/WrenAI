@@ -110,23 +110,31 @@ export default function useCombineFieldOptions(props: Props) {
       allModels.filter(
         (item) => !(excludeModels && excludeModels.includes(item.name)),
       ),
-    [excludeModels, baseModel],
+    [excludeModels, baseModel, data],
   );
 
-  const modelOptions = useMemo(() => {
-    return filteredModels.map((model) => ({
-      label: model.name,
-      value: convertObjectToIdentifier(model, modelKeys),
-    }));
-  }, [filteredModels]);
+  const modelOptions = useMemo(
+    () =>
+      filteredModels.map((model) => ({
+        label: model.name,
+        value: convertObjectToIdentifier(model, modelKeys),
+      })),
+    [filteredModels],
+  );
 
-  const fieldOptions = useMemo(() => {
-    const model = filteredModels.find((item) => item.name === baseModel);
-    return (model?.fields || []).map((field) => ({
-      label: field.referenceName,
-      value: convertObjectToIdentifier(field, fieldKeys),
-    }));
-  }, [modelOptions, baseModel]);
+  const filteredModel = useMemo(
+    () => filteredModels.find((item) => item.name === baseModel),
+    [modelOptions, baseModel],
+  );
+
+  const fieldOptions = useMemo(
+    () =>
+      (filteredModel?.fields || []).map((field) => ({
+        label: field.referenceName,
+        value: convertObjectToIdentifier(field, fieldKeys),
+      })),
+    [filteredModel],
+  );
 
   return { modelOptions, fieldOptions, onModelChange: setBaseModel };
 }

@@ -18,9 +18,13 @@ const RELATION_FIELD = gql`
     nodeType
     displayName
     referenceName
+    fromModelId
     fromModelName
+    fromColumnId
     fromColumnName
+    toModelId
     toModelName
+    toColumnId
     toColumnName
     description
   }
