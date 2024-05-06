@@ -105,18 +105,6 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
 
     assert response.status_code == 202
 
-    wren_engine_is_ready = False
-
-    while not wren_engine_is_ready:
-        response = requests.get(
-            f"{WREN_ENGINE_API_URL}/v1/mdl/status",
-        )
-
-        assert response.status_code == 200
-
-        if response.json()["systemStatus"] == "READY":
-            wren_engine_is_ready = True
-
     st.toast("Wren Engine is ready", icon="🎉")
 
 
