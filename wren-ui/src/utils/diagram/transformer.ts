@@ -170,10 +170,11 @@ export class Transformer {
     for (const relationField of relationFields) {
       // check if edge already exist
       const hasEdgeExist = this.edges.some((edge) => {
-        const [id] = (edge.targetHandle || '').split('_');
-        return id === relationField.id;
+        // the edge should be unique as relationId
+        const edgeRelationId = edge.data?.relation?.relationId;
+        return edgeRelationId === relationField.relationId;
       });
-      if (hasEdgeExist) break;
+      if (hasEdgeExist) continue;
 
       // prepare to add new edge
       const targetModel = this.models.find(
