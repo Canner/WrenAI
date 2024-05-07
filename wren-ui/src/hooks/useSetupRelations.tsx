@@ -46,6 +46,12 @@ export default function useSetupRelations() {
       [],
     );
 
+    // redirect to the home page if there is no relationship data needs to be saved
+    if (relations.length === 0) {
+      onRedirectToHomePage();
+      return;
+    }
+
     await saveRelationsMutation({
       variables: { data: { relations } },
     });
