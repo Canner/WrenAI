@@ -48,7 +48,10 @@ class Indexing(BasicPipeline):
         super().__init__(self._pipeline)
 
     def run(self, mdl_str: str) -> Dict[str, Any]:
+        logger.info("Ask Indexing pipeline is clearing old documents...")
         self._clear_documents()
+
+        logger.info("Ask Indexing pipeline is writing new documents...")
         return self._pipeline.run(
             {"writer": {"documents": self._get_documents(mdl_str)}}
         )

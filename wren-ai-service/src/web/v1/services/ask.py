@@ -132,6 +132,9 @@ class AskService:
     def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
     ) -> SemanticsPreparationStatusResponse:
+        if prepare_semantics_status_request.id not in self.prepare_semantics_statuses:
+            return SemanticsPreparationStatusResponse(status="indexing")
+
         return self.prepare_semantics_statuses[prepare_semantics_status_request.id]
 
     def _is_stopped(self, query_id: str):
