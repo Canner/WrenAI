@@ -45,6 +45,10 @@ async def prepare_semantics(
     prepare_semantics_request: SemanticsPreparationRequest,
     background_tasks: BackgroundTasks,
 ) -> SemanticsPreparationResponse:
+    container.ASK_SERVICE.prepare_semantics_statuses[
+        prepare_semantics_request.id
+    ] = SemanticsPreparationStatusResponse(status="indexing")
+
     background_tasks.add_task(
         container.ASK_SERVICE.prepare_semantics,
         prepare_semantics_request,
@@ -68,6 +72,9 @@ async def ask(
 ) -> AskResponse:
     query_id = str(uuid.uuid4())
     ask_request.query_id = query_id
+    container.ASK_SERVICE.ask_results[query_id] = AskResultResponse(
+        status="understanding"
+    )
     background_tasks.add_task(
         container.ASK_SERVICE.ask,
         ask_request,

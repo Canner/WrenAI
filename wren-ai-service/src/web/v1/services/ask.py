@@ -111,10 +111,6 @@ class AskService:
         self.ask_results: dict[str, AskResultResponse] = {}
 
     def prepare_semantics(self, prepare_semantics_request: SemanticsPreparationRequest):
-        self.prepare_semantics_statuses[
-            prepare_semantics_request.id
-        ] = SemanticsPreparationStatusResponse(status="indexing")
-
         try:
             self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
@@ -133,7 +129,10 @@ class AskService:
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
     ) -> SemanticsPreparationStatusResponse:
         if prepare_semantics_status_request.id not in self.prepare_semantics_statuses:
-            return SemanticsPreparationStatusResponse(status="indexing")
+            return SemanticsPreparationStatusResponse(
+                status="failed",
+                error=f"{prepare_semantics_status_request.id} is not found",
+            )
 
         return self.prepare_semantics_statuses[prepare_semantics_status_request.id]
 
@@ -292,4 +291,13 @@ class AskService:
         self,
         ask_result_request: AskResultRequest,
     ) -> AskResultResponse:
+        if ask_result_request.query_id not in self.ask_results:
+            return AskResultResponse(
+                status="failed",
+                error=AskResultResponse.AskError(
+                    code="OTHERS",
+                    message=f"{ask_result_request.query_id} is not found",
+                ),
+            )
+
         return self.ask_results[ask_result_request.query_id]
