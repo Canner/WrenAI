@@ -18,6 +18,7 @@ import {
 } from '../models';
 import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
+import { isEmpty } from 'lodash';
 
 const logger = getLogger('ModelService');
 logger.level = 'debug';
@@ -309,6 +310,9 @@ export class ModelService implements IModelService {
   }
 
   public async saveRelations(relations: RelationData[]) {
+    if (isEmpty(relations)) {
+      return [];
+    }
     const project = await this.projectService.getCurrentProject();
 
     const models = await this.modelRepository.findAllBy({
