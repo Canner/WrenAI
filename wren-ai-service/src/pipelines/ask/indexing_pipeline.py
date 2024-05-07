@@ -129,6 +129,7 @@ class DDLConverter:
             "models": [],
             "relationships": mdl_json["relationships"],
             "views": mdl_json["views"],
+            "metrics": mdl_json["metrics"],
         }
 
         for model in mdl_json["models"]:
@@ -162,6 +163,7 @@ class DDLConverter:
         ddl_commands = generate_ddls_from_semantics(
             semantics["models"],
             semantics["relationships"],
+            semantics["metrics"],
         )
 
         ddl_commands.extend(self._convert_views(semantics["views"]))

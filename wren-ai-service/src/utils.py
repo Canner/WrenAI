@@ -191,6 +191,7 @@ def generate_semantics(mdl_str: str) -> Dict[str, Any]:
 def generate_ddls_from_semantics(
     models: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
+    metrics: List[Dict[str, Any]],
 ) -> List[str]:
     ddl_commands = []
     # A map to store model primary keys for foreign key relationships
@@ -254,6 +255,32 @@ def generate_ddls_from_semantics(
             comment = f"\n/* {json.dumps(model['properties'])} */\n"
         else:
             comment = ""
+        create_table_ddl = (
+            f"{comment}CREATE TABLE {table_name} (\n  "
+            + ",\n  ".join(columns_ddl)
+            + "\n);"
+        )
+
+        ddl_commands.append(create_table_ddl)
+
+    for metric in metrics:
+        table_name = metric["name"]
+        columns_ddl = []
+        for dimension in metric["dimension"]:
+            column_name = dimension["name"]
+            column_type = dimension["type"]
+            comment = "-- This column is a dimension\n  "
+            column_ddl = f"{comment}{column_name} {column_type}"
+            columns_ddl.append(column_ddl)
+
+        for measure in metric["measure"]:
+            column_name = measure["name"]
+            column_type = measure["type"]
+            comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
+            column_ddl = f"{comment}{column_name} {column_type}"
+            columns_ddl.append(column_ddl)
+
+        comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
         create_table_ddl = (
             f"{comment}CREATE TABLE {table_name} (\n  "
             + ",\n  ".join(columns_ddl)
