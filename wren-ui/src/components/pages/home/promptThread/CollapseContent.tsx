@@ -74,16 +74,20 @@ export default function CollapseContent(props: Props) {
           {showNativeSQL && (
             <StyledToolBar className="d-flex justify-space-between text-family-base">
               <div>
-                <Image
-                  className="mr-2"
-                  src={DATA_SOURCE_OPTIONS[dataSourceType].logo}
-                  alt={DATA_SOURCE_OPTIONS[dataSourceType].label}
-                  width="22"
-                  height="22"
-                />
-                <Text className="gray-8 text-medium text-sm">
-                  {DATA_SOURCE_OPTIONS[dataSourceType].label}
-                </Text>
+                {nativeSQLResult.nativeSQLMode && (
+                  <>
+                    <Image
+                      className="mr-2"
+                      src={DATA_SOURCE_OPTIONS[dataSourceType].logo}
+                      alt={DATA_SOURCE_OPTIONS[dataSourceType].label}
+                      width="22"
+                      height="22"
+                    />
+                    <Text className="gray-8 text-medium text-sm">
+                      {DATA_SOURCE_OPTIONS[dataSourceType].label}
+                    </Text>
+                  </>
+                )}
               </div>
               <div>
                 <Switch
