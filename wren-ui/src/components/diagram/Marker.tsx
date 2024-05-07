@@ -1,6 +1,16 @@
 export default function Marker() {
+  // This is only used to embed definitions which can reused inside an svg image.
   return (
-    <svg style={{ position: 'absolute', top: 0, left: 0 }}>
+    <svg
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: 0,
+        height: 0,
+        zIndex: -1,
+      }}
+    >
       <defs>
         <marker
           id="many_right"
