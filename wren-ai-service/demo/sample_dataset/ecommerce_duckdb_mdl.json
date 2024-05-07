@@ -473,7 +473,7 @@
     {
       "name": "PaymentsOrders",
       "models": ["payments", "orders"],
-      "joinType": "ONE_TO_MANY",
+      "joinType": "MANY_TO_ONE",
       "condition": "payments.OrderId = orders.OrderId",
       "manySideSortKeys": [],
       "properties": {}
