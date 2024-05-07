@@ -1,3 +1,4 @@
+import logging
 from typing import Any, List
 
 from haystack import Document, Pipeline
@@ -14,6 +15,7 @@ from src.pipelines.ask.components.prompts import (
 from src.utils import load_env_vars
 
 load_env_vars()
+logger = logging.getLogger("wren-ai-service")
 
 
 class Generation(BasicPipeline):
@@ -42,6 +44,7 @@ class Generation(BasicPipeline):
         query: str,
         contexts: List[Document],
     ):
+        logger.info("Ask Generation pipeline is running...")
         return self._pipeline.run(
             {
                 "text_to_sql_prompt_builder": {

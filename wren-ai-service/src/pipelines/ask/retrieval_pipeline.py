@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from haystack import Pipeline
@@ -9,6 +10,7 @@ from src.pipelines.ask.components.retriever import init_retriever
 from src.utils import load_env_vars
 
 load_env_vars()
+logger = logging.getLogger("wren-ai-service")
 
 
 class Retrieval(BasicPipeline):
@@ -26,6 +28,7 @@ class Retrieval(BasicPipeline):
         super().__init__(self._pipeline)
 
     def run(self, query: str):
+        logger.info("Ask Retrieval pipeline is running...")
         return self._pipeline.run(
             {
                 "embedder": {

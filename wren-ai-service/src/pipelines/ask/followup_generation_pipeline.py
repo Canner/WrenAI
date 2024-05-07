@@ -1,3 +1,4 @@
+import logging
 from typing import Any, List
 
 from haystack import Document, Pipeline
@@ -15,6 +16,7 @@ from src.utils import load_env_vars
 from src.web.v1.services.ask import AskRequest
 
 load_env_vars()
+logger = logging.getLogger("wren-ai-service")
 
 
 class FollowUpGeneration(BasicPipeline):
@@ -45,6 +47,7 @@ class FollowUpGeneration(BasicPipeline):
         contexts: List[Document],
         history: AskRequest.AskResponseDetails,
     ):
+        logger.info("Ask FollowUpGeneration pipeline is running...")
         return self._pipeline.run(
             {
                 "text_to_sql_prompt_builder": {

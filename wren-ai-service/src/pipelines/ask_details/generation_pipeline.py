@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from haystack import Pipeline
@@ -12,6 +13,7 @@ from src.pipelines.ask_details.components.post_processors import (
 from src.utils import load_env_vars
 
 load_env_vars()
+logger = logging.getLogger("wren-ai-service")
 
 
 class Generation(BasicPipeline):
@@ -27,6 +29,7 @@ class Generation(BasicPipeline):
         super().__init__(self._pipeline)
 
     def run(self, sql: str):
+        logger.info("Ask Details Generation pipeline is running...")
         return self._pipeline.run(
             {
                 "generator": {

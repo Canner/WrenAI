@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, List
 
 from haystack import Document, Pipeline
@@ -11,6 +12,8 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     init_sql_correction_prompt_builder,
 )
+
+logger = logging.getLogger("wren-ai-service")
 
 
 class SQLCorrection(BasicPipeline):
@@ -40,6 +43,7 @@ class SQLCorrection(BasicPipeline):
         contexts: List[Document],
         invalid_generation_results: List[Dict[str, str]],
     ):
+        logger.info("Ask SQLCorrection pipeline is running...")
         return self._pipeline.run(
             {
                 "sql_correction_prompt_builder": {

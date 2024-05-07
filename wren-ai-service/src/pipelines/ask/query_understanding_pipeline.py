@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from haystack import Pipeline
@@ -8,6 +9,8 @@ from src.pipelines.ask.components.post_processors import (
     init_query_understanding_post_processor,
 )
 from src.pipelines.ask.components.prompts import init_query_preprocess_prompt_builder
+
+logger = logging.getLogger("wren-ai-service")
 
 
 class QueryUnderstanding(BasicPipeline):
@@ -39,6 +42,7 @@ class QueryUnderstanding(BasicPipeline):
         self,
         query: str,
     ):
+        logger.info("Ask QueryUnderstanding pipeline is running...")
         return self._pipeline.run(
             {
                 "query_preprocess_prompt_builder": {
