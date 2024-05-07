@@ -250,6 +250,13 @@ errorHandlers.set('UpdateRelationship', new UpdateRelationshipErrorHandler());
 errorHandlers.set('DeleteRelationship', new DeleteRelationshipErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
+  // networkError
+  if (error.networkError) {
+    message.error(
+      'No internet. Please check your network connection and try again.',
+    );
+  }
+
   const operationName = error?.operation?.operationName || '';
   if (error.graphQLErrors) {
     for (const err of error.graphQLErrors) {
