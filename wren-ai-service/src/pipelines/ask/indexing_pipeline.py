@@ -56,6 +56,7 @@ class Indexing(BasicPipeline):
         self._clear_documents()
 
         logger.info("Ask Indexing pipeline is writing new documents...")
+        self._clear_documents(self._document_store)
         self._store_view_questions(mdl_str)
         return self._pipeline.run(
             {"writer": {"documents": self._get_documents(mdl_str)}}
@@ -73,14 +74,20 @@ class Indexing(BasicPipeline):
         """
         views = json.loads(mdl_str)["views"]
 
-        def _format(view: Dict[str, Any]) -> Dict[str, Any]:
-            return {
-                "question": view["properties"]["question"],
-                "description": view["properties"]["description"],
-                "statement": view["statement"],
-            }
+        def _format(view: Dict[str, Any]) -> List[str]:
+            return str(
+                {
+                    "question": view["properties"]["question"],
+                    "description": view["properties"]["description"],
+                    "statement": view["statement"],
+                }
+            )
 
         converted_views = [_format(view) for view in views]
+
+        if not converted_views:
+            return
+
         embeddings = self._openai_client.embeddings.create(
             input=converted_views,
             model=self.embedding_model_name,
@@ -106,10 +113,10 @@ class Indexing(BasicPipeline):
             policy=DuplicatePolicy.OVERWRITE,
         )
 
-    def _clear_documents(self) -> None:
-        ids = [str(i) for i in range(self._document_store.count_documents())]
+    def _clear_documents(self, store: DocumentStore) -> None:
+        ids = [str(i) for i in range(store.count_documents())]
         if ids:
-            self._document_store.delete_documents(ids)
+            store.delete_documents(ids)
 
     def _get_documents(self, mdl_str: str) -> List[Document]:
         mdl_json = json.loads(mdl_str)

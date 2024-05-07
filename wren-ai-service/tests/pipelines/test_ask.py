@@ -32,9 +32,15 @@ def document_store():
     return init_document_store(dataset_name="book_2")
 
 
-def test_indexing_pipeline(mdl_str: str, document_store: Any):
+@pytest.fixture
+def view_store():
+    return init_document_store(dataset_name="view_questions")
+
+
+def test_indexing_pipeline(mdl_str: str, document_store: Any, view_store: Any):
     indexing_pipeline = Indexing(
         document_store=document_store,
+        view_store=view_store,
     )
 
     indexing_pipeline.run(mdl_str)
@@ -54,6 +60,7 @@ def test_clear_documents(mdl_str: str):
 
     indexing_pipeline = Indexing(
         document_store=store,
+        view_store=store,
     )
 
     indexing_pipeline.run(mdl_str)
@@ -62,7 +69,14 @@ def test_clear_documents(mdl_str: str):
     indexing_pipeline.run(
         """
         {"models": [], "relationships": [], "views": [
-          {"name": "book", "statement": "SELECT * FROM book", "properties": {}}
+          {
+            "name": "book",
+            "statement": "SELECT * FROM book",
+            "properties": {
+              "question": "How many books are there?",
+              "description": "Retrieve the number of books"
+            }
+          }
         ]}
         """
     )
