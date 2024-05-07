@@ -19,6 +19,7 @@ wren-ai-service/assertion.log
 wren-ai-service/demo/spider
 wren-ai-service/demo/poetry.lock
 wren-ai-service/demo/custom_dataset
+wren-ai-service/demo/.env
 
 # cache
 __pycache__
