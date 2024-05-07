@@ -45,7 +45,8 @@ def test_indexing_pipeline(mdl_str: str, document_store: Any, view_store: Any):
 
     indexing_pipeline.run(mdl_str)
 
-    assert document_store.count_documents() == 2
+    assert document_store.count_documents() == 3
+    assert view_store.count_documents() == 1
 
 
 def test_clear_documents(mdl_str: str):
@@ -64,7 +65,7 @@ def test_clear_documents(mdl_str: str):
     )
 
     indexing_pipeline.run(mdl_str)
-    assert store.count_documents() == 2
+    assert store.count_documents() == 3
 
     indexing_pipeline.run(
         """

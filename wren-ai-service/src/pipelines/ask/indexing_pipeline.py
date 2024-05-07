@@ -72,6 +72,7 @@ class Indexing(BasicPipeline):
         }
         and store it in the view store.
         """
+        self._clear_documents(self._view_store)
         views = json.loads(mdl_str)["views"]
 
         def _format(view: Dict[str, Any]) -> List[str]:
