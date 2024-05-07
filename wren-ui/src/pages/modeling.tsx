@@ -280,11 +280,9 @@ export default function Modeling() {
     const { targetNodeType, data } = payload;
     switch (targetNodeType) {
       case NODE_TYPE.CALCULATED_FIELD:
-        calculatedFieldModal.openModal({
-          payload: {
-            models: diagramData.models,
-            sourceModel: data,
-          },
+        calculatedFieldModal.openModal(null, {
+          models: diagramData.models,
+          sourceModel: data,
         });
         break;
       case NODE_TYPE.RELATION:

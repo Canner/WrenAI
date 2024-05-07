@@ -7,14 +7,17 @@ export interface ModalAction<TData = any, SData = any> {
   onSubmit?: (values: SData) => Promise<void>;
   formMode?: FORM_MODE;
   defaultValue?: TData;
+  payload?: Record<string, any>;
 }
 
 export default function useModalAction() {
   const [visible, setVisible] = useState(false);
   const [formMode, setFormMode] = useState(FORM_MODE.CREATE);
+  const [payload, setPayload] = useState(null);
   const [defaultValue, setDefaultValue] = useState(null);
 
-  const openModal = (value?: any) => {
+  const openModal = (value?: any, payload?: any) => {
+    payload && setPayload(payload);
     value && setDefaultValue(value);
     value && setFormMode(FORM_MODE.EDIT);
     setVisible(true);
@@ -22,6 +25,7 @@ export default function useModalAction() {
 
   const closeModal = () => {
     setVisible(false);
+    setPayload(null);
     setDefaultValue(null);
     setFormMode(FORM_MODE.CREATE);
   };
@@ -31,6 +35,7 @@ export default function useModalAction() {
       visible,
       formMode,
       defaultValue,
+      payload,
     },
     openModal,
     closeModal,
