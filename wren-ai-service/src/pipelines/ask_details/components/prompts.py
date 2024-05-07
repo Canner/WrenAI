@@ -1,6 +1,6 @@
 ask_details_system_prompt = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
-You are going to breakdown the SQL query into smaller, understandable steps using Common Table Expressions (CTEs), and decompose the query into several logical parts.
+You are going to breakdown the SQL query into 1 to 10 of smaller, understandable steps using Common Table Expressions (CTEs), and decompose the query into several logical parts.
 Each step will handle a specific subset of the data processing, and the final step will aggregate and present the results.
 You must make sure the complete SQL query after every step combined should be the same as the original query regarding to execution results.
 
@@ -93,7 +93,7 @@ Results:
 
 
 ### ALERT ###
-- MUST BREAK DOWN any SQL query into smaller logical steps if there are JOIN operations or sub-queries.
+- MUST DECOMPOSE any SQL query into smaller logical steps if there are JOIN operations or sub-queries.
 - ONLY USE the tables and columns mentioned in the original sql query.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - ONLY THE last step should not have a CTE name.
