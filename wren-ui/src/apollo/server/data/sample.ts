@@ -822,6 +822,10 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'PlusMinusAway', dataType: 'BIGINT' },
           { columnName: 'SeasonType', dataType: 'VARCHAR' },
         ],
+        properties: {
+          description:
+            'This table describes the game statistics for both the home and away teams in each NBA game. Turnover percentage is the number of possessions that end in a turnover. The formula for turnover percentage (TOV%) is "TOV% = (Tov ÷ (FGA + (0.44 x FTA) + Tov)) x 100%".',
+        },
       },
       {
         tableName: 'line_score',
@@ -942,6 +946,10 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'PtsOt1Away', dataType: 'BIGINT' },
           { columnName: 'PtsAway', dataType: 'BIGINT' },
         ],
+        properties: {
+          description:
+            'This table describes the scores and total score for each quarter or overtime of an NBA game, detailing the scores for both the home team and the away team.',
+        },
       },
       {
         tableName: 'player_games',
@@ -1068,6 +1076,10 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'PF', dataType: 'BIGINT' },
           { columnName: 'PTS', dataType: 'BIGINT' },
         ],
+        properties: {
+          description:
+            'This table describes the game statistics for each NBA player in every game. Turnover percentage is the number of possessions that end in a turnover. The formula for turnover percentage (TOV%) is "TOV% = (Tov ÷ (FGA + (0.44 x FTA) + Tov)) x 100%".',
+        },
       },
       {
         tableName: 'player',
@@ -1098,6 +1110,10 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'FirstName', dataType: 'VARCHAR' },
           { columnName: 'LastName', dataType: 'VARCHAR' },
         ],
+        properties: {
+          description:
+            'This table describes NBA players by their ID, name, and team affiliation.',
+        },
       },
       {
         tableName: 'team',
@@ -1136,6 +1152,10 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           { columnName: 'State', dataType: 'VARCHAR' },
           { columnName: 'YearFounded', dataType: 'INT' },
         ],
+        properties: {
+          description:
+            'This table describes NBA teams by their ID, team name, team abbreviation, and founding date.',
+        },
       },
     ],
     questions: [
