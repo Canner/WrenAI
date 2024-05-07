@@ -337,7 +337,17 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }
 
     // use custom error to transform error
-    const error = body?.error?.code ? Errors.create(body?.error?.code) : null;
+    const code = body?.error?.code;
+    const error = code
+      ? Errors.create(
+          code,
+          code === Errors.GeneralErrorCodes.AI_SERVICE_UNDEFINED_ERROR
+            ? {
+                customMessage: body?.error?.message,
+              }
+            : undefined,
+        )
+      : null;
 
     // format custom error into WrenAIError that is used in graphql
     const formattedError = error

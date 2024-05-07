@@ -8,6 +8,9 @@ export enum GeneralErrorCodes {
   NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
   NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
 
+  // Exception error for AI service (e.g., network connection error)
+  AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
+
   // Connector errors
   // duckdb
   INIT_SQL_ERROR = 'INIT_SQL_ERROR',
@@ -77,7 +80,9 @@ export const create = (
       originalError,
       code,
       message,
-      shortMessage: shortMessages[code],
+      shortMessage:
+        shortMessages[code] ||
+        shortMessages[GeneralErrorCodes.INTERNAL_SERVER_ERROR],
     },
   });
 
