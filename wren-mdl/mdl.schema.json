@@ -6,7 +6,6 @@
   "$defs": {
     "column": {
       "type": "object",
-      "unevaluatedItems": false,
       "properties": {
         "name": {
           "description": "the name of the column",
@@ -14,7 +13,7 @@
           "minLength": 1
         },
         "type": {
-          "definition": "the type of the column",
+          "description": "the type of the column",
           "type": "string",
           "minLength": 1
         },
@@ -27,11 +26,11 @@
           "type": "boolean"
         },
         "notNull": {
-          "definition": "whether the column is not null or not",
+          "description": "whether the column is not null or not",
           "type": "boolean"
         },
         "expression": {
-          "definition": "the expression of the column. If the column is calculated, this field is required",
+          "description": "the expression of the column. If the column is calculated, this field is required",
           "type": ["string", "null"]
         },
         "properties": {
@@ -64,7 +63,6 @@
       "unevaluatedItems": false,
       "items": {
         "type": "object",
-        "unevaluatedItems": false,
         "properties": {
           "name": {
             "description": "the name of the model",
@@ -82,7 +80,7 @@
             "minLength": 1
           },
           "tableReference": {
-            "definition": "the table reference of the model",
+            "description": "the table reference of the model",
             "type": "object",
             "properties": {
               "catalog": {
@@ -106,7 +104,7 @@
             }
           },
           "primaryKey": {
-            "definition": "the primary key of the model. It's required if the model is the one side of any OEN_TO_MANY or MANY_TO_ONE relationship",
+            "description": "the primary key of the model. It's required if the model is the one side of any OEN_TO_MANY or MANY_TO_ONE relationship",
             "type": "string"
           },
           "cached": {
@@ -141,7 +139,6 @@
       "unevaluatedItems": false,
       "items": {
         "type": "object",
-        "unevaluatedItems": false,
         "properties": {
           "name": {
             "description": "the name of the relationship",
@@ -185,7 +182,6 @@
       "unevaluatedItems": false,
       "items": {
         "type": "object",
-        "unevaluatedItems": false,
         "properties": {
           "name": {
             "description": "the name of the metric",
@@ -201,20 +197,14 @@
             "description": "the list of dimensions",
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
                 "$ref": "#/$defs/column"
-              }
             }
           },
           "measure": {
             "description": "the list of measures",
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
                 "$ref": "#/$defs/column"
-              }
             },
             "minItems": 1
           },
@@ -224,7 +214,6 @@
             "unevaluatedItems": false,
             "items": {
               "description": "the time grain field. It's should belong to the dimension fields",
-              "unevaluatedItems": false,
               "type": "object",
               "properties": {
                 "name": {
@@ -282,7 +271,6 @@
       "unevaluatedItems": false,
       "items": {
         "type": "object",
-        "unevaluatedItems": false,
         "properties": {
           "name": {
             "description": "the name of the view",
@@ -311,7 +299,6 @@
       "unevaluatedItems": false,
       "items": {
         "type": "object",
-        "unevaluatedItems": false,
         "properties": {
           "name": {
             "description": "the name of the enum",
@@ -324,7 +311,6 @@
             "items": {
               "description": "the member of enum",
               "type": "object",
-              "unevaluatedItems": false,
               "properties": {
                 "name": {
                   "description": "the name of the member",
@@ -360,18 +346,17 @@
     },
     "macros": {
       "description": "the list of macros",
-      "tyep": "array",
+      "type": "array",
       "unevaluatedItems": false,
       "items": {
         "type": "object",
-        "unevaluatedItems": false,
         "properties": {
           "name": {
             "description": "the name of the macro",
             "type": "string",
             "minLength": 1
           },
-          "definition": {
+          "description": {
             "description": "the definition of the macro",
             "type": "string",
             "minLength": 1
@@ -400,6 +385,5 @@
     }
   },
   "required": ["catalog", "schema"],
-  "unevaluatedItems": false,
   "additionalProperties": false
 }
