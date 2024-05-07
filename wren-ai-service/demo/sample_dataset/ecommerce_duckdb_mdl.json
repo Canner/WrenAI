@@ -40,6 +40,54 @@
           "isCalculated": false,
           "notNull": false,
           "properties": {}
+        },
+        {
+          "name": "LatestRecord",
+          "type": "DATE",
+          "isCalculated": true,
+          "expression": "max(orders.PurchaseTimestamp)",
+          "notNull": false,
+          "properties": {}
+        },
+        {
+            "name": "FirstRecord",
+            "type": "DATE",
+            "isCalculated": true,
+            "expression": "min(orders.PurchaseTimestamp)",
+            "notNull": false,
+            "properties": {}
+        },
+        {
+            "name": "VIP",
+            "type": "BOOLEAN",
+            "isCalculated": true,
+            "expression": "sum(orders.Size) > 2",
+            "notNull": false,
+            "properties": {}
+        },
+        {
+            "name": "OrderCount",
+            "type": "BIGINT",
+            "isCalculated": true,
+            "expression": "count(orders.OrderId)",
+            "notNull": false,
+            "properties": {}
+        },
+        {
+          "name": "Debit",
+          "type": "DOUBLE",
+          "isCalculated": true,
+          "expression": "sum(orders.OrderBalance)",
+          "notNull": false,
+          "properties": {}
+        },
+        {
+            "name": "ReviewRate",
+            "type": "DOUBLE",
+            "isCalculated": true,
+            "expression": "count(orders.IsReviewed = TRUE) / count(DISTINCT orders.OrderId)",
+            "notNull": false,
+            "properties": {}
         }
       ],
       "primaryKey": "Id",
@@ -242,6 +290,79 @@
           "isCalculated": false,
           "notNull": false,
           "properties": {}
+        },
+        {
+            "name": "Rating",
+            "type": "DOUBLE",
+            "isCalculated": true,
+            "expression": "avg(reviews.Score)",
+            "notNull": false,
+            "properties": {
+                "description": "A calculated column representing averge score of the reviews associated with the order.",
+                "display_name": "Rating"
+            }
+        },
+        {
+            "name": "ReviewCount",
+            "type": "BIGINT",
+            "isCalculated": true,
+            "expression": "count(reviews.Id)",
+            "notNull": false,
+            "properties": {
+                "description": "A calculated column representing the number of the reviews associated with the order.",
+                "display_name": "Review Count"
+            }
+        },
+	      {
+	        "name": "IsReviewed",
+	        "type": "BOOLEAN",
+	        "isCalculated": true,
+	        "expression": "count(reviews.Id) > 0",
+	        "notNull": false,
+	        "properties": {}
+	      },
+        {
+            "name": "Size",
+            "type": "BIGINT",
+            "isCalculated": true,
+            "expression": "count(order_items.ItemNumber)",
+            "notNull": false,
+            "properties": {
+                "description": "A calculated column representing the number of the items associated with the order.",
+                "display_name": "Package Size"
+            }
+        },
+        {
+            "name": "Large",
+            "type": "BOOLEAN",
+            "isCalculated": true,
+            "expression": "count(order_items.ItemNumber) > 1",
+            "notNull": false,
+            "properties": {}
+        },
+        {
+          "name": "TotalValue",
+          "type": "DOUBLE",
+          "isCalculated": true,
+          "expression": "sum(order_items.Price)",
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "PaidValue",
+          "type": "DOUBLE",
+          "isCalculated": true,
+          "expression": "sum(payments.Value)",
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "OrderBalance",
+          "type": "DOUBLE",
+          "isCalculated": true,
+          "expression": "sum(order_items.Price) - sum(payments.Value)",
+          "notNull": false,
+          "properties": {}
         }
       ],
       "primaryKey": "OrderId",
@@ -358,6 +479,17 @@
           "isCalculated": false,
           "notNull": false,
           "properties": {}
+        },
+        {
+          "name": "Revenue",
+          "type": "DOUBLE",
+          "isCalculated": true,
+          "notNull": false,
+          "expression": "sum(order_items.Price)",
+          "properties": {
+              "description": "The calculated field representing the product revenue by summing up the product price in each order.",
+              "display_name": "Revenue"
+          }
         }
       ],
       "primaryKey": "Id",
@@ -496,6 +628,14 @@
         {
           "name": "Status",
           "type": "VARCHAR"
+        },
+        {
+          "name": "Size",
+          "type": "BIGINT"
+        },
+        {
+          "name": "IsReviewed",
+          "type": "BOOLEAN"
         }
       ],
       "measure": [
@@ -503,6 +643,16 @@
           "name": "Price",
           "type": "DOUBLE",
           "expression": "sum(order_items.Price) - COALESCE(LAG(sum(order_items.Price)) OVER (ORDER BY date_trunc('MONTH', PurchaseTimestamp)), 0) / COALESCE(LAG(sum(order_items.Price)) OVER (ORDER BY date_trunc('MONTH', PurchaseTimestamp)), 1)"
+        },
+        {
+          "name": "NumberOfOrders",
+          "type": "BIGINT",
+          "expression": "count(OrderId)"
+        },
+        {
+          "name": "Peak",
+          "type": "DOUBLE",
+          "expression": "max(TotalValue)"
         }
       ],
       "timeGrain": [
@@ -530,6 +680,10 @@
     }
   ],
   "macros": [
+    {
+      "name": "MoM",
+      "definition": "(calculation: Expression, timestamp: Expression) => ({{ calculation }} - COALESCE(LAG({{ calculation }}) OVER (ORDER BY {{ timestamp }}), 0)) / COALESCE(LAG({{ calculation }}) OVER (ORDER BY {{ timestamp }}), 1)"
+    }
   ],
   "dateSpine": {
     "unit": "DAY",
