@@ -93,7 +93,12 @@ class Indexing(BasicPipeline):
                 content=converted_view,
                 embedding=embeddings.data[i].embedding,
             )
-            for i, converted_view in enumerate(tqdm(converted_views))
+            for i, converted_view in enumerate(
+                tqdm(
+                    converted_views,
+                    desc="indexing view into the historial view question store",
+                )
+            )
         ]
 
         self._view_store.write_documents(
