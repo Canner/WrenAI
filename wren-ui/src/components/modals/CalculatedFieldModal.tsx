@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { Modal, Form, Input, Typography, Button } from 'antd';
 import LinkOutlined from '@ant-design/icons/LinkOutlined';
-import { omit } from 'lodash';
+import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
 import { DiagramModel } from '@/utils/data/type';
 import { ModalAction } from '@/hooks/useModalAction';
@@ -38,7 +38,17 @@ type Props = ModalAction<
 };
 
 export default function AddCalculatedFieldModal(props: Props) {
-  const { visible, loading, onSubmit, onClose, defaultValue } = props;
+  const {
+    visible,
+    loading,
+    onSubmit,
+    onClose,
+    defaultValue,
+    payload,
+    formMode,
+  } = props;
+
+  const isEditMode = formMode === FORM_MODE.EDIT;
 
   const [form] = Form.useForm();
   const expression = Form.useWatch('expression', form);
@@ -46,11 +56,8 @@ export default function AddCalculatedFieldModal(props: Props) {
 
   const expressionOptions = useExpressionFieldOptions();
 
-  const models = useMemo(() => defaultValue?.payload?.models, [defaultValue]);
-  const sourceModel = useMemo(
-    () => defaultValue?.payload?.sourceModel,
-    [defaultValue],
-  );
+  const models = useMemo(() => payload?.models, [payload]);
+  const sourceModel = useMemo(() => payload?.sourceModel, [payload]);
 
   const [validateCalculatedField] = useValidateCalculatedFieldMutation();
   const validateCalculatedFieldName = useCallback(
@@ -69,7 +76,7 @@ export default function AddCalculatedFieldModal(props: Props) {
 
   useEffect(() => {
     if (!visible) return;
-    form.setFieldsValue(omit(defaultValue || {}, ['payload']));
+    form.setFieldsValue(defaultValue || {});
   }, [form, defaultValue, visible]);
 
   const fetchOptions = useCallback(
@@ -112,7 +119,7 @@ export default function AddCalculatedFieldModal(props: Props) {
 
   return (
     <Modal
-      title="Add calculated field"
+      title={`${isEditMode ? 'Update' : 'Add'} calculated field`}
       width={750}
       visible={visible}
       onCancel={onClose}

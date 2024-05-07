@@ -4,7 +4,7 @@ import { getFieldValue } from '@/components/selectors/lineageSelector/FieldSelec
 
 export const editCalculatedField = (
   payload: { diagramData: Diagram; data: any },
-  openCalculatedFieldModal: (defaultValue: any) => void,
+  openCalculatedFieldModal: (defaultValue: any, payload: any) => void,
 ) => {
   const { diagramData, data } = payload;
   const sourceModel = diagramData.models.find(
@@ -22,16 +22,18 @@ export const editCalculatedField = (
   if (isSourceModelField) {
     const field = getField(sourceModel, data.lineage[0]);
     openCalculatedFieldModal &&
-      openCalculatedFieldModal({
-        columnId: data.columnId,
-        name: data.referenceName,
-        expression: data.aggregation,
-        lineage: [getFieldValue(field)],
-        payload: {
+      openCalculatedFieldModal(
+        {
+          columnId: data.columnId,
+          name: data.referenceName,
+          expression: data.aggregation,
+          lineage: [getFieldValue(field)],
+        },
+        {
           models: diagramData.models,
           sourceModel,
         },
-      });
+      );
     return;
   }
 
@@ -54,14 +56,16 @@ export const editCalculatedField = (
   const field = getField(lastModel, lastColumnId);
 
   openCalculatedFieldModal &&
-    openCalculatedFieldModal({
-      columnId: data.columnId,
-      name: data.referenceName,
-      expression: data.aggregation,
-      lineage: [...relations, field].map(getFieldValue),
-      payload: {
+    openCalculatedFieldModal(
+      {
+        columnId: data.columnId,
+        name: data.referenceName,
+        expression: data.aggregation,
+        lineage: [...relations, field].map(getFieldValue),
+      },
+      {
         models: diagramData.models,
         sourceModel,
       },
-    });
+    );
 };
