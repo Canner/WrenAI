@@ -325,8 +325,26 @@ export default function Modeling() {
         <EditMetadataModal
           {...editMetadataModal.state}
           onClose={editMetadataModal.closeModal}
-          onSubmit={async ({ id, data }) => {
-            await updateModelMetadata({ variables: { where: { id }, data } });
+          onSubmit={async ({ nodeType, data }) => {
+            const { modelId, viewId, ...metadata } = data;
+            switch (nodeType) {
+              case NODE_TYPE.MODEL: {
+                await updateModelMetadata({
+                  variables: { where: { id: modelId }, data: metadata },
+                });
+                break;
+              }
+
+              case NODE_TYPE.VIEW: {
+                // TODO: connect to update view metadata
+                console.log('onSubmit VIEW', viewId, metadata);
+                break;
+              }
+
+              default:
+                console.log('onSubmit', nodeType, data);
+                break;
+            }
           }}
         />
         <ModelDrawer

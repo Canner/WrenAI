@@ -1,5 +1,6 @@
 import { useContext } from 'react';
 import { Typography } from 'antd';
+import { NODE_TYPE } from '@/utils/enum';
 import FieldTable from '@/components/table/FieldTable';
 import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
 import RelationTable from '@/components/table/RelationTable';
@@ -17,6 +18,8 @@ export interface Props {
   relationFields: any[];
   description: string;
   properties: Record<string, any>;
+  nodeType: NODE_TYPE;
+  modelId: number;
 }
 
 const FIELDS_NAME = {
@@ -39,6 +42,8 @@ export default function EditModelMetadata(props: Props) {
     calculatedFields = [],
     relationFields = [],
     description,
+    nodeType,
+    modelId,
   } = props || {};
 
   const form = useContext(EditableContext);
@@ -48,6 +53,7 @@ export default function EditModelMetadata(props: Props) {
       [formNamespace]: {
         ...(form.getFieldValue(formNamespace) || {}),
         ...value,
+        modelId,
       },
     });
   };
@@ -71,6 +77,7 @@ export default function EditModelMetadata(props: Props) {
       <EditBasicMetadata
         dataSource={{ displayName, referenceName, description }}
         onChange={onChange}
+        nodeType={nodeType}
       />
 
       <div className="mb-6">

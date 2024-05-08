@@ -1,13 +1,15 @@
 import { Modal, Form } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { NODE_TYPE } from '@/utils/enum';
+import { EditableContext } from '@/components/EditableWrapper';
 import EditModelMetadata, {
   Props as EditModelProps,
 } from '@/components/pages/modeling/metadata/EditModelMetadata';
-import { EditableContext } from '@/components/EditableWrapper';
+import EditViewMetadata, {
+  Props as EditViewProps,
+} from '@/components/pages/modeling/metadata/EditViewMetadata';
 
-type DefaultValue = EditModelProps & {
-  modelId: number;
+type DefaultValue = (EditModelProps | EditViewProps) & {
   nodeType: NODE_TYPE;
 };
 
@@ -25,7 +27,7 @@ export default function EditMetadataModal(props: Props) {
 
   const submit = async () => {
     const values = form.getFieldValue(formNamespace);
-    await onSubmit({ data: values, id: defaultValue?.modelId });
+    await onSubmit({ data: values, nodeType });
     onClose();
   };
 
@@ -48,7 +50,14 @@ export default function EditMetadataModal(props: Props) {
           {nodeType === NODE_TYPE.MODEL && (
             <EditModelMetadata
               formNamespace={formNamespace}
-              {...defaultValue}
+              {...(defaultValue as EditModelProps)}
+            />
+          )}
+
+          {nodeType === NODE_TYPE.VIEW && (
+            <EditViewMetadata
+              formNamespace={formNamespace}
+              {...(defaultValue as EditViewProps)}
             />
           )}
         </Form>
