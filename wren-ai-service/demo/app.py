@@ -107,50 +107,51 @@ if __name__ == "__main__":
 
             st.markdown("---")
 
-            chosen_models = st.multiselect(
-                "Select data models for AI to generate MDL metadata",
-                [model["name"] for model in st.session_state["mdl_json"]["models"]],
-            )
-            if chosen_models and st.session_state["chosen_models"] != chosen_models:
-                st.session_state["chosen_models"] = chosen_models
-                st.session_state["mdl_json"] = get_mdl_json(
-                    st.session_state["chosen_dataset"]
+            if st.session_state["mdl_json"]:
+                chosen_models = st.multiselect(
+                    "Select data models for AI to generate MDL metadata",
+                    [model["name"] for model in st.session_state["mdl_json"]["models"]],
+                )
+                if chosen_models and st.session_state["chosen_models"] != chosen_models:
+                    st.session_state["chosen_models"] = chosen_models
+                    st.session_state["mdl_json"] = get_mdl_json(
+                        st.session_state["chosen_dataset"]
+                    )
+
+                ai_generate_metadata_ok = st.button(
+                    "AI Generate MDL Metadata",
+                    disabled=not chosen_models,
+                )
+                if ai_generate_metadata_ok:
+                    st.session_state["mdl_json"] = get_new_mdl_json(
+                        chosen_models=chosen_models
+                    )
+
+                # Display the model using the selected database
+                st.markdown("MDL Model")
+                st.json(
+                    body=st.session_state["mdl_json"],
+                    expanded=False,
                 )
 
-            ai_generate_metadata_ok = st.button(
-                "AI Generate MDL Metadata",
-                disabled=not chosen_models,
-            )
-            if ai_generate_metadata_ok:
-                st.session_state["mdl_json"] = get_new_mdl_json(
-                    chosen_models=chosen_models
+                show_er_diagram(
+                    st.session_state["mdl_json"]["models"],
+                    st.session_state["mdl_json"]["relationships"],
                 )
 
-            # Display the model using the selected database
-            st.markdown("MDL Model")
-            st.json(
-                body=st.session_state["mdl_json"],
-                expanded=False,
-            )
-
-            show_er_diagram(
-                st.session_state["mdl_json"]["models"],
-                st.session_state["mdl_json"]["relationships"],
-            )
-
-            deploy_ok = st.button(
-                "Deploy the MDL model using the selected database",
-                type="primary",
-            )
-            # Semantics preparation
-            if deploy_ok:
-                if st.session_state["dataset_type"] == "duckdb":
-                    prepare_duckdb(st.session_state["chosen_dataset"])
-
-                rerun_wren_engine(
-                    st.session_state["mdl_json"], st.session_state["dataset_type"]
+                deploy_ok = st.button(
+                    "Deploy the MDL model using the selected database",
+                    type="primary",
                 )
-                prepare_semantics(st.session_state["mdl_json"])
+                # Semantics preparation
+                if deploy_ok:
+                    if st.session_state["dataset_type"] == "duckdb":
+                        prepare_duckdb(st.session_state["chosen_dataset"])
+
+                    rerun_wren_engine(
+                        st.session_state["mdl_json"], st.session_state["dataset_type"]
+                    )
+                    prepare_semantics(st.session_state["mdl_json"])
 
     query = st.chat_input(
         "Ask a question about the database",
