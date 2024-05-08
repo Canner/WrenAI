@@ -343,13 +343,13 @@ export default function Modeling() {
           {...calculatedFieldModal.state}
           onClose={calculatedFieldModal.closeModal}
           loading={calculatedFieldLoading}
-          onSubmit={async ({ id, ...values }) => {
+          onSubmit={async ({ id, data }) => {
             if (id) {
               await updateCalculatedField({
-                variables: { where: { id }, data: values },
+                variables: { where: { id }, data },
               });
             } else {
-              await createCalculatedField({ variables: { data: values } });
+              await createCalculatedField({ variables: { data } });
             }
           }}
         />

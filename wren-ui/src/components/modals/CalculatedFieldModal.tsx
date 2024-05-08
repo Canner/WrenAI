@@ -32,7 +32,7 @@ export type CalculatedFieldValue = {
 
 type Props = ModalAction<
   CalculatedFieldValue,
-  CreateCalculatedFieldInput & { id?: number }
+  { id?: number; data: CreateCalculatedFieldInput }
 > & {
   loading?: boolean;
 };
@@ -104,13 +104,15 @@ export default function AddCalculatedFieldModal(props: Props) {
 
         await onSubmit({
           id,
-          modelId,
-          expression: values.expression,
-          name: values.name,
-          // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId
-          lineage: values.lineage.map(
-            (field) => field.relationId || field.columnId,
-          ),
+          data: {
+            modelId,
+            expression: values.expression,
+            name: values.name,
+            // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId
+            lineage: values.lineage.map(
+              (field) => field.relationId || field.columnId,
+            ),
+          },
         });
         onClose();
       })
