@@ -82,15 +82,14 @@ WrenAI is consist of three core services:
 
 - ***[Wren AI Service](https://github.com/Canner/WrenAI/tree/main/wren-ai-service):*** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
 
-- ***[Wren Engine](https://github.com/Canner/wren-engine):*** Serves as the platform's backbone, managing metadata and connecting to data sources, while preparing for future application integrations.
+- ***[Wren Engine](https://github.com/Canner/wren-engine):*** Serves as the semantic engine, mapping business terms to data sources, defining relationships, and incorporating predefined calculations and aggregations.
 
 ![wrenai_works](./misc/how_wrenai_works.png)
 
-## 🫣 Sneak Peek
+## 🤩 Learn More About Text-to-SQL
 
-|  Data Modeling   | Ask and Follow-up Questions  |
-|  ----  | ----  |
-| ![preview_model](./misc/preview_model.png)  | ![preview_ask](./misc/preview_ask.png) |
+- [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
+- [How do you use LangChain to build a Text-to-SQL solution? What are the challenges? How to solve it?](https://blog.getwren.ai/how-do-you-use-langchain-to-build-a-text-to-sql-solution-what-are-the-challenges-how-to-solve-it-b6d9c66aa038)
 
 ## 🤞 Design Philosophies
 
@@ -109,20 +108,12 @@ WrenAI is currently in ***alpha version***. The project team is actively working
 
 Using WrenAI is super simple, you can setup within 3 minutes, and start to interact with your own data!
 
-***Start Today And Be 100X More Productive Than Yesterday***
-
 - Visit our [Installation Guide of WrenAI](http://docs.getwren.ai/installation).
 - Visit the [Usage Guides](http://docs.getwren.ai/guide/connect/overview) to learn more about how to use WrenAI.
 
 ## 📚 Documentation
 
 Visit [WrenAI documentation](https://docs.getwren.ai) to view the full documentation.
-
-## 📶 Telemetry
-
-WrenAI collects anonymous usage statistics for application components. We receive an event each time these components are initialized or used, allowing us to identify which features are most relevant and valued by our community. These statistics help us improve our features and serve as a reference for deciding on our roadmap.
-
-Read more about telemetry or how you can opt out in [WrenAI doc](https://docs.getwren.ai/overview/telemetry).
 
 ## ⭐️ Community
 
