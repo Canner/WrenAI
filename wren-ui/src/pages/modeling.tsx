@@ -86,6 +86,7 @@ export default function Modeling() {
   const [createCalculatedField, { loading: calculatedFieldCreating }] =
     useCreateCalculatedFieldMutation(
       getBaseOptions({
+        onError: null,
         onCompleted: () => {
           message.success('Successfully created calculated field.');
         },
@@ -94,6 +95,7 @@ export default function Modeling() {
 
   const [updateCalculatedField] = useUpdateCalculatedFieldMutation(
     getBaseOptions({
+      onError: null,
       onCompleted: () => {
         message.success('Successfully updated calculated field.');
       },
