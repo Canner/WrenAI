@@ -40,7 +40,7 @@
 
 WrenAI is reimagining how businesses can interact with and leverage their data through LLM, by bringing comprehension capabilities to small and large data teams.
 
-![wrenai_overview](./misc/wrenai_overview.png)
+![wrenai_overview](./misc/wrenai_view.png)
 
 👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
 
