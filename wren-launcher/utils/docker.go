@@ -178,7 +178,7 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, teleme
 	}
 	// replace the content with regex
 	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, port, pg_pwd, userUUID, telemetryConsent)
-	newEnvFile := path.Join(projectDir, ".env")
+	newEnvFile := getEnvFilePath(projectDir)
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
 	if err != nil {
@@ -192,6 +192,10 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, teleme
 	}
 
 	return nil
+}
+
+func getEnvFilePath(projectDir string) string {
+	return path.Join(projectDir, ".env")
 }
 
 func RunDockerCompose(projectName string, projectDir string) error {
@@ -297,7 +301,7 @@ func IfPortUsedByWrenUI(port int) bool {
 	return false
 }
 
-func CheckWrenAIStarted(url string) error {
+func CheckWrenUIStarted(url string) error {
 	// check response from localhost:3000
 	resp, err := http.Get(url)
 	if err != nil {
@@ -306,8 +310,35 @@ func CheckWrenAIStarted(url string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
+		fmt.Println("WrenUI is not ready yet")
 		return fmt.Errorf("WrenAI is not started yet")
 	}
+	return nil
+}
 
+func CheckAIServiceStarted(projectDir string) error {
+	// check response from localhost:5555
+	envExampleFile := getEnvFilePath(projectDir)
+
+	// read ai port from env file
+	envFileContent, err := os.ReadFile(envExampleFile)
+	if err != nil {
+		return err
+	}
+	reg := regexp.MustCompile(`WREN_AI_SERVICE_PORT=(.*)`)
+	aiPort := reg.FindStringSubmatch(string(envFileContent))[1]
+
+	// health check
+	url := fmt.Sprintf("http://localhost:%s/health", aiPort)
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		fmt.Println("AI service is not ready yet")
+		return fmt.Errorf("AI service is not started yet")
+	}
 	return nil
 }

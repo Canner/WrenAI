@@ -171,10 +171,26 @@ func Launch() {
 		}
 
 		// check if WrenAI is started
-		err = utils.CheckWrenAIStarted(url)
+		err := utils.CheckWrenUIStarted(url)
 		if err == nil {
+			fmt.Println("WrenUI is Ready")
 			break
 		}
+		time.Sleep(5 * time.Second)
+	}
+
+	for {
+		if time.Now().After(timeoutTime) {
+			panic("Timeout")
+		}
+
+		// check if ai service is ready
+		err := utils.CheckAIServiceStarted(projectDir)
+		if err == nil {
+			fmt.Println("AI Service is Ready")
+			break
+		}
+		// print errAI error
 		time.Sleep(5 * time.Second)
 	}
 
