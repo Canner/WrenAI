@@ -21,6 +21,7 @@ import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import { isEmpty } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
+import * as Errors from '@server/utils/error';
 
 const logger = getLogger('ModelService');
 logger.level = 'debug';
@@ -131,9 +132,11 @@ export class ModelService implements IModelService {
       } as CheckCalculatedFieldCanQueryData);
     logger.debug(`${logTitle} : checkCalculatedFieldCanQuery: ${canQuery}`);
     if (!canQuery) {
-      throw new Error(
-        `Can not execute a query using this calculated field: "${errorMessage}"`,
-      );
+      const error = JSON.parse(errorMessage);
+      throw Errors.create(Errors.GeneralErrorCodes.INVALID_CALCULATED_FIELD, {
+        customMessage: error?.message,
+        originalError: error,
+      });
     }
     const inputFieldId = lineage[lineage.length - 1];
     const dataType = await this.inferCalculatedFieldDataType(
@@ -196,9 +199,11 @@ export class ModelService implements IModelService {
       } as CheckCalculatedFieldCanQueryData);
     logger.debug(`${logTitle}: checkCalculatedFieldCanQuery: ${canQuery}`);
     if (!canQuery) {
-      throw new Error(
-        `Can not execute a query using this calculated field: "${errorMessage}"`,
-      );
+      const error = JSON.parse(errorMessage);
+      throw Errors.create(Errors.GeneralErrorCodes.INVALID_CALCULATED_FIELD, {
+        customMessage: error?.message,
+        originalError: error,
+      });
     }
     const inputFieldId = lineage[lineage.length - 1];
     const dataType = await this.inferCalculatedFieldDataType(
