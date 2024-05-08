@@ -1,6 +1,7 @@
 import { CompactTable } from './connector';
 import { IConnector } from './connector';
 import { getLogger } from '@server/utils';
+import { ColumnTypes } from './types';
 
 import pg from 'pg';
 const { Client } = pg;
@@ -23,7 +24,7 @@ export interface PostgresColumnResponse {
   column_name: string;
   ordinal_position: string;
   is_nullable: string;
-  data_type: string;
+  data_type: ColumnTypes;
 }
 
 export interface PostgresConstraintResponse {
@@ -97,7 +98,7 @@ export class PostgresConnector
         column_name: row.column_name,
         ordinal_position: row.ordinal_position,
         is_nullable: row.is_nullable,
-        data_type: row.data_type,
+        data_type: this.transformColumnType(row.data_type),
       };
     }) as PostgresColumnResponse[];
 
@@ -141,6 +142,62 @@ export class PostgresConnector
       };
     }) as PostgresConstraintResponse[];
     return constraints;
+  }
+
+  private transformColumnType(dataType: string) {
+    // lower case the dataType
+    dataType = dataType.toLowerCase();
+
+    // all possible types listed here: https://www.postgresql.org/docs/current/datatype.html#DATATYPE-TABLE
+
+    switch (dataType) {
+      case 'text':
+        return ColumnTypes.TEXT;
+      case 'char':
+      case 'character':
+      case 'bpchar':
+      case 'name':
+        return ColumnTypes.CHAR;
+      case 'character varying':
+        return ColumnTypes.VARCHAR;
+      case 'bigint':
+        return ColumnTypes.BIGINT;
+      case 'int':
+      case 'integer':
+        return ColumnTypes.INTEGER;
+      case 'smallint':
+        return ColumnTypes.SMALLINT;
+      case 'real':
+        return ColumnTypes.REAL;
+      case 'double precision':
+        return ColumnTypes.DOUBLE;
+      case 'numeric':
+      case 'decimal':
+        return ColumnTypes.DECIMAL;
+      case 'boolean':
+        return ColumnTypes.BOOLEAN;
+      case 'timestamp':
+      case 'timestamp without time zone':
+        return ColumnTypes.TIMESTAMP;
+      case 'timestamp with time zone':
+        return ColumnTypes.TIMESTAMPTZ;
+      case 'date':
+        return ColumnTypes.DATE;
+      case 'interval':
+        return ColumnTypes.INTERVAL;
+      case 'json':
+        return ColumnTypes.JSON;
+      case 'bytea':
+        return ColumnTypes.BYTEA;
+      case 'uuid':
+        return ColumnTypes.UUID;
+      case 'inet':
+        return ColumnTypes.INET;
+      case 'oid':
+        return ColumnTypes.OID;
+      default:
+        return ColumnTypes.UNKNOWN;
+    }
   }
 
   private formatToCompactTable(

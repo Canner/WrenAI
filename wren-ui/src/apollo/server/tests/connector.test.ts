@@ -5,6 +5,7 @@ import {
 } from '@server/connectors/postgresConnector';
 import { TestingEnv } from './env';
 import { TestingPostgres } from './testingDatabase/postgres';
+import { ColumnTypes } from '@server/connectors/types';
 
 describe('Connector', () => {
   let connector: PostgresConnector;
@@ -26,7 +27,7 @@ describe('Connector', () => {
   const tpchCustomerColumns = [
     {
       name: 'c_custkey',
-      type: 'integer',
+      type: ColumnTypes.INTEGER,
       notNull: true,
       description: '',
       properties: {
@@ -35,7 +36,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_name',
-      type: 'character varying',
+      type: ColumnTypes.VARCHAR,
       notNull: true,
       description: '',
       properties: {
@@ -44,7 +45,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_address',
-      type: 'character varying',
+      type: ColumnTypes.VARCHAR,
       notNull: true,
       description: '',
       properties: {
@@ -53,7 +54,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_nationkey',
-      type: 'integer',
+      type: ColumnTypes.INTEGER,
       notNull: true,
       description: '',
       properties: {
@@ -62,7 +63,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_phone',
-      type: 'character',
+      type: ColumnTypes.CHAR,
       notNull: true,
       description: '',
       properties: {
@@ -71,7 +72,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_acctbal',
-      type: 'numeric',
+      type: ColumnTypes.DECIMAL,
       notNull: true,
       description: '',
       properties: {
@@ -80,7 +81,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_mktsegment',
-      type: 'character',
+      type: ColumnTypes.CHAR,
       notNull: true,
       description: '',
       properties: {
@@ -89,7 +90,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_comment',
-      type: 'character varying',
+      type: ColumnTypes.VARCHAR,
       notNull: true,
       description: '',
       properties: {
@@ -208,6 +209,7 @@ describe('Connector', () => {
     expect(customerTable).toBeTruthy();
     expect(customerTable.columns).toBeTruthy();
     expect(customerTable.columns.length).toBe(tpchCustomerColumns.length);
+
     for (const column of tpchCustomerColumns) {
       const found = customerTable.columns.find(
         (c) => c.name === column.name && c.type === column.type,
