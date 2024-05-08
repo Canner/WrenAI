@@ -6,8 +6,9 @@ import {
   InfoCircle,
   Cube,
   LineChart,
+  IdCard,
 } from '@styled-icons/boxicons-regular';
-import { Braces, Brackets, Map2 } from '@styled-icons/remix-line';
+import { Braces, Map2 } from '@styled-icons/remix-line';
 import {
   SortNumerically,
   SortAlphabetically,
@@ -20,6 +21,7 @@ import {
   Pageview,
   Explore,
 } from '@styled-icons/material-outlined';
+import FieldBinaryOutlined from '@ant-design/icons/FieldBinaryOutlined';
 import MonitorOutlined from '@ant-design/icons/MonitorOutlined';
 import SwapOutlined from '@ant-design/icons/SwapOutlined';
 import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
@@ -43,10 +45,13 @@ export const TextIcon = styled(Text)`
 export const CalendarIcon = styled(Calendar)`
   height: 1em;
 `;
-export const ArrayBracketsIcon = styled(Brackets)`
+export const IdIcon = styled(IdCard)`
   height: 1em;
 `;
 export const JsonBracesIcon = styled(Braces)`
+  height: 1em;
+`;
+export const BinaryIcon = styled(FieldBinaryOutlined)`
   height: 1em;
 `;
 export const ColumnsIcon = styled(Columns)`

@@ -1,37 +1,62 @@
+// Refer to backend connector types:
+// src/apollo/server/connectors/types.ts
+
 export enum COLUMN_TYPE {
-  // Boolean
+  // Boolean Types
   BOOLEAN = 'BOOLEAN',
 
-  // Date and Time
-  DATE = 'DATE',
-  TIME = 'TIME',
-  TIMESTAMP = 'TIMESTAMP',
-  DATETIME = 'DATETIME',
-
-  // Integer
-  INTEGER = 'INTEGER',
+  // Numeric Types
   TINYINT = 'TINYINT',
-  SMALLINT = 'SMALLINT',
-  BIGINT = 'BIGINT',
-  INT = 'INT',
-  NUMBER = 'NUMBER',
 
-  // Floating-Point
-  DOUBLE = 'DOUBLE',
-  REAL = 'REAL',
+  INT2 = 'INT2',
+  SMALLINT = 'SMALLINT', // alias for INT2
 
-  // Fixed-Precision
+  INT4 = 'INT4',
+  INTEGER = 'INTEGER', // alias for INT4
+
+  INT8 = 'INT8',
+  BIGINT = 'BIGINT', // alias for INT8
+
+  NUMERIC = 'NUMERIC',
   DECIMAL = 'DECIMAL',
 
-  // String
-  CHAR = 'CHAR',
-  JSON = 'JSON',
-  TEXT = 'TEXT',
-  VARBINARY = 'VARBINARY',
-  VARCHAR = 'VARCHAR',
-  STRING = 'STRING',
+  // Floating-Point Types
+  FLOAT4 = 'FLOAT4',
+  REAL = 'REAL', // alias for FLOAT4
 
-  // Mongo DB
-  MONGO_ARRAY = 'ARRAY',
-  MONGO_ROW = 'ROW',
+  FLOAT8 = 'FLOAT8',
+  DOUBLE = 'DOUBLE', // alias for FLOAT8
+
+  // Character Types
+  VARCHAR = 'VARCHAR',
+  CHAR = 'CHAR',
+  BPCHAR = 'BPCHAR', // BPCHAR is fixed-length, blank padded string
+  TEXT = 'TEXT', // alias for VARCHAR
+  STRING = 'STRING', // alias for VARCHAR
+  NAME = 'NAME', // alias for VARCHAR
+
+  // Date/Time Types
+  TIMESTAMP = 'TIMESTAMP',
+  TIMESTAMPTZ = 'TIMESTAMP WITH TIME ZONE',
+  DATE = 'DATE',
+  INTERVAL = 'INTERVAL',
+
+  // JSON Types
+  JSON = 'JSON',
+
+  // Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
+  // https://www.postgresql.org/docs/current/datatype-oid.html
+  OID = 'OID',
+
+  // Binary Data Types
+  BYTEA = 'BYTEA',
+
+  // UUID Type
+  UUID = 'UUID',
+
+  // Network Address Types
+  INET = 'INET',
+
+  // Unknown Type
+  UNKNOWN = 'UNKNOWN',
 }
