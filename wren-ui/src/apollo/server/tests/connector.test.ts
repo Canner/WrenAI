@@ -5,7 +5,7 @@ import {
 } from '@server/connectors/postgresConnector';
 import { TestingEnv } from './env';
 import { TestingPostgres } from './testingDatabase/postgres';
-import { ColumnTypes } from '@server/connectors/types';
+import { WrenEngineColumnType } from '@server/connectors/types';
 
 describe('Connector', () => {
   let connector: PostgresConnector;
@@ -27,7 +27,7 @@ describe('Connector', () => {
   const tpchCustomerColumns = [
     {
       name: 'c_custkey',
-      type: ColumnTypes.INTEGER,
+      type: WrenEngineColumnType.INTEGER,
       notNull: true,
       description: '',
       properties: {
@@ -36,7 +36,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_name',
-      type: ColumnTypes.VARCHAR,
+      type: WrenEngineColumnType.VARCHAR,
       notNull: true,
       description: '',
       properties: {
@@ -45,7 +45,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_address',
-      type: ColumnTypes.VARCHAR,
+      type: WrenEngineColumnType.VARCHAR,
       notNull: true,
       description: '',
       properties: {
@@ -54,7 +54,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_nationkey',
-      type: ColumnTypes.INTEGER,
+      type: WrenEngineColumnType.INTEGER,
       notNull: true,
       description: '',
       properties: {
@@ -63,7 +63,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_phone',
-      type: ColumnTypes.CHAR,
+      type: WrenEngineColumnType.CHAR,
       notNull: true,
       description: '',
       properties: {
@@ -72,7 +72,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_acctbal',
-      type: ColumnTypes.DECIMAL,
+      type: WrenEngineColumnType.DECIMAL,
       notNull: true,
       description: '',
       properties: {
@@ -81,7 +81,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_mktsegment',
-      type: ColumnTypes.CHAR,
+      type: WrenEngineColumnType.CHAR,
       notNull: true,
       description: '',
       properties: {
@@ -90,7 +90,7 @@ describe('Connector', () => {
     },
     {
       name: 'c_comment',
-      type: ColumnTypes.VARCHAR,
+      type: WrenEngineColumnType.VARCHAR,
       notNull: true,
       description: '',
       properties: {

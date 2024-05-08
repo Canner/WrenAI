@@ -1,7 +1,7 @@
 import { CompactTable } from './connector';
 import { IConnector } from './connector';
 import { getLogger } from '@server/utils';
-import { ColumnTypes } from './types';
+import { WrenEngineColumnType } from './types';
 
 import pg from 'pg';
 const { Client } = pg;
@@ -24,7 +24,7 @@ export interface PostgresColumnResponse {
   column_name: string;
   ordinal_position: string;
   is_nullable: string;
-  data_type: ColumnTypes;
+  data_type: WrenEngineColumnType;
 }
 
 export interface PostgresConstraintResponse {
@@ -152,51 +152,51 @@ export class PostgresConnector
 
     switch (dataType) {
       case 'text':
-        return ColumnTypes.TEXT;
+        return WrenEngineColumnType.TEXT;
       case 'char':
       case 'character':
       case 'bpchar':
       case 'name':
-        return ColumnTypes.CHAR;
+        return WrenEngineColumnType.CHAR;
       case 'character varying':
-        return ColumnTypes.VARCHAR;
+        return WrenEngineColumnType.VARCHAR;
       case 'bigint':
-        return ColumnTypes.BIGINT;
+        return WrenEngineColumnType.BIGINT;
       case 'int':
       case 'integer':
-        return ColumnTypes.INTEGER;
+        return WrenEngineColumnType.INTEGER;
       case 'smallint':
-        return ColumnTypes.SMALLINT;
+        return WrenEngineColumnType.SMALLINT;
       case 'real':
-        return ColumnTypes.REAL;
+        return WrenEngineColumnType.REAL;
       case 'double precision':
-        return ColumnTypes.DOUBLE;
+        return WrenEngineColumnType.DOUBLE;
       case 'numeric':
       case 'decimal':
-        return ColumnTypes.DECIMAL;
+        return WrenEngineColumnType.DECIMAL;
       case 'boolean':
-        return ColumnTypes.BOOLEAN;
+        return WrenEngineColumnType.BOOLEAN;
       case 'timestamp':
       case 'timestamp without time zone':
-        return ColumnTypes.TIMESTAMP;
+        return WrenEngineColumnType.TIMESTAMP;
       case 'timestamp with time zone':
-        return ColumnTypes.TIMESTAMPTZ;
+        return WrenEngineColumnType.TIMESTAMPTZ;
       case 'date':
-        return ColumnTypes.DATE;
+        return WrenEngineColumnType.DATE;
       case 'interval':
-        return ColumnTypes.INTERVAL;
+        return WrenEngineColumnType.INTERVAL;
       case 'json':
-        return ColumnTypes.JSON;
+        return WrenEngineColumnType.JSON;
       case 'bytea':
-        return ColumnTypes.BYTEA;
+        return WrenEngineColumnType.BYTEA;
       case 'uuid':
-        return ColumnTypes.UUID;
+        return WrenEngineColumnType.UUID;
       case 'inet':
-        return ColumnTypes.INET;
+        return WrenEngineColumnType.INET;
       case 'oid':
-        return ColumnTypes.OID;
+        return WrenEngineColumnType.OID;
       default:
-        return ColumnTypes.UNKNOWN;
+        return WrenEngineColumnType.UNKNOWN;
     }
   }
 

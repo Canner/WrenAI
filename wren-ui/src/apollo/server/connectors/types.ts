@@ -1,4 +1,4 @@
-export enum ColumnTypes {
+export enum WrenEngineColumnType {
   // Boolean Types
   BOOLEAN = 'BOOLEAN',
 
