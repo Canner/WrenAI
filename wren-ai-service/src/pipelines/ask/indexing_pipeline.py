@@ -205,8 +205,6 @@ class Indexing(BasicPipeline):
         self,
         document_store: DocumentStore,
         view_store: DocumentStore,
-        embedding_model_name: str = EMBEDDING_MODEL_NAME,
-        embedding_model_dim: int = EMBEDDING_MODEL_DIMENSION,
     ) -> None:
         pipe = Pipeline()
         pipe.add_component("cleaner", DocumentCleaner([document_store, view_store]))
