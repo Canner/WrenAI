@@ -62,6 +62,11 @@ def root():
     return RedirectResponse(url="/docs")
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
     server_host = os.getenv("WREN_AI_SERVICE_HOST") or "127.0.0.1"
     server_port = (
