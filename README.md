@@ -58,13 +58,23 @@ WrenAI is reimagining how businesses can interact with and leverage their data t
 
 > WrenAI evolves with every interaction. It learns from user feedback and behavioral patterns, continuously refining its suggestions.
 
+## 🔥 Preview
+
+### Ask your business questions and follow-up insights
+
+![](./misc/preview_ask.png)
+
+### Modeling with semantics, such as relationships, metrics and calculations
+
+![](./misc/preview_model.png)
+
 ## 🤔 Benefits using WrenAI
 
 WrenAI leverages Large Language Models (LLM) with Retrieval-Augmented Generation (RAG) technology to enhance comprehension of internal data.  Below are the three key benefits:
 
 ### 1. Fast Onboarding
 
-> Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
+> Discover and analyze your data with our user interface. Suitable for data analysts, and non-technical users to use.
 
 ### 2. Secure By Design
 
