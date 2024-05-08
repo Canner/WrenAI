@@ -37,19 +37,30 @@ const makeCheckAllowType =
 
 export const checkStringFunctionAllowType = makeCheckAllowType(
   stringFunctions,
-  [COLUMN_TYPE.VARCHAR, COLUMN_TYPE.CHAR, COLUMN_TYPE.TEXT, COLUMN_TYPE.STRING],
+  [
+    COLUMN_TYPE.VARCHAR,
+    COLUMN_TYPE.CHAR,
+    COLUMN_TYPE.BPCHAR,
+    COLUMN_TYPE.TEXT,
+    COLUMN_TYPE.STRING,
+    COLUMN_TYPE.NAME,
+  ],
 );
 
 export const checkNumberFunctionAllowType = makeCheckAllowType(mathFunctions, [
-  COLUMN_TYPE.INTEGER,
   COLUMN_TYPE.TINYINT,
+  COLUMN_TYPE.INT2,
   COLUMN_TYPE.SMALLINT,
+  COLUMN_TYPE.INT4,
+  COLUMN_TYPE.INTEGER,
+  COLUMN_TYPE.INT8,
   COLUMN_TYPE.BIGINT,
-  COLUMN_TYPE.INT,
+  COLUMN_TYPE.NUMERIC,
   COLUMN_TYPE.DECIMAL,
-  COLUMN_TYPE.DOUBLE,
+  COLUMN_TYPE.FLOAT4,
   COLUMN_TYPE.REAL,
-  COLUMN_TYPE.NUMBER,
+  COLUMN_TYPE.FLOAT8,
+  COLUMN_TYPE.DOUBLE,
 ]);
 
 export const createLineageSelectorValidator =
