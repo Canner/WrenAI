@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Row, Col, Button, Collapse } from 'antd';
+import { Row, Col, Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
@@ -10,9 +10,9 @@ import StopOutlined from '@ant-design/icons/StopFilled';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import CloseCircleFilled from '@ant-design/icons/CloseCircleFilled';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
-import CaretRightOutlined from '@ant-design/icons/CaretRightOutlined';
 import ViewSQLModal from '@/components/pages/home/prompt/ViewSQLModal';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
+import ErrorCollapse from '@/components/ErrorCollapse';
 import useModalAction from '@/hooks/useModalAction';
 import useAskProcessState from '@/hooks/useAskProcessState';
 import { AskingTask } from '@/apollo/client/graphql/__types__';
@@ -26,24 +26,6 @@ const StyledResult = styled.div`
   box-shadow:
     rgba(0, 0, 0, 0.1) 0px 10px 15px -3px,
     rgba(0, 0, 0, 0.05) 0px 4px 6px -2px;
-`;
-
-const StyledCollapse = styled(Collapse)`
-  .ant-collapse-item {
-    > .ant-collapse-header {
-      color: var(--gray-7);
-      padding-left: 0;
-      padding-right: 0;
-
-      .ant-collapse-arrow {
-        margin-right: 8px;
-      }
-    }
-    > .ant-collapse-content .ant-collapse-content-box {
-      color: var(--gray-7);
-      padding: 0;
-    }
-  }
 `;
 
 const ResultBlock = styled.div`
@@ -137,16 +119,7 @@ const makeProcessingError =
         </div>
         <div className="gray-7">{config.description || message}</div>
         {hasStacktrace && (
-          <StyledCollapse
-            ghost
-            expandIcon={({ isActive }) => (
-              <CaretRightOutlined rotate={isActive ? 90 : 0} />
-            )}
-          >
-            <Collapse.Panel key="1" header="Show error messages">
-              <pre className="mb-0">{stacktrace.join('\n')}</pre>
-            </Collapse.Panel>
-          </StyledCollapse>
+          <ErrorCollapse className="mt-2" message={stacktrace.join('\n')} />
         )}
       </div>
     );
