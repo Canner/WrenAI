@@ -116,4 +116,13 @@ class AskDetailsService:
         self,
         ask_details_result_request: AskDetailsResultRequest,
     ) -> AskDetailsResultResponse:
+        if ask_details_result_request.query_id not in self.ask_details_results:
+            return AskDetailsResultResponse(
+                status="failed",
+                error=AskDetailsResultResponse.AskDetailsError(
+                    code="OTHERS",
+                    message=f"{ask_details_result_request.query_id} is not found",
+                ),
+            )
+
         return self.ask_details_results[ask_details_result_request.query_id]

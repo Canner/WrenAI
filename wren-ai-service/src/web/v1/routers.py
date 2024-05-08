@@ -108,6 +108,9 @@ async def ask_details(
 ) -> AskDetailsResponse:
     query_id = str(uuid.uuid4())
     ask_details_request.query_id = query_id
+    container.ASK_DETAILS_SERVICE.ask_details_results[
+        query_id
+    ] = AskDetailsResultResponse(status="understanding")
     background_tasks.add_task(
         container.ASK_DETAILS_SERVICE.ask_details,
         ask_details_request,
