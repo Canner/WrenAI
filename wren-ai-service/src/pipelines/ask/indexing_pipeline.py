@@ -4,7 +4,7 @@ import os
 from typing import Any, Dict, List
 
 import openai
-from haystack import Document, Pipeline
+from haystack import Document, Pipeline, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from tqdm import tqdm
@@ -21,6 +21,28 @@ load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 DATASET_NAME = os.getenv("DATASET_NAME")
+
+
+@component
+class DocumentCleaner:
+    """
+    This component is used to clear all the documents in the specified document store(si).
+
+    """
+
+    def __init__(self, stores: List[DocumentStore]) -> None:
+        self._stores = stores
+        pass
+
+    @component.output_types(mdl=str)
+    def run(self, mdl: str) -> str:
+        def _clear_documents(store: DocumentStore) -> None:
+            ids = [str(i) for i in range(store.count_documents())]
+            if ids:
+                store.delete_documents(ids)
+
+        [_clear_documents(store) for store in self._stores]
+        return {"mdl": mdl}
 
 
 class Indexing(BasicPipeline):
