@@ -301,7 +301,7 @@ func IfPortUsedByWrenUI(port int) bool {
 	return false
 }
 
-func CheckWrenUIStarted(url string) error {
+func CheckUIServiceStarted(url string) error {
 	// check response from localhost:3000
 	resp, err := http.Get(url)
 	if err != nil {
@@ -310,7 +310,6 @@ func CheckWrenUIStarted(url string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		fmt.Println("WrenUI is not ready yet")
 		return fmt.Errorf("WrenAI is not started yet")
 	}
 	return nil
@@ -337,7 +336,6 @@ func CheckAIServiceStarted(projectDir string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		fmt.Println("AI service is not ready yet")
 		return fmt.Errorf("AI service is not started yet")
 	}
 	return nil
