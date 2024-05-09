@@ -29,7 +29,7 @@
 </p>
 
 
-> WrenAI is ***your AI data assistant*** that helps you get results and insights faster by asking questions without writing SQL.
+> WrenAI is a **text-to-SQL solution** for data teams to get results and insights faster by asking business questions without writing SQL.
 
 ## ▶️ Video Introduction
 
@@ -38,7 +38,7 @@
 
 ## 🎯 Our Mission
 
-WrenAI is reimagining how businesses can interact with and leverage their data through LLM, by bringing comprehension capabilities to small and large data teams.
+WrenAI is reimagining how businesses can interact with and leverage their data through LLM by bringing comprehension capabilities to database data structures.
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
