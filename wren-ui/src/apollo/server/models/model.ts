@@ -54,13 +54,19 @@ export enum ExpressionName {
 
 export interface CreateCalculatedFieldData {
   modelId: number;
-  name: string;
+  name: string; //displayName
   expression: ExpressionName;
   lineage: number[];
 }
 
 export interface UpdateCalculatedFieldData {
-  name: string;
+  name: string; //displayName
+  expression: ExpressionName;
+  lineage: number[];
+}
+
+export interface CheckCalculatedFieldCanQueryData {
+  referenceName: string;
   expression: ExpressionName;
   lineage: number[];
 }
