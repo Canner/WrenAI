@@ -200,12 +200,16 @@ export class DiagramResolver {
       type: relation.joinType as RelationType,
       fromModelId: relation.fromModelId,
       fromModelName: relation.fromModelName,
+      fromModelDisplayName: relation.fromModelDisplayName,
       fromColumnId: relation.fromColumnId,
       fromColumnName: relation.fromColumnName,
+      fromColumnDisplayName: relation.fromColumnDisplayName,
       toModelId: relation.toModelId,
       toModelName: relation.toModelName,
+      toModelDisplayName: relation.toModelDisplayName,
       toColumnId: relation.toColumnId,
       toColumnName: relation.toColumnName,
+      toColumnDisplayName: relation.toColumnDisplayName,
       description: properties?.description,
     };
   }
