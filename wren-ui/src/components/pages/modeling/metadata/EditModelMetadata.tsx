@@ -114,7 +114,7 @@ export default function EditModelMetadata(props: Props) {
           <RelationshipEditableTable
             dataSource={relationFields}
             columns={[
-              COLUMN.NAME,
+              { ...COLUMN.NAME, dataIndex: 'displayName' },
               COLUMN.RELATION_FROM,
               COLUMN.RELATION_TO,
               { ...COLUMN.RELATION, width: 130 },
