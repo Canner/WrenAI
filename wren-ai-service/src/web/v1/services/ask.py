@@ -88,6 +88,7 @@ class AskResultResponse(BaseModel):
     class AskResult(BaseModel):
         sql: str
         summary: str
+        kind: Literal["llm", "view"] = "llm"
 
     class AskError(BaseModel):
         code: Literal[
