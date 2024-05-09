@@ -32,7 +32,6 @@ class DocumentCleaner:
 
     def __init__(self, stores: List[DocumentStore]) -> None:
         self._stores = stores
-        pass
 
     @component.output_types(mdl=str)
     def run(self, mdl: str) -> str:
