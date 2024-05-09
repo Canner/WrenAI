@@ -46,7 +46,7 @@ class DocumentCleaner:
 
 
 @component
-class ViewIndexer:
+class ViewConverter:
     """
     Convert the view MDL to the following format:
     {
@@ -57,17 +57,13 @@ class ViewIndexer:
     and store it in the view store.
     """
 
-    def __init__(
-        self,
-        store: DocumentStore,
-    ) -> None:
-        self._store = store
+    def __init__(self) -> None:
         self._openai_client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
 
         self.embedding_model_name = EMBEDDING_MODEL_NAME
         self.embedding_model_dim = EMBEDDING_MODEL_DIMENSION
 
-    @component.output_types()
+    @component.output_types(documents=List[Document])
     def run(self, mdl: str) -> None:
         views = json.loads(mdl)["views"]
 
@@ -105,16 +101,11 @@ class ViewIndexer:
             )
         ]
 
-        self._store.write_documents(
-            documents,
-            policy=DuplicatePolicy.OVERWRITE,
-        )
-
-        return {}
+        return {"documents": documents}
 
 
 @component
-class MDLToDDLConverter:
+class DDLConverter:
     def __init__(self) -> None:
         self._openai_client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -207,19 +198,28 @@ class Indexing(BasicPipeline):
     ) -> None:
         pipe = Pipeline()
         pipe.add_component("cleaner", DocumentCleaner([ddl_store, view_store]))
-        pipe.add_component("view_indexer", ViewIndexer(view_store))
-        pipe.add_component("converter", MDLToDDLConverter())
+        pipe.add_component("view_converter", ViewConverter())
         pipe.add_component(
-            "writer",
+            "view_writer",
+            DocumentWriter(
+                document_store=view_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        )
+        pipe.add_component("ddl_converter", DDLConverter())
+        pipe.add_component(
+            "ddl_writer",
             DocumentWriter(
                 document_store=ddl_store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         )
 
-        pipe.connect("cleaner", "view_indexer")
-        pipe.connect("cleaner", "converter")
-        pipe.connect("converter", "writer")
+        pipe.connect("cleaner", "view_converter")
+        pipe.connect("view_converter", "view_writer")
+
+        pipe.connect("cleaner", "ddl_converter")
+        pipe.connect("ddl_converter", "ddl_writer")
 
         self._pipeline = pipe
 
