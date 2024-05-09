@@ -50,13 +50,14 @@ export const COLUMN = {
     key: 'fromField',
     ellipsis: true,
     render: (relation) =>
-      `${relation.fromModelName}.${relation.fromColumnName}`,
+      `${relation.fromModelDisplayName}.${relation.fromColumnDisplayName}`,
   },
   RELATION_TO: {
     title: 'To',
     key: 'toField',
     ellipsis: true,
-    render: (relation) => `${relation.toModelName}.${relation.toColumnName}`,
+    render: (relation) =>
+      `${relation.toModelDisplayName}.${relation.toColumnDisplayName}`,
   },
   RELATION: {
     title: 'Type',

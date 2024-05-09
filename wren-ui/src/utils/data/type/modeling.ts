@@ -39,9 +39,13 @@ export type ComposeDiagramField = (
     Pick<
       DiagramModelRelationField,
       | 'fromModelName'
+      | 'fromModelDisplayName'
       | 'fromColumnName'
+      | 'fromColumnDisplayName'
       | 'toModelName'
+      | 'toModelDisplayName'
       | 'toColumnName'
+      | 'toColumnDisplayName'
       | 'relationId'
     >
   >;
