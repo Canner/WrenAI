@@ -35,7 +35,7 @@ def ask_service():
     return AskService(
         {
             "indexing": indexing_pipeline.Indexing(
-                document_store=document_store,
+                ddl_store=document_store,
                 view_store=view_store,
             ),
             "query_understanding": query_understanding_pipeline.QueryUnderstanding(

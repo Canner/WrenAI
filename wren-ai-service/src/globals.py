@@ -66,7 +66,7 @@ def init_globals():
     ASK_SERVICE = AskService(
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
-                document_store=document_store,
+                ddl_store=document_store,
                 view_store=view_store,
             ),
             "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(

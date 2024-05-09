@@ -39,7 +39,7 @@ def view_store():
 
 def test_indexing_pipeline(mdl_str: str, document_store: Any, view_store: Any):
     indexing_pipeline = Indexing(
-        document_store=document_store,
+        ddl_store=document_store,
         view_store=view_store,
     )
 
@@ -60,7 +60,7 @@ def test_clear_documents(mdl_str: str):
     )
 
     indexing_pipeline = Indexing(
-        document_store=store,
+        ddl_store=store,
         view_store=store,
     )
 

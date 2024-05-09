@@ -202,17 +202,17 @@ class MDLToDDLConverter:
 class Indexing(BasicPipeline):
     def __init__(
         self,
-        document_store: DocumentStore,
+        ddl_store: DocumentStore,
         view_store: DocumentStore,
     ) -> None:
         pipe = Pipeline()
-        pipe.add_component("cleaner", DocumentCleaner([document_store, view_store]))
+        pipe.add_component("cleaner", DocumentCleaner([ddl_store, view_store]))
         pipe.add_component("view_indexer", ViewIndexer(view_store))
         pipe.add_component("converter", MDLToDDLConverter())
         pipe.add_component(
             "writer",
             DocumentWriter(
-                document_store=document_store,
+                document_store=ddl_store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         )
@@ -231,7 +231,7 @@ class Indexing(BasicPipeline):
 
 if __name__ == "__main__":
     indexing_pipeline = Indexing(
-        document_store=init_document_store(), view_store=init_document_store()
+        ddl_store=init_document_store(), view_store=init_document_store()
     )
 
     print("generating indexing_pipeline.jpg to outputs/pipelines/ask...")

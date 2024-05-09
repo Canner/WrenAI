@@ -151,7 +151,7 @@ if __name__ == "__main__":
     # indexing
     print("Indexing documents...")
     mdl = get_mdl_from_wren_engine()
-    indexing_pipeline = Indexing(document_store=document_store)
+    indexing_pipeline = Indexing(ddl_store=document_store)
     indexing_pipeline.run(json.dumps(mdl))
     print(
         f"Finished indexing documents, document count: {document_store.count_documents()}"
