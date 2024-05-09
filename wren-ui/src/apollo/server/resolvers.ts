@@ -81,6 +81,7 @@ const resolvers = {
     deleteView: modelResolver.deleteView,
     previewViewData: modelResolver.previewViewData,
     validateView: modelResolver.validateView,
+    updateViewMetadata: modelResolver.updateViewMetadata,
 
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,

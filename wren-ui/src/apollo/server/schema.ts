@@ -213,12 +213,23 @@ export const typeDefs = gql`
     description: String
   }
 
+  input UpdateViewColumnMetadataInput {
+    referenceName: String!
+    description: String
+  }
+
   input UpdateModelMetadataInput {
     displayName: String # Model display name, i,e, the alias of the model
     description: String # Model description
     columns: [UpdateColumnMetadataInput!] # Update column metadata
     calculatedFields: [UpdateCalculatedFieldMetadataInput!] # Update calculated field metadata
     relationships: [UpdateRelationshipMetadataInput!] # Update relationship metadata
+  }
+
+  input UpdateViewMetadataInput {
+    displayName: String # View display name, i,e, the alias of the view
+    description: String # View description
+    columns: [UpdateViewColumnMetadataInput!]
   }
 
   type FieldInfo {
@@ -330,6 +341,7 @@ export const typeDefs = gql`
     displayName: String!
     referenceName: String!
     fields: [DiagramViewField]!
+    description: String
   }
 
   type DiagramViewField {
@@ -338,6 +350,7 @@ export const typeDefs = gql`
     referenceName: String!
     type: String!
     nodeType: NodeType!
+    description: String
   }
 
   type DiagramModel {
@@ -613,6 +626,10 @@ export const typeDefs = gql`
     updateModelMetadata(
       where: ModelWhereInput!
       data: UpdateModelMetadataInput!
+    ): Boolean!
+    updateViewMetadata(
+      where: ViewWhereUniqueInput!
+      data: UpdateViewMetadataInput!
     ): Boolean!
 
     # Relation
