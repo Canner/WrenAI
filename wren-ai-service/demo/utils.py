@@ -484,6 +484,8 @@ state_tax DESC
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
+    st.session_state["sql_explanation_button_index"] = None
+
     st.session_state["preview_data_button_index"] = index
     st.session_state["preview_sql"] = full_sqls[index]
 
@@ -496,6 +498,8 @@ def on_click_sql_explanation_button(
     sql_summary: str,
     sql_analysis: dict,
 ):
+    st.session_state["preview_data_button_index"] = None
+
     st.session_state["sql_explanation_button_index"] = index
     st.session_state["sql_explanation_question"] = question
     st.session_state["sql_explanation_sql"] = sql
