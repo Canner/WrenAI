@@ -15,10 +15,12 @@ import {
   CreateCalculatedFieldData,
   ExpressionName,
   UpdateCalculatedFieldData,
+  CheckCalculatedFieldCanQueryData,
 } from '../models';
 import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import { isEmpty } from 'lodash';
+import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 
 const logger = getLogger('ModelService');
 logger.level = 'debug';
@@ -96,7 +98,8 @@ export class ModelService implements IModelService {
   public async createCalculatedField(
     data: CreateCalculatedFieldData,
   ): Promise<ModelColumn> {
-    const { modelId, name, expression, lineage } = data;
+    const { modelId, name: displayName, expression, lineage } = data;
+    const logTitle = `Create Calculated Field ${displayName}`;
     const model = await this.modelRepository.findOneBy({
       id: modelId,
     });
@@ -104,26 +107,32 @@ export class ModelService implements IModelService {
       throw new Error('Model not found');
     }
     const { valid, message } = await this.validateCalculatedFieldNaming(
-      name,
+      displayName,
       modelId,
     );
     logger.debug(
-      `creating calculated field ${name} : validateCalculatedFieldNaming: ${valid}, ${message}`,
+      `${logTitle} : validateCalculatedFieldNaming: ${valid}, ${message}`,
     );
     if (!valid) {
       throw new Error(message);
     }
-    const canQuery = await this.checkCalculatedFieldCanQuery(
-      modelId,
-      model.referenceName,
-      data,
-    );
-    logger.debug(
-      `creating calculated field ${name} : checkCalculatedFieldCanQuery: ${canQuery}`,
-    );
+
+    // generate referenceName
+    const referenceName =
+      this.generateReferenceNameFromDisplayName(displayName);
+    logger.debug(`${logTitle} : generated referenceName: "${referenceName}"`);
+
+    // check this calculated field is valid for engine to query
+    const { valid: canQuery, message: errorMessage } =
+      await this.checkCalculatedFieldCanQuery(modelId, model.referenceName, {
+        referenceName,
+        expression,
+        lineage,
+      } as CheckCalculatedFieldCanQueryData);
+    logger.debug(`${logTitle} : checkCalculatedFieldCanQuery: ${errorMessage}`);
     if (!canQuery) {
       throw new Error(
-        'Can not execute a query when using this calculated field',
+        `Can not execute a query using this calculated field: "${errorMessage}"`,
       );
     }
     const inputFieldId = lineage[lineage.length - 1];
@@ -131,14 +140,14 @@ export class ModelService implements IModelService {
       expression,
       inputFieldId,
     );
-    logger.debug(
-      `creating calculated field ${name} : inferCalculatedFieldDataType: ${dataType}`,
-    );
+    logger.debug(`${logTitle} : inferCalculatedFieldDataType: ${dataType}`);
+
+    // create calculated field
     const column = await this.modelColumnRepository.createOne({
       modelId,
-      displayName: name,
-      sourceColumnName: name,
-      referenceName: name,
+      displayName: displayName,
+      sourceColumnName: referenceName,
+      referenceName,
       type: dataType,
       isCalculated: true,
       isPk: false,
@@ -154,7 +163,8 @@ export class ModelService implements IModelService {
     data: UpdateCalculatedFieldData,
     id: number,
   ): Promise<ModelColumn> {
-    const { name, expression, lineage } = data;
+    const { name: displayName, expression, lineage } = data;
+    const logTitle = `Update Calculated Field ${id}`;
     const column = await this.modelColumnRepository.findOneBy({ id });
     if (!column) {
       throw new Error('Column not found');
@@ -163,28 +173,31 @@ export class ModelService implements IModelService {
       id: column.modelId,
     });
     const { valid, message } = await this.validateCalculatedFieldNaming(
-      name,
+      displayName,
       column.modelId,
       id,
     );
     logger.debug(
-      `updating calculated field: ${id} : validateCalculatedFieldNaming: ${valid}, ${message}`,
+      `${logTitle}: validateCalculatedFieldNaming: ${valid}, ${message}`,
     );
     if (!valid) {
       throw new Error(message);
     }
-    logger.debug({ id: model.id, modelName: model.referenceName, data });
-    const canQuery = await this.checkCalculatedFieldCanQuery(
-      model.id,
-      model.referenceName,
-      data,
-    );
-    logger.debug(
-      `updating calculated field: ${id} :checkCalculatedFieldCanQuery: ${canQuery}`,
-    );
+    const referenceName =
+      this.generateReferenceNameFromDisplayName(displayName);
+    logger.debug(`${logTitle}: generated referenceName: "${referenceName}"`);
+
+    // check this calculated field is valid for engine to query
+    const { valid: canQuery, message: errorMessage } =
+      await this.checkCalculatedFieldCanQuery(model.id, model.referenceName, {
+        referenceName,
+        expression,
+        lineage,
+      } as CheckCalculatedFieldCanQueryData);
+    logger.debug(`${logTitle}: checkCalculatedFieldCanQuery: ${canQuery}`);
     if (!canQuery) {
       throw new Error(
-        'Can not execute a query when using this calculated field',
+        `Can not execute a query using this calculated field: "${errorMessage}"`,
       );
     }
     const inputFieldId = lineage[lineage.length - 1];
@@ -192,13 +205,11 @@ export class ModelService implements IModelService {
       expression,
       inputFieldId,
     );
-    logger.debug(
-      `updating calculated field: ${id} :inferCalculatedFieldDataType: ${dataType}`,
-    );
+    logger.debug(`${logTitle}: inferCalculatedFieldDataType: ${dataType}`);
     const updatedColumn = await this.modelColumnRepository.updateOne(id, {
-      displayName: name,
-      sourceColumnName: name,
-      referenceName: name,
+      displayName: displayName,
+      sourceColumnName: referenceName,
+      referenceName,
       type: dataType,
       aggregation: expression,
       lineage: JSON.stringify(lineage),
@@ -423,21 +434,22 @@ export class ModelService implements IModelService {
   }
 
   public async validateCalculatedFieldNaming(
-    name: string,
+    displayName: string,
     modelId: number,
     columnId?: number,
   ): Promise<ValidateCalculatedFieldResponse> {
-    // only allow uppercase/lowercase english, numbers, underscore and dash
-    const regex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
-    if (!regex.test(name)) {
+    // only allow uppercase/lowercase english, numbers, syntaxes in the first raw of keyboard, {}, [], ', ", ,, .
+    const validationRes = validateDisplayName(displayName);
+    if (!validationRes.valid) {
       return {
         valid: false,
-        message:
-          'Only a-z, A-Z, 0-9, _, - are allowed and cannot start with number',
+        message: validationRes.message || 'Invalid Calculated field name',
       };
     }
 
     // can not duplicated with existed column
+    const referenceName =
+      this.generateReferenceNameFromDisplayName(displayName);
     let existedColumns = await this.modelColumnRepository.findColumnsByModelIds(
       [modelId],
     );
@@ -446,10 +458,12 @@ export class ModelService implements IModelService {
         (column) => column.id !== columnId,
       );
     }
-    if (existedColumns.find((column) => column.referenceName === name)) {
+    if (
+      existedColumns.find((column) => column.referenceName === referenceName)
+    ) {
       return {
         valid: false,
-        message: 'Calculated field name can not duplicated with existed column',
+        message: `The generated Calculated field name "${referenceName}" is duplicated with existed column, please change the name and try again`,
       };
     }
     return { valid: true };
@@ -466,6 +480,11 @@ export class ModelService implements IModelService {
 
     // delete all models
     await this.modelRepository.deleteAllBy({ projectId });
+  }
+
+  private generateReferenceNameFromDisplayName(displayName: string) {
+    // replace all syntaxes that [in the first raw of keyboard, {}, [], ', ", ,, . ] with _
+    return replaceAllowableSyntax(displayName);
   }
 
   private generateRelationName(relation: RelationData, models: Model[]) {
@@ -551,21 +570,23 @@ export class ModelService implements IModelService {
   private async checkCalculatedFieldCanQuery(
     modelId: number,
     modelName: string,
-    data: CreateCalculatedFieldData | UpdateCalculatedFieldData,
+    data: CheckCalculatedFieldCanQueryData,
   ) {
     const { mdlBuilder } = await this.mdlService.makeCurrentModelMDL();
-    const { name: columnName, expression, lineage } = data;
+    const { referenceName, expression, lineage } = data;
     const inputFieldId = lineage[lineage.length - 1];
     const dataType = await this.inferCalculatedFieldDataType(
       expression,
       inputFieldId,
     );
+
+    // add temporary calculated field
     const modelColumn = {
       id: 99999999,
       modelId,
-      displayName: columnName,
-      sourceColumnName: columnName,
-      referenceName: columnName,
+      displayName: referenceName,
+      sourceColumnName: referenceName,
+      referenceName: referenceName,
       type: dataType,
       isCalculated: true,
       isPk: false,
@@ -576,17 +597,23 @@ export class ModelService implements IModelService {
     } as ModelColumn;
     mdlBuilder.insertCalculatedField(modelName, modelColumn);
     const manifest = mdlBuilder.getManifest();
-    logger.debug(`Calculated field MDL: ${JSON.stringify(manifest)}`);
+
+    // find the calculated field in manifest
+    const calculatedField = manifest.models
+      .find((m) => m.name === modelName)
+      ?.columns.find((c) => c.name === referenceName);
+
+    logger.debug(`Calculated field MDL: ${JSON.stringify(calculatedField)}`);
     const { valid, message } =
       await this.wrenEngineAdaptor.validateColumnIsValid(
         manifest,
         modelName,
-        columnName,
+        referenceName,
       );
     if (!valid) {
       logger.debug(`Calculated field can not query: ${message}`);
     }
-    return valid;
+    return { valid, message };
   }
 
   private async validateCreateRelation(
