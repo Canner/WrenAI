@@ -11,7 +11,7 @@ export default function RelationTable(props: Props) {
       {...props}
       columns={
         columns || [
-          COLUMN.REFERENCE_NAME,
+          { ...COLUMN.NAME, dataIndex: 'displayName' },
           COLUMN.RELATION_FROM,
           COLUMN.RELATION_TO,
           COLUMN.RELATION,

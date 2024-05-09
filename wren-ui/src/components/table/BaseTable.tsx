@@ -14,7 +14,7 @@ export const COLUMN = {
     ellipsis: true,
     render: (name) => name || '-',
   },
-  REFERENCE_NAME: {
+  NAME: {
     title: 'Name',
     dataIndex: 'referenceName',
     key: 'referenceName',
