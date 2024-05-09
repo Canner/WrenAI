@@ -95,6 +95,15 @@
   "metrics": [],
   "cumulativeMetrics": [],
   "enumDefinitions": [],
-  "views": [],
+  "views": [
+    {
+      "name": "book",
+      "statement": "SELECT * FROM book",
+      "properties": {
+        "question": "How many books are there?",
+        "description": "Retrieve the number of books"
+      }
+    }
+  ],
   "macros": []
 }

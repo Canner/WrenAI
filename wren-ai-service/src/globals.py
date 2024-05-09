@@ -45,6 +45,7 @@ def init_globals():
     global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
 
     document_store = init_document_store()
+    view_store = init_document_store(dataset_name="view_questions")
     embedder = init_embedder()
     retriever = init_retriever(
         document_store=document_store,
@@ -65,7 +66,8 @@ def init_globals():
     ASK_SERVICE = AskService(
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
-                document_store=document_store,
+                ddl_store=document_store,
+                view_store=view_store,
             ),
             "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(
                 generator=query_understanding_generator,

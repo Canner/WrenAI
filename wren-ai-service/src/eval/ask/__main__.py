@@ -419,7 +419,7 @@ if __name__ == "__main__":
         sql_correction_generator = init_generator()
 
         print("Indexing documents...")
-        indexing_pipeline = Indexing(document_store=document_store)
+        indexing_pipeline = Indexing(ddl_store=document_store)
         indexing_pipeline_def = indexing_pipeline._pipe.dumps()
         indexing_pipeline.run(mdl_str)
         print(
