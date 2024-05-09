@@ -30,7 +30,7 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string, userUUID string, telemetryConsent bool) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryConsent bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
@@ -41,7 +41,11 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_pas
 
 	// replace PORT
 	reg = regexp.MustCompile(`HOST_PORT=(.*)`)
-	str = reg.ReplaceAllString(str, "HOST_PORT="+fmt.Sprintf("%d", port))
+	str = reg.ReplaceAllString(str, "HOST_PORT="+fmt.Sprintf("%d", hostPort))
+
+	// replace AI_SERVICE_FORWARD_PORT
+	reg = regexp.MustCompile(`AI_SERVICE_FORWARD_PORT=(.*)`)
+	str = reg.ReplaceAllString(str, "AI_SERVICE_FORWARD_PORT="+fmt.Sprintf("%d", aiPort))
 
 	// replace PG_PASSWORD
 	reg = regexp.MustCompile(`PG_PASSWORD=(.*)`)
@@ -143,7 +147,7 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, telemetryConsent bool) error {
+func PrepareDockerFiles(openaiApiKey string, hostPort int, aiPort int, projectDir string, telemetryConsent bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -177,7 +181,7 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, teleme
 		return err
 	}
 	// replace the content with regex
-	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, port, pg_pwd, userUUID, telemetryConsent)
+	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, hostPort, aiPort, pg_pwd, userUUID, telemetryConsent)
 	newEnvFile := getEnvFilePath(projectDir)
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
@@ -315,20 +319,9 @@ func CheckUIServiceStarted(url string) error {
 	return nil
 }
 
-func CheckAIServiceStarted(projectDir string) error {
-	// check response from localhost:5555
-	envExampleFile := getEnvFilePath(projectDir)
-
-	// read ai port from env file
-	envFileContent, err := os.ReadFile(envExampleFile)
-	if err != nil {
-		return err
-	}
-	reg := regexp.MustCompile(`WREN_AI_SERVICE_PORT=(.*)`)
-	aiPort := reg.FindStringSubmatch(string(envFileContent))[1]
-
+func CheckAIServiceStarted(port int) error {
 	// health check
-	url := fmt.Sprintf("http://localhost:%s/health", aiPort)
+	url := fmt.Sprintf("http://localhost:%d/health", port)
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
