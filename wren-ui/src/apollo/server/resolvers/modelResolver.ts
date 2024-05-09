@@ -13,6 +13,7 @@ import { constructCteSql } from '../services/askingService';
 import { format } from 'sql-formatter';
 import { isEmpty, isNil } from 'lodash';
 import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
+import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -448,10 +449,10 @@ export class ModelResolver {
 
   // create view from sql of a response
   public async createView(_root: any, args: any, ctx: IContext) {
-    const { name, responseId } = args.data;
+    const { name: displayName, responseId } = args.data;
 
     // validate view name
-    const validateResult = await this.validateViewName(name, ctx);
+    const validateResult = await this.validateViewName(displayName, ctx);
     if (!validateResult.valid) {
       throw new Error(validateResult.message);
     }
@@ -478,11 +479,12 @@ export class ModelResolver {
 
     // properties
     const properties = {
-      displayName: name,
+      displayName,
       columns,
     };
 
     // create view
+    const name = replaceAllowableSyntax(displayName);
     const view = await ctx.viewRepository.createOne({
       projectId: project.id,
       name,
@@ -491,7 +493,10 @@ export class ModelResolver {
     });
 
     // telemetry
-    ctx.telemetry.send_event('create_view', { statement, displayName: name });
+    ctx.telemetry.send_event('create_view', {
+      statement,
+      displayName,
+    });
 
     return view;
   }
@@ -561,27 +566,26 @@ export class ModelResolver {
 
   // validate view name
   private async validateViewName(
-    viewName: string,
+    viewDisplayName: string,
     ctx: IContext,
   ): Promise<{ valid: boolean; message?: string }> {
     // check if view name is valid
     // a-z, A-Z, 0-9, _, - are allowed and cannot start with number
-    const regex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
-    if (!regex.test(viewName)) {
+    const { valid, message } = validateDisplayName(viewDisplayName);
+    if (!valid) {
       return {
         valid: false,
-        message:
-          'Only a-z, A-Z, 0-9, _, - are allowed and cannot start with number',
+        message,
       };
     }
-
+    const referenceName = replaceAllowableSyntax(viewDisplayName);
     // check if view name is duplicated
     const project = await ctx.projectService.getCurrentProject();
     const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
-    if (views.find((v) => v.name === viewName)) {
+    if (views.find((v) => v.name === referenceName)) {
       return {
         valid: false,
-        message: 'View name is duplicated',
+        message: `Generated View name "${referenceName}" is duplicated`,
       };
     }
 
