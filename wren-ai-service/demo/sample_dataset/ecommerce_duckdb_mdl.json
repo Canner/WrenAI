@@ -642,6 +642,11 @@
         {
           "name": "Price",
           "type": "DOUBLE",
+          "expression": "sum(order_items.Price)"
+        },
+        {
+          "name": "MoM_Price",
+          "type": "DOUBLE",
           "expression": "sum(order_items.Price) - COALESCE(LAG(sum(order_items.Price)) OVER (ORDER BY date_trunc('MONTH', PurchaseTimestamp)), 0) / COALESCE(LAG(sum(order_items.Price)) OVER (ORDER BY date_trunc('MONTH', PurchaseTimestamp)), 1)"
         },
         {
