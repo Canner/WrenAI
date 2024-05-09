@@ -28,7 +28,10 @@ import {
   useDeleteModelMutation,
   useUpdateModelMutation,
 } from '@/apollo/client/graphql/model.generated';
-import { useUpdateModelMetadataMutation } from '@/apollo/client/graphql/metadata.generated';
+import {
+  useUpdateModelMetadataMutation,
+  useUpdateViewMetadataMutation,
+} from '@/apollo/client/graphql/metadata.generated';
 import {
   useCreateCalculatedFieldMutation,
   useUpdateCalculatedFieldMutation,
@@ -177,6 +180,14 @@ export default function Modeling() {
     }),
   );
 
+  const [updateViewMetadata] = useUpdateViewMetadataMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully updated view metadata.');
+      },
+    }),
+  );
+
   const diagramData = useMemo(() => {
     if (!data) return null;
     return data?.diagram;
@@ -191,10 +202,27 @@ export default function Modeling() {
   useEffect(() => {
     if (metadataDrawer.state.visible) {
       const data = metadataDrawer.state.defaultValue;
-      const currentModel = diagramData.models.find(
-        (model) => model.modelId === data.modelId,
-      );
-      metadataDrawer.updateState(currentModel);
+      let currentNodeData = null;
+      switch (data.nodeType) {
+        case NODE_TYPE.MODEL: {
+          currentNodeData = diagramData.models.find(
+            (model) => model.modelId === data.modelId,
+          );
+          break;
+        }
+
+        case NODE_TYPE.VIEW: {
+          currentNodeData = diagramData.views.find(
+            (view) => view.viewId === data.viewId,
+          );
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      metadataDrawer.updateState(currentNodeData);
     }
   }, [diagramData]);
 
@@ -336,8 +364,9 @@ export default function Modeling() {
               }
 
               case NODE_TYPE.VIEW: {
-                // TODO: connect to update view metadata
-                console.log('onSubmit VIEW', viewId, metadata);
+                await updateViewMetadata({
+                  variables: { where: { id: viewId }, data: metadata },
+                });
                 break;
               }
 

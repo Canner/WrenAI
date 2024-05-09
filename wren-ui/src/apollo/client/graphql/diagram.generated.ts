@@ -3,7 +3,7 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type ViewFieldFragment = { __typename?: 'DiagramViewField', id: string, displayName: string, referenceName: string, type: string, nodeType: Types.NodeType };
+export type ViewFieldFragment = { __typename?: 'DiagramViewField', id: string, displayName: string, referenceName: string, type: string, nodeType: Types.NodeType, description?: string | null };
 
 export type RelationFieldFragment = { __typename?: 'DiagramModelRelationField', id: string, relationId: number, type: Types.RelationType, nodeType: Types.NodeType, displayName: string, referenceName: string, fromModelId: number, fromModelName: string, fromModelDisplayName: string, fromColumnId: number, fromColumnName: string, fromColumnDisplayName: string, toModelId: number, toModelName: string, toModelDisplayName: string, toColumnId: number, toColumnName: string, toColumnDisplayName: string, description?: string | null };
 
@@ -12,7 +12,7 @@ export type FieldFragment = { __typename?: 'DiagramModelField', id: string, colu
 export type DiagramQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type DiagramQuery = { __typename?: 'Query', diagram: { __typename?: 'Diagram', models: Array<{ __typename?: 'DiagramModel', id: string, modelId: number, nodeType: Types.NodeType, displayName: string, referenceName: string, sourceTableName: string, refSql: string, cached: boolean, refreshTime?: string | null, description?: string | null, fields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null } | null>, calculatedFields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null } | null>, relationFields: Array<{ __typename?: 'DiagramModelRelationField', id: string, relationId: number, type: Types.RelationType, nodeType: Types.NodeType, displayName: string, referenceName: string, fromModelId: number, fromModelName: string, fromModelDisplayName: string, fromColumnId: number, fromColumnName: string, fromColumnDisplayName: string, toModelId: number, toModelName: string, toModelDisplayName: string, toColumnId: number, toColumnName: string, toColumnDisplayName: string, description?: string | null } | null> } | null>, views: Array<{ __typename?: 'DiagramView', id: string, viewId: number, nodeType: Types.NodeType, displayName: string, referenceName: string, statement: string, fields: Array<{ __typename?: 'DiagramViewField', id: string, displayName: string, referenceName: string, type: string, nodeType: Types.NodeType } | null> } | null> } };
+export type DiagramQuery = { __typename?: 'Query', diagram: { __typename?: 'Diagram', models: Array<{ __typename?: 'DiagramModel', id: string, modelId: number, nodeType: Types.NodeType, displayName: string, referenceName: string, sourceTableName: string, refSql: string, cached: boolean, refreshTime?: string | null, description?: string | null, fields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null } | null>, calculatedFields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null } | null>, relationFields: Array<{ __typename?: 'DiagramModelRelationField', id: string, relationId: number, type: Types.RelationType, nodeType: Types.NodeType, displayName: string, referenceName: string, fromModelId: number, fromModelName: string, fromModelDisplayName: string, fromColumnId: number, fromColumnName: string, fromColumnDisplayName: string, toModelId: number, toModelName: string, toModelDisplayName: string, toColumnId: number, toColumnName: string, toColumnDisplayName: string, description?: string | null } | null> } | null>, views: Array<{ __typename?: 'DiagramView', id: string, viewId: number, nodeType: Types.NodeType, displayName: string, description?: string | null, referenceName: string, statement: string, fields: Array<{ __typename?: 'DiagramViewField', id: string, displayName: string, referenceName: string, type: string, nodeType: Types.NodeType, description?: string | null } | null> } | null> } };
 
 export const ViewFieldFragmentDoc = gql`
     fragment ViewField on DiagramViewField {
@@ -21,6 +21,7 @@ export const ViewFieldFragmentDoc = gql`
   referenceName
   type
   nodeType
+  description
 }
     `;
 export const RelationFieldFragmentDoc = gql`
@@ -90,6 +91,7 @@ export const DiagramDocument = gql`
       viewId
       nodeType
       displayName
+      description
       referenceName
       statement
       fields {
