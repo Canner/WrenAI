@@ -13,7 +13,7 @@ export default function CalculatedFieldTable(props: Props) {
         columns || [
           { ...COLUMN.NAME, dataIndex: 'displayName', width: 160 },
           COLUMN.EXPRESSION,
-          { ...COLUMN.DESCRIPTION, width: 280 },
+          { ...COLUMN.DESCRIPTION, width: 160 },
         ]
       }
       expandable={

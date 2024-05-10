@@ -15,7 +15,7 @@ export default function RelationTable(props: Props) {
           COLUMN.RELATION_FROM,
           COLUMN.RELATION_TO,
           COLUMN.RELATION,
-          { ...COLUMN.DESCRIPTION, width: 150 },
+          { ...COLUMN.DESCRIPTION, width: 160 },
         ]
       }
       expandable={
