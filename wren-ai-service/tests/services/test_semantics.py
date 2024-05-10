@@ -1,6 +1,7 @@
 import pytest
 
 from src.pipelines.semantics import description
+from src.utils import init_providers
 from src.web.v1.services.semantics import (
     GenerateDescriptionRequest,
     SemanticsService,
@@ -9,9 +10,19 @@ from src.web.v1.services.semantics import (
 
 @pytest.fixture
 def semantics_service():
+    llm_provider, document_store_provider = init_providers()
+    embedder = llm_provider.get_embedder()
+    ddl_store = document_store_provider.get_store()
+    retriever = document_store_provider.get_retriever(document_store=ddl_store)
+    generator = llm_provider.get_generator()
+
     return SemanticsService(
         pipelines={
-            "generate_description": description.Generation(),
+            "generate_description": description.Generation(
+                embedder=embedder,
+                retriever=retriever,
+                generator=generator,
+            ),
         }
     )
 

@@ -48,58 +48,59 @@ def init_globals(
     global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
 
     llm_provider, document_store_provider = init_providers()
-
-    document_store = document_store_provider.get_store()
+    ddl_store = document_store_provider.get_store()
     view_store = document_store_provider.get_store(dataset_name="view_questions")
-    embedder = llm_provider.get_embedder()
-    retriever = document_store_provider.get_retriever(document_store=document_store)
-    query_understanding_generator = llm_provider.get_generator()
-    text_to_sql_generator = llm_provider.get_generator(
-        system_prompt=text_to_sql_system_prompt
-    )
-    text_to_sql_with_followup_generator = llm_provider.get_generator(
-        system_prompt=text_to_sql_system_prompt
-    )
-    sql_correction_generator = llm_provider.get_generator(
-        system_prompt=text_to_sql_system_prompt
-    )
-    sql_details_generator = llm_provider.get_generator(
-        system_prompt=ask_details_system_prompt
-    )
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
-            "generate_description": description.Generation(),
+            "generate_description": description.Generation(
+                embedder=llm_provider.get_embedder(),
+                retriever=document_store_provider.get_retriever(
+                    document_store=ddl_store
+                ),
+                generator=llm_provider.get_generator(),
+            ),
         }
     )
+
     ASK_SERVICE = AskService(
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
-                ddl_store=document_store,
+                ddl_store=ddl_store,
                 view_store=view_store,
             ),
             "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(
-                generator=query_understanding_generator,
+                generator=llm_provider.get_generator(),
             ),
             "retrieval": ask_retrieval_pipeline.Retrieval(
-                embedder=embedder,
-                retriever=retriever,
+                embedder=llm_provider.get_embedder(),
+                retriever=document_store_provider.get_retriever(
+                    document_store=ddl_store
+                ),
             ),
             "generation": ask_generation_pipeline.Generation(
-                generator=text_to_sql_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=text_to_sql_system_prompt,
+                ),
             ),
             "sql_correction": ask_sql_correction_pipeline.SQLCorrection(
-                generator=sql_correction_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=text_to_sql_system_prompt,
+                ),
             ),
             "followup_generation": ask_followup_generation_pipeline.FollowUpGeneration(
-                generator=text_to_sql_with_followup_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=text_to_sql_system_prompt,
+                ),
             ),
         }
     )
     ASK_DETAILS_SERVICE = AskDetailsService(
         pipelines={
             "generation": ask_details_generation_pipeline.Generation(
-                generator=sql_details_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=ask_details_system_prompt
+                )
             ),
         }
     )
