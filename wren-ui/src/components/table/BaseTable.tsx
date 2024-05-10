@@ -122,7 +122,7 @@ const ExpandableRowIterator = makeIterable((props) => {
         <Col span={6} className="gray-6">
           {title}
         </Col>
-        <Col>{value}</Col>
+        <Col style={{ wordBreak: 'break-word' }}>{value}</Col>
       </Row>
     </>
   );

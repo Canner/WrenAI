@@ -24,6 +24,14 @@ export default function RelationTable(props: Props) {
               expandedRowRender: (record) => (
                 <ExpandableRows
                   data={[
+                    {
+                      title: 'From',
+                      value: `${record.fromModelDisplayName}.${record.fromColumnDisplayName}`,
+                    },
+                    {
+                      title: 'To',
+                      value: `${record.toModelDisplayName}.${record.toColumnDisplayName}`,
+                    },
                     { title: 'Description', value: record.description || '-' },
                   ]}
                 />
