@@ -22,7 +22,7 @@ export const Config = {
   // the height of more tip
   moreTipHeight: 25,
   // the columns limit
-  columnsLimit: 50,
+  columnsLimit: 10,
   // the overflow of the model body
   bodyOverflow: 'auto',
   // the margin x between the model and the other models
