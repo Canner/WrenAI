@@ -17,15 +17,12 @@ export default function ViewMetadata(props: Props) {
     viewId,
   } = props || {};
 
-  const [previewViewDataMutation, previewViewDataResult] =
-    usePreviewViewDataMutation({
-      onError: (error) => console.error(error),
-    });
+  const [previewViewData, previewViewDataResult] = usePreviewViewDataMutation({
+    onError: (error) => console.error(error),
+  });
 
   const onPreviewData = () => {
-    previewViewDataMutation({
-      variables: { where: { id: viewId } },
-    });
+    previewViewData({ variables: { where: { id: viewId } } });
   };
 
   // View only can input Name (alias), so it should show alias as Name in metadata.
@@ -70,11 +67,9 @@ export default function ViewMetadata(props: Props) {
         </Button>
         <div className="my-3">
           <PreviewData
-            {...{
-              error: previewViewDataResult.error,
-              loading: previewViewDataResult.loading,
-              previewData: previewViewDataResult?.data?.previewViewData,
-            }}
+            error={previewViewDataResult.error}
+            loading={previewViewDataResult.loading}
+            previewData={previewViewDataResult?.data?.previewViewData}
           />
         </div>
       </div>

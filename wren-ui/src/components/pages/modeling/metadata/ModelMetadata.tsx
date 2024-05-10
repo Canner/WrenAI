@@ -1,21 +1,16 @@
-import { Col, Row, Typography } from 'antd';
+import { Col, Row, Typography, Button } from 'antd';
 import FieldTable from '@/components/table/FieldTable';
 import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
 import RelationTable from '@/components/table/RelationTable';
+import PreviewData from '@/components/dataPreview/PreviewData';
+import { DiagramModel } from '@/utils/data';
+import { usePreviewModelDataMutation } from '@/apollo/client/graphql/model.generated';
 
-export interface Props {
-  displayName: string;
-  referenceName: string;
-  sourceTableName: string;
-  fields: any[];
-  calculatedFields: any[];
-  relationFields: any[];
-  description: string;
-  properties: Record<string, any>;
-}
+export type Props = DiagramModel;
 
 export default function ModelMetadata(props: Props) {
   const {
+    modelId,
     displayName,
     referenceName,
     fields = [],
@@ -23,6 +18,15 @@ export default function ModelMetadata(props: Props) {
     relationFields = [],
     description,
   } = props || {};
+
+  const [previewModelData, previewModelDataResult] =
+    usePreviewModelDataMutation({
+      onError: (error) => console.error(error),
+    });
+
+  const onPreviewData = () => {
+    previewModelData({ variables: { where: { id: modelId } } });
+  };
 
   return (
     <>
@@ -71,6 +75,25 @@ export default function ModelMetadata(props: Props) {
           <RelationTable dataSource={relationFields} showExpandable />
         </div>
       )}
+
+      <div className="mb-6">
+        <Typography.Text className="d-block gray-7 mb-2">
+          Data preview (100 rows)
+        </Typography.Text>
+        <Button
+          onClick={onPreviewData}
+          loading={previewModelDataResult.loading}
+        >
+          Preview data
+        </Button>
+        <div className="my-3">
+          <PreviewData
+            error={previewModelDataResult.error}
+            loading={previewModelDataResult.loading}
+            previewData={previewModelDataResult.data?.previewModelData}
+          />
+        </div>
+      </div>
     </>
   );
 }
