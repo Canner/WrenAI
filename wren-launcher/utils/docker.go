@@ -30,7 +30,7 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_password string, userUUID string, telemetryConsent bool) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryConsent bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
@@ -41,7 +41,11 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, port int, pg_pas
 
 	// replace PORT
 	reg = regexp.MustCompile(`HOST_PORT=(.*)`)
-	str = reg.ReplaceAllString(str, "HOST_PORT="+fmt.Sprintf("%d", port))
+	str = reg.ReplaceAllString(str, "HOST_PORT="+fmt.Sprintf("%d", hostPort))
+
+	// replace AI_SERVICE_FORWARD_PORT
+	reg = regexp.MustCompile(`AI_SERVICE_FORWARD_PORT=(.*)`)
+	str = reg.ReplaceAllString(str, "AI_SERVICE_FORWARD_PORT="+fmt.Sprintf("%d", aiPort))
 
 	// replace PG_PASSWORD
 	reg = regexp.MustCompile(`PG_PASSWORD=(.*)`)
@@ -143,7 +147,7 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, telemetryConsent bool) error {
+func PrepareDockerFiles(openaiApiKey string, hostPort int, aiPort int, projectDir string, telemetryConsent bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -177,8 +181,8 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, teleme
 		return err
 	}
 	// replace the content with regex
-	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, port, pg_pwd, userUUID, telemetryConsent)
-	newEnvFile := path.Join(projectDir, ".env")
+	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, hostPort, aiPort, pg_pwd, userUUID, telemetryConsent)
+	newEnvFile := getEnvFilePath(projectDir)
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
 	if err != nil {
@@ -192,6 +196,10 @@ func PrepareDockerFiles(openaiApiKey string, port int, projectDir string, teleme
 	}
 
 	return nil
+}
+
+func getEnvFilePath(projectDir string) string {
+	return path.Join(projectDir, ".env")
 }
 
 func RunDockerCompose(projectName string, projectDir string) error {
@@ -297,7 +305,7 @@ func IfPortUsedByWrenUI(port int) bool {
 	return false
 }
 
-func CheckWrenAIStarted(url string) error {
+func CheckUIServiceStarted(url string) error {
 	// check response from localhost:3000
 	resp, err := http.Get(url)
 	if err != nil {
@@ -308,6 +316,20 @@ func CheckWrenAIStarted(url string) error {
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("WrenAI is not started yet")
 	}
+	return nil
+}
 
+func CheckAIServiceStarted(port int) error {
+	// health check
+	url := fmt.Sprintf("http://localhost:%d/health", port)
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("AI service is not started yet")
+	}
 	return nil
 }

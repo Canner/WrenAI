@@ -144,9 +144,10 @@ func Launch() {
 	// download docker-compose file and env file template for WrenAI
 	pterm.Info.Println("Downloading docker-compose file and env file")
 	// find an available port
-	defaultPort := 3000
-	port := utils.FindAvailablePort(defaultPort)
-	err = utils.PrepareDockerFiles(apiKey, port, projectDir, telemetryConsent)
+	uiPort := utils.FindAvailablePort(3000)
+	aiPort := utils.FindAvailablePort(5555)
+
+	err = utils.PrepareDockerFiles(apiKey, uiPort, aiPort, projectDir, telemetryConsent)
 	if err != nil {
 		panic(err)
 	}
@@ -161,7 +162,7 @@ func Launch() {
 
 	// wait for 10 seconds
 	pterm.Info.Println("WrenAI is starting, please wait for a moment...")
-	url := fmt.Sprintf("http://localhost:%d", port)
+	url := fmt.Sprintf("http://localhost:%d", uiPort)
 	// wait until checking if CheckWrenAIStarted return without error
 	// if timeout 2 minutes, panic
 	timeoutTime := time.Now().Add(2 * time.Minute)
@@ -170,9 +171,24 @@ func Launch() {
 			panic("Timeout")
 		}
 
-		// check if WrenAI is started
-		err = utils.CheckWrenAIStarted(url)
+		// check if ui is ready
+		err := utils.CheckUIServiceStarted(url)
 		if err == nil {
+			pterm.Info.Println("UI Service is ready")
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
+
+	for {
+		if time.Now().After(timeoutTime) {
+			panic("Timeout")
+		}
+
+		// check if ai service is ready
+		err := utils.CheckAIServiceStarted(aiPort)
+		if err == nil {
+			pterm.Info.Println("AI Service is Ready")
 			break
 		}
 		time.Sleep(5 * time.Second)
