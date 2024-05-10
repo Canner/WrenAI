@@ -176,6 +176,12 @@ def remove_duplicates(dicts):
     return unique_dicts
 
 
+# please do not change this function unless you are adjusting the OpenAILLMProvider or QdrantProvider
+# if you would like to change the providers, please do the following steps:
+# 1. create a new provider class that implements LLMProvider or DocumentStoreProvider in the src/providers directory
+# 2. if you need to add new environment variables, please add them to the .env.dev and .env.prod files
+# 3. add a new function to import your providers in this file
+# 4. call the new function you created in the src/__main__.py in container.init_globals()
 def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
     load_env_vars()
 
