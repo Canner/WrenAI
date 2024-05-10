@@ -15,7 +15,7 @@ from src.pipelines.ask.components.embedder import (
     EMBEDDING_MODEL_DIMENSION,
     EMBEDDING_MODEL_NAME,
 )
-from src.utils import generate_ddls_from_semantics, load_env_vars
+from src.utils import load_env_vars
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -160,13 +160,13 @@ class DDLConverter:
                 }
             )
 
-        ddl_commands = generate_ddls_from_semantics(
-            semantics["models"],
-            semantics["relationships"],
-            semantics["metrics"],
+        ddl_commands = (
+            self._convert_models_and_relationships(
+                semantics["models"], semantics["relationships"]
+            )
+            + self._convert_metrics(semantics["metrics"])
+            + self._convert_views(semantics["views"])
         )
-
-        ddl_commands.extend(self._convert_views(semantics["views"]))
 
         embeddings = self._openai_client.embeddings.create(
             input=ddl_commands,
@@ -184,12 +184,122 @@ class DDLConverter:
             for i, ddl_command in enumerate(tqdm(ddl_commands))
         ]
 
+    # TODO: refactor this method
+    def _convert_models_and_relationships(
+        self, models: List[Dict[str, Any]], relationships: List[Dict[str, Any]]
+    ) -> List[str]:
+        ddl_commands = []
+
+        # A map to store model primary keys for foreign key relationships
+        primary_keys_map = {model["name"]: model["primaryKey"] for model in models}
+
+        for model in models:
+            table_name = model["name"]
+            columns_ddl = []
+            for column in model["columns"]:
+                if "relationship" not in column:
+                    if column["properties"]:
+                        comment = f"-- {json.dumps(column['properties'])}\n  "
+                    else:
+                        comment = ""
+                    if column["isCalculated"]:
+                        comment = (
+                            comment
+                            + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
+                        )
+                    column_name = column["name"]
+                    column_type = column["type"]
+                    column_ddl = f"{comment}{column_name} {column_type}"
+
+                    # If column is a primary key
+                    if column_name == model.get("primaryKey", ""):
+                        column_ddl += " PRIMARY KEY"
+
+                    columns_ddl.append(column_ddl)
+
+            # Add foreign key constraints based on relationships
+            for relationship in relationships:
+                if (
+                    table_name == relationship["models"][0]
+                    and relationship["joinType"].upper() == "MANY_TO_ONE"
+                ):
+                    related_table = relationship["models"][1]
+                    fk_column = relationship["condition"].split(" = ")[0].split(".")[1]
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    columns_ddl.append(fk_constraint)
+                elif (
+                    table_name == relationship["models"][1]
+                    and relationship["joinType"].upper() == "ONE_TO_MANY"
+                ):
+                    related_table = relationship["models"][0]
+                    fk_column = relationship["condition"].split(" = ")[1].split(".")[1]
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    columns_ddl.append(fk_constraint)
+                elif (
+                    table_name in relationship["models"]
+                    and relationship["joinType"].upper() == "ONE_TO_ONE"
+                ):
+                    index = relationship["models"].index(table_name)
+                    related_table = [
+                        m for m in relationship["models"] if m != table_name
+                    ][0]
+                    fk_column = (
+                        relationship["condition"].split(" = ")[index].split(".")[1]
+                    )
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    columns_ddl.append(fk_constraint)
+
+            if model["properties"]:
+                comment = f"\n/* {json.dumps(model['properties'])} */\n"
+            else:
+                comment = ""
+
+            create_table_ddl = (
+                f"{comment}CREATE TABLE {table_name} (\n  "
+                + ",\n  ".join(columns_ddl)
+                + "\n);"
+            )
+            ddl_commands.append(create_table_ddl)
+
+        return ddl_commands
+
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
         def _format(view: Dict[str, Any]) -> str:
             properties = view["properties"] if "properties" in view else ""
             return f"/* {properties} */\nCREATE VIEW {view['name']}\nAS ({view['statement']})"
 
         return [_format(view) for view in views]
+
+    def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[str]:
+        ddl_commands = []
+
+        for metric in metrics:
+            table_name = metric["name"]
+            columns_ddl = []
+            for dimension in metric["dimension"]:
+                column_name = dimension["name"]
+                column_type = dimension["type"]
+                comment = "-- This column is a dimension\n  "
+                column_ddl = f"{comment}{column_name} {column_type}"
+                columns_ddl.append(column_ddl)
+
+            for measure in metric["measure"]:
+                column_name = measure["name"]
+                column_type = measure["type"]
+                comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
+                column_ddl = f"{comment}{column_name} {column_type}"
+                columns_ddl.append(column_ddl)
+
+            comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
+            create_table_ddl = (
+                f"{comment}CREATE TABLE {table_name} (\n  "
+                + ",\n  ".join(columns_ddl)
+                + "\n);"
+            )
+
+            ddl_commands.append(create_table_ddl)
+
+        return ddl_commands
 
 
 class Indexing(BasicPipeline):
