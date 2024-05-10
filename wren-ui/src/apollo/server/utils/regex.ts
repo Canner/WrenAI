@@ -12,13 +12,13 @@ export function validateDisplayName(displayName: string): ValidationResult {
   if (!syntaxValid) {
     valid = false;
     message =
-      'Invalid displayName, Only space & [  a-z, A-Z, 0-9, _, -, !@#$%^&*()-+{}[]\'".,  ] are allowed.';
+      'Only space & [  a-z, A-Z, 0-9, _, -, !@#$%^&*()-+{}[]\'".,  ] are allowed.';
   }
   const startWithLetterRegex = /^[A-Za-z]/;
   const startWithLetterValid = startWithLetterRegex.test(displayName);
   if (!startWithLetterValid) {
     valid = false;
-    message = 'Invalid displayName, Must start with a letter.';
+    message = 'Must start with a letter.';
   }
 
   return {
