@@ -1,8 +1,7 @@
-import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import requests
 import sqlglot
@@ -151,47 +150,6 @@ def check_if_sql_executable(
     )
 
     return True if response.status_code == 200 else False
-
-
-def generate_semantics(mdl_str: str) -> Dict[str, Any]:
-    mdl_json = json.loads(mdl_str)
-
-    for i, _ in enumerate(mdl_json["relationships"]):
-        mdl_json["relationships"][i]["type"] = "relationship"
-
-    semantics = {"models": [], "relationships": mdl_json["relationships"]}
-
-    for model in mdl_json["models"]:
-        columns = []
-        for column in model["columns"]:
-            if "relationship" in column:
-                columns.append(
-                    {
-                        "name": column["name"],
-                        "properties": column["properties"],
-                        "type": column["type"],
-                        "relationship": column["relationship"],
-                    }
-                )
-            else:
-                columns.append(
-                    {
-                        "name": column["name"],
-                        "properties": column["properties"],
-                        "type": column["type"],
-                    }
-                )
-
-        semantics["models"].append(
-            {
-                "type": "model",
-                "name": model["name"],
-                "properties": model["properties"],
-                "columns": columns,
-                "primaryKey": model["primaryKey"],
-            }
-        )
-    return semantics
 
 
 def remove_duplicates(dicts):
