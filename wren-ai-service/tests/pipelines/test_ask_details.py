@@ -1,5 +1,5 @@
-from src.globals import init_providers
 from src.pipelines.ask_details.generation_pipeline import Generation
+from src.utils import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsResultResponse,
 )

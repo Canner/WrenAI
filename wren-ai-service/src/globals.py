@@ -28,8 +28,7 @@ from src.pipelines.ask_details import (
 )
 from src.pipelines.ask_details.components.prompts import ask_details_system_prompt
 from src.pipelines.semantics import description
-from src.providers.document_store.qdrant import QdrantProvider
-from src.providers.llm.openai import OpenAILLMProvider
+from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics import SemanticsService
@@ -39,12 +38,6 @@ load_dotenv()
 SEMANTIC_SERVICE = None
 ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
-
-
-def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
-    llm_provider = OpenAILLMProvider()
-    document_store_provider = QdrantProvider()
-    return llm_provider, document_store_provider
 
 
 def init_globals(

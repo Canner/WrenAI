@@ -2,12 +2,18 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 import sqlglot
 from dotenv import load_dotenv
+from haystack.utils.auth import Secret
 from openai import OpenAI
+
+from src.core.document_store_provider import DocumentStoreProvider
+from src.core.llm_provider import LLMProvider
+from src.providers.document_store.qdrant import QdrantProvider
+from src.providers.llm.openai import OpenAILLMProvider
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -210,3 +216,15 @@ def remove_duplicates(dicts):
             seen.add(identifier)
             unique_dicts.append(d)
     return unique_dicts
+
+
+def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
+    load_env_vars()
+
+    llm_provider = OpenAILLMProvider(
+        api_key=Secret.from_env_var("OPENAI_API_KEY"),
+    )
+    document_store_provider = QdrantProvider(
+        location=os.getenv("QDRANT_HOST"),
+    )
+    return llm_provider, document_store_provider

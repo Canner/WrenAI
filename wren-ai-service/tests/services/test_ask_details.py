@@ -2,8 +2,8 @@ import uuid
 
 import pytest
 
-from src.globals import init_providers
 from src.pipelines.ask_details import generation_pipeline
+from src.utils import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
     AskDetailsResultRequest,

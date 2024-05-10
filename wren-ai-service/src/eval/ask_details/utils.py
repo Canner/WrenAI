@@ -11,8 +11,8 @@ from haystack_integrations.components.evaluators.ragas import (
 )
 
 from src.eval.utils import get_generation_model_pricing
-from src.pipelines.ask_details.components.generator import init_generator
 from src.pipelines.ask_details.generation_pipeline import Generation
+from src.utils import init_providers
 
 
 def _prepare_ask_details_eval_data(input_path: str, output_path: str):
@@ -29,8 +29,9 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
         )
         return
 
+    llm_provider, _ = init_providers()
     generation_pipeline = Generation(
-        generator=init_generator(),
+        generator=llm_provider.get_generator(),
     )
 
     def _generate_data(input: dict):
@@ -120,7 +121,7 @@ class Collector:
     def _destruct(self, response: Dict[str, Any]):
         return (
             response["post_processor"]["results"],
-            response["generator"]["meta"][0],
+            response["ask_details_generator"]["meta"][0],
         )
 
     def _cost_analysis(self):

@@ -3,7 +3,6 @@ import uuid
 
 import pytest
 
-from src.globals import init_providers
 from src.pipelines.ask import (
     generation_pipeline,
     indexing_pipeline,
@@ -11,6 +10,7 @@ from src.pipelines.ask import (
     retrieval_pipeline,
     sql_correction_pipeline,
 )
+from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,

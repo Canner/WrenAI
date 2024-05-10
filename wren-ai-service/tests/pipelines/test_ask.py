@@ -3,13 +3,13 @@ from typing import Any
 
 import pytest
 
-from src.globals import init_providers
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.query_understanding_pipeline import QueryUnderstanding
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
+from src.utils import init_providers
 from src.web.v1.services.ask import AskRequest, AskResultResponse, SQLExplanation
 
 GLOBAL_DATA = {
@@ -52,7 +52,6 @@ def test_indexing_pipeline(mdl_str: str, document_store: Any, view_store: Any):
 def test_clear_documents(mdl_str: str):
     _, document_store_provider = init_providers()
     store = document_store_provider.get_store(
-        location=":memory:",
         dataset_name="test_clear_documents",
         recreate_index=True,
     )

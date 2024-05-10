@@ -9,9 +9,7 @@ from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 
 from src.core.llm_provider import LLMProvider
-from src.utils import load_env_vars
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 GENERATION_MODEL_NAME = "gpt-3.5-turbo"
@@ -37,6 +35,9 @@ class CustomOpenAIGenerator(OpenAIGenerator):
 
 
 class OpenAILLMProvider(LLMProvider):
+    def __init__(self, api_key: Secret):
+        self._api_key = api_key
+
     def get_generator(
         self,
         model_name: str = GENERATION_MODEL_NAME,
@@ -44,7 +45,7 @@ class OpenAILLMProvider(LLMProvider):
         system_prompt: Optional[str] = None,
     ):
         return CustomOpenAIGenerator(
-            api_key=Secret.from_env_var("OPENAI_API_KEY"),
+            api_key=self._api_key,
             model=model_name,
             system_prompt=system_prompt,
             generation_kwargs=model_kwargs,
@@ -52,6 +53,6 @@ class OpenAILLMProvider(LLMProvider):
 
     def get_embedder(self, model_name: str = EMBEDDING_MODEL_NAME):
         return OpenAITextEmbedder(
-            api_key=Secret.from_env_var("OPENAI_API_KEY"),
+            api_key=self._api_key,
             model=model_name,
         )

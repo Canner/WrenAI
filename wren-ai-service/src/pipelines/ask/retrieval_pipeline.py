@@ -4,10 +4,7 @@ from typing import Any
 from haystack import Pipeline
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import init_embedder
-from src.pipelines.ask.components.retriever import init_retriever
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -39,10 +36,12 @@ class Retrieval(BasicPipeline):
 
 
 if __name__ == "__main__":
+    llm_provider, document_store_provider = init_providers()
+
     retrieval_pipeline = Retrieval(
-        embedder=init_embedder(),
-        retriever=init_retriever(
-            document_store=init_document_store(),
+        embedder=llm_provider.get_embedder(),
+        retriever=document_store_provider.get_retriever(
+            document_store=document_store_provider.get_store(),
         ),
     )
 

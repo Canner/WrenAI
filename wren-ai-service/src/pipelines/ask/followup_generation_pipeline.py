@@ -4,15 +4,12 @@ from typing import Any, List
 from haystack import Document, Pipeline
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.ask.components.generator import (
-    init_generator,
-)
 from src.pipelines.ask.components.post_processors import init_generation_post_processor
 from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     init_text_to_sql_with_followup_prompt_builder,
 )
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 from src.web.v1.services.ask import AskRequest
 
 load_env_vars()
@@ -61,8 +58,9 @@ class FollowUpGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
+    llm_provider, _ = init_providers()
     followup_generation_pipeline = FollowUpGeneration(
-        generator=init_generator(),
+        generator=llm_provider.get_generator(),
     )
 
     print("generating followup_generation_pipeline.jpg to outputs/pipelines/ask...")

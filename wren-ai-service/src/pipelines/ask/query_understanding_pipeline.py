@@ -4,11 +4,11 @@ from typing import Any
 from haystack import Pipeline
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.ask.components.generator import init_generator
 from src.pipelines.ask.components.post_processors import (
     init_query_understanding_post_processor,
 )
 from src.pipelines.ask.components.prompts import init_query_preprocess_prompt_builder
+from src.utils import init_providers
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -53,8 +53,9 @@ class QueryUnderstanding(BasicPipeline):
 
 
 if __name__ == "__main__":
+    llm_provider, _ = init_providers()
     query_understanding_pipeline = QueryUnderstanding(
-        generator=init_generator(),
+        generator=llm_provider.get_generator(),
     )
 
     print("generating query_understanding_pipeline.jpg to outputs/pipelines/ask...")

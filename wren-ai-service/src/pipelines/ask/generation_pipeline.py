@@ -4,7 +4,6 @@ from typing import Any, List
 from haystack import Document, Pipeline
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.ask.components.generator import init_generator
 from src.pipelines.ask.components.post_processors import (
     init_generation_post_processor,
 )
@@ -12,7 +11,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     init_text_to_sql_prompt_builder,
 )
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -57,8 +56,9 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    llm_provider, _ = init_providers()
     generation_pipeline = Generation(
-        generator=init_generator(),
+        generator=llm_provider.get_generator(),
     )
 
     print("generating generation_pipeline.jpg to outputs/pipelines/ask...")
