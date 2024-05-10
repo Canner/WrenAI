@@ -365,6 +365,7 @@ export type Mutation = {
   deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
   previewData: Scalars['JSON'];
+  previewModelData: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
   resetCurrentProject: Scalars['Boolean'];
   saveDataSource: DataSource;
@@ -450,6 +451,11 @@ export type MutationDeleteViewArgs = {
 
 export type MutationPreviewDataArgs = {
   where: PreviewDataInput;
+};
+
+
+export type MutationPreviewModelDataArgs = {
+  where: WhereIdInput;
 };
 
 

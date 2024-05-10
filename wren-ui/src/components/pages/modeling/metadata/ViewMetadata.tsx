@@ -9,15 +9,12 @@ export type Props = DiagramView;
 export default function ViewMetadata(props: Props) {
   const { referenceName, statement, viewId } = props || {};
 
-  const [previewViewDataMutation, previewViewDataResult] =
-    usePreviewViewDataMutation({
-      onError: (error) => console.error(error),
-    });
+  const [previewViewData, previewViewDataResult] = usePreviewViewDataMutation({
+    onError: (error) => console.error(error),
+  });
 
   const onPreviewData = () => {
-    previewViewDataMutation({
-      variables: { where: { id: viewId } },
-    });
+    previewViewData({ variables: { where: { id: viewId } } });
   };
 
   return (
@@ -43,11 +40,9 @@ export default function ViewMetadata(props: Props) {
         </Button>
         <div className="my-3">
           <PreviewData
-            {...{
-              error: previewViewDataResult.error,
-              loading: previewViewDataResult.loading,
-              previewData: previewViewDataResult?.data?.previewViewData,
-            }}
+            error={previewViewDataResult.error}
+            loading={previewViewDataResult.loading}
+            previewData={previewViewDataResult?.data?.previewViewData}
           />
         </div>
       </div>
