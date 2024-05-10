@@ -45,6 +45,7 @@ export class ModelResolver {
     this.deleteView = this.deleteView.bind(this);
 
     // preview
+    this.previewModelData = this.previewModelData.bind(this);
     this.previewViewData = this.previewViewData.bind(this);
     this.getNativeSql = this.getNativeSql.bind(this);
 
@@ -505,6 +506,24 @@ export class ModelResolver {
     }
     await ctx.viewRepository.deleteOne(viewId);
     return true;
+  }
+
+  public async previewModelData(_root: any, args: any, ctx: IContext) {
+    const modelId = args.where.id;
+    const model = await ctx.modelRepository.findOneBy({ id: modelId });
+    if (!model) {
+      throw new Error('Model not found');
+    }
+
+    // pass the current mdl to wren engine to preview data, prevent the model is not deployed
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    const sql = `select * from ${model.referenceName}`;
+    const data = await ctx.wrenEngineAdaptor.previewData(
+      sql,
+      PREVIEW_MAX_OUTPUT_ROW,
+      manifest,
+    );
+    return data;
   }
 
   public async previewViewData(_root: any, args: any, ctx: IContext) {

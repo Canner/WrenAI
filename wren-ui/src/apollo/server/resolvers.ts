@@ -51,6 +51,7 @@ const resolvers = {
     createModel: modelResolver.createModel,
     updateModel: modelResolver.updateModel,
     deleteModel: modelResolver.deleteModel,
+    previewModelData: modelResolver.previewModelData,
     updateModelMetadata: modelResolver.updateModelMetadata,
 
     // calculated field
