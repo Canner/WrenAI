@@ -18,14 +18,14 @@ type Props = DrawerAction<Metadata> & { onEditClick: (value?: any) => void };
 
 export default function MetadataDrawer(props: Props) {
   const { visible, defaultValue, onClose, onEditClick } = props;
-  const { referenceName, nodeType = NODE_TYPE.MODEL } = defaultValue || {};
+  const { displayName, nodeType = NODE_TYPE.MODEL } = defaultValue || {};
   const isModel = nodeType === NODE_TYPE.MODEL;
   const isView = nodeType === NODE_TYPE.VIEW;
 
   return (
     <Drawer
       visible={visible}
-      title={referenceName}
+      title={displayName}
       width={760}
       closable
       destroyOnClose
