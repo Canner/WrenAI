@@ -1,7 +1,5 @@
 from typing import Callable, Tuple
 
-from dotenv import load_dotenv
-
 from src.core.document_store_provider import DocumentStoreProvider
 from src.core.llm_provider import LLMProvider
 from src.pipelines.ask import (
@@ -32,8 +30,6 @@ from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics import SemanticsService
-
-load_dotenv()
 
 SEMANTIC_SERVICE = None
 ASK_SERVICE = None
