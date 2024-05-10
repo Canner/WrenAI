@@ -69,16 +69,21 @@ def test_clear_documents(mdl_str: str):
 
     indexing_pipeline.run(
         """
-        {"models": [], "relationships": [], "views": [
-          {
-            "name": "book",
-            "statement": "SELECT * FROM book",
-            "properties": {
-              "question": "How many books are there?",
-              "description": "Retrieve the number of books"
-            }
-          }
-        ]}
+        {
+            "models": [],
+            "relationships": [],
+            "metrics": [],
+            "views": [
+                {
+                    "name": "book",
+                    "statement": "SELECT * FROM book",
+                    "properties": {
+                        "question": "How many books are there?",
+                        "description": "Retrieve the number of books"
+                    }
+                }
+            ]
+        }
         """
     )
     assert store.count_documents() == 1
