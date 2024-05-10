@@ -604,7 +604,7 @@ export class ModelResolver {
     if (views.find((v) => v.name === referenceName)) {
       return {
         valid: false,
-        message: `Generated View name "${referenceName}" is duplicated`,
+        message: `Generated view name "${referenceName}" is duplicated`,
       };
     }
 

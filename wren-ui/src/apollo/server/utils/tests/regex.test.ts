@@ -25,7 +25,7 @@ describe('validateDisplayName', () => {
       // Assert
       expect(result.valid).toBe(false);
       expect(result.message).toBe(
-        'Invalid displayName, Only space & [  a-z, A-Z, 0-9, _, -, !@#$%^&*()-+{}[]\'".,  ] are allowed.',
+        'Only space & [  a-z, A-Z, 0-9, _, -, !@#$%^&*()-+{}[]\'".,  ] are allowed.',
       );
     },
   );
@@ -40,9 +40,7 @@ describe('validateDisplayName', () => {
 
       // Assert
       expect(result.valid).toBe(false);
-      expect(result.message).toBe(
-        'Invalid displayName, Must start with a letter.',
-      );
+      expect(result.message).toBe('Must start with a letter.');
     },
   );
 });

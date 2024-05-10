@@ -129,7 +129,7 @@ export class ModelService implements IModelService {
         expression,
         lineage,
       } as CheckCalculatedFieldCanQueryData);
-    logger.debug(`${logTitle} : checkCalculatedFieldCanQuery: ${errorMessage}`);
+    logger.debug(`${logTitle} : checkCalculatedFieldCanQuery: ${canQuery}`);
     if (!canQuery) {
       throw new Error(
         `Can not execute a query using this calculated field: "${errorMessage}"`,
@@ -463,7 +463,7 @@ export class ModelService implements IModelService {
     ) {
       return {
         valid: false,
-        message: `The generated Calculated field name "${referenceName}" is duplicated with existed column, please change the name and try again`,
+        message: `The generated calculated field name "${referenceName}" is duplicated with existed column, please change the name and try again`,
       };
     }
     return { valid: true };
