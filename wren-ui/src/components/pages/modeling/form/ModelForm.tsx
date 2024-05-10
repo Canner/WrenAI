@@ -178,8 +178,9 @@ export default function ModelForm(props: Props) {
               targetKeys={selectedColumns}
               onChange={onChangeColumns}
               filterOption={(inputValue: string, item: TransferItem) =>
-                item.name.indexOf(inputValue) !== -1 ||
-                item.type.indexOf(inputValue) !== -1
+                item.name.toLowerCase().indexOf(inputValue.toLowerCase()) !==
+                  -1 ||
+                item.type.toLowerCase().indexOf(inputValue.toLowerCase()) !== -1
               }
               leftColumns={defaultColumns}
               rightColumns={defaultColumns}
