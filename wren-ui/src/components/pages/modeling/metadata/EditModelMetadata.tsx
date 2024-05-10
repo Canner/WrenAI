@@ -97,7 +97,7 @@ export default function EditModelMetadata(props: Props) {
           <CalculatedFieldEditableTable
             dataSource={calculatedFields}
             columns={[
-              { ...COLUMN.NAME, width: 160 },
+              { ...COLUMN.NAME, dataIndex: 'displayName', width: 160 },
               COLUMN.EXPRESSION,
               { ...COLUMN.DESCRIPTION, width: 280 },
             ]}

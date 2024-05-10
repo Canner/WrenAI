@@ -25,7 +25,7 @@ export const editCalculatedField = (
       openCalculatedFieldModal(
         {
           columnId: data.columnId,
-          name: data.referenceName,
+          name: data.displayName,
           expression: data.aggregation,
           lineage: [getFieldValue(field)],
         },
@@ -59,7 +59,7 @@ export const editCalculatedField = (
     openCalculatedFieldModal(
       {
         columnId: data.columnId,
-        name: data.referenceName,
+        name: data.displayName,
         expression: data.aggregation,
         lineage: [...relations, field].map(getFieldValue),
       },

@@ -11,7 +11,7 @@ export default function CalculatedFieldTable(props: Props) {
       {...props}
       columns={
         columns || [
-          { ...COLUMN.NAME, width: 160 },
+          { ...COLUMN.NAME, dataIndex: 'displayName', width: 160 },
           COLUMN.EXPRESSION,
           { ...COLUMN.DESCRIPTION, width: 280 },
         ]
