@@ -1,4 +1,6 @@
-sql_details_system_prompt = """
+from haystack.components.builders.prompt_builder import PromptBuilder
+
+ask_details_system_prompt = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
 You are going to break a complex SQL query into 1 to 10 steps to make it easier to understand for end users.
 Each step should have a SQL query part, a summary explaining the purpose of that query, and a CTE name to link the queries. 
@@ -47,7 +49,12 @@ Results:
 - YOU MUST BREAK DOWN any SQL query into small steps if there is JOIN operations or sub-queries.
 - ONLY USE the tables and columns mentioned in the original sql query.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- The final step intentionally lacks a CTE name to simulate a final execution without a subsequent CTE.
+- ONLY THE last step should not have a CTE name.
+"""
+
+ask_details_user_prompt_template = """
+### INPUT ###
+SQL query: {{ sql }}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a valid JSON format as following:
@@ -63,6 +70,9 @@ The final answer must be a valid JSON format as following:
     ] # a list of steps
 }
 
-### THE ORIGINAL SQL QUERY ###
 Let's think step by step.
 """
+
+
+def init_ask_details_prompt_builder():
+    return PromptBuilder(template=ask_details_user_prompt_template)

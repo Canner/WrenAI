@@ -2,8 +2,8 @@ import uuid
 
 import pytest
 
+from src.globals import init_providers
 from src.pipelines.ask_details import generation_pipeline
-from src.pipelines.ask_details.components.generator import init_generator
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
     AskDetailsResultRequest,
@@ -13,7 +13,8 @@ from src.web.v1.services.ask_details import (
 
 @pytest.fixture
 def ask_details_service():
-    sql_details_generator = init_generator()
+    llm_provider, _ = init_providers()
+    sql_details_generator = llm_provider.get_generator()
 
     return AskDetailsService(
         {

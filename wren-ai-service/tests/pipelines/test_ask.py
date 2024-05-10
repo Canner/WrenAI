@@ -2,12 +2,8 @@ import json
 from typing import Any
 
 import pytest
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import init_embedder
-from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.retriever import init_retriever
+from src.globals import init_providers
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
@@ -29,12 +25,16 @@ def mdl_str():
 
 @pytest.fixture
 def document_store():
-    return init_document_store(dataset_name="book_2")
+    _, document_store_provider = init_providers()
+
+    return document_store_provider.get_store(dataset_name="book_2")
 
 
 @pytest.fixture
 def view_store():
-    return init_document_store(dataset_name="view_questions")
+    _, document_store_provider = init_providers()
+
+    return document_store_provider.get_store(dataset_name="view_questions")
 
 
 def test_indexing_pipeline(mdl_str: str, document_store: Any, view_store: Any):
@@ -50,13 +50,11 @@ def test_indexing_pipeline(mdl_str: str, document_store: Any, view_store: Any):
 
 
 def test_clear_documents(mdl_str: str):
-    store = QdrantDocumentStore(
-        ":memory:",
-        index="test_clear_documents",
-        embedding_dim=3072,
+    _, document_store_provider = init_providers()
+    store = document_store_provider.get_store(
+        location=":memory:",
+        dataset_name="test_clear_documents",
         recreate_index=True,
-        return_embedding=True,
-        wait_result_from_api=True,
     )
 
     indexing_pipeline = Indexing(
@@ -90,8 +88,9 @@ def test_clear_documents(mdl_str: str):
 
 
 def test_query_understanding_pipeline():
+    llm_provider, _ = init_providers()
     query_understanding_pipeline = QueryUnderstanding(
-        generator=init_generator(),
+        generator=llm_provider.get_generator(),
     )
 
     assert query_understanding_pipeline.run("How many books are there?")[
@@ -109,9 +108,12 @@ def test_query_understanding_pipeline():
 
 
 def test_retrieval_pipeline(document_store: Any):
+    llm_provider, document_store_provider = init_providers()
     retrieval_pipeline = Retrieval(
-        embedder=init_embedder(),
-        retriever=init_retriever(document_store=document_store),
+        embedder=llm_provider.get_embedder(),
+        retriever=document_store_provider.get_retriever(
+            document_store=document_store,
+        ),
     )
 
     retrieval_result = retrieval_pipeline.run(
@@ -125,9 +127,8 @@ def test_retrieval_pipeline(document_store: Any):
 
 
 def test_generation_pipeline():
-    generation_pipeline = Generation(
-        generator=init_generator(),
-    )
+    llm_provider, _ = init_providers()
+    generation_pipeline = Generation(generator=llm_provider.get_generator())
     generation_result = generation_pipeline.run(
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
@@ -139,9 +140,8 @@ def test_generation_pipeline():
 
 
 def test_followup_generation_pipeline():
-    generation_pipeline = FollowUpGeneration(
-        generator=init_generator(),
-    )
+    llm_provider, _ = init_providers()
+    generation_pipeline = FollowUpGeneration(generator=llm_provider.get_generator())
     generation_result = generation_pipeline.run(
         "What are names of the books?",
         contexts=GLOBAL_DATA["contexts"],
@@ -158,16 +158,15 @@ def test_followup_generation_pipeline():
         ),
     )
 
-    print(generation_result)
-
     assert AskResultResponse.AskResult(
         **generation_result["post_processor"]["valid_generation_results"][0]
     )
 
 
 def test_sql_correction_pipeline():
+    llm_provider, _ = init_providers()
     sql_correction_pipeline = SQLCorrection(
-        generator=init_generator(),
+        generator=llm_provider.get_generator(),
     )
 
     sql_correction_result = sql_correction_pipeline.run(

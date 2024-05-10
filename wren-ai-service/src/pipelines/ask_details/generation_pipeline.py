@@ -10,6 +10,9 @@ from src.pipelines.ask_details.components.generator import (
 from src.pipelines.ask_details.components.post_processors import (
     init_generation_post_processor,
 )
+from src.pipelines.ask_details.components.prompts import (
+    init_ask_details_prompt_builder,
+)
 from src.utils import load_env_vars
 
 load_env_vars()
@@ -22,9 +25,19 @@ class Generation(BasicPipeline):
         generator: Any,
     ):
         self._pipeline = Pipeline()
-        self._pipeline.add_component("generator", generator)
+        self._pipeline.add_component(
+            "ask_details_prompt_builder",
+            init_ask_details_prompt_builder(),
+        )
+        self._pipeline.add_component("ask_details_generator", generator)
         self._pipeline.add_component("post_processor", init_generation_post_processor())
-        self._pipeline.connect("generator.replies", "post_processor.replies")
+
+        self._pipeline.connect(
+            "ask_details_prompt_builder.prompt", "ask_details_generator.prompt"
+        )
+        self._pipeline.connect(
+            "ask_details_generator.replies", "post_processor.replies"
+        )
 
         super().__init__(self._pipeline)
 
@@ -32,8 +45,8 @@ class Generation(BasicPipeline):
         logger.info("Ask Details Generation pipeline is running...")
         return self._pipeline.run(
             {
-                "generator": {
-                    "prompt": sql,
+                "ask_details_prompt_builder": {
+                    "sql": sql,
                 },
             }
         )

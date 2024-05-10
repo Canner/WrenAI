@@ -4,7 +4,7 @@ from typing import Optional
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
-from src.core.documentstore_provider import DocumentStoreProvider
+from src.core.document_store_provider import DocumentStoreProvider
 from src.providers.llm.openai import EMBEDDING_MODEL_DIMENSION
 from src.utils import load_env_vars
 
@@ -14,12 +14,13 @@ load_env_vars()
 class QdrantProvider(DocumentStoreProvider):
     def get_store(
         self,
+        location: str = os.getenv("QDRANT_HOST"),
         embedding_model_dim: int = EMBEDDING_MODEL_DIMENSION,
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):
         return QdrantDocumentStore(
-            url=os.getenv("QDRANT_HOST"),
+            location=location,
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,

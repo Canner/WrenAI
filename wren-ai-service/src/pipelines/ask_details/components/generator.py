@@ -9,8 +9,6 @@ from haystack.utils.auth import Secret
 
 from src.utils import load_env_vars
 
-from .prompts import sql_details_system_prompt
-
 load_env_vars()
 
 logging.getLogger("backoff").addHandler(logging.StreamHandler())
@@ -40,10 +38,11 @@ class CustomOpenAIGenerator(OpenAIGenerator):
 def init_generator(
     model_name: str = _MODEL_NAME,
     generation_kwargs: Optional[Dict[str, Any]] = _GENERATION_KWARGS,
+    system_prompt: Optional[str] = None,
 ) -> Any:
     return CustomOpenAIGenerator(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
         model=model_name,
         generation_kwargs=generation_kwargs,
-        system_prompt=sql_details_system_prompt,
+        system_prompt=system_prompt,
     )
