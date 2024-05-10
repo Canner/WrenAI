@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 import pytest
+from haystack.document_stores.types import DocumentStore
 
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
@@ -37,7 +38,9 @@ def view_store():
     return document_store_provider.get_store(dataset_name="view_questions")
 
 
-def test_indexing_pipeline(mdl_str: str, document_store: Any, view_store: Any):
+def test_indexing_pipeline(
+    mdl_str: str, document_store: DocumentStore, view_store: DocumentStore
+):
     indexing_pipeline = Indexing(
         ddl_store=document_store,
         view_store=view_store,
