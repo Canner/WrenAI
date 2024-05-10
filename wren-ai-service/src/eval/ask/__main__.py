@@ -398,7 +398,10 @@ if __name__ == "__main__":
         embedder = llm_provider.get_embedder()
 
         print("Indexing documents...")
-        indexing_pipeline = Indexing(ddl_store=document_store)
+        indexing_pipeline = Indexing(
+            ddl_store=document_store,
+            create_embeddings=llm_provider.create_embeddings,
+        )
         indexing_pipeline_def = indexing_pipeline._pipeline.dumps()
         indexing_pipeline.run(mdl_str)
         print(

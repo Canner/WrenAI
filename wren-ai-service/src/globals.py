@@ -67,6 +67,7 @@ def init_globals(
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
                 ddl_store=ddl_store,
+                create_embeddings=llm_provider.create_embeddings,
                 view_store=view_store,
             ),
             "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(

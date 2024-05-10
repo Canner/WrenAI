@@ -51,8 +51,28 @@ class OpenAILLMProvider(LLMProvider):
             generation_kwargs=model_kwargs,
         )
 
-    def get_embedder(self, model_name: str = EMBEDDING_MODEL_NAME):
+    def get_embedder(
+        self,
+        model_name: str = EMBEDDING_MODEL_NAME,
+        model_dim: int = EMBEDDING_MODEL_DIMENSION,
+    ):
         return OpenAITextEmbedder(
             api_key=self._api_key,
             model=model_name,
+            dimensions=model_dim,
         )
+
+    def create_embeddings(
+        self,
+        texts: List[str],
+        model_name: str = EMBEDDING_MODEL_NAME,
+        model_dim: int = EMBEDDING_MODEL_DIMENSION,
+    ) -> List[float]:
+        _openai_client = openai.Client(api_key=self._api_key.resolve_value())
+        _embeddings = _openai_client.embeddings.create(
+            input=texts,
+            model=model_name,
+            dimensions=model_dim,
+        )
+
+        return [data.embedding for data in _embeddings.data]

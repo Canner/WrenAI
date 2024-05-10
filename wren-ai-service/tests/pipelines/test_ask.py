@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from haystack.document_stores.types import DocumentStore
 
+from src.core.llm_provider import LLMProvider
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
@@ -25,6 +26,13 @@ def mdl_str():
 
 
 @pytest.fixture
+def llm_provider():
+    llm_provider, _ = init_providers()
+
+    return llm_provider
+
+
+@pytest.fixture
 def document_store():
     _, document_store_provider = init_providers()
 
@@ -39,10 +47,14 @@ def view_store():
 
 
 def test_indexing_pipeline(
-    mdl_str: str, document_store: DocumentStore, view_store: DocumentStore
+    mdl_str: str,
+    llm_provider: LLMProvider,
+    document_store: DocumentStore,
+    view_store: DocumentStore,
 ):
     indexing_pipeline = Indexing(
         ddl_store=document_store,
+        create_embeddings=llm_provider.create_embeddings,
         view_store=view_store,
     )
 
@@ -53,7 +65,7 @@ def test_indexing_pipeline(
 
 
 def test_clear_documents(mdl_str: str):
-    _, document_store_provider = init_providers()
+    llm_provider, document_store_provider = init_providers()
     store = document_store_provider.get_store(
         dataset_name="test_clear_documents",
         recreate_index=True,
@@ -61,6 +73,7 @@ def test_clear_documents(mdl_str: str):
 
     indexing_pipeline = Indexing(
         ddl_store=store,
+        create_embeddings=llm_provider.create_embeddings,
         view_store=store,
     )
 
