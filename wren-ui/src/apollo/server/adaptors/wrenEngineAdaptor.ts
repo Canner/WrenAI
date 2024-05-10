@@ -72,7 +72,11 @@ export interface IWrenEngineAdaptor {
   putSessionProps(props: Record<string, any>): Promise<void>;
   queryDuckdb(sql: string): Promise<QueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
-  previewData(sql: string, limit?: number): Promise<QueryResponse>;
+  previewData(
+    sql: string,
+    limit?: number,
+    mdl?: Manifest,
+  ): Promise<QueryResponse>;
   describeStatement(sql: string): Promise<DescribeStatementResponse>;
   getNativeSQL(sql: string): Promise<string>;
   validateColumnIsValid(
@@ -242,6 +246,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   public async previewData(
     sql: string,
     limit: number = DEFAULT_PREVIEW_LIMIT,
+    manifest?: Manifest,
   ): Promise<QueryResponse> {
     try {
       const url = new URL(this.previewUrlPath, this.wrenEngineBaseEndpoint);
@@ -256,6 +261,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         data: {
           sql,
           limit,
+          manifest,
         },
       });
 
