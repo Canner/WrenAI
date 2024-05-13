@@ -65,7 +65,8 @@ class ViewConverter:
 
     @component.output_types(documents=List[Document])
     def run(self, mdl: str) -> None:
-        views = json.loads(mdl)["views"]
+        _mdl_json = json.loads(mdl)
+        views = _mdl_json["views"] if "views" in _mdl_json else []
 
         def _format(view: Dict[str, Any]) -> List[str]:
             return str(
