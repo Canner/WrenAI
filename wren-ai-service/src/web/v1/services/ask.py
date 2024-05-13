@@ -118,6 +118,7 @@ class AskService:
                 prepare_semantics_request.id
             ] = SemanticsPreparationStatusResponse(status="finished")
         except Exception as e:
+            logger.error(f"ask pipeline - Failed to prepare semantics: {e}")
             self.prepare_semantics_statuses[
                 prepare_semantics_request.id
             ] = SemanticsPreparationStatusResponse(
@@ -129,6 +130,9 @@ class AskService:
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
     ) -> SemanticsPreparationStatusResponse:
         if prepare_semantics_status_request.id not in self.prepare_semantics_statuses:
+            logger.error(
+                f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.id}"
+            )
             return SemanticsPreparationStatusResponse(
                 status="failed",
                 error=f"{prepare_semantics_status_request.id} is not found",
@@ -159,6 +163,9 @@ class AskService:
                 )
 
                 if not query_understanding_result["post_processor"]["is_valid_query"]:
+                    logger.error(
+                        f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
+                    )
                     self.ask_results[query_id] = AskResultResponse(
                         status="failed",
                         error=AskResultResponse.AskError(
@@ -177,6 +184,9 @@ class AskService:
                 documents = retrieval_result["retriever"]["documents"]
 
                 if not documents:
+                    logger.error(
+                        f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
+                    )
                     self.ask_results[query_id] = AskResultResponse(
                         status="failed",
                         error=AskResultResponse.AskError(
@@ -255,6 +265,7 @@ class AskService:
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
 
                 if not valid_generation_results:
+                    logger.error(f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}")
                     self.ask_results[query_id] = AskResultResponse(
                         status="failed",
                         error=AskResultResponse.AskError(
@@ -271,6 +282,7 @@ class AskService:
                         ],
                     )
         except Exception as e:
+            logger.error(f"ask pipeline - OTHERS: {e}")
             self.ask_results[query_id] = AskResultResponse(
                 status="failed",
                 error=AskResultResponse.AskError(
@@ -292,6 +304,9 @@ class AskService:
         ask_result_request: AskResultRequest,
     ) -> AskResultResponse:
         if ask_result_request.query_id not in self.ask_results:
+            logger.error(
+                f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
+            )
             return AskResultResponse(
                 status="failed",
                 error=AskResultResponse.AskError(

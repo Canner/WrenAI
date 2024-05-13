@@ -1,7 +1,10 @@
+import logging
 from typing import List, Literal, Optional
 
 from haystack import Pipeline
 from pydantic import BaseModel
+
+logger = logging.getLogger("wren-ai-service")
 
 
 class SQLExplanation(BaseModel):
@@ -104,6 +107,7 @@ class AskDetailsService:
                     ),
                 )
         except Exception as e:
+            logger.error(f"ask-details pipeline - OTHERS: {e}")
             self.ask_details_results[query_id] = AskDetailsResultResponse(
                 status="failed",
                 error=AskDetailsResultResponse.AskDetailsError(
@@ -117,6 +121,9 @@ class AskDetailsService:
         ask_details_result_request: AskDetailsResultRequest,
     ) -> AskDetailsResultResponse:
         if ask_details_result_request.query_id not in self.ask_details_results:
+            logger.error(
+                f"ask-details pipeline - OTHERS: {ask_details_result_request.query_id} is not found"
+            )
             return AskDetailsResultResponse(
                 status="failed",
                 error=AskDetailsResultResponse.AskDetailsError(
