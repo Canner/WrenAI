@@ -95,6 +95,7 @@ func askForAPIKey() (string, error) {
 func askForGenerationModel() (string, error) {
 	// let users know we're asking for a generation model
 	fmt.Println("Please provide the generation model you want to use")
+	fmt.Println("You can learn more about OpenAI's generation models at https://platform.openai.com/docs/models/models")
 
 	prompt := promptui.Select{
 		Label: "Select an OpenAI's generation model",
