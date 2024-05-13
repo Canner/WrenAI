@@ -108,14 +108,13 @@ class DDLConverter:
 
         logger.debug(f"original mdl_json: {json.dumps(mdl_json, indent=2)}")
 
-        for i, _ in enumerate(mdl_json["relationships"]):
-            mdl_json["relationships"][i]["type"] = "relationship"
-
         semantics = {
             "models": [],
-            "relationships": mdl_json["relationships"],
-            "views": mdl_json["views"],
-            "metrics": mdl_json["metrics"],
+            "relationships": mdl_json["relationships"]
+            if "relationships" in mdl_json
+            else [],
+            "views": mdl_json["views"] if "views" in mdl_json else [],
+            "metrics": mdl_json["metrics"] if "metrics" in mdl_json else [],
         }
 
         for model in mdl_json["models"]:
