@@ -185,6 +185,11 @@ def remove_duplicates(dicts):
 def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
     load_env_vars()
 
+    logger.info("Initializing providers...")
+    logger.info(
+        f"Using OpenAI Generation Model: {os.getenv("OPENAI_GENERATION_MODEL")}"
+    )
+
     llm_provider = OpenAILLMProvider(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
         generation_model=os.getenv("OPENAI_GENERATION_MODEL"),
