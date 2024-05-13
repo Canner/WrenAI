@@ -39,7 +39,7 @@ if __name__ == "__main__":
     llm_provider, document_store_provider = init_providers()
 
     retrieval_pipeline = Retrieval(
-        embedder=llm_provider.get_embedder(),
+        embedder=llm_provider.get_text_embedder(),
         retriever=document_store_provider.get_retriever(
             document_store=document_store_provider.get_store(),
         ),

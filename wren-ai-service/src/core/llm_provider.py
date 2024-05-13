@@ -7,9 +7,9 @@ class LLMProvider(metaclass=ABCMeta):
         ...
 
     @abstractmethod
-    def get_embedder(self, *args, **kwargs):
+    def get_text_embedder(self, *args, **kwargs):
         ...
 
     @abstractmethod
-    def create_embeddings(self, *args, **kwargs) -> list[float]:
+    def get_document_embedder(self, *args, **kwargs):
         ...

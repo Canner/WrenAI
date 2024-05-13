@@ -20,7 +20,7 @@ class QdrantProvider(DocumentStoreProvider):
         return QdrantDocumentStore(
             location=self._location,
             embedding_dim=embedding_model_dim,
-            index=dataset_name or "db_schema",
+            index=dataset_name or "Document",
             recreate_index=recreate_index,
             # hnsw_config={"ef_construct": 200, "m": 32},  # https://qdrant.tech/documentation/concepts/indexing/#vector-index
         )

@@ -395,12 +395,12 @@ if __name__ == "__main__":
         )
         text_to_sql_generator = llm_provider.get_generator()
         sql_correction_generator = llm_provider.get_generator()
-        embedder = llm_provider.get_embedder()
+        embedder = llm_provider.get_text_embedder()
 
         print("Indexing documents...")
         indexing_pipeline = Indexing(
             ddl_store=document_store,
-            create_embeddings=llm_provider.create_embeddings,
+            document_embedder=llm_provider.get_document_embedder(),
         )
         indexing_pipeline_def = indexing_pipeline._pipeline.dumps()
         indexing_pipeline.run(mdl_str)

@@ -1,7 +1,7 @@
 import json  # noqa: I001
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List
 
 from haystack import Document, Pipeline, component
 from haystack.components.writers import DocumentWriter
@@ -51,8 +51,8 @@ class ViewConverter:
     and store it in the view store.
     """
 
-    def __init__(self, create_embeddings: Callable[[Any], list[float]]) -> None:
-        self.create_embeddings = create_embeddings
+    def __init__(self, document_embedder: Any) -> None:
+        self.document_embedder = document_embedder
 
     @component.output_types(documents=List[Document])
     def run(self, mdl: str) -> None:
@@ -73,15 +73,11 @@ class ViewConverter:
         if not converted_views:
             return {"documents": []}
 
-        embeddings = self.create_embeddings(
-            texts=converted_views,
-        )
         documents = [
             Document(
                 id=str(i),
                 meta={"id": str(i)},
                 content=converted_view,
-                embedding=embeddings[i],
             )
             for i, converted_view in enumerate(
                 tqdm(
@@ -91,20 +87,18 @@ class ViewConverter:
             )
         ]
 
-        return {"documents": documents}
+        return self.document_embedder.run(documents)
 
 
 @component
 class DDLConverter:
-    def __init__(self, create_embeddings: Callable[[Any], list[float]]) -> None:
-        self.create_embeddings = create_embeddings
+    def __init__(self, document_embedder: Any) -> None:
+        self.document_embedder = document_embedder
 
     @component.output_types(documents=List[Document])
     def run(self, mdl: str):
         logger.info("Ask Indexing pipeline is writing new documents...")
-        return {"documents": self._get_documents(mdl)}
 
-    def _get_documents(self, mdl: str) -> List[Document]:
         mdl_json = json.loads(mdl)
 
         logger.debug(f"original mdl_json: {json.dumps(mdl_json, indent=2)}")
@@ -154,18 +148,16 @@ class DDLConverter:
             + self._convert_views(semantics["views"])
         )
 
-        embeddings = self.create_embeddings(
-            texts=ddl_commands,
-        )
-        return [
+        documents = [
             Document(
                 id=str(i),
                 meta={"id": str(i)},
                 content=ddl_command,
-                embedding=embeddings[i],
             )
             for i, ddl_command in enumerate(tqdm(ddl_commands))
         ]
+
+        return self.document_embedder.run(documents)
 
     # TODO: refactor this method
     def _convert_models_and_relationships(
@@ -289,15 +281,15 @@ class Indexing(BasicPipeline):
     def __init__(
         self,
         ddl_store: DocumentStore,
-        create_embeddings: Callable[[Any], list[float]],
-        view_store: Optional[DocumentStore] = None,
+        document_embedder: Any,
+        view_store: DocumentStore,
     ) -> None:
         pipe = Pipeline()
         stores = [ddl_store, view_store] if view_store else [ddl_store]
         pipe.add_component("cleaner", DocumentCleaner(stores))
         pipe.add_component(
             "ddl_converter",
-            DDLConverter(create_embeddings=create_embeddings),
+            DDLConverter(document_embedder=document_embedder),
         )
         pipe.add_component(
             "ddl_writer",
@@ -306,22 +298,20 @@ class Indexing(BasicPipeline):
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         )
-        if view_store:
-            pipe.add_component(
-                "view_converter",
-                ViewConverter(create_embeddings=create_embeddings),
-            )
-            pipe.add_component(
-                "view_writer",
-                DocumentWriter(
-                    document_store=view_store,
-                    policy=DuplicatePolicy.OVERWRITE,
-                ),
-            )
+        pipe.add_component(
+            "view_converter",
+            ViewConverter(document_embedder=document_embedder),
+        )
+        pipe.add_component(
+            "view_writer",
+            DocumentWriter(
+                document_store=view_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        )
 
-            pipe.connect("cleaner", "view_converter")
-            pipe.connect("view_converter", "view_writer")
-
+        pipe.connect("cleaner", "view_converter")
+        pipe.connect("view_converter", "view_writer")
         pipe.connect("cleaner", "ddl_converter")
         pipe.connect("ddl_converter", "ddl_writer")
 
@@ -337,7 +327,7 @@ if __name__ == "__main__":
     llm_provider, document_store_provider = init_providers()
     indexing_pipeline = Indexing(
         ddl_store=document_store_provider.get_store(),
-        create_embeddings=llm_provider.create_embeddings,
+        document_embedder=llm_provider.get_document_embedder(),
         view_store=document_store_provider.get_store(),
     )
 

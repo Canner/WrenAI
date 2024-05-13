@@ -24,7 +24,7 @@ def ask_service():
     llm_provider, document_store_provider = init_providers()
     document_store = document_store_provider.get_store()
     view_store = document_store_provider.get_store(dataset_name="view_questions")
-    embedder = llm_provider.get_embedder()
+    embedder = llm_provider.get_text_embedder()
     retriever = document_store_provider.get_retriever(document_store=document_store)
     query_understanding_generator = llm_provider.get_generator()
     text_to_sql_generator = llm_provider.get_generator()
@@ -34,7 +34,7 @@ def ask_service():
         {
             "indexing": indexing_pipeline.Indexing(
                 ddl_store=document_store,
-                create_embeddings=llm_provider.create_embeddings,
+                document_embedder=llm_provider.get_document_embedder(),
                 view_store=view_store,
             ),
             "query_understanding": query_understanding_pipeline.QueryUnderstanding(

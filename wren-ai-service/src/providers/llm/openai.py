@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 import backoff
 import openai
 from haystack import component
-from haystack.components.embedders import OpenAITextEmbedder
+from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
 from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 
@@ -51,7 +51,7 @@ class OpenAILLMProvider(LLMProvider):
             generation_kwargs=model_kwargs,
         )
 
-    def get_embedder(
+    def get_text_embedder(
         self,
         model_name: str = EMBEDDING_MODEL_NAME,
         model_dim: int = EMBEDDING_MODEL_DIMENSION,
@@ -62,17 +62,13 @@ class OpenAILLMProvider(LLMProvider):
             dimensions=model_dim,
         )
 
-    def create_embeddings(
+    def get_document_embedder(
         self,
-        texts: List[str],
         model_name: str = EMBEDDING_MODEL_NAME,
         model_dim: int = EMBEDDING_MODEL_DIMENSION,
-    ) -> List[float]:
-        _openai_client = openai.Client(api_key=self._api_key.resolve_value())
-        _embeddings = _openai_client.embeddings.create(
-            input=texts,
+    ):
+        return OpenAIDocumentEmbedder(
+            api_key=self._api_key,
             model=model_name,
             dimensions=model_dim,
         )
-
-        return [data.embedding for data in _embeddings.data]

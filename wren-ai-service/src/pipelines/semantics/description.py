@@ -87,7 +87,7 @@ class Generation(BasicPipeline):
 
 if __name__ == "__main__":
     llm_provider, document_store_provider = init_providers()
-    embedder = llm_provider.get_embedder()
+    embedder = llm_provider.get_text_embedder()
     ddl_store = document_store_provider.get_store()
     retriever = document_store_provider.get_retriever(document_store=ddl_store)
     generator = llm_provider.get_generator()

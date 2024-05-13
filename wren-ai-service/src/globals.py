@@ -50,7 +50,7 @@ def init_globals(
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
             "generate_description": description.Generation(
-                embedder=llm_provider.get_embedder(),
+                embedder=llm_provider.get_text_embedder(),
                 retriever=document_store_provider.get_retriever(
                     document_store=ddl_store
                 ),
@@ -63,14 +63,14 @@ def init_globals(
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
                 ddl_store=ddl_store,
-                create_embeddings=llm_provider.create_embeddings,
+                document_embedder=llm_provider.get_document_embedder(),
                 view_store=view_store,
             ),
             "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(
                 generator=llm_provider.get_generator(),
             ),
             "retrieval": ask_retrieval_pipeline.Retrieval(
-                embedder=llm_provider.get_embedder(),
+                embedder=llm_provider.get_text_embedder(),
                 retriever=document_store_provider.get_retriever(
                     document_store=ddl_store
                 ),

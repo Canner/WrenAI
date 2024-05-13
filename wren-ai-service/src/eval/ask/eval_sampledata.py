@@ -126,7 +126,7 @@ if __name__ == "__main__":
         dataset_name=SAMPLE_DATASET_NAME,
         recreate_index=True,
     )
-    embedder = llm_provider.get_embedder()
+    embedder = llm_provider.get_text_embedder()
     retriever = document_store_provider.get_retriever(
         document_store=document_store,
         top_k=10,
@@ -150,7 +150,7 @@ if __name__ == "__main__":
     mdl = get_mdl_from_wren_engine()
     indexing_pipeline = Indexing(
         ddl_store=document_store,
-        create_embeddings=llm_provider.create_embeddings,
+        document_embedder=llm_provider.get_document_embedder(),
     )
     indexing_pipeline.run(json.dumps(mdl))
     print(

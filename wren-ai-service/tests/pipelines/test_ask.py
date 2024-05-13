@@ -54,7 +54,7 @@ def test_indexing_pipeline(
 ):
     indexing_pipeline = Indexing(
         ddl_store=document_store,
-        create_embeddings=llm_provider.create_embeddings,
+        document_embedder=llm_provider.get_document_embedder(),
         view_store=view_store,
     )
 
@@ -73,7 +73,7 @@ def test_clear_documents(mdl_str: str):
 
     indexing_pipeline = Indexing(
         ddl_store=store,
-        create_embeddings=llm_provider.create_embeddings,
+        document_embedder=llm_provider.get_document_embedder(),
         view_store=store,
     )
 
@@ -125,7 +125,7 @@ def test_query_understanding_pipeline():
 def test_retrieval_pipeline(document_store: Any):
     llm_provider, document_store_provider = init_providers()
     retrieval_pipeline = Retrieval(
-        embedder=llm_provider.get_embedder(),
+        embedder=llm_provider.get_text_embedder(),
         retriever=document_store_provider.get_retriever(
             document_store=document_store,
         ),
