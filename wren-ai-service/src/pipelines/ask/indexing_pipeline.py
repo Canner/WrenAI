@@ -177,7 +177,7 @@ class DDLConverter:
                         comment = f"-- {json.dumps(column['properties'])}\n  "
                     else:
                         comment = ""
-                    if "isCalculated" in column:
+                    if "isCalculated" in column and column["isCalculated"]:
                         comment = (
                             comment
                             + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
@@ -224,7 +224,7 @@ class DDLConverter:
                     fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
                     columns_ddl.append(fk_constraint)
 
-            if model["properties"]:
+            if "properties" in model:
                 comment = f"\n/* {json.dumps(model['properties'])} */\n"
             else:
                 comment = ""
