@@ -12,15 +12,11 @@ from pathlib import Path
 import requests
 from tqdm import tqdm
 
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import init_embedder
-from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 
 load_env_vars()
 
@@ -125,17 +121,18 @@ if __name__ == "__main__":
         Path("./outputs/ask/sampledata").mkdir(parents=True)
 
     # init ask pipeline
-    document_store = init_document_store(
+    llm_provider, document_store_provider = init_providers()
+    document_store = document_store_provider.get_store(
         dataset_name=SAMPLE_DATASET_NAME,
         recreate_index=True,
     )
-    embedder = init_embedder()
-    retriever = init_retriever(
+    embedder = llm_provider.get_text_embedder()
+    retriever = document_store_provider.get_retriever(
         document_store=document_store,
         top_k=10,
     )
-    text_to_sql_generator = init_generator()
-    sql_correction_generator = init_generator()
+    text_to_sql_generator = llm_provider.get_generator()
+    sql_correction_generator = llm_provider.get_generator()
 
     retrieval_pipeline = Retrieval(
         embedder=embedder,
@@ -151,7 +148,10 @@ if __name__ == "__main__":
     # indexing
     print("Indexing documents...")
     mdl = get_mdl_from_wren_engine()
-    indexing_pipeline = Indexing(ddl_store=document_store)
+    indexing_pipeline = Indexing(
+        ddl_store=document_store,
+        document_embedder=llm_provider.get_document_embedder(),
+    )
     indexing_pipeline.run(json.dumps(mdl))
     print(
         f"Finished indexing documents, document count: {document_store.count_documents()}"

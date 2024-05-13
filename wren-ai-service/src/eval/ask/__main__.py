@@ -9,16 +9,12 @@ from typing import Any, Dict, Optional
 
 from tqdm import tqdm
 
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import init_embedder
-from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
 from src.pipelines.semantics import description
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 from src.web.v1.services.semantics import (
     GenerateDescriptionRequest,
     SemanticsService,
@@ -387,21 +383,26 @@ if __name__ == "__main__":
             with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
                 mdl_str = json.dumps(json.load(f))
 
-        document_store = init_document_store(
+        llm_provider, document_store_provider = init_providers()
+
+        document_store = document_store_provider.get_store(
             dataset_name=DATASET_NAME,
             recreate_index=True,
         )
-        embedder = init_embedder()
-        retriever = init_retriever(
+        retriever = document_store_provider.get_retriever(
             document_store=document_store,
             top_k=10,
         )
-        text_to_sql_generator = init_generator()
-        sql_correction_generator = init_generator()
+        text_to_sql_generator = llm_provider.get_generator()
+        sql_correction_generator = llm_provider.get_generator()
+        embedder = llm_provider.get_text_embedder()
 
         print("Indexing documents...")
-        indexing_pipeline = Indexing(ddl_store=document_store)
-        indexing_pipeline_def = indexing_pipeline._pipe.dumps()
+        indexing_pipeline = Indexing(
+            ddl_store=document_store,
+            document_embedder=llm_provider.get_document_embedder(),
+        )
+        indexing_pipeline_def = indexing_pipeline._pipeline.dumps()
         indexing_pipeline.run(mdl_str)
         print(
             f"Finished indexing documents, document count: {document_store.count_documents()}"

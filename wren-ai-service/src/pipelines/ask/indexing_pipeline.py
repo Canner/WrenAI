@@ -1,21 +1,15 @@
-import json
+import json  # noqa: I001
 import logging
 import os
 from typing import Any, Dict, List
 
-import openai
 from haystack import Document, Pipeline, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import (
-    EMBEDDING_MODEL_DIMENSION,
-    EMBEDDING_MODEL_NAME,
-)
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -57,11 +51,8 @@ class ViewConverter:
     and store it in the view store.
     """
 
-    def __init__(self) -> None:
-        self._openai_client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
-
-        self.embedding_model_name = EMBEDDING_MODEL_NAME
-        self.embedding_model_dim = EMBEDDING_MODEL_DIMENSION
+    def __init__(self, document_embedder: Any) -> None:
+        self.document_embedder = document_embedder
 
     @component.output_types(documents=List[Document])
     def run(self, mdl: str) -> None:
@@ -82,17 +73,11 @@ class ViewConverter:
         if not converted_views:
             return {"documents": []}
 
-        embeddings = self._openai_client.embeddings.create(
-            input=converted_views,
-            model=self.embedding_model_name,
-            dimensions=self.embedding_model_dim,
-        )
         documents = [
             Document(
                 id=str(i),
                 meta={"id": str(i)},
                 content=converted_view,
-                embedding=embeddings.data[i].embedding,
             )
             for i, converted_view in enumerate(
                 tqdm(
@@ -102,23 +87,18 @@ class ViewConverter:
             )
         ]
 
-        return {"documents": documents}
+        return self.document_embedder.run(documents)
 
 
 @component
 class DDLConverter:
-    def __init__(self) -> None:
-        self._openai_client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
-
-        self.embedding_model_name = EMBEDDING_MODEL_NAME
-        self.embedding_model_dim = EMBEDDING_MODEL_DIMENSION
+    def __init__(self, document_embedder: Any) -> None:
+        self.document_embedder = document_embedder
 
     @component.output_types(documents=List[Document])
     def run(self, mdl: str):
         logger.info("Ask Indexing pipeline is writing new documents...")
-        return {"documents": self._get_documents(mdl)}
 
-    def _get_documents(self, mdl: str) -> List[Document]:
         mdl_json = json.loads(mdl)
 
         logger.debug(f"original mdl_json: {json.dumps(mdl_json, indent=2)}")
@@ -168,21 +148,16 @@ class DDLConverter:
             + self._convert_views(semantics["views"])
         )
 
-        embeddings = self._openai_client.embeddings.create(
-            input=ddl_commands,
-            model=self.embedding_model_name,
-            dimensions=self.embedding_model_dim,
-        )
-
-        return [
+        documents = [
             Document(
                 id=str(i),
                 meta={"id": str(i)},
                 content=ddl_command,
-                embedding=embeddings.data[i].embedding,
             )
             for i, ddl_command in enumerate(tqdm(ddl_commands))
         ]
+
+        return self.document_embedder.run(documents)
 
     # TODO: refactor this method
     def _convert_models_and_relationships(
@@ -306,19 +281,16 @@ class Indexing(BasicPipeline):
     def __init__(
         self,
         ddl_store: DocumentStore,
+        document_embedder: Any,
         view_store: DocumentStore,
     ) -> None:
         pipe = Pipeline()
-        pipe.add_component("cleaner", DocumentCleaner([ddl_store, view_store]))
-        pipe.add_component("view_converter", ViewConverter())
+        stores = [ddl_store, view_store] if view_store else [ddl_store]
+        pipe.add_component("cleaner", DocumentCleaner(stores))
         pipe.add_component(
-            "view_writer",
-            DocumentWriter(
-                document_store=view_store,
-                policy=DuplicatePolicy.OVERWRITE,
-            ),
+            "ddl_converter",
+            DDLConverter(document_embedder=document_embedder),
         )
-        pipe.add_component("ddl_converter", DDLConverter())
         pipe.add_component(
             "ddl_writer",
             DocumentWriter(
@@ -326,10 +298,20 @@ class Indexing(BasicPipeline):
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         )
+        pipe.add_component(
+            "view_converter",
+            ViewConverter(document_embedder=document_embedder),
+        )
+        pipe.add_component(
+            "view_writer",
+            DocumentWriter(
+                document_store=view_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        )
 
         pipe.connect("cleaner", "view_converter")
         pipe.connect("view_converter", "view_writer")
-
         pipe.connect("cleaner", "ddl_converter")
         pipe.connect("ddl_converter", "ddl_writer")
 
@@ -342,8 +324,11 @@ class Indexing(BasicPipeline):
 
 
 if __name__ == "__main__":
+    llm_provider, document_store_provider = init_providers()
     indexing_pipeline = Indexing(
-        ddl_store=init_document_store(), view_store=init_document_store()
+        ddl_store=document_store_provider.get_store(),
+        document_embedder=llm_provider.get_document_embedder(),
+        view_store=document_store_provider.get_store(),
     )
 
     print("generating indexing_pipeline.jpg to outputs/pipelines/ask...")

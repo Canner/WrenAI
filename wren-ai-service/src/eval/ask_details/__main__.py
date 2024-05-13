@@ -7,9 +7,8 @@ from src.eval.ask_details.utils import (
     Summary,
     _prepare_ask_details_eval_data,
 )
-from src.pipelines.ask_details.components.generator import init_generator
 from src.pipelines.ask_details.generation_pipeline import Generation
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 
 INPUT_PATH = "./src/eval/ask_details/data/baseball_1_data.json"
 EVAL_CONTEXT_PATH = "./src/eval/ask_details/data/baseball_1_eval_context.json"
@@ -29,8 +28,9 @@ with open(EVAL_CONTEXT_PATH) as f:
 summary = Summary()
 collectors = [Collector(element=element) for element in eval_context]
 
+llm_provider, _ = init_providers()
 pipeline = Generation(
-    generator=init_generator(),
+    generator=llm_provider.get_generator(),
 )
 
 for collector in collectors:

@@ -1,13 +1,18 @@
-import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import requests
 import sqlglot
 from dotenv import load_dotenv
+from haystack.utils.auth import Secret
 from openai import OpenAI
+
+from src.core.document_store_provider import DocumentStoreProvider
+from src.core.llm_provider import LLMProvider
+from src.providers.document_store.qdrant import QdrantProvider
+from src.providers.llm.openai import OpenAILLMProvider
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -147,47 +152,6 @@ def check_if_sql_executable(
     return True if response.status_code == 200 else False
 
 
-def generate_semantics(mdl_str: str) -> Dict[str, Any]:
-    mdl_json = json.loads(mdl_str)
-
-    for i, _ in enumerate(mdl_json["relationships"]):
-        mdl_json["relationships"][i]["type"] = "relationship"
-
-    semantics = {"models": [], "relationships": mdl_json["relationships"]}
-
-    for model in mdl_json["models"]:
-        columns = []
-        for column in model["columns"]:
-            if "relationship" in column:
-                columns.append(
-                    {
-                        "name": column["name"],
-                        "properties": column["properties"],
-                        "type": column["type"],
-                        "relationship": column["relationship"],
-                    }
-                )
-            else:
-                columns.append(
-                    {
-                        "name": column["name"],
-                        "properties": column["properties"],
-                        "type": column["type"],
-                    }
-                )
-
-        semantics["models"].append(
-            {
-                "type": "model",
-                "name": model["name"],
-                "properties": model["properties"],
-                "columns": columns,
-                "primaryKey": model["primaryKey"],
-            }
-        )
-    return semantics
-
-
 def remove_duplicates(dicts):
     """
     Removes duplicates from a list of dictionaries based on 'sql' and 'summary' fields.
@@ -210,3 +174,21 @@ def remove_duplicates(dicts):
             seen.add(identifier)
             unique_dicts.append(d)
     return unique_dicts
+
+
+# please do not change this function unless you are adjusting the OpenAILLMProvider or QdrantProvider
+# if you would like to change the providers, please do the following steps:
+# 1. create a new provider class that implements LLMProvider or DocumentStoreProvider in the src/providers directory
+# 2. if you need to add new environment variables, please add them to the .env.dev and .env.prod files
+# 3. add a new function to import your providers in this file
+# 4. call the new function you created in the src/__main__.py in container.init_globals()
+def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
+    load_env_vars()
+
+    llm_provider = OpenAILLMProvider(
+        api_key=Secret.from_env_var("OPENAI_API_KEY"),
+    )
+    document_store_provider = QdrantProvider(
+        location=os.getenv("QDRANT_HOST"),
+    )
+    return llm_provider, document_store_provider

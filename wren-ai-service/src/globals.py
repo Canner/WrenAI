@@ -1,5 +1,7 @@
-from dotenv import load_dotenv
+from typing import Callable, Tuple
 
+from src.core.document_store_provider import DocumentStoreProvider
+from src.core.llm_provider import LLMProvider
 from src.pipelines.ask import (
     followup_generation_pipeline as ask_followup_generation_pipeline,
 )
@@ -18,79 +20,84 @@ from src.pipelines.ask import (
 from src.pipelines.ask import (
     sql_correction_pipeline as ask_sql_correction_pipeline,
 )
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import init_embedder
-from src.pipelines.ask.components.generator import init_generator
 from src.pipelines.ask.components.prompts import text_to_sql_system_prompt
-from src.pipelines.ask.components.retriever import init_retriever
 from src.pipelines.ask_details import (
     generation_pipeline as ask_details_generation_pipeline,
 )
-from src.pipelines.ask_details.components.generator import (
-    init_generator as init_ask_details_generator,
-)
+from src.pipelines.ask_details.components.prompts import ask_details_system_prompt
 from src.pipelines.semantics import description
+from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics import SemanticsService
-
-load_dotenv()
 
 SEMANTIC_SERVICE = None
 ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
 
 
-def init_globals():
+def init_globals(
+    init_providers: Callable[
+        [], Tuple[LLMProvider, DocumentStoreProvider]
+    ] = init_providers,
+):
     global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
 
-    document_store = init_document_store()
-    view_store = init_document_store(dataset_name="view_questions")
-    embedder = init_embedder()
-    retriever = init_retriever(
-        document_store=document_store,
-    )
-    query_understanding_generator = init_generator()
-    text_to_sql_generator = init_generator(system_prompt=text_to_sql_system_prompt)
-    text_to_sql_with_followup_generator = init_generator(
-        system_prompt=text_to_sql_system_prompt
-    )
-    sql_correction_generator = init_generator(system_prompt=text_to_sql_system_prompt)
-    sql_details_generator = init_ask_details_generator()
+    llm_provider, document_store_provider = init_providers()
+    ddl_store = document_store_provider.get_store()
+    view_store = document_store_provider.get_store(dataset_name="view_questions")
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
-            "generate_description": description.Generation(),
+            "generate_description": description.Generation(
+                embedder=llm_provider.get_text_embedder(),
+                retriever=document_store_provider.get_retriever(
+                    document_store=ddl_store
+                ),
+                generator=llm_provider.get_generator(),
+            ),
         }
     )
+
     ASK_SERVICE = AskService(
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
-                ddl_store=document_store,
+                ddl_store=ddl_store,
+                document_embedder=llm_provider.get_document_embedder(),
                 view_store=view_store,
             ),
             "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(
-                generator=query_understanding_generator,
+                generator=llm_provider.get_generator(),
             ),
             "retrieval": ask_retrieval_pipeline.Retrieval(
-                embedder=embedder,
-                retriever=retriever,
+                embedder=llm_provider.get_text_embedder(),
+                retriever=document_store_provider.get_retriever(
+                    document_store=ddl_store
+                ),
             ),
             "generation": ask_generation_pipeline.Generation(
-                generator=text_to_sql_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=text_to_sql_system_prompt,
+                ),
             ),
             "sql_correction": ask_sql_correction_pipeline.SQLCorrection(
-                generator=sql_correction_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=text_to_sql_system_prompt,
+                ),
             ),
             "followup_generation": ask_followup_generation_pipeline.FollowUpGeneration(
-                generator=text_to_sql_with_followup_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=text_to_sql_system_prompt,
+                ),
             ),
         }
     )
     ASK_DETAILS_SERVICE = AskDetailsService(
         pipelines={
             "generation": ask_details_generation_pipeline.Generation(
-                generator=sql_details_generator,
+                generator=llm_provider.get_generator(
+                    system_prompt=ask_details_system_prompt
+                )
             ),
         }
     )

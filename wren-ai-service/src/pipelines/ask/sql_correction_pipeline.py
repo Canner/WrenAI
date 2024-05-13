@@ -4,14 +4,12 @@ from typing import Any, Dict, List
 from haystack import Document, Pipeline
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.ask.components.generator import (
-    init_generator,
-)
 from src.pipelines.ask.components.post_processors import init_generation_post_processor
 from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     init_sql_correction_prompt_builder,
 )
+from src.utils import init_providers
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -56,8 +54,9 @@ class SQLCorrection(BasicPipeline):
 
 
 if __name__ == "__main__":
+    llm_provider, _ = init_providers()
     sql_correction_pipeline = SQLCorrection(
-        generator=init_generator(),
+        generator=llm_provider.get_generator(),
     )
 
     print("generating sql_correction_pipeline.jpg to outputs/pipelines/ask...")

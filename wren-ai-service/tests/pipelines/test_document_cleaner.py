@@ -1,18 +1,16 @@
 from haystack import Document
 from haystack.document_stores.types import DocumentStore
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
 from src.pipelines.ask.indexing_pipeline import DocumentCleaner
+from src.utils import init_providers
 
 
 def _mock_store(name: str = "default") -> DocumentStore:
-    store = QdrantDocumentStore(
-        ":memory:",
-        index=name,
-        embedding_dim=5,
+    _, document_store_provider = init_providers()
+    store = document_store_provider.get_store(
+        embedding_model_dim=5,
+        dataset_name=name,
         recreate_index=True,
-        return_embedding=True,
-        wait_result_from_api=True,
     )
 
     store.write_documents(

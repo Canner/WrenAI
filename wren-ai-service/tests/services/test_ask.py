@@ -10,10 +10,7 @@ from src.pipelines.ask import (
     retrieval_pipeline,
     sql_correction_pipeline,
 )
-from src.pipelines.ask.components.document_store import init_document_store
-from src.pipelines.ask.components.embedder import init_embedder
-from src.pipelines.ask.components.generator import init_generator
-from src.pipelines.ask.components.retriever import init_retriever
+from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
@@ -24,18 +21,20 @@ from src.web.v1.services.ask import (
 
 @pytest.fixture
 def ask_service():
-    document_store = init_document_store()
-    view_store = init_document_store(dataset_name="view_questions")
-    embedder = init_embedder()
-    retriever = init_retriever(document_store=document_store)
-    query_understanding_generator = init_generator()
-    text_to_sql_generator = init_generator()
-    sql_correction_generator = init_generator()
+    llm_provider, document_store_provider = init_providers()
+    document_store = document_store_provider.get_store()
+    view_store = document_store_provider.get_store(dataset_name="view_questions")
+    embedder = llm_provider.get_text_embedder()
+    retriever = document_store_provider.get_retriever(document_store=document_store)
+    query_understanding_generator = llm_provider.get_generator()
+    text_to_sql_generator = llm_provider.get_generator()
+    sql_correction_generator = llm_provider.get_generator()
 
     return AskService(
         {
             "indexing": indexing_pipeline.Indexing(
                 ddl_store=document_store,
+                document_embedder=llm_provider.get_document_embedder(),
                 view_store=view_store,
             ),
             "query_understanding": query_understanding_pipeline.QueryUnderstanding(
