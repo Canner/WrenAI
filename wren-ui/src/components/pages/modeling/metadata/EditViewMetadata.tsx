@@ -3,9 +3,11 @@ import { Typography } from 'antd';
 import { NODE_TYPE } from '@/utils/enum';
 import FieldTable from '@/components/table/FieldTable';
 import { makeEditableBaseTable } from '@/components/table/EditableBaseTable';
+import { createViewNameValidator } from '@/utils/validator';
 import { COLUMN } from '@/components/table/BaseTable';
 import { EditableContext } from '@/components/EditableWrapper';
 import EditBasicMetadata from './EditBasicMetadata';
+import { useValidateViewMutation } from '@/apollo/client/graphql/view.generated';
 
 export interface Props {
   formNamespace: string;
@@ -35,6 +37,10 @@ export default function EditViewMetadata(props: Props) {
 
   const form = useContext(EditableContext);
 
+  const [validateViewMutation] = useValidateViewMutation({
+    fetchPolicy: 'no-cache',
+  });
+
   const onChange = (value) => {
     form.setFieldsValue({
       [formNamespace]: {
@@ -62,6 +68,16 @@ export default function EditViewMetadata(props: Props) {
         dataSource={{ displayName, description }}
         onChange={onChange}
         nodeType={nodeType}
+        rules={{
+          // View display name changing will trigger re-generate reference name
+          // So we need to validate the display name
+          displayName: [
+            {
+              required: true,
+              validator: createViewNameValidator(validateViewMutation),
+            },
+          ],
+        }}
       />
 
       <div className="mb-6">

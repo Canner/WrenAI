@@ -26,9 +26,15 @@ export default function EditMetadataModal(props: Props) {
   const [form] = Form.useForm();
 
   const submit = async () => {
-    const values = form.getFieldValue(formNamespace);
-    await onSubmit({ data: values, nodeType });
-    onClose();
+    form
+      .validateFields()
+      .then(async () => {
+        // Get the saved metadata values to submit if there is no editing failed
+        const values = form.getFieldValue(formNamespace);
+        await onSubmit({ data: values, nodeType });
+        onClose();
+      })
+      .catch(console.error);
   };
 
   return (

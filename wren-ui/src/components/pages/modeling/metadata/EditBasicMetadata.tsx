@@ -4,8 +4,15 @@ import { cloneDeep, set } from 'lodash';
 import { NODE_TYPE } from '@/utils/enum';
 import EditableWrapper from '@/components/EditableWrapper';
 
-export default function EditBasicMetadata(props) {
-  const { dataSource, onChange, nodeType } = props;
+interface Props {
+  dataSource: any;
+  onChange?: (value: any) => void;
+  nodeType: NODE_TYPE;
+  rules?: Record<string, any[]>;
+}
+
+export default function EditBasicMetadata(props: Props) {
+  const { dataSource, onChange, nodeType, rules } = props;
   const [data, setData] = useState(dataSource);
 
   const isModel = nodeType === NODE_TYPE.MODEL;
@@ -66,6 +73,7 @@ export default function EditBasicMetadata(props) {
             record={data}
             dataIndex="displayName"
             handleSave={handleSave}
+            rules={rules?.displayName}
           >
             {data.displayName || '-'}
           </EditableWrapper>
