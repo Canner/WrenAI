@@ -19,6 +19,7 @@ export enum GeneralErrorCodes {
   // calculated field validation
   DUPLICATED_FIELD_NAME = 'DUPLICATED_FIELD_NAME',
   INVALID_EXPRESSION = 'INVALID_EXPRESSION',
+  INVALID_CALCULATED_FIELD = 'INVALID_CALCULATED_FIELD',
 }
 
 export const errorMessages = {
@@ -43,6 +44,8 @@ export const errorMessages = {
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'This field name already exists',
   [GeneralErrorCodes.INVALID_EXPRESSION]:
     'Invalid expression, please check your expression and try again.',
+  [GeneralErrorCodes.INVALID_CALCULATED_FIELD]:
+    'Can not execute a query when using this calculated field',
 };
 
 export const shortMessages = {
@@ -54,6 +57,7 @@ export const shortMessages = {
   [GeneralErrorCodes.SESSION_PROPS_ERROR]: 'Invalid session properties',
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'Duplicated field name',
   [GeneralErrorCodes.INVALID_EXPRESSION]: 'Invalid expression',
+  [GeneralErrorCodes.INVALID_CALCULATED_FIELD]: 'Invalid calculated field',
 };
 
 export const create = (

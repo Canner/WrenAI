@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo } from 'react';
-import { Modal, Form, Input, Typography, Button } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Modal, Form, Input, Typography, Button, Alert } from 'antd';
 import LinkOutlined from '@ant-design/icons/LinkOutlined';
 import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
@@ -9,12 +9,14 @@ import {
   createLineageSelectorNameValidator,
   createLineageSelectorValidator,
 } from '@/utils/validator';
+import { ERROR_CODES, parseGraphQLError } from '@/utils/errorHandler';
 import { FieldValue } from '@/components/selectors/lineageSelector/FieldSelect';
 import useExpressionFieldOptions from '@/hooks/useExpressionFieldOptions';
 import LineageSelector, {
   getLineageOptions,
 } from '@/components/selectors/lineageSelector';
 import DescriptiveSelector from '@/components/selectors/DescriptiveSelector';
+import ErrorCollapse from '@/components/ErrorCollapse';
 import { useValidateCalculatedFieldMutation } from '@/apollo/client/graphql/calculatedField.generated';
 import { CreateCalculatedFieldInput } from '@/apollo/client/graphql/__types__';
 
@@ -32,7 +34,7 @@ export type CalculatedFieldValue = {
 
 type Props = ModalAction<
   CalculatedFieldValue,
-  CreateCalculatedFieldInput & { id?: number }
+  { id?: number; data: CreateCalculatedFieldInput }
 > & {
   loading?: boolean;
 };
@@ -49,6 +51,8 @@ export default function AddCalculatedFieldModal(props: Props) {
   } = props;
 
   const isEditMode = formMode === FORM_MODE.EDIT;
+  const [error, setError] =
+    useState<ReturnType<typeof parseGraphQLError>>(null);
 
   const [form] = Form.useForm();
   const expression = Form.useWatch('expression', form);
@@ -95,7 +99,13 @@ export default function AddCalculatedFieldModal(props: Props) {
     [models, lineage, expression],
   );
 
+  const reset = () => {
+    setError(null);
+    form.resetFields();
+  };
+
   const submit = () => {
+    setError(null);
     form
       .validateFields()
       .then(async (values) => {
@@ -104,17 +114,25 @@ export default function AddCalculatedFieldModal(props: Props) {
 
         await onSubmit({
           id,
-          modelId,
-          expression: values.expression,
-          name: values.name,
-          // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId
-          lineage: values.lineage.map(
-            (field) => field.relationId || field.columnId,
-          ),
+          data: {
+            modelId,
+            expression: values.expression,
+            name: values.name,
+            // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId
+            lineage: values.lineage.map(
+              (field) => field.relationId || field.columnId,
+            ),
+          },
         });
         onClose();
       })
-      .catch(console.error);
+      .catch((err) => {
+        const graphQLError = parseGraphQLError(err);
+        if (graphQLError.code === ERROR_CODES.INVALID_CALCULATED_FIELD) {
+          setError(graphQLError);
+        }
+        console.error(err);
+      });
   };
 
   return (
@@ -126,7 +144,7 @@ export default function AddCalculatedFieldModal(props: Props) {
       confirmLoading={loading}
       maskClosable={false}
       destroyOnClose
-      afterClose={() => form.resetFields()}
+      afterClose={() => reset()}
       footer={
         <div className="d-flex justify-space-between align-center">
           <div className="text-sm ml-2">
@@ -210,6 +228,15 @@ export default function AddCalculatedFieldModal(props: Props) {
           </Form.Item>
         )}
       </Form>
+
+      {!!error && (
+        <Alert
+          showIcon
+          type="error"
+          message={error.shortMessage}
+          description={<ErrorCollapse message={error.message} />}
+        />
+      )}
     </Modal>
   );
 }
