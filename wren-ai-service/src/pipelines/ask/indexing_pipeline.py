@@ -111,11 +111,11 @@ class DDLConverter:
 
         semantics = {
             "models": [],
-            "relationships": mdl_json["relationships"]
-            if "relationships" in mdl_json
-            else [],
-            "views": mdl_json["views"] if "views" in mdl_json else [],
-            "metrics": mdl_json["metrics"] if "metrics" in mdl_json else [],
+            "relationships": (
+                mdl_json["relationships"] if "relationships" in mdl_json else []
+            ),
+            "views": (mdl_json["views"] if "views" in mdl_json else []),
+            "metrics": (mdl_json["metrics"] if "metrics" in mdl_json else []),
         }
 
         for model in mdl_json["models"]:
@@ -123,15 +123,15 @@ class DDLConverter:
             for column in model["columns"]:
                 ddl_column = {
                     "name": column["name"],
-                    "properties": column["properties"],
                     "type": column["type"],
-                    "isCalculated": column["isCalculated"],
                 }
+                if "properties" in column:
+                    ddl_column["properties"] = column["properties"]
                 if "relationship" in column:
                     ddl_column["relationship"] = column["relationship"]
                 if "expression" in column:
                     ddl_column["expression"] = column["expression"]
-                if column["isCalculated"]:
+                if "isCalculated" in column:
                     ddl_column["isCalculated"] = column["isCalculated"]
 
                 columns.append(ddl_column)
@@ -140,7 +140,7 @@ class DDLConverter:
                 {
                     "type": "model",
                     "name": model["name"],
-                    "properties": model["properties"],
+                    "properties": model["properties"] if "properties" in model else {},
                     "columns": columns,
                     "primaryKey": model["primaryKey"],
                 }
@@ -181,11 +181,11 @@ class DDLConverter:
             columns_ddl = []
             for column in model["columns"]:
                 if "relationship" not in column:
-                    if column["properties"]:
+                    if "properties" in column:
                         comment = f"-- {json.dumps(column['properties'])}\n  "
                     else:
                         comment = ""
-                    if column["isCalculated"]:
+                    if "isCalculated" in column:
                         comment = (
                             comment
                             + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
