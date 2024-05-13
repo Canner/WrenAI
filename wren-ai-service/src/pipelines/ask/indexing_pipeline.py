@@ -79,7 +79,7 @@ class ViewConverter:
         converted_views = [_format(view) for view in views]
 
         if not converted_views:
-            return
+            return {"documents": []}
 
         embeddings = self._openai_client.embeddings.create(
             input=converted_views,
