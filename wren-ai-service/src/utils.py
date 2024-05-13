@@ -187,6 +187,7 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
 
     llm_provider = OpenAILLMProvider(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
+        generation_model=os.getenv("OPENAI_GENERATION_MODEL"),
     )
     document_store_provider = QdrantProvider(
         location=os.getenv("QDRANT_HOST"),
