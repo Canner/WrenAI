@@ -47,15 +47,15 @@ export default function CombineFieldSelector(props: Props) {
 
   useEffect(syncOnChange, [internalValue]);
 
-  const changeModel = (model: string, option) => {
-    onModelChange && onModelChange(option.label);
+  const changeModel = (model: string) => {
+    onModelChange && onModelChange(model);
     const newInternalValue = { model, field: undefined };
     setInternalValue(newInternalValue);
     onChange && onChange(newInternalValue);
   };
 
-  const changeField = (field: string, option) => {
-    onFieldChange && onFieldChange(option.label);
+  const changeField = (field: string) => {
+    onFieldChange && onFieldChange(field);
     setInternalValue({ ...internalValue, field });
   };
 

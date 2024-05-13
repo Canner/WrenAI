@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useListModelsQuery } from '@/apollo/client/graphql/model.generated';
 import {
   convertObjectToIdentifier,
@@ -15,22 +15,20 @@ interface Props {
 }
 
 // for identifier keys
-const modelKeys = ['id', 'name'];
+const modelKeys = ['id', 'referenceName'];
 const fieldKeys = ['id', 'referenceName'];
 
 export const convertFormValuesToIdentifier = (
   relationFormValues: RelationFormValues,
 ) => {
-  const fromModel: { id: string; name: string } = convertIdentifierToObject(
-    relationFormValues.fromField.model,
-  );
+  const fromModel: { id: string; referenceName: string } =
+    convertIdentifierToObject(relationFormValues.fromField.model);
 
   const fromField: { id: string; referenceName: string } =
     convertIdentifierToObject(relationFormValues.fromField.field);
 
-  const toModel: { id: string; name: string } = convertIdentifierToObject(
-    relationFormValues.toField.model,
-  );
+  const toModel: { id: string; referenceName: string } =
+    convertIdentifierToObject(relationFormValues.toField.model);
 
   const toField: { id: string; referenceName: string } =
     convertIdentifierToObject(relationFormValues.toField.field);
@@ -39,13 +37,13 @@ export const convertFormValuesToIdentifier = (
     ...relationFormValues,
     fromField: {
       modelId: fromModel.id,
-      modelName: fromModel.name,
+      modelName: fromModel.referenceName,
       fieldId: fromField.id,
       fieldName: fromField.referenceName,
     },
     toField: {
       modelId: toModel.id,
-      modelName: toModel.name,
+      modelName: toModel.referenceName,
       fieldId: toField.id,
       fieldName: toField.referenceName,
     },
@@ -56,7 +54,7 @@ export const convertDefaultValueToIdentifier = (defaultValue) => {
   const fromField = {
     model: {
       id: defaultValue.fromField.modelId,
-      name: defaultValue.fromField.modelName,
+      referenceName: defaultValue.fromField.modelName,
     },
     field: {
       id: defaultValue.fromField.fieldId,
@@ -66,7 +64,7 @@ export const convertDefaultValueToIdentifier = (defaultValue) => {
   const toField = {
     model: {
       id: defaultValue.toField.modelId,
-      name: defaultValue.toField.modelName,
+      referenceName: defaultValue.toField.modelName,
     },
     field: {
       id: defaultValue.toField.fieldId,
@@ -91,6 +89,9 @@ export default function useCombineFieldOptions(props: Props) {
 
   const [baseModel, setBaseModel] = useState<string>(model || '');
 
+  // bind model to baseModel
+  useEffect(() => setBaseModel(model), [model]);
+
   const { data } = useListModelsQuery({
     fetchPolicy: 'cache-and-network',
   });
@@ -100,7 +101,8 @@ export default function useCombineFieldOptions(props: Props) {
 
     return data.listModels.map((model) => ({
       id: model.id,
-      name: model.referenceName,
+      referenceName: model.referenceName,
+      displayName: model.displayName,
       fields: model.fields,
     }));
   }, [data]);
@@ -108,7 +110,8 @@ export default function useCombineFieldOptions(props: Props) {
   const filteredModels = useMemo(
     () =>
       allModels.filter(
-        (item) => !(excludeModels && excludeModels.includes(item.name)),
+        (item) =>
+          !(excludeModels && excludeModels.includes(item.referenceName)),
       ),
     [excludeModels, baseModel, data],
   );
@@ -116,25 +119,31 @@ export default function useCombineFieldOptions(props: Props) {
   const modelOptions = useMemo(
     () =>
       filteredModels.map((model) => ({
-        label: model.name,
+        label: model.displayName,
         value: convertObjectToIdentifier(model, modelKeys),
       })),
     [filteredModels],
   );
 
-  const filteredModel = useMemo(
-    () => filteredModels.find((item) => item.name === baseModel),
+  const selectedModel = useMemo(
+    () => filteredModels.find((item) => item.referenceName === baseModel),
     [modelOptions, baseModel],
   );
 
   const fieldOptions = useMemo(
     () =>
-      (filteredModel?.fields || []).map((field) => ({
-        label: field.referenceName,
+      (selectedModel?.fields || []).map((field) => ({
+        label: field.displayName,
         value: convertObjectToIdentifier(field, fieldKeys),
       })),
-    [filteredModel],
+    [selectedModel],
   );
 
-  return { modelOptions, fieldOptions, onModelChange: setBaseModel };
+  const onModelChange = (value: string) => {
+    const model: { id: string; referenceName: string } =
+      convertIdentifierToObject(value);
+    setBaseModel(model.referenceName);
+  };
+
+  return { modelOptions, fieldOptions, onModelChange };
 }
