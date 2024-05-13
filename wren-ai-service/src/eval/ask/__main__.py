@@ -399,8 +399,8 @@ if __name__ == "__main__":
 
         print("Indexing documents...")
         indexing_pipeline = Indexing(
-            ddl_store=document_store,
-            document_embedder=llm_provider.get_document_embedder(),
+            llm_provider=llm_provider,
+            store_provider=document_store_provider,
         )
         indexing_pipeline_def = indexing_pipeline._pipeline.dumps()
         indexing_pipeline.run(mdl_str)

@@ -45,7 +45,6 @@ def init_globals(
 
     llm_provider, document_store_provider = init_providers()
     ddl_store = document_store_provider.get_store()
-    view_store = document_store_provider.get_store(dataset_name="view_questions")
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
@@ -62,9 +61,8 @@ def init_globals(
     ASK_SERVICE = AskService(
         pipelines={
             "indexing": ask_indexing_pipeline.Indexing(
-                ddl_store=ddl_store,
-                document_embedder=llm_provider.get_document_embedder(),
-                view_store=view_store,
+                llm_provider=llm_provider,
+                store_provider=document_store_provider,
             ),
             "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(
                 generator=llm_provider.get_generator(),

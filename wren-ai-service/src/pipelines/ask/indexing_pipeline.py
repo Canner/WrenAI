@@ -8,6 +8,8 @@ from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from tqdm import tqdm
 
+from src.core.document_store_provider import DocumentStoreProvider
+from src.core.llm_provider import LLMProvider
 from src.core.pipeline import BasicPipeline
 from src.utils import init_providers, load_env_vars
 
@@ -20,7 +22,7 @@ DATASET_NAME = os.getenv("DATASET_NAME")
 @component
 class DocumentCleaner:
     """
-    This component is used to clear all the documents in the specified document store(si).
+    This component is used to clear all the documents in the specified document store(s).
 
     """
 
@@ -40,6 +42,31 @@ class DocumentCleaner:
 
 
 @component
+class MDLValidator:
+    """
+    Validate the MDL to check if it is a valid JSON and contains the required keys.
+    """
+
+    @component.output_types(mdl=Dict[str, Any])
+    def run(self, mdl: str) -> str:
+        try:
+            mdl_json = json.loads(mdl)
+            logger.debug(f"MDL JSON: {mdl_json}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON: {e}")
+        if "models" not in mdl_json:
+            mdl_json["models"] = []
+        if "views" not in mdl_json:
+            mdl_json["views"] = []
+        if "relationships" not in mdl_json:
+            mdl_json["relationships"] = []
+        if "metrics" not in mdl_json:
+            mdl_json["metrics"] = []
+
+        return {"mdl": mdl_json}
+
+
+@component
 class ViewConverter:
     """
     Convert the view MDL to the following format:
@@ -51,14 +78,8 @@ class ViewConverter:
     and store it in the view store.
     """
 
-    def __init__(self, document_embedder: Any) -> None:
-        self.document_embedder = document_embedder
-
     @component.output_types(documents=List[Document])
-    def run(self, mdl: str) -> None:
-        mdl_json = json.loads(mdl)
-        views = mdl_json["views"] if "views" in mdl_json else []
-
+    def run(self, mdl: Dict[str, Any]) -> None:
         def _format(view: Dict[str, Any]) -> List[str]:
             return str(
                 {
@@ -68,51 +89,43 @@ class ViewConverter:
                 }
             )
 
-        converted_views = [_format(view) for view in views]
+        converted_views = (
+            [_format(view) for view in mdl["views"]] if mdl["views"] else []
+        )
 
-        if not converted_views:
-            return {"documents": []}
-
-        documents = [
-            Document(
-                id=str(i),
-                meta={"id": str(i)},
-                content=converted_view,
-            )
-            for i, converted_view in enumerate(
-                tqdm(
-                    converted_views,
-                    desc="indexing view into the historial view question store",
+        return {
+            "documents": [
+                Document(
+                    id=str(i),
+                    meta={"id": str(i)},
+                    content=converted_view,
                 )
-            )
-        ]
-
-        return self.document_embedder.run(documents)
+                for i, converted_view in enumerate(
+                    tqdm(
+                        converted_views,
+                        desc="indexing view into the historial view question store",
+                    )
+                )
+            ]
+        }
 
 
 @component
 class DDLConverter:
-    def __init__(self, document_embedder: Any) -> None:
-        self.document_embedder = document_embedder
-
     @component.output_types(documents=List[Document])
-    def run(self, mdl: str):
+    def run(self, mdl: Dict[str, Any]):
         logger.info("Ask Indexing pipeline is writing new documents...")
 
-        mdl_json = json.loads(mdl)
-
-        logger.debug(f"original mdl_json: {json.dumps(mdl_json, indent=2)}")
+        logger.debug(f"original mdl_json: {mdl}")
 
         semantics = {
             "models": [],
-            "relationships": (
-                mdl_json["relationships"] if "relationships" in mdl_json else []
-            ),
-            "views": (mdl_json["views"] if "views" in mdl_json else []),
-            "metrics": (mdl_json["metrics"] if "metrics" in mdl_json else []),
+            "relationships": mdl["relationships"],
+            "views": mdl["views"],
+            "metrics": mdl["metrics"],
         }
 
-        for model in mdl_json["models"]:
+        for model in mdl["models"]:
             columns = []
             for column in model["columns"]:
                 ddl_column = {
@@ -148,16 +161,16 @@ class DDLConverter:
             + self._convert_views(semantics["views"])
         )
 
-        documents = [
-            Document(
-                id=str(i),
-                meta={"id": str(i)},
-                content=ddl_command,
-            )
-            for i, ddl_command in enumerate(tqdm(ddl_commands))
-        ]
-
-        return self.document_embedder.run(documents)
+        return {
+            "documents": [
+                Document(
+                    id=str(i),
+                    meta={"id": str(i)},
+                    content=ddl_command,
+                )
+                for i, ddl_command in enumerate(tqdm(ddl_commands))
+            ]
+        }
 
     # TODO: refactor this method
     def _convert_models_and_relationships(
@@ -279,18 +292,17 @@ class DDLConverter:
 
 class Indexing(BasicPipeline):
     def __init__(
-        self,
-        ddl_store: DocumentStore,
-        document_embedder: Any,
-        view_store: DocumentStore,
+        self, llm_provider: LLMProvider, store_provider: DocumentStoreProvider
     ) -> None:
+        ddl_store = store_provider.get_store()
+        view_store = store_provider.get_store(dataset_name="view_questions")
+
         pipe = Pipeline()
-        stores = [ddl_store, view_store] if view_store else [ddl_store]
-        pipe.add_component("cleaner", DocumentCleaner(stores))
-        pipe.add_component(
-            "ddl_converter",
-            DDLConverter(document_embedder=document_embedder),
-        )
+        pipe.add_component("validator", MDLValidator())
+        pipe.add_component("cleaner", DocumentCleaner([ddl_store, view_store]))
+
+        pipe.add_component("ddl_converter", DDLConverter())
+        pipe.add_component("ddl_embedder", llm_provider.get_document_embedder())
         pipe.add_component(
             "ddl_writer",
             DocumentWriter(
@@ -298,10 +310,8 @@ class Indexing(BasicPipeline):
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         )
-        pipe.add_component(
-            "view_converter",
-            ViewConverter(document_embedder=document_embedder),
-        )
+        pipe.add_component("view_converter", ViewConverter())
+        pipe.add_component("view_embedder", llm_provider.get_document_embedder())
         pipe.add_component(
             "view_writer",
             DocumentWriter(
@@ -310,10 +320,15 @@ class Indexing(BasicPipeline):
             ),
         )
 
-        pipe.connect("cleaner", "view_converter")
-        pipe.connect("view_converter", "view_writer")
-        pipe.connect("cleaner", "ddl_converter")
-        pipe.connect("ddl_converter", "ddl_writer")
+        pipe.connect("cleaner", "validator")
+
+        pipe.connect("validator", "ddl_converter")
+        pipe.connect("ddl_converter", "ddl_embedder")
+        pipe.connect("ddl_embedder", "ddl_writer")
+
+        pipe.connect("validator", "view_converter")
+        pipe.connect("view_converter", "view_embedder")
+        pipe.connect("view_embedder", "view_writer")
 
         self._pipeline = pipe
 
@@ -324,12 +339,7 @@ class Indexing(BasicPipeline):
 
 
 if __name__ == "__main__":
-    llm_provider, document_store_provider = init_providers()
-    indexing_pipeline = Indexing(
-        ddl_store=document_store_provider.get_store(),
-        document_embedder=llm_provider.get_document_embedder(),
-        view_store=document_store_provider.get_store(),
-    )
+    indexing_pipeline = Indexing(*init_providers())
 
     print("generating indexing_pipeline.jpg to outputs/pipelines/ask...")
     indexing_pipeline.draw("./outputs/pipelines/ask/indexing_pipeline.jpg")
