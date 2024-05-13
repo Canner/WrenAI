@@ -3,6 +3,11 @@ import { ErrorResponse } from '@apollo/client/link/error';
 import { ApolloError } from '@apollo/client';
 import { message } from 'antd';
 
+// Refer to backend GeneralErrorCodes for mapping
+export const ERROR_CODES = {
+  INVALID_CALCULATED_FIELD: 'INVALID_CALCULATED_FIELD',
+};
+
 /**
  * Replace the token %{s} in the message with the detail message.
  * For example:
@@ -269,7 +274,7 @@ export default errorHandler;
 
 export const parseGraphQLError = (error: ApolloError) => {
   const graphQLErrors: GraphQLError = error.graphQLErrors?.[0];
-  const extensions = graphQLErrors.extensions;
+  const extensions = graphQLErrors?.extensions || {};
   return {
     message: extensions.message as string,
     shortMessage: extensions.shortMessage as string,

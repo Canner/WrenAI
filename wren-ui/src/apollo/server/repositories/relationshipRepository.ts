@@ -19,10 +19,14 @@ export interface Relation {
 export interface ExtraRelationInfo {
   fromModelId: number;
   fromModelName: string;
+  fromModelDisplayName: string;
   fromColumnName: string;
+  fromColumnDisplayName: string;
   toModelId: number;
   toModelName: string;
+  toModelDisplayName: string;
   toColumnName: string;
+  toColumnDisplayName: string;
 }
 
 export type RelationInfo = Relation & ExtraRelationInfo;
@@ -172,10 +176,14 @@ export class RelationRepository
       `${this.tableName}.*`,
       'fm.id AS fromModelId',
       'fm.reference_name AS fromModelName',
+      'fm.display_name AS fromModelDisplayName',
       'tm.id AS toModelId',
       'tm.reference_name AS toModelName',
+      'tm.display_name AS toModelDisplayName',
       'fmc.reference_name AS fromColumnName',
+      'fmc.display_name AS fromColumnDisplayName',
       'tmc.reference_name AS toColumnName',
+      'tmc.display_name AS toColumnDisplayName',
     );
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
   }

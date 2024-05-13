@@ -11,11 +11,11 @@ export default function RelationTable(props: Props) {
       {...props}
       columns={
         columns || [
-          COLUMN.REFERENCE_NAME,
+          { ...COLUMN.NAME, dataIndex: 'displayName' },
           COLUMN.RELATION_FROM,
           COLUMN.RELATION_TO,
           COLUMN.RELATION,
-          { ...COLUMN.DESCRIPTION, width: 150 },
+          { ...COLUMN.DESCRIPTION, width: 160 },
         ]
       }
       expandable={
@@ -24,6 +24,14 @@ export default function RelationTable(props: Props) {
               expandedRowRender: (record) => (
                 <ExpandableRows
                   data={[
+                    {
+                      title: 'From',
+                      value: `${record.fromModelDisplayName}.${record.fromColumnDisplayName}`,
+                    },
+                    {
+                      title: 'To',
+                      value: `${record.toModelDisplayName}.${record.toColumnDisplayName}`,
+                    },
                     { title: 'Description', value: record.description || '-' },
                   ]}
                 />

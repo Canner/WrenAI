@@ -7,7 +7,7 @@ import { usePreviewViewDataMutation } from '@/apollo/client/graphql/view.generat
 export type Props = DiagramView;
 
 export default function ViewMetadata(props: Props) {
-  const { referenceName, statement, viewId } = props || {};
+  const { displayName, statement, viewId } = props || {};
 
   const [previewViewDataMutation, previewViewDataResult] =
     usePreviewViewDataMutation({
@@ -20,11 +20,12 @@ export default function ViewMetadata(props: Props) {
     });
   };
 
+  // View only can input Name (alias), so it should show alias as Name in metadata.
   return (
     <>
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">Name</Typography.Text>
-        <div>{referenceName || '-'}</div>
+        <div>{displayName || '-'}</div>
       </div>
 
       <div className="mb-6">

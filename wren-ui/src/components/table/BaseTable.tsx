@@ -14,7 +14,7 @@ export const COLUMN = {
     ellipsis: true,
     render: (name) => name || '-',
   },
-  REFERENCE_NAME: {
+  NAME: {
     title: 'Name',
     dataIndex: 'referenceName',
     key: 'referenceName',
@@ -50,13 +50,14 @@ export const COLUMN = {
     key: 'fromField',
     ellipsis: true,
     render: (relation) =>
-      `${relation.fromModelName}.${relation.fromColumnName}`,
+      `${relation.fromModelDisplayName}.${relation.fromColumnDisplayName}`,
   },
   RELATION_TO: {
     title: 'To',
     key: 'toField',
     ellipsis: true,
-    render: (relation) => `${relation.toModelName}.${relation.toColumnName}`,
+    render: (relation) =>
+      `${relation.toModelDisplayName}.${relation.toColumnDisplayName}`,
   },
   RELATION: {
     title: 'Type',
@@ -121,7 +122,7 @@ const ExpandableRowIterator = makeIterable((props) => {
         <Col span={6} className="gray-6">
           {title}
         </Col>
-        <Col>{value}</Col>
+        <Col style={{ wordBreak: 'break-word' }}>{value}</Col>
       </Row>
     </>
   );

@@ -4,7 +4,7 @@ import { Modal, Form, Select } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
-import { JOIN_TYPE, FORM_MODE } from '@/utils/enum';
+import { JOIN_TYPE, FORM_MODE, convertIdentifierToObject } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
 import useCombineFieldOptions, {
   convertDefaultValueToIdentifier,
@@ -46,9 +46,10 @@ export default function RelationModal(props: Props) {
   const isUpdateMode = formMode === FORM_MODE.EDIT;
 
   const fromCombineField = useCombineFieldOptions({ model });
-  const modelValue = fromCombineField.modelOptions.find(
-    (m) => m.label === model,
-  )?.value;
+  const modelValue = fromCombineField.modelOptions.find((option) => {
+    const value: any = convertIdentifierToObject(option.value);
+    return value.referenceName === model;
+  })?.value;
 
   const toFieldModel = defaultValue?.toField.modelName;
   const toCombineField = useCombineFieldOptions({
@@ -57,15 +58,12 @@ export default function RelationModal(props: Props) {
   });
 
   useEffect(() => {
-    if (!visible) return;
-    fromCombineField.onModelChange(model);
-
-    if (isEmpty(defaultValue)) return;
+    if (!visible || isEmpty(defaultValue)) return;
 
     const transformedValue = convertDefaultValueToIdentifier(defaultValue);
     form.setFieldsValue(transformedValue);
 
-    toCombineField.onModelChange(toFieldModel);
+    toCombineField.onModelChange(transformedValue.toField.model);
   }, [form, defaultValue, visible]);
 
   const relationTypeOptions = Object.keys(JOIN_TYPE).map((key) => ({
@@ -106,7 +104,9 @@ export default function RelationModal(props: Props) {
         [],
       );
 
-      const disabled = modelList.includes(modelOption.label);
+      const modelValue: { id: string; referenceName: string } =
+        convertIdentifierToObject(modelOption.value);
+      const disabled = modelList.includes(modelValue.referenceName);
 
       return {
         ...modelOption,

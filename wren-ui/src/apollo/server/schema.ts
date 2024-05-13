@@ -380,12 +380,16 @@ export const typeDefs = gql`
     description: String
     fromModelId: Int!
     fromModelName: String!
+    fromModelDisplayName: String!
     fromColumnId: Int!
     fromColumnName: String!
+    fromColumnDisplayName: String!
     toModelId: Int!
     toModelName: String!
+    toModelDisplayName: String!
     toColumnId: Int!
     toColumnName: String!
+    toColumnDisplayName: String!
   }
 
   input SimpleMeasureInput {

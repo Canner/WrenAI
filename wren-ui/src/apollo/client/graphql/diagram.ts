@@ -20,12 +20,16 @@ const RELATION_FIELD = gql`
     referenceName
     fromModelId
     fromModelName
+    fromModelDisplayName
     fromColumnId
     fromColumnName
+    fromColumnDisplayName
     toModelId
     toModelName
+    toModelDisplayName
     toColumnId
     toColumnName
+    toColumnDisplayName
     description
   }
 `;

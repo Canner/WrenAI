@@ -10,12 +10,7 @@ export default function FieldTable(props: Props) {
     <BaseTable
       {...props}
       columns={
-        columns || [
-          COLUMN.REFERENCE_NAME,
-          COLUMN.ALIAS,
-          COLUMN.TYPE,
-          COLUMN.DESCRIPTION,
-        ]
+        columns || [COLUMN.NAME, COLUMN.ALIAS, COLUMN.TYPE, COLUMN.DESCRIPTION]
       }
       expandable={
         showExpandable
