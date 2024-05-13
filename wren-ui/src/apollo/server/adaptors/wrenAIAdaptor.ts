@@ -232,7 +232,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       } else {
         return {
           status: WrenAIDeployStatusEnum.FAILED,
-          error: `WrenAI: Deploy wren AI failed or timeout, hash: ${hash}`,
+          error: `WrenAI: Deploy wren AI failed or timeout, hash: ${hash}, `,
         };
       }
     } catch (err: any) {
@@ -281,6 +281,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.get(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations/${deployId}/status`,
       );
+      if (res.data.error) {
+        logger.debug(`deploy error: ${res.data.error}`);
+      }
       return res.data?.status.toUpperCase() as WrenAISystemStatus;
     } catch (err: any) {
       logger.debug(

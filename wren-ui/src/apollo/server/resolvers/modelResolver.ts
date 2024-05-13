@@ -590,9 +590,11 @@ export class ModelResolver {
 
     // update view metadata
     const properties = JSON.parse(view.properties);
-
+    let newName = view.name;
     // if displayName is not null, or undefined, update the displayName
     if (!isNil(data.displayName)) {
+      await this.validateViewName(data.displayName, ctx, viewId);
+      newName = replaceAllowableSyntax(data.displayName);
       properties.displayName = this.determineMetadataValue(data.displayName);
     }
 
@@ -621,6 +623,7 @@ export class ModelResolver {
     }
 
     await ctx.viewRepository.updateOne(viewId, {
+      name: newName,
       properties: JSON.stringify(properties),
     });
 
@@ -642,6 +645,7 @@ export class ModelResolver {
   private async validateViewName(
     viewDisplayName: string,
     ctx: IContext,
+    selfView?: number,
   ): Promise<{ valid: boolean; message?: string }> {
     // check if view name is valid
     // a-z, A-Z, 0-9, _, - are allowed and cannot start with number
@@ -656,7 +660,7 @@ export class ModelResolver {
     // check if view name is duplicated
     const project = await ctx.projectService.getCurrentProject();
     const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
-    if (views.find((v) => v.name === referenceName)) {
+    if (views.find((v) => v.name === referenceName && v.id !== selfView)) {
       return {
         valid: false,
         message: `Generated view name "${referenceName}" is duplicated`,
