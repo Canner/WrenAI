@@ -12,7 +12,7 @@ from openai import OpenAI
 from src.core.document_store_provider import DocumentStoreProvider
 from src.core.llm_provider import LLMProvider
 from src.providers.document_store.qdrant import QdrantProvider
-from src.providers.llm.openai import OpenAILLMProvider
+from src.providers.llm.openai import GENERATION_MODEL_NAME, OpenAILLMProvider
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -185,14 +185,14 @@ def remove_duplicates(dicts):
 def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
     load_env_vars()
 
+    generation_model = os.getenv("OPENAI_GENERATION_MODEL") or GENERATION_MODEL_NAME
+
     logger.info("Initializing providers...")
-    logger.info(
-        f"Using OpenAI Generation Model: {os.getenv("OPENAI_GENERATION_MODEL")}"
-    )
+    logger.info(f"Using OpenAI Generation Model: {generation_model}")
 
     llm_provider = OpenAILLMProvider(
         api_key=Secret.from_env_var("OPENAI_API_KEY"),
-        generation_model=os.getenv("OPENAI_GENERATION_MODEL"),
+        generation_model=generation_model,
     )
     document_store_provider = QdrantProvider(
         location=os.getenv("QDRANT_HOST"),
