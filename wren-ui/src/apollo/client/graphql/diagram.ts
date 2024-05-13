@@ -7,6 +7,7 @@ const VIEW_FIELD = gql`
     referenceName
     type
     nodeType
+    description
   }
 `;
 
@@ -79,6 +80,7 @@ export const DIAGRAM = gql`
         viewId
         nodeType
         displayName
+        description
         referenceName
         statement
         fields {

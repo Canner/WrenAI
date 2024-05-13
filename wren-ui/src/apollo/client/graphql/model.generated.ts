@@ -43,6 +43,13 @@ export type DeleteModelMutationVariables = Types.Exact<{
 
 export type DeleteModelMutation = { __typename?: 'Mutation', deleteModel: boolean };
 
+export type PreviewModelDataMutationVariables = Types.Exact<{
+  where: Types.WhereIdInput;
+}>;
+
+
+export type PreviewModelDataMutation = { __typename?: 'Mutation', previewModelData: any };
+
 export const CommonColumnFragmentDoc = gql`
     fragment CommonColumn on DetailedColumn {
   displayName
@@ -272,3 +279,34 @@ export function useDeleteModelMutation(baseOptions?: Apollo.MutationHookOptions<
 export type DeleteModelMutationHookResult = ReturnType<typeof useDeleteModelMutation>;
 export type DeleteModelMutationResult = Apollo.MutationResult<DeleteModelMutation>;
 export type DeleteModelMutationOptions = Apollo.BaseMutationOptions<DeleteModelMutation, DeleteModelMutationVariables>;
+export const PreviewModelDataDocument = gql`
+    mutation PreviewModelData($where: WhereIdInput!) {
+  previewModelData(where: $where)
+}
+    `;
+export type PreviewModelDataMutationFn = Apollo.MutationFunction<PreviewModelDataMutation, PreviewModelDataMutationVariables>;
+
+/**
+ * __usePreviewModelDataMutation__
+ *
+ * To run a mutation, you first call `usePreviewModelDataMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `usePreviewModelDataMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [previewModelDataMutation, { data, loading, error }] = usePreviewModelDataMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *   },
+ * });
+ */
+export function usePreviewModelDataMutation(baseOptions?: Apollo.MutationHookOptions<PreviewModelDataMutation, PreviewModelDataMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<PreviewModelDataMutation, PreviewModelDataMutationVariables>(PreviewModelDataDocument, options);
+      }
+export type PreviewModelDataMutationHookResult = ReturnType<typeof usePreviewModelDataMutation>;
+export type PreviewModelDataMutationResult = Apollo.MutationResult<PreviewModelDataMutation>;
+export type PreviewModelDataMutationOptions = Apollo.BaseMutationOptions<PreviewModelDataMutation, PreviewModelDataMutationVariables>;

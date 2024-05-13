@@ -222,6 +222,7 @@ export class DiagramResolver {
       type: column.type,
       displayName: column.name,
       referenceName: column.name,
+      description: column?.properties?.description,
     }));
 
     return {
@@ -232,6 +233,7 @@ export class DiagramResolver {
       referenceName: view.name,
       displayName: properties?.displayName || view.name,
       fields,
+      description: properties?.description,
     };
   }
 }

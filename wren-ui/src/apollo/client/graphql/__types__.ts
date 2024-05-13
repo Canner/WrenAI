@@ -254,6 +254,7 @@ export type DiagramModelRelationField = {
 
 export type DiagramView = {
   __typename?: 'DiagramView';
+  description?: Maybe<Scalars['String']>;
   displayName: Scalars['String'];
   fields: Array<Maybe<DiagramViewField>>;
   id: Scalars['String'];
@@ -265,6 +266,7 @@ export type DiagramView = {
 
 export type DiagramViewField = {
   __typename?: 'DiagramViewField';
+  description?: Maybe<Scalars['String']>;
   displayName: Scalars['String'];
   id: Scalars['String'];
   nodeType: NodeType;
@@ -369,6 +371,7 @@ export type Mutation = {
   deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
   previewData: Scalars['JSON'];
+  previewModelData: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
   resetCurrentProject: Scalars['Boolean'];
   saveDataSource: DataSource;
@@ -381,6 +384,7 @@ export type Mutation = {
   updateModelMetadata: Scalars['Boolean'];
   updateRelation: Scalars['JSON'];
   updateThread: Thread;
+  updateViewMetadata: Scalars['Boolean'];
   validateCalculatedField: CalculatedFieldValidationResponse;
   validateView: ViewValidationResponse;
 };
@@ -457,6 +461,11 @@ export type MutationPreviewDataArgs = {
 };
 
 
+export type MutationPreviewModelDataArgs = {
+  where: WhereIdInput;
+};
+
+
 export type MutationPreviewViewDataArgs = {
   where: ViewWhereUniqueInput;
 };
@@ -514,6 +523,12 @@ export type MutationUpdateRelationArgs = {
 export type MutationUpdateThreadArgs = {
   data: UpdateThreadInput;
   where: ThreadUniqueWhereInput;
+};
+
+
+export type MutationUpdateViewMetadataArgs = {
+  data: UpdateViewMetadataInput;
+  where: ViewWhereUniqueInput;
 };
 
 
@@ -782,6 +797,17 @@ export type UpdateRelationshipMetadataInput = {
 
 export type UpdateThreadInput = {
   summary?: InputMaybe<Scalars['String']>;
+};
+
+export type UpdateViewColumnMetadataInput = {
+  description?: InputMaybe<Scalars['String']>;
+  referenceName: Scalars['String'];
+};
+
+export type UpdateViewMetadataInput = {
+  columns?: InputMaybe<Array<UpdateViewColumnMetadataInput>>;
+  description?: InputMaybe<Scalars['String']>;
+  displayName?: InputMaybe<Scalars['String']>;
 };
 
 export type ValidateCalculatedFieldInput = {

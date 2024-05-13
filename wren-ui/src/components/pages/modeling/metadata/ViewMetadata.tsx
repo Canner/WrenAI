@@ -1,23 +1,28 @@
 import { Button, Typography } from 'antd';
 import CodeBlock from '@/components/editor/CodeBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
+import { COLUMN } from '@/components/table/BaseTable';
+import FieldTable from '@/components/table/FieldTable';
 import { DiagramView } from '@/utils/data';
 import { usePreviewViewDataMutation } from '@/apollo/client/graphql/view.generated';
 
 export type Props = DiagramView;
 
 export default function ViewMetadata(props: Props) {
-  const { displayName, statement, viewId } = props || {};
+  const {
+    displayName,
+    description,
+    fields = [],
+    statement,
+    viewId,
+  } = props || {};
 
-  const [previewViewDataMutation, previewViewDataResult] =
-    usePreviewViewDataMutation({
-      onError: (error) => console.error(error),
-    });
+  const [previewViewData, previewViewDataResult] = usePreviewViewDataMutation({
+    onError: (error) => console.error(error),
+  });
 
   const onPreviewData = () => {
-    previewViewDataMutation({
-      variables: { where: { id: viewId } },
-    });
+    previewViewData({ variables: { where: { id: viewId } } });
   };
 
   // View only can input Name (alias), so it should show alias as Name in metadata.
@@ -26,6 +31,24 @@ export default function ViewMetadata(props: Props) {
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">Name</Typography.Text>
         <div>{displayName || '-'}</div>
+      </div>
+
+      <div className="mb-6">
+        <Typography.Text className="d-block gray-7 mb-2">
+          Description
+        </Typography.Text>
+        <div>{description || '-'}</div>
+      </div>
+
+      <div className="mb-6">
+        <Typography.Text className="d-block gray-7 mb-2">
+          Columns ({fields.length})
+        </Typography.Text>
+        <FieldTable
+          columns={[COLUMN.NAME, COLUMN.TYPE, COLUMN.DESCRIPTION]}
+          dataSource={fields}
+          showExpandable
+        />
       </div>
 
       <div className="mb-6">
@@ -44,11 +67,9 @@ export default function ViewMetadata(props: Props) {
         </Button>
         <div className="my-3">
           <PreviewData
-            {...{
-              error: previewViewDataResult.error,
-              loading: previewViewDataResult.loading,
-              previewData: previewViewDataResult?.data?.previewViewData,
-            }}
+            error={previewViewDataResult.error}
+            loading={previewViewDataResult.loading}
+            previewData={previewViewDataResult?.data?.previewViewData}
           />
         </div>
       </div>

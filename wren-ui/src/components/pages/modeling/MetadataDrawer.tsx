@@ -31,14 +31,12 @@ export default function MetadataDrawer(props: Props) {
       destroyOnClose
       onClose={onClose}
       extra={
-        isModel && (
-          <Button
-            icon={<EditOutlined />}
-            onClick={() => onEditClick(defaultValue)}
-          >
-            Edit
-          </Button>
-        )
+        <Button
+          icon={<EditOutlined />}
+          onClick={() => onEditClick(defaultValue)}
+        >
+          Edit
+        </Button>
       }
     >
       {isModel && <ModelMetadata {...defaultValue} />}

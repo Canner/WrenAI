@@ -4,6 +4,7 @@ import {
   UpdateModelMetadataInput,
   CreateCalculatedFieldData,
   UpdateCalculatedFieldData,
+  UpdateViewMetadataInput,
 } from '../models';
 import { IContext, RelationData, UpdateRelationData } from '../types';
 import { getLogger } from '@server/utils';
@@ -44,6 +45,7 @@ export class ModelResolver {
     this.validateView = this.validateView.bind(this);
     this.createView = this.createView.bind(this);
     this.deleteView = this.deleteView.bind(this);
+    this.updateViewMetadata = this.updateViewMetadata.bind(this);
 
     // preview
     this.previewModelData = this.previewModelData.bind(this);
@@ -572,6 +574,62 @@ export class ModelResolver {
     return await ctx.wrenEngineAdaptor.getNativeSQL(sql);
   }
 
+  public async updateViewMetadata(
+    _root: any,
+    args: { where: { id: number }; data: UpdateViewMetadataInput },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const viewId = args.where.id;
+    const data = args.data;
+
+    // check if view exists
+    const view = await ctx.viewRepository.findOneBy({ id: viewId });
+    if (!view) {
+      throw new Error('View not found');
+    }
+
+    // update view metadata
+    const properties = JSON.parse(view.properties);
+    let newName = view.name;
+    // if displayName is not null, or undefined, update the displayName
+    if (!isNil(data.displayName)) {
+      await this.validateViewName(data.displayName, ctx, viewId);
+      newName = replaceAllowableSyntax(data.displayName);
+      properties.displayName = this.determineMetadataValue(data.displayName);
+    }
+
+    // if description is not null, or undefined, update the description in properties
+    if (!isNil(data.description)) {
+      properties.description = this.determineMetadataValue(data.description);
+    }
+
+    // view column metadata
+    if (!isEmpty(data.columns)) {
+      const viewColumns = properties.columns;
+      for (const col of viewColumns) {
+        const requestedMetadata = data.columns.find(
+          (c) => c.referenceName === col.name,
+        );
+
+        if (!isNil(requestedMetadata.description)) {
+          col.properties = col.properties || {};
+          col.properties.description = this.determineMetadataValue(
+            requestedMetadata.description,
+          );
+        }
+      }
+
+      properties.columns = viewColumns;
+    }
+
+    await ctx.viewRepository.updateOne(viewId, {
+      name: newName,
+      properties: JSON.stringify(properties),
+    });
+
+    return true;
+  }
+
   private determineMetadataValue(value: string) {
     // if it's empty string, meaning users want to remove the value
     // so we return null
@@ -587,6 +645,7 @@ export class ModelResolver {
   private async validateViewName(
     viewDisplayName: string,
     ctx: IContext,
+    selfView?: number,
   ): Promise<{ valid: boolean; message?: string }> {
     // check if view name is valid
     // a-z, A-Z, 0-9, _, - are allowed and cannot start with number
@@ -601,7 +660,7 @@ export class ModelResolver {
     // check if view name is duplicated
     const project = await ctx.projectService.getCurrentProject();
     const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
-    if (views.find((v) => v.name === referenceName)) {
+    if (views.find((v) => v.name === referenceName && v.id !== selfView)) {
       return {
         valid: false,
         message: `Generated view name "${referenceName}" is duplicated`,
