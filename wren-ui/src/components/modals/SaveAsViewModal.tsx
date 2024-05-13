@@ -1,7 +1,7 @@
 import { Button, Form, Input, Modal, Typography } from 'antd';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ModalAction } from '@/hooks/useModalAction';
-import { ERROR_TEXTS } from '@/utils/error';
+import { createViewNameValidator } from '@/utils/validator';
 import CodeBlock from '@/components/editor/CodeBlock';
 import { useValidateViewMutation } from '@/apollo/client/graphql/view.generated';
 
@@ -11,25 +11,6 @@ type Props = ModalAction<{ sql: string }> & {
   loading?: boolean;
   defaultValue: { sql: string; responseId: number };
 };
-
-const createViewTitleValidator =
-  (validateViewMutation: any) => async (_rule: any, value: string) => {
-    if (!value) {
-      return Promise.reject(ERROR_TEXTS.SAVE_AS_VIEW.NAME.REQUIRED);
-    }
-
-    const validateViewResult = await validateViewMutation({
-      variables: { data: { name: value } },
-    });
-
-    const { valid, message } = validateViewResult?.data?.validateView;
-
-    if (!valid) {
-      return Promise.reject(message);
-    }
-
-    return Promise.resolve();
-  };
 
 export default function SaveAsViewModal(props: Props) {
   const { visible, loading, onSubmit, onClose, defaultValue } = props;
@@ -90,7 +71,7 @@ export default function SaveAsViewModal(props: Props) {
           rules={[
             {
               required: true,
-              validator: createViewTitleValidator(validateViewMutation),
+              validator: createViewNameValidator(validateViewMutation),
             },
           ]}
         >

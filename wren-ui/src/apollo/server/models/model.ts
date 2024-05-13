@@ -25,12 +25,23 @@ export interface RelationshipMetadataInput {
   description: string;
 }
 
+export interface ViewColumnMetadataInput {
+  referenceName: string;
+  description: string;
+}
+
 export interface UpdateModelMetadataInput {
   displayName: string;
   description: string;
   columns: Array<ColumnMetadataInput>;
   calculatedFields: Array<CalculatedFieldMetadataInput>;
   relationships: Array<RelationshipMetadataInput>;
+}
+
+export interface UpdateViewMetadataInput {
+  displayName: string;
+  description: string;
+  columns: Array<ViewColumnMetadataInput>;
 }
 
 export enum ExpressionName {

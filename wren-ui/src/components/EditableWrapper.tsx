@@ -8,6 +8,7 @@ interface Props {
   children: React.ReactNode;
   dataIndex: string;
   record: any;
+  rules?: any[];
   handleSave: (id: string, value: { [key: string]: string }) => void;
 }
 
@@ -36,7 +37,7 @@ const EditableStyle = styled.div`
 export const EditableContext = createContext<FormInstance<any> | null>(null);
 
 export default function EditableWrapper(props: Props) {
-  const { children, dataIndex, record, handleSave } = props;
+  const { children, dataIndex, record, rules, handleSave } = props;
 
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<InputRef>(null);
@@ -67,7 +68,7 @@ export default function EditableWrapper(props: Props) {
   };
 
   const childNode = editing ? (
-    <Form.Item style={{ margin: 0 }} name={dataIndexKey}>
+    <Form.Item style={{ margin: 0 }} name={dataIndexKey} rules={rules}>
       <Input size="small" ref={inputRef} onPressEnter={save} onBlur={save} />
     </Form.Item>
   ) : (

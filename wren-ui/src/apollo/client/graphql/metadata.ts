@@ -8,3 +8,12 @@ export const UPDATE_MODEL_METADATA = gql`
     updateModelMetadata(where: $where, data: $data)
   }
 `;
+
+export const UPDATE_VIEW_METADATA = gql`
+  mutation UpdateViewMetadata(
+    $where: ViewWhereUniqueInput!
+    $data: UpdateViewMetadataInput!
+  ) {
+    updateViewMetadata(where: $where, data: $data)
+  }
+`;

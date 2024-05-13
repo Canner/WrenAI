@@ -21,6 +21,7 @@ export interface DiagramView {
   displayName: string;
   referenceName: string;
   fields: DiagramViewField[];
+  description: string;
 }
 
 export interface DiagramViewField {
@@ -29,6 +30,7 @@ export interface DiagramViewField {
   referenceName: string;
   type: string;
   nodeType: NodeType;
+  description: string;
 }
 
 export interface DiagramModel {

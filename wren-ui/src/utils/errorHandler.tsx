@@ -157,7 +157,7 @@ class DeleteModelErrorHandler extends ErrorHandler {
   }
 }
 
-class UpdateModelMetdataErrorHandler extends ErrorHandler {
+class UpdateModelMetadataErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
@@ -220,6 +220,15 @@ class DeleteRelationshipErrorHandler extends ErrorHandler {
   }
 }
 
+class UpdateViewMetadataErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update view metadata.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -235,7 +244,8 @@ errorHandlers.set('UpdateDataSource', new UpdateDataSourceErrorHandler());
 errorHandlers.set('CreateModel', new CreateModelErrorHandler());
 errorHandlers.set('UpdateModel', new UpdateModelErrorHandler());
 errorHandlers.set('DeleteModel', new DeleteModelErrorHandler());
-errorHandlers.set('UpdateModelMetadata', new UpdateModelMetdataErrorHandler());
+errorHandlers.set('UpdateModelMetadata', new UpdateModelMetadataErrorHandler());
+errorHandlers.set('UpdateViewMetadata', new UpdateViewMetadataErrorHandler());
 errorHandlers.set(
   'CreateCalculatedField',
   new CreateCalculatedFieldErrorHandler(),
