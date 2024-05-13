@@ -232,7 +232,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       } else {
         return {
           status: WrenAIDeployStatusEnum.FAILED,
-          error: `WrenAI: Deploy wren AI failed or timeout, hash: ${hash}, `,
+          error: `WrenAI: Deploy wren AI failed or timeout, hash: ${hash}`,
         };
       }
     } catch (err: any) {
