@@ -30,7 +30,7 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGenerationModel string,hostPort int, aiPort int, pg_password string, userUUID string, telemetryConsent bool) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryConsent bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
