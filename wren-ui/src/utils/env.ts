@@ -5,8 +5,15 @@ const env = {
 
 export default env;
 
+type UserConfig = {
+  isTelemetryEnabled: boolean;
+  telemetryKey: string;
+  telemetryHost: string;
+  userUUID: string;
+};
+
 // Get the user configuration
-export const getUserConfig = async () => {
+export const getUserConfig = async (): Promise<UserConfig> => {
   const config = await fetch('/api/config').then((res) => res.json());
   const decodedTelemetryKey = Buffer.from(
     config.telemetryKey,
