@@ -83,8 +83,12 @@ class ViewConverter:
         def _format(view: Dict[str, Any]) -> List[str]:
             return str(
                 {
-                    "question": view["properties"]["question"],
-                    "description": view["properties"]["description"],
+                    "question": view["properties"]["question"]
+                    if "question" in view["properties"]
+                    else "",
+                    "description": view["properties"]["description"]
+                    if "description" in view["properties"]
+                    else "",
                     "statement": view["statement"],
                 }
             )
