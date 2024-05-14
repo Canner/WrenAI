@@ -14,7 +14,8 @@ TEXT_TO_SQL_RULES = """
 
 query_preprocess_user_prompt_template = """
 ### TASK ###
-Detect if the input is a valid question or query?
+Based on the user's input below, classify whether the query is not random words.
+Provide your classification as 'Yes' or 'No'. Yes if you think the query is not random words, and No if you think the query is random words.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
@@ -23,8 +24,10 @@ The final answer must be the JSON format like following:
     "result": "yes" or "no"
 }
 
-### QUESTION ###
+### INPUT ###
 {{ query }}
+
+Let's think step by step.
 """
 
 text_to_sql_system_prompt = """
