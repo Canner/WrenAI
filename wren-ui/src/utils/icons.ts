@@ -28,7 +28,7 @@ import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
 import { Binoculars, LightningCharge } from '@styled-icons/bootstrap';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import { Sparkles } from '@styled-icons/ionicons-outline';
-import { Discord } from '@styled-icons/fa-brands';
+import { Discord, Github } from '@styled-icons/fa-brands';
 
 export const NumericIcon = styled(SortNumerically)`
   height: 1em;
@@ -103,5 +103,9 @@ export const BinocularsIcon = styled(Binoculars)`
 `;
 
 export const DiscordIcon = styled(Discord)`
+  height: 1em;
+`;
+
+export const GithubIcon = styled(Github)`
   height: 1em;
 `;

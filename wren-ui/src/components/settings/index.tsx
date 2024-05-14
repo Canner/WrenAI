@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, Layout, Button } from 'antd';
 import styled from 'styled-components';
 import { SETTINGS } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
 import { ModalAction } from '@/hooks/useModalAction';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
+import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import DataSourceSettings from './DataSourceSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
@@ -18,6 +19,14 @@ const { Sider, Content } = Layout;
 type Props = ModalAction<any, any> & {
   loading?: boolean;
 };
+
+const StyledSider = styled(Sider)`
+  .ant-layout-sider-children {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+`;
 
 const StyledModal = styled(Modal)`
   .ant-modal-content {
@@ -94,6 +103,10 @@ export default function Settings(props: Props) {
     fetchPolicy: 'cache-and-network',
   });
 
+  const productVersion = useMemo(() => {
+    return data?.settings?.productVersion;
+  }, [data?.settings]);
+
   useEffect(() => {
     if (visible) fetchSettings();
   }, [visible]);
@@ -111,19 +124,25 @@ export default function Settings(props: Props) {
       centered
     >
       <Layout style={{ height: '100%' }}>
-        <Sider width={310} className="border-r border-gray-4">
+        <StyledSider width={310} className="border-r border-gray-4">
           <div className="gray-9 text-bold py-3 px-5">
             <SettingOutlined className="mr-2" />
             Settings
           </div>
-          <div className="p-3">
+          <div className="p-3 flex-grow-1">
             <MenuIterator
               data={menuList}
               currentMenu={menu}
               onClick={onMenuClick}
             />
           </div>
-        </Sider>
+          {!!productVersion && (
+            <div className="gray-7 d-flex align-center p-3 px-5">
+              <InfoCircleOutlined className="mr-2 text-sm" />
+              WrenAI version: {productVersion}
+            </div>
+          )}
+        </StyledSider>
         <Content className="d-flex flex-column">
           <div className="d-flex align-center gray-9 border-b border-gray-4 text-bold py-3 px-4">
             <current.icon className="mr-2" />

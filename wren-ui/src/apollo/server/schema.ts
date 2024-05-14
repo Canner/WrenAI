@@ -573,6 +573,7 @@ export const typeDefs = gql`
   }
 
   type Settings {
+    productVersion: String!
     dataSource: DataSource!
   }
 

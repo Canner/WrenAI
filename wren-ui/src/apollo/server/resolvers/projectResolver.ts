@@ -47,6 +47,7 @@ export class ProjectResolver {
     const dataSourceType = project.type;
 
     return {
+      productVersion: ctx.config.wrenProductVersion || '',
       dataSource: {
         type: dataSourceType,
         properties: this.getDataSourceProperties(project),
