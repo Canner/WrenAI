@@ -30,9 +30,12 @@ export interface IConfig {
   posthogApiKey?: string;
   posthogHost?: string;
   userUUID?: string;
+
+  // versions
   wrenUIVersion?: string;
   wrenEngineVersion?: string;
   wrenAIVersion?: string;
+  wrenProductVersion?: string;
 }
 
 const defaultConfig = {
@@ -99,9 +102,12 @@ const config = {
   posthogApiKey: process.env.POSTHOG_API_KEY,
   posthogHost: process.env.POSTHOG_HOST,
   userUUID: process.env.USER_UUID,
+
+  // versions
   wrenUIVersion: process.env.WREN_UI_VERSION,
   wrenEngineVersion: process.env.WREN_ENGINE_VERSION,
   wrenAIVersion: process.env.WREN_AI_SERVICE_VERSION,
+  wrenProductVersion: process.env.WREN_PRODUCT_VERSION,
 };
 
 export function getConfig(): IConfig {
