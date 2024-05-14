@@ -35,18 +35,18 @@ class CustomOpenAIGenerator(OpenAIGenerator):
 
 
 class OpenAILLMProvider(LLMProvider):
-    def __init__(self, api_key: Secret):
+    def __init__(self, api_key: Secret, generation_model: str = GENERATION_MODEL_NAME):
         self._api_key = api_key
+        self._generation_model = generation_model
 
     def get_generator(
         self,
-        model_name: str = GENERATION_MODEL_NAME,
         model_kwargs: Optional[Dict[str, Any]] = GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
         return CustomOpenAIGenerator(
             api_key=self._api_key,
-            model=model_name,
+            model=self._generation_model,
             system_prompt=system_prompt,
             generation_kwargs=model_kwargs,
         )

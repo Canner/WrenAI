@@ -92,6 +92,26 @@ func askForAPIKey() (string, error) {
 	return result, nil
 }
 
+func askForGenerationModel() (string, error) {
+	// let users know we're asking for a generation model
+	fmt.Println("Please provide the generation model you want to use")
+	fmt.Println("You can learn more about OpenAI's generation models at https://platform.openai.com/docs/models/models")
+
+	prompt := promptui.Select{
+		Label: "Select an OpenAI's generation model",
+		Items: []string{"gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"},
+	}
+
+	_, result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
 func Launch() {
 	// recover from panic
 	defer func() {
@@ -110,6 +130,10 @@ func Launch() {
 	// ask for OpenAI API key
 	pterm.Print("\n")
 	apiKey, err := askForAPIKey()
+
+	// ask for OpenAI generation model
+	pterm.Print("\n")
+	generationModel, err := askForGenerationModel()
 
 	// ask for telemetry consent
 	pterm.Print("\n")
@@ -147,7 +171,7 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
-	err = utils.PrepareDockerFiles(apiKey, uiPort, aiPort, projectDir, telemetryConsent)
+	err = utils.PrepareDockerFiles(apiKey, generationModel, uiPort, aiPort, projectDir, telemetryConsent)
 	if err != nil {
 		panic(err)
 	}

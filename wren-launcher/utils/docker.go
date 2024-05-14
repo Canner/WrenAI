@@ -30,10 +30,14 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryConsent bool) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryConsent bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
+
+	// replace OPENAI_GENERATION_MODEL
+	reg = regexp.MustCompile(`OPENAI_GENERATION_MODEL=(.*)`)
+	str = reg.ReplaceAllString(str, "OPENAI_GENERATION_MODEL="+OpenaiGenerationModel)
 
 	// replace USER_UUID
 	reg = regexp.MustCompile(`USER_UUID=(.*)`)
@@ -147,7 +151,7 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, hostPort int, aiPort int, projectDir string, telemetryConsent bool) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryConsent bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -175,13 +179,14 @@ func PrepareDockerFiles(openaiApiKey string, hostPort int, aiPort int, projectDi
 	}
 
 	// replace OPENAI_API_KEY=sk-xxxxxx with OPENAI_API_KEY=OpenaiApiKey
+	// replace OPENAI_GENERATION_MODEL= with OPENAI_GENERATION_MODEL=OpenaiGenerationModel
 	// read the file
 	envExampleFileContent, err := os.ReadFile(envExampleFile)
 	if err != nil {
 		return err
 	}
 	// replace the content with regex
-	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, hostPort, aiPort, pg_pwd, userUUID, telemetryConsent)
+	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, openaiGenerationModel, hostPort, aiPort, pg_pwd, userUUID, telemetryConsent)
 	newEnvFile := getEnvFilePath(projectDir)
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)

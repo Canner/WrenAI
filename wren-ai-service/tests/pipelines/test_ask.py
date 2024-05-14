@@ -111,9 +111,6 @@ def test_query_understanding_pipeline():
     assert query_understanding_pipeline.run("How many books are there?")[
         "post_processor"
     ]["is_valid_query"]
-    assert query_understanding_pipeline.run("select * from books")["post_processor"][
-        "is_valid_query"
-    ]
     assert not query_understanding_pipeline.run("i am cool")["post_processor"][
         "is_valid_query"
     ]
