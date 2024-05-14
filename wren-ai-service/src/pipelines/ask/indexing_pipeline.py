@@ -176,7 +176,12 @@ class DDLConverter:
                     meta={"id": str(i)},
                     content=ddl_command,
                 )
-                for i, ddl_command in enumerate(tqdm(ddl_commands))
+                for i, ddl_command in enumerate(
+                    tqdm(
+                        ddl_commands,
+                        desc="indexing ddl commands into the ddl store",
+                    )
+                )
             ]
         }
 
