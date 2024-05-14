@@ -83,12 +83,16 @@ class ViewConverter:
         def _format(view: Dict[str, Any]) -> List[str]:
             return str(
                 {
-                    "question": view["properties"]["question"]
-                    if "question" in view["properties"]
-                    else "",
-                    "description": view["properties"]["description"]
-                    if "description" in view["properties"]
-                    else "",
+                    "question": (
+                        view["properties"]["question"]
+                        if "properties" in view and "question" in view["properties"]
+                        else ""
+                    ),
+                    "description": (
+                        view["properties"]["description"]
+                        if "properties" in view and "description" in view["properties"]
+                        else ""
+                    ),
                     "statement": view["statement"],
                 }
             )
@@ -172,7 +176,12 @@ class DDLConverter:
                     meta={"id": str(i)},
                     content=ddl_command,
                 )
-                for i, ddl_command in enumerate(tqdm(ddl_commands))
+                for i, ddl_command in enumerate(
+                    tqdm(
+                        ddl_commands,
+                        desc="indexing ddl commands into the ddl store",
+                    )
+                )
             ]
         }
 
