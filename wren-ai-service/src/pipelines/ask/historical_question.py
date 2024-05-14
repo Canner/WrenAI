@@ -1,11 +1,15 @@
 import logging
+from typing import List, Optional
 
-from haystack import Pipeline
+from haystack import Document, Pipeline, component
 
 from src.core.document_store_provider import DocumentStoreProvider
 from src.core.llm_provider import LLMProvider
 from src.core.pipeline import BasicPipeline
-from src.utils import init_providers, load_env_vars
+from src.utils import (
+    init_providers,
+    load_env_vars,
+)
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -21,26 +25,42 @@ class HistoricalQuestion(BasicPipeline):
             "retriever",
             store_provider.get_retriever(
                 document_store=store_provider.get_store(dataset_name="view_questions"),
-                top_k=1,
             ),
         )
+        pipe.add_component("score_filter", ScoreFilter())
 
         pipe.connect("embedder.embedding", "retriever.query_embedding")
+        pipe.connect("retriever.documents", "score_filter.documents")
 
         self._pipeline = pipe
         super().__init__(self._pipeline)
 
     def run(self, query: str):
-        return self._pipeline.run({"embedder": {"text": query}})
+        logger.info("Try to extract historical question")
+        return self._pipeline.run(
+            {
+                "embedder": {"text": query},
+                "retriever": {"top_k": 1},
+                "score_filter": {"score": 0.9},
+            }
+        )
+
+
+@component
+class ScoreFilter:
+    @component.output_types(
+        documents=List[Optional[Document]],
+    )
+    def run(self, documents: List[Document], score: float = 0):
+        return {
+            "documents": list(
+                filter(lambda document: document.score >= score, documents)
+            )
+        }
 
 
 if __name__ == "__main__":
     pipeline = HistoricalQuestion(*init_providers())
 
-    res = pipeline.run("What is the capital of France?")
-    print(res.get("retriever"))
-    document = res.get("retriever").get("documents")[0]
-    print(document.content)
-
-    # print("generating historical_question.jpg to outputs/pipelines/ask...")
-    # pipeline.draw("./outputs/pipelines/historical_question.jpg")
+    print("generating historical_question.jpg to outputs/pipelines/ask...")
+    pipeline.draw("./outputs/pipelines/historical_question.jpg")
