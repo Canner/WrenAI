@@ -51,9 +51,4 @@
 
 ## Adding your preferred LLM or Document Store
 
-Currently WrenAI team is working hard to make text-to-sql user experience and performance better; however, we continually receive feedback from our users that they want to use their preferred LLM or Document Store. We are happy to announce that we have made it possible for you to add your preferred LLM or Document Store to WrenAI. You can follow the steps below to add your preferred LLM or Document Store:
-
-1. create a new provider class that inherits from `LLMProvider` or `DocumentStoreProvider` in the `src/providers` directory
-2. if you need to add new environment variables, please add them to the related environment variable files
-3. add a new function to import your providers in the `src/utils.py` file
-4. call the new function you created in `container.init_globals()` in the `src/__main__.py`
+Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM or Document Store.
