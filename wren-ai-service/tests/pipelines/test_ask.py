@@ -1,9 +1,8 @@
 import json
-from typing import Any
 
 import pytest
-from haystack.document_stores.types import DocumentStore
 
+from src.core.document_store_provider import DocumentStoreProvider
 from src.core.llm_provider import LLMProvider
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
@@ -33,48 +32,19 @@ def llm_provider():
 
 
 @pytest.fixture
-def document_store():
-    _, document_store_provider = init_providers()
+def store_provider():
+    _, store_provider = init_providers()
 
-    return document_store_provider.get_store(dataset_name="book_2")
-
-
-@pytest.fixture
-def view_store():
-    _, document_store_provider = init_providers()
-
-    return document_store_provider.get_store(dataset_name="view_questions")
-
-
-def test_indexing_pipeline(
-    mdl_str: str,
-    llm_provider: LLMProvider,
-    document_store: DocumentStore,
-    view_store: DocumentStore,
-):
-    indexing_pipeline = Indexing(
-        ddl_store=document_store,
-        document_embedder=llm_provider.get_document_embedder(),
-        view_store=view_store,
-    )
-
-    indexing_pipeline.run(mdl_str)
-
-    assert document_store.count_documents() == 3
-    assert view_store.count_documents() == 1
+    return store_provider
 
 
 def test_clear_documents(mdl_str: str):
     llm_provider, document_store_provider = init_providers()
-    store = document_store_provider.get_store(
-        dataset_name="test_clear_documents",
-        recreate_index=True,
-    )
+    store = document_store_provider.get_store()
 
     indexing_pipeline = Indexing(
-        ddl_store=store,
-        document_embedder=llm_provider.get_document_embedder(),
-        view_store=store,
+        llm_provider=llm_provider,
+        store_provider=document_store_provider,
     )
 
     indexing_pipeline.run(mdl_str)
@@ -102,6 +72,24 @@ def test_clear_documents(mdl_str: str):
     assert store.count_documents() == 1
 
 
+def test_indexing_pipeline(
+    mdl_str: str,
+    llm_provider: LLMProvider,
+    store_provider: DocumentStoreProvider,
+):
+    indexing_pipeline = Indexing(
+        llm_provider=llm_provider,
+        store_provider=store_provider,
+    )
+
+    indexing_pipeline.run(mdl_str)
+
+    assert store_provider.get_store().count_documents() == 3
+    assert (
+        store_provider.get_store(dataset_name="view_questions").count_documents() == 1
+    )
+
+
 def test_query_understanding_pipeline():
     llm_provider, _ = init_providers()
     query_understanding_pipeline = QueryUnderstanding(
@@ -119,12 +107,14 @@ def test_query_understanding_pipeline():
     ]
 
 
-def test_retrieval_pipeline(document_store: Any):
-    llm_provider, document_store_provider = init_providers()
+def test_retrieval_pipeline(
+    llm_provider: LLMProvider,
+    store_provider: DocumentStoreProvider,
+):
     retrieval_pipeline = Retrieval(
         embedder=llm_provider.get_text_embedder(),
-        retriever=document_store_provider.get_retriever(
-            document_store=document_store,
+        retriever=store_provider.get_retriever(
+            document_store=store_provider.get_store(),
         ),
     )
 

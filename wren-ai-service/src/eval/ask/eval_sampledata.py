@@ -1,6 +1,7 @@
 """
 CAUTION: before running this code, please ensure the given dataset's mdl model is deployed already
 """
+
 import argparse
 import json
 import os
@@ -149,8 +150,8 @@ if __name__ == "__main__":
     print("Indexing documents...")
     mdl = get_mdl_from_wren_engine()
     indexing_pipeline = Indexing(
-        ddl_store=document_store,
-        document_embedder=llm_provider.get_document_embedder(),
+        llm_provider=llm_provider,
+        store_provider=document_store_provider,
     )
     indexing_pipeline.run(json.dumps(mdl))
     print(

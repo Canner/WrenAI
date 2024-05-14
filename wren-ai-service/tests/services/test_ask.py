@@ -23,7 +23,6 @@ from src.web.v1.services.ask import (
 def ask_service():
     llm_provider, document_store_provider = init_providers()
     document_store = document_store_provider.get_store()
-    view_store = document_store_provider.get_store(dataset_name="view_questions")
     embedder = llm_provider.get_text_embedder()
     retriever = document_store_provider.get_retriever(document_store=document_store)
     query_understanding_generator = llm_provider.get_generator()
@@ -33,9 +32,8 @@ def ask_service():
     return AskService(
         {
             "indexing": indexing_pipeline.Indexing(
-                ddl_store=document_store,
-                document_embedder=llm_provider.get_document_embedder(),
-                view_store=view_store,
+                llm_provider=llm_provider,
+                store_provider=document_store_provider,
             ),
             "query_understanding": query_understanding_pipeline.QueryUnderstanding(
                 generator=query_understanding_generator,
