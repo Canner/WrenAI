@@ -16,8 +16,8 @@ Spin.setDefaultIndicator(defaultIndicator);
 const setupTelemetry = (userConfig) => {
   // Check that PostHog is client-side (used to handle Next.js SSR)
   if (userConfig.isTelemetryEnabled && typeof window !== 'undefined') {
-    posthog.init(env.posthogAPIKey, {
-      api_host: env.posthogHost,
+    posthog.init(userConfig.telemetryKey, {
+      api_host: userConfig.telemetryHost,
       autocapture: {
         dom_event_allowlist: ['click'],
         css_selector_allowlist: ['[data-ph-capture="true"]'],

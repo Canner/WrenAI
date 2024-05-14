@@ -1,9 +1,6 @@
 const env = {
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
-  posthogAPIKey: process.env.NEXT_PUBLIC_POSTHOG_API_KEY,
-  posthogHost:
-    process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://app.posthog.com',
 };
 
 export default env;
