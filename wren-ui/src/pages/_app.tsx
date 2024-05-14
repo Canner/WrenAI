@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { AppProps } from 'next/app';
 import Head from 'next/head';
 import { Spin } from 'antd';
@@ -40,8 +41,20 @@ const setupTelemetry = (userConfig) => {
 };
 
 function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
+
   useEffect(() => {
-    getUserConfig().then(setupTelemetry);
+    const handleRouteChange = () => posthog.capture('$pageview');
+
+    getUserConfig().then((config) => {
+      setupTelemetry(config);
+      // Track page views
+      router.events.on('routeChangeComplete', handleRouteChange);
+    });
+
+    return () => {
+      router.events.off('routeChangeComplete', handleRouteChange);
+    };
   }, []);
 
   return (
