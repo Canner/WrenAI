@@ -6,7 +6,7 @@ const defaultOptions = {} as const;
 export type GetSettingsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type GetSettingsQuery = { __typename?: 'Query', settings: { __typename?: 'Settings', dataSource: { __typename?: 'DataSource', type: Types.DataSourceName, properties: any, sampleDataset?: Types.SampleDatasetName | null } } };
+export type GetSettingsQuery = { __typename?: 'Query', settings: { __typename?: 'Settings', productVersion: string, dataSource: { __typename?: 'DataSource', type: Types.DataSourceName, properties: any, sampleDataset?: Types.SampleDatasetName | null } } };
 
 export type ResetCurrentProjectMutationVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -17,6 +17,7 @@ export type ResetCurrentProjectMutation = { __typename?: 'Mutation', resetCurren
 export const GetSettingsDocument = gql`
     query GetSettings {
   settings {
+    productVersion
     dataSource {
       type
       properties

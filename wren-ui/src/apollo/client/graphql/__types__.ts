@@ -681,6 +681,7 @@ export type SaveTablesInput = {
 export type Settings = {
   __typename?: 'Settings';
   dataSource: DataSource;
+  productVersion: Scalars['String'];
 };
 
 export type SimpleMeasureInput = {
