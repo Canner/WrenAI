@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/cd265c1e957eff89bbc8859ac48fd6b8b8339eec/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/cd265c1e957eff89bbc8859ac48fd6b8b8339eec/.env.example"
+	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/d388eb84caac180174afe87274f57d9b46973ec7/docker-compose.yaml"
+	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/d388eb84caac180174afe87274f57d9b46973ec7/.env.example"
 
 	// pg user
 	PG_USERNAME string = "wren-user"
