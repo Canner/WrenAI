@@ -76,6 +76,7 @@ services:
       SQLITE_FILE: /app/data/db.sqlite3
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
       WREN_AI_ENDPOINT: http://wren-ai-service:${WREN_AI_SERVICE_PORT}
+      OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       PG_USERNAME: ${PG_USERNAME}
       PG_PASSWORD: ${PG_PASSWORD}
     ports:

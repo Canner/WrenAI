@@ -16,6 +16,7 @@ export interface IConfig {
 
   // wren AI
   wrenAIEndpoint: string;
+  openaiGenerationModel?: string;
 
   // encryption
   encryptionPassword: string;
@@ -86,6 +87,7 @@ const config = {
 
   // wren AI
   wrenAIEndpoint: process.env.WREN_AI_ENDPOINT,
+  openaiGenerationModel: process.env.OPENAI_GENERATION_MODEL,
 
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,
