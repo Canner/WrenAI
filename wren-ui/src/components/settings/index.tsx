@@ -5,6 +5,7 @@ import { SETTINGS } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
 import { ModalAction } from '@/hooks/useModalAction';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
+import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import DataSourceSettings from './DataSourceSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
@@ -136,7 +137,10 @@ export default function Settings(props: Props) {
             />
           </div>
           {!!productVersion && (
-            <div className="p-3 gray-7">WrenAI version: {productVersion}</div>
+            <div className="gray-7 d-flex align-center p-3 px-5">
+              <InfoCircleOutlined className="mr-2 text-sm" />
+              WrenAI version: {productVersion}
+            </div>
           )}
         </StyledSider>
         <Content className="d-flex flex-column">
