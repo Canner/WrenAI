@@ -28,6 +28,7 @@ class HistoricalQuestion(BasicPipeline):
             ),
         )
         pipe.add_component("score_filter", ScoreFilter())
+        # todo: add a llm filter to filter out low scoring document
 
         pipe.connect("embedder.embedding", "retriever.query_embedding")
         pipe.connect("retriever.documents", "score_filter.documents")
