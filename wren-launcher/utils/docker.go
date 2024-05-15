@@ -30,7 +30,7 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryConsent bool) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
@@ -61,7 +61,7 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGeneration
 
 	// replace TELEMETRY_ENABLED
 	reg = regexp.MustCompile(`TELEMETRY_ENABLED=(.*)`)
-	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryConsent))
+	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryEnabled))
 
 	return str
 }
@@ -151,7 +151,7 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryConsent bool) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -184,7 +184,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		return err
 	}
 	// replace the content with regex
-	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, openaiGenerationModel, hostPort, aiPort, pg_pwd, userUUID, telemetryConsent)
+	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, openaiGenerationModel, hostPort, aiPort, pg_pwd, userUUID, telemetryEnabled)
 	newEnvFile := getEnvFilePath(projectDir)
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
