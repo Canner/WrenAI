@@ -9,6 +9,9 @@ from src.pipelines.ask import (
     generation_pipeline as ask_generation_pipeline,
 )
 from src.pipelines.ask import (
+    historical_question,
+)
+from src.pipelines.ask import (
     indexing_pipeline as ask_indexing_pipeline,
 )
 from src.pipelines.ask import (
@@ -72,6 +75,10 @@ def init_globals(
                 retriever=document_store_provider.get_retriever(
                     document_store=ddl_store
                 ),
+            ),
+            "historical_question": historical_question.HistoricalQuestion(
+                llm_provider=llm_provider,
+                store_provider=document_store_provider,
             ),
             "generation": ask_generation_pipeline.Generation(
                 generator=llm_provider.get_generator(
