@@ -38,7 +38,7 @@ func evaluateTelemetryPreferences() (bool, error) {
 		fmt.Println("You have disabled telemetry, WrenAI will not collect any data.")
 		return false, nil
 	}
-	fmt.Println("WrenAI collects 'ONLY usage data' to improve WrenAI.")
+	fmt.Println("WrenAI relies on anonymous usage statistics to continuously improve.")
 	fmt.Println("You can read more at https://docs.getwren.ai/overview/telemetry")
 	return true, nil
 }
