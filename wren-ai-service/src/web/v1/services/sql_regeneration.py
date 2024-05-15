@@ -1,10 +1,13 @@
+import logging
 from typing import List, Literal, Optional
 
 from haystack import Pipeline
 from pydantic import BaseModel
 
+logger = logging.getLogger("wren-ai-service")
 
-# POST /v1/sql-regeneration
+
+# POST /v1/sql-regenerations
 class DecisionPoint(BaseModel):
     type: Literal["filters"]
     value: str
@@ -37,7 +40,7 @@ class SQLRegenerationResponse(BaseModel):
     query_id: str
 
 
-# GET /v1/sql-regeneration/{query_id}/result
+# GET /v1/sql-regenerations/{query_id}/result
 class SQLRegenerationResultRequest(BaseModel):
     query_id: str
 
@@ -67,8 +70,58 @@ class SQLRegenerationService:
         self._pipelines = pipelines
         self.sql_regeneration_results: dict[str, SQLRegenerationResultResponse] = {}
 
-    def sql_regeneration() -> SQLRegenerationResponse:
-        pass
+    def sql_regeneration(
+        self,
+        sql_regeneration_request: SQLRegenerationRequest,
+    ):
+        try:
+            query_id = sql_regeneration_request.query_id
 
-    def get_sql_regeneration_result() -> SQLRegenerationResultResponse:
-        pass
+            self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+                status="understanding",
+            )
+
+            self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+                status="generating",
+            )
+
+            generation_result = self._pipelines["generation"].run(
+                corrections=sql_regeneration_request.corrections,
+            )
+
+            sql_regeneration_result = generation_result["post_processor"]["results"]
+
+            logger.debug(f"sql regeneration results: {sql_regeneration_result}")
+
+            self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+                status="finished",
+                response=sql_regeneration_result,
+            )
+        except Exception as e:
+            logger.error(f"sql regeneration pipeline - OTHERS: {e}")
+            self.sql_regeneration_results[
+                sql_regeneration_request.query_id
+            ] = SQLRegenerationResultResponse(
+                status="failed",
+                error=SQLRegenerationResultResponse.SQLRegenerationError(
+                    code="OTHERS",
+                    message=str(e),
+                ),
+            )
+
+    def get_sql_regeneration_result(
+        self, sql_regeneration_result_request: SQLRegenerationResultRequest
+    ) -> SQLRegenerationResultResponse:
+        if (
+            sql_regeneration_result_request.query_id
+            not in self.sql_regeneration_results
+        ):
+            return SQLRegenerationResultResponse(
+                status="failed",
+                error=SQLRegenerationResultResponse.SQLRegenerationError(
+                    code="OTHERS",
+                    message=f"{sql_regeneration_result_request.query_id} is not found",
+                ),
+            )
+
+        return self.sql_regeneration_results[sql_regeneration_result_request.query_id]
