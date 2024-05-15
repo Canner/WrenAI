@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from haystack import Document, Pipeline, component
 
@@ -29,9 +29,11 @@ class HistoricalQuestion(BasicPipeline):
         )
         pipe.add_component("score_filter", ScoreFilter())
         # todo: add a llm filter to filter out low scoring document
+        pipe.add_component("output_formatter", OutputFormatter())
 
         pipe.connect("embedder.embedding", "retriever.query_embedding")
-        pipe.connect("retriever.documents", "score_filter.documents")
+        pipe.connect("retriever", "score_filter")
+        pipe.connect("score_filter", "output_formatter")
 
         self._pipeline = pipe
         super().__init__(self._pipeline)
@@ -42,7 +44,7 @@ class HistoricalQuestion(BasicPipeline):
             {
                 "embedder": {"text": query},
                 "retriever": {"top_k": 1},
-                "score_filter": {"score": 0.9},
+                "score_filter": {"score": 0.8},
             }
         )
 
@@ -50,7 +52,7 @@ class HistoricalQuestion(BasicPipeline):
 @component
 class ScoreFilter:
     @component.output_types(
-        documents=List[Optional[Document]],
+        documents=List[Document],
     )
     def run(self, documents: List[Document], score: float = 0):
         return {
@@ -58,6 +60,27 @@ class ScoreFilter:
                 filter(lambda document: document.score >= score, documents)
             )
         }
+
+
+@component
+class OutputFormatter:
+    @component.output_types(
+        documents=List[Optional[Dict]],
+    )
+    def run(self, documents: List[Document]):
+        list = []
+        logger.debug(f"historical_question_output_formatter: {documents}")
+
+        for doc in documents:
+            content = eval(doc.content)
+            formatted = {
+                "question": content["question"],
+                "description": content["description"],
+                "statement": content["statement"],
+            }
+            list.append(formatted)
+
+        return {"documents": list}
 
 
 if __name__ == "__main__":

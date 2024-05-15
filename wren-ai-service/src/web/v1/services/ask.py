@@ -199,6 +199,7 @@ class AskService:
 
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="generating")
+
                 if ask_request.history:
                     text_to_sql_generation_results = self._pipelines[
                         "followup_generation"
@@ -265,7 +266,14 @@ class AskService:
                 logger.debug("After sql correction:")
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
 
-                if not valid_generation_results:
+                historical_question_result = (
+                    self._pipelines["historical_question"]
+                    .run(query=ask_request.query)
+                    .get("output_formatter", {})
+                    .get("documents")
+                )
+
+                if not valid_generation_results and not historical_question_result:
                     logger.error(f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}")
                     self.ask_results[query_id] = AskResultResponse(
                         status="failed",
@@ -274,14 +282,29 @@ class AskService:
                             message="No relevant SQL",
                         ),
                     )
-                else:
-                    self.ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        response=[
-                            AskResultResponse.AskResult(**result)
-                            for result in valid_generation_results
-                        ],
+                    return
+
+                results = [
+                    AskResultResponse.AskResult(
+                        **{
+                            "sql": result.get("statement"),
+                            "summary": result.get("description"),
+                            "type": "view",
+                        }
                     )
+                    for result in historical_question_result
+                ] + [
+                    AskResultResponse.AskResult(**result)
+                    for result in valid_generation_results
+                ]
+
+                if len(results) > 3:
+                    del results[3:]
+
+                self.ask_results[query_id] = AskResultResponse(
+                    status="finished",
+                    response=results,
+                )
         except Exception as e:
             logger.error(f"ask pipeline - OTHERS: {e}")
             self.ask_results[query_id] = AskResultResponse(
