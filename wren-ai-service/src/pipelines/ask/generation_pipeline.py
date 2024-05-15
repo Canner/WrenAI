@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List
+from typing import Any, Dict, List
 
 from haystack import Document, Pipeline
 
@@ -38,11 +38,7 @@ class Generation(BasicPipeline):
         )
         super().__init__(self._pipeline)
 
-    def run(
-        self,
-        query: str,
-        contexts: List[Document],
-    ):
+    def run(self, query: str, contexts: List[Document], exclude: List[Dict]):
         logger.info("Ask Generation pipeline is running...")
         return self._pipeline.run(
             {
@@ -50,6 +46,7 @@ class Generation(BasicPipeline):
                     "query": query,
                     "documents": contexts,
                     "alert": TEXT_TO_SQL_RULES,
+                    "exclude": exclude,
                 }
             }
         )

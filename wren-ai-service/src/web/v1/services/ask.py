@@ -200,6 +200,13 @@ class AskService:
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="generating")
 
+                historical_question_result = (
+                    self._pipelines["historical_question"]
+                    .run(query=ask_request.query)
+                    .get("output_formatter", {})
+                    .get("documents")
+                )
+
                 if ask_request.history:
                     text_to_sql_generation_results = self._pipelines[
                         "followup_generation"
@@ -212,6 +219,7 @@ class AskService:
                     text_to_sql_generation_results = self._pipelines["generation"].run(
                         query=ask_request.query,
                         contexts=documents,
+                        exclude=historical_question_result,
                     )
 
                 valid_generation_results = []
@@ -265,13 +273,6 @@ class AskService:
 
                 logger.debug("After sql correction:")
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
-
-                historical_question_result = (
-                    self._pipelines["historical_question"]
-                    .run(query=ask_request.query)
-                    .get("output_formatter", {})
-                    .get("documents")
-                )
 
                 if not valid_generation_results and not historical_question_result:
                     logger.error(f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}")
