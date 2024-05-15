@@ -1,4 +1,4 @@
-import { Form, Input } from 'antd';
+import { Form, Input, Switch } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 
@@ -87,6 +87,9 @@ export default function PostgreSQLProperties(props: Props) {
         ]}
       >
         <Input placeholder="PostgreSQL database name" disabled={isEditMode} />
+      </Form.Item>
+      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
+        <Switch />
       </Form.Item>
     </>
   );

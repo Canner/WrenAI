@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import Image from 'next/image';
-import { useEffect } from 'react';
-import { Button, Form, Modal, message } from 'antd';
+import { useEffect, useMemo } from 'react';
+import { Button, Form, Modal, message, Alert } from 'antd';
 import { makeIterable } from '@/utils/iteration';
 import { DATA_SOURCES, FORM_MODE, Path } from '@/utils/enum';
 import { getDataSource, getTemplates } from '@/components/pages/setup/utils';
@@ -82,13 +82,15 @@ const DataSourcePanel = (props: Props) => {
   const current = getDataSource(type as unknown as DATA_SOURCES);
   const [form] = Form.useForm();
 
-  const [updateDataSource, { loading }] = useUpdateDataSourceMutation({
+  const [updateDataSource, { loading, error }] = useUpdateDataSourceMutation({
     onError: (error) => console.error(error),
     onCompleted: async () => {
       refetchSettings();
       message.success('Successfully update data source.');
     },
   });
+
+  const connectErrorMessage = useMemo(() => error?.message, [error]);
 
   useEffect(() => properties && reset(), [properties]);
 
@@ -127,6 +129,16 @@ const DataSourcePanel = (props: Props) => {
       </div>
       <Form form={form} layout="vertical" className="py-3 px-4">
         <current.component mode={FORM_MODE.EDIT} />
+
+        {connectErrorMessage && (
+          <Alert
+            message="Failed to connect"
+            description={connectErrorMessage || 'Cannot connect to data source'}
+            type="error"
+            showIcon
+            className="my-6"
+          />
+        )}
 
         <div className="py-2 text-right">
           <Button className="mr-2" style={{ width: 80 }} onClick={reset}>
