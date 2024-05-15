@@ -15,6 +15,7 @@ export interface PostgresConnectionConfig {
   host: string;
   database: string;
   port: number;
+  ssl?: boolean;
 }
 
 export interface PostgresColumnResponse {

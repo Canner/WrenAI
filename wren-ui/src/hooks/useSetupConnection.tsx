@@ -38,6 +38,7 @@ export const transformFormToProperties = (
         properties?.password === PASSWORD_PLACEHOLDER
           ? undefined
           : properties?.password,
+      ssl: properties?.ssl,
     };
   }
 

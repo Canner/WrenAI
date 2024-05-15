@@ -24,7 +24,8 @@ export class PostgresStrategy implements IDataSourceStrategy {
   }
 
   public async createDataSource(properties: PGDataSourceProperties) {
-    const { displayName, host, port, database, user, password } = properties;
+    const { displayName, host, port, database, user, password, ssl } =
+      properties;
 
     await this.testConnection(properties);
 
@@ -45,6 +46,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
       database,
       user,
       credentials: encryptedCredentials,
+      configurations: { ssl },
     });
     return project;
   }
@@ -52,7 +54,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
   public async updateDataSource(
     properties: PGDataSourceProperties,
   ): Promise<any> {
-    const { displayName, user, password: newPassword } = properties;
+    const { displayName, user, password: newPassword, ssl } = properties;
     const {
       host,
       port,
@@ -66,21 +68,18 @@ export class PostgresStrategy implements IDataSourceStrategy {
     );
     const password = newPassword || oldPassword;
 
-    await this.testConnection({
+    const newProperties = {
       host,
       port,
       database,
       user,
       password,
-    });
+      ssl,
+    };
 
-    await this.patchConfigToWrenEngine({
-      host,
-      port,
-      database,
-      user,
-      password,
-    });
+    await this.testConnection(newProperties);
+
+    await this.patchConfigToWrenEngine(newProperties);
 
     const credentials = { password } as any;
     const encryptedCredentials = encryptor.encrypt(credentials);
@@ -282,6 +281,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
       host: this.project.host,
       database: this.project.database,
       port: this.project.port,
+      ssl: this.project.configurations?.ssl,
     });
     return connector;
   }
