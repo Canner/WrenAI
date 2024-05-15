@@ -5,6 +5,7 @@ import pytest
 
 from src.pipelines.ask import (
     generation_pipeline,
+    historical_question,
     indexing_pipeline,
     query_understanding_pipeline,
     retrieval_pipeline,
@@ -41,6 +42,10 @@ def ask_service():
             "retrieval": retrieval_pipeline.Retrieval(
                 embedder=embedder,
                 retriever=retriever,
+            ),
+            "historical_question": historical_question.HistoricalQuestion(
+                llm_provider=llm_provider,
+                store_provider=document_store_provider,
             ),
             "generation": generation_pipeline.Generation(
                 generator=text_to_sql_generator,
