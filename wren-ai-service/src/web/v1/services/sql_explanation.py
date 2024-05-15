@@ -45,9 +45,7 @@ class SQLExplanationService:
         self._pipelines = pipelines
         self.sql_explanation_results: dict[str, SQLExplanationResultResponse] = {}
 
-    def sql_explanation(
-        self, sql_explanation_request: SQLExplanationRequest
-    ) -> SQLExplanationResponse:
+    def sql_explanation(self, sql_explanation_request: SQLExplanationRequest):
         try:
             query_id = sql_explanation_request.query_id
 
