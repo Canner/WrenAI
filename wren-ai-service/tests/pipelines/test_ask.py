@@ -131,6 +131,17 @@ def test_generation_pipeline():
     generation_result = generation_pipeline.run(
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
+        exclude=[],
+    )
+
+    assert AskResultResponse.AskResult(
+        **generation_result["post_processor"]["valid_generation_results"][0]
+    )
+
+    generation_result = generation_pipeline.run(
+        "How many authors are there?",
+        contexts=GLOBAL_DATA["contexts"],
+        exclude=[{"statement": "SELECT 1 FROM author"}],
     )
 
     assert AskResultResponse.AskResult(
