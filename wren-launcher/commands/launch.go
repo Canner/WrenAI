@@ -39,7 +39,7 @@ func evaluateTelemetryPreferences() (bool, error) {
 		return false, nil
 	}
 	fmt.Println("WrenAI relies on anonymous usage statistics to continuously improve.")
-	fmt.Println("You can read more at https://docs.getwren.ai/overview/telemetry")
+	fmt.Println("You can opt out of sharing these statistics by manually adding flag `--disable-telemetry` as described at https://docs.getwren.ai/overview/telemetry")
 	return true, nil
 }
 
