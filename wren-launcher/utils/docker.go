@@ -178,8 +178,6 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		return err
 	}
 
-	// replace OPENAI_API_KEY=sk-xxxxxx with OPENAI_API_KEY=OpenaiApiKey
-	// replace OPENAI_GENERATION_MODEL= with OPENAI_GENERATION_MODEL=OpenaiGenerationModel
 	// read the file
 	envExampleFileContent, err := os.ReadFile(envExampleFile)
 	if err != nil {
