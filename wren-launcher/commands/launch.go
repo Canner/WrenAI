@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Canner/WrenAI/wren-launcher/config"
 	utils "github.com/Canner/WrenAI/wren-launcher/utils"
 	"github.com/common-nighthawk/go-figure"
 	"github.com/manifoldco/promptui"
@@ -30,36 +31,15 @@ func prepareProjectDir() string {
 	return projectDir
 }
 
-func AskForTelemetryConsent() (bool, error) {
+func evaluateTelemetryPreferences() (bool, error) {
 	// let users know we're asking for telemetry consent
-	fmt.Println("WrenAI collects 'ONLY usage data' to improve WrenAI.")
-	fmt.Println("You can read more about what we collected at https://docs.getwren.ai/overview/telemetry")
-
-	validate := func(input string) error {
-		if input == "y" || input == "n" || input == "" {
-			return nil
-		}
-		return errors.New("invalid input")
-	}
-
-	prompt := promptui.Prompt{
-		Label:    "Do you agree to help us by sending anonymous usage data? (y/n, default is y)",
-		Validate: validate,
-	}
-
-	result, err := prompt.Run()
-
-	if err != nil {
-		fmt.Printf("Prompt failed %v\n", err)
-		return false, err
-	}
-
-	if result == "n" {
-		fmt.Println("You have chosen not to consent to telemetry data collection. WrenAI will not collect any usage data.")
+	disableTelemetry := config.IsTelemetryDisabled()
+	if disableTelemetry {
+		fmt.Println("You have disabled telemetry, WrenAI will not collect any data.")
 		return false, nil
 	}
-
-	fmt.Println("Thank you for sharing your usage information with us.")
+	fmt.Println("WrenAI collects 'ONLY usage data' to improve WrenAI.")
+	fmt.Println("You can read more at https://docs.getwren.ai/overview/telemetry")
 	return true, nil
 }
 
@@ -137,7 +117,7 @@ func Launch() {
 
 	// ask for telemetry consent
 	pterm.Print("\n")
-	telemetryConsent, err := AskForTelemetryConsent()
+	telemetryEnabled, err := evaluateTelemetryPreferences()
 
 	if err != nil {
 		pterm.Error.Println("Failed to get API key")
@@ -171,7 +151,7 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
-	err = utils.PrepareDockerFiles(apiKey, generationModel, uiPort, aiPort, projectDir, telemetryConsent)
+	err = utils.PrepareDockerFiles(apiKey, generationModel, uiPort, aiPort, projectDir, telemetryEnabled)
 	if err != nil {
 		panic(err)
 	}
