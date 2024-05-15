@@ -41,4 +41,5 @@ export interface PGDataSourceProperties {
   database: string;
   user: string;
   password: string;
+  ssl?: boolean;
 }

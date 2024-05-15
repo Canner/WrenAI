@@ -375,6 +375,7 @@ export class ProjectResolver {
       properties.port = project.port;
       properties.database = project.database;
       properties.user = project.user;
+      properties.ssl = project.configurations?.ssl;
     }
 
     return properties;
