@@ -32,6 +32,12 @@ from src.web.v1.services.sql_explanation import (
     SQLExplanationResultRequest,
     SQLExplanationResultResponse,
 )
+from src.web.v1.services.sql_regeneration import (
+    SQLRegenerationRequest,
+    SQLRegenerationResponse,
+    SQLRegenerationResultRequest,
+    SQLRegenerationResultResponse,
+)
 
 router = APIRouter()
 
@@ -160,4 +166,30 @@ async def get_sql_explanation_result(
 ) -> SQLExplanationResultResponse:
     return container.SQL_EXPLANATION_SERVICE.get_sql_explanation_result(
         SQLExplanationResultRequest(query_id=query_id)
+    )
+
+
+@router.post("/sql-regenerations")
+async def sql_regeneration(
+    sql_regeneration_request: SQLRegenerationRequest,
+    background_tasks: BackgroundTasks,
+) -> SQLRegenerationResponse:
+    query_id = str(uuid.uuid4())
+    sql_regeneration_request.query_id = query_id
+    container.SQL_REGENERATION_SERVICE.sql_regeneration_results[
+        query_id
+    ] = SQLRegenerationResultResponse(status="understanding")
+    background_tasks.add_task(
+        container.SQL_REGENERATION_SERVICE.sql_regeneration,
+        sql_regeneration_request,
+    )
+    return SQLRegenerationResponse(query_id=query_id)
+
+
+@router.get("/sql-regenerations/{query_id}/result")
+async def get_sql_regeneration_result(
+    query_id: str,
+) -> SQLRegenerationResultResponse:
+    return container.SQL_REGENERATION_SERVICE.get_sql_regeneration_result(
+        SQLRegenerationResultRequest(query_id=query_id)
     )

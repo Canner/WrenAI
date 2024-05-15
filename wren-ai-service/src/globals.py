@@ -34,6 +34,7 @@ from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics import SemanticsService
 from src.web.v1.services.sql_explanation import SQLExplanationService
+from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
 SEMANTIC_SERVICE = None
 ASK_SERVICE = None
@@ -110,3 +111,5 @@ def init_globals():
             )
         }
     )
+
+    SQL_REGENERATION_SERVICE = SQLRegenerationService(pipelines={})
