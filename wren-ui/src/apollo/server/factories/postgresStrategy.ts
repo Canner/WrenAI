@@ -12,7 +12,11 @@ import {
   PostgresConnector,
 } from '../connectors/postgresConnector';
 import { Encryptor } from '../utils';
-import { findColumnsToUpdate, updateModelPrimaryKey } from './util';
+import {
+  findColumnsToUpdate,
+  updateModelPrimaryKey,
+  adaptColumnNameToReferenceName,
+} from './util';
 
 export class PostgresStrategy implements IDataSourceStrategy {
   private project?: Project;
@@ -327,7 +331,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
         isCalculated: false,
         displayName: columnName,
         sourceColumnName: columnName,
-        referenceName: columnName,
+        referenceName: adaptColumnNameToReferenceName(columnName),
         type: tableColumn?.data_type || 'string',
         notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
         isPk: primaryKey === columnName,
@@ -378,7 +382,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
           isCalculated: false,
           displayName: columnName,
           sourceColumnName: columnName,
-          referenceName: columnName,
+          referenceName: adaptColumnNameToReferenceName(columnName),
           type: tableColumn?.data_type || 'string',
           notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
           isPk: false,
