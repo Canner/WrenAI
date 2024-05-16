@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { keyBy } from 'lodash';
 import { Col, Row, Typography, Button } from 'antd';
 import FieldTable from '@/components/table/FieldTable';
 import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
@@ -23,6 +25,17 @@ export default function ModelMetadata(props: Props) {
     usePreviewModelDataMutation({
       onError: (error) => console.error(error),
     });
+
+  // Model preview data should show alias as column name.
+  const fieldsMap = useMemo(() => keyBy(fields, 'referenceName'), [fields]);
+  const previewData = useMemo(() => {
+    const previewModelData = previewModelDataResult.data?.previewModelData;
+    const columns = (previewModelData?.columns || []).map((column) => {
+      const alias = fieldsMap[column.name]?.displayName;
+      return { ...column, name: alias || column.name };
+    });
+    return { ...previewModelData, columns };
+  }, [fieldsMap, previewModelDataResult.data]);
 
   const onPreviewData = () => {
     previewModelData({ variables: { where: { id: modelId } } });
@@ -90,7 +103,7 @@ export default function ModelMetadata(props: Props) {
           <PreviewData
             error={previewModelDataResult.error}
             loading={previewModelDataResult.loading}
-            previewData={previewModelDataResult.data?.previewModelData}
+            previewData={previewData}
           />
         </div>
       </div>
