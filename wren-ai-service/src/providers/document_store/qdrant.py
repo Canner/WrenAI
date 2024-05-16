@@ -5,8 +5,10 @@ from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
 from src.core.provider import DocumentStoreProvider
 from src.providers.llm.openai import EMBEDDING_MODEL_DIMENSION
+from src.providers.loader import provider
 
 
+@provider("qdrant")
 class QdrantProvider(DocumentStoreProvider):
     def __init__(self, location: str):
         self._location = location

@@ -9,6 +9,7 @@ from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 
 from src.core.provider import LLMProvider
+from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -34,6 +35,7 @@ class CustomOpenAIGenerator(OpenAIGenerator):
         )
 
 
+@provider("openai")
 class OpenAILLMProvider(LLMProvider):
     def __init__(self, api_key: Secret, generation_model: str = GENERATION_MODEL_NAME):
         self._api_key = api_key
