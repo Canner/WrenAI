@@ -498,11 +498,14 @@ export class ModelService implements IModelService {
     if (!fromModel || !toModel) {
       throw new Error('Model not found');
     }
+
     return (
       fromModel.sourceTableName.charAt(0).toUpperCase() +
       fromModel.sourceTableName.slice(1) +
+      relation.fromColumnId +
       toModel.sourceTableName.charAt(0).toUpperCase() +
-      toModel.sourceTableName.slice(1)
+      toModel.sourceTableName.slice(1) +
+      relation.toColumnId
     );
   }
 
