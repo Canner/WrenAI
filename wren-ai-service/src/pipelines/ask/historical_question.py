@@ -1,3 +1,4 @@
+import ast
 import logging
 from typing import Dict, List, Optional
 
@@ -72,7 +73,7 @@ class OutputFormatter:
         logger.debug(f"historical_question_output_formatter: {documents}")
 
         for doc in documents:
-            content = eval(doc.content)
+            content = ast.literal_eval(doc.content)
             formatted = {
                 "question": content["question"],
                 "description": content["description"],
