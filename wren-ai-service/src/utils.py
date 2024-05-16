@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Tuple
 import requests
 import sqlglot
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.providers import loader
@@ -64,12 +63,6 @@ def clean_generation_result(result: str) -> str:
 
 
 def load_env_vars() -> str:
-    def _verify_env_vars() -> None:
-        """
-        this is a temporary solution to verify that the required environment variables are set
-        """
-        OpenAI().models.list()
-
     load_dotenv(override=True)
 
     if is_dev_env := os.getenv("ENV") and os.getenv("ENV").lower() == "dev":
@@ -77,7 +70,6 @@ def load_env_vars() -> str:
     else:
         load_dotenv(".env.prod", override=True)
 
-    _verify_env_vars()
     return "dev" if is_dev_env else "prod"
 
 

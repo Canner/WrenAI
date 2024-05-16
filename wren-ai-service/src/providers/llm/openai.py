@@ -8,6 +8,7 @@ from haystack import component
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
 from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
+from openai import OpenAI
 
 from src.core.provider import LLMProvider
 from src.providers.loader import provider
@@ -44,6 +45,13 @@ class OpenAILLMProvider(LLMProvider):
         generation_model: str = os.getenv("OPENAI_GENERATION_MODEL")
         or GENERATION_MODEL_NAME,
     ):
+        def _verify_env_vars() -> None:
+            """
+            this is a temporary solution to verify that the required environment variables are set
+            """
+            OpenAI().models.list()
+
+        _verify_env_vars()
         logger.info(f"Using OpenAI Generation Model: {generation_model}")
         self._api_key = api_key
         self._generation_model = generation_model
