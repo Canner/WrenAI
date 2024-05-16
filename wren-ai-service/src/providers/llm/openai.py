@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import backoff
@@ -37,7 +38,13 @@ class CustomOpenAIGenerator(OpenAIGenerator):
 
 @provider("openai")
 class OpenAILLMProvider(LLMProvider):
-    def __init__(self, api_key: Secret, generation_model: str = GENERATION_MODEL_NAME):
+    def __init__(
+        self,
+        api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
+        generation_model: str = os.getenv("OPENAI_GENERATION_MODEL")
+        or GENERATION_MODEL_NAME,
+    ):
+        logger.info(f"Using OpenAI Generation Model: {generation_model}")
         self._api_key = api_key
         self._generation_model = generation_model
 

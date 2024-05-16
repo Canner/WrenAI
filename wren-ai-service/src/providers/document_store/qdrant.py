@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
@@ -10,7 +11,7 @@ from src.providers.loader import provider
 
 @provider("qdrant")
 class QdrantProvider(DocumentStoreProvider):
-    def __init__(self, location: str):
+    def __init__(self, location: str = os.getenv("QDRANT_HOST")):
         self._location = location
 
     def get_store(
