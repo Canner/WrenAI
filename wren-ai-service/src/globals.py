@@ -1,7 +1,6 @@
 from typing import Callable, Tuple
 
-from src.core.document_store_provider import DocumentStoreProvider
-from src.core.llm_provider import LLMProvider
+from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask import (
     followup_generation_pipeline as ask_followup_generation_pipeline,
 )

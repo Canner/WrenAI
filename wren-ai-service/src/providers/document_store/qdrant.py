@@ -3,7 +3,7 @@ from typing import Optional
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
-from src.core.document_store_provider import DocumentStoreProvider
+from src.core.provider import DocumentStoreProvider
 from src.providers.llm.openai import EMBEDDING_MODEL_DIMENSION
 
 

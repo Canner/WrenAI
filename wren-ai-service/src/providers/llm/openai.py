@@ -8,7 +8,7 @@ from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbe
 from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 
-from src.core.llm_provider import LLMProvider
+from src.core.provider import LLMProvider
 
 logger = logging.getLogger("wren-ai-service")
 

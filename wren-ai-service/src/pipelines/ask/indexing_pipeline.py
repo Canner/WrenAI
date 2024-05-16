@@ -8,8 +8,8 @@ from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from tqdm import tqdm
 
-from src.core.document_store_provider import DocumentStoreProvider
-from src.core.llm_provider import LLMProvider
+from src.core.provider import LLMProvider
+from src.core.provider import DocumentStoreProvider
 from src.core.pipeline import BasicPipeline
 from src.utils import init_providers, load_env_vars
 

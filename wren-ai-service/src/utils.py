@@ -9,8 +9,7 @@ from dotenv import load_dotenv
 from haystack.utils.auth import Secret
 from openai import OpenAI
 
-from src.core.document_store_provider import DocumentStoreProvider
-from src.core.llm_provider import LLMProvider
+from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.providers.document_store.qdrant import QdrantProvider
 from src.providers.llm.openai import GENERATION_MODEL_NAME, OpenAILLMProvider
 
