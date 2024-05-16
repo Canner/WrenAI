@@ -49,12 +49,3 @@ def get_provider(name: str):
     logger.debug(f"Getting provider: {name} from {PROVIDERS}")
 
     return PROVIDERS[name]
-
-
-if __name__ == "__main__":
-    from src.providers.loader import PROVIDERS
-
-    logging.basicConfig(level=logging.INFO)
-
-    import_mods()
-    get_provider("openai")
