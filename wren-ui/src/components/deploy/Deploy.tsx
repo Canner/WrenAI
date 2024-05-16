@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Button, Space, Typography } from 'antd';
+import { Button, Space, Typography, message } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
@@ -38,9 +38,29 @@ const getDeployStatus = (deploying: boolean, status: SyncStatus) => {
 
 export default function Deploy() {
   const deployContext = useDeployStatusContext();
-  const [deployMutation, { loading: deploying }] = useDeployMutation();
-
   const { data, loading, startPolling, stopPolling } = deployContext;
+
+  const [deployMutation, { data: deployResult, loading: deploying }] =
+    useDeployMutation({
+      onCompleted: (data) => {
+        if (data.deploy?.status === 'FAILED') {
+          console.error('Failed to deploy - ', data.deploy?.error);
+          message.error(
+            'Failed to deploy. Please check the log for more details.',
+          );
+        }
+      },
+    });
+
+  useEffect(() => {
+    // Stop polling deploy status if deploy failed
+    if (
+      deployResult?.deploy?.status === 'FAILED' &&
+      data?.modelSync.status === SyncStatus.UNSYNCRONIZED
+    ) {
+      stopPolling();
+    }
+  }, [deployResult, data]);
 
   const syncStatus = data?.modelSync.status;
 

@@ -237,11 +237,11 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       }
     } catch (err: any) {
       logger.debug(
-        `Got error when deploying to wren AI, hash: ${hash}. Error: ${getAISerciceError(err)}`,
+        `Got error when deploying to wren AI, hash: ${hash}. Error: ${err}`,
       );
       return {
         status: WrenAIDeployStatusEnum.FAILED,
-        error: `WrenAI Error: deployment hash:${hash}, ${err.message}`,
+        error: `WrenAI Error: deployment hash:${hash}, ${err}`,
       };
     }
   }
@@ -265,11 +265,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
           return;
         }
       } catch (err: any) {
-        logger.debug(err);
-        logger.debug(
-          `Got error when waiting for deploy finished: ${err.message}`,
-        );
-        break;
+        throw err;
       }
       await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
     }
@@ -282,12 +278,13 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations/${deployId}/status`,
       );
       if (res.data.error) {
-        logger.debug(`deploy error: ${res.data.error}`);
+        // passing AI response error string to catch block
+        throw res.data.error;
       }
       return res.data?.status.toUpperCase() as WrenAISystemStatus;
     } catch (err: any) {
       logger.debug(
-        `Got error in API /v1/semantics-preparations/${deployId}/status: ${getAISerciceError(err)}`,
+        `Got error in API /v1/semantics-preparations/${deployId}/status: ${err}`,
       );
       throw err;
     }
