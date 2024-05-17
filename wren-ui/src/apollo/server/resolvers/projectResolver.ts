@@ -6,7 +6,7 @@ import {
   RelationData,
   SampleDatasetData,
 } from '../types';
-import { getLogger } from '@server/utils';
+import { Encryptor, getLogger } from '@server/utils';
 import { Model, ModelColumn, Project } from '../repositories';
 import {
   SampleDatasetName,
@@ -17,6 +17,7 @@ import {
 } from '@server/data';
 import { snakeCase } from 'lodash';
 import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
+import { SupportedDataSource } from '../adaptors/ibisAdaptor';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -40,6 +41,58 @@ export class ProjectResolver {
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
     this.startSampleDataset = this.startSampleDataset.bind(this);
+    this.testIbis = this.testIbis.bind(this);
+  }
+
+  public async testIbis(_root: any, _arg: any, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    logger.debug(project);
+
+    let sql;
+    let connectionInfo = {};
+    let dataSource = null;
+    if (project.type === 'POSTGRES') {
+      const encryptor = new Encryptor(ctx.config);
+      const decryptedCredentials = encryptor.decrypt(project.credentials);
+      const { password } = JSON.parse(decryptedCredentials);
+
+      connectionInfo = {
+        host: project.host,
+        port: project.port,
+        database: project.database,
+        user: project.user,
+        password,
+      };
+      sql = 'SELECT * FROM public_orders';
+      dataSource = SupportedDataSource.POSTGRES;
+    } else if (project.type === 'BIG_QUERY') {
+      const encryptor = new Encryptor(ctx.config);
+      const decryptedCredentials = encryptor.decrypt(project.credentials);
+      const credential = Buffer.from(decryptedCredentials).toString('base64');
+      connectionInfo = {
+        project_id: project.projectId,
+        dataset_id: project.datasetId,
+        credentials: credential,
+      };
+      sql = `select * from "${project.projectId}".payments`;
+      dataSource = SupportedDataSource.BIGQUERY;
+    } else {
+      logger.error('Unsupported data source type');
+      return {};
+    }
+    logger.debug(connectionInfo);
+    logger.debug(sql);
+    const ibisAdaptor = ctx.ibisServerAdaptor;
+    const nativeSql = await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
+      modelingOnly: true,
+    });
+    logger.debug(`native sql: ${nativeSql}`);
+    const response = await ibisAdaptor.query(
+      nativeSql,
+      dataSource,
+      connectionInfo,
+    );
+    return response;
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
@@ -385,4 +438,13 @@ export class ProjectResolver {
 
     return properties;
   }
+}
+
+function isJsonString(str) {
+  try {
+    JSON.parse(str);
+  } catch (_e) {
+    return false;
+  }
+  return true;
 }
