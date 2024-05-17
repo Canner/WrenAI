@@ -49,6 +49,9 @@ export const ERROR_TEXTS = {
     RELATION_TYPE: {
       REQUIRED: 'Please select a relationship type.',
     },
+    RELATIONSHIP: {
+      EXIST: 'This relationship already exists.',
+    },
   },
   SETUP_MODEL: {
     TABLE: {
