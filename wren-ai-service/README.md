@@ -2,7 +2,7 @@
 
 ## Environment Setup
 
-- Python 3.12
+- Python 3.12.0
 - install `poetry` with version 1.7.1: `curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`
 - execute `poetry install` to install the dependencies
 - copy `.env.example` file to `.env`, and `.env.dev.example` file to `.env.dev` and fill in the environment variables
