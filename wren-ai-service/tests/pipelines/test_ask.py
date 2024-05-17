@@ -1,5 +1,4 @@
-import json
-
+import orjson as json
 import pytest
 
 from src.core.document_store_provider import DocumentStoreProvider

@@ -1,6 +1,6 @@
-import json
 import uuid
 
+import orjson as json
 import pytest
 
 from src.pipelines.ask import (

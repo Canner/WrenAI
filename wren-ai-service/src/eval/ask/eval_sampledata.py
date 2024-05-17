@@ -3,13 +3,13 @@ CAUTION: before running this code, please ensure the given dataset's mdl model i
 """
 
 import argparse
-import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
+import orjson as json
 import requests
 from tqdm import tqdm
 

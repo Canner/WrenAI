@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import sqlite3
@@ -9,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import gdown
+import orjson as json
 import pandas as pd
 import sqlglot
 import sqlparse

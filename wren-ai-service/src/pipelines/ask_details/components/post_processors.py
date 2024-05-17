@@ -1,9 +1,9 @@
-import json
 import logging
 import os
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
+import orjson as json
 from haystack import component
 
 from src.utils import (

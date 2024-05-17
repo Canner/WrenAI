@@ -1,6 +1,6 @@
-import json
 from pathlib import Path
 
+import orjson as json
 import streamlit as st
 
 

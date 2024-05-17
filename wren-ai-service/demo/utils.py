@@ -1,10 +1,10 @@
-import json
 import os
 import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import orjson as json
 import pandas as pd
 import requests
 import sqlparse

@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -7,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import orjson as json
 from tqdm import tqdm
 
 from src.pipelines.ask.generation_pipeline import Generation

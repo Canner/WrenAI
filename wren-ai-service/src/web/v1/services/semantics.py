@@ -1,6 +1,6 @@
-import json
 from typing import Any, AnyStr, Dict, List
 
+import orjson as json
 from haystack import Pipeline
 from pydantic import BaseModel
 

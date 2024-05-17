@@ -1,6 +1,6 @@
-import json
 import uuid
 
+import orjson as json
 from fastapi.testclient import TestClient
 
 from src.__main__ import app

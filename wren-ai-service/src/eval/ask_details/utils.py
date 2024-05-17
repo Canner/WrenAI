@@ -1,8 +1,8 @@
-import json
 import os
 import time
 from typing import Any, Dict
 
+import orjson as json
 from haystack import Pipeline
 from haystack.components.generators import OpenAIGenerator
 from haystack_integrations.components.evaluators.ragas import (

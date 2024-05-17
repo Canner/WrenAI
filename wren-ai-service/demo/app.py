@@ -1,7 +1,7 @@
-import json
 import re
 import uuid
 
+import orjson as json
 import streamlit as st
 from utils import (
     DATA_SOURCES,

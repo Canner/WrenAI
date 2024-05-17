@@ -1,6 +1,6 @@
-import json
 from typing import Any, AnyStr, Dict, Optional
 
+import orjson as json
 from haystack import Pipeline
 from haystack.components.builders import PromptBuilder
 
