@@ -1,4 +1,5 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
+import { capitalize } from 'lodash';
 import { IConnector } from '../connectors/connector';
 import { Model, ModelColumn, Project } from '../repositories';
 import {
@@ -232,10 +233,8 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       const relation: AnalysisRelationInfo = {
         // upper case the first letter of the sourceTableName
         name:
-          fromModel.sourceTableName.charAt(0).toUpperCase() +
-          fromModel.sourceTableName.slice(1) +
-          toModel.sourceTableName.charAt(0).toUpperCase() +
-          toModel.sourceTableName.slice(1),
+          capitalize(fromModel.sourceTableName) +
+          capitalize(toModel.sourceTableName),
         fromModelId: fromModel.id,
         fromModelReferenceName: fromModel.referenceName,
         fromColumnId: fromColumn.id,

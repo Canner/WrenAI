@@ -136,7 +136,7 @@ function EditableRelationTable(props: EditableRelationTableProps) {
           </Button>
         )}
         rowKey={(record: RelationsDataType) =>
-          `${modelName}-${record.toField.modelName}-${index}`
+          `${modelName}-${record.fromField.fieldName}-${record.toField.modelName}-${record.toField.fieldName}-${index}`
         }
       />
     </div>

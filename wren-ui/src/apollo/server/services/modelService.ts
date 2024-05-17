@@ -19,7 +19,7 @@ import {
 } from '../models';
 import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
-import { isEmpty } from 'lodash';
+import { isEmpty, capitalize } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 import * as Errors from '@server/utils/error';
 
@@ -353,7 +353,7 @@ export class ModelService implements IModelService {
       if (!toColumn) {
         throw new Error(`Column not found, column Id  ${relation.toColumnId}`);
       }
-      const relationName = this.generateRelationName(relation, models);
+      const relationName = this.generateRelationName(relation, models, columns);
       return {
         projectId: project.id,
         name: relationName,
@@ -385,7 +385,7 @@ export class ModelService implements IModelService {
     if (!valid) {
       throw new Error(message);
     }
-    const relationName = this.generateRelationName(relation, models);
+    const relationName = this.generateRelationName(relation, models, columns);
     const savedRelation = await this.relationRepository.createOne({
       projectId: project.id,
       name: relationName,
@@ -492,17 +492,29 @@ export class ModelService implements IModelService {
     return replaceAllowableSyntax(displayName);
   }
 
-  private generateRelationName(relation: RelationData, models: Model[]) {
+  private generateRelationName(
+    relation: RelationData,
+    models: Model[],
+    columns: ModelColumn[],
+  ) {
     const fromModel = models.find((m) => m.id === relation.fromModelId);
     const toModel = models.find((m) => m.id === relation.toModelId);
     if (!fromModel || !toModel) {
       throw new Error('Model not found');
     }
+
+    const fromColumn = columns.find(
+      (column) => column.id === relation.fromColumnId,
+    );
+    const toColumn = columns.find(
+      (column) => column.id === relation.toColumnId,
+    );
+
     return (
-      fromModel.sourceTableName.charAt(0).toUpperCase() +
-      fromModel.sourceTableName.slice(1) +
-      toModel.sourceTableName.charAt(0).toUpperCase() +
-      toModel.sourceTableName.slice(1)
+      capitalize(fromModel.sourceTableName) +
+      capitalize(fromColumn.referenceName) +
+      capitalize(toModel.sourceTableName) +
+      capitalize(toColumn.referenceName)
     );
   }
 
