@@ -37,12 +37,12 @@ export async function updateModelPrimaryKey(
   }
 }
 
-export function adaptColumnNameToReferenceName(columnName: string) {
+export function transformInvalidColumnName(columnName: string) {
   let referenceName = replaceAllowableSyntax(columnName);
   // If the reference name does not start with a letter, add a prefix
   const startWithLetterRegex = /^[A-Za-z]/;
   if (!startWithLetterRegex.test(referenceName)) {
-    referenceName = `r_${referenceName}`;
+    referenceName = `col_${referenceName}`;
   }
   return referenceName;
 }

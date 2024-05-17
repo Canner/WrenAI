@@ -11,7 +11,7 @@ import { IDataSourceStrategy } from './dataSourceStrategy';
 import {
   findColumnsToUpdate,
   updateModelPrimaryKey,
-  adaptColumnNameToReferenceName,
+  transformInvalidColumnName,
 } from './util';
 
 export class DuckDBStrategy implements IDataSourceStrategy {
@@ -271,7 +271,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
         isCalculated: false,
         displayName: columnName,
         sourceColumnName: columnName,
-        referenceName: adaptColumnNameToReferenceName(columnName),
+        referenceName: transformInvalidColumnName(columnName),
         type: compactColumn.type || 'string',
         notNull: compactColumn.notNull,
         isPk: primaryKey === columnName,
@@ -307,7 +307,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
           isCalculated: false,
           displayName: columnName,
           sourceColumnName: columnName,
-          referenceName: adaptColumnNameToReferenceName(columnName),
+          referenceName: transformInvalidColumnName(columnName),
           type: compactColumn.type || 'string',
           notNull: compactColumn.notNull,
           isPk: false,
