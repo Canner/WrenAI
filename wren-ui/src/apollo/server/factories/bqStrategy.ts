@@ -15,7 +15,11 @@ import {
 } from '../connectors/bqConnector';
 import { Encryptor, toBase64 } from '../utils';
 import { IDataSourceStrategy } from './dataSourceStrategy';
-import { findColumnsToUpdate, updateModelPrimaryKey } from './util';
+import {
+  findColumnsToUpdate,
+  updateModelPrimaryKey,
+  transformInvalidColumnName,
+} from './util';
 
 export class BigQueryStrategy implements IDataSourceStrategy {
   connector: IConnector<any, any>;
@@ -367,7 +371,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
         isCalculated: false,
         displayName: columnName,
         sourceColumnName: columnName,
-        referenceName: columnName,
+        referenceName: transformInvalidColumnName(columnName),
         type: tableColumn?.data_type || 'string',
         notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
         isPk: primaryKey === columnName,
@@ -406,7 +410,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
           isCalculated: false,
           displayName: columnName,
           sourceColumnName: columnName,
-          referenceName: columnName,
+          referenceName: transformInvalidColumnName(columnName),
           type: tableColumn?.data_type || 'string',
           notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
           isPk: false,

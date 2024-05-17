@@ -8,7 +8,11 @@ import {
 } from '../connectors/duckdbConnector';
 import { trim } from '../utils';
 import { IDataSourceStrategy } from './dataSourceStrategy';
-import { findColumnsToUpdate, updateModelPrimaryKey } from './util';
+import {
+  findColumnsToUpdate,
+  updateModelPrimaryKey,
+  transformInvalidColumnName,
+} from './util';
 
 export class DuckDBStrategy implements IDataSourceStrategy {
   connector: IConnector<any, any>;
@@ -267,7 +271,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
         isCalculated: false,
         displayName: columnName,
         sourceColumnName: columnName,
-        referenceName: columnName,
+        referenceName: transformInvalidColumnName(columnName),
         type: compactColumn.type || 'string',
         notNull: compactColumn.notNull,
         isPk: primaryKey === columnName,
@@ -303,7 +307,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
           isCalculated: false,
           displayName: columnName,
           sourceColumnName: columnName,
-          referenceName: columnName,
+          referenceName: transformInvalidColumnName(columnName),
           type: compactColumn.type || 'string',
           notNull: compactColumn.notNull,
           isPk: false,

@@ -325,6 +325,10 @@ export class MDLBuilder implements IMDLBuilder {
     currentModel?: ModelMDL,
   ): string {
     if (!column.isCalculated) {
+      // Provide original column name in expression to MDL if referenceName has converted.
+      if (column.sourceColumnName !== column.referenceName) {
+        return `"${column.sourceColumnName}"`;
+      }
       return '';
     }
     // calculated field
