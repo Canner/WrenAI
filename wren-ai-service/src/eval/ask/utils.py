@@ -390,7 +390,10 @@ def prepare_evaluation_pipeline_inputs(
         questions.append(ground_truth["question"])
         ground_truths.append(ground_truth["answer"])
         contexts.append(
-            [orjson.dumps(context["content"]) for context in prediction["contexts"]]
+            [
+                orjson.dumps(context["content"]).decode("utf-8")
+                for context in prediction["contexts"]
+            ]
         )
         responses.append(prediction["answer"])
 

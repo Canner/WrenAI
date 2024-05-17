@@ -61,7 +61,7 @@ def ask_service():
 @pytest.fixture
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
-        return orjson.dumps(json.load(f))
+        return orjson.dumps(json.load(f)).decode("utf-8")
 
 
 def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):

@@ -374,15 +374,15 @@ if __name__ == "__main__":
             with open(
                 f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "r"
             ) as f:
-                mdl_str = orjson.dumps(json.load(f))
+                mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
         elif CUSTOM_SEMANTIC_DESCRIPTION:
             with open(
                 f"./src/eval/data/{DATASET_NAME}_custom_semantic_mdl.json", "r"
             ) as f:
-                mdl_str = orjson.dumps(json.load(f))
+                mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
         else:
             with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
-                mdl_str = orjson.dumps(json.load(f))
+                mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
         llm_provider, document_store_provider = init_providers()
 

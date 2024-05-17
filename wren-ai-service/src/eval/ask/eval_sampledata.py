@@ -154,7 +154,7 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
         store_provider=document_store_provider,
     )
-    indexing_pipeline.run(orjson.dumps(mdl))
+    indexing_pipeline.run(orjson.dumps(mdl).decode("utf-8"))
     print(
         f"Finished indexing documents, document count: {document_store.count_documents()}"
     )

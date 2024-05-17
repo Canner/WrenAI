@@ -201,7 +201,7 @@ class DDLConverter:
             for column in model["columns"]:
                 if "relationship" not in column:
                     if "properties" in column:
-                        comment = f"-- {orjson.dumps(column['properties'])}\n  "
+                        comment = f"-- {orjson.dumps(column['properties']).decode("utf-8")}\n  "
                     else:
                         comment = ""
                     if "isCalculated" in column and column["isCalculated"]:
@@ -252,7 +252,9 @@ class DDLConverter:
                     columns_ddl.append(fk_constraint)
 
             if "properties" in model:
-                comment = f"\n/* {orjson.dumps(model['properties'])} */\n"
+                comment = (
+                    f"\n/* {orjson.dumps(model['properties']).decode("utf-8")} */\n"
+                )
             else:
                 comment = ""
 
