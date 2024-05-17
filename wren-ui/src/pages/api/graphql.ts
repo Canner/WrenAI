@@ -27,6 +27,7 @@ import { ThreadRepository } from '@/apollo/server/repositories/threadRepository'
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
 import { Telemetry } from '@/apollo/server/telemetry/telemetry';
+import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -64,6 +65,9 @@ const bootstrapServer = async () => {
   });
   const wrenAIAdaptor = new WrenAIAdaptor({
     wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
+  });
+  const ibisServerAdaptor = new IbisAdaptor({
+    ibisServerBaseEndpoint: serverConfig.ibisServerBaseEndpoint,
   });
 
   const projectService = new ProjectService({ projectRepository });
@@ -138,6 +142,7 @@ const bootstrapServer = async () => {
       telemetry,
       // adaptor
       wrenEngineAdaptor,
+      ibisServerAdaptor,
 
       // services
       projectService,

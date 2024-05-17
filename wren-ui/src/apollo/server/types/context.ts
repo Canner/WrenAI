@@ -1,3 +1,4 @@
+import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import { IConfig } from '../config';
 import {
@@ -21,6 +22,7 @@ export interface IContext {
 
   // adaptor
   wrenEngineAdaptor: IWrenEngineAdaptor;
+  ibisServerAdaptor: IIbisAdaptor;
 
   // services
   projectService: IProjectService;

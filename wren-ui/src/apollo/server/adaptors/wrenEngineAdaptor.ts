@@ -66,6 +66,11 @@ export interface ValidationResponse {
   message?: string;
 }
 
+export interface DryPlanOption {
+  modelingOnly?: boolean;
+  manifest?: Manifest;
+}
+
 export interface IWrenEngineAdaptor {
   deploy(deployData: deployData): Promise<DeployResponse>;
   initDatabase(sql: string): Promise<void>;
@@ -78,7 +83,7 @@ export interface IWrenEngineAdaptor {
     mdl?: Manifest,
   ): Promise<QueryResponse>;
   describeStatement(sql: string): Promise<DescribeStatementResponse>;
-  getNativeSQL(sql: string): Promise<string>;
+  getNativeSQL(sql: string, options?: DryPlanOption): Promise<string>;
   validateColumnIsValid(
     manifest: Manifest,
     modelName: string,
@@ -285,8 +290,16 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
-  public async getNativeSQL(sql: string): Promise<string> {
+  public async getNativeSQL(
+    sql: string,
+    options: DryPlanOption,
+  ): Promise<string> {
     try {
+      const props = {
+        modelingOnly: options?.modelingOnly ? true : false,
+        manifest: options?.manifest,
+      };
+
       const url = new URL(this.dryPlanUrlPath, this.wrenEngineBaseEndpoint);
       const headers = { 'Content-Type': 'application/json' };
 
@@ -296,7 +309,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         headers,
         data: {
           sql,
-          modelingOnly: false,
+          ...props,
         },
       });
 
