@@ -68,6 +68,8 @@ export default function CombineFieldSelector(props: Props) {
         placeholder="Model"
         value={value?.model || modelValue}
         disabled={modelDisabled}
+        showSearch
+        optionFilterProp="label"
       />
       <Select
         className="flex-grow-1"
@@ -76,6 +78,8 @@ export default function CombineFieldSelector(props: Props) {
         placeholder="Field"
         value={value?.field || fieldValue}
         disabled={fieldDisabled}
+        showSearch
+        optionFilterProp="label"
       />
     </Input.Group>
   );
