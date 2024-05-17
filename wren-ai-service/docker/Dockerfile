@@ -1,5 +1,5 @@
 # reference: https://medium.com/@albertazzir/blazing-fast-python-docker-builds-with-poetry-a78a66f5aed0
-FROM python:3.12.2-bookworm as builder
+FROM python:3.12.0-bookworm as builder
 
 RUN pip install poetry==1.7.1
 
