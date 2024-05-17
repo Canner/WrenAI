@@ -237,11 +237,11 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       }
     } catch (err: any) {
       logger.debug(
-        `Got error when deploying to wren AI, hash: ${hash}. Error: ${err}`,
+        `Got error when deploying to wren AI, hash: ${hash}. Error: ${err.message}`,
       );
       return {
         status: WrenAIDeployStatusEnum.FAILED,
-        error: `WrenAI Error: deployment hash:${hash}, ${err}`,
+        error: `WrenAI Error: deployment hash:${hash}, ${err.message}`,
       };
     }
   }
@@ -279,12 +279,12 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       if (res.data.error) {
         // passing AI response error string to catch block
-        throw res.data.error;
+        throw new Error(res.data.error);
       }
       return res.data?.status.toUpperCase() as WrenAISystemStatus;
     } catch (err: any) {
       logger.debug(
-        `Got error in API /v1/semantics-preparations/${deployId}/status: ${err}`,
+        `Got error in API /v1/semantics-preparations/${deployId}/status: ${err.message}`,
       );
       throw err;
     }
