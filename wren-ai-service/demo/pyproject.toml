@@ -13,6 +13,7 @@ sqlparse = "^0.4.4"
 streamlit = "^1.32.2"
 watchdog = "^4.0.0"
 python-dotenv = "^1.0.1"
+orjson = "^3.10.3"
 
 
 [build-system]

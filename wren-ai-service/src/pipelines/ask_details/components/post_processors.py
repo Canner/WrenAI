@@ -1,9 +1,9 @@
-import json
 import logging
 import os
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
+import orjson
 from haystack import component
 
 from src.utils import (
@@ -23,7 +23,7 @@ class GenerationPostProcessor:
         results=Optional[Dict[str, Any]],
     )
     def run(self, replies: List[str]) -> Dict[str, Any]:
-        cleaned_generation_result = json.loads(clean_generation_result(replies[0]))
+        cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
 
         steps = cleaned_generation_result.get("steps", [])
         if not steps:

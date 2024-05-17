@@ -1,6 +1,6 @@
-import json
 from typing import Any, AnyStr, Dict, List
 
+import orjson
 from haystack import Pipeline
 from pydantic import BaseModel
 
@@ -46,7 +46,7 @@ class SemanticsService:
                 "identifier": request.identifier,
             }
         )
-        content = json.loads(response["llm"]["replies"][0])
+        content = orjson.loads(response["llm"]["replies"][0])
 
         return GenerateDescriptionResponse(
             identifier=request.identifier,

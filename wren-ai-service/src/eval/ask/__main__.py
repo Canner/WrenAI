@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import orjson
 from tqdm import tqdm
 
 from src.pipelines.ask.generation_pipeline import Generation
@@ -172,7 +173,7 @@ def eval(prediction_results_file: Path, dataset_name: str, ground_truths: list[d
     download_spider_data()
 
     with open(prediction_results_file, "r") as f:
-        predictions = [json.loads(line) for line in f]
+        predictions = [orjson.loads(line) for line in f]
 
     # eval_pipeline = Evaluation()
     # eval_pipeline_inputs = prepare_evaluation_pipeline_inputs(
@@ -265,13 +266,13 @@ if __name__ == "__main__":
 
     if EASY_QUESTIONS:
         with open(f"./src/eval/data/{DATASET_NAME}_data_easy.json", "r") as f:
-            ground_truths = [json.loads(line) for line in f]
+            ground_truths = [orjson.loads(line) for line in f]
     elif HARD_QUESTIONS:
         with open(f"./src/eval/data/{DATASET_NAME}_data_hard.json", "r") as f:
-            ground_truths = [json.loads(line) for line in f]
+            ground_truths = [orjson.loads(line) for line in f]
     else:
         with open(f"./src/eval/data/{DATASET_NAME}_data.json", "r") as f:
-            ground_truths = [json.loads(line) for line in f]
+            ground_truths = [orjson.loads(line) for line in f]
 
     if ENABLE_SEMANTIC_DESCRIPTION:
         if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
@@ -373,15 +374,15 @@ if __name__ == "__main__":
             with open(
                 f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json", "r"
             ) as f:
-                mdl_str = json.dumps(json.load(f))
+                mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
         elif CUSTOM_SEMANTIC_DESCRIPTION:
             with open(
                 f"./src/eval/data/{DATASET_NAME}_custom_semantic_mdl.json", "r"
             ) as f:
-                mdl_str = json.dumps(json.load(f))
+                mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
         else:
             with open(f"./src/eval/data/{DATASET_NAME}_mdl.json", "r") as f:
-                mdl_str = json.dumps(json.load(f))
+                mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
         llm_provider, document_store_provider = init_providers()
 

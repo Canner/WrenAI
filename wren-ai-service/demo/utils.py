@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import orjson
 import pandas as pd
 import requests
 import sqlparse
@@ -424,7 +425,7 @@ def prepare_semantics(mdl_json: dict):
     semantics_preparation_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations",
         json={
-            "mdl": json.dumps(mdl_json),
+            "mdl": orjson.dumps(mdl_json).decode("utf-8"),
             "id": st.session_state["deployment_id"],
         },
     )

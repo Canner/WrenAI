@@ -3,6 +3,7 @@ import os
 import time
 from typing import Any, Dict
 
+import orjson
 from haystack import Pipeline
 from haystack.components.generators import OpenAIGenerator
 from haystack_integrations.components.evaluators.ragas import (
@@ -39,7 +40,7 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
             sql=input["answer"],
         )
 
-        output = json.loads(response["generator"]["replies"][0])
+        output = orjson.loads(response["generator"]["replies"][0])
 
         print(output)
         return {
@@ -52,7 +53,7 @@ def _prepare_ask_details_eval_data(input_path: str, output_path: str):
         }
 
     with open(input_path) as f:
-        eval_context = [_generate_data(json.loads(line)) for line in f]
+        eval_context = [_generate_data(orjson.loads(line)) for line in f]
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -206,7 +207,7 @@ class Collector:
 
         client = OpenAIGenerator()
         response = client.run(prompt=prompt)
-        reply = json.loads(response["replies"][0])
+        reply = orjson.loads(response["replies"][0])
 
         self._result["accuracy"]["wren"]["llm_judge"] = {
             "explanation": reply["E"],

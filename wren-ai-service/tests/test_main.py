@@ -1,6 +1,7 @@
 import json
 import uuid
 
+import orjson
 from fastapi.testclient import TestClient
 
 from src.__main__ import app
@@ -56,7 +57,7 @@ def test_semantics_preparations():
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
 
         with open("tests/data/book_2_mdl.json", "r") as f:
-            mdl_str = json.dumps(json.load(f))
+            mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
         response = client.post(
             url="/v1/semantics-preparations",
