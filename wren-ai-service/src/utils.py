@@ -6,13 +6,9 @@ from typing import Dict, List, Optional, Tuple
 import requests
 import sqlglot
 from dotenv import load_dotenv
-from haystack.utils.auth import Secret
-from openai import OpenAI
 
-from src.core.document_store_provider import DocumentStoreProvider
-from src.core.llm_provider import LLMProvider
-from src.providers.document_store.qdrant import QdrantProvider
-from src.providers.llm.openai import GENERATION_MODEL_NAME, OpenAILLMProvider
+from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.providers import loader
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -67,12 +63,6 @@ def clean_generation_result(result: str) -> str:
 
 
 def load_env_vars() -> str:
-    def _verify_env_vars() -> None:
-        """
-        this is a temporary solution to verify that the required environment variables are set
-        """
-        OpenAI().models.list()
-
     load_dotenv(override=True)
 
     if is_dev_env := os.getenv("ENV") and os.getenv("ENV").lower() == "dev":
@@ -80,7 +70,6 @@ def load_env_vars() -> str:
     else:
         load_dotenv(".env.prod", override=True)
 
-    _verify_env_vars()
     return "dev" if is_dev_env else "prod"
 
 
@@ -176,25 +165,12 @@ def remove_duplicates(dicts):
     return unique_dicts
 
 
-# please do not change this function unless you are adjusting the OpenAILLMProvider or QdrantProvider
-# if you would like to change the providers, please do the following steps:
-# 1. create a new provider class that implements LLMProvider or DocumentStoreProvider in the src/providers directory
-# 2. if you need to add new environment variables, please add them to the .env.dev and .env.prod files
-# 3. add a new function to import your providers in this file
-# 4. call the new function you created in the src/__main__.py in container.init_globals()
 def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
     load_env_vars()
 
-    generation_model = os.getenv("OPENAI_GENERATION_MODEL") or GENERATION_MODEL_NAME
-
     logger.info("Initializing providers...")
-    logger.info(f"Using OpenAI Generation Model: {generation_model}")
+    loader.import_mods()
 
-    llm_provider = OpenAILLMProvider(
-        api_key=Secret.from_env_var("OPENAI_API_KEY"),
-        generation_model=generation_model,
-    )
-    document_store_provider = QdrantProvider(
-        location=os.getenv("QDRANT_HOST"),
-    )
-    return llm_provider, document_store_provider
+    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER"))
+    document_store_provider = loader.get_provider(os.getenv("DOCUMENT_STORE_PROVIDER"))
+    return llm_provider(), document_store_provider()

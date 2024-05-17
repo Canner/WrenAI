@@ -3,8 +3,7 @@ import json
 import orjson
 import pytest
 
-from src.core.document_store_provider import DocumentStoreProvider
-from src.core.llm_provider import LLMProvider
+from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
 from src.pipelines.ask.indexing_pipeline import Indexing
