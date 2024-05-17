@@ -1,3 +1,4 @@
+import { capitalize } from 'lodash';
 import { IDataSourceStrategy } from './dataSourceStrategy';
 import {
   AnalysisRelationInfo,
@@ -219,10 +220,8 @@ export class PostgresStrategy implements IDataSourceStrategy {
       const relation: AnalysisRelationInfo = {
         // upper case the first letter of the sourceTableName
         name:
-          fromModel.sourceTableName.charAt(0).toUpperCase() +
-          fromModel.sourceTableName.slice(1) +
-          toModel.sourceTableName.charAt(0).toUpperCase() +
-          toModel.sourceTableName.slice(1),
+          capitalize(fromModel.sourceTableName) +
+          capitalize(toModel.sourceTableName),
         fromModelId: fromModel.id,
         fromModelReferenceName: fromModel.referenceName,
         fromColumnId: fromColumn.id,

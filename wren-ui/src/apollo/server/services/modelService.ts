@@ -19,7 +19,7 @@ import {
 } from '../models';
 import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
-import { isEmpty } from 'lodash';
+import { isEmpty, capitalize } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 import * as Errors from '@server/utils/error';
 
@@ -511,14 +511,10 @@ export class ModelService implements IModelService {
     );
 
     return (
-      fromModel.sourceTableName.charAt(0).toUpperCase() +
-      fromModel.sourceTableName.slice(1) +
-      fromColumn.referenceName.charAt(0).toUpperCase() +
-      fromColumn.referenceName.slice(1) +
-      toModel.sourceTableName.charAt(0).toUpperCase() +
-      toModel.sourceTableName.slice(1) +
-      toColumn.referenceName.charAt(0).toUpperCase() +
-      toColumn.referenceName.slice(1)
+      capitalize(fromModel.sourceTableName) +
+      capitalize(fromColumn.referenceName) +
+      capitalize(toModel.sourceTableName) +
+      capitalize(toColumn.referenceName)
     );
   }
 
