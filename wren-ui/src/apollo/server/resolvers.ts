@@ -86,6 +86,9 @@ const resolvers = {
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,
     updateDataSource: projectResolver.updateDataSource,
+
+    // test
+    testIbis: projectResolver.testIbis,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),
