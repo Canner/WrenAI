@@ -1,7 +1,6 @@
+import json
 import os
 from datetime import datetime
-
-import orjson as json
 
 from src.eval.ask_details.utils import (
     Collector,

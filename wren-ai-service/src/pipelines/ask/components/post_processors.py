@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-import orjson as json
+import orjson
 from haystack import component
 
 from src.utils import (
@@ -22,7 +22,7 @@ class QueryUnderstandingPostProcessor:
     )
     def run(self, replies: List[str]):
         try:
-            result = json.loads(replies[0])["result"]
+            result = orjson.loads(replies[0])["result"]
 
             if result == "yes":
                 return {
@@ -48,9 +48,9 @@ class GenerationPostProcessor:
     )
     def run(self, replies: List[str]):
         try:
-            cleaned_generation_result = json.loads(clean_generation_result(replies[0]))[
-                "results"
-            ]
+            cleaned_generation_result = orjson.loads(
+                clean_generation_result(replies[0])
+            )["results"]
 
             if isinstance(cleaned_generation_result, dict):
                 cleaned_generation_result = [cleaned_generation_result]

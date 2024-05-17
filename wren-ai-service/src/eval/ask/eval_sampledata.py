@@ -3,13 +3,14 @@ CAUTION: before running this code, please ensure the given dataset's mdl model i
 """
 
 import argparse
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
-import orjson as json
+import orjson
 import requests
 from tqdm import tqdm
 
@@ -153,7 +154,7 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
         store_provider=document_store_provider,
     )
-    indexing_pipeline.run(json.dumps(mdl))
+    indexing_pipeline.run(orjson.dumps(mdl))
     print(
         f"Finished indexing documents, document count: {document_store.count_documents()}"
     )

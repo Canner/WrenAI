@@ -1,10 +1,11 @@
+import json
 import os
 import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import orjson as json
+import orjson
 import pandas as pd
 import requests
 import sqlparse
@@ -424,7 +425,7 @@ def prepare_semantics(mdl_json: dict):
     semantics_preparation_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/semantics-preparations",
         json={
-            "mdl": json.dumps(mdl_json),
+            "mdl": orjson.dumps(mdl_json),
             "id": st.session_state["deployment_id"],
         },
     )

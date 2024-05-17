@@ -1,6 +1,7 @@
+import json
 import uuid
 
-import orjson as json
+import orjson
 import pytest
 
 from src.pipelines.ask import (
@@ -60,7 +61,7 @@ def ask_service():
 @pytest.fixture
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
-        return json.dumps(json.load(f))
+        return orjson.dumps(json.load(f))
 
 
 def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):

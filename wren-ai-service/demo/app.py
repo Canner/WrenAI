@@ -1,7 +1,7 @@
 import re
 import uuid
 
-import orjson as json
+import orjson
 import streamlit as st
 from utils import (
     DATA_SOURCES,
@@ -93,7 +93,7 @@ if __name__ == "__main__":
                     f"_{data_source}_mdl.json"
                 )[0]
                 st.session_state["dataset_type"] = data_source
-                st.session_state["mdl_json"] = json.loads(
+                st.session_state["mdl_json"] = orjson.loads(
                     uploaded_file.getvalue().decode("utf-8")
                 )
                 save_mdl_json_file(uploaded_file.name, st.session_state["mdl_json"])

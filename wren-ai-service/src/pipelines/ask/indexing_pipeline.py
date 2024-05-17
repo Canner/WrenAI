@@ -1,8 +1,9 @@
-import orjson as json  # noqa: I001
+import json
 import logging
 import os
 from typing import Any, Dict, List
 
+import orjson
 from haystack import Document, Pipeline, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
@@ -50,7 +51,7 @@ class MDLValidator:
     @component.output_types(mdl=Dict[str, Any])
     def run(self, mdl: str) -> str:
         try:
-            mdl_json = json.loads(mdl)
+            mdl_json = orjson.loads(mdl)
             logger.debug(f"MDL JSON: {mdl_json}")
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON: {e}")
@@ -200,7 +201,7 @@ class DDLConverter:
             for column in model["columns"]:
                 if "relationship" not in column:
                     if "properties" in column:
-                        comment = f"-- {json.dumps(column['properties'])}\n  "
+                        comment = f"-- {orjson.dumps(column['properties'])}\n  "
                     else:
                         comment = ""
                     if "isCalculated" in column and column["isCalculated"]:
@@ -251,7 +252,7 @@ class DDLConverter:
                     columns_ddl.append(fk_constraint)
 
             if "properties" in model:
-                comment = f"\n/* {json.dumps(model['properties'])} */\n"
+                comment = f"\n/* {orjson.dumps(model['properties'])} */\n"
             else:
                 comment = ""
 

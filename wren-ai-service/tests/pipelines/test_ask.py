@@ -1,4 +1,6 @@
-import orjson as json
+import json
+
+import orjson
 import pytest
 
 from src.core.document_store_provider import DocumentStoreProvider
@@ -20,7 +22,7 @@ GLOBAL_DATA = {
 @pytest.fixture
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
-        return json.dumps(json.load(f))
+        return orjson.dumps(json.load(f))
 
 
 @pytest.fixture

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sqlite3
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import gdown
-import orjson as json
+import orjson
 import pandas as pd
 import sqlglot
 import sqlparse
@@ -389,7 +390,7 @@ def prepare_evaluation_pipeline_inputs(
         questions.append(ground_truth["question"])
         ground_truths.append(ground_truth["answer"])
         contexts.append(
-            [json.dumps(context["content"]) for context in prediction["contexts"]]
+            [orjson.dumps(context["content"]) for context in prediction["contexts"]]
         )
         responses.append(prediction["answer"])
 

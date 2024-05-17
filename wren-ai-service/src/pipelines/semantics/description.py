@@ -1,6 +1,6 @@
 from typing import Any, AnyStr, Dict, Optional
 
-import orjson as json
+import orjson
 from haystack import Pipeline
 from haystack.components.builders import PromptBuilder
 
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     )
     print(res)
     print(res["llm"]["replies"][0])
-    content = json.loads(res["llm"]["replies"][0])
+    content = orjson.loads(res["llm"]["replies"][0])
     print(content)
 
     pipe.draw("./outputs/pipelines/semantics/description.jpg")

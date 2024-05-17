@@ -1,8 +1,9 @@
+import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
 
-import orjson as json
+import orjson
 import streamlit as st
 
 
@@ -121,7 +122,7 @@ def show_prediction_results(eval_file_paths: List, prediction_file_paths: List):
 
     for prediction_file_path in prediction_file_paths:
         with open(prediction_file_path, "r") as f:
-            file_predictions.append([json.loads(line) for line in f])
+            file_predictions.append([orjson.loads(line) for line in f])
 
     file1_question_right_or_wrong_mapping = get_question_right_or_wrong_mapping(
         file_evals[0]["eval_results"]
@@ -233,7 +234,7 @@ def show_prediction_result(eval_file_path: Path, prediction_file_path: Path):
         eval_results = json.load(f)
 
     with open(prediction_file_path, "r") as f:
-        predictions = [json.loads(line) for line in f]
+        predictions = [orjson.loads(line) for line in f]
 
     question_right_or_wrong_mapping = get_question_right_or_wrong_mapping(
         eval_results["eval_results"]
