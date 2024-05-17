@@ -52,7 +52,6 @@ export interface IRelationRepository extends IBasicRepository<Relation> {
     },
     queryOptions?: IQueryOptions,
   ): Promise<RelationInfo[]>;
-  findExistedRelationBetweenModels(modelIds): Promise<RelationInfo[]>;
 }
 
 export class RelationRepository
@@ -185,27 +184,6 @@ export class RelationRepository
       'tmc.reference_name AS toColumnName',
       'tmc.display_name AS toColumnDisplayName',
     );
-    return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
-  }
-
-  public async findExistedRelationBetweenModels(modelIds) {
-    const query = this.knex(this.tableName)
-      .join(
-        'model_column AS fmc',
-        `${this.tableName}.from_column_id`,
-        '=',
-        'fmc.id',
-      )
-      .join(
-        'model_column AS tmc',
-        `${this.tableName}.to_column_id`,
-        '=',
-        'tmc.id',
-      )
-      .whereIn('fmc.model_id', modelIds)
-      .whereIn('tmc.model_id', modelIds)
-      .select(`${this.tableName}.*`);
-    const result = await query;
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
   }
 }
