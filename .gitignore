@@ -48,6 +48,9 @@ node_modules
 
 ## testing
 wren-ui/coverage
+wren-ui/test-results
+wren-ui/playwright-report
+wren-ui/e2e/e2e.config.json
 
 ## next.js
 wren-ui/.next
