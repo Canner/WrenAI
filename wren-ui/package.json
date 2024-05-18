@@ -46,6 +46,7 @@
     "@graphql-codegen/typescript": "2.7.3",
     "@graphql-codegen/typescript-operations": "^2.5.3",
     "@graphql-codegen/typescript-react-apollo": "3.3.3",
+    "@playwright/test": "^1.44.0",
     "@testcontainers/postgresql": "^10.8.2",
     "@testing-library/react": "14.0.0",
     "@types/jest": "29.4.4",
