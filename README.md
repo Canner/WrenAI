@@ -44,19 +44,23 @@ WrenAI is reimagining how businesses can interact with and leverage their data t
 
 👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
 
-## 👊 Why WrenAI?
+## 👊 Text-to-SQL End-To-End Solution
 
-### 1. Reduce Hallucination
+### 1. Indexing With Semantics
 
-> WrenAI offers detailed, explainable responses, ensuring users understand the origins and context of their data, thereby reducing ***hallucinations*** in LLMs.
+> WrenAI has implemented a semantic engine architecture to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
-### 2. Augment Your LLM Knowledge Base
+### 2. Augment LLM Prompts
 
-> WrenAI enriches LLMs with your specific business context, with additional metadata for your data schema, such as semantics and relationships.
+> With WrenAI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with “Modeling Definition Language” (MDL), reducing duplicate coding and simplifying data joins.
 
-### 3. Self-Learning Feedback Loop
+### 3. Generate Insights
 
-> WrenAI evolves with every interaction. It learns from user feedback and behavioral patterns, continuously refining its suggestions.
+> When starting a new conversation in WrenAI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
+
+### 4. Self-Learning Feedback Loop (Coming Soon)
+
+> The AI self-learning feedback loop is designed to refine SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantics enhancement, and query frequency.
 
 ## 🔥 Preview
 
@@ -68,13 +72,13 @@ WrenAI is reimagining how businesses can interact with and leverage their data t
 
 ![](./misc/preview_model.png)
 
-## 🤔 Benefits using WrenAI
+## 🤔 Why WrenAI?
 
-WrenAI leverages Large Language Models (LLM) with Retrieval-Augmented Generation (RAG) technology to enhance comprehension of internal data.  Below are the three key benefits:
+We focus on providing a secure and reliable text-to-SQL solution for everyone.
 
-### 1. Fast Onboarding
+### 1. Turnkey Solution
 
-> Discover and analyze your data with our user interface. Suitable for data analysts, and non-technical users to use.
+> WrenAI makes it easy to onboard your data. Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
 
 ### 2. Secure By Design
 
@@ -102,15 +106,6 @@ WrenAI is consist of three core services:
 - [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
 - [How do you use LangChain to build a Text-to-SQL solution? What are the challenges? How to solve it?](https://blog.getwren.ai/how-do-you-use-langchain-to-build-a-text-to-sql-solution-what-are-the-challenges-how-to-solve-it-b6d9c66aa038)
 - [What we learned from Pinterest’s Text-to-SQL solution?](https://blog.getwren.ai/what-we-learned-from-pinterests-text-to-sql-solution-840fa5840635)
-
-## 🤞 Design Philosophies
-
-We have some core design philosophies that were used when developing WrenAI.
-
-- **Explainability**: WrenAI ensures that every SQL query generated in natural language is accurate, concise, and reliable.
-- **Interoperability**: WrenAI enables users to query data from multiple sources without dealing with the complexities of different data formats and dialects, providing a standard interface across different sources.
-- **Interactive Experience**: WrenAI is designed to engage users in a dialogue, clarifying their queries and refining results in real time.
-- **Continuous Learning**: WrenAI will proactively learn through ongoing query history, feedback, and interactions. Incorporating new patterns, information, and data structures into our LLM knowledge base.
 
 ## 🚧 Project Status
 
