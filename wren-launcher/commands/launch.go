@@ -46,6 +46,7 @@ func evaluateTelemetryPreferences() (bool, error) {
 func askForAPIKey() (string, error) {
 	// let users know we're asking for an API key
 	fmt.Println("Please provide your OpenAI API key")
+	fmt.Println("Please use the key with full permission, more details at https://help.openai.com/en/articles/8867743-assign-api-key-permissions")
 
 	validate := func(input string) error {
 		// check if input is a valid API key
