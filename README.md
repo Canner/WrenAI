@@ -74,7 +74,7 @@ WrenAI is reimagining how businesses can interact with and leverage their data t
 
 ## 🤔 Why WrenAI?
 
-We focus on providing a secure and reliable text-to-SQL solution for everyone.
+We focus on providing an open, secure and reliable text-to-SQL solution for everyone.
 
 ### 1. Turnkey Solution
 
