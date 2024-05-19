@@ -1,27 +1,54 @@
 import { test, expect } from '@playwright/test';
 import * as helper from '../helper';
 
-test.afterEach(async () => {
-  await helper.resetDatabase();
-});
+test.describe('Connect sample dataset', () => {
+  test.beforeAll(async () => {
+    await helper.resetDatabase();
+  });
 
-test('test E-commerce dataset successfully.', async ({ page }) => {
-  await page.goto('/setup/connection');
-  await page.getByRole('button', { name: 'E-commerce' }).click();
-  await page.waitForURL('/home');
-  await expect(
-    page.getByText(
-      'What are the top 3 value for orders placed by customers in each city?',
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      'What are the top 3 value for orders placed by customers in each city?',
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      'What is the total value of payments made by customers from each state?',
-    ),
-  ).toBeVisible();
+  test.afterEach(async () => {
+    await helper.resetDatabase();
+  });
+
+  test('test E-commerce dataset successfully.', async ({ page }) => {
+    await page.goto('/setup/connection');
+    await page.getByRole('button', { name: 'E-commerce' }).click();
+    await expect(page).toHaveURL('/home', { timeout: 60000 });
+    await expect(
+      page.getByText(
+        'What are the top 3 value for orders placed by customers in each city?',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'What are the top 3 value for orders placed by customers in each city?',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'What is the total value of payments made by customers from each state?',
+      ),
+    ).toBeVisible();
+  });
+
+  test('test NBA dataset successfully.', async ({ page }) => {
+    await page.goto('/setup/connection');
+    await page.getByRole('button', { name: 'NBA' }).click();
+    await expect(page).toHaveURL('/home', { timeout: 60000 });
+    await expect(
+      page.getByText(
+        'How many three-pointers were made by each player in each game?',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'What is the differences in turnover rates between teams with high and low average scores?',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'Which teams had the highest average points scored per game throughout the season?',
+      ),
+    ).toBeVisible();
+  });
 });
