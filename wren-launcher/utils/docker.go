@@ -23,8 +23,10 @@ import (
 )
 
 const (
-	DOCKER_COMPOSE_YAML_URL string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/4c1cd5933b475488e25fc0bc8f06deb4969a273c/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL  string = "https://gist.githubusercontent.com/wwwy3y3/5fee68a54458a07abbeb573711652292/raw/4c1cd5933b475488e25fc0bc8f06deb4969a273c/.env.example"
+	// please change the version when the version is updated
+	WREN_PRODUCT_VERSION string = "0.3.3"
+	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
+	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 
 	// pg user
 	PG_USERNAME string = "wren-user"
