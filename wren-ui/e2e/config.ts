@@ -11,19 +11,21 @@ export const testDbConfig = {
 // Replace the default test config with your own e2e.config.json
 const defaultTestConfig = {
   bigQuery: {
-    projectId: 'bigquery-project-id',
-    datasetId: 'bigquery-dataset-id',
+    projectId: 'wrenai',
+    datasetId: 'wrenai.tpch_sf1',
+    // The credential file should be under "wren-ui" folder
     credentialPath: 'bigquery-credential-path',
   },
   duckDb: {
-    sqlCsvPath: 'duckdb-sql-csv-path',
+    sqlCsvPath: 'https://duckdb.org/data/flights.csv',
   },
   postgreSql: {
     host: 'postgresql-host',
-    port: 'postgresql-port',
+    port: '5432',
     username: 'postgresql-username',
     password: 'postgresql-password',
     database: 'postgresql-database',
+    ssl: false,
   },
 };
 
