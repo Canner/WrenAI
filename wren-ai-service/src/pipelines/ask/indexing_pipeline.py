@@ -112,7 +112,7 @@ class ViewConverter:
                 for i, converted_view in enumerate(
                     tqdm(
                         converted_views,
-                        desc="indexing view into the historial view question store",
+                        desc="indexing view into the historical view question store",
                     )
                 )
             ]
