@@ -684,6 +684,16 @@ export class ModelService implements IModelService {
       };
     }
 
+    const existedRelations =
+      await this.relationRepository.findExistedRelationBetweenModels(relation);
+
+    if (existedRelations.length > 0) {
+      return {
+        valid: false,
+        message: 'This relationship already exists.',
+      };
+    }
+
     return { valid: true };
   }
 }
