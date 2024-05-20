@@ -329,7 +329,9 @@ export class ModelResolver {
 
     // if description is not null, or undefined, update the description in properties
     if (!isNil(data.description)) {
-      const properties = JSON.parse(model.properties);
+      const properties = isNil(data.description)
+        ? {}
+        : JSON.parse(model.properties);
       properties.description = this.determineMetadataValue(data.description);
       modelMetadata.properties = JSON.stringify(properties);
     }
