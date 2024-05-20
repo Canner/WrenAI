@@ -4,6 +4,7 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
+import { RelationData } from '../types';
 
 export interface Relation {
   id: number; // ID
@@ -52,7 +53,9 @@ export interface IRelationRepository extends IBasicRepository<Relation> {
     },
     queryOptions?: IQueryOptions,
   ): Promise<RelationInfo[]>;
-  findExistedRelationBetweenModels(modelIds): Promise<RelationInfo[]>;
+  findExistedRelationBetweenModels(
+    relation: RelationData,
+  ): Promise<RelationInfo[]>;
 }
 
 export class RelationRepository
@@ -188,7 +191,8 @@ export class RelationRepository
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
   }
 
-  public async findExistedRelationBetweenModels(modelIds) {
+  public async findExistedRelationBetweenModels(relation: RelationData) {
+    const { fromModelId, fromColumnId, toModelId, toColumnId } = relation;
     const query = this.knex(this.tableName)
       .join(
         'model_column AS fmc',
@@ -202,8 +206,16 @@ export class RelationRepository
         '=',
         'tmc.id',
       )
-      .whereIn('fmc.model_id', modelIds)
-      .whereIn('tmc.model_id', modelIds)
+      // duplicate relationship check
+      .whereRaw(
+        `fmc.model_id = ? And ${this.tableName}.from_column_id = ? And tmc.model_id = ? And ${this.tableName}.to_column_id = ?`,
+        [fromModelId, fromColumnId, toModelId, toColumnId],
+      )
+      // reverse relationship check
+      .orWhereRaw(
+        `fmc.model_id = ? And ${this.tableName}.from_column_id = ? And tmc.model_id = ? And ${this.tableName}.to_column_id = ?`,
+        [toModelId, toColumnId, fromModelId, fromColumnId],
+      )
       .select(`${this.tableName}.*`);
     const result = await query;
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];

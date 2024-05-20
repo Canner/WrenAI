@@ -684,18 +684,16 @@ export class ModelService implements IModelService {
       };
     }
 
-    // only one relation between two models
     const existedRelations =
-      await this.relationRepository.findExistedRelationBetweenModels([
-        fromModelId,
-        toModelId,
-      ]);
+      await this.relationRepository.findExistedRelationBetweenModels(relation);
+
     if (existedRelations.length > 0) {
       return {
         valid: false,
-        message: 'Only one relation between two models',
+        message: 'This relationship already exists.',
       };
     }
+
     return { valid: true };
   }
 }

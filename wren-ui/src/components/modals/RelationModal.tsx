@@ -6,16 +6,26 @@ import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
 import { JOIN_TYPE, FORM_MODE, convertIdentifierToObject } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
+import {
+  createRelationshipFromFieldValidator,
+  createRelationshipToFieldValidator,
+} from '@/utils/validator';
 import useCombineFieldOptions, {
   convertDefaultValueToIdentifier,
 } from '@/hooks/useCombineFieldOptions';
 import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
 import { SelectedRecommendRelations } from '@/components/pages/setup/DefineRelations';
 
+export const FormFieldKey = {
+  FROM_FIELD: 'fromField',
+  TO_FIELD: 'toField',
+  TYPE: 'type',
+};
+
 export interface RelationFormValues {
   fromField: { model: string; field: string };
   toField: { model: string; field: string };
-  type: string;
+  type?: string;
 }
 
 export type RelationFieldValue = Pick<
@@ -71,50 +81,6 @@ export default function RelationModal(props: Props) {
     value: JOIN_TYPE[key],
   }));
 
-  // check that only 1 set of relationships can be set up between models
-  const toCombineModelOptions = toCombineField.modelOptions.map(
-    (modelOption) => {
-      const modelList = Object.entries(relations).reduce(
-        (acc, [modelName, modelRelations]) => {
-          if (modelName === model) {
-            const toFieldModelList = modelRelations.map(
-              (relation) => relation.toField.modelName,
-            );
-
-            acc = [
-              ...acc,
-              ...(isEmpty(defaultValue)
-                ? toFieldModelList
-                : toFieldModelList.filter(
-                    (toFieldModel) =>
-                      toFieldModel !== defaultValue.toField.modelName,
-                  )),
-            ];
-          } else {
-            const toFieldModelList = modelRelations.map(
-              (relation) => relation.toField.modelName,
-            );
-            if (toFieldModelList.includes(model)) {
-              acc = [...acc, modelName];
-            }
-          }
-
-          return acc;
-        },
-        [],
-      );
-
-      const modelValue: { id: string; referenceName: string } =
-        convertIdentifierToObject(modelOption.value);
-      const disabled = modelList.includes(modelValue.referenceName);
-
-      return {
-        ...modelOption,
-        disabled,
-      };
-    },
-  );
-
   const submit = () => {
     form
       .validateFields()
@@ -142,13 +108,16 @@ export default function RelationModal(props: Props) {
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
           label="From"
-          name="fromField"
+          name={FormFieldKey.FROM_FIELD}
           required
           rules={[
-            {
-              required: true,
-              message: ERROR_TEXTS.ADD_RELATION.FROM_FIELD.REQUIRED,
-            },
+            ({ getFieldValue }) => ({
+              validator: createRelationshipFromFieldValidator(
+                isUpdateMode,
+                relations,
+                getFieldValue,
+              ),
+            }),
           ]}
         >
           <CombineFieldSelector
@@ -162,25 +131,21 @@ export default function RelationModal(props: Props) {
         </Form.Item>
         <Form.Item
           label="To"
-          name="toField"
+          name={FormFieldKey.TO_FIELD}
           required
           rules={[
-            () => ({
-              validator(_, value) {
-                if (!value || !value.field) {
-                  return Promise.reject(
-                    ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED,
-                  );
-                }
-
-                return Promise.resolve();
-              },
+            ({ getFieldValue }) => ({
+              validator: createRelationshipToFieldValidator(
+                isUpdateMode,
+                relations,
+                getFieldValue,
+              ),
             }),
           ]}
         >
           <CombineFieldSelector
             onModelChange={toCombineField.onModelChange}
-            modelOptions={toCombineModelOptions}
+            modelOptions={toCombineField.modelOptions}
             fieldOptions={toCombineField.fieldOptions}
             modelDisabled={isUpdateMode}
             fieldDisabled={isUpdateMode}
@@ -188,7 +153,7 @@ export default function RelationModal(props: Props) {
         </Form.Item>
         <Form.Item
           label="Type"
-          name="type"
+          name={FormFieldKey.TYPE}
           required
           rules={[
             {
