@@ -7,8 +7,8 @@ import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
 import { JOIN_TYPE, FORM_MODE, convertIdentifierToObject } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
 import {
-  relationshipFromFieldValidator,
-  relationshipToFieldValidator,
+  createRelationshipFromFieldValidator,
+  createRelationshipToFieldValidator,
 } from '@/utils/validator';
 import useCombineFieldOptions, {
   convertDefaultValueToIdentifier,
@@ -25,7 +25,7 @@ export const FormFieldKey = {
 export interface RelationFormValues {
   fromField: { model: string; field: string };
   toField: { model: string; field: string };
-  type: string;
+  type?: string;
 }
 
 export type RelationFieldValue = Pick<
@@ -112,7 +112,7 @@ export default function RelationModal(props: Props) {
           required
           rules={[
             ({ getFieldValue }) => ({
-              validator: relationshipFromFieldValidator(
+              validator: createRelationshipFromFieldValidator(
                 isUpdateMode,
                 relations,
                 getFieldValue,
@@ -135,7 +135,7 @@ export default function RelationModal(props: Props) {
           required
           rules={[
             ({ getFieldValue }) => ({
-              validator: relationshipToFieldValidator(
+              validator: createRelationshipToFieldValidator(
                 isUpdateMode,
                 relations,
                 getFieldValue,

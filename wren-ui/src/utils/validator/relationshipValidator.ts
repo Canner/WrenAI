@@ -25,30 +25,34 @@ const isExistRelationship = (
 ) => {
   const relationshipsByFromFieldModel =
     relationships[formValues.fromField.modelName];
-  const isDuplicate = relationshipsByFromFieldModel.find(
-    (relationship) =>
-      relationship.fromField.modelId === formValues.fromField.modelId &&
-      relationship.fromField.fieldId === formValues.fromField.fieldId &&
-      relationship.toField.modelId === formValues.toField.modelId &&
-      relationship.toField.fieldId === formValues.toField.fieldId,
+  const isDuplicate = Boolean(
+    relationshipsByFromFieldModel.find(
+      (relationship) =>
+        relationship.fromField.modelId === formValues.fromField.modelId &&
+        relationship.fromField.fieldId === formValues.fromField.fieldId &&
+        relationship.toField.modelId === formValues.toField.modelId &&
+        relationship.toField.fieldId === formValues.toField.fieldId,
+    ),
   );
 
-  if (Boolean(isDuplicate)) return true;
+  if (isDuplicate) return true;
 
   const relationshipsbyToFieldModel =
     relationships[formValues.toField.modelName];
-  const isReverseDuplicate = relationshipsbyToFieldModel.find(
-    (relationship) =>
-      relationship.fromField.modelId === formValues.toField.modelId &&
-      relationship.fromField.fieldId === formValues.toField.fieldId &&
-      relationship.toField.modelId === formValues.fromField.modelId &&
-      relationship.toField.fieldId === formValues.fromField.fieldId,
+  const isReverseDuplicate = Boolean(
+    relationshipsbyToFieldModel.find(
+      (relationship) =>
+        relationship.fromField.modelId === formValues.toField.modelId &&
+        relationship.fromField.fieldId === formValues.toField.fieldId &&
+        relationship.toField.modelId === formValues.fromField.modelId &&
+        relationship.toField.fieldId === formValues.fromField.fieldId,
+    ),
   );
 
-  return Boolean(isReverseDuplicate);
+  return isReverseDuplicate;
 };
 
-export const relationshipFromFieldValidator =
+export const createRelationshipFromFieldValidator =
   (
     skip = false,
     relationships: SelectedRecommendRelations,
@@ -68,7 +72,6 @@ export const relationshipFromFieldValidator =
             convertFormValuesToIdentifier({
               fromField: value,
               toField,
-              type: '',
             }),
           )
         ) {
@@ -80,7 +83,7 @@ export const relationshipFromFieldValidator =
     return Promise.resolve();
   };
 
-export const relationshipToFieldValidator =
+export const createRelationshipToFieldValidator =
   (
     skip = false,
     relationships: SelectedRecommendRelations,
@@ -100,7 +103,6 @@ export const relationshipToFieldValidator =
             convertFormValuesToIdentifier({
               fromField,
               toField: value,
-              type: '',
             }),
           )
         ) {
