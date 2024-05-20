@@ -40,7 +40,7 @@ services:
     pull_policy: always
     platform: ${PLATFORM}
     ports:
-      - ${WREN_AI_SERVICE_PORT}:${WREN_AI_SERVICE_PORT}
+      - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
       WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
