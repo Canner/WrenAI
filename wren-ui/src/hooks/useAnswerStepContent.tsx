@@ -19,6 +19,7 @@ function getButtonProps({
   isViewSQL,
   onViewSQL,
   onPreviewData,
+  previewDataProps,
 }) {
   const previewDataButtonProps = isLastStep
     ? { type: 'primary', className: 'mr-2' }
@@ -36,6 +37,7 @@ function getButtonProps({
     },
     previewDataButtonProps: {
       ...previewDataButtonProps,
+      ...previewDataProps,
       onClick: onPreviewData,
     },
   };
@@ -94,12 +96,17 @@ export default function useAnswerStepContent({
   const isPreviewData =
     collapseContentType === COLLAPSE_CONTENT_TYPE.PREVIEW_DATA;
 
+  const previewDataLoading = previewDataResult.loading;
+
   const buttonProps = getButtonProps({
     isLastStep,
     isPreviewData,
     isViewSQL,
     onPreviewData,
     onViewSQL,
+    previewDataProps: {
+      loading: previewDataLoading,
+    },
   });
 
   return {
@@ -118,7 +125,7 @@ export default function useAnswerStepContent({
           }),
       previewDataResult: {
         error: previewDataResult.error,
-        loading: previewDataResult.loading,
+        loading: previewDataLoading,
         previewData: previewDataResult?.data?.previewData,
       } as unknown as PreviewDataMutationResult,
       nativeSQLResult,
