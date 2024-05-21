@@ -138,7 +138,11 @@ const ColumnTemplate = (props) => {
         (edge: any) =>
           trimId(edge.sourceHandle) === id || trimId(edge.targetHandle) === id,
       );
-      setEdges(highlightEdges([relatedEdge.id], true));
+
+      // skip to highlight & open relationship popup if no related edge
+      if (!relatedEdge) return;
+
+      setEdges(highlightEdges([relatedEdge?.id], true));
       setNodes(
         highlightNodes(
           [relatedEdge.source, relatedEdge.target],
