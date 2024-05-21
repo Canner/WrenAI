@@ -171,6 +171,8 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
     logger.info("Initializing providers...")
     loader.import_mods()
 
-    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER"))
-    document_store_provider = loader.get_provider(os.getenv("DOCUMENT_STORE_PROVIDER"))
+    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai"))
+    document_store_provider = loader.get_provider(
+        os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
+    )
     return llm_provider(), document_store_provider()
