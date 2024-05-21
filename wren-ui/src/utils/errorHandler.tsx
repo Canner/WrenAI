@@ -6,6 +6,7 @@ import { message } from 'antd';
 // Refer to backend GeneralErrorCodes for mapping
 export const ERROR_CODES = {
   INVALID_CALCULATED_FIELD: 'INVALID_CALCULATED_FIELD',
+  CONNECTION_REFUSED: 'CONNECTION_REFUSED',
 };
 
 /**

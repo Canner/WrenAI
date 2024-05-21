@@ -64,9 +64,15 @@ export class PostgresConnector
       return true;
     } catch (err) {
       logger.error(`Error connecting to Postgres: ${err}`);
-      throw Errors.create(Errors.GeneralErrorCodes.CONNECTION_ERROR, {
-        originalError: err,
-      });
+      if (err.code === 'ECONNREFUSED') {
+        throw Errors.create(Errors.GeneralErrorCodes.CONNECTION_REFUSED, {
+          originalError: err,
+        });
+      } else {
+        throw Errors.create(Errors.GeneralErrorCodes.CONNECTION_ERROR, {
+          originalError: err,
+        });
+      }
     }
   }
 

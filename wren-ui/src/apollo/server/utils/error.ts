@@ -16,6 +16,8 @@ export enum GeneralErrorCodes {
   // duckdb
   INIT_SQL_ERROR = 'INIT_SQL_ERROR',
   SESSION_PROPS_ERROR = 'SESSION_PROPS_ERROR',
+  // postgres
+  CONNECTION_REFUSED = 'CONNECTION_REFUSED',
 
   // calculated field validation
   DUPLICATED_FIELD_NAME = 'DUPLICATED_FIELD_NAME',
@@ -41,6 +43,9 @@ export const errorMessages = {
     'The initializing SQL seems to be invalid, Please check your SQL and try again.',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]:
     'The session properties seem to be invalid, Please check your session properties and try again.',
+  // postgres
+  [GeneralErrorCodes.CONNECTION_REFUSED]:
+    'Connection refused by the server, Please check your connection settings and try again.',
 
   // calculated field validation
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'This field name already exists',
@@ -58,6 +63,7 @@ export const shortMessages = {
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]: 'Invalid session properties',
+  [GeneralErrorCodes.CONNECTION_REFUSED]: 'Connection refused',
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'Duplicated field name',
   [GeneralErrorCodes.INVALID_EXPRESSION]: 'Invalid expression',
   [GeneralErrorCodes.INVALID_CALCULATED_FIELD]: 'Invalid calculated field',

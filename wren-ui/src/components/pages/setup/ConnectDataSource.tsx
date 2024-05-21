@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Alert, Typography, Form, Row, Col, Button } from 'antd';
 import styled from 'styled-components';
 import { DATA_SOURCES } from '@/utils/enum/dataSources';
-import { getDataSource } from './utils';
+import { getDataSource, getPostgresErrorMessage } from './utils';
 
 const StyledForm = styled(Form)`
   border: 1px var(--gray-4) solid;
@@ -88,7 +88,11 @@ export default function ConnectDataSource(props: Props) {
       {connectError && (
         <Alert
           message={connectError.shortMessage}
-          description={connectError.message}
+          description={
+            dataSource === DATA_SOURCES.PG_SQL
+              ? getPostgresErrorMessage(connectError)
+              : connectError.message
+          }
           type="error"
           showIcon
           className="my-6"
