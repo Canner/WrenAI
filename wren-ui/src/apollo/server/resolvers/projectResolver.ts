@@ -269,7 +269,12 @@ export class ProjectResolver {
       id,
       displayName,
       referenceName,
-      relations: relations.filter((relation) => relation.fromModelId === id),
+      relations: relations.filter(
+        (relation) =>
+          relation.fromModelId === id &&
+          // exclude self-referential relationship
+          relation.toModelId !== relation.fromModelId,
+      ),
     }));
   }
 
