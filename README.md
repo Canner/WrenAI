@@ -38,7 +38,7 @@
 
 ## 🎯 Our Mission
 
-WrenAI is reimagining how businesses can interact with and leverage their data through LLM by bringing comprehension capabilities to database data structures.
+WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any data source and industry. We believe that breakthroughs in Text-to-SQL technology will usher in a new era of Data Democratization.
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
