@@ -1,15 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { getTestConfig } from '../config';
 import * as helper from '../helper';
+import * as onboarding from '../commonTests/onboarding';
 
 const testConfig = getTestConfig();
 
-test.describe('Connect PostgreSQL in onboarding flow', () => {
+test.describe('Test PostgreSQL data source', () => {
   test.beforeAll(async () => {
     await helper.resetDatabase();
   });
 
-  test('connect PostgreSQL data source successfully.', async ({ page }) => {
+  test('Connect PostgreSQL data source successfully', async ({ page }) => {
     await page.goto('/setup/connection');
 
     await page.locator('button').filter({ hasText: 'PostgreSQL' }).click();
@@ -35,4 +36,6 @@ test.describe('Connect PostgreSQL in onboarding flow', () => {
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page).toHaveURL('/setup/models', { timeout: 60000 });
   });
+
+  test('Setup all models', onboarding.setupModels);
 });
