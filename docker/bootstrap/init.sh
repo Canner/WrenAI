@@ -18,6 +18,7 @@ pg_username=$PG_USERNAME
 # put a content into config.properties if not exists
 if [ ! -f ${data_path}/config.properties ]; then
     echo "node.environment=production" > ${data_path}/config.properties
+    echo "wren.experimental-enable-dynamic-fields=true" > ${data_path}/config.properties
 #    echo "PG_DATABASE=\"tpch\"" >> ${data_path}/config.properties
 fi
 
