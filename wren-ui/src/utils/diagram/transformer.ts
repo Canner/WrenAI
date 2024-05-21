@@ -184,6 +184,10 @@ export class Transformer {
             model.referenceName,
           ),
       )!;
+
+      // skip the edge if model not found
+      if (!targetModel) continue;
+
       const targetField = targetModel.relationFields.find(
         (field) =>
           [
