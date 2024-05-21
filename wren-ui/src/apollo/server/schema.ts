@@ -469,9 +469,16 @@ export const typeDefs = gql`
     STOPPED
   }
 
+  enum ResultCandidateType {
+    VIEW # View type candidate is provided basd on a saved view
+    LLM # LLM type candidate is created by LLM
+  }
+
   type ResultCandidate {
+    type: ResultCandidateType!
     sql: String!
     summary: String!
+    view: ViewInfo
   }
 
   type AskingTask {
