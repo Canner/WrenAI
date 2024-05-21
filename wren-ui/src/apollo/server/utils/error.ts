@@ -23,6 +23,9 @@ export enum GeneralErrorCodes {
   DUPLICATED_FIELD_NAME = 'DUPLICATED_FIELD_NAME',
   INVALID_EXPRESSION = 'INVALID_EXPRESSION',
   INVALID_CALCULATED_FIELD = 'INVALID_CALCULATED_FIELD',
+
+  // when createing views
+  INVALID_VIEW_CREATION = 'INVALID_VIEW_CREATION',
 }
 
 export const errorMessages = {
@@ -53,6 +56,9 @@ export const errorMessages = {
     'Invalid expression, please check your expression and try again.',
   [GeneralErrorCodes.INVALID_CALCULATED_FIELD]:
     'Can not execute a query when using this calculated field',
+
+  // when createing views
+  [GeneralErrorCodes.INVALID_VIEW_CREATION]: 'Invalid view creation',
 };
 
 export const shortMessages = {
@@ -67,6 +73,7 @@ export const shortMessages = {
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'Duplicated field name',
   [GeneralErrorCodes.INVALID_EXPRESSION]: 'Invalid expression',
   [GeneralErrorCodes.INVALID_CALCULATED_FIELD]: 'Invalid calculated field',
+  [GeneralErrorCodes.INVALID_VIEW_CREATION]: 'Invalid view creation',
 };
 
 export const create = (
