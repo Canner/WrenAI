@@ -1,6 +1,11 @@
 import { CompactTable } from './connector';
 import { IConnector } from './connector';
 import { BigQuery, BigQueryOptions } from '@google-cloud/bigquery';
+import { getLogger } from '@server/utils';
+import * as Errors from '@server/utils/error';
+
+const logger = getLogger('DuckDBConnector');
+logger.level = 'debug';
 
 // column type ref: https://cloud.google.com/bigquery/docs/information-schema-columns#schema
 export interface BQColumnResponse {
@@ -61,8 +66,11 @@ export class BQConnector
     try {
       await this.bq.query('SELECT 1;');
       return true;
-    } catch (_err) {
-      return false;
+    } catch (err) {
+      logger.error(`Error connecting to BigQuery: ${err}`);
+      throw Errors.create(Errors.GeneralErrorCodes.CONNECTION_ERROR, {
+        originalError: err,
+      });
     }
   }
 

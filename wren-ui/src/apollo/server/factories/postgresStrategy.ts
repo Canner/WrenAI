@@ -246,10 +246,8 @@ export class PostgresStrategy implements IDataSourceStrategy {
     const connector = new PostgresConnector(properties);
 
     // check DataSource is valid and can connect to it
-    const connected = await connector.connect();
-    if (!connected) {
-      throw new Error('Can not connect to data source');
-    }
+    await connector.connect();
+
     // check can list dataset table
     try {
       await connector.listTables({ format: false });

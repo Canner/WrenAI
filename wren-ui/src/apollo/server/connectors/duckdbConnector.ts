@@ -5,6 +5,7 @@ import {
 import { CompactTable } from './connector';
 import { IConnector } from './connector';
 import { getLogger } from '@server/utils';
+import * as Errors from '@server/utils/error';
 
 const logger = getLogger('DuckDBConnector');
 logger.level = 'debug';
@@ -50,8 +51,11 @@ export class DuckDBConnector
     try {
       await this.wrenEngineAdaptor.queryDuckdb(sql);
       return true;
-    } catch (_err) {
-      return false;
+    } catch (err) {
+      logger.error(`Error connecting to DuckDB: ${err}`);
+      throw Errors.create(Errors.GeneralErrorCodes.CONNECTION_ERROR, {
+        originalError: err,
+      });
     }
   }
 

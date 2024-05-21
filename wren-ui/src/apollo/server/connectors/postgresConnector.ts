@@ -2,6 +2,7 @@ import { CompactTable } from './connector';
 import { IConnector } from './connector';
 import { getLogger } from '@server/utils';
 import { WrenEngineColumnType } from './types';
+import * as Errors from '@server/utils/error';
 
 import pg from 'pg';
 const { Client } = pg;
@@ -63,7 +64,9 @@ export class PostgresConnector
       return true;
     } catch (err) {
       logger.error(`Error connecting to Postgres: ${err}`);
-      return false;
+      throw Errors.create(Errors.GeneralErrorCodes.CONNECTION_ERROR, {
+        originalError: err,
+      });
     }
   }
 
