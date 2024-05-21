@@ -2,16 +2,37 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 
 ## Getting Started
 
-First, run the development server:
+Step 1. Make sure your node version is 16
+```bash
+node -v
+```
+
+Step 2. Install dependencies:
 
 ```bash
-npm run dev
+yarn 
+```
+
+Step 3. Run migrations:
+
+```bash
+# Windows
+SET DB_TYPE=sqlite
+
+# Linux or MacOS
+export DB_TYPE=sqlite
+
+yarn migrate
 # or
+npm run migrate
+```
+
+Step 4. Run the development server:
+
+```bash
 yarn dev
 # or
-pnpm dev
-# or
-bun dev
+npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
