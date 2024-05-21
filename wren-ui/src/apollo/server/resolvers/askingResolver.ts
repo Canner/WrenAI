@@ -108,12 +108,19 @@ export class AskingResolver {
     const askResult = await askingService.getAskingTask(taskId);
 
     // construct candidates from response
-    const candidates = (askResult.response || []).map((response) => {
-      return {
-        sql: response.sql,
-        summary: response.summary,
-      };
-    });
+    const candidates = await Promise.all(
+      (askResult.response || []).map(async (response) => {
+        const view = response.viewId
+          ? await ctx.viewRepository.findOneBy({ id: response.viewId })
+          : null;
+        return {
+          type: response.type,
+          sql: response.sql,
+          summary: response.summary,
+          view,
+        };
+      }),
+    );
 
     return {
       status: askResult.status,
