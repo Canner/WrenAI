@@ -283,6 +283,7 @@ const errorHandler = (error: ErrorResponse) => {
 export default errorHandler;
 
 export const parseGraphQLError = (error: ApolloError) => {
+  if (!error) return null;
   const graphQLErrors: GraphQLError = error.graphQLErrors?.[0];
   const extensions = graphQLErrors?.extensions || {};
   return {
