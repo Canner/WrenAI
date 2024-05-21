@@ -496,6 +496,13 @@ export class ModelResolver {
     const properties = {
       displayName,
       columns,
+
+      // properties from the thread response
+      responseId, // helpful for mapping back to the thread response
+      question: response.question,
+      summary: response.summary,
+      // detail is not going to send to AI service for indexing, but useful if we want display on UI
+      detail: response.detail,
     };
 
     // create view
