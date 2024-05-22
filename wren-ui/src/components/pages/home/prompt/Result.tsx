@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
-import { Row, Col, Button } from 'antd';
+import Link from 'next/link';
+import { Row, Col, Button, Popover } from 'antd';
 import styled from 'styled-components';
-import { PROCESS_STATE } from '@/utils/enum';
+import { PROCESS_STATE, Path } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
@@ -10,6 +11,8 @@ import StopOutlined from '@ant-design/icons/StopFilled';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import CloseCircleFilled from '@ant-design/icons/CloseCircleFilled';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
+import FileAddOutlined from '@ant-design/icons/FileAddOutlined';
+import { SparklesIcon } from '@/utils/icons';
 import ViewSQLModal from '@/components/pages/home/prompt/ViewSQLModal';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import ErrorCollapse from '@/components/ErrorCollapse';
@@ -30,11 +33,18 @@ const StyledResult = styled.div`
 
 const ResultBlock = styled.div`
   user-select: none;
-  height: 129px;
+  overflow: hidden;
   &:hover {
     border-color: var(--geekblue-6) !important;
     transition: border-color ease 0.2s;
   }
+`;
+
+const MarkedResultBlock = styled.div`
+  height: 32px;
+  margin-left: -12px;
+  margin-right: -12px;
+  padding-top: 8px;
 `;
 
 interface Props {
@@ -46,11 +56,12 @@ interface Props {
   onStop: () => void;
 }
 
-const ResultTemplate = ({ index, summary, sql, onSelect, onShowSQL }) => {
+const ResultTemplate = ({ index, summary, sql, view, onSelect, onShowSQL }) => {
+  const isViewSaved = !!view;
   return (
     <Col span={8}>
       <ResultBlock
-        className="border border-gray-5 rounded px-3 pt-3 pb-4 cursor-pointer"
+        className="border border-gray-5 rounded px-3 pt-3 cursor-pointer"
         onClick={() => onSelect({ sql, summary })}
       >
         <div className="d-flex justify-space-between align-center text-sm mb-3">
@@ -66,7 +77,38 @@ const ResultTemplate = ({ index, summary, sql, onSelect, onShowSQL }) => {
             View SQL
           </Button>
         </div>
-        <EllipsisWrapper multipleLine={3} text={summary} />
+        <EllipsisWrapper multipleLine={3} minHeight={66} text={summary} />
+        <MarkedResultBlock onClickCapture={(event) => event.stopPropagation()}>
+          {isViewSaved && (
+            <Popover
+              trigger={['hover']}
+              placement="topLeft"
+              content={
+                <div className="d-flex" style={{ width: 300 }}>
+                  <SparklesIcon
+                    className="text-md geekblue-6 mr-2"
+                    style={{ marginTop: 2 }}
+                  />
+                  <div>
+                    This search result corresponds to a saved view:{' '}
+                    <Link
+                      href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      {view.name}
+                    </Link>
+                  </div>
+                </div>
+              }
+            >
+              <div className="d-flex align-center bg-geekblue-1 geekblue-6 text-xs px-3 py-1">
+                <FileAddOutlined className="text-sm mr-2" /> Result from a saved
+                view
+              </div>
+            </Popover>
+          )}
+        </MarkedResultBlock>
       </ResultBlock>
     </Col>
   );
@@ -172,7 +214,7 @@ const Finished = (props: Props) => {
           Close
         </Button>
       </div>
-      <Row gutter={12}>
+      <Row gutter={[12, 12]}>
         <ResultColumnIterator
           data={data}
           onShowSQL={showSQL}
