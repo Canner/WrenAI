@@ -9,7 +9,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     init_text_to_sql_with_followup_prompt_builder,
 )
-from src.utils import init_providers, load_env_vars
+from src.utils import init_providers, load_env_vars, timer
 from src.web.v1.services.ask import AskRequest
 
 load_env_vars()
@@ -38,6 +38,7 @@ class FollowUpGeneration(BasicPipeline):
 
         super().__init__(self._pipeline)
 
+    @timer
     def run(
         self,
         query: str,

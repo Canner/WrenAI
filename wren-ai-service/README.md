@@ -35,6 +35,12 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 - `make streamlit` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
 
+### Speed Evaluation
+
+- add environment variables `ENABLE_TIMER=True` in `.env.dev`
+- restart wren ai service
+- check `outputs` folder for the evaluation result file
+
 ## Demo
 
 - prerequisites

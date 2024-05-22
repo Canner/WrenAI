@@ -8,7 +8,7 @@ from src.pipelines.ask.components.post_processors import (
     init_query_understanding_post_processor,
 )
 from src.pipelines.ask.components.prompts import init_query_preprocess_prompt_builder
-from src.utils import init_providers
+from src.utils import init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -38,6 +38,7 @@ class QueryUnderstanding(BasicPipeline):
 
         super().__init__(self._pipeline)
 
+    @timer
     def run(
         self,
         query: str,

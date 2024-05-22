@@ -11,7 +11,8 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.utils import init_providers, load_env_vars
+from src.utils import init_providers, load_env_vars, timer
+
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -342,6 +343,7 @@ class Indexing(BasicPipeline):
 
         super().__init__(self._pipeline)
 
+    @timer
     def run(self, mdl_str: str) -> Dict[str, Any]:
         return self._pipeline.run({"cleaner": {"mdl": mdl_str}})
 
