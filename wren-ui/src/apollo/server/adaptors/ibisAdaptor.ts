@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 import { getLogger } from '@server/utils/logger';
+import { DataSourceName } from '../types';
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
 
@@ -21,14 +22,14 @@ export interface BIGQUERYConnectionInfo {
 export interface IIbisAdaptor {
   query: (
     query: string,
-    dataSource: SupportedDataSource,
+    dataSource: DataSourceName,
     connectionInfo: BIGQUERYConnectionInfo | POSTGRESConnectionInfo,
   ) => Promise<IbisQueryResponse>;
 }
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
-  BIGQUERY = 'BIG_QUERY',
+  BIG_QUERY = 'BIG_QUERY',
   SNOWFLAKE = 'SNOWFLAKE',
 }
 
@@ -42,7 +43,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   private readonly ibisServerBaseEndpoint: string;
   private readonly dataSourceUrlMap: Record<SupportedDataSource, string> = {
     [SupportedDataSource.POSTGRES]: 'postgres',
-    [SupportedDataSource.BIGQUERY]: 'bigquery',
+    [SupportedDataSource.BIG_QUERY]: 'bigquery',
     [SupportedDataSource.SNOWFLAKE]: 'snowflake',
   };
 
@@ -52,7 +53,7 @@ export class IbisAdaptor implements IIbisAdaptor {
 
   async query(
     query: string,
-    dataSource: SupportedDataSource,
+    dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
   ): Promise<IbisQueryResponse> {
     const body = {

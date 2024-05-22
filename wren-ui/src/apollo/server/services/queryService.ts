@@ -110,18 +110,13 @@ export class QueryService implements IQueryService {
         },
       );
       logger.debug(`Native SQL: ${nativeSql}`);
-      // throw error if datasource not in supported list
-      if (
-        !Object.prototype.hasOwnProperty.call(SupportedDataSource, datasource)
-      ) {
-        throw new Error(`Unsupported datasource for ibis: "${datasource}"`);
-      }
 
+      this.checkDataSourceIsSupported(datasource);
       // time ibis performance
       const start = new Date().getTime();
       const data = await this.ibisAdaptor.query(
         nativeSql,
-        datasource as any,
+        datasource,
         connectionInfo,
       );
       const end = new Date().getTime();
@@ -201,11 +196,7 @@ export class QueryService implements IQueryService {
       });
 
       // throw error if datasource not in supported list
-      if (
-        !Object.prototype.hasOwnProperty.call(SupportedDataSource, datasource)
-      ) {
-        throw new Error(`Unsupported datasource for ibis: "${datasource}"`);
-      }
+      this.checkDataSourceIsSupported(datasource);
 
       return await this.ibisAdaptor.query(
         nativeSql,
@@ -246,5 +237,13 @@ export class QueryService implements IQueryService {
       columns: transformedColumns,
       data: data.data,
     } as PreviewDataResponse;
+  }
+
+  private checkDataSourceIsSupported(dataSource: DataSourceName) {
+    if (
+      !Object.prototype.hasOwnProperty.call(SupportedDataSource, dataSource)
+    ) {
+      throw new Error(`Unsupported datasource for ibis: "${dataSource}"`);
+    }
   }
 }
