@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import { Col, Button, Row, Skeleton, Typography } from 'antd';
 import styled from 'styled-components';
+import { Path } from '@/utils/enum';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
+import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import StepContent from '@/components/pages/home/promptThread/StepContent';
 
 const { Title, Text } = Typography;
@@ -50,6 +53,10 @@ interface Props {
   isLastThreadResponse: boolean;
   onTriggerScrollToBottom: () => void;
   summary: string;
+  view?: {
+    id: number;
+    name: string;
+  };
 }
 
 export default function AnswerResult(props: Props) {
@@ -64,7 +71,10 @@ export default function AnswerResult(props: Props) {
     onOpenSaveAsViewModal,
     onTriggerScrollToBottom,
     summary,
+    view,
   } = props;
+
+  const isViewSaved = !!view;
 
   const [ellipsis, setEllipsis] = useState(true);
 
@@ -104,17 +114,35 @@ export default function AnswerResult(props: Props) {
           />
         ))}
       </StyledAnswer>
-      <Button
-        className="mt-2 gray-6"
-        type="text"
-        size="small"
-        icon={<SaveOutlined />}
-        onClick={() =>
-          onOpenSaveAsViewModal({ sql: fullSql, responseId: threadResponseId })
-        }
-      >
-        Save as View
-      </Button>
+      {isViewSaved ? (
+        <div className="mt-2 gray-6 text-medium">
+          <FileDoneOutlined className="mr-2" />
+          Generated from saved view{' '}
+          <Link
+            className="gray-7"
+            href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            {view.name}
+          </Link>
+        </div>
+      ) : (
+        <Button
+          className="mt-2 gray-6"
+          type="text"
+          size="small"
+          icon={<SaveOutlined />}
+          onClick={() =>
+            onOpenSaveAsViewModal({
+              sql: fullSql,
+              responseId: threadResponseId,
+            })
+          }
+        >
+          Save as View
+        </Button>
+      )}
     </Skeleton>
   );
 }
