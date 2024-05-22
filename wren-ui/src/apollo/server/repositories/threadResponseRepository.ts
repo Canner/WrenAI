@@ -14,6 +14,7 @@ export interface DetailStep {
 }
 
 export interface ThreadResponseDetail {
+  viewId?: number;
   description: string;
   steps: Array<DetailStep>;
 }
@@ -95,15 +96,15 @@ export class ThreadResponseRepository
         ? // turn object keys into camelCase
           mapKeys(result[0], (_value, key) => camelCase(key))
         : null;
+    return this.transformToThreadResponse(transformed);
+  }
 
-    // JSON.parse detail and error
-    return transformed
-      ? ({
-          ...transformed,
-          detail: transformed.detail ? JSON.parse(transformed.detail) : null,
-          error: transformed.error ? JSON.parse(transformed.error) : null,
-        } as ThreadResponse)
-      : null;
+  public async createOne(
+    data: Partial<ThreadResponse>,
+    queryOptions?: IQueryOptions,
+  ): Promise<ThreadResponse> {
+    const threadResponse = await super.createOne(data, queryOptions);
+    return this.transformToThreadResponse(threadResponse);
   }
 
   public async updateOne(
@@ -125,6 +126,18 @@ export class ThreadResponseRepository
       .where({ id })
       .update(transformedData)
       .returning('*');
-    return this.transformFromDBData(result);
+    const transformed = this.transformFromDBData(result);
+    return this.transformToThreadResponse(transformed);
+  }
+
+  private transformToThreadResponse(result: any): ThreadResponse {
+    // JSON.parse detail and error
+    return result
+      ? ({
+          ...result,
+          detail: result.detail ? JSON.parse(result.detail) : null,
+          error: result.error ? JSON.parse(result.error) : null,
+        } as ThreadResponse)
+      : null;
   }
 }

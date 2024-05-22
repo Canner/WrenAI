@@ -20,9 +20,12 @@ import {
 } from '../adaptors/wrenEngineAdaptor';
 import { format } from 'sql-formatter';
 import { Telemetry } from '../telemetry/telemetry';
+import { IViewRepository, View } from '../repositories';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
+
+const QUERY_ID_PLACEHOLDER = '0';
 
 export interface Task {
   id: string;
@@ -34,9 +37,10 @@ export interface AskingTaskInput {
 }
 
 export interface AskingDetailTaskInput {
-  question: string;
-  sql: string;
-  summary: string;
+  question?: string;
+  sql?: string;
+  summary?: string;
+  viewId?: number;
 }
 
 export interface IAskingService {
@@ -232,6 +236,7 @@ export class AskingService implements IAskingService {
   private wrenEngineAdaptor: IWrenEngineAdaptor;
   private deployService: IDeployService;
   private projectService: IProjectService;
+  private viewRepository: IViewRepository;
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
   private backgroundTracker: BackgroundTracker;
@@ -243,6 +248,7 @@ export class AskingService implements IAskingService {
     wrenEngineAdaptor,
     deployService,
     projectService,
+    viewRepository,
     threadRepository,
     threadResponseRepository,
   }: {
@@ -251,6 +257,7 @@ export class AskingService implements IAskingService {
     wrenEngineAdaptor: IWrenEngineAdaptor;
     deployService: IDeployService;
     projectService: IProjectService;
+    viewRepository: IViewRepository;
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
   }) {
@@ -258,6 +265,7 @@ export class AskingService implements IAskingService {
     this.wrenEngineAdaptor = wrenEngineAdaptor;
     this.deployService = deployService;
     this.projectService = projectService;
+    this.viewRepository = viewRepository;
     this.threadRepository = threadRepository;
     this.threadResponseRepository = threadResponseRepository;
     this.telemetry = telemetry;
@@ -322,6 +330,11 @@ export class AskingService implements IAskingService {
    * 3. put the task into background tracker
    */
   public async createThread(input: AskingDetailTaskInput): Promise<Thread> {
+    // if input contains a viewId, simply create a thread from saved properties of the view
+    if (input.viewId) {
+      return this.createThreadFromView(input.viewId);
+    }
+
     // 1. create a task on AI service to generate the detail
     const response = await this.wrenAIAdaptor.generateAskDetail({
       query: input.question,
@@ -386,6 +399,18 @@ export class AskingService implements IAskingService {
 
     if (!thread) {
       throw new Error(`Thread ${threadId} not found`);
+    }
+
+    // if input contains a viewId, simply create a thread from saved properties of the view
+    if (input.viewId) {
+      const view = await this.viewRepository.findOneBy({ id: input.viewId });
+
+      if (!view) {
+        throw new Error(`View ${input.viewId} not found`);
+      }
+
+      const res = await this.createThreadResponseFromView(view, thread);
+      return res;
     }
 
     // 1. create a task on AI service to generate the detail
@@ -473,5 +498,38 @@ export class AskingService implements IAskingService {
       summary: latestResponse.summary,
       steps: latestResponse.detail.steps,
     };
+  }
+
+  private async createThreadFromView(viewId: number) {
+    const view = await this.viewRepository.findOneBy({ id: viewId });
+    if (!view) {
+      throw new Error(`View ${viewId} not found`);
+    }
+
+    const properties = JSON.parse(view.properties) || {};
+    const project = await this.projectService.getCurrentProject();
+    const thread = await this.threadRepository.createOne({
+      projectId: project.id,
+      sql: view.statement,
+      summary: properties.summary,
+    });
+
+    await this.createThreadResponseFromView(view, thread);
+    return thread;
+  }
+
+  private async createThreadResponseFromView(view: View, thread: Thread) {
+    const properties = JSON.parse(view.properties) || {};
+    return this.threadResponseRepository.createOne({
+      threadId: thread.id,
+      queryId: QUERY_ID_PLACEHOLDER,
+      question: properties.question,
+      summary: properties.summary,
+      status: AskResultStatus.FINISHED,
+      detail: {
+        ...properties.detail,
+        viewId: view.id,
+      },
+    });
   }
 }
