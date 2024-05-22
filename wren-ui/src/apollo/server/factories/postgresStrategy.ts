@@ -12,12 +12,15 @@ import {
   PostgresColumnResponse,
   PostgresConnector,
 } from '../connectors/postgresConnector';
-import { Encryptor } from '../utils';
+import { Encryptor, getLogger } from '../utils';
 import {
   findColumnsToUpdate,
   updateModelPrimaryKey,
   transformInvalidColumnName,
 } from './util';
+
+const logger = getLogger('PostgresStrategy');
+logger.level = 'debug';
 
 export class PostgresStrategy implements IDataSourceStrategy {
   private project?: Project;
@@ -390,8 +393,15 @@ export class PostgresStrategy implements IDataSourceStrategy {
       }
       return acc;
     }, []);
-    const columns =
-      await this.ctx.modelColumnRepository.createMany(columnValues);
+    const batch = 100;
+    const columns = [];
+    for (let i = 0; i < columnValues.length; i += batch) {
+      logger.debug(`Creating columns: ${i} - ${i + batch}`);
+      const res = await this.ctx.modelColumnRepository.createMany(
+        columnValues.slice(i, i + batch),
+      );
+      columns.push(...res);
+    }
     return columns;
   }
 }
