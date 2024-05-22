@@ -260,9 +260,10 @@ export class PostgresStrategy implements IDataSourceStrategy {
   }
 
   private async patchConfigToWrenEngine(properties: any) {
-    const { host, port, database, user, password } = properties;
+    const { host, port, database, user, password, ssl } = properties;
+    const sslMode = ssl ? '?sslmode=require' : '';
     // update wren-engine config
-    const jdbcUrl = `jdbc:postgresql://${host}:${port}/${database}`;
+    const jdbcUrl = `jdbc:postgresql://${host}:${port}/${database}${sslMode}`;
     const config = {
       'wren.datasource.type': 'postgres',
       'postgres.jdbc.url': jdbcUrl,
