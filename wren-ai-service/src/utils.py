@@ -198,7 +198,10 @@ def timer(func):
                 f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
             )
 
-            if func.__qualname__ == "AskService.ask":
+            if (
+                func.__qualname__ == "AskService.get_ask_result"
+                and value.status == "finished"
+            ):
                 if not Path("./outputs").exists():
                     Path("./outputs").mkdir()
 

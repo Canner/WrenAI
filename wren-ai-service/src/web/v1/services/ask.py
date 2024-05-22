@@ -325,6 +325,7 @@ class AskService:
             status="stopped",
         )
 
+    @timer
     def get_ask_result(
         self,
         ask_result_request: AskResultRequest,
