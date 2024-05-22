@@ -553,7 +553,8 @@
       "statement": "SELECT \"a\".\"Name\", COUNT(\"t\".\"TrackId\") AS \"Track_Count\" FROM \"artist\" AS \"a\" JOIN \"album\" AS \"al\" ON \"a\".\"ArtistId\" = \"al\".\"ArtistId\" JOIN \"track\" AS \"t\" ON \"al\".\"AlbumId\" = \"t\".\"AlbumId\" GROUP BY \"a\".\"Name\"",
       "properties": {
         "question": "How many tracks does each artist have in the database?",
-        "description": "The breakdown simplifies the process of counting the number of tracks for each artist."
+        "summary": "The breakdown simplifies the process of counting the number of tracks for each artist.",
+        "viewId": "e0a5f4e0-20b8-4e76-93ab-64d88e2306dc"
       }
     }
   ],

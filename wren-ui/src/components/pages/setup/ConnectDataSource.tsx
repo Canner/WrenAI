@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Alert, Typography, Form, Row, Col, Button } from 'antd';
 import styled from 'styled-components';
 import { DATA_SOURCES } from '@/utils/enum/dataSources';
-import { getDataSource } from './utils';
+import { getDataSource, getPostgresErrorMessage } from './utils';
 
 const StyledForm = styled(Form)`
   border: 1px var(--gray-4) solid;
@@ -16,15 +16,15 @@ const DataSource = styled.div`
 `;
 
 interface Props {
-  connectErrorMessage: string;
   dataSource: DATA_SOURCES;
   onNext: (data: any) => void;
   onBack: () => void;
   submitting: boolean;
+  connectError?: Record<string, any>;
 }
 
 export default function ConnectDataSource(props: Props) {
-  const { connectErrorMessage, dataSource, submitting, onNext, onBack } = props;
+  const { connectError, dataSource, submitting, onNext, onBack } = props;
   const [form] = Form.useForm();
   const current = getDataSource(dataSource);
 
@@ -85,10 +85,14 @@ export default function ConnectDataSource(props: Props) {
         <current.component />
       </StyledForm>
 
-      {connectErrorMessage && (
+      {connectError && (
         <Alert
-          message="Failed to connect"
-          description={connectErrorMessage || 'Cannot connect to data source'}
+          message={connectError.shortMessage}
+          description={
+            dataSource === DATA_SOURCES.PG_SQL
+              ? getPostgresErrorMessage(connectError)
+              : connectError.message
+          }
           type="error"
           showIcon
           className="my-6"

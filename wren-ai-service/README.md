@@ -1,8 +1,12 @@
 # AI Service of WrenAI
 
+## Concepts
+
+Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service) here to understand the concepts of Wren AI Service.
+
 ## Environment Setup
 
-- Python 3.12.0
+- Python 3.12.0, recommended to use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage the Python versions
 - install `poetry` with version 1.7.1: `curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`
 - execute `poetry install` to install the dependencies
 - copy `.env.example` file to `.env`, and `.env.dev.example` file to `.env.dev` and fill in the environment variables
@@ -25,8 +29,9 @@
 - install `psql`
 - fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
 - start the docker service
-- run qdrant and wren-engine docker containers: `make run-all`
-- evaluation: `make eval-ask` and check out the outputs folder
+- evaluation
+  - `make eval pipeline=ask args="--help"`
+  - `make eval pipeline=ask_details args="--help"`
 - `make streamlit` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
 

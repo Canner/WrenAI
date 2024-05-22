@@ -101,7 +101,8 @@
       "statement": "SELECT * FROM book",
       "properties": {
         "question": "How many books are there?",
-        "description": "Retrieve the number of books"
+        "summary": "Retrieve the number of books",
+        "viewId": "fake-id-1"
       }
     }
   ],

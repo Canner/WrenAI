@@ -14,13 +14,16 @@ import {
   BQConnector,
   BQListTableOptions,
 } from '../connectors/bqConnector';
-import { Encryptor, toBase64 } from '../utils';
+import { Encryptor, toBase64, getLogger } from '../utils';
 import { IDataSourceStrategy } from './dataSourceStrategy';
 import {
   findColumnsToUpdate,
   updateModelPrimaryKey,
   transformInvalidColumnName,
 } from './util';
+
+const logger = getLogger('BigQueryStrategy');
+logger.level = 'debug';
 
 export class BigQueryStrategy implements IDataSourceStrategy {
   connector: IConnector<any, any>;
@@ -419,12 +422,16 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       }
       return acc;
     }, []);
-    const columns = await Promise.all(
-      columnValues.map(
-        async (column) =>
-          await this.ctx.modelColumnRepository.createOne(column),
-      ),
-    );
+    const batch = 100;
+    const columns = [];
+    for (let i = 0; i < columnValues.length; i += batch) {
+      logger.debug(`Creating columns: ${i} - ${i + batch}`);
+      const res = await this.ctx.modelColumnRepository.createMany(
+        columnValues.slice(i, i + batch),
+      );
+      columns.push(...res);
+    }
+
     return columns;
   }
 }

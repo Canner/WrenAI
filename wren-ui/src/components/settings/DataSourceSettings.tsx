@@ -11,6 +11,7 @@ import {
   transformFormToProperties,
   transformPropertiesToForm,
 } from '@/hooks/useSetupConnection';
+import { parseGraphQLError } from '@/utils/errorHandler';
 import {
   useStartSampleDatasetMutation,
   useUpdateDataSourceMutation,
@@ -90,7 +91,7 @@ const DataSourcePanel = (props: Props) => {
     },
   });
 
-  const connectErrorMessage = useMemo(() => error?.message, [error]);
+  const updateError = useMemo(() => parseGraphQLError(error), [error]);
 
   useEffect(() => properties && reset(), [properties]);
 
@@ -130,10 +131,10 @@ const DataSourcePanel = (props: Props) => {
       <Form form={form} layout="vertical" className="py-3 px-4">
         <current.component mode={FORM_MODE.EDIT} />
 
-        {connectErrorMessage && (
+        {updateError && (
           <Alert
-            message="Failed to connect"
-            description={connectErrorMessage || 'Cannot connect to data source'}
+            message={updateError.shortMessage}
+            description={updateError.message}
             type="error"
             showIcon
             className="my-6"

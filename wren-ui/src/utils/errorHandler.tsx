@@ -6,6 +6,7 @@ import { message } from 'antd';
 // Refer to backend GeneralErrorCodes for mapping
 export const ERROR_CODES = {
   INVALID_CALCULATED_FIELD: 'INVALID_CALCULATED_FIELD',
+  CONNECTION_REFUSED: 'CONNECTION_REFUSED',
 };
 
 /**
@@ -283,6 +284,7 @@ const errorHandler = (error: ErrorResponse) => {
 export default errorHandler;
 
 export const parseGraphQLError = (error: ApolloError) => {
+  if (!error) return null;
   const graphQLErrors: GraphQLError = error.graphQLErrors?.[0];
   const extensions = graphQLErrors?.extensions || {};
   return {
