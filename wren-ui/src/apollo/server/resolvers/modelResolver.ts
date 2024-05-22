@@ -478,8 +478,15 @@ export class ModelResolver {
     const statement = format(constructCteSql(steps));
 
     // describe columns
-    const { columns } =
-      await ctx.wrenEngineAdaptor.describeStatement(statement);
+    const { connectionInfo, datasource } =
+      ctx.queryService.composeConnectionInfo(project);
+    const { columns } = await ctx.queryService.describeStatement(statement, {
+      datasource,
+      connectionInfo,
+      limit: PREVIEW_MAX_OUTPUT_ROW,
+      modelingOnly: false,
+    });
+
     if (isEmpty(columns)) {
       throw new Error('Failed to describe statement');
     }
@@ -540,15 +547,20 @@ export class ModelResolver {
     if (!model) {
       throw new Error('Model not found');
     }
-
-    // pass the current mdl to wren engine to preview data, prevent the model is not deployed
+    const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    const { datasource, connectionInfo } =
+      ctx.queryService.composeConnectionInfo(project);
     const sql = `select * from ${model.referenceName}`;
-    const data = await ctx.wrenEngineAdaptor.previewData(
-      sql,
-      PREVIEW_MAX_OUTPUT_ROW,
-      manifest,
-    );
+
+    const data = await ctx.queryService.preview(sql, {
+      datasource,
+      connectionInfo,
+      limit: PREVIEW_MAX_OUTPUT_ROW,
+      modelingOnly: false,
+      mdl: manifest,
+    });
+
     return data;
   }
 
@@ -558,11 +570,16 @@ export class ModelResolver {
     if (!view) {
       throw new Error('View not found');
     }
+    const project = await ctx.projectService.getCurrentProject();
+    const { datasource, connectionInfo } =
+      ctx.queryService.composeConnectionInfo(project);
 
-    const data = await ctx.wrenEngineAdaptor.previewData(
-      view.statement,
-      PREVIEW_MAX_OUTPUT_ROW,
-    );
+    const data = await ctx.queryService.preview(view.statement, {
+      datasource,
+      connectionInfo,
+      limit: PREVIEW_MAX_OUTPUT_ROW,
+      modelingOnly: false,
+    });
     return data;
   }
 
