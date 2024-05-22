@@ -17,7 +17,7 @@ import {
 } from '@server/data';
 import { snakeCase } from 'lodash';
 import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
-import { SupportedDataSource } from '../adaptors/ibisAdaptor';
+import { sqls } from '../data/tpch';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -48,7 +48,6 @@ export class ProjectResolver {
     const project = await ctx.projectService.getCurrentProject();
     logger.debug(project);
 
-    let sql;
     let connectionInfo = {};
     let dataSource = null;
     if (project.type === 'POSTGRES') {
@@ -63,8 +62,8 @@ export class ProjectResolver {
         user: project.user,
         password,
       };
-      sql = 'SELECT * FROM public_orders';
-      dataSource = SupportedDataSource.POSTGRES;
+
+      dataSource = DataSourceName.POSTGRES;
     } else if (project.type === 'BIG_QUERY') {
       const encryptor = new Encryptor(ctx.config);
       const decryptedCredentials = encryptor.decrypt(project.credentials);
@@ -74,25 +73,26 @@ export class ProjectResolver {
         dataset_id: project.datasetId,
         credentials: credential,
       };
-      sql = `select * from "${project.projectId}".payments`;
-      dataSource = SupportedDataSource.BIGQUERY;
+
+      dataSource = DataSourceName.BIG_QUERY;
     } else {
       logger.error('Unsupported data source type');
       return {};
     }
-    logger.debug(connectionInfo);
-    logger.debug(sql);
-    const ibisAdaptor = ctx.ibisServerAdaptor;
-    const nativeSql = await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
-      modelingOnly: true,
-    });
-    logger.debug(`native sql: ${nativeSql}`);
-    const response = await ibisAdaptor.query(
-      nativeSql,
-      dataSource,
-      connectionInfo as any,
-    );
-    return response;
+    for (const sql of sqls) {
+      const ibisAdaptor = ctx.ibisServerAdaptor;
+      const start = Date.now();
+      const res = await ibisAdaptor.query(
+        sql,
+        dataSource,
+        connectionInfo as any,
+      );
+      const end = Date.now();
+      logger.debug(`Ibis response time: ${end - start}ms`);
+      logger.debug(`data len: ${res.data.length}`);
+      logger.debug(`data sample: ${res.data.slice(0, 3)}`);
+    }
+    return { true: 1 };
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {

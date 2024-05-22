@@ -60,7 +60,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       sql: query,
       ...connectionInfo,
     };
-    logger.debug(body);
+    // logger.debug(body);
     try {
       const res = await axios.post(
         `${this.ibisServerBaseEndpoint}/v2/ibis/${this.dataSourceUrlMap[dataSource]}/query`,
