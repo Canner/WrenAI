@@ -688,8 +688,5 @@ export const typeDefs = gql`
     # Settings
     resetCurrentProject: Boolean!
     updateDataSource(data: UpdateDataSourceInput!): DataSource!
-
-    #test
-    testIbis: JSON!
   }
 `;
