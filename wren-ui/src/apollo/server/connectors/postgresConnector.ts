@@ -5,6 +5,7 @@ import { WrenEngineColumnType } from './types';
 import * as Errors from '@server/utils/error';
 
 import pg from 'pg';
+import { ConnectionOptions } from 'tls';
 const { Client } = pg;
 
 const logger = getLogger('PostgresConnector');
@@ -16,7 +17,7 @@ export interface PostgresConnectionConfig {
   host: string;
   database: string;
   port: number;
-  ssl?: boolean;
+  ssl?: boolean | ConnectionOptions;
 }
 
 export interface PostgresColumnResponse {
@@ -267,6 +268,11 @@ export class PostgresConnector
   private async prepareClient() {
     if (this.client) {
       return;
+    }
+
+    // bypass server certificate validation
+    if (this.config.ssl) {
+      this.config.ssl = { rejectUnauthorized: false };
     }
 
     this.client = new Client(this.config);
