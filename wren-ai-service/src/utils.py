@@ -1,6 +1,8 @@
+import functools
 import logging
 import os
 import re
+import time
 from typing import Dict, List, Optional, Tuple
 
 import requests
@@ -176,3 +178,22 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
         os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
     )
     return llm_provider(), document_store_provider()
+
+
+def timer(func):
+    load_env_vars()
+
+    @functools.wraps(func)
+    def wrapper_timer(*args, **kwargs):
+        startTime = time.perf_counter()
+        value = func(*args, **kwargs)
+        endTime = time.perf_counter()
+        elapsed_time = endTime - startTime
+        if os.getenv("ENABLE_TIMER"):
+            with open(os.getenv("PERF_TEST_REPORT"), "a") as f:
+                f.write(
+                    f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds\n"
+                )
+        return value
+
+    return wrapper_timer
