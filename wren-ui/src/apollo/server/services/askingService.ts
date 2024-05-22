@@ -14,13 +14,10 @@ import {
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
-import {
-  IWrenEngineAdaptor,
-  QueryResponse,
-} from '../adaptors/wrenEngineAdaptor';
 import { format } from 'sql-formatter';
 import { Telemetry } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
+import { IQueryService, PreviewDataResponse } from './queryService';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -69,7 +66,10 @@ export interface IAskingService {
     threadId: number,
   ): Promise<ThreadResponseWithThreadContext[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
-  previewData(responseId: number, stepIndex?: number): Promise<QueryResponse>;
+  previewData(
+    responseId: number,
+    stepIndex?: number,
+  ): Promise<PreviewDataResponse>;
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
 
@@ -233,42 +233,42 @@ class BackgroundTracker {
 
 export class AskingService implements IAskingService {
   private wrenAIAdaptor: IWrenAIAdaptor;
-  private wrenEngineAdaptor: IWrenEngineAdaptor;
   private deployService: IDeployService;
   private projectService: IProjectService;
   private viewRepository: IViewRepository;
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
   private backgroundTracker: BackgroundTracker;
+  private queryService: IQueryService;
   private telemetry: Telemetry;
 
   constructor({
     telemetry,
     wrenAIAdaptor,
-    wrenEngineAdaptor,
     deployService,
     projectService,
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    queryService,
   }: {
     telemetry: Telemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
-    wrenEngineAdaptor: IWrenEngineAdaptor;
     deployService: IDeployService;
     projectService: IProjectService;
     viewRepository: IViewRepository;
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
+    queryService: IQueryService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
-    this.wrenEngineAdaptor = wrenEngineAdaptor;
     this.deployService = deployService;
     this.projectService = projectService;
     this.viewRepository = viewRepository;
     this.threadRepository = threadRepository;
     this.threadResponseRepository = threadResponseRepository;
     this.telemetry = telemetry;
+    this.queryService = queryService;
     this.backgroundTracker = new BackgroundTracker({
       telemetry,
       wrenAIAdaptor,
@@ -459,16 +459,24 @@ export class AskingService implements IAskingService {
   public async previewData(
     responseId: number,
     stepIndex?: number,
-  ): Promise<QueryResponse> {
+  ): Promise<PreviewDataResponse> {
     const response = await this.getResponse(responseId);
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
-
+    const project = await this.projectService.getCurrentProject();
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps, stepIndex));
+    const { datasource, connectionInfo } =
+      this.queryService.composeConnectionInfo(project);
+
+    const data = await this.queryService.preview(sql, {
+      datasource,
+      connectionInfo,
+    });
+
     this.telemetry.send_event('preview_data', { sql });
-    return this.wrenEngineAdaptor.previewData(sql);
+    return data;
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {

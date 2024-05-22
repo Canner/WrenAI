@@ -90,7 +90,7 @@ export class ProjectResolver {
     const response = await ibisAdaptor.query(
       nativeSql,
       dataSource,
-      connectionInfo,
+      connectionInfo as any,
     );
     return response;
   }
@@ -438,13 +438,4 @@ export class ProjectResolver {
 
     return properties;
   }
-}
-
-function isJsonString(str) {
-  try {
-    JSON.parse(str);
-  } catch (_e) {
-    return false;
-  }
-  return true;
 }
