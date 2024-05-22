@@ -1,4 +1,4 @@
-import { isEmpty } from 'lodash';
+import { isEmpty, isNil, pick, pickBy } from 'lodash';
 import {
   Model,
   ModelColumn,
@@ -114,14 +114,21 @@ export class MDLBuilder implements IMDLBuilder {
       // if putting properties not string, it will throw error
       // filter out properties that have string value
       const properties = JSON.parse(view.properties) || {};
+
+      // filter out properties that are not null or undefined
+      // and are in the list of properties that are allowed
+      const viewProperties = pickBy(properties, (value, key) => {
+        return (
+          !isNil(value) &&
+          ['displayName', 'description', 'question', 'summary'].includes(key)
+        );
+      });
+
       return {
         name: view.name,
         statement: view.statement,
         properties: {
-          displayName: properties.displayName,
-          description: properties.description,
-          question: properties.question,
-          summary: properties.summary,
+          ...viewProperties,
 
           // viewId will be passed back in other APIs
           // to identify the view
