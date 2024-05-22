@@ -6,7 +6,7 @@ import {
   RelationData,
   SampleDatasetData,
 } from '../types';
-import { Encryptor, getLogger } from '@server/utils';
+import { getLogger } from '@server/utils';
 import { Model, ModelColumn, Project } from '../repositories';
 import {
   SampleDatasetName,
@@ -17,7 +17,6 @@ import {
 } from '@server/data';
 import { snakeCase } from 'lodash';
 import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
-import { sqls } from '../data/tpch';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -41,58 +40,6 @@ export class ProjectResolver {
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
     this.startSampleDataset = this.startSampleDataset.bind(this);
-    this.testIbis = this.testIbis.bind(this);
-  }
-
-  public async testIbis(_root: any, _arg: any, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
-    logger.debug(project);
-
-    let connectionInfo = {};
-    let dataSource = null;
-    if (project.type === 'POSTGRES') {
-      const encryptor = new Encryptor(ctx.config);
-      const decryptedCredentials = encryptor.decrypt(project.credentials);
-      const { password } = JSON.parse(decryptedCredentials);
-
-      connectionInfo = {
-        host: project.host,
-        port: project.port,
-        database: project.database,
-        user: project.user,
-        password,
-      };
-
-      dataSource = DataSourceName.POSTGRES;
-    } else if (project.type === 'BIG_QUERY') {
-      const encryptor = new Encryptor(ctx.config);
-      const decryptedCredentials = encryptor.decrypt(project.credentials);
-      const credential = Buffer.from(decryptedCredentials).toString('base64');
-      connectionInfo = {
-        project_id: project.projectId,
-        dataset_id: project.datasetId,
-        credentials: credential,
-      };
-
-      dataSource = DataSourceName.BIG_QUERY;
-    } else {
-      logger.error('Unsupported data source type');
-      return {};
-    }
-    for (const sql of sqls) {
-      const ibisAdaptor = ctx.ibisServerAdaptor;
-      const start = Date.now();
-      const res = await ibisAdaptor.query(
-        sql,
-        dataSource,
-        connectionInfo as any,
-      );
-      const end = Date.now();
-      logger.debug(`Ibis response time: ${end - start}ms`);
-      logger.debug(`data len: ${res.data.length}`);
-      logger.debug(`data sample: ${res.data.slice(0, 3)}`);
-    }
-    return { true: 1 };
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
