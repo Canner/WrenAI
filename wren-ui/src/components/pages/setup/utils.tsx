@@ -11,6 +11,7 @@ import BigQueryProperties from './dataSources/BigQueryProperties';
 import DuckDBProperties from './dataSources/DuckDBProperties';
 import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
+import { ERROR_CODES } from '@/utils/errorHandler';
 
 type SetupStep = {
   step: number;
@@ -124,4 +125,25 @@ export const getTemplates = () => {
     ...TEMPLATE_OPTIONS[key],
     value: key,
   })) as ButtonOption[];
+};
+
+export const getPostgresErrorMessage = (error: Record<string, any>) => {
+  if (error.code === ERROR_CODES.CONNECTION_REFUSED) {
+    return (
+      <div>
+        {error.message}. <br />
+        If you are having trouble connecting to your PostgreSQL database, please
+        refer to our{' '}
+        <a
+          href="https://docs.getwren.ai/guide/connect/postgresql#connect"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          documentation
+        </a>{' '}
+        for detailed instructions.
+      </div>
+    );
+  }
+  return error.message;
 };
