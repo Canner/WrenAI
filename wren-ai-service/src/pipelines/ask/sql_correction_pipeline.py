@@ -9,7 +9,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     init_sql_correction_prompt_builder,
 )
-from src.utils import init_providers
+from src.utils import init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -36,6 +36,7 @@ class SQLCorrection(BasicPipeline):
 
         super().__init__(self._pipeline)
 
+    @timer
     def run(
         self,
         contexts: List[Document],

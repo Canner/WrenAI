@@ -9,6 +9,7 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import (
     init_providers,
     load_env_vars,
+    timer,
 )
 
 load_env_vars()
@@ -38,6 +39,7 @@ class HistoricalQuestion(BasicPipeline):
         self._pipeline = pipe
         super().__init__(self._pipeline)
 
+    @timer
     def run(self, query: str):
         logger.info("Try to extract historical question")
         return self._pipeline.run(
