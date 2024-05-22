@@ -4,7 +4,7 @@ from typing import Any
 from haystack import Pipeline
 
 from src.core.pipeline import BasicPipeline
-from src.utils import init_providers, load_env_vars
+from src.utils import init_providers, load_env_vars, timer
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -24,6 +24,7 @@ class Retrieval(BasicPipeline):
 
         super().__init__(self._pipeline)
 
+    @timer
     def run(self, query: str):
         logger.info("Ask Retrieval pipeline is running...")
         return self._pipeline.run(

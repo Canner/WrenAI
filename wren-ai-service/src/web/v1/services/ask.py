@@ -5,7 +5,7 @@ import sqlparse
 from haystack import Pipeline
 from pydantic import BaseModel
 
-from src.utils import remove_duplicates
+from src.utils import remove_duplicates, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -150,6 +150,7 @@ class AskService:
             and self.ask_results[query_id].status == "stopped"
         )
 
+    @timer
     def ask(
         self,
         ask_request: AskRequest,
@@ -329,6 +330,7 @@ class AskService:
             status="stopped",
         )
 
+    @timer
     def get_ask_result(
         self,
         ask_result_request: AskResultRequest,
