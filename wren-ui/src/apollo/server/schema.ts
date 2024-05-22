@@ -489,15 +489,17 @@ export const typeDefs = gql`
 
   # Thread
   input CreateThreadInput {
-    question: String!
-    sql: String!
-    summary: String!
+    question: String
+    sql: String
+    summary: String
+    viewId: Int
   }
 
   input CreateThreadResponseInput {
-    question: String!
-    sql: String!
-    summary: String!
+    question: String
+    sql: String
+    summary: String
+    viewId: Int
   }
 
   input ThreadUniqueWhereInput {
@@ -521,6 +523,7 @@ export const typeDefs = gql`
   }
 
   type ThreadResponseDetail {
+    view: ViewInfo
     sql: String
     description: String
     steps: [DetailStep!]!
