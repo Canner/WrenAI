@@ -67,7 +67,7 @@ describe('DeployService', () => {
     const projectId = 1;
 
     mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
-      hash: deployService.createMDLHash(manifest),
+      hash: deployService.createMDLHash(manifest, 1),
     });
 
     const response = await deployService.deploy(manifest, projectId);

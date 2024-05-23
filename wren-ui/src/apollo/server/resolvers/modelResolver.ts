@@ -39,6 +39,7 @@ export class ModelResolver {
     this.deleteModel = this.deleteModel.bind(this);
     this.updateModelMetadata = this.updateModelMetadata.bind(this);
     this.deploy = this.deploy.bind(this);
+    this.getMDL = this.getMDL.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
 
     // view
@@ -139,7 +140,7 @@ export class ModelResolver {
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const currentHash = ctx.deployService.createMDLHash(manifest);
+    const currentHash = ctx.deployService.createMDLHash(manifest, project.id);
     const lastDeployHash = await ctx.deployService.getLastDeployment(
       project.id,
     );
@@ -161,6 +162,15 @@ export class ModelResolver {
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     return await ctx.deployService.deploy(manifest, project.id);
+  }
+
+  public async getMDL(_root: any, _args: any, ctx: IContext) {
+    const { hash } = _args.data;
+    const mdl = await ctx.deployService.getMDLByHash(hash);
+    return {
+      hash,
+      mdl,
+    };
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {
