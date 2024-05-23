@@ -13,6 +13,7 @@ logger.level = 'debug';
 
 export interface IProjectService {
   getCurrentProject: () => Promise<Project>;
+  getProjectById: (projectId: number) => Promise<Project>;
   getCredentialFilePath: (project?: Project) => Promise<string>;
   writeCredentialFile: (
     credentials: JSON,
@@ -30,6 +31,10 @@ export class ProjectService implements IProjectService {
 
   public async getCurrentProject() {
     return await this.projectRepository.getCurrentProject();
+  }
+
+  public async getProjectById(projectId: number) {
+    return await this.projectRepository.findOneBy({ id: projectId });
   }
 
   public async getCredentialFilePath(project?: Project) {

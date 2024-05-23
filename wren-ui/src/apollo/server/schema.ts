@@ -588,6 +588,12 @@ export const typeDefs = gql`
     dataSource: DataSource!
   }
 
+  input PreviewSQLDataInput {
+    sql: String!
+    projectId: Int!
+    limit: Int
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -688,5 +694,8 @@ export const typeDefs = gql`
     # Settings
     resetCurrentProject: Boolean!
     updateDataSource(data: UpdateDataSourceInput!): DataSource!
+
+    # preview
+    previewSql(data: PreviewSQLDataInput): JSON!
   }
 `;

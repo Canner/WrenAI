@@ -5,6 +5,7 @@ import {
   CreateCalculatedFieldData,
   UpdateCalculatedFieldData,
   UpdateViewMetadataInput,
+  PreviewSQLData,
 } from '../models';
 import { IContext, RelationData, UpdateRelationData } from '../types';
 import { getLogger } from '@server/utils';
@@ -51,6 +52,7 @@ export class ModelResolver {
     // preview
     this.previewModelData = this.previewModelData.bind(this);
     this.previewViewData = this.previewViewData.bind(this);
+    this.previewSql = this.previewSql.bind(this);
     this.getNativeSql = this.getNativeSql.bind(this);
 
     // calculated field
@@ -581,6 +583,23 @@ export class ModelResolver {
       modelingOnly: false,
     });
     return data;
+  }
+
+  public async previewSql(
+    _root: any,
+    args: { data: PreviewSQLData },
+    ctx: IContext,
+  ) {
+    const { sql, projectId, limit } = args.data;
+    const project = await ctx.projectService.getProjectById(projectId);
+    const { datasource, connectionInfo } =
+      ctx.queryService.composeConnectionInfo(project);
+    return await ctx.queryService.preview(sql, {
+      datasource,
+      connectionInfo,
+      limit: limit || PREVIEW_MAX_OUTPUT_ROW,
+      modelingOnly: false,
+    });
   }
 
   public async getNativeSql(
