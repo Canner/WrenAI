@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from haystack import Pipeline
 from pydantic import BaseModel
@@ -13,7 +13,7 @@ class SQLExplanationRequest(BaseModel):
     question: str
     sql: str
     sql_summary: str
-    sql_analysis: dict
+    sql_analysis_results: List[Dict]
     full_sql: str
 
     @property
@@ -36,7 +36,7 @@ class SQLExplanationResultRequest(BaseModel):
 
 class SQLExplanationResultResponse(BaseModel):
     status: Literal["understanding", "generating", "finished", "failed"]
-    response: Optional[dict] = None
+    response: Optional[List[Dict]] = None
     error: Optional[str] = None
 
 
@@ -61,7 +61,7 @@ class SQLExplanationService:
                 question=sql_explanation_request.question,
                 sql=sql_explanation_request.sql,
                 sql_summary=sql_explanation_request.sql_summary,
-                sql_analysis=sql_explanation_request.sql_analysis,
+                sql_analysis_results=sql_explanation_request.sql_analysis_results,
                 full_sql=sql_explanation_request.full_sql,
             )
 

@@ -350,149 +350,11 @@ def show_asks_details_results(query: str):
                 args=[i, sqls],
             )
         with col2:
-            SAMPLE_INPUT = [
-                i,
-                "Which customers whose last names start with the letter 'G' have placed orders, and what is the total number of orders, total price, and state tax accrued per customer, sorted by state tax in descending order?",
-                """
-SELECT
-c.id,
-c.first_name,
-c.last_name,
-COUNT(*) as num_orders, 
-SUM(o.price) AS total_price, 
-SUM(o.price * s.sales_tax) AS state_tax 
-FROM 
-customer c 
-JOIN state s ON c.state = s.id 
-JOIN orders o ON c.id = o.customer_id 
-WHERE 
-o.price > 0  AND c.last_name LIKE 'G%' 
-GROUP BY 
-1, 
-2, 
-3 
-ORDER BY 
-state_tax DESC
-                """,
-                """
-SELECT
-c.id,
-c.first_name,
-c.last_name,
-COUNT(*) as num_orders, 
-SUM(o.price) AS total_price, 
-SUM(o.price * s.sales_tax) AS state_tax 
-FROM 
-customer c 
-JOIN state s ON c.state = s.id 
-JOIN orders o ON c.id = o.customer_id 
-WHERE 
-o.price > 0  AND c.last_name LIKE 'G%' 
-GROUP BY 
-1, 
-2, 
-3 
-ORDER BY 
-state_tax DESC
-                """,
-                "retrieves and summarizes customer order data based on the specified filters and aggregation rules. The results will show the customers whose last names start with 'G', along with the number of orders, total prices, and state taxes sorted by the amount of tax paid",
-                {
-                    "selectItems": [
-                        {
-                            "aliasName": None,
-                            "expression": "c.id",
-                            "properties": {
-                                "includeFunctionCall": False,
-                                "includeMathematicalOperation": False,
-                            },
-                        },
-                        {
-                            "aliasName": None,
-                            "expression": "c.first_name",
-                            "properties": {
-                                "includeFunctionCall": False,
-                                "includeMathematicalOperation": False,
-                            },
-                        },
-                        {
-                            "aliasName": None,
-                            "expression": "c.last_name",
-                            "properties": {
-                                "includeFunctionCall": False,
-                                "includeMathematicalOperation": False,
-                            },
-                        },
-                        {
-                            "aliasName": "num_orders",
-                            "expression": "count(*)",
-                            "properties": {
-                                "includeFunctionCall": True,
-                                "includeMathematicalOperation": False,
-                            },
-                        },
-                        {
-                            "aliasName": "total_price",
-                            "expression": "SUM(o.price)",
-                            "properties": {
-                                "includeFunctionCall": True,
-                                "includeMathematicalOperation": False,
-                            },
-                        },
-                        {
-                            "aliasName": "state_tax",
-                            "expression": "SUM(o.price * s.sales_tax)",
-                            "properties": {
-                                "includeFunctionCall": True,
-                                "includeMathematicalOperation": True,
-                            },
-                        },
-                    ],
-                    "relation": {
-                        "type": "INNER_JOIN",
-                        "left": {
-                            "type": "INNER_JOIN",
-                            "left": {
-                                "type": "TABLE",
-                                "tableName": "customer",
-                                "alias": "c",
-                            },
-                            "right": {
-                                "type": "TABLE",
-                                "tableName": "state",
-                                "alias": "s",
-                            },
-                            "criteria": "c.state = s.id",
-                        },
-                        "right": {"type": "TABLE", "tableName": "orders", "alias": "o"},
-                        "criteria": "c.id = o.customer_id",
-                    },
-                    "filters": [
-                        {
-                            "expression": "o.price > 0",
-                            "properties": {
-                                "includeFunctionCall": False,
-                                "includeMathematicalOperation": True,
-                            },
-                        },
-                        {
-                            "expression": "c.last_name LIKE 'G%'",
-                            "properties": {
-                                "includeFunctionCall": False,
-                                "includeMathematicalOperation": False,
-                            },
-                        },
-                    ],
-                    "groupByKeys": ["c.id", "c.first_name", "c.last_name"],
-                    "sortings": [{"expression": "state_tax", "order": "DESC"}],
-                },
-            ]
-
             st.button(
                 label="SQL Explanation",
                 key=f"sql_explanation_btn_{i}",
                 on_click=on_click_sql_explanation_button,
-                args=SAMPLE_INPUT,
-                # args=[i, query, step["sql"], sqls[-1], step["summary"], {}],
+                args=[i, query, step["sql"], sqls[-1], step["summary"]],
             )
 
         if (
@@ -532,22 +394,36 @@ def on_click_preview_data_button(index: int, full_sqls: List[str]):
     st.session_state["preview_sql"] = full_sqls[index]
 
 
+def get_sql_analysis_results(sql: str):
+    response = requests.get(
+        f"{WREN_ENGINE_API_URL}/v1/analysis/sql",
+        json={
+            "sql": sql,
+        },
+    )
+
+    assert response.status_code == 200
+
+    return response.json()
+
+
 def on_click_sql_explanation_button(
     index: int,
     question: str,
     sql: str,
     full_sql: str,
     sql_summary: str,
-    sql_analysis: dict,
 ):
     st.session_state["preview_data_button_index"] = None
+
+    sql_analysis_results = get_sql_analysis_results(sql)
 
     st.session_state["sql_explanation_button_index"] = index
     st.session_state["sql_explanation_question"] = question
     st.session_state["sql_explanation_sql"] = sql
     st.session_state["sql_explanation_full_sql"] = full_sql
     st.session_state["sql_explanation_sql_summary"] = sql_summary
-    st.session_state["sql_explanation_sql_analysis"] = sql_analysis
+    st.session_state["sql_explanation_sql_analysis"] = sql_analysis_results
 
 
 # ai service api related
@@ -766,7 +642,7 @@ def sql_explanation():
             "question": st.session_state["sql_explanation_question"],
             "sql": st.session_state["sql_explanation_sql"],
             "sql_summary": st.session_state["sql_explanation_sql_summary"],
-            "sql_analysis": st.session_state["sql_explanation_sql_analysis"],
+            "sql_analysis_results": st.session_state["sql_explanation_sql_analysis"],
             "full_sql": st.session_state["sql_explanation_full_sql"],
         },
     )

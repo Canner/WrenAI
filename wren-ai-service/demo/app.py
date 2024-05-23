@@ -179,7 +179,7 @@ if __name__ == "__main__":
                 st.session_state["query_history"] = None
 
             # reset relevant session_states
-            st.session_state["query"] = None
+            # st.session_state["query"] = None
             st.session_state["asks_results"] = None
             st.session_state["chosen_query_result"] = None
             st.session_state["asks_details_result"] = None
@@ -193,8 +193,8 @@ if __name__ == "__main__":
             st.session_state["asks_details_result"]
             and st.session_state["chosen_query_result"]
         ):
-            show_asks_details_results(query)
+            show_asks_details_results(st.session_state["query"])
         elif st.session_state["chosen_query_result"]:
             ask_details()
             if st.session_state["asks_details_result"]:
-                show_asks_details_results(query)
+                show_asks_details_results(st.session_state["query"])
