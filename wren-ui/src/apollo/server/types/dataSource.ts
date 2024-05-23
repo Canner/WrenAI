@@ -2,6 +2,7 @@ export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
   DUCKDB = 'DUCKDB',
   POSTGRES = 'POSTGRES',
+  COUCHBASE = 'COUCHBASE',
 }
 
 export interface DataSource {
@@ -17,7 +18,8 @@ export interface SampleDatasetData {
 export type DataSourceProperties = { displayName: string } & Partial<
   BigQueryDataSourceProperties &
     DuckDBDataSourceProperties &
-    PGDataSourceProperties
+    PGDataSourceProperties & 
+    CouchbaseDataSourceProperties
 >;
 
 export interface BigQueryDataSourceProperties {
@@ -39,6 +41,14 @@ export interface PGDataSourceProperties {
   host: string;
   port: number;
   database: string;
+  user: string;
+  password: string;
+  ssl?: boolean;
+}
+
+export interface CouchbaseDataSourceProperties{
+  displayName: string;
+  server: string;
   user: string;
   password: string;
   ssl?: boolean;

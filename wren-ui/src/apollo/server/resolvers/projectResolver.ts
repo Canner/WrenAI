@@ -381,6 +381,10 @@ export class ProjectResolver {
       properties.database = project.database;
       properties.user = project.user;
       properties.ssl = project.configurations?.ssl;
+    } else if (dataSourceType === DataSourceName.COUCHBASE) {
+      properties.server = project.server;
+      properties.user = project.user
+      properties.ssl = project.configurations?.ssl;
     }
 
     return properties;
