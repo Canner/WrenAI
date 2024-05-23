@@ -1,7 +1,7 @@
-import json
 import logging
 from typing import Any, Dict, List, Optional
 
+import orjson
 from haystack import Pipeline, component
 from haystack.components.builders.prompt_builder import PromptBuilder
 
@@ -33,7 +33,7 @@ class GenerationPostProcessor:
         results=Optional[Dict[str, Any]],
     )
     def run(self, replies: List[str]) -> Dict[str, Any]:
-        return {"results": json.loads(replies[0])}
+        return {"results": orjson.loads(replies[0])}
 
 
 class Generation(BasicPipeline):

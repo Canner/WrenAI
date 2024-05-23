@@ -34,16 +34,27 @@ Please simply answer me with the following JSON structure:
   "selectItems": {
     "withFunctionCall": [
       {
+        "alias": <alias_string>,
         "expression": <expression_string>,
         "explanation": <explanation_string>
       }...
     ],
-    "withoutFunctionCall": [
-      {
-        "expression": <expression_string>,
-        "explanation": <explanation_string>
-      }...
-    ]
+    "withoutFunctionCall": {
+      "withMathematicalOperation": [
+        {
+          "alias": <alias_string>,
+          "expression": <expression_string>,
+          "explanation": <explanation_string>
+        }...
+      ],
+      "withoutMathematicalOperation": [
+        {
+          "alias": <alias_string>,
+          "expression": <expression_string>,
+          "explanation": <explanation_string>
+        }...
+      ]
+    }
   },
   "relation": [
     {
@@ -52,20 +63,20 @@ Please simply answer me with the following JSON structure:
     }...
   ],
   "filters": {
-    "withFunctionCall": [
-      {
-        "expression": <expression_string>,
-        "explanation": <explanation_string>
-      }...
-    ],
-    "withoutFunctionCall": [
-      {
-        "expression": <expression_string>,
-        "explanation": <explanation_string>
-      }...
-    ]
+    "expression": <expression_string>,
+    "explanation": <explanation_string>
   },
-  "groupByKeys": <explanation_string>,
-  "sortings": <explanation_string>
+  "groupByKeys": [
+    {
+      "expression": <expression_string>,
+      "explanation": <explanation_string>
+    }...
+  ],
+  "sortings": [
+    {
+      "expression": <expression_string>,
+      "explanation": <explanation_string>
+    }
+  ]
 }
 """

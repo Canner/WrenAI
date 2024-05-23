@@ -1,7 +1,7 @@
-import json
 import logging
 from typing import Any, Dict, List, Optional
 
+import orjson
 from haystack import Pipeline, component
 from haystack.components.builders.prompt_builder import PromptBuilder
 
@@ -18,22 +18,194 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_explanation_user_prompt_template = """
 question: {{ question }}
-sql query: {{ sql }}
-sql query summary: {{ sql_summary }}
-sql query analysis: {{ sql_analysis }}
-full sql query: {{ full_sql }}
+SQL query: {{ sql }}
+SQL query summary: {{ sql_summary }}
+SQL query analysis: {{ sql_analysis_results }}
+full SQL query: {{ full_sql }}
 
 Let's think step by step.
 """
 
 
+def _compose_sql_expression_of_filter_type(filter_analysis: Dict) -> str:
+    if filter_analysis["type"] == "EXPR":
+        return filter_analysis["node"]
+    elif filter_analysis["type"] in ("AND", "OR"):
+        left_expr = _compose_sql_expression_of_filter_type(filter_analysis["left"])
+        right_expr = _compose_sql_expression_of_filter_type(filter_analysis["right"])
+        return f"{left_expr} {filter_analysis['type']} {right_expr}"
+
+    return ""
+
+
+def _compose_sql_expression_of_groupby_type(groupby_keys: List[List[str]]) -> List[str]:
+    return [f"{','.join(groupby_key)}" for groupby_key in groupby_keys]
+
+
+def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
+    results = []
+    if relation["type"] == "TABLE":
+        results = results.append(f"FROM {relation["tableName"]}")
+    elif relation["type"] == "INNER_JOIN":
+        pass
+    elif relation["type"] == "LEFT_JOIN":
+        pass
+    elif relation["type"] == "RIGHT_JOIN":
+        pass
+    elif relation["type"] == "FULL_JOIN":
+        pass
+    elif relation["type"] == "CROSS_JOIN":
+        pass
+    elif relation["type"] == "IMPLICIT_JOIN":
+        pass
+
+    return results
+
+
+def _compose_sql_expression_of_select_type(select_items: List[Dict]) -> Dict:
+    result = {
+        "withFunctionCall": [],
+        "withoutFunctionCall": {
+            "withMathematicalOperation": [],
+            "withoutMathematicalOperation": [],
+        },
+    }
+
+    for select_item in select_items:
+        if select_item["properties"]["includeFunctionCall"] == "true":
+            result["withFunctionCall"].append(
+                {"alias": select_item["alias"], "expression": select_item["expression"]}
+            )
+        else:
+            if select_item["properties"]["includeMathematicalOperation"] == "true":
+                result["withoutFunctionCall"]["withMathematicalOperation"].append(
+                    {
+                        "alias": select_item["alias"],
+                        "expression": select_item["expression"],
+                    }
+                )
+            else:
+                result["withoutFunctionCall"]["withoutMathematicalOperation"].append(
+                    {
+                        "alias": select_item["alias"],
+                        "expression": select_item["expression"],
+                    }
+                )
+
+    return result
+
+
+def _compose_sql_expression_of_sortings_type(sortings: List[Dict]) -> List[str]:
+    return [f'{sorting["expression"]} {sorting["ordering"]}' for sorting in sortings]
+
+
+@component
+class SQLAnalysisPreprocessor:
+    @component.output_types(
+        preprocessed_sql_analysis_results=List[Dict],
+    )
+    def run(
+        self,
+        sql_analysis_results: List[Dict],
+    ) -> List[Dict[str, Any]]:
+        preprocessed_sql_analysis_results = []
+        for sql_analysis_result in sql_analysis_results:
+            preprocessed_sql_analysis_result = {}
+            if "filter" in sql_analysis_result:
+                preprocessed_sql_analysis_result[
+                    "filter"
+                ] = _compose_sql_expression_of_filter_type(
+                    sql_analysis_result["filter"]
+                )
+            if "groupByKeys" in sql_analysis_result:
+                preprocessed_sql_analysis_result[
+                    "groupByKeys"
+                ] = _compose_sql_expression_of_groupby_type(
+                    sql_analysis_result["groupByKeys"]
+                )
+            if "relation" in sql_analysis_result:
+                preprocessed_sql_analysis_result[
+                    "relation"
+                ] = _compose_sql_expression_of_relation_type(
+                    sql_analysis_result["relation"]
+                )
+            if "selectItems" in sql_analysis_result:
+                preprocessed_sql_analysis_result[
+                    "selectItems"
+                ] = _compose_sql_expression_of_select_type(
+                    sql_analysis_result["selectItems"]
+                )
+            if "sortings" in sql_analysis_result:
+                preprocessed_sql_analysis_result[
+                    "sortings"
+                ] = _compose_sql_expression_of_sortings_type(
+                    sql_analysis_result["sortings"]
+                )
+            preprocessed_sql_analysis_results.append(preprocessed_sql_analysis_result)
+
+        return {"preprocessed_sql_analysis_results": preprocessed_sql_analysis_results}
+
+
 @component
 class GenerationPostProcessor:
     @component.output_types(
-        results=Optional[Dict[str, Any]],
+        results=Optional[List[Dict[str, Any]]],
     )
     def run(self, replies: List[str]) -> Dict[str, Any]:
-        return {"results": json.loads(replies[0])}
+        results = []
+        sql_explanation_results = orjson.loads(replies[0])
+
+        if "selectItems" in sql_explanation_results:
+            results += (
+                [
+                    {"type": "selectItems", "payload": select_item}
+                    for select_item in (
+                        sql_explanation_results["selectItems"].get(
+                            "withFunctionCall", []
+                        )
+                    )
+                ]
+                + [
+                    {"type": "selectItems", "payload": select_item}
+                    for select_item in (
+                        sql_explanation_results["selectItems"]
+                        .get("withoutFunctionCall", {})
+                        .get("withMathematicalOperation", [])
+                    )
+                ]
+                + [
+                    {"type": "selectItems", "payload": select_item}
+                    for select_item in (
+                        sql_explanation_results["selectItems"]
+                        .get("withoutFunctionCall", {})
+                        .get("withoutMathematicalOperation", [])
+                    )
+                ]
+            )
+        if "relation" in sql_explanation_results:
+            results += [
+                {"type": "relation", "payload": relation}
+                for relation in sql_explanation_results["relation"]
+            ]
+        if (
+            "filters" in sql_explanation_results
+            and sql_explanation_results["filters"]["expression"]
+        ):
+            results += [
+                {"type": "filters", "payload": sql_explanation_results["filters"]}
+            ]
+        if "groupByKeys" in sql_explanation_results:
+            results += [
+                {"type": "groupByKeys", "payload": groupby_key}
+                for groupby_key in sql_explanation_results["groupByKeys"]
+            ]
+        if "sortings" in sql_explanation_results:
+            results += [
+                {"type": "sortings", "payload": sorting}
+                for sorting in sql_explanation_results["sortings"]
+            ]
+
+        return {"results": results}
 
 
 class Generation(BasicPipeline):
@@ -42,6 +214,10 @@ class Generation(BasicPipeline):
         llm_provider: LLMProvider,
     ):
         self._pipeline = Pipeline()
+        self._pipeline.add_component(
+            "sql_analysis_preprocessor",
+            SQLAnalysisPreprocessor(),
+        )
         self._pipeline.add_component(
             "sql_explanation_prompt_builder",
             PromptBuilder(template=sql_explanation_user_prompt_template),
@@ -52,6 +228,10 @@ class Generation(BasicPipeline):
         )
         self._pipeline.add_component("post_processor", GenerationPostProcessor())
 
+        self._pipeline.connect(
+            "sql_analysis_preprocessor.preprocessed_sql_analysis_results",
+            "sql_explanation_prompt_builder.sql_analysis_results",
+        )
         self._pipeline.connect(
             "sql_explanation_prompt_builder.prompt", "sql_explanation_generator.prompt"
         )
@@ -65,7 +245,7 @@ class Generation(BasicPipeline):
         self,
         question: str,
         sql: str,
-        sql_analysis: dict,
+        sql_analysis_results: List[Dict],
         sql_summary: str,
         full_sql: str,
         include_outputs_from: List[str] | None = None,
@@ -73,10 +253,12 @@ class Generation(BasicPipeline):
         logger.info("SQL Explanation Generation pipeline is running...")
         return self._pipeline.run(
             {
+                "sql_analysis_preprocessor": {
+                    "sql_analysis_results": sql_analysis_results,
+                },
                 "sql_explanation_prompt_builder": {
                     "question": question,
                     "sql": sql,
-                    "sql_analysis": sql_analysis,
                     "sql_summary": sql_summary,
                     "full_sql": full_sql,
                 },
@@ -93,7 +275,54 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    print("generating generation_pipeline.jpg to outputs/pipelines/sql_explanation...")
-    generation_pipeline.draw(
-        "./outputs/pipelines/sql_explanation/generation_pipeline.jpg"
+    results = generation_pipeline.run(
+        question="xxx",
+        sql="xxx",
+        sql_analysis_results=[
+            {
+                "filter": {
+                    "left": {"node": "(custkey = 1)", "type": "EXPR"},
+                    "right": {"node": "(name = 'tom')", "type": "EXPR"},
+                    "type": "AND",
+                },
+                "groupByKeys": [["c.name"]],
+                "relation": {
+                    "criteria": "ON (c.custkey = o.custkey)",
+                    "left": {"alias": "c", "tableName": "Customer", "type": "TABLE"},
+                    "right": {"alias": "o", "tableName": "Orders", "type": "TABLE"},
+                    "type": "INNER_JOIN",
+                },
+                "selectItems": [
+                    {
+                        "alias": None,
+                        "expression": "c.name",
+                        "properties": {
+                            "includeFunctionCall": "false",
+                            "includeMathematicalOperation": "false",
+                        },
+                    },
+                    {
+                        "alias": None,
+                        "expression": "count(*)",
+                        "properties": {
+                            "includeFunctionCall": "true",
+                            "includeMathematicalOperation": "false",
+                        },
+                    },
+                ],
+                "sortings": [{"expression": "c.name", "ordering": "DESCENDING"}],
+            }
+        ],
+        sql_summary="xxx",
+        full_sql="xxx",
+        include_outputs_from=[
+            "sql_analysis_preprocessor",
+            "sql_explanation_prompt_builder",
+        ],
     )
+    print(results)
+
+    # print("generating generation_pipeline.jpg to outputs/pipelines/sql_explanation...")
+    # generation_pipeline.draw(
+    #     "./outputs/pipelines/sql_explanation/generation_pipeline.jpg"
+    # )
