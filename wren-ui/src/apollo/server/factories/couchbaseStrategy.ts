@@ -11,7 +11,7 @@ import { Model, ModelColumn, Project } from '../repositories';
 import {
   CouchbaseColumnResponse,
   CouchbaseConnector,
-} from '../connectors/postgresConnector';
+} from '../connectors/couchbaseConnector';
 import { Encryptor } from '../utils';
 import {
   findColumnsToUpdate,
