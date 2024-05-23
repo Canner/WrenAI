@@ -13,7 +13,6 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import init_providers, load_env_vars, timer
 
-
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
@@ -301,10 +300,10 @@ class DDLConverter:
 
 class Indexing(BasicPipeline):
     def __init__(
-        self, llm_provider: LLMProvider, store_provider: DocumentStoreProvider
+        self, llm_provider: LLMProvider, document_store_provider: DocumentStoreProvider
     ) -> None:
-        ddl_store = store_provider.get_store()
-        view_store = store_provider.get_store(dataset_name="view_questions")
+        ddl_store = document_store_provider.get_store()
+        view_store = document_store_provider.get_store(dataset_name="view_questions")
 
         pipe = Pipeline()
         pipe.add_component("validator", MDLValidator())
@@ -344,8 +343,15 @@ class Indexing(BasicPipeline):
         super().__init__(self._pipeline)
 
     @timer
-    def run(self, mdl_str: str) -> Dict[str, Any]:
-        return self._pipeline.run({"cleaner": {"mdl": mdl_str}})
+    def run(
+        self, mdl_str: str, include_outputs_from: List[str] | None = None
+    ) -> Dict[str, Any]:
+        return self._pipeline.run(
+            {"cleaner": {"mdl": mdl_str}},
+            include_outputs_from=(
+                set(include_outputs_from) if include_outputs_from else None
+            ),
+        )
 
 
 if __name__ == "__main__":

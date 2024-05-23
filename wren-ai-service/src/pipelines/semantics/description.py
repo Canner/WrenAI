@@ -1,10 +1,11 @@
-from typing import Any, AnyStr, Dict, Optional
+from typing import Any, AnyStr, Dict, List, Optional
 
 import orjson
 from haystack import Pipeline
 from haystack.components.builders import PromptBuilder
 
 from src.core.pipeline import BasicPipeline
+from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import init_providers
 
 _TEMPLATE = """
@@ -51,16 +52,18 @@ The output format doesn't need a markdown JSON code block.
 class Generation(BasicPipeline):
     def __init__(
         self,
-        embedder,
-        retriever,
-        generator,
+        llm_provider: LLMProvider,
+        document_store_provider: DocumentStoreProvider,
     ):
         self._prompt_builder = PromptBuilder(template=_TEMPLATE)
         self._pipe = Pipeline()
-        self._pipe.add_component("text_embedder", embedder)
-        self._pipe.add_component("retriever", retriever)
+        self._pipe.add_component("text_embedder", llm_provider.get_text_embedder())
+        self._pipe.add_component(
+            "retriever",
+            document_store_provider.get_retriever(document_store_provider.get_store()),
+        )
         self._pipe.add_component("prompt_builder", self._prompt_builder)
-        self._pipe.add_component("llm", generator)
+        self._pipe.add_component("llm", llm_provider.get_generator())
 
         self._pipe.connect("text_embedder.embedding", "retriever.query_embedding")
         self._pipe.connect("retriever", "prompt_builder.documents")
@@ -69,7 +72,12 @@ class Generation(BasicPipeline):
         super().__init__(self._pipe)
 
     def run(
-        self, *, mdl: Dict[AnyStr, Any], model: str, identifier: Optional[str] = None
+        self,
+        *,
+        mdl: Dict[AnyStr, Any],
+        model: str,
+        identifier: Optional[str] = None,
+        include_outputs_from: List[str] | None = None,
     ):
         return self._pipe.run(
             {
@@ -81,21 +89,18 @@ class Generation(BasicPipeline):
                 "text_embedder": {
                     "text": f"model: {model}, identifier: {identifier}",
                 },
-            }
+            },
+            include_outputs_from=(
+                set(include_outputs_from) if include_outputs_from else None
+            ),
         )
 
 
 if __name__ == "__main__":
     llm_provider, document_store_provider = init_providers()
-    embedder = llm_provider.get_text_embedder()
-    ddl_store = document_store_provider.get_store()
-    retriever = document_store_provider.get_retriever(document_store=ddl_store)
-    generator = llm_provider.get_generator()
-
     pipe = Generation(
-        embedder=embedder,
-        retriever=retriever,
-        generator=generator,
+        llm_provider=llm_provider,
+        document_store_provider=document_store_provider,
     )
 
     res = pipe.run(

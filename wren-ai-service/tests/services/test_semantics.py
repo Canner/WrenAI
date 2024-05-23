@@ -11,17 +11,12 @@ from src.web.v1.services.semantics import (
 @pytest.fixture
 def semantics_service():
     llm_provider, document_store_provider = init_providers()
-    embedder = llm_provider.get_text_embedder()
-    ddl_store = document_store_provider.get_store()
-    retriever = document_store_provider.get_retriever(document_store=ddl_store)
-    generator = llm_provider.get_generator()
 
     return SemanticsService(
         pipelines={
             "generate_description": description.Generation(
-                embedder=embedder,
-                retriever=retriever,
-                generator=generator,
+                llm_provider=llm_provider,
+                document_store_provider=document_store_provider,
             ),
         }
     )

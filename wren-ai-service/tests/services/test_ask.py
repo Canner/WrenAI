@@ -24,35 +24,29 @@ from src.web.v1.services.ask import (
 @pytest.fixture
 def ask_service():
     llm_provider, document_store_provider = init_providers()
-    document_store = document_store_provider.get_store()
-    embedder = llm_provider.get_text_embedder()
-    retriever = document_store_provider.get_retriever(document_store=document_store)
-    query_understanding_generator = llm_provider.get_generator()
-    text_to_sql_generator = llm_provider.get_generator()
-    sql_correction_generator = llm_provider.get_generator()
 
     return AskService(
         {
             "indexing": indexing_pipeline.Indexing(
                 llm_provider=llm_provider,
-                store_provider=document_store_provider,
+                document_store_provider=document_store_provider,
             ),
             "query_understanding": query_understanding_pipeline.QueryUnderstanding(
-                generator=query_understanding_generator,
+                llm_provider=llm_provider,
             ),
             "retrieval": retrieval_pipeline.Retrieval(
-                embedder=embedder,
-                retriever=retriever,
+                llm_provider=llm_provider,
+                document_store_provider=document_store_provider,
             ),
             "historical_question": historical_question.HistoricalQuestion(
                 llm_provider=llm_provider,
                 store_provider=document_store_provider,
             ),
             "generation": generation_pipeline.Generation(
-                generator=text_to_sql_generator,
+                llm_provider=llm_provider,
             ),
             "sql_correction": sql_correction_pipeline.SQLCorrection(
-                generator=sql_correction_generator,
+                llm_provider=llm_provider,
             ),
         }
     )

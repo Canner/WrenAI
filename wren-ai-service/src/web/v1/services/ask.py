@@ -116,6 +116,7 @@ class AskService:
 
     def prepare_semantics(self, prepare_semantics_request: SemanticsPreparationRequest):
         try:
+            print(prepare_semantics_request.mdl)
             self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
             self.prepare_semantics_statuses[
@@ -314,7 +315,7 @@ class AskService:
                 )
         except Exception as e:
             logger.error(f"ask pipeline - OTHERS: {e}")
-            self.ask_results[query_id] = AskResultResponse(
+            self.ask_results[ask_request.query_id] = AskResultResponse(
                 status="failed",
                 error=AskResultResponse.AskError(
                     code="OTHERS",
