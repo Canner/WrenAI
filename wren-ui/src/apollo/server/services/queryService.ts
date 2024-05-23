@@ -112,15 +112,11 @@ export class QueryService implements IQueryService {
       logger.debug(`Native SQL: ${nativeSql}`);
 
       this.checkDataSourceIsSupported(datasource);
-      // time ibis performance
-      const start = new Date().getTime();
       const data = await this.ibisAdaptor.query(
         nativeSql,
         datasource,
         connectionInfo,
       );
-      const end = new Date().getTime();
-      logger.debug(`Ibis query took ${end - start} ms`);
       return this.transformDataType(data);
     }
   }
