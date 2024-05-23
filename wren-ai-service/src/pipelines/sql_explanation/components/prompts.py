@@ -24,6 +24,7 @@ For example, the relation tree structure below has two relations that are both I
     ...
   },
   "criteria": ...
+  "exprSources": ...
 }
 
 
@@ -59,6 +60,13 @@ Please simply answer me with the following JSON structure:
   "relation": [
     {
       "type": <type_string>,
+      "criteria": <criteria_string>,
+      "exprSources": [
+        {
+          "expression": <expression_string>,
+          "sourceDataset": <sourceDataset_string>
+        }...
+      ],
       "explanation": <explanation_string>
     }...
   ],
