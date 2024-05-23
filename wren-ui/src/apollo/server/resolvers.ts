@@ -86,6 +86,9 @@ const resolvers = {
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,
     updateDataSource: projectResolver.updateDataSource,
+
+    // preview
+    previewSql: modelResolver.previewSql,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),
