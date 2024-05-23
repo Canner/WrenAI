@@ -32,7 +32,8 @@ export interface IDeployService {
   deploy(manifest: Manifest, projectId: number): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<string>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
-  createMDLHash(manifest: Manifest): string;
+  createMDLHash(manifest: Manifest, projectId: number): string;
+  getMDLByHash(hash: string): Promise<string>;
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
 
@@ -76,7 +77,7 @@ export class DeployService implements IDeployService {
 
   public async deploy(manifest, projectId) {
     // generate hash of manifest
-    const hash = this.createMDLHash(manifest);
+    const hash = this.createMDLHash(manifest, projectId);
     logger.debug(`Deploying model, hash: ${hash}`);
     logger.debug(JSON.stringify(manifest));
 
@@ -116,10 +117,24 @@ export class DeployService implements IDeployService {
     return { status, error };
   }
 
-  public createMDLHash(manifest: Manifest) {
-    const content = JSON.stringify(manifest);
+  public createMDLHash(manifest: Manifest, projectId: number) {
+    const manifestStr = JSON.stringify(manifest);
+    const content = `${projectId} ${manifestStr}`;
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;
+  }
+
+  public async getMDLByHash(hash: string) {
+    const deploy = await this.deployLogRepository.findOneBy({ hash });
+    if (!deploy) {
+      return null;
+    }
+    let mdl = deploy.manifest;
+    if (typeof deploy.manifest === 'string') {
+      mdl = JSON.parse(deploy.manifest);
+    }
+    // return base64 encoded manifest
+    return Buffer.from(JSON.stringify(mdl)).toString('base64');
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {
