@@ -19,6 +19,7 @@ numpy = "==1.26.4"
 sqlparse = "==0.4.4"
 sqlglot = "==22.5.0"
 orjson = "==3.10.3"
+sf-hamilton = {extras = ["visualization"], version = "^1.63.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "==8.2.0"
