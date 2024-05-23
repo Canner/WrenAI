@@ -43,22 +43,37 @@ def _compose_sql_expression_of_groupby_type(groupby_keys: List[List[str]]) -> Li
 
 
 def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
-    results = []
-    if relation["type"] == "TABLE":
-        results = results.append(f"FROM {relation["tableName"]}")
-    elif relation["type"] == "INNER_JOIN":
-        pass
-    elif relation["type"] == "LEFT_JOIN":
-        pass
-    elif relation["type"] == "RIGHT_JOIN":
-        pass
-    elif relation["type"] == "FULL_JOIN":
-        pass
-    elif relation["type"] == "CROSS_JOIN":
-        pass
-    elif relation["type"] == "IMPLICIT_JOIN":
-        pass
+    def _is_subquery_or_has_subquery_child(relation):
+        if relation["type"] == "SUBQUERY":
+            return True
+        if relation["type"].endswith("_JOIN"):
+            if (
+                relation["left"]["type"] == "SUBQUERY"
+                or relation["right"]["type"] == "SUBQUERY"
+            ):
+                return True
+        return False
 
+    def _collect_relations(relation, result, top_level: bool = True):
+        if _is_subquery_or_has_subquery_child(relation):
+            return
+
+        if relation["type"] == "TABLE" and top_level:
+            result.append(relation)
+        elif relation["type"].endswith("_JOIN"):
+            result.append(
+                {
+                    "type": relation["type"],
+                    "criteria": relation["criteria"],
+                    "exprSources": relation["exprSources"],
+                }
+            )
+            _collect_relations(relation["left"], result, top_level=False)
+            _collect_relations(relation["right"], result, top_level=False)
+
+    print(f"relation: {relation}")
+    results = []
+    _collect_relations(relation, results)
     return results
 
 
@@ -129,6 +144,7 @@ class SQLAnalysisPreprocessor:
                 ] = _compose_sql_expression_of_relation_type(
                     sql_analysis_result["relation"]
                 )
+                print(f'preprocessed: {preprocessed_sql_analysis_result["relation"]}')
             if "selectItems" in sql_analysis_result:
                 preprocessed_sql_analysis_result[
                     "selectItems"
@@ -187,6 +203,7 @@ class GenerationPostProcessor:
                 {"type": "relation", "payload": relation}
                 for relation in sql_explanation_results["relation"]
             ]
+            print(f'result: {sql_explanation_results["relation"]}')
         if (
             "filters" in sql_explanation_results
             and sql_explanation_results["filters"]["expression"]
@@ -275,54 +292,7 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    results = generation_pipeline.run(
-        question="xxx",
-        sql="xxx",
-        sql_analysis_results=[
-            {
-                "filter": {
-                    "left": {"node": "(custkey = 1)", "type": "EXPR"},
-                    "right": {"node": "(name = 'tom')", "type": "EXPR"},
-                    "type": "AND",
-                },
-                "groupByKeys": [["c.name"]],
-                "relation": {
-                    "criteria": "ON (c.custkey = o.custkey)",
-                    "left": {"alias": "c", "tableName": "Customer", "type": "TABLE"},
-                    "right": {"alias": "o", "tableName": "Orders", "type": "TABLE"},
-                    "type": "INNER_JOIN",
-                },
-                "selectItems": [
-                    {
-                        "alias": None,
-                        "expression": "c.name",
-                        "properties": {
-                            "includeFunctionCall": "false",
-                            "includeMathematicalOperation": "false",
-                        },
-                    },
-                    {
-                        "alias": None,
-                        "expression": "count(*)",
-                        "properties": {
-                            "includeFunctionCall": "true",
-                            "includeMathematicalOperation": "false",
-                        },
-                    },
-                ],
-                "sortings": [{"expression": "c.name", "ordering": "DESCENDING"}],
-            }
-        ],
-        sql_summary="xxx",
-        full_sql="xxx",
-        include_outputs_from=[
-            "sql_analysis_preprocessor",
-            "sql_explanation_prompt_builder",
-        ],
+    print("generating generation_pipeline.jpg to outputs/pipelines/sql_explanation...")
+    generation_pipeline.draw(
+        "./outputs/pipelines/sql_explanation/generation_pipeline.jpg"
     )
-    print(results)
-
-    # print("generating generation_pipeline.jpg to outputs/pipelines/sql_explanation...")
-    # generation_pipeline.draw(
-    #     "./outputs/pipelines/sql_explanation/generation_pipeline.jpg"
-    # )
