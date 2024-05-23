@@ -62,7 +62,7 @@ const ResultTemplate = ({ index, summary, sql, view, onSelect, onShowSQL }) => {
     <Col span={8}>
       <ResultBlock
         className="border border-gray-5 rounded px-3 pt-3 cursor-pointer"
-        onClick={() => onSelect({ sql, summary })}
+        onClick={() => onSelect({ sql, summary, viewId: view?.id })}
       >
         <div className="d-flex justify-space-between align-center text-sm mb-3">
           <div className="border border-gray-5 px-2 rounded-pill">

@@ -23,6 +23,11 @@ const COMMON_RESPONSE = gql`
         sql
         cteName
       }
+      view {
+        id
+        name
+        statement
+      }
     }
   }
 `;
@@ -45,6 +50,12 @@ export const ASKING_TASK = gql`
       candidates {
         sql
         summary
+        type
+        view {
+          id
+          name
+          statement
+        }
       }
       error {
         ...CommonError

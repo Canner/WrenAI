@@ -98,15 +98,17 @@ export type CreateSimpleMetricInput = {
 };
 
 export type CreateThreadInput = {
-  question: Scalars['String'];
-  sql: Scalars['String'];
-  summary: Scalars['String'];
+  question?: InputMaybe<Scalars['String']>;
+  sql?: InputMaybe<Scalars['String']>;
+  summary?: InputMaybe<Scalars['String']>;
+  viewId?: InputMaybe<Scalars['Int']>;
 };
 
 export type CreateThreadResponseInput = {
-  question: Scalars['String'];
-  sql: Scalars['String'];
-  summary: Scalars['String'];
+  question?: InputMaybe<Scalars['String']>;
+  sql?: InputMaybe<Scalars['String']>;
+  summary?: InputMaybe<Scalars['String']>;
+  viewId?: InputMaybe<Scalars['Int']>;
 };
 
 export type CreateViewInput = {
@@ -658,7 +660,14 @@ export type ResultCandidate = {
   __typename?: 'ResultCandidate';
   sql: Scalars['String'];
   summary: Scalars['String'];
+  type: ResultCandidateType;
+  view?: Maybe<ViewInfo>;
 };
+
+export enum ResultCandidateType {
+  LLM = 'LLM',
+  VIEW = 'VIEW'
+}
 
 export type SampleDatasetInput = {
   name: SampleDatasetName;
@@ -737,6 +746,7 @@ export type ThreadResponseDetail = {
   description?: Maybe<Scalars['String']>;
   sql?: Maybe<Scalars['String']>;
   steps: Array<DetailStep>;
+  view?: Maybe<ViewInfo>;
 };
 
 export type ThreadUniqueWhereInput = {
