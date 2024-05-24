@@ -18,6 +18,12 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_regeneration_user_prompt_template = """
+{% for correction in corrections %}
+    {{ correction }}
+{% endfor %}
+
+return json object
+{}
 """
 
 
@@ -59,12 +65,16 @@ class Generation(BasicPipeline):
     def run(
         self,
         corrections: List[Correction],
+        include_outputs_from: List[str] | None = None,
     ):
         logger.info("SQL Regeneration Generation pipeline is running...")
         return self._pipeline.run(
             {
-                "sql_regeneration_prompt_builder": {},
-            }
+                "sql_regeneration_prompt_builder": {
+                    "corrections": corrections,
+                },
+            },
+            include_outputs_from=include_outputs_from,
         )
 
 
