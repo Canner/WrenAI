@@ -2,8 +2,11 @@ import uuid
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks
+from hamilton import driver
+from pydantic import BaseModel
 
 import src.globals as container
+import src.pipelines.experiment.query_understanding_sync as pipe
 from src.web.v1.services.ask import (
     AskRequest,
     AskResponse,
@@ -123,3 +126,23 @@ async def get_ask_details_result(query_id: str) -> AskDetailsResultResponse:
     return container.ASK_DETAILS_SERVICE.get_ask_details_result(
         AskDetailsResultRequest(query_id=query_id)
     )
+
+
+# import src.pipelines.experiment.query_understanding as pipe
+# from hamilton.experimental.h_async import AsyncDriver
+
+
+# dr = AsyncDriver({}, pipe)
+
+dr = driver.Builder().with_modules(pipe).build()
+
+
+class Query(BaseModel):
+    query: str
+
+
+@router.post("/dummy")
+async def dummy(query: Query):
+    res = dr.execute(["post_process"], inputs={"query": query.query})
+    print(res)
+    return "dummy"
