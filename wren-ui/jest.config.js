@@ -5,4 +5,5 @@ module.exports = {
   moduleNameMapper: {
     '^@server/(.*)$': '<rootDir>/src/apollo/server/$1',
   },
+  modulePathIgnorePatterns: ['<rootDir>/e2e/'],
 };

@@ -12,9 +12,12 @@ export enum GeneralErrorCodes {
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
 
   // Connector errors
+  CONNECTION_ERROR = 'CONNECTION_ERROR',
   // duckdb
   INIT_SQL_ERROR = 'INIT_SQL_ERROR',
   SESSION_PROPS_ERROR = 'SESSION_PROPS_ERROR',
+  // postgres
+  CONNECTION_REFUSED = 'CONNECTION_REFUSED',
 
   // calculated field validation
   DUPLICATED_FIELD_NAME = 'DUPLICATED_FIELD_NAME',
@@ -34,11 +37,15 @@ export const errorMessages = {
     'No relevant SQL found for the given query. Please check your query and try again.',
 
   // Connector errors
+  [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to data source',
   // duckdb
   [GeneralErrorCodes.INIT_SQL_ERROR]:
     'The initializing SQL seems to be invalid, Please check your SQL and try again.',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]:
     'The session properties seem to be invalid, Please check your session properties and try again.',
+  // postgres
+  [GeneralErrorCodes.CONNECTION_REFUSED]:
+    'Connection refused by the server, Please check your connection settings and try again.',
 
   // calculated field validation
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'This field name already exists',
@@ -53,8 +60,10 @@ export const shortMessages = {
   [GeneralErrorCodes.MISLEADING_QUERY]: 'Misleading query',
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'No relevant data',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
+  [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]: 'Invalid session properties',
+  [GeneralErrorCodes.CONNECTION_REFUSED]: 'Connection refused',
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'Duplicated field name',
   [GeneralErrorCodes.INVALID_EXPRESSION]: 'Invalid expression',
   [GeneralErrorCodes.INVALID_CALCULATED_FIELD]: 'Invalid calculated field',

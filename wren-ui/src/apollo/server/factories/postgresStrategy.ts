@@ -12,12 +12,15 @@ import {
   PostgresColumnResponse,
   PostgresConnector,
 } from '../connectors/postgresConnector';
-import { Encryptor } from '../utils';
+import { Encryptor, getLogger } from '../utils';
 import {
   findColumnsToUpdate,
   updateModelPrimaryKey,
   transformInvalidColumnName,
 } from './util';
+
+const logger = getLogger('PostgresStrategy');
+logger.level = 'debug';
 
 export class PostgresStrategy implements IDataSourceStrategy {
   private project?: Project;
@@ -246,10 +249,8 @@ export class PostgresStrategy implements IDataSourceStrategy {
     const connector = new PostgresConnector(properties);
 
     // check DataSource is valid and can connect to it
-    const connected = await connector.connect();
-    if (!connected) {
-      throw new Error('Can not connect to data source');
-    }
+    await connector.connect();
+
     // check can list dataset table
     try {
       await connector.listTables({ format: false });
@@ -259,9 +260,10 @@ export class PostgresStrategy implements IDataSourceStrategy {
   }
 
   private async patchConfigToWrenEngine(properties: any) {
-    const { host, port, database, user, password } = properties;
+    const { host, port, database, user, password, ssl } = properties;
+    const sslMode = ssl ? '?sslmode=require' : '';
     // update wren-engine config
-    const jdbcUrl = `jdbc:postgresql://${host}:${port}/${database}`;
+    const jdbcUrl = `jdbc:postgresql://${host}:${port}/${database}${sslMode}`;
     const config = {
       'wren.datasource.type': 'postgres',
       'postgres.jdbc.url': jdbcUrl,
@@ -390,8 +392,15 @@ export class PostgresStrategy implements IDataSourceStrategy {
       }
       return acc;
     }, []);
-    const columns =
-      await this.ctx.modelColumnRepository.createMany(columnValues);
+    const batch = 100;
+    const columns = [];
+    for (let i = 0; i < columnValues.length; i += batch) {
+      logger.debug(`Creating columns: ${i} - ${i + batch}`);
+      const res = await this.ctx.modelColumnRepository.createMany(
+        columnValues.slice(i, i + batch),
+      );
+      columns.push(...res);
+    }
     return columns;
   }
 }

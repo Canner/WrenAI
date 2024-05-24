@@ -1002,7 +1002,8 @@
       "statement": "SELECT \"p\".\"FullName\" AS \"Player_Name\", \"p\".\"TeamId\" AS \"Team_ID\", \"ls\".\"GameDate\", \"ls\".\"TeamIdAway\", \"ls\".\"TeamIdHome\" FROM \"player\" AS \"p\" JOIN \"player_games\" AS \"pg\" ON \"p\".\"Id\" = \"pg\".\"PlayerID\" JOIN \"line_score\" AS \"ls\" ON \"pg\".\"GameID\" = \"ls\".\"GameId\" WHERE \"pg\".\"PTS\" = (SELECT MAX(\"Pts\") FROM \"player_games\") ORDER BY \"pg\".\"PTS\" DESC LIMIT 5",
       "properties": {
         "question": "Who are the top five players in terms of points scored in a single game this season, and which teams were they playing against?",
-        "description": "This query retrieves the player's full name, team ID, game date, away team ID, and home team ID for the top 5 players with the highest points scored in a game."
+        "summary": "This query retrieves the player's full name, team ID, game date, away team ID, and home team ID for the top 5 players with the highest points scored in a game.",
+        "viewId": "3abf0ec9-057e-4ef3-857f-1857157a00dc"
       }
     }
   ],

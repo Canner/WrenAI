@@ -11,7 +11,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     init_text_to_sql_prompt_builder,
 )
-from src.utils import init_providers, load_env_vars
+from src.utils import init_providers, load_env_vars, timer
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -38,6 +38,7 @@ class Generation(BasicPipeline):
         )
         super().__init__(self._pipeline)
 
+    @timer
     def run(self, query: str, contexts: List[Document], exclude: List[Dict]):
         logger.info("Ask Generation pipeline is running...")
         return self._pipeline.run(

@@ -5,7 +5,7 @@ import sqlparse
 from haystack import Pipeline
 from pydantic import BaseModel
 
-from src.utils import remove_duplicates
+from src.utils import remove_duplicates, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -90,6 +90,9 @@ class AskResultResponse(BaseModel):
         summary: str
         type: Literal["llm", "view"] = "llm"
 
+    class ViewResult(AskResult):
+        viewId: str
+
     class AskError(BaseModel):
         code: Literal[
             "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
@@ -99,7 +102,7 @@ class AskResultResponse(BaseModel):
     status: Literal[
         "understanding", "searching", "generating", "finished", "failed", "stopped"
     ]
-    response: Optional[List[AskResult]] = None
+    response: Optional[List[AskResult | ViewResult]] = None
     error: Optional[AskError] = None
 
 
@@ -147,6 +150,7 @@ class AskService:
             and self.ask_results[query_id].status == "stopped"
         )
 
+    @timer
     def ask(
         self,
         ask_request: AskRequest,
@@ -286,11 +290,12 @@ class AskService:
                     return
 
                 results = [
-                    AskResultResponse.AskResult(
+                    AskResultResponse.ViewResult(
                         **{
                             "sql": result.get("statement"),
-                            "summary": result.get("description"),
+                            "summary": result.get("summary"),
                             "type": "view",
+                            "viewId": result.get("viewId"),
                         }
                     )
                     for result in historical_question_result
@@ -299,6 +304,7 @@ class AskService:
                     for result in valid_generation_results
                 ]
 
+                # only return top 3 results, thus remove the rest
                 if len(results) > 3:
                     del results[3:]
 
@@ -324,6 +330,7 @@ class AskService:
             status="stopped",
         )
 
+    @timer
     def get_ask_result(
         self,
         ask_result_request: AskResultRequest,

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Path, SETUP } from '@/utils/enum';
 import { useRouter } from 'next/router';
+import { parseGraphQLError } from '@/utils/errorHandler';
 import {
   useSaveDataSourceMutation,
   useStartSampleDatasetMutation,
@@ -77,12 +78,12 @@ export const transformPropertiesToForm = (
 export default function useSetupConnection() {
   const [stepKey, setStepKey] = useState(SETUP.STARTER);
   const [dataSource, setDataSource] = useState<DataSourceName>();
-  const [connectErrorMessage, setConnectErrorMessage] = useState('');
+  const [connectError, setConnectError] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
     if (stepKey === SETUP.CREATE_DATA_SOURCE) {
-      setConnectErrorMessage('');
+      setConnectError(null);
     }
   }, [stepKey]);
 
@@ -99,8 +100,8 @@ export default function useSetupConnection() {
     });
 
   useEffect(() => {
-    setConnectErrorMessage(error?.message || '');
-  }, [error?.message]);
+    setConnectError(parseGraphQLError(error));
+  }, [error]);
 
   const submitDataSource = async (properties: JSON) => {
     await saveDataSourceMutation({
@@ -150,6 +151,6 @@ export default function useSetupConnection() {
     onBack,
     onNext,
     submitting: loading || startSampleDatasetLoading,
-    connectErrorMessage,
+    connectError,
   };
 }
