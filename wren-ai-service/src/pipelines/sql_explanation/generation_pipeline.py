@@ -1,19 +1,17 @@
 import logging
-from typing import Any
 
 from haystack import Pipeline
 
+from src.core.llm_provider import LLMProvider
 from src.core.pipeline import BasicPipeline
-from src.pipelines.sql_explanation.components.generator import (
-    init_generator,
-)
 from src.pipelines.sql_explanation.components.post_processors import (
     init_generation_post_processor,
 )
 from src.pipelines.sql_explanation.components.prompts import (
     init_sql_explanation_prompt_builder,
+    sql_explanation_system_prompt,
 )
-from src.utils import load_env_vars
+from src.utils import init_providers, load_env_vars
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -22,14 +20,17 @@ logger = logging.getLogger("wren-ai-service")
 class Generation(BasicPipeline):
     def __init__(
         self,
-        generator: Any,
+        llm_provider: LLMProvider,
     ):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
             "sql_explanation_prompt_builder",
             init_sql_explanation_prompt_builder(),
         )
-        self._pipeline.add_component("sql_explanation_generator", generator)
+        self._pipeline.add_component(
+            "sql_explanation_generator",
+            llm_provider.get_generator(system_prompt=sql_explanation_system_prompt),
+        )
         self._pipeline.add_component("post_processor", init_generation_post_processor())
 
         self._pipeline.connect(
@@ -64,8 +65,9 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    llm_provider, _ = init_providers()
     generation_pipeline = Generation(
-        generator=init_generator(),
+        llm_provider=llm_provider,
     )
 
     print("generating generation_pipeline.jpg to outputs/pipelines/sql_explanation...")
