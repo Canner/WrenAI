@@ -230,7 +230,10 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
 
   public async queryCouchbase(sql: string): Promise<QueryResponse> {
     try {
-      const url = new URL(this.queryCouchbaseUrlPath, this.wrenEngineBaseEndpoint);
+      const url = new URL(
+        this.queryCouchbaseUrlPath,
+        this.wrenEngineBaseEndpoint,
+      );
       const headers = {
         'Content-Type': 'text/plain; charset=utf-8',
       };
@@ -244,7 +247,10 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
 
   public async queryCouchbaseSchema(): Promise<QueryResponse> {
     try {
-      const url = new URL(this.queryCouchbaseSchemaUrlPath, this.wrenEngineBaseEndpoint);
+      const url = new URL(
+        this.queryCouchbaseSchemaUrlPath,
+        this.wrenEngineBaseEndpoint,
+      );
       const headers = {
         'Content-Type': 'text/plain; charset=utf-8',
       };

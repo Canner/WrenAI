@@ -18,7 +18,7 @@ export interface SampleDatasetData {
 export type DataSourceProperties = { displayName: string } & Partial<
   BigQueryDataSourceProperties &
     DuckDBDataSourceProperties &
-    PGDataSourceProperties & 
+    PGDataSourceProperties &
     CouchbaseDataSourceProperties
 >;
 
@@ -46,7 +46,7 @@ export interface PGDataSourceProperties {
   ssl?: boolean;
 }
 
-export interface CouchbaseDataSourceProperties{
+export interface CouchbaseDataSourceProperties {
   displayName: string;
   server: string;
   user: string;

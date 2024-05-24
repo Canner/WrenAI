@@ -29,8 +29,7 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
   }
 
   public async createDataSource(properties: CouchbaseDataSourceProperties) {
-    const { displayName, server, user, password, ssl } =
-      properties;
+    const { displayName, server, user, password, ssl } = properties;
 
     await this.testConnection(properties);
 
@@ -58,10 +57,7 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
     properties: CouchbaseDataSourceProperties,
   ): Promise<any> {
     const { displayName, user, password: newPassword, ssl } = properties;
-    const {
-      server,
-      credentials: oldEncryptedCredentials,
-    } = this.project;
+    const { server, credentials: oldEncryptedCredentials } = this.project;
 
     const encryptor = new Encryptor(this.ctx.config);
     const { password: oldPassword } = JSON.parse(

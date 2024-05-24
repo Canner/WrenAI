@@ -383,7 +383,7 @@ export class ProjectResolver {
       properties.ssl = project.configurations?.ssl;
     } else if (dataSourceType === DataSourceName.COUCHBASE) {
       properties.server = project.server;
-      properties.user = project.user
+      properties.user = project.user;
       properties.ssl = project.configurations?.ssl;
     }
 

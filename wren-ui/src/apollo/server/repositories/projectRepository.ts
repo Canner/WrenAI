@@ -14,26 +14,22 @@ export interface Project {
   displayName: string; // Project display name
   credentials: string; // Database credentials. General purpose field for storing credentials
   configurations: Record<string, any>; // Project connection configurations
-
   // bq
   projectId: string; // BigQuery project id
   datasetId: string; // BigQuery datasetId
-
   // duckdb
   initSql: string; // DuckDB init sql
   extensions: string[];
-
   // pg
   host: string; // Host
   port: number; // Port
   database: string; // Database
   user: string; // User
-
-  // couchbase 
-  server: string // Server
-  username: string // Username
-  password: string // Password
-  
+  // couchbase
+  server: string; // Server
+  username: string; // Username
+  password: string; // Password
+  // others
   catalog: string; // Catalog name
   schema: string; // Schema name
   sampleDataset: string; // Sample dataset name
