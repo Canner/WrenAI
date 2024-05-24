@@ -20,10 +20,17 @@ from src.pipelines.indexing import (
     indexing,
 )
 from src.pipelines.semantics import description
+from src.pipelines.sql_explanation import (
+    generation_pipeline as sql_explanation_generation_pipeline,
+)
+from src.pipelines.sql_explanation.components.prompts import (
+    sql_explanation_system_prompt,
+)
 from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics import SemanticsService
+from src.web.v1.services.sql_explanation import SQLExplanationService
 
 SEMANTIC_SERVICE = None
 ASK_SERVICE = None
@@ -88,4 +95,13 @@ def init_globals():
                 engine=engine,
             ),
         },
+    )
+    SQL_EXPLANATION_SERVICE = SQLExplanationService(
+        pipelines={
+            "generation": sql_explanation_generation_pipeline.Generation(
+                generator=llm_provider.get_generator(
+                    system_prompt=sql_explanation_system_prompt,
+                ),
+            )
+        }
     )
