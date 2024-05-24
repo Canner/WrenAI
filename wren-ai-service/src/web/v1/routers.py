@@ -26,6 +26,12 @@ from src.web.v1.services.semantics import (
     BulkGenerateDescriptionRequest,
     GenerateDescriptionResponse,
 )
+from src.web.v1.services.sql_explanation import (
+    SQLExplanationRequest,
+    SQLExplanationResponse,
+    SQLExplanationResultRequest,
+    SQLExplanationResultResponse,
+)
 
 router = APIRouter()
 
@@ -128,4 +134,30 @@ async def ask_details(
 async def get_ask_details_result(query_id: str) -> AskDetailsResultResponse:
     return container.ASK_DETAILS_SERVICE.get_ask_details_result(
         AskDetailsResultRequest(query_id=query_id)
+    )
+
+
+@router.post("/sql-explanations")
+async def sql_explanation(
+    sql_explanation_request: SQLExplanationRequest,
+    background_tasks: BackgroundTasks,
+) -> SQLExplanationResponse:
+    query_id = str(uuid.uuid4())
+    sql_explanation_request.query_id = query_id
+    container.SQL_EXPLANATION_SERVICE.sql_explanation_results[
+        query_id
+    ] = SQLExplanationResultResponse(status="understanding")
+    background_tasks.add_task(
+        container.SQL_EXPLANATION_SERVICE.sql_explanation,
+        sql_explanation_request,
+    )
+    return SQLExplanationResponse(query_id=query_id)
+
+
+@router.get("/sql-explanations/{query_id}/result")
+async def get_sql_explanation_result(
+    query_id: str,
+) -> SQLExplanationResultResponse:
+    return container.SQL_EXPLANATION_SERVICE.get_sql_explanation_result(
+        SQLExplanationResultRequest(query_id=query_id)
     )
