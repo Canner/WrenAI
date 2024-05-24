@@ -68,6 +68,7 @@ class Generation(BasicPipeline):
         sql_analysis: dict,
         sql_summary: str,
         full_sql: str,
+        include_outputs_from: List[str] | None = None,
     ):
         logger.info("SQL Explanation Generation pipeline is running...")
         return self._pipeline.run(
@@ -79,7 +80,8 @@ class Generation(BasicPipeline):
                     "sql_summary": sql_summary,
                     "full_sql": full_sql,
                 },
-            }
+            },
+            include_outputs_from=set(include_outputs_from),
         )
 
 
