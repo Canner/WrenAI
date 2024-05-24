@@ -13,18 +13,24 @@ Step 2. Install dependencies:
 yarn 
 ```
 
-Step 3. Run migrations:
+Step 3. Run migrations(sqlite):
 
 ```bash
-# Windows
-SET DB_TYPE=sqlite
-
-# Linux or MacOS
-export DB_TYPE=sqlite
-
 yarn migrate
 # or
 npm run migrate
+```
+
+To use Postgres as the database of wren-ui, you need to set the two environment variable below.
+PG_URL is the connection string of your postgres database.
+```bash
+# windows
+SET DB_TYPE=pg
+SET PG_URL=postgres://user:password@localhost:5432/dbname 
+
+# linux or mac
+export DB_TYPE=pg
+export PG_URL=postgres://user:password@localhost:5432/dbname
 ```
 
 Step 4. Run the development server:

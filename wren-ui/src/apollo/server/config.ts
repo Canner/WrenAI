@@ -41,7 +41,7 @@ export interface IConfig {
 
 const defaultConfig = {
   // database
-  dbType: 'pg',
+  dbType: 'sqlite',
 
   // pg
   pgUrl: 'postgres://postgres:postgres@localhost:5432/admin_ui',
