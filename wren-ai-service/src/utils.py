@@ -191,7 +191,7 @@ def timer(func):
 
     @functools.wraps(func)
     def wrapper_timer(*args, **kwargs):
-        if os.getenv("ENABLE_TIMER", False):
+        if os.getenv("ENABLE_TIMER", True):
             startTime = time.perf_counter()
             value = func(*args, **kwargs)
             endTime = time.perf_counter()

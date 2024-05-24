@@ -6,11 +6,11 @@ import backoff
 import openai
 from haystack import component
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
-from haystack.components.generators import OpenAIGenerator
 from haystack.utils.auth import Secret
 from openai import OpenAI
 
 from src.core.provider import LLMProvider
+from src.pipelines.experiment.async_generator import OpenAIGenerator
 from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
@@ -30,9 +30,11 @@ EMBEDDING_MODEL_DIMENSION = 3072
 class CustomOpenAIGenerator(OpenAIGenerator):
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
-    def run(self, prompt: str, generation_kwargs: Optional[Dict[str, Any]] = None):
+    async def run(
+        self, prompt: str, generation_kwargs: Optional[Dict[str, Any]] = None
+    ):
         logger.debug(f"Running OpenAI generator with prompt: {prompt}")
-        return super(CustomOpenAIGenerator, self).run(
+        return await super(CustomOpenAIGenerator, self).run(
             prompt=prompt, generation_kwargs=generation_kwargs
         )
 

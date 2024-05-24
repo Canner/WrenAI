@@ -1,12 +1,13 @@
+import asyncio
 import logging
 from typing import List
 
 import orjson
-from hamilton import driver
+from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.utils import init_providers, load_env_vars, timer
+from src.utils import init_providers, load_env_vars
 
 # logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("wren-ai-service")
@@ -40,10 +41,9 @@ llm_provider, _ = init_providers()
 generator = llm_provider.get_generator()
 
 
-@timer
-def generate(prompt: dict) -> dict:
+async def generate(prompt: dict) -> dict:
     logger.info("prompt: %s", prompt)
-    return generator.run(prompt=prompt.get("prompt"))
+    return await generator.run(prompt=prompt.get("prompt"))
 
 
 @component
@@ -80,14 +80,23 @@ def post_process(generate: dict) -> dict:
 
 
 if __name__ == "__main__":
+    import time
+
     import __main__
 
     load_env_vars()
 
-    # dr = AsyncDriver({}, __main__)
-    dr = driver.Builder().with_modules(__main__).build()
-    result = dr.execute(
-        [post_process], inputs={"query": "What is the capital of France?"}
-    )
+    dr = AsyncDriver({}, __main__)
 
-    print(result)
+    s = time.time()
+    loop = asyncio.get_event_loop()
+    tasks = [
+        dr.execute(["post_process"], inputs={"query": "What is the capital of France?"})
+        for i in range(10)
+    ]
+
+    results = loop.run_until_complete(asyncio.gather(*tasks))
+    print("Time taken: ", time.time() - s)
+
+    for result in results:
+        print(result)
