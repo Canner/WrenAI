@@ -1,0 +1,176 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ui-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-ui
+  template:
+    metadata:
+      labels:
+        app: wren-ui
+    spec:
+      volumes:
+        - name: wren-data
+          persistentVolumeClaim:
+            claimName: wren-data-pvc
+      containers:
+
+        - name: wren-ui
+          image: ghcr.io/canner/wren-ui:0.5.6
+          env:
+            - name: DB_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: DB_TYPE
+            - name: SQLITE_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: SQLITE_FILE
+            - name: WREN_ENGINE_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_ENGINE_ENDPOINT
+            - name: WREN_AI_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_AI_ENDPOINT
+            - name: OPENAI_GENERATION_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: OPENAI_GENERATION_MODEL
+            - name: PG_URL
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: PG_URL
+            # telemetry
+            - name: WREN_ENGINE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_ENGINE_PORT
+            - name: WREN_AI_SERVICE_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_AI_SERVICE_VERSION
+            - name: WREN_UI_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_UI_VERSION
+            - name: WREN_ENGINE_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_ENGINE_VERSION
+            - name: USER_UUID
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: USER_UUID
+            - name: POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: POSTHOG_API_KEY
+            - name: POSTHOG_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: POSTHOG_HOST
+            - name: TELEMETRY_ENABLED
+              valueFrom: 
+                configMapKeyRef:
+                  name: wren-config
+                  key: TELEMETRY_ENABLED
+            # client side
+            - name: NEXT_PUBLIC_USER_UUID
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: USER_UUID
+            - name: NEXT_PUBLIC_POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: POSTHOG_API_KEY
+            - name: NEXT_PUBLIC_POSTHOG_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: POSTHOG_HOST
+            - name: NEXT_PUBLIC_TELEMETRY_ENABLED
+              valueFrom: 
+                configMapKeyRef:
+                  name: wren-config
+                  key: TELEMETRY_ENABLED
+            # configs
+            - name: WREN_PRODUCT_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_PRODUCT_VERSION
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: wren-data
+              mountPath: /app/data
+
+        #pgbouncer is a temporary solution while there is no PG_HOST env variable implemented
+        - name: pgbouncer
+          image: bitnami/pgbouncer:1.22.1
+          ports:
+          - containerPort: 5432
+          env:
+          #PgBouncer advertised database.
+          - name: PGBOUNCER_DATABASE
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: PG_DATABASENAME
+          - name: PGBOUNCER_PORT
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: PG_PORT
+          - name: POSTGRESQL_HOST
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: PG_HOST
+          - name: PGBOUNCER_AUTH_USER
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: PG_USERNAME
+          - name: PGBOUNCER_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-postgresql
+                key: postgres-password
+          - name: POSTGRESQL_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: PG_USERNAME
+          - name: POSTGRESQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-postgresql
+                key: postgres-password
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

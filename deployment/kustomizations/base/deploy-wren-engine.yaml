@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-engine-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-engine
+  template:
+    metadata:
+      labels:
+        app: wren-engine
+    spec:
+      volumes:
+        - name: wren-data
+          persistentVolumeClaim:
+            claimName: wren-data-pvc
+      initContainers:
+        - name: bootstrap
+          image: ghcr.io/canner/wren-bootstrap:0.1.4
+          env:
+            - name: DATA_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: DATA_PATH
+            # PG_HOST is not implemented yet
+            # Do we actually need any PG_* variable for the bootstrap/init?
+            - name: PG_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: PG_HOST
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-postgresql
+                  key: postgres-password
+            - name: PG_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: PG_USERNAME
+            # PG_PORT is not implemented yet
+            - name: PG_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: PG_PORT
+            # PG_DATABASENAME is not implemented yet
+            - name: PG_DATABASENAME
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: PG_DATABASENAME
+          volumeMounts:
+            - name: wren-data
+              mountPath: /app/data
+          command: ["/bin/sh", "/app/init.sh"]
+      containers:
+
+        - name: wren-engine
+          image: ghcr.io/canner/wren-engine:0.4.4
+          ports:
+            - containerPort: 8080
+            - containerPort: 7432
+          volumeMounts:
+            - name: wren-data
+              mountPath: /usr/src/app/etc

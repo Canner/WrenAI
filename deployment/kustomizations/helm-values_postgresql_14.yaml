@@ -1,0 +1,4 @@
+auth:
+  secretKeys:
+    adminPasswordKey: postgres-password
+  existingSecret: wrenai-postgresql

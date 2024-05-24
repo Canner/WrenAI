@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wren-config
+data:
+  PLATFORM: linux/amd64
+  WREN_ENGINE_PORT: "8080"
+  WREN_ENGINE_SQL_PORT: "7432"
+  WREN_AI_SERVICE_PORT: "5555"
+  #Release version
+  WREN_PRODUCT_VERSION: "0.3.4"
+  WREN_ENGINE_VERSION: "0.4.4"
+  WREN_AI_SERVICE_VERSION: "0.3.7"
+  WREN_UI_VERSION: "0.5.6"
+  WREN_BOOTSTRAP_VERSION: "0.1.4"
+  OPENAI_GENERATION_MODEL: "gpt-3.5-turbo"
+  POSTHOG_HOST: "https://app.posthog.com"
+  TELEMETRY_ENABLED: "false"
+  HOST_PORT: "3000"
+  AI_SERVICE_FORWARD_PORT: "5555"
+  DATA_PATH: "/app/data"
+  WREN_ENGINE_ENDPOINT: "https://wren-ui.myhost.net"
+  DB_TYPE: sqlite
+#  DB_TYPE: postgres
+  SQLITE_FILE: /app/data/db.sqlite3
+  WREN_AI_ENDPOINT: "http://wren-ai-service.ai-system.svc.cluster.local:5555"
+

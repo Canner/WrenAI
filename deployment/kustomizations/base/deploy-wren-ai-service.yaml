@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ai-service-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-ai-service
+  template:
+    metadata:
+      labels:
+        app: wren-ai-service
+    spec:
+      containers:
+        - name: wren-ai-service
+          image: ghcr.io/canner/wren-ai-service:0.3.7
+          env:
+          - name: WREN_AI_SERVICE_PORT
+            valueFrom: 
+              configMapKeyRef:
+                name: wren-config
+                key: WREN_AI_SERVICE_PORT
+          - name: OPENAI_BASE_URL
+            valueFrom: 
+              secretKeyRef:
+                name: wrenai-secrets
+                key: OPENAI_BASE_URL
+          - name: OPENAI_API_KEY
+            valueFrom: 
+              secretKeyRef:
+                name: wrenai-secrets
+                key: OPENAI_API_KEY
+          - name: OPENAI_GENERATION_MODEL
+            valueFrom: 
+              configMapKeyRef:
+                name: wren-config
+                key: OPENAI_GENERATION_MODEL
+          - name: QDRANT_HOST
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: QDRANT_HOST
+          # QDRANT_PORT is not implemented yet
+          - name: QDRANT_PORT
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: QDRANT_PORT
+          # QDRANT_COLLECTION_NAME is not implemented yet
+          - name: QDRANT_COLLECTION_NAME
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: QDRANT_COLLECTION_NAME
+          # QDRANT_DIMENTIONS is not implemented yet
+          - name: QDRANT_DIMENTIONS
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: QDRANT_DIMENTIONS
+          # QDRANT_HTTP_MODE is not implemented yet
+          - name: QDRANT_HTTP_MODE
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: QDRANT_HTTP_MODE
+          # QDRANT_API_KEY is not implemented yet
+          - name: QDRANT_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: QDRANT_API_KEY
+          - name: WREN_ENGINE_ENDPOINT
+            valueFrom:
+              configMapKeyRef:
+                name: wren-config
+                key: WREN_ENGINE_ENDPOINT
+          - name: PYTHONUNBUFFERED
+            value: "1"
+          ports:
+            - containerPort: 5555
