@@ -13,6 +13,7 @@ class SQLExplanation(BaseModel):
     sql: str
     summary: str
     explanation: str
+    decision_points: List[str]
     cte_name: str
 
 
@@ -97,6 +98,7 @@ class AskDetailsService:
                         "sql": ask_details_request.sql,
                         "summary": ask_details_request.summary,
                         "explanation": "",
+                        "decision_points": [],
                         "cte_name": "",
                     }
                 ]
