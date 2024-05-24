@@ -116,7 +116,7 @@ class AskService:
 
     def prepare_semantics(self, prepare_semantics_request: SemanticsPreparationRequest):
         try:
-            print(prepare_semantics_request.mdl)
+            logger.info(f"MDL: {prepare_semantics_request.mdl}")
             self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
             self.prepare_semantics_statuses[
