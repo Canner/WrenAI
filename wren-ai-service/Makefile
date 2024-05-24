@@ -59,3 +59,6 @@ test:
 	make run-wren-engine && \
 	poetry run pytest -s $(args) && \
 	make stop-all
+
+load-test:
+	poetry run locust -f tests/locustfile.py

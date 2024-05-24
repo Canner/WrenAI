@@ -37,9 +37,14 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 
 ### Speed Evaluation
 
-- add environment variables `ENABLE_TIMER=True` in `.env.dev`
-- restart wren ai service
-- check `outputs` folder for the evaluation result file
+- to evaluate the speed of the pipeline, you can enable the timer
+  - add environment variables `ENABLE_TIMER=True` in `.env.dev`
+  - restart wren ai service
+  - check `outputs` folder for the evaluation result file
+- to run the load test
+  - in the demo folder, run `make prepare` to start the docker containers
+  - in the demo folder, run `make ai` to start the ai service
+  - run `make load-test`
 
 ## Demo
 
