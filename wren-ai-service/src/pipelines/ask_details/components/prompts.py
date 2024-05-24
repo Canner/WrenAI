@@ -20,14 +20,17 @@ Results:
 - Step 1: 
     - sql: SELECT product_id, sales FROM sales_data
     - summary: Selects product IDs and their corresponding sales from the sales_data table.
+    - explanation: This step isolates the initial retrieval of product IDs and sales from the broader data table, sales_data. By focusing only on these two columns, it simplifies data manipulation in subsequent steps. This is particularly helpful in large datasets, where reducing the dataset early can improve performance. Extracting only the necessary columns also enhances clarity when the query is part of a larger data processing pipeline.
     - cte_name: basic_sales_data
 - Step 2:
     - sql: SELECT product_id, SUM(sales) AS total_sales FROM basic_sales_data GROUP BY product_id
     - summary: Aggregates sales by product, summing up sales for each product ID.
+    - explanation: This step builds on the extracted data from Step 1, focusing on aggregation. By computing the total sales per product, this step consolidates the data necessary for further analysis, specifically looking at performance by product. Using a CTE (Common Table Expression) for this purpose keeps the query modular and clear, as it isolates the aggregation logic, which is crucial for reports and analysis requiring summarized data.
     - cte_name: aggregated_sales
 - Step 3:
     - sql: SELECT product_id, total_sales FROM aggregated_sales WHERE total_sales > 10000
     - summary: Filters the aggregated sales data to only include products whose total sales exceed 10,000.
+    - explanation: The final step applies a conditional filter to the aggregated data to focus only on high-performing products, which are those with sales over 10,000. This step is critical for decision-making or reporting scenarios where performance thresholds are analyzed. Structuring the query this way ensures that only the most relevant data is processed in the final output, making it efficient and targeted.
     - cte_name: <empty_string>
 
 Example 2:
@@ -41,6 +44,7 @@ Results:
 - Step 1:
     - sql: SELECT product_id FROM sales_data
     - summary: Selects product IDs from the sales_data table.
+    - explanation: This step is designed to retrieve only the product_id from the sales_data table. The purpose of isolating this step is to focus specifically on extracting a list of product IDs without any other accompanying data. This simplification can be particularly useful in scenarios where you need to quickly assess or utilize the range of products involved in your dataset.
     - cte_name: <empty_string>
 
 ### ALERT ###

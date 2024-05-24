@@ -286,7 +286,8 @@ def show_asks_details_results():
     sqls = []
     for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
         st.markdown(f"#### Step {i + 1}")
-        st.markdown(step["summary"])
+        st.markdown(f'Summary: {step["summary"]}')
+        st.markdown(f'Explanation: {step["explanation"]}')
 
         sql = ""
         if sqls_with_cte:
