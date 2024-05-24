@@ -71,6 +71,8 @@ export interface IWrenEngineAdaptor {
   initDatabase(sql: string): Promise<void>;
   putSessionProps(props: Record<string, any>): Promise<void>;
   queryDuckdb(sql: string): Promise<QueryResponse>;
+  queryCouchbase(sql: string): Promise<QueryResponse>;
+  queryCouchbaseSchema(): Promise<QueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
   previewData(
     sql: string,
@@ -91,6 +93,8 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private sessionPropsUrlPath = '/v1/data-source/duckdb/settings/session-sql';
   private queryDuckdbUrlPath = '/v1/data-source/duckdb/query';
   private initSqlUrlPath = '/v1/data-source/duckdb/settings/init-sql';
+  private queryCouchbaseUrlPath = '/v1/data-source/couchbase/query';
+  private queryCouchbaseSchemaUrlPath = '/v1/data-source/couchbase/schema';
   private previewUrlPath = '/v1/mdl/preview';
   private dryPlanUrlPath = '/v1/mdl/dry-plan';
   private validateUrlPath = '/v1/mdl/validate';
@@ -220,6 +224,34 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data as QueryResponse;
     } catch (err: any) {
       logger.debug(`Got error when querying duckdb: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async queryCouchbase(sql: string): Promise<QueryResponse> {
+    try {
+      const url = new URL(this.queryCouchbaseUrlPath, this.wrenEngineBaseEndpoint);
+      const headers = {
+        'Content-Type': 'text/plain; charset=utf-8',
+      };
+      const res = await axios.post(url.href, sql, { headers });
+      return res.data as QueryResponse;
+    } catch (err: any) {
+      logger.debug(`Got error when querying Couchbase: ${err.message}`);
+      throw err;
+    }
+  }
+
+  public async queryCouchbaseSchema(): Promise<QueryResponse> {
+    try {
+      const url = new URL(this.queryCouchbaseSchemaUrlPath, this.wrenEngineBaseEndpoint);
+      const headers = {
+        'Content-Type': 'text/plain; charset=utf-8',
+      };
+      const res = await axios.get(url.href, { headers });
+      return res.data as QueryResponse;
+    } catch (err: any) {
+      logger.debug(`Got error when querying Couchbase schema: ${err.message}`);
       throw err;
     }
   }

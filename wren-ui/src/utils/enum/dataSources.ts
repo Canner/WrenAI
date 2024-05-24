@@ -2,4 +2,5 @@ export enum DATA_SOURCES {
   BIG_QUERY = 'BIG_QUERY',
   DUCKDB = 'DUCKDB',
   PG_SQL = 'POSTGRES',
+  COUCHBASE = 'COUCHBASE',
 }

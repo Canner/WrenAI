@@ -1,0 +1,149 @@
+version: '3'
+
+volumes:
+  data:
+  cbData:
+
+networks:
+  wren:
+    driver: bridge
+
+services:
+  bootstrap:
+    image: ghcr.io/canner/wren-bootstrap:${WREN_BOOTSTRAP_VERSION}
+    restart: on-failure
+    platform: ${PLATFORM}
+    environment:
+      DATA_PATH: /app/data
+      PG_USERNAME: ${PG_USERNAME}
+      PG_PASSWORD: ${PG_PASSWORD}
+    volumes:
+      - data:/app/data
+    command: /bin/sh /app/init.sh
+
+  wren-engine:
+    image: wren-engine:0.4.5-SNAPSHOT-arm64
+    restart: always
+    expose:
+      - ${WREN_ENGINE_PORT}
+      - ${WREN_ENGINE_SQL_PORT}
+    volumes:
+      - data:/usr/src/app/etc
+    networks:
+      - wren
+    depends_on:
+      - bootstrap
+
+  wren-ai-service:
+    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+    restart: on-failure
+    platform: ${PLATFORM}
+    expose:
+      - ${WREN_AI_SERVICE_PORT}
+    ports: 
+      - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
+    environment:
+      WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
+      QDRANT_HOST: qdrant
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      # sometimes the console won't show print messages,
+      # using PYTHONUNBUFFERED: 1 can fix this
+      PYTHONUNBUFFERED: 1
+    networks:
+      - wren
+    depends_on:
+      - wren-engine
+      - qdrant
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    restart: on-failure
+    expose:
+      - 6333
+      - 6334
+    volumes:
+      - data:/qdrant/storage
+    networks:
+      - wren
+
+  wren-ui:
+    image: wren-ui:local-arm64
+    restart: always
+    environment:
+      DB_TYPE: sqlite
+      # /app is the working directory in the container
+      SQLITE_FILE: /app/data/db.sqlite3
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      WREN_AI_ENDPOINT: http://wren-ai-service:${WREN_AI_SERVICE_PORT}
+      OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
+      PG_USERNAME: ${PG_USERNAME}
+      PG_PASSWORD: ${PG_PASSWORD}
+      # telemetry
+      WREN_ENGINE_PORT: ${WREN_ENGINE_PORT}
+      WREN_AI_SERVICE_VERSION: ${WREN_AI_SERVICE_VERSION}
+      WREN_UI_VERSION: ${WREN_UI_VERSION}
+      USER_UUID: ${USER_UUID}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY}
+      POSTHOG_HOST: ${POSTHOG_HOST}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED}
+      # client side
+      NEXT_PUBLIC_USER_UUID: ${USER_UUID}
+      NEXT_PUBLIC_POSTHOG_API_KEY: ${POSTHOG_API_KEY}
+      NEXT_PUBLIC_POSTHOG_HOST: ${POSTHOG_HOST}
+      NEXT_PUBLIC_TELEMETRY_ENABLED: ${TELEMETRY_ENABLED}
+      # configs
+      WREN_PRODUCT_VERSION: ${WREN_PRODUCT_VERSION}
+    ports:
+      # HOST_PORT is the port you want to expose to the host machine
+      - ${HOST_PORT}:3000
+    volumes:
+      - data:/app/data
+    networks:
+      - wren
+    depends_on:
+      - wren-ai-service
+      - wren-engine
+
+  couchserver:
+    image: couchbase:enterprise-7.6.1
+    restart: on-failure
+    ports:
+      - '8091:8091'
+      - '18091:18091'
+      - '8092:8092'
+      - '8093:8093'
+      - '8094:8094'
+      - '8095:8095'
+      - '8096:8096'
+      - '8097:8097'
+      - '9123:9123'
+      - '11207:11207'
+      - '11210:11210'
+      - '11280:11280'
+      - '18092:18092'
+      - '18093:18093'
+      - '18094:18094'
+      - '18095:18095'
+      - '18096:18096'
+      - '18097:18097'
+    volumes:
+      - cbData:/opt/couchbase/var
+    networks:
+      - wren
+
+  postgres:
+    image: postgres:14-alpine
+    platform: ${PLATFORM}
+    ports:
+      - 9432:5432
+    volumes:
+      - data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_USER=test
+      - POSTGRES_DB=test
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    networks:
+      - wren

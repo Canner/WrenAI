@@ -10,6 +10,7 @@ import DefineRelations from './DefineRelations';
 import BigQueryProperties from './dataSources/BigQueryProperties';
 import DuckDBProperties from './dataSources/DuckDBProperties';
 import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
+import CouchbaseProperties from './dataSources/CouchbaseProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 
 type SetupStep = {
@@ -55,6 +56,12 @@ export const SETUP_STEPS = {
 } as { [key: string]: SetupStep };
 
 export const DATA_SOURCE_OPTIONS = {
+  [DATA_SOURCES.COUCHBASE]: {
+    label: 'Couchbase',
+    logo: '/images/dataSource/couchbase-favicon.svg',
+    guide: 'https://www.omnistrate.com/docs/couchbase-connector',
+    disabled: false,
+  },
   [DATA_SOURCES.BIG_QUERY]: {
     label: 'BigQuery',
     logo: '/images/dataSource/bigQuery.svg',
@@ -76,6 +83,7 @@ export const DATA_SOURCE_OPTIONS = {
 } as { [key: string]: ButtonOption };
 
 export const DATA_SOURCE_FORM = {
+  [DATA_SOURCES.COUCHBASE]: { component: CouchbaseProperties },
   [DATA_SOURCES.BIG_QUERY]: { component: BigQueryProperties },
   [DATA_SOURCES.DUCKDB]: { component: DuckDBProperties },
   [DATA_SOURCES.PG_SQL]: { component: PostgreSQLProperties },
@@ -106,6 +114,10 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
   );
   return (
     {
+      [DATA_SOURCES.COUCHBASE]: merge(
+        DATA_SOURCE_OPTIONS[DATA_SOURCES.COUCHBASE],
+        DATA_SOURCE_FORM[DATA_SOURCES.COUCHBASE],
+      ),
       [DATA_SOURCES.BIG_QUERY]: defaultDataSource,
       [DATA_SOURCES.DUCKDB]: merge(
         DATA_SOURCE_OPTIONS[DATA_SOURCES.DUCKDB],

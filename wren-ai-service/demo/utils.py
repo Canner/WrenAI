@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
-DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
+DATA_SOURCES = ["duckdb", "bigquery", "postgres", "couchbase"]
 
 load_dotenv()
 
@@ -91,6 +91,17 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
                 {"name": "postgres.user", "value": os.getenv("postgres.user")},
                 {"name": "postgres.password", "value": os.getenv("postgres.password")},
                 {"name": "postgres.jdbc.url", "value": os.getenv("postgres.jdbc.url")},
+            ]
+        )
+    elif dataset_type == "couchbase":
+        _update_wren_engine_configs(
+            [
+                {"name": "wren.datasource.type", "value": "couchbase"},
+                {"name": "couchbase.server", "value": os.getenv("couchbase.server")},
+                {"name": "couchbase.user", "value": os.getenv("couchbase.user")},
+                {"name": "couchbase.password", "value": os.getenv("couchbase.password")},
+                {"name": "couchbase.useSsl", "value": os.getenv("couchbase.useSSL")},
+                {"name": "couchbase.jdbc.url", "value": os.getenv("couchbase.jdbc.url")},
             ]
         )
 

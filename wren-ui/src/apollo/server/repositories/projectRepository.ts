@@ -29,6 +29,11 @@ export interface Project {
   database: string; // Database
   user: string; // User
 
+  // couchbase 
+  server: string // Server
+  username: string // Username
+  password: string // Password
+  
   catalog: string; // Catalog name
   schema: string; // Schema name
   sampleDataset: string; // Sample dataset name
