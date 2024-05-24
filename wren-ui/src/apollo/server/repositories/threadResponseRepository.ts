@@ -4,7 +4,7 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys } from 'lodash';
+import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
 import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
 
 export interface DetailStep {
@@ -70,10 +70,18 @@ export class ThreadResponseRepository
       })
       .map((res) => {
         // JSON.parse detail and error
+        const detail =
+          res.detail && typeof res.detail === 'string'
+            ? JSON.parse(res.detail)
+            : res.detail;
+        const error =
+          res.error && typeof res.error === 'string'
+            ? JSON.parse(res.error)
+            : res.error;
         return {
           ...res,
-          detail: res.detail ? JSON.parse(res.detail) : null,
-          error: res.error ? JSON.parse(res.error) : null,
+          detail: detail || null,
+          error: error || null,
         };
       }) as ThreadResponseWithThreadContext[];
   }
@@ -105,11 +113,16 @@ export class ThreadResponseRepository
       throw new Error('Unexpected dbdata');
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
-    // JSON.parse detail and error
-    return {
-      ...camelCaseData,
-      detail: camelCaseData.detail ? JSON.parse(camelCaseData.detail) : null,
-      error: camelCaseData.error ? JSON.parse(camelCaseData.error) : null,
-    } as ThreadResponse;
+    const formattedData = mapValues(camelCaseData, (value, key) => {
+      if (['error', 'detail'].includes(key)) {
+        if (typeof value === 'string') {
+          return value ? JSON.parse(value) : value;
+        } else {
+          return value;
+        }
+      }
+      return value;
+    }) as ThreadResponse;
+    return formattedData;
   };
 }
