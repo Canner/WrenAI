@@ -60,7 +60,7 @@ class AskDetailsService:
     def ask_details(
         self,
         ask_details_request: AskDetailsRequest,
-    ) -> AskDetailsResponse:
+    ):
         try:
             # ask details status can be understanding, searching, generating, finished, stopped
             # we will need to handle business logic for each status
@@ -108,7 +108,9 @@ class AskDetailsService:
                 )
         except Exception as e:
             logger.error(f"ask-details pipeline - OTHERS: {e}")
-            self.ask_details_results[query_id] = AskDetailsResultResponse(
+            self.ask_details_results[
+                ask_details_request.query_id
+            ] = AskDetailsResultResponse(
                 status="failed",
                 error=AskDetailsResultResponse.AskDetailsError(
                     code="OTHERS",

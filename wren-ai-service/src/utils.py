@@ -143,6 +143,9 @@ def check_if_sql_executable(
         },
     )
 
+    if response.status_code != 200:
+        logger.debug(f"SQL is not executable: {response.json()}")
+
     return True if response.status_code == 200 else False
 
 

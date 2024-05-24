@@ -386,42 +386,30 @@ if __name__ == "__main__":
 
         llm_provider, document_store_provider = init_providers()
 
-        document_store = document_store_provider.get_store(
-            dataset_name=DATASET_NAME,
-            recreate_index=True,
-        )
-        retriever = document_store_provider.get_retriever(
-            document_store=document_store,
-            top_k=10,
-        )
-        text_to_sql_generator = llm_provider.get_generator()
-        sql_correction_generator = llm_provider.get_generator()
-        embedder = llm_provider.get_text_embedder()
-
         print("Indexing documents...")
         indexing_pipeline = Indexing(
             llm_provider=llm_provider,
-            store_provider=document_store_provider,
+            document_store_provider=document_store_provider,
         )
         indexing_pipeline_def = indexing_pipeline._pipeline.dumps()
         indexing_pipeline.run(mdl_str)
         print(
-            f"Finished indexing documents, document count: {document_store.count_documents()}"
+            f"Finished indexing documents, document count: {document_store_provider.get_store().count_documents()}"
         )
 
         retrieval_pipeline = Retrieval(
-            embedder=embedder,
-            retriever=retriever,
+            llm_provider=llm_provider,
+            document_store_provider=document_store_provider,
         )
         retrieval_pipeline_def = retrieval_pipeline._pipe.dumps()
 
         generation_pipeline = Generation(
-            generator=text_to_sql_generator,
+            llm_provider=llm_provider,
         )
         generation_pipeline_def = generation_pipeline._pipe.dumps()
 
         sql_correction_pipeline = SQLCorrection(
-            generator=sql_correction_generator,
+            llm_provider=llm_provider,
         )
         sql_correction_pipeline_def = sql_correction_pipeline._pipe.dumps()
 
