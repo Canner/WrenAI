@@ -1,20 +1,39 @@
+import json
 import logging
+from typing import Any, Dict, List, Optional
 
-from haystack import Pipeline
+from haystack import Pipeline, component
+from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.core.llm_provider import LLMProvider
 from src.core.pipeline import BasicPipeline
-from src.pipelines.sql_explanation.components.post_processors import (
-    init_generation_post_processor,
-)
+from src.core.provider import LLMProvider
 from src.pipelines.sql_explanation.components.prompts import (
-    init_sql_explanation_prompt_builder,
     sql_explanation_system_prompt,
 )
 from src.utils import init_providers, load_env_vars
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
+
+
+sql_explanation_user_prompt_template = """
+question: {{ question }}
+sql query: {{ sql }}
+sql query summary: {{ sql_summary }}
+sql query analysis: {{ sql_analysis }}
+full sql query: {{ full_sql }}
+
+Let's think step by step.
+"""
+
+
+@component
+class GenerationPostProcessor:
+    @component.output_types(
+        results=Optional[Dict[str, Any]],
+    )
+    def run(self, replies: List[str]) -> Dict[str, Any]:
+        return {"results": json.loads(replies[0])}
 
 
 class Generation(BasicPipeline):
@@ -25,13 +44,13 @@ class Generation(BasicPipeline):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
             "sql_explanation_prompt_builder",
-            init_sql_explanation_prompt_builder(),
+            PromptBuilder(template=sql_explanation_user_prompt_template),
         )
         self._pipeline.add_component(
             "sql_explanation_generator",
             llm_provider.get_generator(system_prompt=sql_explanation_system_prompt),
         )
-        self._pipeline.add_component("post_processor", init_generation_post_processor())
+        self._pipeline.add_component("post_processor", GenerationPostProcessor())
 
         self._pipeline.connect(
             "sql_explanation_prompt_builder.prompt", "sql_explanation_generator.prompt"

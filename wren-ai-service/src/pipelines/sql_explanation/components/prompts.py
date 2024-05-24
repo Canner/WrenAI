@@ -1,5 +1,3 @@
-from haystack.components.builders.prompt_builder import PromptBuilder
-
 sql_explanation_system_prompt = """
 ### TASK ###
 
@@ -71,17 +69,3 @@ Please simply answer me with the following JSON structure:
   "sortings": <explanation_string>
 }
 """
-
-sql_explanation_user_prompt_template = """
-question: {{ question }}
-sql query: {{ sql }}
-sql query summary: {{ sql_summary }}
-sql query analysis: {{ sql_analysis }}
-full sql query: {{ full_sql }}
-
-Let's think step by step.
-"""
-
-
-def init_sql_explanation_prompt_builder():
-    return PromptBuilder(template=sql_explanation_user_prompt_template)
