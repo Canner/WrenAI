@@ -38,4 +38,9 @@ test.describe('Test PostgreSQL data source', () => {
   });
 
   test('Setup all models', onboarding.setupModels);
+
+  test(
+    'Save recommended relationships',
+    onboarding.saveRecommendedRelationships,
+  );
 });

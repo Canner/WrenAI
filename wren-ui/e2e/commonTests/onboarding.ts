@@ -9,3 +9,10 @@ export const setupModels = async ({ page }) => {
   await page.getByRole('button', { name: 'Next' }).click();
   await expect(page).toHaveURL('/setup/relationships', { timeout: 60000 });
 };
+
+export const saveRecommendedRelationships = async ({ page }) => {
+  await page.goto('/setup/relationships');
+
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await expect(page).toHaveURL('/home', { timeout: 60000 });
+};

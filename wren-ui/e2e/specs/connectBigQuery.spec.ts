@@ -35,4 +35,9 @@ test.describe('Test BigQuery data source', async () => {
   });
 
   test('Setup all models', onboarding.setupModels);
+
+  test(
+    'Save recommended relationships',
+    onboarding.saveRecommendedRelationships,
+  );
 });
