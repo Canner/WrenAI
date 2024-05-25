@@ -48,11 +48,11 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ### 1. Indexing With Semantics
 
-> WrenAI has implemented a semantic engine architecture to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
+> WrenAI has implemented a [semantic engine architecture](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
 ### 2. Augment LLM Prompts
 
-> With WrenAI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with “Modeling Definition Language” (MDL), reducing duplicate coding and simplifying data joins.
+> With WrenAI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language” (MDL)](https://docs.getwren.ai/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
 
 ### 3. Generate Insights
 
@@ -68,13 +68,13 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ![](./misc/preview_ask.png)
 
-### Modeling with semantics, such as relationships, metrics and calculations
+### Modeling with semantics, such as relationships, metrics, and calculations
 
 ![](./misc/preview_model.png)
 
 ## 🤔 Why WrenAI?
 
-We focus on providing an open, secure and reliable text-to-SQL solution for everyone.
+We focus on providing an open, secure, and reliable text-to-SQL solution for everyone.
 
 ### 1. Turnkey Solution
 
@@ -90,7 +90,7 @@ We focus on providing an open, secure and reliable text-to-SQL solution for ever
 
 ## 🤖 WrenAI's Architecture
 
-WrenAI is consist of three core services:
+WrenAI consists of three core services:
 
 - ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within WrenAI's framework.
 
