@@ -1,3 +1,20 @@
+"""
+Thoughts on mapping mdl's data model to nebula's property graph schema
+For models, columns and relationships:
+1. each table in mdl will be a vertex in nebula
+2. each column in mdl will also be a vertex in nebula
+3. columns will have a relationship with the table they belong to
+4. relationships between tables will be represented as edges between each column from respective table
+5. we don't need to store the data in nebula, just the schema
+
+For metrics:
+
+
+For views:
+
+
+"""
+
 import json
 
 from nebula3.Config import Config
