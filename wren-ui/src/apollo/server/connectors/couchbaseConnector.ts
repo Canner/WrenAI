@@ -58,7 +58,6 @@ export class CouchbaseConnector
     if (listTableOptions.format) {
       return this.formatToCompactTable(response);
     }
-    return response.data;
   }
 
   public async listConstraints(): Promise<any[]> {

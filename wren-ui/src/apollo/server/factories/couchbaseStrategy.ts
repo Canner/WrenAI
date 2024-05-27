@@ -1,18 +1,16 @@
-import { capitalize } from 'lodash';
-import { IDataSourceStrategy } from './dataSourceStrategy';
-import {
-  AnalysisRelationInfo,
-  DataSourceName,
-  IContext,
-  RelationType,
-  CouchbaseDataSourceProperties,
-} from '../types';
+import { IConnector, CompactTable } from '../connectors/connector';
 import { Model, ModelColumn, Project } from '../repositories';
 import {
-  CouchbaseColumnResponse,
+  DataSourceName,
+  CouchbaseDataSourceProperties,
+  IContext
+} from '../types';
+import {
   CouchbaseConnector,
+  CouchbaseListTableOptions,
 } from '../connectors/couchbaseConnector';
 import { Encryptor } from '../utils';
+import { IDataSourceStrategy } from './dataSourceStrategy';
 import {
   findColumnsToUpdate,
   updateModelPrimaryKey,
@@ -20,11 +18,14 @@ import {
 } from './util';
 
 export class CouchbaseStrategy implements IDataSourceStrategy {
-  private project?: Project;
-  private ctx: IContext;
+  connector: IConnector<any, any>;
+  project: Project;
+  ctx: IContext;
 
   constructor({ ctx, project }: { ctx: IContext; project?: Project }) {
-    this.project = project;
+    if (project) {
+      this.project = project;
+    }
     this.ctx = ctx;
   }
 
@@ -95,29 +96,28 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
     formatToCompactTable: boolean;
   }) {
     const connector = this.getCouchbaseConnector();
-
-    // list tables
     const listTableOptions = {
       format: formatToCompactTable,
     };
-
     const tables = await connector.listTables(listTableOptions);
     return tables;
   }
 
   public async saveModels(tables: string[]) {
     const connector = this.getCouchbaseConnector();
-    const dataSourceColumns = (await connector.listTables({
-      format: false,
-    })) as CouchbaseColumnResponse[];
-
-    const models = await this.createModels(tables, connector);
+    const listTableOptions = { format: true } as CouchbaseListTableOptions;
+    const dataSourceColumns = (await connector.listTables(
+      listTableOptions,
+    )) as CompactTable[];
+    const models = await this.createModels(
+      tables,
+      dataSourceColumns as CompactTable[],
+    );
     // create columns
     const columns = await this.createAllColumns(
       tables,
       models,
-      dataSourceColumns as CouchbaseColumnResponse[],
-      connector,
+      dataSourceColumns as CompactTable[],
     );
     return { models, columns };
   }
@@ -127,18 +127,21 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
     columns: string[],
     primaryKey?: string,
   ) {
-    const connector = this.getCouchbaseConnector();
-    const dataSourceColumns = (await connector.listTables({
-      format: false,
-    })) as CouchbaseColumnResponse[];
-
-    const models = await this.createModels([table], connector);
-    const model = models[0];
-    // create columns
+    const connector = new CouchbaseConnector({
+      wrenEngineAdaptor: this.ctx.wrenEngineAdaptor,
+    });
+    const listTableOptions = { format: true } as CouchbaseListTableOptions;
+    const dataSourceColumns = (await connector.listTables(
+      listTableOptions,
+    )) as CompactTable[];
+    const model = await this.createModels(
+      [table],
+      dataSourceColumns as CompactTable[],
+    );
     const modelColumns = await this.createColumns(
       columns,
-      model,
-      dataSourceColumns as CouchbaseColumnResponse[],
+      model[0],
+      dataSourceColumns,
       primaryKey,
     );
     return { model, columns: modelColumns };
@@ -149,10 +152,13 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
     columns: string[],
     primaryKey?: string,
   ) {
-    const connector = this.getCouchbaseConnector();
-    const dataSourceColumns = (await connector.listTables({
-      format: false,
-    })) as CouchbaseColumnResponse[];
+    const connector = new CouchbaseConnector({
+      wrenEngineAdaptor: this.ctx.wrenEngineAdaptor,
+    });
+    const listTableOptions = { format: true } as CouchbaseListTableOptions;
+    const dataSourceColumns = (await connector.listTables(
+      listTableOptions,
+    )) as CompactTable[];
     const existingColumns = await this.ctx.modelColumnRepository.findAllBy({
       modelId: model.id,
     });
@@ -169,7 +175,7 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
       await this.createColumns(
         toCreateColumns,
         model,
-        dataSourceColumns as CouchbaseColumnResponse[],
+        dataSourceColumns,
         primaryKey,
       );
     }
@@ -178,58 +184,8 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
     }
   }
 
-  public async analysisRelation(models: Model[], columns: ModelColumn[]) {
-    const connector = this.getCouchbaseConnector();
-    const constraints = await connector.listConstraints();
-    const relations = [];
-    for (const constraint of constraints) {
-      const {
-        constraintTable,
-        constraintColumn,
-        constraintedTable,
-        constraintedColumn,
-      } = constraint;
-      // validate tables and columns exists in our models and model columns
-      const fromModel = models.find(
-        (m) => m.sourceTableName === constraintTable,
-      );
-      const toModel = models.find(
-        (m) => m.sourceTableName === constraintedTable,
-      );
-      if (!fromModel || !toModel) {
-        continue;
-      }
-      const fromColumn = columns.find(
-        (c) =>
-          c.modelId === fromModel.id && c.sourceColumnName === constraintColumn,
-      );
-      const toColumn = columns.find(
-        (c) =>
-          c.modelId === toModel.id && c.sourceColumnName === constraintedColumn,
-      );
-      if (!fromColumn || !toColumn) {
-        continue;
-      }
-      // create relation
-      const relation: AnalysisRelationInfo = {
-        // upper case the first letter of the sourceTableName
-        name:
-          capitalize(fromModel.sourceTableName) +
-          capitalize(toModel.sourceTableName),
-        fromModelId: fromModel.id,
-        fromModelReferenceName: fromModel.referenceName,
-        fromColumnId: fromColumn.id,
-        fromColumnReferenceName: fromColumn.referenceName,
-        toModelId: toModel.id,
-        toModelReferenceName: toModel.referenceName,
-        toColumnId: toColumn.id,
-        toColumnReferenceName: toColumn.referenceName,
-        // TODO: add join type
-        type: RelationType.ONE_TO_MANY,
-      };
-      relations.push(relation);
-    }
-    return relations;
+  public async analysisRelation(_models, _columns) {
+    return [];
   }
 
   private async testConnection(properties: any) {
@@ -263,36 +219,42 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
   }
 
   private getCouchbaseConnector() {
-    // get credentials decrypted
-    const { credentials: encryptedCredentials } = this.project;
-    const encryptor = new Encryptor(this.ctx.config);
-    const credentials = JSON.parse(encryptor.decrypt(encryptedCredentials));
-
-    // connect to data source
+    // // get credentials decrypted
+    // const { credentials: encryptedCredentials } = this.project;
+    // const encryptor = new Encryptor(this.ctx.config);
+    // const credentials = JSON.parse(encryptor.decrypt(encryptedCredentials));
+    // // connect to data source
+    // const connector = new CouchbaseConnector({
+    //   user: this.project.user,
+    //   password: credentials.password,
+    //   server: this.project.server,
+    //   ssl: this.project.configurations?.ssl,
+    // });
     const connector = new CouchbaseConnector({
-      user: this.project.user,
-      password: credentials.password,
-      server: this.project.server,
-      ssl: this.project.configurations?.ssl,
+      wrenEngineAdaptor: this.ctx.wrenEngineAdaptor,
     });
     return connector;
   }
 
-  private async createModels(tables: string[], connector: CouchbaseConnector) {
+  private async createModels(tables: string[], compactTables: CompactTable[]) {
     const projectId = this.project.id;
-    const modelValues = tables.map((compactTableName) => {
-      const { schema, tableName } =
-        connector.parseCompactTableName(compactTableName);
-      // make referenceName = schema + _ + tableName
-      const referenceName = `${schema}_${tableName}`;
+
+    const modelValues = tables.map((tableName) => {
+      const compactTable = compactTables.find(
+        (table) => table.name === tableName,
+      );
+      const properties = compactTable.properties
+        ? JSON.stringify(compactTable.properties)
+        : null;
       const model = {
         projectId,
-        displayName: compactTableName, // use table name as displayName, referenceName and tableName
-        referenceName,
-        sourceTableName: compactTableName,
-        refSql: `select * from "${schema}"."${tableName}"`,
+        displayName: tableName, //use table name as displayName, referenceName and tableName
+        referenceName: tableName,
+        sourceTableName: tableName,
+        refSql: `select * from ${compactTable.properties.schema}.${tableName}`,
         cached: false,
         refreshTime: null,
+        properties,
       } as Partial<Model>;
       return model;
     });
@@ -304,15 +266,21 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
   private async createColumns(
     columns: string[],
     model: Model,
-    dataSourceColumns: CouchbaseColumnResponse[],
+    compactTables: CompactTable[],
     primaryKey?: string,
   ) {
     const columnValues = columns.reduce((acc, columnName) => {
-      const tableColumn = dataSourceColumns.find(
-        (col) => col.column_name === columnName,
+      const compactColumns = compactTables.find(
+        (table) => table.name === model.sourceTableName,
+      )?.columns;
+      if (!compactColumns) {
+        throw new Error('Table not found');
+      }
+      const compactColumn = compactColumns.find(
+        (column) => column.name === columnName,
       );
-      if (!tableColumn) {
-        throw new Error(`Column not found: ${columnName}`);
+      if (!compactColumn) {
+        throw new Error('Column not found');
       }
       const columnValue = {
         modelId: model.id,
@@ -320,60 +288,46 @@ export class CouchbaseStrategy implements IDataSourceStrategy {
         displayName: columnName,
         sourceColumnName: columnName,
         referenceName: transformInvalidColumnName(columnName),
-        type: tableColumn?.data_type || 'string',
-        notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
+        type: compactColumn.type || 'string',
+        notNull: compactColumn.notNull,
         isPk: primaryKey === columnName,
+        properties: JSON.stringify(compactColumn.properties),
       } as Partial<ModelColumn>;
       acc.push(columnValue);
       return acc;
     }, []);
-    const modelColumns = await Promise.all(
-      columnValues.map(
-        async (column) =>
-          await this.ctx.modelColumnRepository.createOne(column),
-      ),
-    );
-    return modelColumns;
+    const res = await this.ctx.modelColumnRepository.createMany(columnValues);
+    return res;
   }
 
   private async createAllColumns(
     tables: string[],
     models: Model[],
-    dataSourceColumns: CouchbaseColumnResponse[],
-    connector: CouchbaseConnector,
+    compactTables: CompactTable[],
   ) {
-    const columnValues = tables.reduce((acc, compactTableName) => {
-      // sourceTableName is the same as compactTableName when we create models
-      const modelId = models.find(
-        (m) => m.sourceTableName === compactTableName,
-      )?.id;
-
+    const columnValues = tables.reduce((acc, tableName) => {
+      const modelId = models.find((m) => m.sourceTableName === tableName)?.id;
       if (!modelId) {
-        throw new Error('Model not found');
+        throw new Error(`Model not found: ${tableName}`);
       }
-
-      // get columns of the table
-      // format the table_name & table_schema of the column to match compactTableName
-      const tableColumns = dataSourceColumns.filter(
-        (col) =>
-          connector.formatCompactTableName(col.table_name, col.table_schema) ===
-          compactTableName,
-      );
-
-      // create column for each column in the table
-      // and add it to accumulated columnValues
-      // columnValues will be used to create columns in database
-      for (const tableColumn of tableColumns) {
-        const columnName = tableColumn.column_name;
+      const compactColumns = compactTables.find(
+        (table) => table.name === tableName,
+      )?.columns;
+      if (!compactColumns) {
+        throw new Error('Table not found');
+      }
+      for (const compactColumn of compactColumns) {
+        const columnName = compactColumn.name;
         const columnValue = {
           modelId,
           isCalculated: false,
           displayName: columnName,
           sourceColumnName: columnName,
           referenceName: transformInvalidColumnName(columnName),
-          type: tableColumn?.data_type || 'string',
-          notNull: tableColumn.is_nullable.toLocaleLowerCase() !== 'yes',
+          type: compactColumn.type || 'string',
+          notNull: compactColumn.notNull,
           isPk: false,
+          properties: JSON.stringify(compactColumn.properties),
         } as Partial<ModelColumn>;
         acc.push(columnValue);
       }
