@@ -9,6 +9,7 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import (
     init_providers,
     load_env_vars,
+    timer,
 )
 
 load_env_vars()
@@ -38,6 +39,7 @@ class HistoricalQuestion(BasicPipeline):
         self._pipeline = pipe
         super().__init__(self._pipeline)
 
+    @timer
     def run(self, query: str):
         logger.info("Try to extract historical question")
         return self._pipeline.run(
@@ -74,9 +76,10 @@ class OutputFormatter:
         for doc in documents:
             content = ast.literal_eval(doc.content)
             formatted = {
-                "question": content["question"],
-                "description": content["description"],
-                "statement": content["statement"],
+                "question": content.get("question"),
+                "summary": content.get("summary"),
+                "statement": content.get("statement"),
+                "viewId": content.get("viewId"),
             }
             list.append(formatted)
 

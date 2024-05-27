@@ -30,7 +30,7 @@ collectors = [Collector(element=element) for element in eval_context]
 
 llm_provider, _ = init_providers()
 pipeline = Generation(
-    generator=llm_provider.get_generator(),
+    llm_provider=llm_provider,
 )
 
 for collector in collectors:

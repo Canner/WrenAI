@@ -13,6 +13,10 @@ import {
   updateModelPrimaryKey,
   transformInvalidColumnName,
 } from './util';
+import { getLogger } from '@server/utils';
+
+const logger = getLogger('DuckDBStrategy');
+logger.level = 'debug';
 
 export class DuckDBStrategy implements IDataSourceStrategy {
   connector: IConnector<any, any>;
@@ -317,8 +321,15 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       }
       return acc;
     }, []);
-    const columns =
-      await this.ctx.modelColumnRepository.createMany(columnValues);
+    let columns = [];
+    const batch = 100;
+    for (let i = 0; i < columnValues.length; i += batch) {
+      logger.debug(`Creating columns: ${i} - ${i + batch}`);
+      const columnValueChunk = columnValues.slice(i, i + batch);
+      const columnChunk =
+        await this.ctx.modelColumnRepository.createMany(columnValueChunk);
+      columns = columns.concat(columnChunk);
+    }
     return columns;
   }
 }

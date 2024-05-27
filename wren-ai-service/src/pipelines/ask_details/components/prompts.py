@@ -1,5 +1,3 @@
-from haystack.components.builders.prompt_builder import PromptBuilder
-
 ask_details_system_prompt = """
 You are a Trino SQL expert with exceptional logical thinking skills. 
 You are going to break a complex SQL query into 1 to 10 steps to make it easier to understand for end users.
@@ -30,7 +28,7 @@ Results:
 - Step 3:
     - sql: SELECT product_id, total_sales FROM aggregated_sales WHERE total_sales > 10000
     - summary: Filters the aggregated sales data to only include products whose total sales exceed 10,000.
-    - cte_name: 
+    - cte_name: <empty_string>
 
 Example 2:
 Original SQL Query:
@@ -43,7 +41,7 @@ Results:
 - Step 1:
     - sql: SELECT product_id FROM sales_data
     - summary: Selects product IDs from the sales_data table.
-    - cte_name:
+    - cte_name: <empty_string>
 
 ### ALERT ###
 - YOU MUST BREAK DOWN any SQL query into small steps if there is JOIN operations or sub-queries.
@@ -51,28 +49,3 @@ Results:
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - ONLY THE last step should not have a CTE name.
 """
-
-ask_details_user_prompt_template = """
-### INPUT ###
-SQL query: {{ sql }}
-
-### FINAL ANSWER FORMAT ###
-The final answer must be a valid JSON format as following:
-
-{
-    "description": <SHORT_SQL_QUERY_DESCRIPTION>,
-    "steps: [
-        {
-            "sql": <SQL_QUERY_STRING_1>,
-            "summary": <SUMMARY_STRING_1>,
-            "cte_name": <CTE_NAME_STRING_1>
-        }
-    ] # a list of steps
-}
-
-Let's think step by step.
-"""
-
-
-def init_ask_details_prompt_builder():
-    return PromptBuilder(template=ask_details_user_prompt_template)

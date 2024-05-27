@@ -50,28 +50,28 @@
           "properties": {}
         },
         {
-            "name": "FirstRecord",
-            "type": "DATE",
-            "isCalculated": true,
-            "expression": "min(orders.PurchaseTimestamp)",
-            "notNull": false,
-            "properties": {}
+          "name": "FirstRecord",
+          "type": "DATE",
+          "isCalculated": true,
+          "expression": "min(orders.PurchaseTimestamp)",
+          "notNull": false,
+          "properties": {}
         },
         {
-            "name": "VIP",
-            "type": "BOOLEAN",
-            "isCalculated": true,
-            "expression": "sum(orders.Size) > 2",
-            "notNull": false,
-            "properties": {}
+          "name": "VIP",
+          "type": "BOOLEAN",
+          "isCalculated": true,
+          "expression": "sum(orders.Size) > 2",
+          "notNull": false,
+          "properties": {}
         },
         {
-            "name": "OrderCount",
-            "type": "BIGINT",
-            "isCalculated": true,
-            "expression": "count(orders.OrderId)",
-            "notNull": false,
-            "properties": {}
+          "name": "OrderCount",
+          "type": "BIGINT",
+          "isCalculated": true,
+          "expression": "count(orders.OrderId)",
+          "notNull": false,
+          "properties": {}
         },
         {
           "name": "Debit",
@@ -82,12 +82,12 @@
           "properties": {}
         },
         {
-            "name": "ReviewRate",
-            "type": "DOUBLE",
-            "isCalculated": true,
-            "expression": "count(orders.IsReviewed = TRUE) / count(DISTINCT orders.OrderId)",
-            "notNull": false,
-            "properties": {}
+          "name": "ReviewRate",
+          "type": "DOUBLE",
+          "isCalculated": true,
+          "expression": "count(orders.IsReviewed = TRUE) / count(DISTINCT orders.OrderId)",
+          "notNull": false,
+          "properties": {}
         }
       ],
       "primaryKey": "Id",
@@ -292,53 +292,53 @@
           "properties": {}
         },
         {
-            "name": "Rating",
-            "type": "DOUBLE",
-            "isCalculated": true,
-            "expression": "avg(reviews.Score)",
-            "notNull": false,
-            "properties": {
-                "description": "A calculated column representing averge score of the reviews associated with the order.",
-                "display_name": "Rating"
-            }
+          "name": "Rating",
+          "type": "DOUBLE",
+          "isCalculated": true,
+          "expression": "avg(reviews.Score)",
+          "notNull": false,
+          "properties": {
+            "description": "A calculated column representing averge score of the reviews associated with the order.",
+            "display_name": "Rating"
+          }
         },
         {
-            "name": "ReviewCount",
-            "type": "BIGINT",
-            "isCalculated": true,
-            "expression": "count(reviews.Id)",
-            "notNull": false,
-            "properties": {
-                "description": "A calculated column representing the number of the reviews associated with the order.",
-                "display_name": "Review Count"
-            }
-        },
-	      {
-	        "name": "IsReviewed",
-	        "type": "BOOLEAN",
-	        "isCalculated": true,
-	        "expression": "count(reviews.Id) > 0",
-	        "notNull": false,
-	        "properties": {}
-	      },
-        {
-            "name": "Size",
-            "type": "BIGINT",
-            "isCalculated": true,
-            "expression": "count(order_items.ItemNumber)",
-            "notNull": false,
-            "properties": {
-                "description": "A calculated column representing the number of the items associated with the order.",
-                "display_name": "Package Size"
-            }
+          "name": "ReviewCount",
+          "type": "BIGINT",
+          "isCalculated": true,
+          "expression": "count(reviews.Id)",
+          "notNull": false,
+          "properties": {
+            "description": "A calculated column representing the number of the reviews associated with the order.",
+            "display_name": "Review Count"
+          }
         },
         {
-            "name": "Large",
-            "type": "BOOLEAN",
-            "isCalculated": true,
-            "expression": "count(order_items.ItemNumber) > 1",
-            "notNull": false,
-            "properties": {}
+          "name": "IsReviewed",
+          "type": "BOOLEAN",
+          "isCalculated": true,
+          "expression": "count(reviews.Id) > 0",
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "Size",
+          "type": "BIGINT",
+          "isCalculated": true,
+          "expression": "count(order_items.ItemNumber)",
+          "notNull": false,
+          "properties": {
+            "description": "A calculated column representing the number of the items associated with the order.",
+            "display_name": "Package Size"
+          }
+        },
+        {
+          "name": "Large",
+          "type": "BOOLEAN",
+          "isCalculated": true,
+          "expression": "count(order_items.ItemNumber) > 1",
+          "notNull": false,
+          "properties": {}
         },
         {
           "name": "TotalValue",
@@ -487,8 +487,8 @@
           "notNull": false,
           "expression": "sum(order_items.Price)",
           "properties": {
-              "description": "The calculated field representing the product revenue by summing up the product price in each order.",
-              "display_name": "Revenue"
+            "description": "The calculated field representing the product revenue by summing up the product price in each order.",
+            "display_name": "Revenue"
           }
         }
       ],
@@ -572,7 +572,10 @@
   "relationships": [
     {
       "name": "CustomersOrders",
-      "models": ["customers", "orders"],
+      "models": [
+        "customers",
+        "orders"
+      ],
       "joinType": "ONE_TO_MANY",
       "condition": "customers.Id = orders.CustomerId",
       "manySideSortKeys": [],
@@ -580,7 +583,10 @@
     },
     {
       "name": "OrdersOrder_items",
-      "models": ["orders", "order_items"],
+      "models": [
+        "orders",
+        "order_items"
+      ],
       "joinType": "ONE_TO_MANY",
       "condition": "orders.OrderId = order_items.OrderId",
       "manySideSortKeys": [],
@@ -588,7 +594,10 @@
     },
     {
       "name": "ProductsOrder_items",
-      "models": ["products", "order_items"],
+      "models": [
+        "products",
+        "order_items"
+      ],
       "joinType": "ONE_TO_MANY",
       "condition": "products.Id = order_items.ProductId",
       "manySideSortKeys": [],
@@ -596,7 +605,10 @@
     },
     {
       "name": "OrdersReviews",
-      "models": ["orders", "reviews"],
+      "models": [
+        "orders",
+        "reviews"
+      ],
       "joinType": "ONE_TO_MANY",
       "condition": "orders.OrderId = reviews.OrderId",
       "manySideSortKeys": [],
@@ -604,7 +616,10 @@
     },
     {
       "name": "PaymentsOrders",
-      "models": ["payments", "orders"],
+      "models": [
+        "payments",
+        "orders"
+      ],
       "joinType": "MANY_TO_ONE",
       "condition": "payments.OrderId = orders.OrderId",
       "manySideSortKeys": [],
@@ -680,7 +695,8 @@
       "statement": "WITH customer_order_items AS (SELECT c.State, oi.ItemNumber FROM customers c JOIN orders o ON c.Id = o.CustomerId JOIN order_items oi ON o.OrderId = oi.OrderId) SELECT State, COUNT(ItemNumber) AS Total_Items_Purchased FROM customer_order_items GROUP BY State",
       "properties": {
         "question": "How many items have been purchased in orders placed by customers in each state?",
-        "description": "The query counts the total number of items purchased by customers in each state."
+        "summary": "The query counts the total number of items purchased by customers in each state.",
+        "viewId": "20b69c05-e9a3-4c4d-a421-06ba7e7a385a"
       }
     }
   ],

@@ -32,10 +32,10 @@ def llm_provider():
 
 
 @pytest.fixture
-def store_provider():
-    _, store_provider = init_providers()
+def document_store_provider():
+    _, document_store_provider = init_providers()
 
-    return store_provider
+    return document_store_provider
 
 
 def test_clear_documents(mdl_str: str):
@@ -44,7 +44,7 @@ def test_clear_documents(mdl_str: str):
 
     indexing_pipeline = Indexing(
         llm_provider=llm_provider,
-        store_provider=document_store_provider,
+        document_store_provider=document_store_provider,
     )
 
     indexing_pipeline.run(mdl_str)
@@ -75,25 +75,28 @@ def test_clear_documents(mdl_str: str):
 def test_indexing_pipeline(
     mdl_str: str,
     llm_provider: LLMProvider,
-    store_provider: DocumentStoreProvider,
+    document_store_provider: DocumentStoreProvider,
 ):
     indexing_pipeline = Indexing(
         llm_provider=llm_provider,
-        store_provider=store_provider,
+        document_store_provider=document_store_provider,
     )
 
     indexing_pipeline.run(mdl_str)
 
-    assert store_provider.get_store().count_documents() == 3
+    assert document_store_provider.get_store().count_documents() == 3
     assert (
-        store_provider.get_store(dataset_name="view_questions").count_documents() == 1
+        document_store_provider.get_store(
+            dataset_name="view_questions"
+        ).count_documents()
+        == 1
     )
 
 
 def test_query_understanding_pipeline():
     llm_provider, _ = init_providers()
     query_understanding_pipeline = QueryUnderstanding(
-        generator=llm_provider.get_generator(),
+        llm_provider=llm_provider,
     )
 
     assert query_understanding_pipeline.run("How many books are there?")[
@@ -106,13 +109,11 @@ def test_query_understanding_pipeline():
 
 def test_retrieval_pipeline(
     llm_provider: LLMProvider,
-    store_provider: DocumentStoreProvider,
+    document_store_provider: DocumentStoreProvider,
 ):
     retrieval_pipeline = Retrieval(
-        embedder=llm_provider.get_text_embedder(),
-        retriever=store_provider.get_retriever(
-            document_store=store_provider.get_store(),
-        ),
+        llm_provider=llm_provider,
+        document_store_provider=document_store_provider,
     )
 
     retrieval_result = retrieval_pipeline.run(
@@ -127,7 +128,7 @@ def test_retrieval_pipeline(
 
 def test_generation_pipeline():
     llm_provider, _ = init_providers()
-    generation_pipeline = Generation(generator=llm_provider.get_generator())
+    generation_pipeline = Generation(llm_provider=llm_provider)
     generation_result = generation_pipeline.run(
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
@@ -151,7 +152,7 @@ def test_generation_pipeline():
 
 def test_followup_generation_pipeline():
     llm_provider, _ = init_providers()
-    generation_pipeline = FollowUpGeneration(generator=llm_provider.get_generator())
+    generation_pipeline = FollowUpGeneration(llm_provider=llm_provider)
     generation_result = generation_pipeline.run(
         "What are names of the books?",
         contexts=GLOBAL_DATA["contexts"],
@@ -176,7 +177,7 @@ def test_followup_generation_pipeline():
 def test_sql_correction_pipeline():
     llm_provider, _ = init_providers()
     sql_correction_pipeline = SQLCorrection(
-        generator=llm_provider.get_generator(),
+        llm_provider=llm_provider,
     )
 
     sql_correction_result = sql_correction_pipeline.run(

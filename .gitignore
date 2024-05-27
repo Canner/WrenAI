@@ -21,6 +21,9 @@ wren-ai-service/demo/poetry.lock
 wren-ai-service/demo/custom_dataset
 wren-ai-service/demo/.env
 
+# python
+.python-version
+
 # cache
 __pycache__
 local_cache
@@ -48,6 +51,9 @@ node_modules
 
 ## testing
 wren-ui/coverage
+wren-ui/test-results
+wren-ui/playwright-report
+wren-ui/e2e/e2e.config.json
 
 ## next.js
 wren-ui/.next
