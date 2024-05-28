@@ -61,4 +61,4 @@ test:
 	make stop-all
 
 load-test:
-	poetry run locust -f tests/locustfile.py
+	poetry run python -m src.test_script
