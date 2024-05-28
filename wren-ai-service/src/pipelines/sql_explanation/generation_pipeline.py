@@ -71,7 +71,6 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
             _collect_relations(relation["left"], result, top_level=False)
             _collect_relations(relation["right"], result, top_level=False)
 
-    print(f"relation: {relation}")
     results = []
     _collect_relations(relation, results)
     return results
@@ -125,39 +124,41 @@ class SQLAnalysisPreprocessor:
     ) -> List[Dict[str, Any]]:
         preprocessed_sql_analysis_results = []
         for sql_analysis_result in sql_analysis_results:
-            preprocessed_sql_analysis_result = {}
-            if "filter" in sql_analysis_result:
-                preprocessed_sql_analysis_result[
-                    "filter"
-                ] = _compose_sql_expression_of_filter_type(
-                    sql_analysis_result["filter"]
+            if not sql_analysis_result.get("isSubqueryOrCte", False):
+                preprocessed_sql_analysis_result = {}
+                if "filter" in sql_analysis_result:
+                    preprocessed_sql_analysis_result[
+                        "filter"
+                    ] = _compose_sql_expression_of_filter_type(
+                        sql_analysis_result["filter"]
+                    )
+                if "groupByKeys" in sql_analysis_result:
+                    preprocessed_sql_analysis_result[
+                        "groupByKeys"
+                    ] = _compose_sql_expression_of_groupby_type(
+                        sql_analysis_result["groupByKeys"]
+                    )
+                if "relation" in sql_analysis_result:
+                    preprocessed_sql_analysis_result[
+                        "relation"
+                    ] = _compose_sql_expression_of_relation_type(
+                        sql_analysis_result["relation"]
+                    )
+                if "selectItems" in sql_analysis_result:
+                    preprocessed_sql_analysis_result[
+                        "selectItems"
+                    ] = _compose_sql_expression_of_select_type(
+                        sql_analysis_result["selectItems"]
+                    )
+                if "sortings" in sql_analysis_result:
+                    preprocessed_sql_analysis_result[
+                        "sortings"
+                    ] = _compose_sql_expression_of_sortings_type(
+                        sql_analysis_result["sortings"]
+                    )
+                preprocessed_sql_analysis_results.append(
+                    preprocessed_sql_analysis_result
                 )
-            if "groupByKeys" in sql_analysis_result:
-                preprocessed_sql_analysis_result[
-                    "groupByKeys"
-                ] = _compose_sql_expression_of_groupby_type(
-                    sql_analysis_result["groupByKeys"]
-                )
-            if "relation" in sql_analysis_result:
-                preprocessed_sql_analysis_result[
-                    "relation"
-                ] = _compose_sql_expression_of_relation_type(
-                    sql_analysis_result["relation"]
-                )
-                print(f'preprocessed: {preprocessed_sql_analysis_result["relation"]}')
-            if "selectItems" in sql_analysis_result:
-                preprocessed_sql_analysis_result[
-                    "selectItems"
-                ] = _compose_sql_expression_of_select_type(
-                    sql_analysis_result["selectItems"]
-                )
-            if "sortings" in sql_analysis_result:
-                preprocessed_sql_analysis_result[
-                    "sortings"
-                ] = _compose_sql_expression_of_sortings_type(
-                    sql_analysis_result["sortings"]
-                )
-            preprocessed_sql_analysis_results.append(preprocessed_sql_analysis_result)
 
         return {"preprocessed_sql_analysis_results": preprocessed_sql_analysis_results}
 
@@ -203,7 +204,6 @@ class GenerationPostProcessor:
                 {"type": "relation", "payload": relation}
                 for relation in sql_explanation_results["relation"]
             ]
-            print(f'result: {sql_explanation_results["relation"]}')
         if (
             "filters" in sql_explanation_results
             and sql_explanation_results["filters"]["expression"]
