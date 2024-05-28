@@ -54,6 +54,7 @@ const resolvers = {
     deleteModel: modelResolver.deleteModel,
     previewModelData: modelResolver.previewModelData,
     updateModelMetadata: modelResolver.updateModelMetadata,
+    triggerDataSourceDetection: projectResolver.triggerDataSourceDetection,
 
     // calculated field
     createCalculatedField: modelResolver.createCalculatedField,

@@ -28,6 +28,7 @@ import { snakeCase } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
+import DataSourceSchemaDetector from '@server/managers/dataSourceSchemaDetector';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -51,6 +52,8 @@ export class ProjectResolver {
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
     this.startSampleDataset = this.startSampleDataset.bind(this);
+    this.triggerDataSourceDetection =
+      this.triggerDataSourceDetection.bind(this);
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
@@ -425,6 +428,16 @@ export class ProjectResolver {
     // async deploy
     this.deploy(ctx);
     return savedRelations;
+  }
+
+  public async triggerDataSourceDetection(
+    _root: any,
+    _arg: any,
+    ctx: IContext,
+  ) {
+    const schemaDetector = new DataSourceSchemaDetector({ ctx });
+    await schemaDetector.detectSchemaChange();
+    return true;
   }
 
   private async deploy(ctx: IContext) {
