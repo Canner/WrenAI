@@ -660,6 +660,7 @@ export const typeDefs = gql`
     updateModel(where: ModelWhereInput!, data: UpdateModelInput!): JSON!
     deleteModel(where: ModelWhereInput!): Boolean!
     previewModelData(where: WhereIdInput!): JSON!
+    triggerDataSourceDetection: Boolean!
 
     # Metadata
     updateModelMetadata(
