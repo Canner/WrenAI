@@ -4,7 +4,7 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, mapKeys } from 'lodash';
+import { camelCase, isPlainObject, mapKeys } from 'lodash';
 import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
 
 export interface DetailStep {
@@ -78,35 +78,6 @@ export class ThreadResponseRepository
       }) as ThreadResponseWithThreadContext[];
   }
 
-  public async findOneBy(
-    filter: Partial<ThreadResponse>,
-    queryOptions?: IQueryOptions,
-  ) {
-    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const query = executer(this.tableName).where(
-      this.transformToDBData(filter),
-    );
-    if (queryOptions?.limit) {
-      query.limit(queryOptions.limit);
-    }
-
-    const result = await query;
-    const transformed =
-      result && result.length > 0
-        ? // turn object keys into camelCase
-          mapKeys(result[0], (_value, key) => camelCase(key))
-        : null;
-    return this.transformToThreadResponse(transformed);
-  }
-
-  public async createOne(
-    data: Partial<ThreadResponse>,
-    queryOptions?: IQueryOptions,
-  ): Promise<ThreadResponse> {
-    const threadResponse = await super.createOne(data, queryOptions);
-    return this.transformToThreadResponse(threadResponse);
-  }
-
   public async updateOne(
     id: string | number,
     data: Partial<{
@@ -126,18 +97,19 @@ export class ThreadResponseRepository
       .where({ id })
       .update(transformedData)
       .returning('*');
-    const transformed = this.transformFromDBData(result);
-    return this.transformToThreadResponse(transformed);
+    return this.transformFromDBData(result);
   }
 
-  private transformToThreadResponse(result: any): ThreadResponse {
+  protected override transformFromDBData = (data: any): ThreadResponse => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     // JSON.parse detail and error
-    return result
-      ? ({
-          ...result,
-          detail: result.detail ? JSON.parse(result.detail) : null,
-          error: result.error ? JSON.parse(result.error) : null,
-        } as ThreadResponse)
-      : null;
-  }
+    return {
+      ...camelCaseData,
+      detail: camelCaseData.detail ? JSON.parse(camelCaseData.detail) : null,
+      error: camelCaseData.error ? JSON.parse(camelCaseData.error) : null,
+    } as ThreadResponse;
+  };
 }
