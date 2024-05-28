@@ -1,4 +1,4 @@
-import { isEmpty, isNil, pick, pickBy } from 'lodash';
+import { isEmpty, isNil, pickBy } from 'lodash';
 import {
   Model,
   ModelColumn,
@@ -111,8 +111,6 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.views = this.views.map((view: View) => {
-      // if putting properties not string, it will throw error
-      // filter out properties that have string value
       const properties = JSON.parse(view.properties) || {};
 
       // filter out properties that are not null or undefined
