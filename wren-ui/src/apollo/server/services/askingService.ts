@@ -325,6 +325,9 @@ export class AskingService implements IAskingService {
 
   /**
    * Asking detail task.
+   * The process of creating a thread is as follows:
+   * If input contains a viewId, simply create a thread from saved properties of the view.
+   * Otherwise, create a task on AI service to generate the detail.
    * 1. create a task on AI service to generate the detail
    * 2. create a thread and the first thread response
    * 3. put the task into background tracker
