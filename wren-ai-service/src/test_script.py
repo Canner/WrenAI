@@ -1,11 +1,15 @@
 import json
 import os
 import time
+from pathlib import Path
 
 from .utils import load_env_vars
 
 load_env_vars()
 filename = f"test_report_{time.strftime("%Y%m%d_%H%M%S")}"
+
+if not Path("./outputs").exists():
+    Path("./outputs").mkdir()
 
 os.system(
     f"poetry run locust -f tests/locustfile.py --config tests/locust.conf --html outputs/{filename}.html --json > outputs/{filename}.json"
