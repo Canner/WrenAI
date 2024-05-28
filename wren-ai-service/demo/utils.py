@@ -354,7 +354,7 @@ def show_asks_details_results(query: str):
                 label="SQL Explanation",
                 key=f"sql_explanation_btn_{i}",
                 on_click=on_click_sql_explanation_button,
-                args=[i, query, step["sql"], sqls[-1], step["summary"]],
+                args=[i, query, sqls[i], sqls[-1], step["summary"]],
             )
 
         if (
