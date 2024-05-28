@@ -25,6 +25,7 @@ import { WrenAIAdaptor } from '@/apollo/server/adaptors/wrenAIAdaptor';
 import { AskingService } from '@/apollo/server/services/askingService';
 import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
+import { SchemaChangeRepository } from '@/apollo/server/repositories/schemaChangeRepository';
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
 import { Telemetry } from '@/apollo/server/telemetry/telemetry';
 import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
@@ -63,6 +64,7 @@ const bootstrapServer = async () => {
   const threadRepository = new ThreadRepository(knex);
   const threadResponseRepository = new ThreadResponseRepository(knex);
   const viewRepository = new ViewRepository(knex);
+  const schemaChangeRepository = new SchemaChangeRepository(knex);
 
   const wrenEngineAdaptor = new WrenEngineAdaptor({
     wrenEngineEndpoint: serverConfig.wrenEngineEndpoint,
@@ -176,6 +178,7 @@ const bootstrapServer = async () => {
       relationRepository,
       viewRepository,
       deployRepository: deployLogRepository,
+      schemaChangeRepository,
     }),
   });
   await apolloServer.start();
