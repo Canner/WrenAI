@@ -6,7 +6,7 @@ from pathlib import Path
 from .utils import load_env_vars
 
 load_env_vars()
-filename = f"test_report_{time.strftime("%Y%m%d_%H%M%S")}"
+filename = f"locust_report_{time.strftime("%Y%m%d_%H%M%S")}"
 
 if not Path("./outputs").exists():
     Path("./outputs").mkdir()
