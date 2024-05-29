@@ -2,6 +2,7 @@ import axios from 'axios';
 
 import { getLogger } from '@server/utils/logger';
 import { DataSourceName } from '../types';
+import { Manifest } from '../mdl/type';
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
 
@@ -24,6 +25,7 @@ export interface IIbisAdaptor {
     query: string,
     dataSource: DataSourceName,
     connectionInfo: BIGQUERYConnectionInfo | POSTGRESConnectionInfo,
+    mdl: Manifest,
   ) => Promise<IbisQueryResponse>;
 }
 
@@ -55,11 +57,14 @@ export class IbisAdaptor implements IIbisAdaptor {
     query: string,
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
+    mdl: Manifest,
   ): Promise<IbisQueryResponse> {
     const body = {
       sql: query,
-      ...connectionInfo,
+      connectionInfo,
+      manifestStr: JSON.stringify(mdl),
     };
+    logger.debug(JSON.stringify(mdl));
     try {
       const res = await axios.post(
         `${this.ibisServerBaseEndpoint}/v2/ibis/${this.dataSourceUrlMap[dataSource]}/query`,

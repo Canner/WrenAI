@@ -465,6 +465,8 @@ export class AskingService implements IAskingService {
       throw new Error(`Thread response ${responseId} not found`);
     }
     const project = await this.projectService.getCurrentProject();
+    const deployment = await this.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps, stepIndex));
     const { datasource, connectionInfo } =
@@ -473,6 +475,7 @@ export class AskingService implements IAskingService {
     const data = await this.queryService.preview(sql, {
       datasource,
       connectionInfo,
+      mdl,
     });
 
     this.telemetry.send_event('preview_data', { sql });
@@ -487,7 +490,7 @@ export class AskingService implements IAskingService {
   private async getDeployId() {
     const project = await this.projectService.getCurrentProject();
     const lastDeploy = await this.deployService.getLastDeployment(project.id);
-    return lastDeploy;
+    return lastDeploy.hash;
   }
 
   /**
