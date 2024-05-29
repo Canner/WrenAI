@@ -104,7 +104,7 @@ class IndexingUser(FastHttpUser):
                     status = json.loads(response.content.decode("utf-8"))["status"]
                     assert status in ["indexing", "finished"]
                     response.success()
-                    time.sleep(5.0)
+                    time.sleep(1.0)
                 except AssertionError as e:
                     response.failure(str(e))
 
@@ -131,6 +131,12 @@ class AskUser(FastHttpUser):
                 response.failure(response.content.decode("utf-8"))
 
         status = ""
+
+        while status in ["understanding", "searching", "generating"]:
+            response = requests.get(f"/v1/asks/{query_id}/result")
+            status = response.json()["status"]
+            time.sleep(1.0)
+
         with self.client.get(
             url=f"/v1/asks/{query_id}/result",
             catch_response=True,
@@ -138,12 +144,7 @@ class AskUser(FastHttpUser):
             try:
                 assert response.status_code == 200
                 status = json.loads(response.content.decode("utf-8"))["status"]
-                assert status in [
-                    "understanding",
-                    "searching",
-                    "generating",
-                    "finished",
-                ]
+                assert status == "finished"
                 response.success()
             except AssertionError as e:
                 response.failure(str(e))
