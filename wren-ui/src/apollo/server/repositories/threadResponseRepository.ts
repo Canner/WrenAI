@@ -115,6 +115,7 @@ export class ThreadResponseRepository
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
       if (['error', 'detail'].includes(key)) {
+        // The value from Sqlite will be string type, while the value from PG is JSON object
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;
         } else {
