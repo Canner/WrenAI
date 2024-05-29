@@ -14,7 +14,7 @@ COPY pyproject.toml ./
 
 RUN poetry install --without dev --no-root && rm -rf $POETRY_CACHE_DIR
 
-FROM python:3.12.2-slim-bookworm as runtime
+FROM python:3.12.0-slim-bookworm as runtime
 
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH"
