@@ -36,7 +36,7 @@ export PG_URL=postgres://user:password@localhost:5432/dbname
 Step 4. Run the development server:
 
 ```bash
-# Skip this step if you run wren-engine and ibis-server from source code
+# Execute this if you start wren-engine and ibis-server via docker
 # Linux or MacOS
 export OTHER_SERVICE_USING_DOCKER=true
 # Windows
