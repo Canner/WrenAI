@@ -31,9 +31,9 @@ export interface PreviewOptions {
   datasource: DataSourceName;
   connectionInfo: POSTGRESConnectionInfo | BIGQUERYConnectionInfo;
   modelingOnly?: boolean;
+  mdl: Manifest;
   limit?: number;
   // if not given, will use the deployed manifest
-  mdl?: Manifest;
 }
 
 export interface SqlValidateOptions {
@@ -86,36 +86,25 @@ export class QueryService implements IQueryService {
     sql: string,
     options: PreviewOptions,
   ): Promise<PreviewDataResponse> {
-    const { datasource, connectionInfo } = options;
+    const { datasource, connectionInfo, mdl, limit } = options;
     if (this.useEngine(datasource)) {
       logger.debug('Using wren engine for preview');
-      const data = await this.wrenEngineAdaptor.previewData(
-        sql,
-        options.limit,
-        options.mdl,
-      );
+      const data = await this.wrenEngineAdaptor.previewData(sql, limit, mdl);
       return data as PreviewDataResponse;
     } else {
       logger.debug('Use ibis adaptor for preview');
       // add alias to FROM clause to prevent ibis error
       // ibis server does not have limit parameter, should handle it in sql
-      const rewrittenSql = options.limit
-        ? `SELECT tmp.* FROM (${sql}) tmp LIMIT ${options.limit}`
+      const rewrittenSql = limit
+        ? `SELECT tmp.* FROM (${sql}) tmp LIMIT ${limit}`
         : sql;
-      const nativeSql = await this.wrenEngineAdaptor.getNativeSQL(
-        rewrittenSql,
-        {
-          modelingOnly: options.modelingOnly,
-          manifest: options.mdl,
-        },
-      );
-      logger.debug(`Native SQL: ${nativeSql}`);
 
       this.checkDataSourceIsSupported(datasource);
       const data = await this.ibisAdaptor.query(
-        nativeSql,
+        rewrittenSql,
         datasource,
         connectionInfo,
+        mdl,
       );
       return this.transformDataType(data);
     }

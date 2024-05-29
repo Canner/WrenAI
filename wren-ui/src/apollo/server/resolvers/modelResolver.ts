@@ -141,9 +141,8 @@ export class ModelResolver {
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const currentHash = ctx.deployService.createMDLHash(manifest, project.id);
-    const lastDeployHash = await ctx.deployService.getLastDeployment(
-      project.id,
-    );
+    const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+    const lastDeployHash = lastDeploy.hash;
     const inProgressDeployment =
       await ctx.deployService.getInProgressDeployment(project.id);
     if (inProgressDeployment) {
@@ -478,6 +477,8 @@ export class ModelResolver {
 
     // create view
     const project = await ctx.projectService.getCurrentProject();
+    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
 
     // get sql statement of a response
     const response = await ctx.askingService.getResponse(responseId);
@@ -497,6 +498,7 @@ export class ModelResolver {
       connectionInfo,
       limit: PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
+      mdl,
     });
 
     if (isEmpty(columns)) {
@@ -582,6 +584,7 @@ export class ModelResolver {
     if (!view) {
       throw new Error('View not found');
     }
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const project = await ctx.projectService.getCurrentProject();
     const { datasource, connectionInfo } =
       ctx.queryService.composeConnectionInfo(project);
@@ -590,6 +593,7 @@ export class ModelResolver {
       datasource,
       connectionInfo,
       limit: PREVIEW_MAX_OUTPUT_ROW,
+      mdl: manifest,
       modelingOnly: false,
     });
     return data;
@@ -602,6 +606,8 @@ export class ModelResolver {
   ) {
     const { sql, projectId, limit } = args.data;
     const project = await ctx.projectService.getProjectById(projectId);
+    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
     const { datasource, connectionInfo } =
       ctx.queryService.composeConnectionInfo(project);
     return await ctx.queryService.preview(sql, {
@@ -609,6 +615,7 @@ export class ModelResolver {
       connectionInfo,
       limit: limit || PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
+      mdl,
     });
   }
 

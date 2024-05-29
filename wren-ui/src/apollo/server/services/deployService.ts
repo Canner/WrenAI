@@ -30,7 +30,7 @@ export interface MDLSyncResponse {
 
 export interface IDeployService {
   deploy(manifest: Manifest, projectId: number): Promise<DeployResponse>;
-  getLastDeployment(projectId: number): Promise<string>;
+  getLastDeployment(projectId: number): Promise<Deploy>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest, projectId: number): string;
   getMDLByHash(hash: string): Promise<string>;
@@ -66,7 +66,7 @@ export class DeployService implements IDeployService {
     if (!lastDeploy) {
       return null;
     }
-    return lastDeploy.hash;
+    return lastDeploy;
   }
 
   public async getInProgressDeployment(projectId) {
