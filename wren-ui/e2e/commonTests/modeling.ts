@@ -1,4 +1,11 @@
-import { expect } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
+interface Relationship {
+  fromFieldModelDisplayName: string;
+  fromFieldColumnDisplayName: string;
+  toFieldModelDisplayName: string;
+  toFieldColumnDisplayName: string;
+  relationshipType: string;
+}
 
 export const checkDeploySynced = async ({ page }) => {
   await page.goto('/modeling');
@@ -17,4 +24,278 @@ export const checkDeployUndeployedChanges = async ({ page }) => {
   await expect(page.getByText('Undeployed changes')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Deploy' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Deploy' })).toBeEnabled();
+};
+
+export const executeModelCRUD = async (
+  page: Page,
+  {
+    modelDisplayName,
+    primaryKeyColumn,
+  }: {
+    modelDisplayName: string;
+    primaryKeyColumn: string;
+  },
+) => {
+  await page.goto('/modeling');
+  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+  // click the model of sidebar
+  await page
+    .getByRole('complementary')
+    .getByText(modelDisplayName, { exact: true })
+    .click();
+
+  // delete the model
+  await page
+    .locator('div')
+    .filter({ hasText: new RegExp(`^${modelDisplayName}$`) })
+    .getByRole('button')
+    .click();
+  await page.getByText('Delete', { exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog')
+      .locator('div')
+      .filter({ hasText: 'Are you sure you want to delete this model?' })
+      .nth(1),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Delete' }).click();
+
+  // check model deleted
+  await expect(page.getByText('Successfully deleted model.')).toBeVisible();
+  await expect(
+    page
+      .getByRole('complementary')
+      .getByText(modelDisplayName, { exact: true }),
+  ).toBeHidden();
+
+  // add the model back
+  await page
+    .locator('div')
+    .filter({ hasText: /^Models\(\d\)$/ })
+    .locator('path')
+    .first()
+    .click();
+
+  // chkeck Model drawer open
+  await expect(page.locator('.ant-drawer-mask')).toBeVisible();
+  await expect(
+    page
+      .locator('div')
+      .filter({ hasText: /^Create a data model$/ })
+      .first(),
+  ).toBeVisible();
+
+  // select resource table and some columns
+  await page.getByLabel('Select a table').click();
+  await page
+    .getByTitle(modelDisplayName, { exact: true })
+    .locator('div')
+    .click();
+
+  await page
+    .getByRole('row', { name: new RegExp(`^${primaryKeyColumn} .*`) })
+    .getByLabel('')
+    .check();
+
+  await page.getByRole('button', { name: 'right' }).click();
+
+  // set primary key
+  await page.getByLabel('Select primary key').click();
+  await page
+    .locator('form')
+    .getByTitle(primaryKeyColumn, { exact: true })
+    .locator('div')
+    .click();
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+
+  // check model added
+  await expect(page.getByText('Successfully created model.')).toBeVisible();
+  await expect(
+    page
+      .getByRole('complementary')
+      .getByText(modelDisplayName, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId(`diagram__model-node__${modelDisplayName}`),
+  ).toBeVisible();
+
+  // update columns
+  await page
+    .locator('div')
+    .filter({ hasText: new RegExp(`^${modelDisplayName}$`) })
+    .getByRole('button')
+    .click();
+  await page.getByText('Update Columns').click();
+
+  // select all columns
+  await page.getByLabel('', { exact: true }).first().check();
+  await page.getByRole('button', { name: 'right' }).click();
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+
+  await expect(page.getByText('Successfully updated model.')).toBeVisible();
+};
+
+export const addRelationship = async (
+  page: Page,
+  {
+    fromFieldModelDisplayName,
+    fromFieldColumnDisplayName,
+    toFieldModelDisplayName,
+    toFieldColumnDisplayName,
+    relationshipType,
+  }: Relationship,
+) => {
+  // add relationship
+  await page
+    .getByTestId(`diagram__model-node__${fromFieldModelDisplayName}`)
+    .locator('div')
+    .filter({ hasText: /^Relationships$/ })
+    .getByRole('button')
+    .first()
+    .click();
+
+  // check relationship modal open
+  await expect(
+    page
+      .locator('div')
+      .filter({
+        hasText: 'Add relationship',
+      })
+      .nth(2),
+  ).toBeVisible();
+  await expect(page.getByText('Add relationship')).toBeVisible();
+
+  // set from field
+  await page.getByTestId('common__fields-select').first().click();
+  await page
+    .getByTestId('common__fields__select-option')
+    .filter({ hasText: fromFieldColumnDisplayName })
+    .click();
+
+  // set to field
+  await page.getByTestId('common__models-select').last().click();
+  await page
+    .getByTestId('common__models__select-option')
+    .filter({ hasText: toFieldModelDisplayName })
+    .click();
+  await page.getByTestId('common__fields-select').last().click();
+  await page
+    .getByTestId('common__fields__select-option')
+    .filter({ hasText: toFieldColumnDisplayName })
+    .last()
+    .click();
+
+  // set relationship type
+  await page.getByTestId('relationship-form__type-select').click();
+  await page.getByTitle(relationshipType).locator('div').click();
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+
+  await expect(
+    page.getByText('Successfully created relationship.'),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByTestId(`diagram__model-node__${fromFieldModelDisplayName}`)
+      .getByTitle(toFieldModelDisplayName, { exact: true }),
+  ).toBeVisible();
+};
+
+export const executeRelationshipCRUD = async (
+  page: Page,
+  {
+    fromFieldModelDisplayName,
+    fromFieldColumnDisplayName,
+    toFieldModelDisplayName,
+    toFieldColumnDisplayName,
+    relationshipType,
+  }: Relationship,
+) => {
+  await page.goto('/modeling');
+  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+  await page
+    .getByRole('complementary')
+    .getByText(fromFieldModelDisplayName, { exact: true })
+    .click();
+
+  // delete relationship
+  await page
+    .getByTestId(`diagram__model-node__${fromFieldModelDisplayName}`)
+    .getByRole('button', { name: 'more' })
+    .nth(1)
+    .click();
+  await page.getByText('Delete', { exact: true }).click();
+
+  // check delete relationship modal open
+  await expect(
+    page
+      .getByRole('dialog')
+      .locator('div')
+      .filter({
+        hasText: 'Are you sure you want to delete this relationship?',
+      })
+      .nth(1),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Are you sure you want to delete this relationship?'),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete' }).click();
+
+  // check relationship deleted
+  await expect(
+    page.getByText('Successfully deleted relationship.'),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByTestId(`diagram__model-node__${fromFieldModelDisplayName}`)
+      .getByTitle(toFieldModelDisplayName, { exact: true }),
+  ).toBeHidden();
+
+  // add relationship
+  await addRelationship(page, {
+    fromFieldModelDisplayName,
+    fromFieldColumnDisplayName,
+    toFieldModelDisplayName,
+    toFieldColumnDisplayName,
+    relationshipType: 'One-to-one',
+  });
+
+  // update relationship
+  await page
+    .getByRole('complementary')
+    .getByText(fromFieldModelDisplayName, { exact: true })
+    .click();
+  await page
+    .getByTestId(`diagram__model-node__${fromFieldModelDisplayName}`)
+    .getByRole('button', { name: 'more' })
+    .nth(1)
+    .click();
+
+  await page.getByText('Edit').click();
+  await expect(
+    page
+      .locator('div')
+      .filter({
+        hasText: 'Update relationship',
+      })
+      .nth(2),
+  ).toBeVisible();
+  await expect(page.getByText('Update relationship')).toBeVisible();
+
+  await page.getByTestId('relationship-form__type-select').click();
+  await page.getByTitle(relationshipType).locator('div').click();
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+
+  // check relationship updated
+  await expect(
+    page.getByText('Successfully updated relationship.'),
+  ).toBeVisible();
 };
