@@ -72,8 +72,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const body = {
       sql: query,
       connectionInfo,
-      // manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
-      manifestStr: JSON.stringify(mdl),
+      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
     };
     logger.debug(`Querying ibis with body: ${JSON.stringify(body, null, 2)}`);
     try {
