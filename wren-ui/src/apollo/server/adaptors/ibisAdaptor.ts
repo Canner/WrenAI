@@ -3,8 +3,14 @@ import axios from 'axios';
 import { getLogger } from '@server/utils/logger';
 import { DataSourceName } from '../types';
 import { Manifest } from '../mdl/type';
+import * as Errors from '@server/utils/error';
+import { getConfig } from '@server/config';
+import { toDockerHost } from '../utils';
+
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
+
+const config = getConfig();
 
 export interface POSTGRESConnectionInfo {
   host: string;
@@ -59,12 +65,17 @@ export class IbisAdaptor implements IIbisAdaptor {
     connectionInfo: Record<string, any>,
     mdl: Manifest,
   ): Promise<IbisQueryResponse> {
+    if (config.otherServiceUsingDocker) {
+      connectionInfo.host = toDockerHost(connectionInfo.host);
+      logger.debug(`Rewritten host: ${connectionInfo.host}`);
+    }
     const body = {
       sql: query,
       connectionInfo,
+      // manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
       manifestStr: JSON.stringify(mdl),
     };
-    logger.debug(JSON.stringify(mdl));
+    logger.debug(`Querying ibis with body: ${JSON.stringify(body, null, 2)}`);
     try {
       const res = await axios.post(
         `${this.ibisServerBaseEndpoint}/v2/ibis/${this.dataSourceUrlMap[dataSource]}/query`,
@@ -73,14 +84,12 @@ export class IbisAdaptor implements IIbisAdaptor {
       const response = res.data;
       return response;
     } catch (e) {
-      logger.debug(`Got error when querying ibis: ${e}`);
-      if (e?.status == 422) {
-        logger.error(`Validation Error, ${(JSON.stringify(e), null, 2)}`);
-        logger.debug(
-          `Input connection info: ${JSON.stringify(connectionInfo, null, 2)}`,
-        );
-      }
-      throw e;
+      logger.debug(`Got error when querying ibis: ${e.response.data}`);
+
+      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
+        customMessage: e.response.data || 'Error querying ibis server',
+        originalError: e,
+      });
     }
   }
 }

@@ -12,7 +12,7 @@ import {
   PostgresColumnResponse,
   PostgresConnector,
 } from '../connectors/postgresConnector';
-import { Encryptor, getLogger } from '../utils';
+import { Encryptor, getLogger, toDockerHost } from '../utils';
 import {
   findColumnsToUpdate,
   updateModelPrimaryKey,
@@ -260,6 +260,11 @@ export class PostgresStrategy implements IDataSourceStrategy {
   }
 
   private async patchConfigToWrenEngine(properties: any) {
+    // rewrite to docker host if engine using docker
+    if (this.ctx.config.otherServiceUsingDocker) {
+      properties.host = toDockerHost(properties.host);
+      logger.debug(`Rewritten host: ${properties.host}`);
+    }
     const { host, port, database, user, password, ssl } = properties;
     const sslMode = ssl ? '?sslmode=require' : '';
     // update wren-engine config

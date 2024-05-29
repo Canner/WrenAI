@@ -1,6 +1,9 @@
 import { pickBy } from 'lodash';
 
 export interface IConfig {
+  // wren ui
+  otherServiceUsingDocker: boolean;
+
   // database
   dbType: string;
   // pg
@@ -43,6 +46,9 @@ export interface IConfig {
 }
 
 const defaultConfig = {
+  // wren ui
+  otherServiceUsingDocker: false,
+
   // database
   dbType: 'sqlite',
 
@@ -70,6 +76,9 @@ const defaultConfig = {
 };
 
 const config = {
+  // node
+  otherServiceUsingDocker: process.env.OTHER_SERVICE_USING_DOCKER === 'true',
+
   // database
   dbType: process.env.DB_TYPE,
   // pg
