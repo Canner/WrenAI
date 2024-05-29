@@ -20,25 +20,84 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the following user query and the history of the last query along with the generated SQL result,
-generate appropriate SQL queries that match the user's current request.
-Generate at most 3 SQL queries in order to interpret the user query in various plausible ways.
+Given the following user's follow-up question and previous SQL query and summary, 
+generate at most 3 SQL queries in order to interpret the user's question in various plausible ways.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document.content }}
 {% endfor %}
 
-Generated SQL Queries amd Summaries:
+### EXAMPLES ###
+
+Example 1
+[INPUT]
+Previous SQL Summary: A query to find the number of employees in each department.
+Previous SQL Query: SELECT department, COUNT(*) as employee_count FROM employees GROUP BY department;
+User's Question: How do I modify this to only show departments with more than 10 employees?
+
+[OUTPUT]
 {
     "results": [
         {
-            "sql": "SELECT users.* FROM users JOIN purchases ON users.id = purchases.user_id WHERE users.sign_up_date >= '2023-01-01';",
-            "summary": "Users joined in 2023 with purchases."
+            "sql": "SELECT department, COUNT() as employee_count FROM employees GROUP BY department HAVING COUNT() > 10",
+            "summary": "Modified to show only departments with more than 10 employees."
         },
         {
-            "sql": "SELECT DISTINCT users.* FROM users INNER JOIN purchases ON users.id = purchases.user_id WHERE users.sign_up_date >= '2023-01-01';",
-            "summary": "Unique users with purchases since 2023."
+            "sql": "SELECT department FROM employees GROUP BY department HAVING COUNT() > 10",
+            "summary": "Shows only the names of departments with more than 10 employees."
+        },
+        {
+            "sql": "SELECT department, COUNT() as employee_count FROM employees WHERE department IN (SELECT department FROM employees GROUP BY department HAVING COUNT(*) > 10)",
+            "summary": "Lists departments and their employee count, including only those with more than 10 employees."
+        }
+    ]
+}
+
+Example 2
+[INPUT]
+Previous SQL Summary: A query to retrieve the total sales per product.
+Previous SQL Query: SELECT product_id, SUM(sales) as total_sales FROM sales GROUP BY product_id;
+User's Question: Can you adjust this to include the product name as well?
+
+[OUTPUT]
+{
+    "results": [
+        {
+            "sql": "SELECT products.name, SUM(sales.sales) as total_sales FROM sales JOIN products ON sales.product_id = products.id GROUP BY products.name",
+            "summary": "Includes product name with total sales."
+        },
+        {
+            "sql": "SELECT p.name, s.total_sales FROM (SELECT product_id, SUM(sales) as total_sales FROM sales GROUP BY product_id) s JOIN products p ON s.product_id = p.id",
+            "summary": "Joins product table to include names in the total sales summary."
+        },
+        {
+            "sql": "SELECT p.name, IFNULL(SUM(s.sales), 0) as total_sales FROM products p LEFT JOIN sales s ON p.id = s.product_id GROUP BY p.name",
+            "summary": "Includes all products, even those with no sales, showing total sales with product names."
+        }
+    ]
+}
+
+Example 3
+[INPUT]
+Previous SQL Summary: Query to find the highest salary in each department.
+Previous SQL Query: SELECT department_id, MAX(salary) as highest_salary FROM employees GROUP BY department_id;
+User's Question: What if I want to see the employee names with the highest salary in each department?
+
+[OUTPUT]
+{
+    "results": [
+        {
+            "sql": "SELECT department_id, employee_name, salary FROM employees WHERE (department_id, salary) IN (SELECT department_id, MAX(salary) FROM employees GROUP BY department_id)",
+            "summary": "Shows the names of employees who earn the highest salary in their respective departments."
+        },
+        {
+            "sql": "SELECT e.department_id, e.employee_name, e.salary FROM employees e INNER JOIN (SELECT department_id, MAX(salary) as max_salary FROM employees GROUP BY department_id) d ON e.department_id = d.department_id AND e.salary = d.max_salary",
+            "summary": "Lists employees with the highest salary in each department."
+        },
+        {
+            "sql": "WITH MaxSalaries AS (SELECT department_id, MAX(salary) as max_salary FROM employees GROUP BY department_id) SELECT e.department_id, e.employee_name, e.salary FROM employees e JOIN MaxSalaries m ON e.department_id = m.department_id AND e.salary = m.max_salary",
+            "summary": "Utilizes a CTE to display each department's highest earners along with their names and salaries."
         }
     ]
 }
@@ -49,7 +108,8 @@ The final answer must be the JSON format like following:
 {
     "results": [
         {"sql": <SQL_QUERY_STRING_1>, "summary": <SUMMARY_STRING_1>},
-        {"sql": <SQL_QUERY_STRING2>, "summary": <SUMMARY_STRING_2>}
+        {"sql": <SQL_QUERY_STRING2>, "summary": <SUMMARY_STRING_2>},
+        {"sql": <SQL_QUERY_STRING3>, "summary": <SUMMARY_STRING_3>}
     ]
 }
 
@@ -57,8 +117,8 @@ The final answer must be the JSON format like following:
 
 ### QUESTION ###
 Previous SQL Summary: {{ history.summary }}
-Previous Generated SQL Query: {{ history.sql }}
-Current User Query: {{ query }}
+Previous SQL Query: {{ history.sql }}
+User's Follow-up Question: {{ query }}
 
 Let's think step by step.
 """
