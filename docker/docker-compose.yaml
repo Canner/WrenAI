@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 volumes:
   data:
@@ -40,7 +40,7 @@ services:
     platform: ${PLATFORM}
     expose:
       - ${WREN_AI_SERVICE_PORT}
-    ports: 
+    ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
       WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
@@ -73,7 +73,8 @@ services:
     restart: on-failure
     platform: ${PLATFORM}
     environment:
-      DB_TYPE: sqlite
+      DB_TYPE: pg
+      PG_URL: ${PG_URL}
       # /app is the working directory in the container
       SQLITE_FILE: /app/data/db.sqlite3
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
