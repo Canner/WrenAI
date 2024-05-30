@@ -5,7 +5,7 @@
 4. Deploy the inflated kustomized app.
 
 Note: Without authentication, once you publish this on the internet, anyone can access your app, see your data, and modify your settings!
-## Dependancies used in this kustomization:
+## Dependencies used in this kustomization:
 - nginx.ingress
 - external-dns
 - cert-manager
