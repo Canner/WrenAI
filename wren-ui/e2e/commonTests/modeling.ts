@@ -26,6 +26,21 @@ export const checkDeployUndeployedChanges = async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Deploy' })).toBeEnabled();
 };
 
+export const executeDeploy = async ({ page }) => {
+  await page.goto('/modeling');
+  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+  await page.getByRole('button', { name: 'Deploy' }).click();
+  await expect(
+    page.getByRole('img', { name: 'loading' }).locator('svg'),
+  ).toBeVisible();
+  await expect(page.getByText('Deploying...')).toBeVisible();
+  await expect(page.getByText('Deploying...')).toBeVisible({
+    visible: false,
+    timeout: 60000,
+  });
+};
+
 export const executeModelCRUD = async (
   page: Page,
   {
@@ -297,5 +312,120 @@ export const executeRelationshipCRUD = async (
   // check relationship updated
   await expect(
     page.getByText('Successfully updated relationship.'),
+  ).toBeVisible();
+};
+
+export const updateModelMetadata = async (
+  page: Page,
+  {
+    modelDisplayName,
+    modelDescription,
+    newModelDisplayName,
+    newModelDescription,
+  }: {
+    modelDisplayName: string;
+    modelDescription: string;
+    newModelDisplayName: string;
+    newModelDescription: string;
+  },
+) => {
+  await page.goto('/modeling');
+  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+  await page
+    .getByRole('complementary')
+    .getByText(modelDisplayName, { exact: true })
+    .click();
+
+  // click node to open metadata drawer
+  await page.getByTestId(`diagram__model-node__${modelDisplayName}`).click();
+
+  // check metadata drawer info
+  await expect(page.locator('.ant-drawer-mask')).toBeVisible();
+  await expect(page.getByLabel('Close', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator('div.ant-drawer-title')
+      .filter({ hasText: new RegExp(`^${modelDisplayName}$`) }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: 'Name' }).locator('div'),
+  ).toHaveText(modelDisplayName);
+  await expect(page.getByTestId('metadata__alias').locator('div')).toHaveText(
+    modelDisplayName,
+  );
+  await expect(
+    page.getByTestId('metadata__description').locator('div'),
+  ).toHaveText(modelDescription);
+
+  // click edit metadata button
+  await page.getByRole('button', { name: 'Edit' }).click();
+
+  // check edit metadata modal
+  await expect(page.locator('.ant-modal-mask')).toBeVisible();
+  await expect(page.locator('div.ant-modal')).toBeVisible();
+  await expect(
+    page.locator('div.ant-modal-title').filter({ hasText: 'Edit metadata' }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel('Edit metadata').getByLabel('Close', { exact: true }),
+  ).toBeVisible();
+
+  // update metadata process
+  // update alias
+  await page
+    .getByTestId('edit-metadata__alias')
+    .getByText(modelDisplayName, { exact: true })
+    .click();
+  await page.locator('#displayName').press('ControlOrMeta+a');
+  await page.locator('#displayName').fill(newModelDisplayName);
+
+  // update description
+  await page
+    .getByTestId('edit-metadata__description')
+    .getByText(modelDescription, { exact: true })
+    .click();
+  await page.locator('#description').press('ControlOrMeta+a');
+  await page.locator('#description').fill(newModelDescription);
+
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+  await page.getByRole('button', { name: 'Submit' }).click();
+
+  // check metadata for metadata drawer
+  await expect(
+    page.getByText('Successfully updated model metadata.'),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('div.ant-drawer-title')
+      .filter({ hasText: new RegExp(`^${newModelDisplayName}$`) }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: 'Name' }).locator('div').first(),
+  ).toHaveText(modelDisplayName);
+  await expect(
+    page.getByTestId('metadata__name').locator('div').first(),
+  ).toHaveText(modelDisplayName);
+  await expect(page.getByTestId('metadata__alias').locator('div')).toHaveText(
+    newModelDisplayName,
+  );
+  await expect(
+    page.getByTestId('metadata__description').locator('div'),
+  ).toHaveText(newModelDescription || '-');
+
+  // close metadata drawer
+  await page
+    .locator('div.ant-drawer')
+    .getByLabel('Close', { exact: true })
+    .click();
+
+  // check info for modeling page
+  await expect(
+    page.getByRole('complementary').getByText(newModelDisplayName),
+  ).toBeVisible();
+  await page.getByRole('complementary').getByText(newModelDisplayName).click();
+  await expect(
+    page.getByTestId(`diagram__model-node__${newModelDisplayName}`),
   ).toBeVisible();
 };

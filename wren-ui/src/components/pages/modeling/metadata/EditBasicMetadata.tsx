@@ -40,15 +40,15 @@ export default function EditBasicMetadata(props: Props) {
       {isModel && (
         <Row>
           <Col span={12}>
-            <div className="mb-6">
+            <div className="mb-6" data-testid="edit-metadata__name">
               <Typography.Text className="d-block gray-7 mb-2">
                 Name
               </Typography.Text>
               <div>{data.referenceName}</div>
             </div>
           </Col>
-          <Col span={12}>
-            <div className="mb-6">
+          <Col span={12} data-testid="edit-metadata__alias">
+            <div className="mb-6" data-testid="metadata__name">
               <Typography.Text className="d-block gray-7 mb-2">
                 Alias
               </Typography.Text>
@@ -65,7 +65,7 @@ export default function EditBasicMetadata(props: Props) {
       )}
 
       {isView && (
-        <div className="mb-6">
+        <div className="mb-6" data-testid="edit-metadata__name">
           <Typography.Text className="d-block gray-7 mb-2">
             Name
           </Typography.Text>
@@ -80,7 +80,7 @@ export default function EditBasicMetadata(props: Props) {
         </div>
       )}
 
-      <div className="mb-6">
+      <div className="mb-6" data-testid="edit-metadata__description">
         <Typography.Text className="d-block gray-7 mb-2">
           Description
         </Typography.Text>

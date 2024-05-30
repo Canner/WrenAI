@@ -24,7 +24,10 @@ test.describe('Test E-commerce sample dataset', () => {
     }
   });
 
-  test('Check should be in Synced status', modelingHelper.checkDeploySynced);
+  test(
+    'Check deploy status should be in Synced status',
+    modelingHelper.checkDeploySynced,
+  );
 
   test('Use suggestion question', async ({ page, baseURL }) => {
     // select first suggested question
@@ -66,7 +69,7 @@ test.describe('Test E-commerce sample dataset', () => {
   });
 
   test(
-    'Check deploy is Undeployed changes',
+    'Check deploy status should be in Undeployed changes status',
     modelingHelper.checkDeployUndeployedChanges,
   );
 
@@ -78,5 +81,19 @@ test.describe('Test E-commerce sample dataset', () => {
       toFieldColumnDisplayName: 'CustomerId',
       relationshipType: 'One-to-many',
     });
+  });
+
+  test('Update model metadata successfully', async ({ page }) => {
+    await modelingHelper.updateModelMetadata(page, {
+      modelDisplayName: 'orders',
+      modelDescription: 'A model representing the orders data.',
+      newModelDisplayName: 'Orders',
+      newModelDescription: '',
+    });
+  });
+
+  test('Trigger and check deploy MDL successfully', async ({ page }) => {
+    await modelingHelper.executeDeploy({ page });
+    await modelingHelper.checkDeploySynced({ page });
   });
 });

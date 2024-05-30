@@ -24,7 +24,10 @@ test.describe('Test NBA sample dataset', () => {
     }
   });
 
-  test('Check should be in Synced status', modelingHelper.checkDeploySynced);
+  test(
+    'Check deploy status should be in Synced status',
+    modelingHelper.checkDeploySynced,
+  );
 
   test('Use suggestion question', async ({ page, baseURL }) => {
     // select first suggested question
@@ -65,7 +68,7 @@ test.describe('Test NBA sample dataset', () => {
   });
 
   test(
-    'Check deploy is Undeployed changes',
+    'Check deploy status should be in Undeployed changes status',
     modelingHelper.checkDeployUndeployedChanges,
   );
 
@@ -77,5 +80,21 @@ test.describe('Test NBA sample dataset', () => {
       toFieldColumnDisplayName: 'Id',
       relationshipType: 'One-to-one',
     });
+  });
+
+  test('Update model metadata successfully', async ({ page }) => {
+    await modelingHelper.updateModelMetadata(page, {
+      modelDisplayName: 'team',
+      modelDescription:
+        'This table describes NBA teams by their ID, team name, team abbreviation, and founding date.',
+      newModelDisplayName: 'Team',
+      newModelDescription:
+        'The team data table describes NBA teams by their ID, team name, team abbreviation, and founding date.',
+    });
+  });
+
+  test('Trigger and check deploy MDL successfully', async ({ page }) => {
+    await modelingHelper.executeDeploy({ page });
+    await modelingHelper.checkDeploySynced({ page });
   });
 });
