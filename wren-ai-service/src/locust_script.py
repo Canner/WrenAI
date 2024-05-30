@@ -12,7 +12,7 @@ if not Path("./outputs").exists():
     Path("./outputs").mkdir()
 
 os.system(
-    f"poetry run locust -f tests/locustfile.py --config tests/locust.conf --html outputs/{filename}.html --json > outputs/{filename}.json"
+    f"poetry run locust -f tests/locustfile.py --config tests/locust.conf --logfile outputs/{filename}.log --html outputs/{filename}.html --json > outputs/{filename}.json"
 )
 
 with open(f"./outputs/{filename}.json", "r") as f:
