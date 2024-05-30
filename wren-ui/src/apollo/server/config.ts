@@ -22,7 +22,7 @@ export interface IConfig {
   openaiGenerationModel?: string;
 
   // ibis server
-  ibisServerBaseEndpoint: string;
+  ibisServerEndpoint: string;
 
   // encryption
   encryptionPassword: string;
@@ -68,7 +68,7 @@ const defaultConfig = {
   wrenAIEndpoint: 'http://localhost:5555',
 
   // ibis server
-  ibisServerBaseEndpoint: 'http://localhost:8000',
+  ibisServerEndpoint: 'http://localhost:8000',
 
   // encryption
   encryptionPassword: 'sementic',
@@ -105,7 +105,7 @@ const config = {
   openaiGenerationModel: process.env.OPENAI_GENERATION_MODEL,
 
   // ibis server
-  ibisServerBaseEndpoint: process.env.IBIS_SERVER_BASE_ENDPOINT,
+  ibisServerEndpoint: process.env.IBIS_SERVER_ENDPOINT,
 
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,
