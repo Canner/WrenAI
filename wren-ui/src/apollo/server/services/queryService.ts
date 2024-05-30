@@ -39,8 +39,8 @@ export interface PreviewOptions {
 export interface SqlValidateOptions {
   datasource: DataSourceName;
   connectionInfo: POSTGRESConnectionInfo | BIGQUERYConnectionInfo;
+  mdl: Manifest;
   modelingOnly?: boolean;
-  mdl?: Manifest;
 }
 
 export interface ComposeConnectionInfoResult {
@@ -167,17 +167,13 @@ export class QueryService implements IQueryService {
   }
 
   async sqlValidate(sql, options): Promise<any> {
-    const { datasource, connectionInfo } = options;
+    const { mdl, limit, datasource, connectionInfo } = options;
     if (this.useEngine(datasource)) {
-      return await this.wrenEngineAdaptor.previewData(
-        sql,
-        options.limit,
-        options.mdl,
-      );
+      return await this.wrenEngineAdaptor.previewData(sql, limit, mdl);
     } else {
       const nativeSql = await this.wrenEngineAdaptor.getNativeSQL(sql, {
         modelingOnly: options.modelingOnly,
-        manifest: options.mdl,
+        manifest: mdl,
       });
 
       // throw error if datasource not in supported list
@@ -187,6 +183,7 @@ export class QueryService implements IQueryService {
         nativeSql,
         datasource as any,
         connectionInfo,
+        mdl,
       );
     }
   }
