@@ -3,6 +3,7 @@ import sys
 from typing import List
 
 import orjson
+from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -89,8 +90,9 @@ class QueryUnderstanding(BasicPipeline):
     ):
         global generator
         generator = llm_provider.get_generator()
-
-        super().__init__(AsyncDriver({}, sys.modules[__name__]))
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
 
     @timer
     async def run(
@@ -98,7 +100,7 @@ class QueryUnderstanding(BasicPipeline):
         query: str,
     ):
         logger.info("Ask QueryUnderstanding pipeline is running...")
-        return await self._pipe.execute(["generate"], inputs={"query": query})
+        return await self._pipe.execute(["post_process"], inputs={"query": query})
 
 
 if __name__ == "__main__":

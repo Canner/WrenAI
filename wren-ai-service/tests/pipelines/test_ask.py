@@ -3,6 +3,7 @@ import json
 import orjson
 import pytest
 
+from src.core.pipeline import async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
@@ -95,14 +96,12 @@ def test_indexing_pipeline(
 
 def test_query_understanding_pipeline():
     llm_provider, _ = init_providers()
-    query_understanding_pipeline = QueryUnderstanding(
-        llm_provider=llm_provider,
-    )
+    pipeline = QueryUnderstanding(llm_provider=llm_provider)
 
-    assert query_understanding_pipeline.run("How many books are there?")[
-        "post_processor"
+    assert async_validate(lambda: pipeline.run("How many books are there?"))[
+        "post_process"
     ]["is_valid_query"]
-    assert not query_understanding_pipeline.run("fds dsio me")["post_processor"][
+    assert not async_validate(lambda: pipeline.run("fds dsio me"))["post_process"][
         "is_valid_query"
     ]
 

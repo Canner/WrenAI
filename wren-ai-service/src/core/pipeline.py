@@ -44,6 +44,6 @@ class BasicPipeline(metaclass=ABCMeta):
 
 
 def async_validate(task: callable):
-    loop = asyncio.get_event_loop()
-    result = loop.run_until_complete(asyncio.gather(task()))
+    result = asyncio.run(task())
     print(result)
+    return result
