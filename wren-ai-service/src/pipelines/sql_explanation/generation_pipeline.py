@@ -78,33 +78,25 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
 
 def _compose_sql_expression_of_select_type(select_items: List[Dict]) -> Dict:
     result = {
-        "withFunctionCall": [],
-        "withoutFunctionCall": {
-            "withMathematicalOperation": [],
-            "withoutMathematicalOperation": [],
-        },
+        "withFunctionCallOrMathematicalOperation": [],
+        "withoutFunctionCallOrMathematicalOperation": [],
     }
 
     for select_item in select_items:
-        if select_item["properties"]["includeFunctionCall"] == "true":
-            result["withFunctionCall"].append(
+        if (
+            select_item["properties"]["includeFunctionCall"] == "true"
+            or select_item["properties"]["includeMathematicalOperation"] == "true"
+        ):
+            result["withFunctionCallOrMathematicalOperation"].append(
                 {"alias": select_item["alias"], "expression": select_item["expression"]}
             )
         else:
-            if select_item["properties"]["includeMathematicalOperation"] == "true":
-                result["withoutFunctionCall"]["withMathematicalOperation"].append(
-                    {
-                        "alias": select_item["alias"],
-                        "expression": select_item["expression"],
-                    }
-                )
-            else:
-                result["withoutFunctionCall"]["withoutMathematicalOperation"].append(
-                    {
-                        "alias": select_item["alias"],
-                        "expression": select_item["expression"],
-                    }
-                )
+            result["withoutFunctionCallOrMathematicalOperation"].append(
+                {
+                    "alias": select_item["alias"],
+                    "expression": select_item["expression"],
+                }
+            )
 
     return result
 
@@ -173,41 +165,33 @@ class GenerationPostProcessor:
         sql_explanation_results = orjson.loads(replies[0])
 
         if "selectItems" in sql_explanation_results:
-            results += (
-                [
-                    {
-                        "type": "selectItems",
-                        "payload": {**select_item, **{"includeFunctionCall": True}},
-                    }
-                    for select_item in (
-                        sql_explanation_results["selectItems"].get(
-                            "withFunctionCall", {}
-                        )
+            results += [
+                {
+                    "type": "selectItems",
+                    "payload": {
+                        **select_item,
+                        **{"includeFunctionCallOrMathematicalOperation": True},
+                    },
+                }
+                for select_item in (
+                    sql_explanation_results["selectItems"].get(
+                        "withFunctionCallOrMathematicalOperation", []
                     )
-                ]
-                + [
-                    {
-                        "type": "selectItems",
-                        "payload": {**select_item, **{"includeFunctionCall": False}},
-                    }
-                    for select_item in (
-                        sql_explanation_results["selectItems"]
-                        .get("withoutFunctionCall", {})
-                        .get("withMathematicalOperation", [])
+                )
+            ] + [
+                {
+                    "type": "selectItems",
+                    "payload": {
+                        **select_item,
+                        **{"includeFunctionCallOrMathematicalOperation": False},
+                    },
+                }
+                for select_item in (
+                    sql_explanation_results["selectItems"].get(
+                        "withoutFunctionCallOrMathematicalOperation", []
                     )
-                ]
-                + [
-                    {
-                        "type": "selectItems",
-                        "payload": {**select_item, **{"includeFunctionCall": False}},
-                    }
-                    for select_item in (
-                        sql_explanation_results["selectItems"]
-                        .get("withoutFunctionCall", {})
-                        .get("withoutMathematicalOperation", [])
-                    )
-                ]
-            )
+                )
+            ]
         if "relation" in sql_explanation_results:
             results += [
                 {"type": "relation", "payload": relation}
