@@ -11,7 +11,7 @@ export default defineConfig({
   forbidOnly: false,
 
   // Retry on CI only.
-  retries: 2,
+  retries: 0,
 
   // Opt out of parallel tests on CI.
   workers: 1,
