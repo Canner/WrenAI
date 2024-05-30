@@ -175,15 +175,21 @@ class GenerationPostProcessor:
         if "selectItems" in sql_explanation_results:
             results += (
                 [
-                    {"type": "selectItems", "payload": select_item}
+                    {
+                        "type": "selectItems",
+                        "payload": {**select_item, **{"includeFunctionCall": True}},
+                    }
                     for select_item in (
                         sql_explanation_results["selectItems"].get(
-                            "withFunctionCall", []
+                            "withFunctionCall", {}
                         )
                     )
                 ]
                 + [
-                    {"type": "selectItems", "payload": select_item}
+                    {
+                        "type": "selectItems",
+                        "payload": {**select_item, **{"includeFunctionCall": False}},
+                    }
                     for select_item in (
                         sql_explanation_results["selectItems"]
                         .get("withoutFunctionCall", {})
@@ -191,7 +197,10 @@ class GenerationPostProcessor:
                     )
                 ]
                 + [
-                    {"type": "selectItems", "payload": select_item}
+                    {
+                        "type": "selectItems",
+                        "payload": {**select_item, **{"includeFunctionCall": False}},
+                    }
                     for select_item in (
                         sql_explanation_results["selectItems"]
                         .get("withoutFunctionCall", {})
