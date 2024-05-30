@@ -1,11 +1,11 @@
-# Deployment of WrenAI to k8s with kustomization
-1. Make sure you sutisfy the dependancies we are using to deploy WrenAI.
-2. Adjust the values and manifests accordingly to your k8s environment.
-3. Deploy Secrets separetly.
-4. Then deploy the inflated kustomized app.
+# Deployment of WrenAI to Kubernetes with Kustomization
+1. Ensure you satisfy the dependencies required to deploy WrenAI.
+2. Adjust the values and manifests accordingly to fit your Kubernetes environment.
+3. Deploy Secrets separately.
+4. Deploy the inflated kustomized app.
+Note: Without authentication, once you publish this on the internet, anyone can access your app, see your data, and modify your settings!
 
-Note: without authentication, once you publish this in the internet enyone can acess your app, see your data and modify your settings!
-## Dependancies used in this kustomization:
+## Dependencies used in this kustomization:
 - nginx.ingress
 - external-dns
 - cert-manager
@@ -14,8 +14,10 @@ Note: without authentication, once you publish this in the internet enyone can a
 
 ## Steps to deploy:
 
-- Before you deploy check out manifests in the `deployment/kustomizations` folder and modify them you your k8s environment.
-The `deployment/kustomizations` folder contains a kustomization.yaml file that will inflate the manifests in to a `deployment/kustomizations/wrenai.kustimized.yaml` file used to deploy the app to your k8s.
+```suggestion
+Before deploying, check out the manifests in the `deployment/kustomizations ` folder and modify them for your Kubernetes environment.
+The `deployment/kustomizations` folder contains a `kustomization.yaml` file that will inflate the manifests into a `deployment/kustomizations/wrenai.kustomized.yaml` file used to deploy the app to your Kubernetes cluster.
+```
 ```shell
 # Clone the repository with the kustomization
 git clone https://github.com/Canner/WrenAI.git

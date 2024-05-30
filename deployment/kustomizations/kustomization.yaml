@@ -15,14 +15,15 @@ kind: Kustomization
 namespace: wren
 helmCharts:
 
-  - name: postgresql
-    repo: https://charts.bitnami.com/bitnami
-    version: 14.3.3
-    releaseName: wren-postgresql
-    valuesFile: helm-values_postgresql_14.yaml
-    includeCRDs: true
-    # the Same Namespace
-    namespace: wren
+### Uncomment if you are planing to use postgresql
+#  - name: postgresql
+#    repo: https://charts.bitnami.com/bitnami
+#    version: 14.3.3
+#    releaseName: wren-postgresql
+#    valuesFile: helm-values_postgresql_14.yaml
+#    includeCRDs: true
+#    # the Same Namespace
+#    namespace: wren
 
   - name: qdrant
     repo: https://qdrant.github.io/qdrant-helm
@@ -38,11 +39,11 @@ images:
   - name: ghcr.io/canner/wren-bootstrap
     newTag: 0.1.4 # Update to new version
   - name: ghcr.io/canner/wren-engine
-    newTag: 0.4.4 # Update to new version
+    newTag: 0.4.5 # Update to new version
   - name: ghcr.io/canner/wren-ui
-    newTag: 0.5.6 # Update to new version
+    newTag: 0.5.7 # Update to new version
   - name: ghcr.io/canner/wren-ai-service
-    newTag: 0.3.7 # Update to new version
+    newTag: 0.4.0 # Update to new version
 
 resources:
   - base/cm.yaml

@@ -21,11 +21,6 @@ spec:
               configMapKeyRef:
                 name: wren-config
                 key: WREN_AI_SERVICE_PORT
-          - name: OPENAI_BASE_URL
-            valueFrom: 
-              secretKeyRef:
-                name: wrenai-secrets
-                key: OPENAI_BASE_URL
           - name: OPENAI_API_KEY
             valueFrom: 
               secretKeyRef:
@@ -41,36 +36,6 @@ spec:
               secretKeyRef:
                 name: wrenai-secrets
                 key: QDRANT_HOST
-          # QDRANT_PORT is not implemented yet
-          - name: QDRANT_PORT
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: QDRANT_PORT
-          # QDRANT_COLLECTION_NAME is not implemented yet
-          - name: QDRANT_COLLECTION_NAME
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: QDRANT_COLLECTION_NAME
-          # QDRANT_DIMENTIONS is not implemented yet
-          - name: QDRANT_DIMENTIONS
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: QDRANT_DIMENTIONS
-          # QDRANT_HTTP_MODE is not implemented yet
-          - name: QDRANT_HTTP_MODE
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: QDRANT_HTTP_MODE
-          # QDRANT_API_KEY is not implemented yet
-          - name: QDRANT_API_KEY
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: QDRANT_API_KEY
           - name: WREN_ENGINE_ENDPOINT
             valueFrom:
               configMapKeyRef:

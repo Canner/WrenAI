@@ -25,13 +25,6 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: DATA_PATH
-            # PG_HOST is not implemented yet
-            # Do we actually need any PG_* variable for the bootstrap/init?
-            - name: PG_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: wrenai-secrets
-                  key: PG_HOST
             - name: PG_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -42,18 +35,6 @@ spec:
                 secretKeyRef:
                   name: wrenai-secrets
                   key: PG_USERNAME
-            # PG_PORT is not implemented yet
-            - name: PG_PORT
-              valueFrom:
-                secretKeyRef:
-                  name: wrenai-secrets
-                  key: PG_PORT
-            # PG_DATABASENAME is not implemented yet
-            - name: PG_DATABASENAME
-              valueFrom:
-                secretKeyRef:
-                  name: wrenai-secrets
-                  key: PG_DATABASENAME
           volumeMounts:
             - name: wren-data
               mountPath: /app/data

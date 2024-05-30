@@ -51,16 +51,3 @@ spec:
       port: 5555
       targetPort: 5555
       name: wren-ai-service
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: wren-pgbouncer-service
-spec:
-  selector:
-    app: wren-app
-  ports:
-    - protocol: TCP
-      port: 5432
-      targetPort: 5432
-      name: wren-pgbouncer-service
