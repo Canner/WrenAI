@@ -10,6 +10,7 @@ from locust import FastHttpUser, events, task
 deployment_id = str(uuid.uuid4())
 mdl_str = ""
 finished_query = []
+successful_query = []
 
 with open("tests/data/book_2_mdl.json", "r") as f:
     mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
@@ -38,7 +39,9 @@ def on_test_start(environment, **kwargs):
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    logging.info(f"Total finished query: {len(finished_query)}")
+    logging.info(f"Total finished queries: {len(finished_query)}")
+    logging.info(f"Total successful queries: {len(successful_query)}")
+    ##logging.info(f"successful queries: {successful_query}")
 
 
 class SemanticsDescriptionsUser(FastHttpUser):
@@ -111,8 +114,8 @@ class IndexingUser(FastHttpUser):
                     assert status in ["indexing", "finished"]
                     response.success()
                     time.sleep(1.0)
-                except AssertionError as e:
-                    response.failure(str(e))
+                except AssertionError:
+                    response.failure(response.content.decode("utf-8"))
 
 
 class AskUser(FastHttpUser):
@@ -152,6 +155,7 @@ class AskUser(FastHttpUser):
                     ]
                     if status == "finished":
                         finished_query.append(query_id)
+                        successful_query.append(response.content.decode("utf-8"))
                     response.success()
                     time.sleep(1.0)
                 except AssertionError:
