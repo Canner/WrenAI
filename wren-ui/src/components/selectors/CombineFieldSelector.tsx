@@ -70,6 +70,7 @@ export default function CombineFieldSelector(props: Props) {
         disabled={modelDisabled}
         showSearch
         optionFilterProp="label"
+        data-testid="common__models-select"
       />
       <Select
         className="flex-grow-1"
@@ -80,6 +81,7 @@ export default function CombineFieldSelector(props: Props) {
         disabled={fieldDisabled}
         showSearch
         optionFilterProp="label"
+        data-testid="common__fields-select"
       />
     </Input.Group>
   );

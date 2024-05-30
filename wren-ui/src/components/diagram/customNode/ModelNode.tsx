@@ -61,7 +61,10 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
   );
 
   return (
-    <StyledNode onClick={onNodeClick}>
+    <StyledNode
+      onClick={onNodeClick}
+      data-testid={`diagram__model-node__${data.originalData.displayName}`}
+    >
       <NodeHeader className="dragHandle">
         <span className="adm-model-header">
           <ModelIcon />

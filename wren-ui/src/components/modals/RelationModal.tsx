@@ -163,6 +163,7 @@ export default function RelationModal(props: Props) {
           ]}
         >
           <Select
+            data-testid="relationship-form__type-select"
             options={relationTypeOptions}
             placeholder="Select a relationship type"
           />
