@@ -47,6 +47,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
         - in the demo folder, run `make prepare` to start the docker containers
         - in the demo folder, run `make ai` to start the ai service
       - Setup option 2: normal env setup
+        - setup `DATASET_NAME` in `.env.dev`
         - in wren-ai-service folder, run `make run-all` to start the docker containers
         - in wren-ai-service folder, run `make start` to start the ai service
   - run `make load-test`
