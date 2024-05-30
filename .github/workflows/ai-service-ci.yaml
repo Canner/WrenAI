@@ -29,8 +29,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Install poetry
-        run: pipx install poetry==1.7.1
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v3
+        with:
+          poetry-version: '1.7.1'
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
