@@ -1,10 +1,10 @@
-# Deployment of WrenAI to k8s with kustomization
-1. Make sure you sutisfy the dependancies we are using to deploy WrenAI.
-2. Adjust the values and manifests accordingly to your k8s environment.
-3. Deploy Secrets separetly.
-4. Then deploy the inflated kustomized app.
+# Deployment of WrenAI to Kubernetes with Kustomization
+1. Ensure you satisfy the dependencies required to deploy WrenAI.
+2. Adjust the values and manifests accordingly to fit your Kubernetes environment.
+3. Deploy Secrets separately.
+4. Deploy the inflated kustomized app.
 
-Note: without authentication, once you publish this in the internet enyone can acess your app, see your data and modify your settings!
+Note: Without authentication, once you publish this on the internet, anyone can access your app, see your data, and modify your settings!
 ## Dependancies used in this kustomization:
 - nginx.ingress
 - external-dns
