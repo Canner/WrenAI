@@ -469,9 +469,16 @@ export const typeDefs = gql`
     STOPPED
   }
 
+  enum ResultCandidateType {
+    VIEW # View type candidate is provided basd on a saved view
+    LLM # LLM type candidate is created by LLM
+  }
+
   type ResultCandidate {
+    type: ResultCandidateType!
     sql: String!
     summary: String!
+    view: ViewInfo
   }
 
   type AskingTask {
@@ -482,15 +489,17 @@ export const typeDefs = gql`
 
   # Thread
   input CreateThreadInput {
-    question: String!
-    sql: String!
-    summary: String!
+    question: String
+    sql: String
+    summary: String
+    viewId: Int
   }
 
   input CreateThreadResponseInput {
-    question: String!
-    sql: String!
-    summary: String!
+    question: String
+    sql: String
+    summary: String
+    viewId: Int
   }
 
   input ThreadUniqueWhereInput {
@@ -514,6 +523,7 @@ export const typeDefs = gql`
   }
 
   type ThreadResponseDetail {
+    view: ViewInfo
     sql: String
     description: String
     steps: [DetailStep!]!

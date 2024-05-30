@@ -1,4 +1,6 @@
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/router';
+import { useSearchParams } from 'next/navigation';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import styled from 'styled-components';
@@ -55,6 +57,8 @@ const DiagramWrapper = styled.div`
 `;
 
 export default function Modeling() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const diagramRef = useRef(null);
 
   const { data } = useDiagramQuery({
@@ -198,6 +202,25 @@ export default function Modeling() {
   const editMetadataModal = useModalAction();
   const calculatedFieldModal = useModalAction();
   const relationshipModal = useRelationshipModal(diagramData);
+
+  const queryParams = {
+    viewId: searchParams.get('viewId'),
+    openMetadata: searchParams.get('openMetadata'),
+  };
+
+  // doing actions if the route has specific query params
+  useEffect(() => {
+    if (!diagramData) return;
+    // open view metadata drawer
+    if (queryParams.viewId && queryParams.openMetadata) {
+      const searchedView = diagramData.views.find(
+        (view) => view.viewId === Number(queryParams.viewId),
+      );
+      !!searchedView && metadataDrawer.openDrawer(searchedView);
+      // clear query params after opening the drawer
+      router.replace(router.pathname);
+    }
+  }, [queryParams, diagramData]);
 
   useEffect(() => {
     if (metadataDrawer.state.visible) {

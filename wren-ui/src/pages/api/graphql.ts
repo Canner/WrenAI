@@ -96,6 +96,7 @@ const bootstrapServer = async () => {
     wrenEngineAdaptor,
     deployService,
     projectService,
+    viewRepository,
     threadRepository,
     threadResponseRepository,
   });

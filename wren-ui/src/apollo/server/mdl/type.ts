@@ -60,6 +60,9 @@ export interface ViewMDL {
   properties?: {
     displayName?: string;
     description?: string;
+    viewId?: string;
+    question?: string;
+    summary?: string;
   };
 }
 

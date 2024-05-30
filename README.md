@@ -48,11 +48,11 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ### 1. Indexing With Semantics
 
-> WrenAI has implemented a semantic engine architecture to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
+> WrenAI has implemented a [semantic engine architecture](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
 ### 2. Augment LLM Prompts
 
-> With WrenAI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with “Modeling Definition Language” (MDL), reducing duplicate coding and simplifying data joins.
+> With WrenAI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language” (MDL)](https://docs.getwren.ai/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
 
 ### 3. Generate Insights
 
@@ -68,13 +68,13 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ![](./misc/preview_ask.png)
 
-### Modeling with semantics, such as relationships, metrics and calculations
+### Modeling with semantics, such as relationships, metrics, and calculations
 
 ![](./misc/preview_model.png)
 
 ## 🤔 Why WrenAI?
 
-We focus on providing an open, secure and reliable text-to-SQL solution for everyone.
+We focus on providing an open, secure, and reliable text-to-SQL solution for everyone.
 
 ### 1. Turnkey Solution
 
@@ -90,7 +90,7 @@ We focus on providing an open, secure and reliable text-to-SQL solution for ever
 
 ## 🤖 WrenAI's Architecture
 
-WrenAI is consist of three core services:
+WrenAI consists of three core services:
 
 - ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within WrenAI's framework.
 
@@ -106,8 +106,8 @@ WrenAI is consist of three core services:
 - [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
 - [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa)
 - [How do you use LangChain to build a Text-to-SQL solution? What are the challenges? How to solve it?](https://blog.getwren.ai/how-do-you-use-langchain-to-build-a-text-to-sql-solution-what-are-the-challenges-how-to-solve-it-b6d9c66aa038)
-- [What we learned from Pinterest’s Text-to-SQL solution?](https://blog.getwren.ai/what-we-learned-from-pinterests-text-to-sql-solution-840fa5840635)
-- [What we learned from Snowflake Copilot building the most powerful SQL LLM in the world](https://blog.getwren.ai/what-we-learned-from-snowflake-copilot-building-the-most-powerful-sql-llm-in-the-world-52f82d661bc1)
+- [Deep dive into how Pinterest built its Text-to-SQL solution.](https://blog.getwren.ai/what-we-learned-from-pinterests-text-to-sql-solution-840fa5840635)
+- [How Snowflake building the most powerful SQL LLM in the world](https://blog.getwren.ai/what-we-learned-from-snowflake-copilot-building-the-most-powerful-sql-llm-in-the-world-52f82d661bc1)
 
 ## 🚧 Project Status
 
