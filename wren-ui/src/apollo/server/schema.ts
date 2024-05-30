@@ -614,6 +614,13 @@ export const typeDefs = gql`
     dryRun: Boolean
   }
 
+  # Schema Change
+  type SchemaChange {
+    deletedTables: JSON
+    deletedColumns: JSON
+    modifiedColumns: JSON
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -626,6 +633,7 @@ export const typeDefs = gql`
     model(where: ModelWhereInput!): DetailedModel!
     modelSync: ModelSyncResponse!
     diagram: Diagram!
+    schemaChange: SchemaChange!
 
     # View
     listViews: [ViewInfo!]!

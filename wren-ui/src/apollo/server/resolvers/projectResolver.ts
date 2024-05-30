@@ -54,6 +54,7 @@ export class ProjectResolver {
     this.startSampleDataset = this.startSampleDataset.bind(this);
     this.triggerDataSourceDetection =
       this.triggerDataSourceDetection.bind(this);
+    this.getSchemaChange = this.getSchemaChange.bind(this);
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
@@ -428,6 +429,25 @@ export class ProjectResolver {
     // async deploy
     this.deploy(ctx);
     return savedRelations;
+  }
+
+  public async getSchemaChange(_root: any, _arg: any, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    const lastSchemaChange =
+      await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
+
+    if (lastSchemaChange) {
+      const changes = JSON.parse(lastSchemaChange.change) || {};
+      const resolves = JSON.parse(lastSchemaChange.resolve) || {};
+      const unresolvedChanges = Object.keys(resolves).reduce(
+        (result, key) =>
+          resolves[key] === false ? { ...result, [key]: changes[key] } : result,
+        {},
+      );
+      return unresolvedChanges;
+    }
+
+    return {};
   }
 
   public async triggerDataSourceDetection(

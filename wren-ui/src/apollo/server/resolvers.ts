@@ -21,6 +21,7 @@ const resolvers = {
     onboardingStatus: projectResolver.getOnboardingStatus,
     modelSync: modelResolver.checkModelSync,
     diagram: diagramResolver.getDiagram,
+    schemaChange: projectResolver.getSchemaChange,
 
     // Ask
     askingTask: askingResolver.getAskingTask,
