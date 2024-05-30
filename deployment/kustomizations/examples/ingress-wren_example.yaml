@@ -13,8 +13,7 @@ metadata:
     external-dns.alpha.kubernetes.io/target: ingress1.myhost.net
     #external-dns.alpha.kubernetes.io/target: ingress2.myhost.net
     
-    ### Dependancy: nginx.ingress:
-    kubernetes.io/ingress.class: nginx
+    ### Dependancy nginx-ingress-controller
     nginx.ingress.kubernetes.io/disable-lua: 'true'
     nginx.ingress.kubernetes.io/enable-lua: 'false'
     nginx.ingress.kubernetes.io/enable-vts-status: 'false'
@@ -27,6 +26,8 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: '360'
 
 spec:
+  #instead you may use other ingressClassName such as AWS alb. If other than nginx ingress is used, don't forget to comment unsupported annotations above
+  #"nginx" or "alb"
   ingressClassName: nginx
   rules:
     - host: wren-ui.myhost.net

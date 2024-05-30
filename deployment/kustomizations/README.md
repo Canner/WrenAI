@@ -32,6 +32,7 @@ kubectl create namespace wren
 # !!!!!!!!!!!!
 # MODIFY secret-wren_example.yaml manifest file FIRST
 # OPENAI_API_KEY is REQUIRED: without a valid key the wren-ai-service-deployment pod will not start
+# You must update PG_URL, otherwise wren-ui will not work
 #vi deployment/kustomizations/examples/secret-wren_example.yaml
 kubectl apply -f deployment/kustomizations/examples/secret-wren_example.yaml
 
@@ -51,6 +52,17 @@ kubectl get pods -n wren
 - `deployment/kustomizations/examples/certificate-qdrant_example.yaml` is an example of how to deploy certificates for your ingress for Qdrant. This is included just in case and is not required, usually you would not be publishing your Vector Database publically in internet. That's why it's commented in the `kustomization.yaml` file. You can use this as a template for your own certificate. It contains dependancy of cert-manager to add your certificates automatically, otherwise you'll need to add it manually.
 - `deployment/kustomizations/patches` folder is empty, feel free to add your own patches & overlays there.
 
+#### Wren-UI Database
+Starting with wren-ui version 0.6.0 by default the postgres database is used for wren-ui in this kuberenetes kustomization and will be installed in the same namespace as wren-ai. If you are using older version, you may use only `sqlite`.
+- `sqllite`: If you are planing to use sqllite as your database instead of postgres, you will need to uncomment `wren-sqllite` in the volumeMounts & PVC sections of the `deployment/kustomizations/base/deploy-wren-ui.yaml` manifest. And adjust the ConfigMap file `deployment/kustomizations/base/cm.yaml` to match your database: `DB_TYPE = "sqlite"`, the `PG_URL` variable should be commented in the Secret (deployment/kustomizations/examples/secret-wren_example.yaml) manifest. Also comment out postgres helm chart section in the `deployment/kustomizations/kustomization.yaml` file and comment out the `PG_URL` in the Secret manifest (deployment/kustomizations/examples/secret-wren_example.yaml).
+- `postgres` (default): Database that will be installed in the same namespace as wren-ai. You *must* update `PG_URL` in the Secret manifest (deployment/kustomizations/examples/secret-wren_example.yaml).
+
+Example: `PG_URL: "postgres://postgres:postgres@wren-postgresql:5432/admin_ui"`
+- `postgres://`        This is the protocol. It tells the system that you’re connecting to a PostgreSQL database.
+- `postgres:postgres`  These are the username(first) and password(second) for the database respectively, separated by a colon. In this case, both the username and password are “postgres”.
+- `@wren-postgresql`   This is the hostname of the database server. "wren-postgresql" means the database server is running in a Kubernetes cluster and it is named "wren-postgresql" in the *same* namespace. If you are using another namespace you must provide the full hostname, example: `wren-postgresql.wrenai.svc.cluster.local`, "wrenai" is the namespace name, "svc.cluster.local" is the default domain name for Kubernetes services no need to change it.
+- `:5432`              This is the port number. PostgreSQL servers listen on port 5432 by default.
+- `/admin_ui`          This is the name of the database you’re connecting to. In this case, the database name is “admin_ui”.
 
 # Minikube
 Prepare your k8s environment. Then use the `Steps to deploy` section to deploy WrenAI app into your k8s.

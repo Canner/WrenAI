@@ -12,10 +12,12 @@ spec:
       labels:
         app: wren-ui
     spec:
-      volumes:
-        - name: wren-data
-          persistentVolumeClaim:
-            claimName: wren-data-pvc
+      #if you are using sqllite, then volume is required, please uncomment next and the volumeMounts sections
+      #if you are using postgres, then volume is not required
+      #volumes:
+      #  - name: wren-sqllite
+      #    persistentVolumeClaim:
+      #      claimName: wren-sqllite-pvc
       containers:
 
         - name: wren-ui
@@ -121,6 +123,8 @@ spec:
                   key: WREN_PRODUCT_VERSION
           ports:
             - containerPort: 3000
-          volumeMounts:
-            - name: wren-data
-              mountPath: /app/data
+          #if you are using sqllite, then volume is required, please uncomment next and the persistentVolumeClaim sections
+          #if you are using postgres, then volume is not required
+          #volumeMounts:
+          #  - name: wren-sqllite
+          #    mountPath: /app/data
