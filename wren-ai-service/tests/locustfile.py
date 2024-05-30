@@ -5,10 +5,11 @@ import uuid
 
 import orjson
 import requests
-from locust import FastHttpUser, between, events, task
+from locust import FastHttpUser, events, task
 
 deployment_id = str(uuid.uuid4())
 mdl_str = ""
+finished_query = []
 
 with open("tests/data/book_2_mdl.json", "r") as f:
     mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
@@ -17,7 +18,7 @@ with open("tests/data/book_2_mdl.json", "r") as f:
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
     requests.post(
-        "http://localhost:5556/v1/semantics-preparations",
+        f"{environment.host}/v1/semantics-preparations",
         json={
             "mdl": mdl_str,
             "id": deployment_id,
@@ -27,12 +28,17 @@ def on_test_start(environment, **kwargs):
     status = "indexing"
     while status == "indexing":
         response = requests.get(
-            f"http://localhost:5556/v1/semantics-preparations/{deployment_id}/status",
+            f"{environment.host}/v1/semantics-preparations/{deployment_id}/status",
         )
         status = response.json()["status"]
 
     logging.info(f"Indexing status: {status}")
     logging.info("Indexing document completed. Start load testing.")
+
+
+@events.test_stop.add_listener
+def on_test_stop(environment, **kwargs):
+    logging.info(f"Total finished query: {len(finished_query)}")
 
 
 class SemanticsDescriptionsUser(FastHttpUser):
@@ -110,8 +116,6 @@ class IndexingUser(FastHttpUser):
 
 
 class AskUser(FastHttpUser):
-    wait_time = between(1, 5)
-
     @task
     def ask(self):
         with self.client.post(
@@ -130,21 +134,26 @@ class AskUser(FastHttpUser):
             except AssertionError:
                 response.failure(response.content.decode("utf-8"))
 
-        status = ""
+        status = "understanding"
 
         while status in ["understanding", "searching", "generating"]:
-            response = requests.get(f"/v1/asks/{query_id}/result")
-            status = response.json()["status"]
-            time.sleep(1.0)
-
-        with self.client.get(
-            url=f"/v1/asks/{query_id}/result",
-            catch_response=True,
-        ) as response:
-            try:
-                assert response.status_code == 200
-                status = json.loads(response.content.decode("utf-8"))["status"]
-                assert status == "finished"
-                response.success()
-            except AssertionError as e:
-                response.failure(str(e))
+            with self.client.get(
+                url=f"/v1/asks/{query_id}/result",
+                catch_response=True,
+            ) as response:
+                try:
+                    assert response.status_code == 200
+                    status = json.loads(response.content.decode("utf-8"))["status"]
+                    assert status in [
+                        "understanding",
+                        "searching",
+                        "generating",
+                        "finished",
+                    ]
+                    if status == "finished":
+                        finished_query.append(query_id)
+                    response.success()
+                    time.sleep(1.0)
+                except AssertionError:
+                    finished_query.append(query_id)
+                    response.failure(response.content.decode("utf-8"))
