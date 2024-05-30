@@ -151,7 +151,7 @@ class AskService:
             and self.ask_results[query_id].status == "stopped"
         )
 
-    @timer
+    # @timer # comment out for now, as it will cause error in FastAPI backgound task
     async def ask(
         self,
         ask_request: AskRequest,
@@ -170,7 +170,7 @@ class AskService:
                     query=ask_request.query,
                 )
 
-                if not query_understanding_result["post_processor"]["is_valid_query"]:
+                if not query_understanding_result["post_process"]["is_valid_query"]:
                     logger.error(
                         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
                     )
