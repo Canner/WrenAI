@@ -59,7 +59,6 @@ spec:
               mountPath: /app/data
           command: ["/bin/sh", "/app/init.sh"]
       containers:
-
         - name: wren-engine
           image: ghcr.io/canner/wren-engine:0.4.4
           ports:
