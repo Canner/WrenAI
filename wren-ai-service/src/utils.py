@@ -106,7 +106,7 @@ def classify_invalid_generation_results(
         quoted_sql = add_quotes(generation_result["sql"])
 
         response = requests.get(
-            f"{api_endpoint}/v1/mdl/preview",
+            f"{api_endpoint}/v1/mdl/dry-run",
             json={
                 "sql": remove_limit_statement(quoted_sql),
                 "limit": 1,
@@ -136,7 +136,7 @@ def check_if_sql_executable(
     sql: str,
 ):
     response = requests.get(
-        f"{api_endpoint}/v1/mdl/preview",
+        f"{api_endpoint}/v1/mdl/dry-run",
         json={
             "sql": remove_limit_statement(add_quotes(sql)),
             "limit": 1,
