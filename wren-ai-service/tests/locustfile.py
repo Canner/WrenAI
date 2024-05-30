@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 import uuid
 
@@ -7,17 +8,23 @@ import orjson
 import requests
 from locust import FastHttpUser, events, task
 
+from src.utils import load_env_vars
+
 deployment_id = str(uuid.uuid4())
 mdl_str = ""
 finished_query = []
 successful_query = []
 
-with open("tests/data/book_2_mdl.json", "r") as f:
+load_env_vars()
+
+with open(f"tests/data/{os.getenv("DATASET_NAME")}_mdl.json", "r") as f:
     mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
+    logging.info(f"Using dataset: {os.getenv("DATASET_NAME")}")
+
     requests.post(
         f"{environment.host}/v1/semantics-preparations",
         json={
