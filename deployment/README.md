@@ -1,4 +1,4 @@
 # Various deployemnt starategies of the app
 
-- [ ] Docker
+- [x] [Docker](../docker/)
 - [x] [Kubernetes: Kustomizations](./kustomizations/)

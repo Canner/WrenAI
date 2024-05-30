@@ -7,6 +7,7 @@ data:
   # Wren Engine Service Port
   WREN_ENGINE_PORT: "8080"
   # Wren AI Service Port
+  # Wren AI Service Port
   WREN_AI_SERVICE_PORT: "5555"
 
   #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
@@ -28,6 +29,8 @@ data:
 
   # `sqlite`, or `postgres` as application database.
   DB_TYPE: sqlite
+
+  # if DB_TYPE = `sqlite`
 
   # if DB_TYPE = `sqlite`
   SQLITE_FILE: /app/data/db.sqlite3
