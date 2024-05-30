@@ -7,94 +7,61 @@ These are different types of sql analysis results: selectItems, relation, filter
 
 ### INPUT STRUCTURE ###
 
-selectItems
-{
-  "type": "selectItems",
-  "payload": {
-    "alias": <alias_string>,
-    "expression": <expression_string>,
-    "properties": {
-        "includeFunctionCall": "true" | "false",
-        "includeMathematicalOperation": "true" | "false"
-    }
-  }
+"selectItems": {
+  "withFunctionCallOrMathematicalOperation": [
+    {
+      "alias": <alias_string>,
+      "expression": <expression_string>
+    }...
+  ],
+  "withoutFunctionCallOrMathematicalOperation": [
+    {
+      "alias": <alias_string>,
+      "expression": <expression_string>
+    }...
+  ]
 }
 
-relation
-{
-  "type": "relation",
-  "payload": {
-    "type": "INNER_JOIN" | "LEFT_JOIN" | "RIGHT_JOIN" | "FULL_JOIN" | "CROSS_JOIN" | "IMPLICIT_JOIN"
-    "criteria": <criteria_string>,
-    "exprSources": [
-      {
-        "expression": <expression_string>,
-        "sourceDataset": <sourceDataset_string>
-      }...
-    ]
-  }
+"relation": {
+  "type": "INNER_JOIN" | "LEFT_JOIN" | "RIGHT_JOIN" | "FULL_JOIN" | "CROSS_JOIN" | "IMPLICIT_JOIN"
+  "criteria": <criteria_string>,
+  "exprSources": [
+    {
+      "expression": <expression_string>,
+      "sourceDataset": <sourceDataset_string>
+    }...
+  ]
+} | {
+  "type": "TABLE",
+  "alias": "c",
+  "tableName": "Customer"
 }
 
-{
-  "type": "relation",
-  "payload": {
-    "type": "TABLE",
-    "alias": "c",
-    "tableName": "Customer"
-  }
-}
+"filters": <expression_string>
 
-filters
-{
-  "type": "filters",
-  "payload": {
-    "expression": <expression_string>
-  }
-}
+"groupByKeys": [<expression_string>, ...]
 
-groupByKeys
-{
-  "type": "groupByKeys",
-  "payload": {
-    "expression": <expression_string>
-  }
-}
+"sortings": [<expression_string>, ...]
 
-sortings
-{
-  "type": "sortings",
-  "payload": {
-    "expression": <expression_string>
-  }
-}
 
 ### OUTPUT STRUCTURE ###
 
 Please simply answer me with the following JSON structure:
 {
   "selectItems": {
-    "withFunctionCall": [
+    "withFunctionCallOrMathematicalOperation": [
       {
         "alias": <original_alias_string>,
         "expression": <original_expression_string>,
         "explanation": <explanation_string>
       }...
     ],
-    "withoutFunctionCall": {
-      "withMathematicalOperation": [
-        {
-          "alias": <original_alias_string>,
-          "expression": <original_expression_string>,
-          "explanation": <explanation_string>
-        }...
-      ],
-      "withoutMathematicalOperation": [
-        {
-          "alias": <original_alias_string>,
-          "expression": <original_expression_string>,
-          "explanation": <explanation_string>
-        }...
-      ]
+    "withoutFunctionCallOrMathematicalOperation": {
+      {
+        "alias": <original_alias_string>,
+        "expression": <original_expression_string>,
+        "explanation": <explanation_string>
+      }...
     }
   },
   "relation": [
