@@ -68,7 +68,7 @@ const bootstrapServer = async () => {
     wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
   });
   const ibisAdaptor = new IbisAdaptor({
-    ibisServerBaseEndpoint: serverConfig.ibisServerBaseEndpoint,
+    ibisServerEndpoint: serverConfig.ibisServerEndpoint,
   });
 
   const projectService = new ProjectService({ projectRepository });
