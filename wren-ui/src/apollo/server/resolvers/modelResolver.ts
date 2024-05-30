@@ -15,6 +15,7 @@ import { format } from 'sql-formatter';
 import { isEmpty, isNil } from 'lodash';
 import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
+import * as Errors from '@server/utils/error';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -483,10 +484,25 @@ export class ModelResolver {
       throw new Error('Failed to describe statement');
     }
 
+    // if the response contains error, throw error
+    // this is to prevent creating view from a response with error
+    if (response.error) {
+      throw Errors.create(Errors.GeneralErrorCodes.INVALID_VIEW_CREATION, {
+        customMessage: 'Cannot create view from a thread response with error',
+      });
+    }
+
     // properties
     const properties = {
       displayName,
       columns,
+
+      // properties from the thread response
+      responseId, // helpful for mapping back to the thread response
+      question: response.question,
+      summary: response.summary,
+      // detail is not going to send to AI service for indexing, but useful if we want display on UI
+      detail: response.detail,
     };
 
     // create view

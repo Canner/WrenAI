@@ -5,6 +5,7 @@ interface Props {
   text?: string;
   children?: ReactNode;
   multipleLine?: number;
+  minHeight?: number;
 }
 
 const Wrapper = styled.div<{ multipleLine?: number }>`
@@ -23,7 +24,7 @@ const Wrapper = styled.div<{ multipleLine?: number }>`
 `;
 
 export default function EllipsisWrapper(props: Props) {
-  const { text, multipleLine, children } = props;
+  const { text, multipleLine, minHeight, children } = props;
   const ref = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(undefined);
   const hasWidth = width !== undefined;
@@ -49,7 +50,7 @@ export default function EllipsisWrapper(props: Props) {
       ref={ref}
       title={title}
       multipleLine={multipleLine}
-      style={{ width }}
+      style={{ width, minHeight }}
     >
       {hasWidth ? renderContent() : null}
     </Wrapper>

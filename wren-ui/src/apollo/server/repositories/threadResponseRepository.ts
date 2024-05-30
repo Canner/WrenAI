@@ -4,7 +4,7 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, mapKeys } from 'lodash';
+import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
 import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
 
 export interface DetailStep {
@@ -14,6 +14,7 @@ export interface DetailStep {
 }
 
 export interface ThreadResponseDetail {
+  viewId?: number;
   description: string;
   steps: Array<DetailStep>;
 }
@@ -69,41 +70,20 @@ export class ThreadResponseRepository
       })
       .map((res) => {
         // JSON.parse detail and error
+        const detail =
+          res.detail && typeof res.detail === 'string'
+            ? JSON.parse(res.detail)
+            : res.detail;
+        const error =
+          res.error && typeof res.error === 'string'
+            ? JSON.parse(res.error)
+            : res.error;
         return {
           ...res,
-          detail: res.detail ? JSON.parse(res.detail) : null,
-          error: res.error ? JSON.parse(res.error) : null,
+          detail: detail || null,
+          error: error || null,
         };
       }) as ThreadResponseWithThreadContext[];
-  }
-
-  public async findOneBy(
-    filter: Partial<ThreadResponse>,
-    queryOptions?: IQueryOptions,
-  ) {
-    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const query = executer(this.tableName).where(
-      this.transformToDBData(filter),
-    );
-    if (queryOptions?.limit) {
-      query.limit(queryOptions.limit);
-    }
-
-    const result = await query;
-    const transformed =
-      result && result.length > 0
-        ? // turn object keys into camelCase
-          mapKeys(result[0], (_value, key) => camelCase(key))
-        : null;
-
-    // JSON.parse detail and error
-    return transformed
-      ? ({
-          ...transformed,
-          detail: transformed.detail ? JSON.parse(transformed.detail) : null,
-          error: transformed.error ? JSON.parse(transformed.error) : null,
-        } as ThreadResponse)
-      : null;
   }
 
   public async updateOne(
@@ -127,4 +107,23 @@ export class ThreadResponseRepository
       .returning('*');
     return this.transformFromDBData(result);
   }
+
+  protected override transformFromDBData = (data: any): ThreadResponse => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
+    const formattedData = mapValues(camelCaseData, (value, key) => {
+      if (['error', 'detail'].includes(key)) {
+        // The value from Sqlite will be string type, while the value from PG is JSON object
+        if (typeof value === 'string') {
+          return value ? JSON.parse(value) : value;
+        } else {
+          return value;
+        }
+      }
+      return value;
+    }) as ThreadResponse;
+    return formattedData;
+  };
 }

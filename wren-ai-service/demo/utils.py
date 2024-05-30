@@ -366,30 +366,32 @@ def generate_mdl_metadata(mdl_model_json: dict):
 def prepare_duckdb(dataset_name: str):
     assert dataset_name in ["music", "nba", "ecommerce"]
 
+    DATASET_VERSION = "v0.3.0"
+
     init_sqls = {
-        "music": """
-CREATE TABLE album AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Album.csv',header=true);
-CREATE TABLE artist AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Artist.csv',header=true);
-CREATE TABLE customer AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Customer.csv',header=true);
-CREATE TABLE genre AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Genre.csv',header=true);
-CREATE TABLE invoice AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Invoice.csv',header=true);
-CREATE TABLE invoiceLine AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/InvoiceLine.csv',header=true);
-CREATE TABLE track AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/Music/Track.csv',header=true);
+        "music": f"""
+CREATE TABLE album AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Album.csv',header=true);
+CREATE TABLE artist AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Artist.csv',header=true);
+CREATE TABLE customer AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Customer.csv',header=true);
+CREATE TABLE genre AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Genre.csv',header=true);
+CREATE TABLE invoice AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Invoice.csv',header=true);
+CREATE TABLE invoiceLine AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/InvoiceLine.csv',header=true);
+CREATE TABLE track AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Track.csv',header=true);
 """,
-        "nba": """
-CREATE TABLE game AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/game.csv',header=true);
-CREATE TABLE line_score AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/line_score.csv',header=true);
-CREATE TABLE player_games AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/player_game.csv',header=true);
-CREATE TABLE player AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/player.csv',header=true);
-CREATE TABLE team AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/NBA/team.csv',header=true);
+        "nba": f"""
+CREATE TABLE game AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/game.csv',header=true);
+CREATE TABLE line_score AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/line_score.csv',header=true);
+CREATE TABLE player_games AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/player_game.csv',header=true);
+CREATE TABLE player AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/player.csv',header=true);
+CREATE TABLE team AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/team.csv',header=true);
 """,
-        "ecommerce": """
-CREATE TABLE customers AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/customers.csv',header=true);
-CREATE TABLE order_items AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/order_items.csv',header=true);
-CREATE TABLE orders AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/orders.csv',header=true);
-CREATE TABLE payments AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/payments.csv',header=true);
-CREATE TABLE products AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/products.csv',header=true);
-CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/E-Commerce/reviews.csv',header=true);
+        "ecommerce": f"""
+CREATE TABLE customers AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/customers.csv',header=true);
+CREATE TABLE order_items AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/order_items.csv',header=true);
+CREATE TABLE orders AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/orders.csv',header=true);
+CREATE TABLE payments AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/payments.csv',header=true);
+CREATE TABLE products AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/products.csv',header=true);
+CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/reviews.csv',header=true);
 """,
     }
 

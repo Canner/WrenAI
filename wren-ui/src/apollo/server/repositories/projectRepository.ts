@@ -6,6 +6,7 @@ import {
   mapKeys,
   mapValues,
   snakeCase,
+  isEmpty,
 } from 'lodash';
 
 export interface Project {
@@ -63,8 +64,12 @@ export class ProjectRepository
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
-      if (['configurations', 'extensions'].includes(key)) {
-        return JSON.parse(value);
+      if (key === 'configurations') {
+        // should return {} if value is null / {}, use value ? {} : JSON.parse(value) will throw error when value is null
+        return isEmpty(value) ? {} : JSON.parse(value);
+      }
+      if (key === 'extensions') {
+        return isEmpty(value) ? [] : JSON.parse(value);
       }
       return value;
     });

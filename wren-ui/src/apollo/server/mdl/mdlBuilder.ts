@@ -1,4 +1,4 @@
-import { isEmpty, pickBy } from 'lodash';
+import { isEmpty, isNil, pickBy } from 'lodash';
 import {
   Model,
   ModelColumn,
@@ -6,7 +6,7 @@ import {
   RelationInfo,
   View,
 } from '../repositories';
-import { Manifest, ModelMDL, ViewMDL } from './type';
+import { Manifest, ModelMDL } from './type';
 import { getLogger } from '@server/utils';
 
 const logger = getLogger('MDLBuilder');
@@ -111,16 +111,27 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.views = this.views.map((view: View) => {
-      // if putting properties not string, it will throw error
-      // filter out properties that have string value
-      const properties = pickBy<ViewMDL['properties']>(
-        JSON.parse(view.properties),
-        (value) => typeof value === 'string',
-      );
+      const properties = JSON.parse(view.properties) || {};
+
+      // filter out properties that are not null or undefined
+      // and are in the list of properties that are allowed
+      const viewProperties = pickBy(properties, (value, key) => {
+        return (
+          !isNil(value) &&
+          ['displayName', 'description', 'question', 'summary'].includes(key)
+        );
+      });
+
       return {
         name: view.name,
         statement: view.statement,
-        properties,
+        properties: {
+          ...viewProperties,
+
+          // viewId will be passed back in other APIs
+          // to identify the view
+          viewId: view.id.toString(),
+        },
       };
     });
   }

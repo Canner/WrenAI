@@ -20,9 +20,10 @@ import {
 
 interface Props {
   onSelect: (payload: {
-    sql: string;
-    summary: string;
-    question: string;
+    sql?: string;
+    summary?: string;
+    question?: string;
+    viewId?: number;
   }) => void;
   onStop: () => void;
   onSubmit: (value: string) => void;
@@ -96,7 +97,15 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   }, [error]);
 
   const selectResult = (payload) => {
-    onSelect && onSelect({ ...payload, question });
+    const isSavedViewCandidate = !!payload.viewId;
+    const data = isSavedViewCandidate
+      ? { viewId: payload.viewId }
+      : {
+          sql: payload.sql,
+          summary: payload.summary,
+          question,
+        };
+    onSelect && onSelect(data);
     closeResult();
   };
 

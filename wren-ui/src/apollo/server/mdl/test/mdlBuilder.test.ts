@@ -392,7 +392,11 @@ describe('MDLBuilder', () => {
       {
         name: 'view',
         statement: 'select * from order',
-        properties: { description: 'foo view', displayName: 'view' },
+        properties: {
+          description: 'foo view',
+          displayName: 'view',
+          viewId: '1',
+        },
       },
     ] as ViewMDL[];
 

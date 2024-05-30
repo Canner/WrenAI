@@ -108,12 +108,19 @@ export class AskingResolver {
     const askResult = await askingService.getAskingTask(taskId);
 
     // construct candidates from response
-    const candidates = (askResult.response || []).map((response) => {
-      return {
-        sql: response.sql,
-        summary: response.summary,
-      };
-    });
+    const candidates = await Promise.all(
+      (askResult.response || []).map(async (response) => {
+        const view = response.viewId
+          ? await ctx.viewRepository.findOneBy({ id: response.viewId })
+          : null;
+        return {
+          type: response.type,
+          sql: response.sql,
+          summary: response.summary,
+          view,
+        };
+      }),
+    );
 
     return {
       status: askResult.status,
@@ -124,16 +131,24 @@ export class AskingResolver {
 
   public async createThread(
     _root: any,
-    args: { data: { question: string; sql: string; summary: string } },
+    args: {
+      data: {
+        question?: string;
+        sql?: string;
+        summary?: string;
+        viewId?: number;
+      };
+    },
     ctx: IContext,
   ): Promise<Thread> {
-    const { question, sql, summary } = args.data;
+    const { question, sql, summary, viewId } = args.data;
 
     const askingService = ctx.askingService;
     const thread = await askingService.createThread({
       question,
       sql,
       summary,
+      viewId,
     });
     // telemetry
     ctx.telemetry.send_event('ask_question', {});
@@ -226,7 +241,12 @@ export class AskingResolver {
     _root: any,
     args: {
       threadId: number;
-      data: { question: string; sql: string; summary: string };
+      data: {
+        question?: string;
+        sql?: string;
+        summary?: string;
+        viewId?: number;
+      };
     },
     ctx: IContext,
   ): Promise<ThreadResponse> {
@@ -271,12 +291,17 @@ export class AskingResolver {
    * Nested resolvers
    */
   public getThreadResponseNestedResolver = () => ({
-    detail: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
-      // extend sql to detail
+    detail: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
+      // extend view & sql to detail
+      const viewId = parent?.detail?.viewId;
+      const view = viewId
+        ? await ctx.viewRepository.findOneBy({ id: viewId })
+        : null;
       return parent.detail
         ? {
             ...parent.detail,
             sql: format(constructCteSql(parent.detail.steps)),
+            view,
           }
         : null;
     },

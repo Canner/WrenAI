@@ -64,6 +64,7 @@ const AnswerResultTemplate = ({
           loading={status !== AskingTaskStatus.FINISHED}
           question={question}
           summary={summary}
+          view={detail?.view}
           fullSql={detail?.sql}
           threadResponseId={id}
           onOpenSaveAsViewModal={onOpenSaveAsViewModal}
