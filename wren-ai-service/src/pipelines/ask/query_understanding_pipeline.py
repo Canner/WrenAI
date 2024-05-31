@@ -1,18 +1,21 @@
 import logging
+import sys
 from typing import List
 
 import orjson
-from haystack import Pipeline, component
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
+from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.utils import init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
 
-query_preprocess_user_prompt_template = """
+_prompt = """
 ### TASK ###
 Based on the user's input below, classify whether the query is not random words.
 Provide your classification as 'Yes' or 'No'. Yes if you think the query is not random words, and No if you think the query is random words.
@@ -29,6 +32,22 @@ The final answer must be the JSON format like following:
 
 Let's think step by step.
 """
+
+
+builder = PromptBuilder(template=_prompt)
+
+
+def prompt(query: str) -> dict:
+    logger.debug(f"query: {query}")
+    return builder.run(query=query)
+
+
+generator = None
+
+
+async def generate(prompt: dict) -> dict:
+    logger.debug(f"prompt: {prompt}")
+    return await generator.run(prompt=prompt.get("prompt"))
 
 
 @component
@@ -56,57 +75,43 @@ class QueryUnderstandingPostProcessor:
             }
 
 
+post_processor = QueryUnderstandingPostProcessor()
+
+
+def post_process(generate: dict) -> dict:
+    logger.debug(f"generate: {generate}")
+    return post_processor.run(generate.get("replies"))
+
+
 class QueryUnderstanding(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
     ):
-        self._pipeline = Pipeline()
-        self._pipeline.add_component(
-            "query_preprocess_prompt_builder",
-            PromptBuilder(template=query_preprocess_user_prompt_template),
+        global generator
+        generator = llm_provider.get_generator()
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
-        self._pipeline.add_component(
-            "query_preprocessor",
-            llm_provider.get_generator(),
-        )
-        self._pipeline.add_component(
-            "post_processor",
-            QueryUnderstandingPostProcessor(),
-        )
-        self._pipeline.connect(
-            "query_preprocess_prompt_builder.prompt", "query_preprocessor.prompt"
-        )
-        self._pipeline.connect("query_preprocessor.replies", "post_processor.replies")
-
-        super().__init__(self._pipeline)
 
     @timer
-    def run(
+    async def run(
         self,
         query: str,
-        include_outputs_from: List[str] | None = None,
     ):
         logger.info("Ask QueryUnderstanding pipeline is running...")
-        return self._pipeline.run(
-            {
-                "query_preprocess_prompt_builder": {
-                    "query": query,
-                },
-            },
-            include_outputs_from=(
-                set(include_outputs_from) if include_outputs_from else None
-            ),
-        )
+        return await self._pipe.execute(["post_process"], inputs={"query": query})
 
 
 if __name__ == "__main__":
     llm_provider, _ = init_providers()
-    query_understanding_pipeline = QueryUnderstanding(
+    pipeline = QueryUnderstanding(
         llm_provider=llm_provider,
     )
 
-    print("generating query_understanding_pipeline.jpg to outputs/pipelines/ask...")
-    query_understanding_pipeline.draw(
-        "./outputs/pipelines/ask/query_understanding_pipeline.jpg"
-    )
+    async_validate(lambda: pipeline.run("this is a test query"))
+
+    # print("generating query_understanding_pipeline.jpg to outputs/pipelines/ask...")
+    # query_understanding_pipeline.draw(
+    #     "./outputs/pipelines/ask/query_understanding_pipeline.jpg"
+    # )
