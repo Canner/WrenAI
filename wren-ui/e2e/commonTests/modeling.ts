@@ -26,9 +26,11 @@ export const checkDeployUndeployedChanges = async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Deploy' })).toBeEnabled();
 };
 
-export const executeDeploy = async ({ page }) => {
-  await page.goto('/modeling');
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+export const executeDeploy = async ({ page, baseURL }) => {
+  if (page.url() !== `${baseURL}/modeling`) {
+    await page.goto('/modeling');
+    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  }
 
   await page.getByRole('button', { name: 'Deploy' }).click();
   await expect(

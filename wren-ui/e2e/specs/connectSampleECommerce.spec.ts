@@ -92,8 +92,24 @@ test.describe('Test E-commerce sample dataset', () => {
     });
   });
 
-  test('Trigger and check deploy MDL successfully', async ({ page }) => {
-    await modelingHelper.executeDeploy({ page });
+  test('Trigger and check deploy MDL successfully', async ({
+    page,
+    baseURL,
+  }) => {
+    await modelingHelper.executeDeploy({ page, baseURL });
     await modelingHelper.checkDeploySynced({ page });
+  });
+
+  test('Save as view successfully', async ({ page, baseURL }) => {
+    await page.goto('/modeling');
+    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+    await homeHelper.saveAsView(
+      { page, baseURL },
+      {
+        question: suggestedQuestions[1],
+        viewName: 'avg review score by city',
+      },
+    );
   });
 });

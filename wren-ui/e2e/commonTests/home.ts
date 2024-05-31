@@ -4,6 +4,7 @@ import {
   AskingTaskStatus,
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
+import * as modelingHelper from './modeling';
 
 export const checkAskingProcess = async (page: Page, question: string) => {
   // check process state
@@ -218,5 +219,121 @@ export const followUpQuestionTest = async ({ page, baseURL, question }) => {
   await expect(page.getByLabel('save').locator('svg').last()).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Save as View' }).last(),
+  ).toBeVisible();
+};
+
+export const saveAsView = async (
+  { page, baseURL }: { page: Page; baseURL: string },
+  { question, viewName }: { question: string; viewName: string },
+) => {
+  await askSuggestionQuestionTest({
+    page,
+    baseURL,
+    suggestedQuestion: question,
+  });
+
+  await expect(
+    page.getByRole('button', { name: 'Save as View' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Save as View' }).click();
+
+  // check save as view modal
+  await expect(page.locator('.ant-modal-mask')).toBeVisible();
+  await expect(page.locator('div.ant-modal')).toBeVisible();
+  await expect(
+    page.locator('div.ant-modal-title').filter({ hasText: 'Save as View' }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel('Save as View').getByLabel('Close', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'After saving, make sure you go to "Modeling Page" to deploy all saved views.',
+    ),
+  ).toBeVisible();
+
+  // save as View process
+  await page.getByLabel('Name').click();
+  await page.getByLabel('Name').fill(viewName);
+
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+  // check save as view success
+  await expect(page.getByText('Successfully created view.')).toBeVisible();
+
+  // go to modeling page
+  await page.getByRole('button', { name: 'Modeling' }).click();
+  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+  // deploy MDL with view
+  await expect(page.getByRole('button', { name: 'Deploy' })).toBeEnabled();
+  await modelingHelper.executeDeploy({ page, baseURL });
+
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(page).toHaveURL('/home', { timeout: 60000 });
+
+  // ask the saved view question
+  await page.getByText(question).click();
+
+  // check asking process state and wait for asking task to finish
+  await checkAskingProcess(page, question);
+  await waitingForAskingTask(page, baseURL);
+  await checkCandidatesResult(page);
+
+  // check offer view result
+  await expect(page.getByText('Result 1')).toBeVisible();
+  await expect(page.getByLabel('file-add').locator('svg')).toBeVisible();
+  await expect(page.getByText('Result from a saved view')).toBeVisible();
+
+  // hover the 'Result from a saved view' and show tooltip
+  await page.getByText('Result from a saved view').hover();
+  await expect(
+    page
+      .getByRole('tooltip', {
+        name: 'This search result corresponds to a saved view:',
+      })
+      .locator('svg'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('This search result corresponds to a saved view:'),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: viewName })).toBeVisible();
+
+  // just waiting to hide the tooltip
+  await page.getByRole('button', { name: 'Ask' }).hover();
+
+  const firstResult = await getFirstCandidatesResultSummary(page);
+  await page.getByRole('cell', { name: firstResult }).first().click();
+
+  // check offer view info for thread response UI
+  await expect(page.getByText('Generated from saved view')).toBeVisible();
+  await expect(page.getByRole('link', { name: viewName })).toBeVisible();
+
+  // click the view name link will open a new tab and go to the view metadata of the modeling page
+  const newWebPagePromise = page.waitForEvent('popup');
+  await page.getByRole('link', { name: viewName }).click();
+  const modelingPage = await newWebPagePromise;
+
+  // check view metadata
+  await expect(
+    modelingPage
+      .locator('div.ant-drawer-title')
+      .filter({ hasText: new RegExp(`^${viewName}$`) }),
+  ).toBeVisible();
+  await expect(
+    modelingPage.getByTestId('metadata__name').getByText(viewName),
+  ).toBeVisible();
+  await modelingPage
+    .locator('div.ant-drawer')
+    .getByLabel('Close', { exact: true })
+    .click();
+
+  // check view node in diagram
+  await expect(
+    modelingPage.getByRole('complementary').getByText(viewName),
+  ).toBeVisible();
+  await modelingPage.getByRole('complementary').getByText(viewName).click();
+  await expect(
+    modelingPage.getByTestId(`diagram__view-node__${viewName}`),
   ).toBeVisible();
 };
