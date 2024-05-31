@@ -48,12 +48,12 @@ def test_clear_documents(mdl_str: str):
         document_store_provider=document_store_provider,
     )
 
-    async_validate(indexing_pipeline.run(mdl_str))
+    async_validate(lambda: indexing_pipeline.run(mdl_str))
 
     assert store.count_documents() == 3
 
     async_validate(
-        indexing_pipeline.run(
+        lambda: indexing_pipeline.run(
             """
         {
             "models": [],
@@ -87,7 +87,7 @@ def test_indexing_pipeline(
         document_store_provider=document_store_provider,
     )
 
-    async_validate(indexing_pipeline.run(mdl_str))
+    async_validate(lambda: indexing_pipeline.run(mdl_str))
 
     assert document_store_provider.get_store().count_documents() == 3
     assert (
