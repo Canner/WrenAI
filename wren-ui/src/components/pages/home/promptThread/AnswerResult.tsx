@@ -55,7 +55,7 @@ interface Props {
   summary: string;
   view?: {
     id: number;
-    name: string;
+    displayName: string;
   };
 }
 
@@ -124,7 +124,7 @@ export default function AnswerResult(props: Props) {
             target="_blank"
             rel="noreferrer noopener"
           >
-            {view.name}
+            {view.displayName}
           </Link>
         </div>
       ) : (

@@ -299,6 +299,7 @@ export const typeDefs = gql`
     id: Int!
     name: String!
     statement: String!
+    displayName: String!
   }
 
   input ViewWhereUniqueInput {
