@@ -11,7 +11,7 @@ import orjson
 from tqdm import tqdm
 
 from src.pipelines.ask.generation_pipeline import Generation
-from src.pipelines.ask.indexing_pipeline import Indexing
+from src.pipelines.ask.indexing import Indexing
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
 from src.pipelines.semantics import description

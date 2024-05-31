@@ -11,7 +11,7 @@ from src.pipelines.ask import (
     historical_question,
 )
 from src.pipelines.ask import (
-    indexing_pipeline as ask_indexing_pipeline,
+    indexing as ask_indexing_pipeline,
 )
 from src.pipelines.ask import (
     query_understanding_pipeline as ask_query_understanding_pipeline,

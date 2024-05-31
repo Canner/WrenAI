@@ -8,7 +8,7 @@ from src.core.pipeline import async_validate
 from src.pipelines.ask import (
     generation_pipeline,
     historical_question,
-    indexing_pipeline,
+    indexing,
     query_understanding_pipeline,
     retrieval_pipeline,
     sql_correction_pipeline,
@@ -28,7 +28,7 @@ def ask_service():
 
     return AskService(
         {
-            "indexing": indexing_pipeline.Indexing(
+            "indexing": indexing.Indexing(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
