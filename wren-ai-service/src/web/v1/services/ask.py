@@ -114,10 +114,12 @@ class AskService:
         ] = {}
         self.ask_results: dict[str, AskResultResponse] = {}
 
-    def prepare_semantics(self, prepare_semantics_request: SemanticsPreparationRequest):
+    async def prepare_semantics(
+        self, prepare_semantics_request: SemanticsPreparationRequest
+    ):
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            self._pipelines["indexing"].run(prepare_semantics_request.mdl)
+            await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
             self.prepare_semantics_statuses[
                 prepare_semantics_request.id

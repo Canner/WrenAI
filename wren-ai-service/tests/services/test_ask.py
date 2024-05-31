@@ -61,10 +61,12 @@ def mdl_str():
 
 def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
     id = str(uuid.uuid4())
-    ask_service.prepare_semantics(
-        SemanticsPreparationRequest(
-            mdl=mdl_str,
-            id=id,
+    async_validate(
+        lambda: ask_service.prepare_semantics(
+            SemanticsPreparationRequest(
+                mdl=mdl_str,
+                id=id,
+            )
         )
     )
 
@@ -75,7 +77,7 @@ def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
         id=id,
     )
     ask_request.query_id = query_id
-    async_validate(ask_service.ask(ask_request))
+    async_validate(lambda: ask_service.ask(ask_request))
 
     # getting ask result
     ask_result_response = ask_service.get_ask_result(
@@ -106,10 +108,12 @@ def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
 
 def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):
     id = str(uuid.uuid4())
-    ask_service.prepare_semantics(
-        SemanticsPreparationRequest(
-            mdl=mdl_str,
-            id=id,
+    async_validate(
+        lambda: ask_service.prepare_semantics(
+            SemanticsPreparationRequest(
+                mdl=mdl_str,
+                id=id,
+            )
         )
     )
 
@@ -120,7 +124,7 @@ def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):
         id=id,
     )
     ask_request.query_id = query_id
-    async_validate(ask_service.ask(ask_request))
+    async_validate(lambda: ask_service.ask(ask_request))
 
     # getting ask result
     ask_result_response = ask_service.get_ask_result(
