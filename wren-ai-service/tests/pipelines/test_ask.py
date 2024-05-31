@@ -7,7 +7,7 @@ from src.core.pipeline import async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
 from src.pipelines.ask.generation_pipeline import Generation
-from src.pipelines.ask.indexing_pipeline import Indexing
+from src.pipelines.ask.indexing import Indexing
 from src.pipelines.ask.query_understanding_pipeline import QueryUnderstanding
 from src.pipelines.ask.retrieval_pipeline import Retrieval
 from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
@@ -48,11 +48,13 @@ def test_clear_documents(mdl_str: str):
         document_store_provider=document_store_provider,
     )
 
-    indexing_pipeline.run(mdl_str)
+    async_validate(indexing_pipeline.run(mdl_str))
+
     assert store.count_documents() == 3
 
-    indexing_pipeline.run(
-        """
+    async_validate(
+        indexing_pipeline.run(
+            """
         {
             "models": [],
             "relationships": [],
@@ -69,7 +71,9 @@ def test_clear_documents(mdl_str: str):
             ]
         }
         """
+        )
     )
+
     assert store.count_documents() == 1
 
 
@@ -83,7 +87,7 @@ def test_indexing_pipeline(
         document_store_provider=document_store_provider,
     )
 
-    indexing_pipeline.run(mdl_str)
+    async_validate(indexing_pipeline.run(mdl_str))
 
     assert document_store_provider.get_store().count_documents() == 3
     assert (
