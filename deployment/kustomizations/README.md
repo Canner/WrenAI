@@ -14,10 +14,9 @@ Note: Without authentication, once you publish this on the internet, anyone can 
 
 ## Steps to deploy:
 
-```suggestion
-Before deploying, check out the manifests in the `deployment/kustomizations ` folder and modify them for your Kubernetes environment.
+`Suggestion`: Before deploying, check out the manifests in the `deployment/kustomizations ` folder and modify them for your Kubernetes environment.
 The `deployment/kustomizations` folder contains a `kustomization.yaml` file that will inflate the manifests into a `deployment/kustomizations/wrenai.kustomized.yaml` file used to deploy the app to your Kubernetes cluster.
-```
+
 ```shell
 # Clone the repository with the kustomization
 git clone https://github.com/Canner/WrenAI.git
@@ -62,7 +61,7 @@ Example: `PG_URL: "postgres://postgres:postgres@wren-postgresql:5432/admin_ui"`
 - `postgres:postgres`  These are the username(first) and password(second) for the database respectively, separated by a colon. In this case, both the username and password are “postgres”.
 - `@wren-postgresql`   This is the hostname of the database server. "wren-postgresql" means the database server is running in a Kubernetes cluster and it is named "wren-postgresql" in the *same* namespace. If you are using another namespace you must provide the full hostname, example: `wren-postgresql.wrenai.svc.cluster.local`, "wrenai" is the namespace name, "svc.cluster.local" is the default domain name for Kubernetes services no need to change it.
 - `:5432`              This is the port number. PostgreSQL servers listen on port 5432 by default.
-- `/admin_ui`          This is the name of the database you’re connecting to. In this case, the database name is “admin_ui”. It can be found in the helm values file in the auth.database parameter `deployment/kustomizations/helm-values_postgresql_14.yaml`
+- `/admin_ui`          This is the name of the database you’re connecting to. In this case, the database name is `admin_ui`. It can be found in the helm values file in the auth.database parameter `deployment/kustomizations/helm-values_postgresql_14.yaml`
 
 # Minikube
 Prepare your k8s environment. Then use the `Steps to deploy` section to deploy WrenAI app into your k8s.
