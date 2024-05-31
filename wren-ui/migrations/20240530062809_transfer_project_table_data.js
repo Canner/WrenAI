@@ -78,5 +78,5 @@ exports.up = async function (knex) {
  * @returns { Promise<void> }
  */
 exports.down = async function (knex) {
-  await knex('project').update({ connectionInfo: null });
+  await knex('project').update({ connection_info: null });
 };
