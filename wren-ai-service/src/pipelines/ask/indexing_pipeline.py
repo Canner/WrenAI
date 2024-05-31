@@ -1,15 +1,19 @@
 import json
 import logging
 import os
+import sys
 from typing import Any, Dict, List
 
 import orjson
-from haystack import Document, Pipeline, component
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
+from hamilton.function_modifiers import extract_fields
+from haystack import Document, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from tqdm import tqdm
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import init_providers, load_env_vars, timer
 
@@ -298,64 +302,93 @@ class DDLConverter:
         return ddl_commands
 
 
+def clean_document_store(mdl_str: str) -> Dict[str, Any]:
+    logger.debug(f"input in clean_document_store: {mdl_str}")
+    return cleaner.run(mdl=mdl_str)
+
+
+@extract_fields(dict(mdl=Dict[str, Any]))
+def validate_mdl(clean_document_store: Dict[str, Any]) -> Dict[str, Any]:
+    logger.debug(f"input in validate_mdl: {clean_document_store}")
+    mdl = clean_document_store.get("mdl")
+    res = validator.run(mdl=mdl)
+    return dict(mdl=res["mdl"])
+
+
+def convert_to_ddl(mdl: Dict[str, Any]) -> Dict[str, Any]:
+    logger.debug(f"input in convert_to_ddl: {mdl}")
+    return ddl_converter.run(mdl=mdl)
+
+
+def embed_ddl(convert_to_ddl: Dict[str, Any]) -> Dict[str, Any]:
+    logger.debug(f"input in embed_ddl: {convert_to_ddl}")
+    return ddl_embedder.run(documents=convert_to_ddl["documents"])
+
+
+def write_ddl(embed_ddl: Dict[str, Any]) -> None:
+    logger.debug(f"input in write_ddl: {embed_ddl}")
+    return ddl_writer.run(documents=embed_ddl["documents"])
+
+
+def convert_to_view(mdl: Dict[str, Any]) -> Dict[str, Any]:
+    logger.debug(f"input in convert_to_view: {mdl}")
+    return view_converter.run(mdl=mdl)
+
+
+def embed_view(convert_to_view: Dict[str, Any]) -> Dict[str, Any]:
+    logger.debug(f"input in embed_view: {convert_to_view}")
+    return view_embedder.run(documents=convert_to_view["documents"])
+
+
+def write_view(embed_view: Dict[str, Any]) -> None:
+    logger.debug(f"input in write_view: {embed_view}")
+    return view_writer.run(documents=embed_view["documents"])
+
+
 class Indexing(BasicPipeline):
     def __init__(
         self, llm_provider: LLMProvider, document_store_provider: DocumentStoreProvider
     ) -> None:
+        global cleaner, validator
+        global ddl_converter, ddl_embedder, ddl_writer
+        global view_converter, view_embedder, view_writer
+
         ddl_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")
 
-        pipe = Pipeline()
-        pipe.add_component("validator", MDLValidator())
-        pipe.add_component("cleaner", DocumentCleaner([ddl_store, view_store]))
+        cleaner = DocumentCleaner([ddl_store, view_store])
+        validator = MDLValidator()
 
-        pipe.add_component("ddl_converter", DDLConverter())
-        pipe.add_component("ddl_embedder", llm_provider.get_document_embedder())
-        pipe.add_component(
-            "ddl_writer",
-            DocumentWriter(
-                document_store=ddl_store,
-                policy=DuplicatePolicy.OVERWRITE,
-            ),
+        ddl_converter = DDLConverter()
+        ddl_embedder = llm_provider.get_document_embedder()
+        ddl_writer = DocumentWriter(
+            document_store=ddl_store,
+            policy=DuplicatePolicy.OVERWRITE,
         )
-        pipe.add_component("view_converter", ViewConverter())
-        pipe.add_component("view_embedder", llm_provider.get_document_embedder())
-        pipe.add_component(
-            "view_writer",
-            DocumentWriter(
-                document_store=view_store,
-                policy=DuplicatePolicy.OVERWRITE,
-            ),
+        view_converter = ViewConverter()
+        view_embedder = llm_provider.get_document_embedder()
+        view_writer = DocumentWriter(
+            document_store=view_store,
+            policy=DuplicatePolicy.OVERWRITE,
         )
 
-        pipe.connect("cleaner", "validator")
-
-        pipe.connect("validator", "ddl_converter")
-        pipe.connect("ddl_converter", "ddl_embedder")
-        pipe.connect("ddl_embedder", "ddl_writer")
-
-        pipe.connect("validator", "view_converter")
-        pipe.connect("view_converter", "view_embedder")
-        pipe.connect("view_embedder", "view_writer")
-
-        self._pipeline = pipe
-
-        super().__init__(self._pipeline)
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
 
     @timer
-    def run(
-        self, mdl_str: str, include_outputs_from: List[str] | None = None
-    ) -> Dict[str, Any]:
-        return self._pipeline.run(
-            {"cleaner": {"mdl": mdl_str}},
-            include_outputs_from=(
-                set(include_outputs_from) if include_outputs_from else None
-            ),
+    async def run(self, mdl_str: str) -> Dict[str, Any]:
+        return await self._pipe.execute(
+            ["write_ddl", "write_view"],
+            inputs={"mdl_str": mdl_str},
         )
 
 
 if __name__ == "__main__":
-    indexing_pipeline = Indexing(*init_providers())
+    pipeline = Indexing(*init_providers())
 
-    print("generating indexing_pipeline.jpg to outputs/pipelines/ask...")
-    indexing_pipeline.draw("./outputs/pipelines/ask/indexing_pipeline.jpg")
+    async_validate(
+        lambda: pipeline.run(
+            '{"models": [], "views": [], "relationships": [], "metrics": []}'
+        )
+    )
