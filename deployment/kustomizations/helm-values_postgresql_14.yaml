@@ -2,3 +2,4 @@ auth:
   secretKeys:
     adminPasswordKey: postgres-password
   existingSecret: wrenai-postgresql
+  database: "admin_ui"
