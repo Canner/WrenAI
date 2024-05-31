@@ -11,7 +11,7 @@ from src.pipelines.sql_regeneration.components.prompts import (
     description_regeneration_system_prompt,
     sql_regeneration_system_prompt,
 )
-from src.utils import init_providers, load_env_vars
+from src.utils import clean_generation_result, init_providers, load_env_vars
 from src.web.v1.services.sql_regeneration import (
     CorrectionPoint,
     DecisionPoint,
@@ -143,7 +143,7 @@ class SQLReGenerationByStepPostProcessor:
         modified_steps = orjson.loads(replies[0])["results"]
         new_steps = [
             {
-                "sql": step.sql,
+                "sql": clean_generation_result(step.sql),
                 "summary": step.summary,
                 "cte_name": step.cte_name,
             }
@@ -151,7 +151,7 @@ class SQLReGenerationByStepPostProcessor:
         ]
         for modified_step in modified_steps:
             new_steps[modified_step["index"]] = {
-                "sql": modified_step.get("sql", ""),
+                "sql": clean_generation_result(modified_step.get("sql", "")),
                 "summary": modified_step.get("summary", ""),
                 "cte_name": modified_step.get("cte_name", ""),
             }
