@@ -89,7 +89,7 @@ const ResultTemplate = ({ index, summary, sql, view, onSelect, onShowSQL }) => {
                     className="text-md geekblue-6 mr-2"
                     style={{ marginTop: 2 }}
                   />
-                  <div>
+                  <div style={{ width: '90%', wordBreak: 'break-all' }}>
                     This search result corresponds to a saved view:{' '}
                     <Link
                       href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
