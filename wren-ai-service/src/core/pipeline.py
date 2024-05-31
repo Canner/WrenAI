@@ -1,13 +1,15 @@
+import asyncio
 import os
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import Any, Dict
 
+from hamilton.experimental.h_async import AsyncDriver
 from haystack import Pipeline
 
 
 class BasicPipeline(metaclass=ABCMeta):
-    def __init__(self, pipe: Pipeline):
+    def __init__(self, pipe: Pipeline | AsyncDriver):
         self._pipe = pipe
 
     @abstractmethod
@@ -39,3 +41,9 @@ class BasicPipeline(metaclass=ABCMeta):
         dir_path, _ = os.path.split(path)
         os.makedirs(dir_path, exist_ok=True)
         self._pipe.draw(path)
+
+
+def async_validate(task: callable):
+    result = asyncio.run(task())
+    print(result)
+    return result

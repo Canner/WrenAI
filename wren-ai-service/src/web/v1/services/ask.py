@@ -2,9 +2,9 @@ import logging
 from typing import List, Literal, Optional
 
 import sqlparse
-from haystack import Pipeline
 from pydantic import BaseModel
 
+from src.core.pipeline import BasicPipeline
 from src.utils import remove_duplicates, timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -107,7 +107,7 @@ class AskResultResponse(BaseModel):
 
 
 class AskService:
-    def __init__(self, pipelines: dict[str, Pipeline]):
+    def __init__(self, pipelines: dict[str, BasicPipeline]):
         self._pipelines = pipelines
         self.prepare_semantics_statuses: dict[
             str, SemanticsPreparationStatusResponse.status
@@ -151,8 +151,8 @@ class AskService:
             and self.ask_results[query_id].status == "stopped"
         )
 
-    @timer
-    def ask(
+    # @timer # comment out for now, as it will cause error in FastAPI backgound task
+    async def ask(
         self,
         ask_request: AskRequest,
     ):
@@ -164,11 +164,13 @@ class AskService:
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="understanding")
 
-                query_understanding_result = self._pipelines["query_understanding"].run(
+                query_understanding_result = await self._pipelines[
+                    "query_understanding"
+                ].run(
                     query=ask_request.query,
                 )
 
-                if not query_understanding_result["post_processor"]["is_valid_query"]:
+                if not query_understanding_result["post_process"]["is_valid_query"]:
                     logger.error(
                         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
                     )
