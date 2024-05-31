@@ -18,6 +18,7 @@ import {
   updateModelPrimaryKey,
   transformInvalidColumnName,
 } from './util';
+import { POSTGRESConnectionInfo } from '../adaptors/ibisAdaptor';
 
 const logger = getLogger('PostgresStrategy');
 logger.level = 'debug';
@@ -43,18 +44,21 @@ export class PostgresStrategy implements IDataSourceStrategy {
     const credentials = { password } as any;
     const encryptor = new Encryptor(this.ctx.config);
     const encryptedCredentials = encryptor.encrypt(credentials);
+    const connectionInfo = {
+      host,
+      port,
+      database,
+      user,
+      password: encryptedCredentials,
+      ssl,
+    } as POSTGRESConnectionInfo;
 
     const project = await this.ctx.projectRepository.createOne({
       displayName,
       schema: 'public',
       catalog: 'wrenai',
       type: DataSourceName.POSTGRES,
-      host,
-      port,
-      database,
-      user,
-      credentials: encryptedCredentials,
-      configurations: { ssl },
+      connectionInfo,
     });
     return project;
   }
@@ -63,12 +67,13 @@ export class PostgresStrategy implements IDataSourceStrategy {
     properties: PGDataSourceProperties,
   ): Promise<any> {
     const { displayName, user, password: newPassword, ssl } = properties;
+    const connectionInfo = this.getConnectionInfo();
     const {
       host,
       port,
       database,
-      credentials: oldEncryptedCredentials,
-    } = this.project;
+      password: oldEncryptedCredentials,
+    } = connectionInfo;
 
     const encryptor = new Encryptor(this.ctx.config);
     const { password: oldPassword } = JSON.parse(
@@ -91,12 +96,16 @@ export class PostgresStrategy implements IDataSourceStrategy {
 
     const credentials = { password } as any;
     const encryptedCredentials = encryptor.encrypt(credentials);
+    const newConnectionInfo = {
+      ...connectionInfo,
+      user,
+      password: encryptedCredentials,
+    };
     const project = await this.ctx.projectRepository.updateOne(
       this.project.id,
       {
         displayName,
-        user,
-        credentials: encryptedCredentials,
+        connectionInfo: newConnectionInfo,
       },
     );
     return project;
@@ -280,18 +289,26 @@ export class PostgresStrategy implements IDataSourceStrategy {
 
   private getPGConnector() {
     // get credentials decrypted
-    const { credentials: encryptedCredentials } = this.project;
+    const connectionInfo = this.getConnectionInfo();
+    const {
+      user,
+      host,
+      database,
+      port,
+      ssl,
+      password: encryptedCredentials,
+    } = connectionInfo;
     const encryptor = new Encryptor(this.ctx.config);
     const credentials = JSON.parse(encryptor.decrypt(encryptedCredentials));
 
     // connect to data source
     const connector = new PostgresConnector({
-      user: this.project.user,
+      user: user,
       password: credentials.password,
-      host: this.project.host,
-      database: this.project.database,
-      port: this.project.port,
-      ssl: this.project.configurations?.ssl,
+      host: host,
+      database: database,
+      port: port,
+      ssl: ssl,
     });
     return connector;
   }
@@ -407,5 +424,9 @@ export class PostgresStrategy implements IDataSourceStrategy {
       columns.push(...res);
     }
     return columns;
+  }
+
+  private getConnectionInfo(): POSTGRESConnectionInfo {
+    return this.project.connectionInfo as POSTGRESConnectionInfo;
   }
 }

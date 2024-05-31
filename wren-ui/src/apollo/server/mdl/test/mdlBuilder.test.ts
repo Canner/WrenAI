@@ -4,6 +4,7 @@ import {
   ModelColumn,
   RelationInfo,
   View,
+  BIG_QUERY_CONNECTION_INFO,
 } from '../../repositories';
 import { MDLBuilder, MDLBuilderBuildFromOptions } from '../mdlBuilder';
 import { ModelMDL, RelationMDL, ViewMDL } from '../type';
@@ -34,9 +35,11 @@ describe('MDLBuilder', () => {
         id: 1,
         type: 'bigquery',
         displayName: 'my project',
-        projectId: 'bq-project-id',
-        datasetId: 'my-dataset',
-        credentials: 'my-credential',
+        connectionInfo: {
+          projectId: 'bq-project-id',
+          datasetId: 'my-dataset',
+          credentials: 'my-credential',
+        } as BIG_QUERY_CONNECTION_INFO,
         catalog: 'wrenai',
         schema: 'public',
         sampleDataset: null,
@@ -209,9 +212,11 @@ describe('MDLBuilder', () => {
       id: 1,
       type: 'bigquery',
       displayName: 'my project',
-      projectId: 'bq-project-id',
-      datasetId: 'my-dataset',
-      credentials: 'my-credential',
+      connectionInfo: {
+        projectId: 'bq-project-id',
+        datasetId: 'my-dataset',
+        credentials: 'my-credential',
+      } as BIG_QUERY_CONNECTION_INFO,
       catalog: 'wrenai',
       schema: 'public',
       sampleDataset: null,

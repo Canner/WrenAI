@@ -7,7 +7,14 @@ import {
   SampleDatasetData,
 } from '../types';
 import { getLogger } from '@server/utils';
-import { Model, ModelColumn, Project } from '../repositories';
+import {
+  BIG_QUERY_CONNECTION_INFO,
+  DUCKDB_CONNECTION_INFO,
+  Model,
+  ModelColumn,
+  POSTGRES_CONNECTION_INFO,
+  Project,
+} from '../repositories';
 import {
   SampleDatasetName,
   SampleDatasetRelationship,
@@ -57,20 +64,21 @@ export class ProjectResolver {
   }
 
   public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {
-    let project: Project;
+    let id: number;
     try {
-      project = await ctx.projectService.getCurrentProject();
+      const project = await ctx.projectService.getCurrentProject();
+      id = project.id;
     } catch {
       // no project found
       return true;
     }
 
-    await ctx.deployService.deleteAllByProjectId(project.id);
-    await ctx.askingService.deleteAllByProjectId(project.id);
-    await ctx.modelService.deleteAllViewsByProjectId(project.id);
-    await ctx.modelService.deleteAllModelsByProjectId(project.id);
+    await ctx.deployService.deleteAllByProjectId(id);
+    await ctx.askingService.deleteAllByProjectId(id);
+    await ctx.modelService.deleteAllViewsByProjectId(id);
+    await ctx.modelService.deleteAllModelsByProjectId(id);
 
-    await ctx.projectService.deleteProject(project.id);
+    await ctx.projectService.deleteProject(id);
 
     return true;
   }
@@ -294,9 +302,9 @@ export class ProjectResolver {
   }
 
   private async deploy(ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
+    const { id } = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, project.id);
+    return await ctx.deployService.deploy(manifest, id);
   }
 
   private buildRelationInput(
@@ -369,18 +377,24 @@ export class ProjectResolver {
     } as DataSourceProperties;
 
     if (dataSourceType === DataSourceName.BIG_QUERY) {
-      properties.projectId = project.projectId;
-      properties.datasetId = project.datasetId;
+      const { projectId, datasetId } =
+        project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
+      properties.projectId = projectId;
+      properties.datasetId = datasetId;
     } else if (dataSourceType === DataSourceName.DUCKDB) {
-      properties.initSql = project.initSql;
-      properties.extensions = project.extensions;
-      properties.configurations = project.configurations;
+      const { initSql, extensions, configurations } =
+        project.connectionInfo as DUCKDB_CONNECTION_INFO;
+      properties.initSql = initSql;
+      properties.extensions = extensions;
+      properties.configurations = configurations;
     } else if (dataSourceType === DataSourceName.POSTGRES) {
-      properties.host = project.host;
-      properties.port = project.port;
-      properties.database = project.database;
-      properties.user = project.user;
-      properties.ssl = project.configurations?.ssl;
+      const { host, port, database, user, ssl } =
+        project.connectionInfo as POSTGRES_CONNECTION_INFO;
+      properties.host = host;
+      properties.port = port;
+      properties.database = database;
+      properties.user = user;
+      properties.ssl = ssl;
     }
 
     return properties;

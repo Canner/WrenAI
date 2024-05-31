@@ -1,5 +1,10 @@
 import { IConnector, CompactTable } from '../connectors/connector';
-import { Model, ModelColumn, Project } from '../repositories';
+import {
+  DUCKDB_CONNECTION_INFO,
+  Model,
+  ModelColumn,
+  Project,
+} from '../repositories';
 import { DataSourceName, DuckDBDataSourceProperties, IContext } from '../types';
 import {
   DuckDBConnector,
@@ -40,6 +45,11 @@ export class DuckDBStrategy implements IDataSourceStrategy {
     });
 
     await this.patchConfigToWrenEngine();
+    const connectionInfo = {
+      initSql: trim(initSql),
+      extensions,
+      configurations,
+    } as DUCKDB_CONNECTION_INFO;
 
     // save DataSource to database
     const project = await this.ctx.projectRepository.createOne({
@@ -47,9 +57,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       schema: 'public',
       catalog: 'wrenai',
       type: DataSourceName.DUCKDB,
-      initSql: trim(initSql),
-      configurations,
-      extensions,
+      connectionInfo,
     });
     return project;
   }
@@ -67,13 +75,16 @@ export class DuckDBStrategy implements IDataSourceStrategy {
 
     await this.patchConfigToWrenEngine();
 
+    const connectionInfo = {
+      initSql: trim(initSql),
+      extensions,
+      configurations,
+    } as DUCKDB_CONNECTION_INFO;
     const project = await this.ctx.projectRepository.updateOne(
       this.project.id,
       {
         displayName,
-        initSql: trim(initSql),
-        configurations,
-        extensions,
+        connectionInfo,
       },
     );
     return project;

@@ -1,7 +1,12 @@
 import { BigQueryOptions } from '@google-cloud/bigquery';
 import { capitalize } from 'lodash';
 import { IConnector } from '../connectors/connector';
-import { Model, ModelColumn, Project } from '../repositories';
+import {
+  BIG_QUERY_CONNECTION_INFO,
+  Model,
+  ModelColumn,
+  Project,
+} from '../repositories';
 import {
   AnalysisRelationInfo,
   BigQueryDataSourceProperties,
@@ -48,14 +53,17 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     // save DataSource to database
     const encryptor = new Encryptor(config);
     const encryptedCredentials = encryptor.encrypt(credentials);
+    const connectionInfo = {
+      projectId,
+      datasetId,
+      credentials: encryptedCredentials,
+    };
     const project = await this.ctx.projectRepository.createOne({
       displayName,
       schema: 'public',
       catalog: 'wrenai',
       type: DataSourceName.BIG_QUERY,
-      projectId,
-      datasetId,
-      credentials: encryptedCredentials,
+      connectionInfo,
     });
     return project;
   }
@@ -69,7 +77,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       projectId,
       datasetId,
       credentials: oldEncryptedCredentials,
-    } = this.project;
+    } = this.project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
 
     const encryptor = new Encryptor(config);
     const oldCredentials = JSON.parse(
@@ -88,7 +96,10 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       this.project.id,
       {
         displayName,
-        credentials: encryptedCredentials,
+        connectionInfo: {
+          ...this.project.connectionInfo,
+          credentials: encryptedCredentials,
+        },
       },
     );
     return project;
@@ -96,8 +107,9 @@ export class BigQueryStrategy implements IDataSourceStrategy {
 
   public async listTable({ formatToCompactTable }) {
     const connector = await this.getBQConnector();
+    const connectionInfo = this.getConnectionInfo();
     const listTableOptions = {
-      datasetId: this.project.datasetId,
+      datasetId: connectionInfo.datasetId,
       format: formatToCompactTable,
     } as BQListTableOptions;
     const tables = await connector.listTables(listTableOptions);
@@ -106,19 +118,16 @@ export class BigQueryStrategy implements IDataSourceStrategy {
 
   public async saveModels(tables: string[]) {
     const connector = await this.getBQConnector();
+    const connectionInfo = this.getConnectionInfo();
     const listTableOptions = {
-      datasetId: this.project.datasetId,
+      datasetId: connectionInfo.datasetId,
       format: false,
     } as BQListTableOptions;
     const dataSourceColumns = (await connector.listTables(
       listTableOptions,
     )) as BQColumnResponse[];
 
-    const models = await this.createModels(
-      this.project,
-      tables,
-      dataSourceColumns,
-    );
+    const models = await this.createModels(tables, dataSourceColumns);
     // create columns
     const columns = await this.createAllColumns(
       tables,
@@ -134,19 +143,16 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     primaryKey?: string,
   ) {
     const connector = await this.getBQConnector();
+    const connectionInfo = this.getConnectionInfo();
     const listTableOptions = {
-      datasetId: this.project.datasetId,
+      datasetId: connectionInfo.datasetId,
       format: false,
     } as BQListTableOptions;
     const dataSourceColumns = (await connector.listTables(
       listTableOptions,
     )) as BQColumnResponse[];
 
-    const models = await this.createModels(
-      this.project,
-      [table],
-      dataSourceColumns,
-    );
+    const models = await this.createModels([table], dataSourceColumns);
     const model = models[0];
     const modelColumns = await this.createColumns(
       columns,
@@ -167,8 +173,9 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       modelId: model.id,
     });
     const connector = await this.getBQConnector();
+    const connectionInfo = this.getConnectionInfo();
     const listTableOptions = {
-      datasetId: this.project.datasetId,
+      datasetId: connectionInfo.datasetId,
       format: false,
     } as BQListTableOptions;
     const dataSourceColumns = (await connector.listTables(
@@ -199,8 +206,9 @@ export class BigQueryStrategy implements IDataSourceStrategy {
 
   public async analysisRelation(models, columns) {
     const connector = await this.getBQConnector();
+    const connectionInfo = this.getConnectionInfo();
     const listConstraintOptions = {
-      datasetId: this.project.datasetId,
+      datasetId: connectionInfo.datasetId,
     };
     const constraints = await connector.listConstraints(listConstraintOptions);
     const relations = [];
@@ -310,7 +318,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
       this.project,
     );
     // fetch tables
-    const { projectId } = this.project;
+    const { projectId } = this.getConnectionInfo();
     const connectionOption: BigQueryOptions = {
       projectId,
       keyFilename: filePath,
@@ -319,11 +327,11 @@ export class BigQueryStrategy implements IDataSourceStrategy {
   }
 
   private async createModels(
-    project: Project,
     tables: string[],
     dataSourceColumns: BQColumnResponse[],
   ) {
     const projectId = this.project.id;
+    const { datasetId } = this.getConnectionInfo();
     const tableDescriptionMap = dataSourceColumns
       .filter((col) => col.table_description)
       .reduce((acc, column) => {
@@ -338,7 +346,7 @@ export class BigQueryStrategy implements IDataSourceStrategy {
         displayName: tableName, //use table name as displayName, referenceName and tableName
         referenceName: tableName,
         sourceTableName: tableName,
-        refSql: `select * from "${project.datasetId}".${tableName}`,
+        refSql: `select * from "${datasetId}".${tableName}`,
         cached: false,
         refreshTime: null,
         properties,
@@ -433,5 +441,8 @@ export class BigQueryStrategy implements IDataSourceStrategy {
     }
 
     return columns;
+  }
+  private getConnectionInfo(): BIG_QUERY_CONNECTION_INFO {
+    return this.project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
   }
 }
