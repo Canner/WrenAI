@@ -112,4 +112,17 @@ test.describe('Test E-commerce sample dataset', () => {
       },
     );
   });
+
+  test('Update view metadata successfully', async ({ page, baseURL }) => {
+    await modelingHelper.updateViewMetadata(
+      { page, baseURL },
+      {
+        viewDisplayName: 'avg review score by city',
+        viewDescription: '',
+        newViewDisplayName: 'avg review score per city',
+        newViewDescription:
+          'Average review score for orders placed by customers in each city.',
+      },
+    );
+  });
 });

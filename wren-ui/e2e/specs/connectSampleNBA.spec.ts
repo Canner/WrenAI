@@ -113,4 +113,17 @@ test.describe('Test NBA sample dataset', () => {
       },
     );
   });
+
+  test('Update view metadata successfully', async ({ page, baseURL }) => {
+    await modelingHelper.updateViewMetadata(
+      { page, baseURL },
+      {
+        viewDisplayName: 'teams with highest average points per game',
+        viewDescription: '',
+        newViewDisplayName: 'teams with the top average points per game',
+        newViewDescription:
+          'Describe the team with the highest average points scored per game',
+      },
+    );
+  });
 });
