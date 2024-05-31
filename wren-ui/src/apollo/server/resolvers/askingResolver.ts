@@ -294,14 +294,18 @@ export class AskingResolver {
     detail: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
       // extend view & sql to detail
       const viewId = parent?.detail?.viewId;
+      if (!viewId) return parent.detail;
       const view = viewId
         ? await ctx.viewRepository.findOneBy({ id: viewId })
         : null;
+      const displayName = view.properties
+        ? JSON.parse(view.properties)?.displayName
+        : view.name;
       return parent.detail
         ? {
             ...parent.detail,
             sql: format(constructCteSql(parent.detail.steps)),
-            view,
+            view: { ...view, displayName },
           }
         : null;
     },
@@ -316,6 +320,19 @@ export class AskingResolver {
   public getResultCandidateNestedResolver = () => ({
     sql: (parent: any, _args: any, _ctx: IContext) => {
       return format(parent.sql);
+    },
+    view: async (parent: any, _args: any, ctx: IContext) => {
+      const viewId = parent.view?.id;
+      if (!viewId) return parent.view;
+      const view = await ctx.viewRepository.findOneBy({ id: viewId });
+
+      const displayName = view.properties
+        ? JSON.parse(view.properties).displayName
+        : view.name;
+      return {
+        ...parent.view,
+        displayName,
+      };
     },
   });
 }
