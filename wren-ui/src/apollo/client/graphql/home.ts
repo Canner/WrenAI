@@ -27,6 +27,7 @@ const COMMON_RESPONSE = gql`
         id
         name
         statement
+        displayName
       }
     }
   }
@@ -55,6 +56,7 @@ export const ASKING_TASK = gql`
           id
           name
           statement
+          displayName
         }
       }
       error {
