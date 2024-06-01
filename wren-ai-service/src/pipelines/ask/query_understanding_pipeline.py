@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import List
+from typing import Any, List
 
 import orjson
 from hamilton import base
@@ -34,22 +34,6 @@ Let's think step by step.
 """
 
 
-builder = PromptBuilder(template=_prompt)
-
-
-def prompt(query: str) -> dict:
-    logger.debug(f"query: {query}")
-    return builder.run(query=query)
-
-
-generator = None
-
-
-async def generate(prompt: dict) -> dict:
-    logger.debug(f"prompt: {prompt}")
-    return await generator.run(prompt=prompt.get("prompt"))
-
-
 @component
 class QueryUnderstandingPostProcessor:
     @component.output_types(
@@ -75,10 +59,19 @@ class QueryUnderstandingPostProcessor:
             }
 
 
-post_processor = QueryUnderstandingPostProcessor()
+def prompt(query: str, prompt_builder: PromptBuilder) -> dict:
+    logger.debug(f"query: {query}")
+    return prompt_builder.run(query=query)
 
 
-def post_process(generate: dict) -> dict:
+async def generate(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {prompt}")
+    return await generator.run(prompt=prompt.get("prompt"))
+
+
+def post_process(
+    generate: dict, post_processor: QueryUnderstandingPostProcessor
+) -> dict:
     logger.debug(f"generate: {generate}")
     return post_processor.run(generate.get("replies"))
 
@@ -88,8 +81,10 @@ class QueryUnderstanding(BasicPipeline):
         self,
         llm_provider: LLMProvider,
     ):
-        global generator
-        generator = llm_provider.get_generator()
+        self.generator = llm_provider.get_generator()
+        self.prompt_builder = PromptBuilder(template=_prompt)
+        self.post_processor = QueryUnderstandingPostProcessor()
+
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -100,7 +95,15 @@ class QueryUnderstanding(BasicPipeline):
         query: str,
     ):
         logger.info("Ask QueryUnderstanding pipeline is running...")
-        return await self._pipe.execute(["post_process"], inputs={"query": query})
+        return await self._pipe.execute(
+            ["post_process"],
+            inputs={
+                "query": query,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
+            },
+        )
 
 
 if __name__ == "__main__":
