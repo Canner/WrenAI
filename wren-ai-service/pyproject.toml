@@ -16,7 +16,7 @@ qdrant-haystack = "==3.5.0"
 backoff = "==2.2.1"
 tqdm = "==4.66.4"
 numpy = "==1.26.4"
-sqlparse = "==0.4.4"
+sqlparse = "==0.5.0"
 sqlglot = "==22.5.0"
 orjson = "==3.10.3"
 

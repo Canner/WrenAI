@@ -9,7 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 requests = "^2.31.0"
-sqlparse = "^0.4.4"
+sqlparse = "^0.5.0"
 streamlit = "^1.32.2"
 watchdog = "^4.0.0"
 python-dotenv = "^1.0.1"
