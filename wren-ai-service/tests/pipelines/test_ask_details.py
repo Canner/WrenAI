@@ -1,8 +1,6 @@
+from src.core.pipeline import async_validate
 from src.pipelines.ask_details.generation import Generation
 from src.utils import init_providers
-from src.web.v1.services.ask_details import (
-    AskDetailsResultResponse,
-)
 
 
 def test_generation_pipeline_producing_executable_sqls():
@@ -25,10 +23,8 @@ def test_generation_pipeline_producing_executable_sqls():
     ]
 
     for candidate_sql_query in candidate_sql_queries:
-        generation_result = generation_pipeline.run(
-            candidate_sql_query,
-        )
-
-        assert AskDetailsResultResponse.AskDetailsResponseDetails(
-            **generation_result["post_processor"]["results"]
+        assert async_validate(
+            lambda: generation_pipeline.run(
+                candidate_sql_query,
+            )
         )

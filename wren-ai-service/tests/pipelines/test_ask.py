@@ -132,48 +132,54 @@ def test_retrieval_pipeline(
 def test_generation_pipeline():
     llm_provider, _ = init_providers()
     generation_pipeline = Generation(llm_provider=llm_provider)
-    generation_result = generation_pipeline.run(
-        "How many authors are there?",
-        contexts=GLOBAL_DATA["contexts"],
-        exclude=[],
+    generation_result = async_validate(
+        lambda: generation_pipeline.run(
+            "How many authors are there?",
+            contexts=GLOBAL_DATA["contexts"],
+            exclude=[],
+        )
     )
 
     assert AskResultResponse.AskResult(
-        **generation_result["post_processor"]["valid_generation_results"][0]
+        **generation_result["post_process"]["valid_generation_results"][0]
     )
 
-    generation_result = generation_pipeline.run(
-        "How many authors are there?",
-        contexts=GLOBAL_DATA["contexts"],
-        exclude=[{"statement": "SELECT 1 FROM author"}],
+    generation_result = async_validate(
+        lambda: generation_pipeline.run(
+            "How many authors are there?",
+            contexts=GLOBAL_DATA["contexts"],
+            exclude=[{"statement": "SELECT 1 FROM author"}],
+        )
     )
 
     assert AskResultResponse.AskResult(
-        **generation_result["post_processor"]["valid_generation_results"][0]
+        **generation_result["post_process"]["valid_generation_results"][0]
     )
 
 
 def test_followup_generation_pipeline():
     llm_provider, _ = init_providers()
     generation_pipeline = FollowUpGeneration(llm_provider=llm_provider)
-    generation_result = generation_pipeline.run(
-        "What are names of the books?",
-        contexts=GLOBAL_DATA["contexts"],
-        history=AskRequest.AskResponseDetails(
-            sql="SELECT COUNT(*) FROM book",
-            summary="Retrieve the number of books",
-            steps=[
-                SQLExplanation(
-                    sql="SELECT COUNT(*) FROM book",
-                    summary="Retrieve the number of books",
-                    cte_name="",
-                )
-            ],
-        ),
+    generation_result = async_validate(
+        lambda: generation_pipeline.run(
+            "What are names of the books?",
+            contexts=GLOBAL_DATA["contexts"],
+            history=AskRequest.AskResponseDetails(
+                sql="SELECT COUNT(*) FROM book",
+                summary="Retrieve the number of books",
+                steps=[
+                    SQLExplanation(
+                        sql="SELECT COUNT(*) FROM book",
+                        summary="Retrieve the number of books",
+                        cte_name="",
+                    )
+                ],
+            ),
+        )
     )
 
     assert AskResultResponse.AskResult(
-        **generation_result["post_processor"]["valid_generation_results"][0]
+        **generation_result["post_process"]["valid_generation_results"][0]
     )
 
 
@@ -183,20 +189,22 @@ def test_sql_correction_pipeline():
         llm_provider=llm_provider,
     )
 
-    sql_correction_result = sql_correction_pipeline.run(
-        contexts=GLOBAL_DATA["contexts"],
-        invalid_generation_results=[
-            {
-                "sql": "Select count(*) from books",
-                "summary": "Retrieve the number of books",
-                "error": 'ERROR:  com.google.cloud.bigquery.BigQueryException: Table "books" must be qualified with a dataset (e.g. dataset.table).',
-            }
-        ],
+    sql_correction_result = async_validate(
+        lambda: sql_correction_pipeline.run(
+            contexts=GLOBAL_DATA["contexts"],
+            invalid_generation_results=[
+                {
+                    "sql": "Select count(*) from books",
+                    "summary": "Retrieve the number of books",
+                    "error": 'ERROR:  com.google.cloud.bigquery.BigQueryException: Table "books" must be qualified with a dataset (e.g. dataset.table).',
+                }
+            ],
+        )
     )
 
     assert isinstance(
-        sql_correction_result["post_processor"]["valid_generation_results"], list
+        sql_correction_result["post_process"]["valid_generation_results"], list
     )
     assert isinstance(
-        sql_correction_result["post_processor"]["invalid_generation_results"], list
+        sql_correction_result["post_process"]["invalid_generation_results"], list
     )
