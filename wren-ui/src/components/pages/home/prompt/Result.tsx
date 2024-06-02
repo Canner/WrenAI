@@ -96,7 +96,7 @@ const ResultTemplate = ({ index, summary, sql, view, onSelect, onShowSQL }) => {
                       target="_blank"
                       rel="noreferrer noopener"
                     >
-                      {view.name}
+                      {view.displayName}
                     </Link>
                   </div>
                 </div>
