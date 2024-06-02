@@ -6,12 +6,12 @@ import pytest
 
 from src.core.pipeline import async_validate
 from src.pipelines.ask import (
-    generation_pipeline,
+    generation,
     historical_question,
     indexing,
-    query_understanding_pipeline,
-    retrieval_pipeline,
-    sql_correction_pipeline,
+    query_understanding,
+    retrieval,
+    sql_correction,
 )
 from src.utils import init_providers
 from src.web.v1.services.ask import (
@@ -32,10 +32,10 @@ def ask_service():
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
-            "query_understanding": query_understanding_pipeline.QueryUnderstanding(
+            "query_understanding": query_understanding.QueryUnderstanding(
                 llm_provider=llm_provider,
             ),
-            "retrieval": retrieval_pipeline.Retrieval(
+            "retrieval": retrieval.Retrieval(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
@@ -43,10 +43,10 @@ def ask_service():
                 llm_provider=llm_provider,
                 store_provider=document_store_provider,
             ),
-            "generation": generation_pipeline.Generation(
+            "generation": generation.Generation(
                 llm_provider=llm_provider,
             ),
-            "sql_correction": sql_correction_pipeline.SQLCorrection(
+            "sql_correction": sql_correction.SQLCorrection(
                 llm_provider=llm_provider,
             ),
         }

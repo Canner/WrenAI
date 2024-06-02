@@ -2,28 +2,28 @@ from typing import Callable, Tuple
 
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask import (
-    followup_generation_pipeline as ask_followup_generation_pipeline,
+    followup_generation as ask_followup_generation,
 )
 from src.pipelines.ask import (
-    generation_pipeline as ask_generation_pipeline,
+    generation as ask_generation,
 )
 from src.pipelines.ask import (
     historical_question,
 )
 from src.pipelines.ask import (
-    indexing as ask_indexing_pipeline,
+    indexing as ask_indexing,
 )
 from src.pipelines.ask import (
-    query_understanding_pipeline as ask_query_understanding_pipeline,
+    query_understanding as ask_query_understanding,
 )
 from src.pipelines.ask import (
-    retrieval_pipeline as ask_retrieval_pipeline,
+    retrieval as ask_retrieval,
 )
 from src.pipelines.ask import (
-    sql_correction_pipeline as ask_sql_correction_pipeline,
+    sql_correction as ask_sql_correction,
 )
 from src.pipelines.ask_details import (
-    generation_pipeline as ask_details_generation_pipeline,
+    generation as ask_details_generation,
 )
 from src.pipelines.semantics import description
 from src.utils import init_providers
@@ -63,14 +63,14 @@ def init_globals(
 
     ASK_SERVICE = AskService(
         pipelines={
-            "indexing": ask_indexing_pipeline.Indexing(
+            "indexing": ask_indexing.Indexing(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
-            "query_understanding": ask_query_understanding_pipeline.QueryUnderstanding(
+            "query_understanding": ask_query_understanding.QueryUnderstanding(
                 llm_provider=llm_provider,
             ),
-            "retrieval": ask_retrieval_pipeline.Retrieval(
+            "retrieval": ask_retrieval.Retrieval(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
@@ -78,13 +78,13 @@ def init_globals(
                 llm_provider=llm_provider,
                 store_provider=document_store_provider,
             ),
-            "generation": ask_generation_pipeline.Generation(
+            "generation": ask_generation.Generation(
                 llm_provider=llm_provider,
             ),
-            "sql_correction": ask_sql_correction_pipeline.SQLCorrection(
+            "sql_correction": ask_sql_correction.SQLCorrection(
                 llm_provider=llm_provider,
             ),
-            "followup_generation": ask_followup_generation_pipeline.FollowUpGeneration(
+            "followup_generation": ask_followup_generation.FollowUpGeneration(
                 llm_provider=llm_provider,
             ),
         }
@@ -92,7 +92,7 @@ def init_globals(
 
     ASK_DETAILS_SERVICE = AskDetailsService(
         pipelines={
-            "generation": ask_details_generation_pipeline.Generation(
+            "generation": ask_details_generation.Generation(
                 llm_provider=llm_provider,
             ),
         }

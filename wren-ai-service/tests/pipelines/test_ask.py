@@ -5,12 +5,12 @@ import pytest
 
 from src.core.pipeline import async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.pipelines.ask.followup_generation_pipeline import FollowUpGeneration
-from src.pipelines.ask.generation_pipeline import Generation
+from src.pipelines.ask.followup_generation import FollowUpGeneration
+from src.pipelines.ask.generation import Generation
 from src.pipelines.ask.indexing import Indexing
-from src.pipelines.ask.query_understanding_pipeline import QueryUnderstanding
-from src.pipelines.ask.retrieval_pipeline import Retrieval
-from src.pipelines.ask.sql_correction_pipeline import SQLCorrection
+from src.pipelines.ask.query_understanding import QueryUnderstanding
+from src.pipelines.ask.retrieval import Retrieval
+from src.pipelines.ask.sql_correction import SQLCorrection
 from src.utils import init_providers
 from src.web.v1.services.ask import AskRequest, AskResultResponse, SQLExplanation
 
