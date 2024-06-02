@@ -2,8 +2,8 @@
 name = "eval"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
-license = "APGL-3.0"
+authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>"]
+license = "AGPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
