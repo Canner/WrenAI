@@ -1,10 +1,13 @@
 import logging
-from typing import Dict, List
+import sys
+from typing import Any, Dict, List
 
-from haystack import Document, Pipeline
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
+from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.pipelines.ask.components.post_processors import GenerationPostProcessor
 from src.pipelines.ask.components.prompts import (
@@ -51,58 +54,76 @@ Let's think step by step.
 """
 
 
+## Start of Pipeline
+def prompt(
+    documents: List[Document],
+    invalid_generation_results: List[Dict],
+    alert: str,
+    prompt_builder: PromptBuilder,
+) -> dict:
+    logger.debug(f"documents: {documents}")
+    logger.debug(f"invalid_generation_results: {invalid_generation_results}")
+    return prompt_builder.run(
+        documents=documents,
+        invalid_generation_results=invalid_generation_results,
+        alert=alert,
+    )
+
+
+async def generate(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {prompt}")
+    return await generator.run(prompt=prompt.get("prompt"))
+
+
+def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+    logger.debug(f"generate: {generate}")
+    return post_processor.run(generate.get("replies"))
+
+
+## End of Pipeline
+
+
 class SQLCorrection(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
     ):
-        self._pipeline = Pipeline()
-        self._pipeline.add_component(
-            "sql_correction_prompt_builder",
-            PromptBuilder(template=sql_correction_user_prompt_template),
+        self.generator = llm_provider.get_generator(
+            system_prompt=text_to_sql_system_prompt
         )
-        self._pipeline.add_component(
-            "sql_correction_generator",
-            llm_provider.get_generator(system_prompt=text_to_sql_system_prompt),
+        self.prompt_builder = PromptBuilder(
+            template=sql_correction_user_prompt_template
         )
-        self._pipeline.add_component("post_processor", GenerationPostProcessor())
+        self.post_processor = GenerationPostProcessor()
 
-        self._pipeline.connect(
-            "sql_correction_prompt_builder.prompt", "sql_correction_generator.prompt"
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
-        self._pipeline.connect(
-            "sql_correction_generator.replies", "post_processor.replies"
-        )
-
-        super().__init__(self._pipeline)
 
     @timer
-    def run(
+    async def run(
         self,
         contexts: List[Document],
         invalid_generation_results: List[Dict[str, str]],
-        include_outputs_from: List[str] | None = None,
     ):
         logger.info("Ask SQLCorrection pipeline is running...")
-        return self._pipeline.run(
-            {
-                "sql_correction_prompt_builder": {
-                    "invalid_generation_results": invalid_generation_results,
-                    "documents": contexts,
-                    "alert": TEXT_TO_SQL_RULES,
-                },
+        return await self._pipe.execute(
+            ["post_process"],
+            inputs={
+                "invalid_generation_results": invalid_generation_results,
+                "documents": contexts,
+                "alert": TEXT_TO_SQL_RULES,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
             },
-            include_outputs_from=(
-                set(include_outputs_from) if include_outputs_from else None
-            ),
         )
 
 
 if __name__ == "__main__":
     llm_provider, _ = init_providers()
-    sql_correction_pipeline = SQLCorrection(
+    pipeline = SQLCorrection(
         llm_provider=llm_provider,
     )
 
-    print("generating sql_correction_pipeline.jpg to outputs/pipelines/ask...")
-    sql_correction_pipeline.draw("./outputs/pipelines/ask/sql_correction_pipeline.jpg")
+    async_validate(lambda: pipeline.run([], []))
