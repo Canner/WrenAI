@@ -2,6 +2,7 @@ import os
 from typing import Any, Optional, Tuple
 
 import orjson
+import streamlit as st
 from dotenv import load_dotenv
 from openai import AsyncClient
 from pydantic import BaseModel, ValidationError
@@ -80,12 +81,16 @@ Think step by step
         },
     ]
 
-    response = await llm_client.chat.completions.create(
-        model=os.getenv("OPENAI_GENERATION_MODEL", "gpt-3.5-turbo"),
-        messages=messages,
-        response_format={"type": "json_object"},
-        max_tokens=4096,
-        temperature=0.5,
-    )
+    try:
+        response = await llm_client.chat.completions.create(
+            model=os.getenv("OPENAI_GENERATION_MODEL", "gpt-3.5-turbo"),
+            messages=messages,
+            response_format={"type": "json_object"},
+            max_tokens=4096,
+            temperature=0.5,
+        )
 
-    return response.choices[0].message.content
+        return orjson.loads(response.choices[0].message.content)["results"]
+    except Exception as e:
+        st.error(f"Error generating question-sql-pairs: {e}")
+        return []
