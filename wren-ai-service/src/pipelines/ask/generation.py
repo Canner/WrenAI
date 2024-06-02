@@ -7,7 +7,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.ask.components.post_processors import (
-    init_generation_post_processor,
+    GenerationPostProcessor,
 )
 from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
@@ -98,7 +98,7 @@ class Generation(BasicPipeline):
             "text_to_sql_generator",
             llm_provider.get_generator(system_prompt=text_to_sql_system_prompt),
         )
-        self._pipeline.add_component("post_processor", init_generation_post_processor())
+        self._pipeline.add_component("post_processor", GenerationPostProcessor())
 
         self._pipeline.connect(
             "text_to_sql_prompt_builder.prompt", "text_to_sql_generator.prompt"

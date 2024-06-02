@@ -59,6 +59,7 @@ class QueryUnderstandingPostProcessor:
             }
 
 
+## Start of Pipeline
 def prompt(query: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"query: {query}")
     return prompt_builder.run(query=query)
@@ -74,6 +75,9 @@ def post_process(
 ) -> dict:
     logger.debug(f"generate: {generate}")
     return post_processor.run(generate.get("replies"))
+
+
+## End of Pipeline
 
 
 class QueryUnderstanding(BasicPipeline):
@@ -113,8 +117,3 @@ if __name__ == "__main__":
     )
 
     async_validate(lambda: pipeline.run("this is a test query"))
-
-    # print("generating query_understanding_pipeline.jpg to outputs/pipelines/ask...")
-    # query_understanding_pipeline.draw(
-    #     "./outputs/pipelines/ask/query_understanding_pipeline.jpg"
-    # )

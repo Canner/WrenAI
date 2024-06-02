@@ -302,72 +302,76 @@ class DDLConverter:
         return ddl_commands
 
 
-def clean_document_store(mdl_str: str) -> Dict[str, Any]:
+## Start of Pipeline
+def clean_document_store(mdl_str: str, cleaner: DocumentCleaner) -> Dict[str, Any]:
     logger.debug(f"input in clean_document_store: {mdl_str}")
     return cleaner.run(mdl=mdl_str)
 
 
 @extract_fields(dict(mdl=Dict[str, Any]))
-def validate_mdl(clean_document_store: Dict[str, Any]) -> Dict[str, Any]:
+def validate_mdl(
+    clean_document_store: Dict[str, Any], validator: MDLValidator
+) -> Dict[str, Any]:
     logger.debug(f"input in validate_mdl: {clean_document_store}")
     mdl = clean_document_store.get("mdl")
     res = validator.run(mdl=mdl)
     return dict(mdl=res["mdl"])
 
 
-def convert_to_ddl(mdl: Dict[str, Any]) -> Dict[str, Any]:
+def convert_to_ddl(mdl: Dict[str, Any], ddl_converter: DDLConverter) -> Dict[str, Any]:
     logger.debug(f"input in convert_to_ddl: {mdl}")
     return ddl_converter.run(mdl=mdl)
 
 
-def embed_ddl(convert_to_ddl: Dict[str, Any]) -> Dict[str, Any]:
+def embed_ddl(convert_to_ddl: Dict[str, Any], ddl_embedder: Any) -> Dict[str, Any]:
     logger.debug(f"input in embed_ddl: {convert_to_ddl}")
     return ddl_embedder.run(documents=convert_to_ddl["documents"])
 
 
-def write_ddl(embed_ddl: Dict[str, Any]) -> None:
+def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_ddl: {embed_ddl}")
     return ddl_writer.run(documents=embed_ddl["documents"])
 
 
-def convert_to_view(mdl: Dict[str, Any]) -> Dict[str, Any]:
+def convert_to_view(
+    mdl: Dict[str, Any], view_converter: ViewConverter
+) -> Dict[str, Any]:
     logger.debug(f"input in convert_to_view: {mdl}")
     return view_converter.run(mdl=mdl)
 
 
-def embed_view(convert_to_view: Dict[str, Any]) -> Dict[str, Any]:
+def embed_view(convert_to_view: Dict[str, Any], view_embedder: Any) -> Dict[str, Any]:
     logger.debug(f"input in embed_view: {convert_to_view}")
     return view_embedder.run(documents=convert_to_view["documents"])
 
 
-def write_view(embed_view: Dict[str, Any]) -> None:
+def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_view: {embed_view}")
     return view_writer.run(documents=embed_view["documents"])
+
+
+## End of Pipeline
 
 
 class Indexing(BasicPipeline):
     def __init__(
         self, llm_provider: LLMProvider, document_store_provider: DocumentStoreProvider
     ) -> None:
-        global cleaner, validator
-        global ddl_converter, ddl_embedder, ddl_writer
-        global view_converter, view_embedder, view_writer
-
         ddl_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")
 
-        cleaner = DocumentCleaner([ddl_store, view_store])
-        validator = MDLValidator()
+        self.cleaner = DocumentCleaner([ddl_store, view_store])
+        self.validator = MDLValidator()
 
-        ddl_converter = DDLConverter()
-        ddl_embedder = llm_provider.get_document_embedder()
-        ddl_writer = DocumentWriter(
+        self.ddl_converter = DDLConverter()
+        self.ddl_embedder = llm_provider.get_document_embedder()
+        self.ddl_writer = DocumentWriter(
             document_store=ddl_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
-        view_converter = ViewConverter()
-        view_embedder = llm_provider.get_document_embedder()
-        view_writer = DocumentWriter(
+        self.view_converter = ViewConverter()
+        self.view_embedder = llm_provider.get_document_embedder()
+        self.view_writer = DocumentWriter(
             document_store=view_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
@@ -380,7 +384,17 @@ class Indexing(BasicPipeline):
     async def run(self, mdl_str: str) -> Dict[str, Any]:
         return await self._pipe.execute(
             ["write_ddl", "write_view"],
-            inputs={"mdl_str": mdl_str},
+            inputs={
+                "mdl_str": mdl_str,
+                "cleaner": self.cleaner,
+                "validator": self.validator,
+                "ddl_converter": self.ddl_converter,
+                "ddl_embedder": self.ddl_embedder,
+                "ddl_writer": self.ddl_writer,
+                "view_converter": self.view_converter,
+                "view_embedder": self.view_embedder,
+                "view_writer": self.view_writer,
+            },
         )
 
 
