@@ -5,10 +5,10 @@
     },
     {
         "user_class_name": "IndexingUser",
-        "fixed_count": 2
+        "fixed_count": 0
     },
     {
         "user_class_name": "AskUser",
-        "fixed_count": 3
+        "fixed_count": 1
     }
 ]

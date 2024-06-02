@@ -8,14 +8,20 @@ from .utils import load_env_vars
 load_env_vars()
 filename = f"locust_report_{time.strftime("%Y%m%d_%H%M%S")}"
 
-if not Path("./outputs").exists():
-    Path("./outputs").mkdir()
+if not Path("./outputs/locust").exists():
+    Path("./outputs/locust").mkdir()
 
 os.system(
-    f"poetry run locust -f tests/locustfile.py --config tests/locust.conf --logfile outputs/{filename}.log --html outputs/{filename}.html --json > outputs/{filename}.json"
+    f"""
+    poetry run locust \
+    --config tests/locust.conf \
+    --logfile outputs/locust/{filename}.log \
+    --html outputs/locust/{filename}.html \
+    --json > outputs/locust/{filename}.json
+    """
 )
 
-with open(f"./outputs/{filename}.json", "r") as f:
+with open(f"./outputs/locust/{filename}.json", "r") as f:
     test_results = json.load(f)
 
 formatted = {
@@ -24,7 +30,7 @@ formatted = {
     "locustfile": "tests/locustfile.py",
     "test results": test_results,
 }
-with open(f"./outputs/{filename}.json", "w") as f:
-    json.dump(formatted, f)
+with open(f"./outputs/locust/{filename}.json", "w") as f:
+    json.dump(formatted, f, indent=2)
 
 print(f"get the test results in {filename}.json and {filename}.html")
