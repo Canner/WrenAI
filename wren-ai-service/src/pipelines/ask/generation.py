@@ -1,13 +1,16 @@
 import logging
-from typing import Dict, List
+import sys
+from typing import Any, Dict, List
 
-from haystack import Document, Pipeline
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
+from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.pipelines.ask.components.post_processors import (
-    init_generation_post_processor,
+    GenerationPostProcessor,
 )
 from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
@@ -84,59 +87,76 @@ Let's think step by step.
 """
 
 
+## Start of Pipeline
+def prompt(
+    query: str,
+    documents: List[Document],
+    exclude: List[Dict],
+    alert: str,
+    prompt_builder: PromptBuilder,
+) -> dict:
+    logger.debug(f"query: {query}")
+    logger.debug(f"documents: {documents}")
+    logger.debug(f"exclude: {exclude}")
+    return prompt_builder.run(
+        query=query, documents=documents, exclude=exclude, alert=alert
+    )
+
+
+async def generate(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {prompt}")
+    return await generator.run(prompt=prompt.get("prompt"))
+
+
+def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+    logger.debug(f"generate: {generate}")
+    return post_processor.run(generate.get("replies"))
+
+
+## End of Pipeline
+
+
 class Generation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
     ):
-        self._pipeline = Pipeline()
-        self._pipeline.add_component(
-            "text_to_sql_prompt_builder",
-            PromptBuilder(template=text_to_sql_user_prompt_template),
+        self.generator = llm_provider.get_generator(
+            system_prompt=text_to_sql_system_prompt
         )
-        self._pipeline.add_component(
-            "text_to_sql_generator",
-            llm_provider.get_generator(system_prompt=text_to_sql_system_prompt),
-        )
-        self._pipeline.add_component("post_processor", init_generation_post_processor())
+        self.prompt_builder = PromptBuilder(template=text_to_sql_user_prompt_template)
+        self.post_processor = GenerationPostProcessor()
 
-        self._pipeline.connect(
-            "text_to_sql_prompt_builder.prompt", "text_to_sql_generator.prompt"
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
-        self._pipeline.connect(
-            "text_to_sql_generator.replies", "post_processor.replies"
-        )
-        super().__init__(self._pipeline)
 
     @timer
-    def run(
+    async def run(
         self,
         query: str,
         contexts: List[Document],
         exclude: List[Dict],
-        include_outputs_from: List[str] | None = None,
     ):
         logger.info("Ask Generation pipeline is running...")
-        return self._pipeline.run(
-            {
-                "text_to_sql_prompt_builder": {
-                    "query": query,
-                    "documents": contexts,
-                    "alert": TEXT_TO_SQL_RULES,
-                    "exclude": exclude,
-                }
+        return await self._pipe.execute(
+            ["post_process"],
+            inputs={
+                "query": query,
+                "documents": contexts,
+                "exclude": exclude,
+                "alert": TEXT_TO_SQL_RULES,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
             },
-            include_outputs_from=(
-                set(include_outputs_from) if include_outputs_from else None
-            ),
         )
 
 
 if __name__ == "__main__":
     llm_provider, _ = init_providers()
-    generation_pipeline = Generation(
+    pipeline = Generation(
         llm_provider=llm_provider,
     )
 
-    print("generating generation_pipeline.jpg to outputs/pipelines/ask...")
-    generation_pipeline.draw("./outputs/pipelines/ask/generation_pipeline.jpg")
+    async_validate(lambda: pipeline.run("this is a test query", [], []))
