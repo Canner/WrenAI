@@ -3,6 +3,7 @@ name = "wren-ai-service"
 version = "0.4.0"
 description = ""
 authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
+license = "AGPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
