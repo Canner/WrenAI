@@ -48,7 +48,6 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     logging.info(f"Total finished queries: {len(finished_query)}")
     logging.info(f"Total successful queries: {len(successful_query)}")
-    ##logging.info(f"successful queries: {successful_query}")
 
 
 class SemanticsDescriptionsUser(FastHttpUser):

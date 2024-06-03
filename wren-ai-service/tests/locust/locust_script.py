@@ -3,7 +3,7 @@ import os
 import time
 from pathlib import Path
 
-from .utils import load_env_vars
+from src.utils import load_env_vars
 
 load_env_vars()
 filename = f"locust_report_{time.strftime("%Y%m%d_%H%M%S")}"
@@ -14,7 +14,6 @@ if not Path("./outputs/locust").exists():
 os.system(
     f"""
     poetry run locust \
-    --config tests/locust.conf \
     --logfile outputs/locust/{filename}.log \
     --html outputs/locust/{filename}.html \
     --json > outputs/locust/{filename}.json
@@ -27,7 +26,7 @@ with open(f"./outputs/locust/{filename}.json", "r") as f:
 formatted = {
     "llm provider": os.getenv("LLM_PROVIDER"),
     "generation model": os.getenv("OPENAI_GENERATION_MODEL"),
-    "locustfile": "tests/locustfile.py",
+    "locustfile": "tests/locust/locustfile.py",
     "test results": test_results,
 }
 with open(f"./outputs/locust/{filename}.json", "w") as f:
