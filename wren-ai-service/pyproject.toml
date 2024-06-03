@@ -3,6 +3,7 @@ name = "wren-ai-service"
 version = "0.4.0"
 description = ""
 authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
+license = "AGPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -16,7 +17,7 @@ qdrant-haystack = "==3.5.0"
 backoff = "==2.2.1"
 tqdm = "==4.66.4"
 numpy = "==1.26.4"
-sqlparse = "==0.4.4"
+sqlparse = "==0.5.0"
 sqlglot = "==22.5.0"
 orjson = "==3.10.3"
 
