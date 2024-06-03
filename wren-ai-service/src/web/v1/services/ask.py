@@ -188,7 +188,7 @@ class AskService:
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="searching")
 
-                retrieval_result = self._pipelines["retrieval"].run(
+                retrieval_result = await self._pipelines["retrieval"].run(
                     query=ask_request.query,
                 )
                 documents = retrieval_result.get("retrieval", {}).get("documents", [])
@@ -217,7 +217,7 @@ class AskService:
                 )
 
                 if ask_request.history:
-                    text_to_sql_generation_results = self._pipelines[
+                    text_to_sql_generation_results = await self._pipelines[
                         "followup_generation"
                     ].run(
                         query=ask_request.query,
@@ -225,7 +225,9 @@ class AskService:
                         history=ask_request.history,
                     )
                 else:
-                    text_to_sql_generation_results = self._pipelines["generation"].run(
+                    text_to_sql_generation_results = await self._pipelines[
+                        "generation"
+                    ].run(
                         query=ask_request.query,
                         contexts=documents,
                         exclude=historical_question_result,
@@ -250,7 +252,9 @@ class AskService:
                 if text_to_sql_generation_results["post_processor"][
                     "invalid_generation_results"
                 ]:
-                    sql_correction_results = self._pipelines["sql_correction"].run(
+                    sql_correction_results = await self._pipelines[
+                        "sql_correction"
+                    ].run(
                         contexts=documents,
                         invalid_generation_results=text_to_sql_generation_results[
                             "post_processor"
