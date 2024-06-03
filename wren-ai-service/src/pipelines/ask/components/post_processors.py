@@ -49,7 +49,3 @@ class GenerationPostProcessor:
                 "valid_generation_results": [],
                 "invalid_generation_results": [],
             }
-
-
-def init_generation_post_processor():
-    return GenerationPostProcessor()

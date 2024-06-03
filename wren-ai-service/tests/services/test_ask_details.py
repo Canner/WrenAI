@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from src.pipelines.ask_details import generation_pipeline
+from src.pipelines.ask_details import generation
 from src.utils import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
@@ -16,7 +16,7 @@ def ask_details_service():
     llm_provider, _ = init_providers()
     return AskDetailsService(
         {
-            "generation": generation_pipeline.Generation(
+            "generation": generation.Generation(
                 llm_provider=llm_provider,
             ),
         }
