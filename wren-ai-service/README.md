@@ -44,7 +44,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 - to run the load test
   - setup `DATASET_NAME` in `.env.dev`
   - adjust test config if needed
-    - adjust test config in `tests/locust/locust.conf`
+    - adjust test config in pyproject.toml `tool.locust` section
     - adjust user count in `tests/locust/config_users.json`
   - in wren-ai-service folder, run `make run-all` to start the docker containers
   - in wren-ai-service folder, run `make start` to start the ai service
