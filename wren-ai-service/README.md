@@ -42,14 +42,9 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
   - restart wren ai service
   - check `outputs` folder for the evaluation result file
 - to run the load test
-  - Choose between the 2 setup options:
-      - Setup option 1: demo env setup
-        - in the demo folder, run `make prepare` to start the docker containers
-        - in the demo folder, run `make ai` to start the ai service
-      - Setup option 2: normal env setup
-        - setup `DATASET_NAME` in `.env.dev`
-        - in wren-ai-service folder, run `make run-all` to start the docker containers
-        - in wren-ai-service folder, run `make start` to start the ai service
+  - setup `DATASET_NAME` in `.env.dev`
+  - in wren-ai-service folder, run `make run-all` to start the docker containers
+  - in wren-ai-service folder, run `make start` to start the ai service
   - run `make load-test`
   - check reports in /outputs folder, there are 3 files with filename **locust_report_{test_timestamp}**:
     - .json: test report in json format, including info like llm provider, version
