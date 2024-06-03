@@ -3,7 +3,7 @@ name = "wren-ai-service-demo"
 version = "0.1.0"
 description = ""
 authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>"]
-license = "Apache 2.0"
+license = "AGPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
