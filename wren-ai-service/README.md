@@ -49,7 +49,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
   - in wren-ai-service folder, run `make run-all` to start the docker containers
   - in wren-ai-service folder, run `make start` to start the ai service
   - run `make load-test`
-  - check reports in /outputs folder, there are 3 files with filename **locust_report_{test_timestamp}**:
+  - check reports in /outputs/locust folder, there are 3 files with filename **locust_report_{test_timestamp}**:
     - .json: test report in json format, including info like llm provider, version
     - .html: test report in html format, showing tables and charts
     - .log: test log
