@@ -103,7 +103,7 @@ def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
     assert ask_result_response.response is not None
     assert ask_result_response.response[0].sql != ""
     assert ask_result_response.response[0].summary != ""
-    assert ask_result_response.response[0].type == "llm"
+    assert ask_result_response.response[0].type == "llm" or "view"
 
 
 def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):

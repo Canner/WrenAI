@@ -57,7 +57,7 @@ class AskDetailsService:
         self._pipelines = pipelines
         self.ask_details_results: dict[str, AskDetailsResultResponse] = {}
 
-    def ask_details(
+    async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,
     ):
@@ -78,11 +78,11 @@ class AskDetailsService:
                 status="generating"
             )
 
-            generation_result = self._pipelines["generation"].run(
+            generation_result = await self._pipelines["generation"].run(
                 sql=ask_details_request.sql,
             )
 
-            ask_details_result = generation_result["post_processor"]["results"]
+            ask_details_result = generation_result["post_process"]["results"]
 
             if not ask_details_result["steps"]:
                 ask_details_result["steps"] = [
