@@ -1,13 +1,16 @@
 import logging
 import os
+import sys
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import orjson
-from haystack import Pipeline, component
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
+from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.pipelines.ask_details.components.prompts import (
     ask_details_system_prompt,
@@ -66,7 +69,7 @@ class GenerationPostProcessor:
         for step in steps:
             step["sql"] = add_quotes(step["sql"])
 
-        sql = _build_cte_query(steps)
+        sql = self._build_cte_query(steps)
         logger.debug(f"GenerationPostProcessor: steps: {pformat(steps)}")
         logger.debug(f"GenerationPostProcessor: final sql: {sql}")
 
@@ -88,13 +91,33 @@ class GenerationPostProcessor:
             },
         }
 
+    def _build_cte_query(self, steps) -> str:
+        ctes = ",\n".join(
+            f"{step['cte_name']} AS ({step['sql']})"
+            for step in steps
+            if step["cte_name"]
+        )
 
-def _build_cte_query(steps) -> str:
-    ctes = ",\n".join(
-        f"{step['cte_name']} AS ({step['sql']})" for step in steps if step["cte_name"]
-    )
+        return f"WITH {ctes}\n" + steps[-1]["sql"] if ctes else steps[-1]["sql"]
 
-    return f"WITH {ctes}\n" + steps[-1]["sql"] if ctes else steps[-1]["sql"]
+
+## Start of Pipeline
+def prompt(sql: str, prompt_builder: PromptBuilder) -> dict:
+    logger.debug(f"sql: {sql}")
+    return prompt_builder.run(sql=sql)
+
+
+async def generate(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {prompt}")
+    return await generator.run(prompt=prompt.get("prompt"))
+
+
+def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+    logger.debug(f"generate: {generate}")
+    return post_processor.run(generate.get("replies"))
+
+
+## End of Pipeline
 
 
 class Generation(BasicPipeline):
@@ -102,45 +125,33 @@ class Generation(BasicPipeline):
         self,
         llm_provider: LLMProvider,
     ):
-        self._pipeline = Pipeline()
-        self._pipeline.add_component(
-            "ask_details_prompt_builder",
-            PromptBuilder(template=ask_details_user_prompt_template),
+        self.generator = llm_provider.get_generator(
+            system_prompt=ask_details_system_prompt
         )
-        self._pipeline.add_component(
-            "ask_details_generator",
-            llm_provider.get_generator(system_prompt=ask_details_system_prompt),
-        )
-        self._pipeline.add_component("post_processor", GenerationPostProcessor())
+        self.prompt_builder = PromptBuilder(template=ask_details_user_prompt_template)
+        self.post_processor = GenerationPostProcessor()
 
-        self._pipeline.connect(
-            "ask_details_prompt_builder.prompt", "ask_details_generator.prompt"
-        )
-        self._pipeline.connect(
-            "ask_details_generator.replies", "post_processor.replies"
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        super().__init__(self._pipeline)
-
-    def run(self, sql: str, include_outputs_from: List[str] | None = None):
+    async def run(self, sql: str):
         logger.info("Ask Details Generation pipeline is running...")
-        return self._pipeline.run(
-            {
-                "ask_details_prompt_builder": {
-                    "sql": sql,
-                },
+        return await self._pipe.execute(
+            ["post_process"],
+            inputs={
+                "sql": sql,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
             },
-            include_outputs_from=(
-                set(include_outputs_from) if include_outputs_from else None
-            ),
         )
 
 
 if __name__ == "__main__":
     llm_provider, _ = init_providers()
-    generation_pipeline = Generation(
+    pipeline = Generation(
         llm_provider=llm_provider,
     )
 
-    print("generating generation_pipeline.jpg to outputs/pipelines/ask_details...")
-    generation_pipeline.draw("./outputs/pipelines/ask_details/generation_pipeline.jpg")
+    async_validate(lambda: pipeline.run("SELECT * FROM table_name"))

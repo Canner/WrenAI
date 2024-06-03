@@ -7,7 +7,7 @@ from src.eval.ask_details.utils import (
     Summary,
     _prepare_ask_details_eval_data,
 )
-from src.pipelines.ask_details.generation_pipeline import Generation
+from src.pipelines.ask_details.generation import Generation
 from src.utils import init_providers, load_env_vars
 
 INPUT_PATH = "./src/eval/ask_details/data/baseball_1_data.json"
