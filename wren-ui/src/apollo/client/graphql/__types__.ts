@@ -833,6 +833,7 @@ export type ValidateViewInput = {
 
 export type ViewInfo = {
   __typename?: 'ViewInfo';
+  displayName: Scalars['String'];
   id: Scalars['Int'];
   name: Scalars['String'];
   statement: Scalars['String'];
