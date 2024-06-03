@@ -42,18 +42,20 @@ class OpenAILLMProvider(LLMProvider):
     def __init__(
         self,
         api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
+        api_base: Secret = Secret.from_env_var("OPENAI_API_BASE"),
         generation_model: str = os.getenv("OPENAI_GENERATION_MODEL")
         or GENERATION_MODEL_NAME,
     ):
-        def _verify_api_key(api_key: str) -> None:
+        def _verify_api_key(api_key: str, api_base: str) -> None:
             """
             this is a temporary solution to verify that the required environment variables are set
             """
-            OpenAI(api_key=api_key).models.list()
+            OpenAI(api_key=api_key, base_url=api_base).models.list()
 
-        _verify_api_key(api_key.resolve_value())
+        _verify_api_key(api_key.resolve_value(), api_base.resolve_value())
         logger.info(f"Using OpenAI Generation Model: {generation_model}")
         self._api_key = api_key
+        self._api_base = api_base
         self._generation_model = generation_model
 
     def get_generator(
@@ -63,6 +65,7 @@ class OpenAILLMProvider(LLMProvider):
     ):
         return CustomOpenAIGenerator(
             api_key=self._api_key,
+            api_base_url=self._api_base.resolve_value(),
             model=self._generation_model,
             system_prompt=system_prompt,
             generation_kwargs=model_kwargs,
@@ -75,6 +78,7 @@ class OpenAILLMProvider(LLMProvider):
     ):
         return OpenAITextEmbedder(
             api_key=self._api_key,
+            api_base_url=self._api_base.resolve_value(),
             model=model_name,
             dimensions=model_dim,
         )
@@ -86,6 +90,7 @@ class OpenAILLMProvider(LLMProvider):
     ):
         return OpenAIDocumentEmbedder(
             api_key=self._api_key,
+            api_base_url=self._api_base.resolve_value(),
             model=model_name,
             dimensions=model_dim,
         )

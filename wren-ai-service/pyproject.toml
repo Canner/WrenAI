@@ -6,7 +6,7 @@ authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@c
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "==3.12.0"
+python = "^3.12"
 fastapi = "==0.109.2"
 uvicorn = {extras = ["standard"], version = "==0.29.0"}
 python-dotenv = "==1.0.1"
