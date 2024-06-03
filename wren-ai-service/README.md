@@ -76,3 +76,8 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 ## Adding your preferred LLM or Document Store
 
 Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM or Document Store.
+
+## Related Issues or PRs
+
+- [Issues](https://github.com/Canner/WrenAI/issues?q=is%3Aopen+is%3Aissue+label%3Amodule%2Fai-service)
+- [PRs](https://github.com/Canner/WrenAI/pulls?q=is%3Aopen+is%3Apr+label%3Amodule%2Fai-service)
