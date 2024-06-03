@@ -127,13 +127,18 @@ export class PostgresStrategy implements IDataSourceStrategy {
     return tables;
   }
 
+  // tables: ['public.table1', 'public.table2]
   public async saveModels(tables: string[]) {
     const connector = this.getPGConnector();
     const dataSourceColumns = (await connector.listTables({
       format: false,
     })) as PostgresColumnResponse[];
 
-    const models = await this.createModels(tables, connector);
+    const models = await this.createModels(
+      tables,
+      connector,
+      dataSourceColumns,
+    );
     // create columns
     const columns = await this.createAllColumns(
       tables,
@@ -154,7 +159,11 @@ export class PostgresStrategy implements IDataSourceStrategy {
       format: false,
     })) as PostgresColumnResponse[];
 
-    const models = await this.createModels([table], connector);
+    const models = await this.createModels(
+      [table],
+      connector,
+      dataSourceColumns,
+    );
     const model = models[0];
     // create columns
     const modelColumns = await this.createColumns(
@@ -313,13 +322,28 @@ export class PostgresStrategy implements IDataSourceStrategy {
     return connector;
   }
 
-  private async createModels(tables: string[], connector: PostgresConnector) {
+  private async createModels(
+    tables: string[],
+    connector: PostgresConnector,
+    dataSourceColumns: PostgresColumnResponse[],
+  ) {
     const projectId = this.project.id;
     const modelValues = tables.map((compactTableName) => {
       const { schema, tableName } =
         connector.parseCompactTableName(compactTableName);
       // make referenceName = schema + _ + tableName
       const referenceName = `${schema}_${tableName}`;
+
+      // store schema and table name in properties, for build tableReference in mdl
+      const dataSourceColumn = dataSourceColumns.find(
+        (col) => col.table_name === tableName && col.table_schema === schema,
+      );
+      const properties = {
+        schema,
+        table: tableName,
+        catalog: dataSourceColumn?.table_catalog,
+      };
+
       const model = {
         projectId,
         displayName: compactTableName, // use table name as displayName, referenceName and tableName
@@ -328,6 +352,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
         refSql: `select * from "${schema}"."${tableName}"`,
         cached: false,
         refreshTime: null,
+        properties: JSON.stringify(properties),
       } as Partial<Model>;
       return model;
     });

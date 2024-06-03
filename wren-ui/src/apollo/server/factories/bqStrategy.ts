@@ -339,8 +339,18 @@ export class BigQueryStrategy implements IDataSourceStrategy {
         return acc;
       }, {});
     const modelValues = tables.map((tableName) => {
+      const dataSourceColumn = dataSourceColumns.find(
+        (col) => col.table_name === tableName,
+      );
+      const { table_schema, table_catalog } = dataSourceColumn;
       const description = tableDescriptionMap[tableName];
-      const properties = description ? JSON.stringify({ description }) : null;
+      const properties = JSON.stringify({
+        description,
+        schema: table_schema,
+        catalog: table_catalog,
+        table: tableName,
+      });
+
       const model = {
         projectId,
         displayName: tableName, //use table name as displayName, referenceName and tableName

@@ -242,9 +242,9 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       const compactTable = compactTables.find(
         (table) => table.name === tableName,
       );
-      const properties = compactTable.properties
-        ? JSON.stringify(compactTable.properties)
-        : null;
+
+      // compactTable contain schema and catalog, these information are for building tableReference in mdl
+      const properties = { ...compactTable.properties, table: tableName };
       const model = {
         projectId,
         displayName: tableName, //use table name as displayName, referenceName and tableName
@@ -253,7 +253,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
         refSql: `select * from ${compactTable.properties.schema}.${tableName}`,
         cached: false,
         refreshTime: null,
-        properties,
+        properties: properties ? JSON.stringify(properties) : null,
       } as Partial<Model>;
       return model;
     });
