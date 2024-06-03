@@ -126,4 +126,172 @@ test.describe('Test NBA sample dataset', () => {
       },
     );
   });
+
+  test('Calculated Fields CRUD successfully', async ({ page }) => {
+    await page.goto('/modeling');
+    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+    const modelDisplayName = 'game';
+    const cfName = 'count of games';
+    const expression = 'Sum';
+    const toFieldModelDisplayName = 'line_score';
+    const toFieldColumnDisplayName = 'GameId';
+    const newToFieldModelDisplayName = 'player_games';
+    const newToFieldColumnDisplayName = 'GameID';
+
+    await page
+      .getByRole('complementary')
+      .getByText(modelDisplayName, { exact: true })
+      .click();
+
+    // add calculated field
+    await page
+      .getByTestId(`diagram__model-node__${modelDisplayName}`)
+      .locator('div')
+      .filter({ hasText: /^Calculated Fields$/ })
+      .getByRole('button')
+      .first()
+      .click();
+
+    await expect(page.locator('.ant-modal-mask')).toBeVisible();
+    await expect(page.locator('div.ant-modal')).toBeVisible();
+    await expect(
+      page
+        .locator('div.ant-modal-title')
+        .filter({ hasText: 'Add calculated field' }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByLabel('Add calculated field')
+        .getByLabel('Close', { exact: true }),
+    ).toBeVisible();
+
+    await page.getByLabel('Name').click();
+    await page.getByLabel('Name').fill(cfName);
+
+    await page.getByTestId('common__descriptive-select').click();
+    await page.getByTitle(expression).locator('div').click();
+
+    await expect(page.getByTestId('common__lineage')).toBeVisible();
+
+    await expect(
+      page
+        .getByTestId('common__lineage-field-block')
+        .getByText(modelDisplayName, { exact: true }),
+    ).toBeVisible();
+
+    await page.getByTestId('common__lineage-fields-select').click();
+
+    // for skip disabled item
+    await page.getByTestId('common__lineage-fields-select').press('ArrowDown');
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: toFieldModelDisplayName })
+      .scrollIntoViewIfNeeded();
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: toFieldModelDisplayName })
+      .click();
+
+    await expect(
+      page
+        .getByTestId('common__lineage-field-block')
+        .getByText(toFieldModelDisplayName, { exact: true }),
+    ).toHaveCount(2);
+
+    await expect(page.getByText('Please select a field.')).toBeVisible();
+    await page.getByTestId('common__lineage-fields-select').last().click();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: toFieldColumnDisplayName })
+      .scrollIntoViewIfNeeded();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: toFieldColumnDisplayName })
+      .click();
+
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Successfully created calculated field.'),
+    ).toBeVisible();
+
+    // update calculated field
+    await page
+      .getByTestId(`diagram__model-node__${modelDisplayName}`)
+      .getByRole('button', { name: 'more' })
+      .nth(1)
+      .click();
+
+    await page.getByText('Edit').click();
+
+    await page
+      .getByTestId('common__lineage-field-block')
+      .filter({ hasText: toFieldModelDisplayName })
+      .getByText(toFieldColumnDisplayName, { exact: true })
+      .click();
+
+    await page
+      .getByTestId('common__lineage-fields-select')
+      .last()
+      .press('ArrowUp');
+    await page
+      .getByTestId('common__lineage-fields-select')
+      .last()
+      .press('ArrowUp');
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .getByText(newToFieldModelDisplayName, { exact: true })
+      .scrollIntoViewIfNeeded();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .getByText(newToFieldModelDisplayName, { exact: true })
+      .click();
+    await expect(
+      page
+        .getByTestId('common__lineage-field-block')
+        .getByText(newToFieldModelDisplayName, { exact: true })
+        .last(),
+    ).toBeVisible();
+
+    await page.getByTestId('common__lineage-fields-select').last().click();
+    await page
+      .getByTestId('common__lineage-fields-select')
+      .last()
+      .press('ArrowDown');
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .getByText(newToFieldColumnDisplayName, { exact: true })
+      .scrollIntoViewIfNeeded();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .getByText(newToFieldColumnDisplayName, { exact: true })
+      .click();
+
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Successfully updated calculated field.'),
+    ).toBeVisible();
+
+    // delete calculated field
+    await page
+      .getByRole('complementary')
+      .getByText(modelDisplayName, { exact: true })
+      .click();
+    await page
+      .getByTestId(`diagram__model-node__${modelDisplayName}`)
+      .getByRole('button', { name: 'more' })
+      .nth(1)
+      .click();
+    await page.getByText('Delete', { exact: true }).click();
+    await page.getByRole('button', { name: 'Delete' }).click();
+    await expect(
+      page.getByText('Successfully deleted calculated field.'),
+    ).toBeVisible();
+  });
 });

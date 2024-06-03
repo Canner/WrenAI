@@ -115,7 +115,10 @@ export default function FieldSelect(props: IterableComponent<Props>) {
   };
 
   return isModelOrRelationshipNode ? (
-    <FieldBox className="adm-fieldBox flex-shrink-0">
+    <FieldBox
+      className="adm-fieldBox flex-shrink-0"
+      data-testid="common__lineage-field-block"
+    >
       <FieldHeader className="py-1 px-3">
         <ModelIcon className="mr-1 flex-shrink-0" />
         <div
@@ -142,6 +145,7 @@ export default function FieldSelect(props: IterableComponent<Props>) {
         onSelect={(value) => {
           onChange && onChange(value, index);
         }}
+        data-testid="common__lineage-fields-select"
       />
     </FieldBox>
   ) : null;
