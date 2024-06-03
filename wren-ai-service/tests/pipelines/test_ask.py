@@ -119,8 +119,10 @@ def test_retrieval_pipeline(
         document_store_provider=document_store_provider,
     )
 
-    retrieval_result = retrieval_pipeline.run(
-        "How many books are there?",
+    retrieval_result = async_validate(
+        lambda: retrieval_pipeline.run(
+            "How many books are there?",
+        )
     )
 
     assert retrieval_result is not None
