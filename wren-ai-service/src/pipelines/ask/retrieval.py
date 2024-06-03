@@ -1,14 +1,30 @@
 import logging
-from typing import List
+import sys
+from typing import Any
 
-from haystack import Pipeline
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import init_providers, load_env_vars, timer
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
+
+
+## Start of Pipeline
+def embedding(query: str, embedder: Any) -> dict:
+    logger.debug(f"query: {query}")
+    return embedder.run(query)
+
+
+def retrieval(embedding: dict, retriever: Any) -> dict:
+    logger.debug(f"embedding: {embedding}")
+    return retriever.run(query_embedding=embedding.get("embedding"))
+
+
+## End of Pipeline
 
 
 class Retrieval(BasicPipeline):
@@ -17,38 +33,33 @@ class Retrieval(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
     ):
-        self._pipeline = Pipeline()
-        self._pipeline.add_component("embedder", llm_provider.get_text_embedder())
-        self._pipeline.add_component(
-            "retriever",
-            document_store_provider.get_retriever(document_store_provider.get_store()),
+        self._embedder = llm_provider.get_text_embedder()
+        self._retriever = document_store_provider.get_retriever(
+            document_store_provider.get_store()
         )
 
-        self._pipeline.connect("embedder.embedding", "retriever.query_embedding")
-
-        super().__init__(self._pipeline)
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
 
     @timer
-    def run(self, query: str, include_outputs_from: List[str] | None = None):
+    async def run(self, query: str):
         logger.info("Ask Retrieval pipeline is running...")
-        return self._pipeline.run(
-            {
-                "embedder": {
-                    "text": query,
-                },
+        return await self._pipe.execute(
+            ["retrieval"],
+            inputs={
+                "query": query,
+                "embedder": self._embedder,
+                "retriever": self._retriever,
             },
-            include_outputs_from=(
-                set(include_outputs_from) if include_outputs_from else None
-            ),
         )
 
 
 if __name__ == "__main__":
     llm_provider, document_store_provider = init_providers()
-    retrieval_pipeline = Retrieval(
+    pipeline = Retrieval(
         llm_provider=llm_provider,
         document_store_provider=document_store_provider,
     )
 
-    print("generating retrieval_pipeline.jpg to outputs/pipelines/ask...")
-    retrieval_pipeline.draw("./outputs/pipelines/ask/retrieval_pipeline.jpg")
+    async_validate(lambda: pipeline.run("this is a query"))

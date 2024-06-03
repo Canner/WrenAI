@@ -191,7 +191,7 @@ class AskService:
                 retrieval_result = self._pipelines["retrieval"].run(
                     query=ask_request.query,
                 )
-                documents = retrieval_result["retriever"]["documents"]
+                documents = retrieval_result.get("retrieval", {}).get("documents", [])
 
                 if not documents:
                     logger.error(
