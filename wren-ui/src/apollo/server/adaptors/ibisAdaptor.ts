@@ -18,6 +18,7 @@ export interface POSTGRESConnectionInfo {
   database: string;
   user: string;
   password: string;
+  ssl: boolean;
 }
 
 export interface BIGQUERYConnectionInfo {

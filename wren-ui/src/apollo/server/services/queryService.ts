@@ -9,7 +9,7 @@ import {
   BIGQUERYConnectionInfo,
 } from '../adaptors/ibisAdaptor';
 import { Encryptor, getLogger } from '@server/utils';
-import { Project } from '../repositories';
+import { BIG_QUERY_CONNECTION_INFO, Project } from '../repositories';
 import { getConfig } from '../config';
 
 const logger = getLogger('QueryService');
@@ -129,29 +129,31 @@ export class QueryService implements IQueryService {
     const { type } = project;
     switch (type) {
       case DataSourceName.POSTGRES: {
+        const connectionInfo = project.connectionInfo as POSTGRESConnectionInfo;
         const encryptor = new Encryptor(config);
-        const decryptedCredentials = encryptor.decrypt(project.credentials);
+        const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
         const { password } = JSON.parse(decryptedCredentials);
         return {
           datasource: DataSourceName.POSTGRES,
           connectionInfo: {
-            host: project.host,
-            port: project.port,
-            database: project.database,
-            user: project.user,
+            ...connectionInfo,
             password,
           } as POSTGRESConnectionInfo,
         };
       }
       case DataSourceName.BIG_QUERY: {
+        const connectionInfo =
+          project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
         const encryptor = new Encryptor(config);
-        const decryptedCredentials = encryptor.decrypt(project.credentials);
+        const decryptedCredentials = encryptor.decrypt(
+          connectionInfo.credentials,
+        );
         const credential = Buffer.from(decryptedCredentials).toString('base64');
         return {
           datasource: DataSourceName.BIG_QUERY,
           connectionInfo: {
-            project_id: project.projectId,
-            dataset_id: project.datasetId,
+            project_id: connectionInfo.projectId,
+            dataset_id: connectionInfo.datasetId,
             credentials: credential,
           } as BIGQUERYConnectionInfo,
         };

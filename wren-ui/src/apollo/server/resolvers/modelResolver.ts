@@ -138,13 +138,13 @@ export class ModelResolver {
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
+    const { id } = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const currentHash = ctx.deployService.createMDLHash(manifest, project.id);
-    const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+    const currentHash = ctx.deployService.createMDLHash(manifest, id);
+    const lastDeploy = await ctx.deployService.getLastDeployment(id);
     const lastDeployHash = lastDeploy.hash;
     const inProgressDeployment =
-      await ctx.deployService.getInProgressDeployment(project.id);
+      await ctx.deployService.getInProgressDeployment(id);
     if (inProgressDeployment) {
       return { status: SyncStatusEnum.IN_PROGRESS };
     }
@@ -158,9 +158,9 @@ export class ModelResolver {
     _args: any,
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const project = await ctx.projectService.getCurrentProject();
+    const { id } = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, project.id);
+    return await ctx.deployService.deploy(manifest, id);
   }
 
   public async getMDL(_root: any, _args: any, ctx: IContext) {
@@ -173,8 +173,7 @@ export class ModelResolver {
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
-    const projectId = project.id;
+    const { id: projectId } = await ctx.projectService.getCurrentProject();
     const models = await ctx.modelRepository.findAllBy({ projectId });
     const modelIds = models.map((m) => m.id);
     const modelColumnList =
@@ -445,8 +444,8 @@ export class ModelResolver {
 
   // list views
   public async listViews(_root: any, _args: any, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
-    const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
+    const { id } = await ctx.projectService.getCurrentProject();
+    const views = await ctx.viewRepository.findAllBy({ projectId: id });
     return views;
   }
 
@@ -627,8 +626,7 @@ export class ModelResolver {
     const { responseId } = args;
 
     // If using a sample dataset, native SQL is not supported
-    const project = await ctx.projectService.getCurrentProject();
-    const sampleDataset = project.sampleDataset;
+    const { sampleDataset } = await ctx.projectService.getCurrentProject();
     if (sampleDataset) {
       throw new Error(`Doesn't support Native SQL`);
     }
@@ -730,8 +728,8 @@ export class ModelResolver {
     }
     const referenceName = replaceAllowableSyntax(viewDisplayName);
     // check if view name is duplicated
-    const project = await ctx.projectService.getCurrentProject();
-    const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
+    const { id } = await ctx.projectService.getCurrentProject();
+    const views = await ctx.viewRepository.findAllBy({ projectId: id });
     if (views.find((v) => v.name === referenceName && v.id !== selfView)) {
       return {
         valid: false,

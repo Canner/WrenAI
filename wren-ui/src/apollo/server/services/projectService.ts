@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
 import { Encryptor, getLogger } from '@server/utils';
-import { IProjectRepository } from '../repositories';
+import { BIG_QUERY_CONNECTION_INFO, IProjectRepository } from '../repositories';
 import { Project } from '../repositories';
 import { getConfig } from '../config';
 
@@ -41,7 +41,8 @@ export class ProjectService implements IProjectService {
     if (!project) {
       project = await this.getCurrentProject();
     }
-    const { credentials: encryptedCredentials } = project;
+    const connectionInfo = project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
+    const encryptedCredentials = connectionInfo.credentials;
     const encryptor = new Encryptor(config);
     const credentials = encryptor.decrypt(encryptedCredentials);
     const filePath = this.writeCredentialFile(

@@ -346,9 +346,9 @@ export class AskingService implements IAskingService {
     });
 
     // 2. create a thread and the first thread response
-    const project = await this.projectService.getCurrentProject();
+    const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
-      projectId: project.id,
+      projectId: id,
       sql: input.sql,
       summary: input.summary,
     });
@@ -370,8 +370,8 @@ export class AskingService implements IAskingService {
   }
 
   public async listThreads(): Promise<Thread[]> {
-    const project = await this.projectService.getCurrentProject();
-    return await this.threadRepository.listAllTimeDescOrder(project.id);
+    const { id } = await this.projectService.getCurrentProject();
+    return await this.threadRepository.listAllTimeDescOrder(id);
   }
 
   public async updateThread(
@@ -488,8 +488,8 @@ export class AskingService implements IAskingService {
   }
 
   private async getDeployId() {
-    const project = await this.projectService.getCurrentProject();
-    const lastDeploy = await this.deployService.getLastDeployment(project.id);
+    const { id } = await this.projectService.getCurrentProject();
+    const lastDeploy = await this.deployService.getLastDeployment(id);
     return lastDeploy.hash;
   }
 
@@ -521,9 +521,9 @@ export class AskingService implements IAskingService {
     }
 
     const properties = JSON.parse(view.properties) || {};
-    const project = await this.projectService.getCurrentProject();
+    const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
-      projectId: project.id,
+      projectId: id,
       sql: view.statement,
       summary: properties.summary,
     });
