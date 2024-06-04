@@ -35,8 +35,7 @@ services:
       - bootstrap
 
   wren-ai-service:
-    # image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
-    image: wren-ai-service:latest
+    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
     restart: on-failure
     platform: ${PLATFORM}
     expose:
