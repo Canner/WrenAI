@@ -88,7 +88,7 @@ with tab_create_dataset:
                             key=f"question_{i}",
                         )
                         st.json(question_sql_pair["context"], expanded=True)
-                        sql = st.text_input(
+                        sql = st.text_area(
                             f"SQL {i}",
                             question_sql_pair["sql"],
                             key=f"sql_{i}",
