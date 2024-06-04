@@ -23,7 +23,7 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the following user's follow-up question and previous SQL query and summary, 
+Given the following user's follow-up question and previous SQL query and summary,
 generate at most 3 SQL queries in order to interpret the user's question in various plausible ways.
 
 ### DATABASE SCHEMA ###
@@ -148,9 +148,9 @@ async def generate(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
-    return post_processor.run(generate.get("replies"))
+    return await post_processor.run(generate.get("replies"))
 
 
 ## End of Pipeline

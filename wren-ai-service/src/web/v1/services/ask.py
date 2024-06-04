@@ -5,7 +5,6 @@ import sqlparse
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.utils import remove_duplicates
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -356,3 +355,27 @@ class AskService:
             )
 
         return self.ask_results[ask_result_request.query_id]
+
+
+def remove_duplicates(dicts):
+    """
+    Removes duplicates from a list of dictionaries based on 'sql' and 'summary' fields.
+
+    Args:
+    dicts (list of dict): The list of dictionaries to be deduplicated.
+
+    Returns:
+    list of dict: A list of dictionaries after removing duplicates.
+    """
+    # Convert each dictionary to a tuple of (sql, summary) to make them hashable
+    seen = set()
+    unique_dicts = []
+    for d in dicts:
+        identifier = (
+            d["sql"],
+            d["summary"],
+        )  # This assumes 'sql' and 'summary' always exist
+        if identifier not in seen:
+            seen.add(identifier)
+            unique_dicts.append(d)
+    return unique_dicts
