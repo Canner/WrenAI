@@ -60,9 +60,9 @@ def embedding(query: str, embedder: Any) -> dict:
     return embedder.run(query)
 
 
-def retrieval(embedding: dict, retriever: Any) -> dict:
+async def retrieval(embedding: dict, retriever: Any) -> dict:
     logger.debug(f"embedding: {embedding}")
-    res = retriever.run(query_embedding=embedding.get("embedding"))
+    res = await retriever.run(query_embedding=embedding.get("embedding"))
     documents = res.get("documents")
     return dict(documents=documents)
 
