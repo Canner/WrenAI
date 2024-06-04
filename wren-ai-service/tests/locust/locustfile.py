@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import time
 import uuid
 
 import orjson
@@ -128,7 +127,7 @@ class IndexingUser(FastHttpUser):
                     status = json.loads(response.content.decode("utf-8"))["status"]
                     assert status in ["indexing", "finished"]
                     response.success()
-                    time.sleep(1.0)
+                    asyncio.sleep(1.0)
                 except AssertionError:
                     response.failure(response.content.decode("utf-8"))
 
@@ -173,7 +172,7 @@ class AskUser(FastHttpUser):
                         finished_ask_query.append(query_id)
                         successful_ask_query.append(response.content.decode("utf-8"))
                     else:
-                        time.sleep(1.0)
+                        asyncio.sleep(1.0)
                 except AssertionError:
                     finished_ask_query.append(query_id)
                     response.failure(response.content.decode("utf-8"))
