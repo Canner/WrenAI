@@ -1,12 +1,15 @@
 import logging
-from typing import List
+import sys
+from typing import Any, List
 
-from haystack import Document, Pipeline
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
+from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.ask.components.post_processors import init_generation_post_processor
+from src.pipelines.ask.components.post_processors import GenerationPostProcessor
 from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
@@ -20,7 +23,7 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the following user's follow-up question and previous SQL query and summary, 
+Given the following user's follow-up question and previous SQL query and summary,
 generate at most 3 SQL queries in order to interpret the user's question in various plausible ways.
 
 ### DATABASE SCHEMA ###
@@ -124,62 +127,86 @@ Let's think step by step.
 """
 
 
+## Start of Pipeline
+def prompt(
+    query: str,
+    documents: List[Document],
+    history: AskRequest.AskResponseDetails,
+    alert: str,
+    prompt_builder: PromptBuilder,
+) -> dict:
+    logger.debug(f"query: {query}")
+    logger.debug(f"documents: {documents}")
+    logger.debug(f"history: {history}")
+    return prompt_builder.run(
+        query=query, documents=documents, history=history, alert=alert
+    )
+
+
+async def generate(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {prompt}")
+    return await generator.run(prompt=prompt.get("prompt"))
+
+
+async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+    logger.debug(f"generate: {generate}")
+    return await post_processor.run(generate.get("replies"))
+
+
+## End of Pipeline
+
+
 class FollowUpGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
     ):
-        self._pipeline = Pipeline()
-        self._pipeline.add_component(
-            "text_to_sql_prompt_builder",
-            PromptBuilder(template=text_to_sql_with_followup_user_prompt_template),
+        self.generator = llm_provider.get_generator(
+            system_prompt=text_to_sql_system_prompt
         )
-        self._pipeline.add_component(
-            "text_to_sql_generator",
-            llm_provider.get_generator(system_prompt=text_to_sql_system_prompt),
+        self.prompt_builder = PromptBuilder(
+            template=text_to_sql_with_followup_user_prompt_template
         )
-        self._pipeline.add_component("post_processor", init_generation_post_processor())
+        self.post_processor = GenerationPostProcessor()
 
-        self._pipeline.connect(
-            "text_to_sql_prompt_builder.prompt", "text_to_sql_generator.prompt"
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
-        self._pipeline.connect(
-            "text_to_sql_generator.replies", "post_processor.replies"
-        )
-
-        super().__init__(self._pipeline)
 
     @timer
-    def run(
+    async def run(
         self,
         query: str,
         contexts: List[Document],
         history: AskRequest.AskResponseDetails,
-        include_outputs_from: List[str] | None = None,
     ):
         logger.info("Ask FollowUpGeneration pipeline is running...")
-        return self._pipeline.run(
-            {
-                "text_to_sql_prompt_builder": {
-                    "query": query,
-                    "documents": contexts,
-                    "history": history,
-                    "alert": TEXT_TO_SQL_RULES,
-                },
+        return await self._pipe.execute(
+            ["post_process"],
+            inputs={
+                "query": query,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
+                "documents": contexts,
+                "history": history,
+                "alert": TEXT_TO_SQL_RULES,
             },
-            include_outputs_from=(
-                set(include_outputs_from) if include_outputs_from else None
-            ),
         )
 
 
 if __name__ == "__main__":
     llm_provider, _ = init_providers()
-    followup_generation_pipeline = FollowUpGeneration(
+    pipeline = FollowUpGeneration(
         llm_provider=llm_provider,
     )
 
-    print("generating followup_generation_pipeline.jpg to outputs/pipelines/ask...")
-    followup_generation_pipeline.draw(
-        "./outputs/pipelines/ask/followup_generation_pipeline.jpg"
+    async_validate(
+        lambda: pipeline.run(
+            "this is a test query",
+            [],
+            AskRequest.AskResponseDetails(
+                sql="SELECT * FROM table", summary="Summary", steps=[]
+            ),
+        )
     )

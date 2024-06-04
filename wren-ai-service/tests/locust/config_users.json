@@ -1,0 +1,18 @@
+[
+    {
+        "user_class_name": "SemanticsDescriptionsUser",
+        "fixed_count": 0
+    },
+    {
+        "user_class_name": "IndexingUser",
+        "fixed_count": 3
+    },
+    {
+        "user_class_name": "AskUser",
+        "fixed_count": 5
+    },
+    {
+        "user_class_name": "AskDetailsUser",
+        "fixed_count": 2
+    }
+]

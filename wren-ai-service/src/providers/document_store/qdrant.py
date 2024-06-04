@@ -1,12 +1,195 @@
 import os
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
+import numpy as np
+import qdrant_client
+from haystack import Document, component
+from haystack.utils import Secret
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from haystack_integrations.document_stores.qdrant.converters import (
+    DENSE_VECTORS_NAME,
+    convert_qdrant_point_to_haystack_document,
+)
+from haystack_integrations.document_stores.qdrant.filters import (
+    convert_filters_to_qdrant,
+)
+from qdrant_client.http import models as rest
 
 from src.core.provider import DocumentStoreProvider
 from src.providers.llm.openai import EMBEDDING_MODEL_DIMENSION
 from src.providers.loader import provider
+
+
+class AsyncQdrantDocumentStore(QdrantDocumentStore):
+    def __init__(
+        self,
+        location: Optional[str] = None,
+        url: Optional[str] = None,
+        port: int = 6333,
+        grpc_port: int = 6334,
+        prefer_grpc: bool = False,
+        https: Optional[bool] = None,
+        api_key: Optional[Secret] = None,
+        prefix: Optional[str] = None,
+        timeout: Optional[float] = None,
+        host: Optional[str] = None,
+        path: Optional[str] = None,
+        index: str = "Document",
+        embedding_dim: int = 768,
+        on_disk: bool = False,
+        content_field: str = "content",
+        name_field: str = "name",
+        embedding_field: str = "embedding",
+        use_sparse_embeddings: bool = False,
+        similarity: str = "cosine",
+        return_embedding: bool = False,
+        progress_bar: bool = True,
+        duplicate_documents: str = "overwrite",
+        recreate_index: bool = False,
+        shard_number: Optional[int] = None,
+        replication_factor: Optional[int] = None,
+        write_consistency_factor: Optional[int] = None,
+        on_disk_payload: Optional[bool] = None,
+        hnsw_config: Optional[dict] = None,
+        optimizers_config: Optional[dict] = None,
+        wal_config: Optional[dict] = None,
+        quantization_config: Optional[dict] = None,
+        init_from: Optional[dict] = None,
+        wait_result_from_api: bool = True,
+        metadata: Optional[dict] = None,
+        write_batch_size: int = 100,
+        scroll_size: int = 10_000,
+        payload_fields_to_index: Optional[List[dict]] = None,
+    ):
+        super(AsyncQdrantDocumentStore, self).__init__(
+            location=location,
+            url=url,
+            port=port,
+            grpc_port=grpc_port,
+            prefer_grpc=prefer_grpc,
+            https=https,
+            api_key=api_key.resolve_value() if api_key else None,
+            prefix=prefix,
+            timeout=timeout,
+            host=host,
+            path=path,
+            index=index,
+            embedding_dim=embedding_dim,
+            on_disk=on_disk,
+            content_field=content_field,
+            name_field=name_field,
+            embedding_field=embedding_field,
+            use_sparse_embeddings=use_sparse_embeddings,
+            similarity=similarity,
+            return_embedding=return_embedding,
+            progress_bar=progress_bar,
+            duplicate_documents=duplicate_documents,
+            recreate_index=recreate_index,
+            shard_number=shard_number,
+            replication_factor=replication_factor,
+            write_consistency_factor=write_consistency_factor,
+            on_disk_payload=on_disk_payload,
+            hnsw_config=hnsw_config,
+            optimizers_config=optimizers_config,
+            wal_config=wal_config,
+            quantization_config=quantization_config,
+            init_from=init_from,
+            wait_result_from_api=wait_result_from_api,
+            metadata=metadata,
+            write_batch_size=write_batch_size,
+            scroll_size=scroll_size,
+            payload_fields_to_index=payload_fields_to_index,
+        )
+
+        metadata = metadata or {}
+        self.async_client = qdrant_client.AsyncQdrantClient(
+            location=location,
+            url=url,
+            port=port,
+            grpc_port=grpc_port,
+            prefer_grpc=prefer_grpc,
+            https=https,
+            api_key=api_key.resolve_value() if api_key else None,
+            prefix=prefix,
+            timeout=timeout,
+            host=host,
+            path=path,
+            metadata=metadata,
+        )
+
+    async def _query_by_embedding(
+        self,
+        query_embedding: List[float],
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: int = 10,
+        scale_score: bool = True,
+        return_embedding: bool = False,
+    ) -> List[Document]:
+        qdrant_filters = convert_filters_to_qdrant(filters)
+
+        points = await self.async_client.search(
+            collection_name=self.index,
+            query_vector=rest.NamedVector(
+                name=DENSE_VECTORS_NAME if self.use_sparse_embeddings else "",
+                vector=query_embedding,
+            ),
+            query_filter=qdrant_filters,
+            limit=top_k,
+            with_vectors=return_embedding,
+        )
+        results = [
+            convert_qdrant_point_to_haystack_document(
+                point, use_sparse_embeddings=self.use_sparse_embeddings
+            )
+            for point in points
+        ]
+        if scale_score:
+            for document in results:
+                score = document.score
+                if self.similarity == "cosine":
+                    score = (score + 1) / 2
+                else:
+                    score = float(1 / (1 + np.exp(-score / 100)))
+                document.score = score
+        return results
+
+
+class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
+    def __init__(
+        self,
+        document_store: AsyncQdrantDocumentStore,
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: int = 10,
+        scale_score: bool = True,
+        return_embedding: bool = False,
+    ):
+        super(AsyncQdrantEmbeddingRetriever, self).__init__(
+            document_store=document_store,
+            filters=filters,
+            top_k=top_k,
+            scale_score=scale_score,
+            return_embedding=return_embedding,
+        )
+
+    @component.output_types(documents=List[Document])
+    async def run(
+        self,
+        query_embedding: List[float],
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: Optional[int] = None,
+        scale_score: Optional[bool] = None,
+        return_embedding: Optional[bool] = None,
+    ):
+        docs = await self._document_store._query_by_embedding(
+            query_embedding=query_embedding,
+            filters=filters or self._filters,
+            top_k=top_k or self._top_k,
+            scale_score=scale_score or self._scale_score,
+            return_embedding=return_embedding or self._return_embedding,
+        )
+
+        return {"documents": docs}
 
 
 @provider("qdrant")
@@ -20,7 +203,7 @@ class QdrantProvider(DocumentStoreProvider):
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):
-        return QdrantDocumentStore(
+        return AsyncQdrantDocumentStore(
             location=self._location,
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
@@ -30,10 +213,10 @@ class QdrantProvider(DocumentStoreProvider):
 
     def get_retriever(
         self,
-        document_store: QdrantDocumentStore,
+        document_store: AsyncQdrantDocumentStore,
         top_k: int = 10,
     ):
-        return QdrantEmbeddingRetriever(
+        return AsyncQdrantEmbeddingRetriever(
             document_store=document_store,
             top_k=top_k,
         )

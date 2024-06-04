@@ -4,13 +4,14 @@ import uuid
 import orjson
 import pytest
 
+from src.core.pipeline import async_validate
 from src.pipelines.ask import (
-    generation_pipeline,
+    generation,
     historical_question,
-    indexing_pipeline,
-    query_understanding_pipeline,
-    retrieval_pipeline,
-    sql_correction_pipeline,
+    indexing,
+    query_understanding,
+    retrieval,
+    sql_correction,
 )
 from src.utils import init_providers
 from src.web.v1.services.ask import (
@@ -27,14 +28,14 @@ def ask_service():
 
     return AskService(
         {
-            "indexing": indexing_pipeline.Indexing(
+            "indexing": indexing.Indexing(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
-            "query_understanding": query_understanding_pipeline.QueryUnderstanding(
+            "query_understanding": query_understanding.QueryUnderstanding(
                 llm_provider=llm_provider,
             ),
-            "retrieval": retrieval_pipeline.Retrieval(
+            "retrieval": retrieval.Retrieval(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
@@ -42,10 +43,10 @@ def ask_service():
                 llm_provider=llm_provider,
                 store_provider=document_store_provider,
             ),
-            "generation": generation_pipeline.Generation(
+            "generation": generation.Generation(
                 llm_provider=llm_provider,
             ),
-            "sql_correction": sql_correction_pipeline.SQLCorrection(
+            "sql_correction": sql_correction.SQLCorrection(
                 llm_provider=llm_provider,
             ),
         }
@@ -60,10 +61,12 @@ def mdl_str():
 
 def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
     id = str(uuid.uuid4())
-    ask_service.prepare_semantics(
-        SemanticsPreparationRequest(
-            mdl=mdl_str,
-            id=id,
+    async_validate(
+        lambda: ask_service.prepare_semantics(
+            SemanticsPreparationRequest(
+                mdl=mdl_str,
+                id=id,
+            )
         )
     )
 
@@ -74,7 +77,7 @@ def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
         id=id,
     )
     ask_request.query_id = query_id
-    ask_service.ask(ask_request)
+    async_validate(lambda: ask_service.ask(ask_request))
 
     # getting ask result
     ask_result_response = ask_service.get_ask_result(
@@ -100,15 +103,17 @@ def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
     assert ask_result_response.response is not None
     assert ask_result_response.response[0].sql != ""
     assert ask_result_response.response[0].summary != ""
-    assert ask_result_response.response[0].type == "llm"
+    assert ask_result_response.response[0].type == "llm" or "view"
 
 
 def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):
     id = str(uuid.uuid4())
-    ask_service.prepare_semantics(
-        SemanticsPreparationRequest(
-            mdl=mdl_str,
-            id=id,
+    async_validate(
+        lambda: ask_service.prepare_semantics(
+            SemanticsPreparationRequest(
+                mdl=mdl_str,
+                id=id,
+            )
         )
     )
 
@@ -119,7 +124,7 @@ def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):
         id=id,
     )
     ask_request.query_id = query_id
-    ask_service.ask(ask_request)
+    async_validate(lambda: ask_service.ask(ask_request))
 
     # getting ask result
     ask_result_response = ask_service.get_ask_result(

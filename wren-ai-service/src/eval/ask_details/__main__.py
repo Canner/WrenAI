@@ -7,12 +7,12 @@ from src.eval.ask_details.utils import (
     Summary,
     _prepare_ask_details_eval_data,
 )
-from src.pipelines.ask_details.generation_pipeline import Generation
+from src.pipelines.ask_details.generation import Generation
 from src.utils import init_providers, load_env_vars
 
 INPUT_PATH = "./src/eval/ask_details/data/baseball_1_data.json"
 EVAL_CONTEXT_PATH = "./src/eval/ask_details/data/baseball_1_eval_context.json"
-EVAL_REPORT_PATH = f"./outputs/ask_details/baseball_1_eval_report_{datetime.now().strftime("%Y%m%d%H%M%S")}.json"
+EVAL_REPORT_PATH = f"./outputs/eval/ask_details/baseball_1_eval_report_{datetime.now().strftime("%Y%m%d%H%M%S")}.json"
 
 load_env_vars()
 _prepare_ask_details_eval_data(

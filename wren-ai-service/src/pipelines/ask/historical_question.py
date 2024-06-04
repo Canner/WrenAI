@@ -1,10 +1,13 @@
 import ast
 import logging
-from typing import Dict, List, Optional
+import sys
+from typing import Any, Dict, List, Optional
 
-from haystack import Document, Pipeline, component
+from hamilton import base
+from hamilton.experimental.h_async import AsyncDriver
+from haystack import Document, component
 
-from src.core.pipeline import BasicPipeline
+from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import (
     init_providers,
@@ -14,41 +17,6 @@ from src.utils import (
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
-
-
-class HistoricalQuestion(BasicPipeline):
-    def __init__(
-        self, llm_provider: LLMProvider, store_provider: DocumentStoreProvider
-    ) -> None:
-        pipe = Pipeline()
-        pipe.add_component("embedder", llm_provider.get_text_embedder())
-        pipe.add_component(
-            "retriever",
-            store_provider.get_retriever(
-                document_store=store_provider.get_store(dataset_name="view_questions"),
-            ),
-        )
-        pipe.add_component("score_filter", ScoreFilter())
-        # todo: add a llm filter to filter out low scoring document
-        pipe.add_component("output_formatter", OutputFormatter())
-
-        pipe.connect("embedder.embedding", "retriever.query_embedding")
-        pipe.connect("retriever", "score_filter")
-        pipe.connect("score_filter", "output_formatter")
-
-        self._pipeline = pipe
-        super().__init__(self._pipeline)
-
-    @timer
-    def run(self, query: str):
-        logger.info("Try to extract historical question")
-        return self._pipeline.run(
-            {
-                "embedder": {"text": query},
-                "retriever": {"top_k": 1},
-                "score_filter": {"score": 0.8},
-            }
-        )
 
 
 @component
@@ -86,8 +54,66 @@ class OutputFormatter:
         return {"documents": list}
 
 
+## Start of Pipeline
+def embedding(query: str, embedder: Any) -> dict:
+    logger.debug(f"query: {query}")
+    return embedder.run(query)
+
+
+async def retrieval(embedding: dict, retriever: Any) -> dict:
+    logger.debug(f"embedding: {embedding}")
+    res = await retriever.run(query_embedding=embedding.get("embedding"))
+    documents = res.get("documents")
+    return dict(documents=documents)
+
+
+def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
+    logger.debug(f"retrieval: {retrieval}")
+    return score_filter.run(documents=retrieval.get("documents"))
+
+
+def formatted_output(
+    filtered_documents: dict, output_formatter: OutputFormatter
+) -> dict:
+    logger.debug(f"filtered_documents: {filtered_documents}")
+    return output_formatter.run(documents=filtered_documents.get("documents"))
+
+
+## End of Pipeline
+
+
+class HistoricalQuestion(BasicPipeline):
+    def __init__(
+        self, llm_provider: LLMProvider, store_provider: DocumentStoreProvider
+    ) -> None:
+        self._embedder = llm_provider.get_text_embedder()
+        self._retriever = store_provider.get_retriever(
+            document_store=store_provider.get_store(dataset_name="view_questions"),
+        )
+        self._score_filter = ScoreFilter()
+        # todo: add a llm filter to filter out low scoring document
+        self._output_formatter = OutputFormatter()
+
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
+    @timer
+    async def run(self, query: str):
+        logger.info("Try to extract historical question")
+        return await self._pipe.execute(
+            ["formatted_output"],
+            inputs={
+                "query": query,
+                "embedder": self._embedder,
+                "retriever": self._retriever,
+                "score_filter": self._score_filter,
+                "output_formatter": self._output_formatter,
+            },
+        )
+
+
 if __name__ == "__main__":
     pipeline = HistoricalQuestion(*init_providers())
 
-    print("generating historical_question.jpg to outputs/pipelines/ask...")
-    pipeline.draw("./outputs/pipelines/historical_question.jpg")
+    async_validate(lambda: pipeline.run("this is a query"))

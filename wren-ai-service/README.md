@@ -42,9 +42,17 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
   - restart wren ai service
   - check `outputs` folder for the evaluation result file
 - to run the load test
-  - in the demo folder, run `make prepare` to start the docker containers
-  - in the demo folder, run `make ai` to start the ai service
+  - setup `DATASET_NAME` in `.env.dev`
+  - adjust test config if needed
+    - adjust test config in pyproject.toml `tool.locust` section
+    - adjust user count in `tests/locust/config_users.json`
+  - in wren-ai-service folder, run `make run-all` to start the docker containers
+  - in wren-ai-service folder, run `make start` to start the ai service
   - run `make load-test`
+  - check reports in /outputs/locust folder, there are 3 files with filename **locust_report_{test_timestamp}**:
+    - .json: test report in json format, including info like llm provider, version
+    - .html: test report in html format, showing tables and charts
+    - .log: test log
 
 ## Demo
 
@@ -68,3 +76,8 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 ## Adding your preferred LLM or Document Store
 
 Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM or Document Store.
+
+## Related Issues or PRs
+
+- [Issues](https://github.com/Canner/WrenAI/issues?q=is%3Aopen+is%3Aissue+label%3Amodule%2Fai-service)
+- [PRs](https://github.com/Canner/WrenAI/pulls?q=is%3Aopen+is%3Apr+label%3Amodule%2Fai-service)
