@@ -29,7 +29,7 @@ data:
   # "sqlite", or "postgres" as application database.
   DB_TYPE: postgres
 
-  ### if DB_TYPE = "sqlite" also make sure to uncomment the "wren-sqllite" in the volumeMounts & PVC sections of the deployment/kustomizations/base/deploy-wren-ui.yaml
+  ### if DB_TYPE = "sqlite" also make sure to uncomment the "wren-sqlite" in the volumeMounts & PVC sections of the deployment/kustomizations/base/deploy-wren-ui.yaml
   #SQLITE_FILE: /app/data/db.sqlite3
   #DATA_PATH: "/app/data"
 

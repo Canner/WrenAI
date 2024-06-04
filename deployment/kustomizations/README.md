@@ -53,7 +53,7 @@ kubectl get pods -n wren
 
 #### Wren-UI Database
 Starting with wren-ui version 0.6.0 by default the postgres database is used for wren-ui in this kuberenetes kustomization and will be installed in the same namespace as wren-ai. If you are using older version, you may use only `sqlite`.
-- `sqllite`: If you are planing to use sqllite as your database instead of postgres, you will need to uncomment `wren-sqllite` in the volumeMounts & PVC sections of the `deployment/kustomizations/base/deploy-wren-ui.yaml` manifest. And adjust the ConfigMap file `deployment/kustomizations/base/cm.yaml` to match your database: `DB_TYPE = "sqlite"`, comment out postgres helm chart section in the `deployment/kustomizations/kustomization.yaml` file and comment out the `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
+- `sqlite`: If you are planing to use sqlite as your database instead of postgres, you will need to uncomment `wren-sqlite` in the volumeMounts & PVC sections of the `deployment/kustomizations/base/deploy-wren-ui.yaml` manifest. And adjust the ConfigMap file `deployment/kustomizations/base/cm.yaml` to match your database: `DB_TYPE = "sqlite"`, comment out postgres helm chart section in the `deployment/kustomizations/kustomization.yaml` file and comment out the `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
 - `postgres` (default): Database that will be installed in the same namespace as wren-ai. You *must* update `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
 
 Example: `PG_URL: "postgres://postgres:postgres@wren-postgresql:5432/admin_ui"`
