@@ -588,6 +588,21 @@ export const typeDefs = gql`
     dataSource: DataSource!
   }
 
+  input GetMDLInput {
+    hash: String!
+  }
+
+  type GetMDLResult {
+    hash: String!
+    mdl: String
+  }
+
+  input PreviewSQLDataInput {
+    sql: String!
+    projectId: Int!
+    limit: Int
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -627,6 +642,7 @@ export const typeDefs = gql`
     saveTables(data: SaveTablesInput!): JSON!
     saveRelations(data: SaveRelationInput!): JSON!
     deploy: JSON!
+    getMDL(data: GetMDLInput): GetMDLResult!
 
     # Modeling Page
     createModel(data: CreateModelInput!): JSON!
@@ -688,5 +704,8 @@ export const typeDefs = gql`
     # Settings
     resetCurrentProject: Boolean!
     updateDataSource(data: UpdateDataSourceInput!): DataSource!
+
+    # preview
+    previewSql(data: PreviewSQLDataInput): JSON!
   }
 `;

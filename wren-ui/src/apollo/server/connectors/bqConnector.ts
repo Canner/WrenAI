@@ -151,6 +151,10 @@ export class BQConnector
           name: row.table_name,
           description: row.table_description,
           columns: [],
+          properties: {
+            schema: row.table_schema,
+            catalog: row.table_catalog,
+          },
         };
         acc.push(table);
       }

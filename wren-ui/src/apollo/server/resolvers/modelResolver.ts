@@ -5,6 +5,7 @@ import {
   CreateCalculatedFieldData,
   UpdateCalculatedFieldData,
   UpdateViewMetadataInput,
+  PreviewSQLData,
 } from '../models';
 import { IContext, RelationData, UpdateRelationData } from '../types';
 import { getLogger } from '@server/utils';
@@ -38,6 +39,7 @@ export class ModelResolver {
     this.deleteModel = this.deleteModel.bind(this);
     this.updateModelMetadata = this.updateModelMetadata.bind(this);
     this.deploy = this.deploy.bind(this);
+    this.getMDL = this.getMDL.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
 
     // view
@@ -51,6 +53,7 @@ export class ModelResolver {
     // preview
     this.previewModelData = this.previewModelData.bind(this);
     this.previewViewData = this.previewViewData.bind(this);
+    this.previewSql = this.previewSql.bind(this);
     this.getNativeSql = this.getNativeSql.bind(this);
 
     // calculated field
@@ -135,14 +138,13 @@ export class ModelResolver {
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
+    const { id } = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const currentHash = ctx.deployService.createMDLHash(manifest);
-    const lastDeployHash = await ctx.deployService.getLastDeployment(
-      project.id,
-    );
+    const currentHash = ctx.deployService.createMDLHash(manifest, id);
+    const lastDeploy = await ctx.deployService.getLastDeployment(id);
+    const lastDeployHash = lastDeploy.hash;
     const inProgressDeployment =
-      await ctx.deployService.getInProgressDeployment(project.id);
+      await ctx.deployService.getInProgressDeployment(id);
     if (inProgressDeployment) {
       return { status: SyncStatusEnum.IN_PROGRESS };
     }
@@ -156,14 +158,22 @@ export class ModelResolver {
     _args: any,
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const project = await ctx.projectService.getCurrentProject();
+    const { id } = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, project.id);
+    return await ctx.deployService.deploy(manifest, id);
+  }
+
+  public async getMDL(_root: any, args: any, ctx: IContext) {
+    const { hash } = args.data;
+    const mdl = await ctx.deployService.getMDLByHash(hash);
+    return {
+      hash,
+      mdl,
+    };
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
-    const projectId = project.id;
+    const { id: projectId } = await ctx.projectService.getCurrentProject();
     const models = await ctx.modelRepository.findAllBy({ projectId });
     const modelIds = models.map((m) => m.id);
     const modelColumnList =
@@ -434,8 +444,8 @@ export class ModelResolver {
 
   // list views
   public async listViews(_root: any, _args: any, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
-    const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
+    const { id } = await ctx.projectService.getCurrentProject();
+    const views = await ctx.viewRepository.findAllBy({ projectId: id });
     return views;
   }
 
@@ -466,6 +476,8 @@ export class ModelResolver {
 
     // create view
     const project = await ctx.projectService.getCurrentProject();
+    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
 
     // get sql statement of a response
     const response = await ctx.askingService.getResponse(responseId);
@@ -478,8 +490,16 @@ export class ModelResolver {
     const statement = format(constructCteSql(steps));
 
     // describe columns
-    const { columns } =
-      await ctx.wrenEngineAdaptor.describeStatement(statement);
+    const { connectionInfo, datasource } =
+      ctx.queryService.composeConnectionInfo(project);
+    const { columns } = await ctx.queryService.describeStatement(statement, {
+      datasource,
+      connectionInfo,
+      limit: PREVIEW_MAX_OUTPUT_ROW,
+      modelingOnly: false,
+      mdl,
+    });
+
     if (isEmpty(columns)) {
       throw new Error('Failed to describe statement');
     }
@@ -540,15 +560,20 @@ export class ModelResolver {
     if (!model) {
       throw new Error('Model not found');
     }
-
-    // pass the current mdl to wren engine to preview data, prevent the model is not deployed
+    const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    const { datasource, connectionInfo } =
+      ctx.queryService.composeConnectionInfo(project);
     const sql = `select * from ${model.referenceName}`;
-    const data = await ctx.wrenEngineAdaptor.previewData(
-      sql,
-      PREVIEW_MAX_OUTPUT_ROW,
-      manifest,
-    );
+
+    const data = await ctx.queryService.preview(sql, {
+      datasource,
+      connectionInfo,
+      limit: PREVIEW_MAX_OUTPUT_ROW,
+      modelingOnly: false,
+      mdl: manifest,
+    });
+
     return data;
   }
 
@@ -558,12 +583,39 @@ export class ModelResolver {
     if (!view) {
       throw new Error('View not found');
     }
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    const project = await ctx.projectService.getCurrentProject();
+    const { datasource, connectionInfo } =
+      ctx.queryService.composeConnectionInfo(project);
 
-    const data = await ctx.wrenEngineAdaptor.previewData(
-      view.statement,
-      PREVIEW_MAX_OUTPUT_ROW,
-    );
+    const data = await ctx.queryService.preview(view.statement, {
+      datasource,
+      connectionInfo,
+      limit: PREVIEW_MAX_OUTPUT_ROW,
+      mdl: manifest,
+      modelingOnly: false,
+    });
     return data;
+  }
+
+  public async previewSql(
+    _root: any,
+    args: { data: PreviewSQLData },
+    ctx: IContext,
+  ) {
+    const { sql, projectId, limit } = args.data;
+    const project = await ctx.projectService.getProjectById(projectId);
+    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
+    const { datasource, connectionInfo } =
+      ctx.queryService.composeConnectionInfo(project);
+    return await ctx.queryService.preview(sql, {
+      datasource,
+      connectionInfo,
+      limit: limit || PREVIEW_MAX_OUTPUT_ROW,
+      modelingOnly: false,
+      mdl,
+    });
   }
 
   public async getNativeSql(
@@ -574,8 +626,7 @@ export class ModelResolver {
     const { responseId } = args;
 
     // If using a sample dataset, native SQL is not supported
-    const project = await ctx.projectService.getCurrentProject();
-    const sampleDataset = project.sampleDataset;
+    const { sampleDataset } = await ctx.projectService.getCurrentProject();
     if (sampleDataset) {
       throw new Error(`Doesn't support Native SQL`);
     }
@@ -677,8 +728,8 @@ export class ModelResolver {
     }
     const referenceName = replaceAllowableSyntax(viewDisplayName);
     // check if view name is duplicated
-    const project = await ctx.projectService.getCurrentProject();
-    const views = await ctx.viewRepository.findAllBy({ projectId: project.id });
+    const { id } = await ctx.projectService.getCurrentProject();
+    const views = await ctx.viewRepository.findAllBy({ projectId: id });
     if (views.find((v) => v.name === referenceName && v.id !== selfView)) {
       return {
         valid: false,

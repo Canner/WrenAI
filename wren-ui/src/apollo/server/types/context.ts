@@ -1,3 +1,4 @@
+import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import { IConfig } from '../config';
 import {
@@ -8,11 +9,14 @@ import {
   IViewRepository,
 } from '../repositories';
 import { IDeployLogRepository } from '../repositories/deployLogRepository';
-import { IAskingService } from '../services/askingService';
-import { IDeployService } from '../services/deployService';
-import { IMDLService } from '../services/mdlService';
-import { IModelService } from '../services/modelService';
-import { IProjectService } from '../services/projectService';
+import {
+  IQueryService,
+  IAskingService,
+  IDeployService,
+  IModelService,
+  IMDLService,
+  IProjectService,
+} from '../services';
 
 export interface IContext {
   config: IConfig;
@@ -21,6 +25,7 @@ export interface IContext {
 
   // adaptor
   wrenEngineAdaptor: IWrenEngineAdaptor;
+  ibisServerAdaptor: IIbisAdaptor;
 
   // services
   projectService: IProjectService;
@@ -28,6 +33,7 @@ export interface IContext {
   mdlService: IMDLService;
   deployService: IDeployService;
   askingService: IAskingService;
+  queryService: IQueryService;
 
   // repository
   projectRepository: IProjectRepository;

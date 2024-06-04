@@ -12,12 +12,13 @@ import {
   PostgresColumnResponse,
   PostgresConnector,
 } from '../connectors/postgresConnector';
-import { Encryptor, getLogger } from '../utils';
+import { Encryptor, getLogger, toDockerHost } from '../utils';
 import {
   findColumnsToUpdate,
   updateModelPrimaryKey,
   transformInvalidColumnName,
 } from './util';
+import { PostgresConnectionInfo } from '../adaptors/ibisAdaptor';
 
 const logger = getLogger('PostgresStrategy');
 logger.level = 'debug';
@@ -43,18 +44,21 @@ export class PostgresStrategy implements IDataSourceStrategy {
     const credentials = { password } as any;
     const encryptor = new Encryptor(this.ctx.config);
     const encryptedCredentials = encryptor.encrypt(credentials);
+    const connectionInfo = {
+      host,
+      port,
+      database,
+      user,
+      password: encryptedCredentials,
+      ssl,
+    } as PostgresConnectionInfo;
 
     const project = await this.ctx.projectRepository.createOne({
       displayName,
       schema: 'public',
       catalog: 'wrenai',
       type: DataSourceName.POSTGRES,
-      host,
-      port,
-      database,
-      user,
-      credentials: encryptedCredentials,
-      configurations: { ssl },
+      connectionInfo,
     });
     return project;
   }
@@ -63,12 +67,13 @@ export class PostgresStrategy implements IDataSourceStrategy {
     properties: PGDataSourceProperties,
   ): Promise<any> {
     const { displayName, user, password: newPassword, ssl } = properties;
+    const connectionInfo = this.getConnectionInfo();
     const {
       host,
       port,
       database,
-      credentials: oldEncryptedCredentials,
-    } = this.project;
+      password: oldEncryptedCredentials,
+    } = connectionInfo;
 
     const encryptor = new Encryptor(this.ctx.config);
     const { password: oldPassword } = JSON.parse(
@@ -91,12 +96,16 @@ export class PostgresStrategy implements IDataSourceStrategy {
 
     const credentials = { password } as any;
     const encryptedCredentials = encryptor.encrypt(credentials);
+    const newConnectionInfo = {
+      ...connectionInfo,
+      user,
+      password: encryptedCredentials,
+    };
     const project = await this.ctx.projectRepository.updateOne(
       this.project.id,
       {
         displayName,
-        user,
-        credentials: encryptedCredentials,
+        connectionInfo: newConnectionInfo,
       },
     );
     return project;
@@ -118,13 +127,18 @@ export class PostgresStrategy implements IDataSourceStrategy {
     return tables;
   }
 
+  // tables: ['public.table1', 'public.table2]
   public async saveModels(tables: string[]) {
     const connector = this.getPGConnector();
     const dataSourceColumns = (await connector.listTables({
       format: false,
     })) as PostgresColumnResponse[];
 
-    const models = await this.createModels(tables, connector);
+    const models = await this.createModels(
+      tables,
+      connector,
+      dataSourceColumns,
+    );
     // create columns
     const columns = await this.createAllColumns(
       tables,
@@ -145,7 +159,11 @@ export class PostgresStrategy implements IDataSourceStrategy {
       format: false,
     })) as PostgresColumnResponse[];
 
-    const models = await this.createModels([table], connector);
+    const models = await this.createModels(
+      [table],
+      connector,
+      dataSourceColumns,
+    );
     const model = models[0];
     // create columns
     const modelColumns = await this.createColumns(
@@ -260,6 +278,11 @@ export class PostgresStrategy implements IDataSourceStrategy {
   }
 
   private async patchConfigToWrenEngine(properties: any) {
+    // rewrite to docker host if engine using docker
+    if (this.ctx.config.otherServiceUsingDocker) {
+      properties.host = toDockerHost(properties.host);
+      logger.debug(`Rewritten host: ${properties.host}`);
+    }
     const { host, port, database, user, password, ssl } = properties;
     const sslMode = ssl ? '?sslmode=require' : '';
     // update wren-engine config
@@ -275,29 +298,52 @@ export class PostgresStrategy implements IDataSourceStrategy {
 
   private getPGConnector() {
     // get credentials decrypted
-    const { credentials: encryptedCredentials } = this.project;
+    const connectionInfo = this.getConnectionInfo();
+    const {
+      user,
+      host,
+      database,
+      port,
+      ssl,
+      password: encryptedCredentials,
+    } = connectionInfo;
     const encryptor = new Encryptor(this.ctx.config);
     const credentials = JSON.parse(encryptor.decrypt(encryptedCredentials));
 
     // connect to data source
     const connector = new PostgresConnector({
-      user: this.project.user,
+      user: user,
       password: credentials.password,
-      host: this.project.host,
-      database: this.project.database,
-      port: this.project.port,
-      ssl: this.project.configurations?.ssl,
+      host: host,
+      database: database,
+      port: port,
+      ssl: ssl,
     });
     return connector;
   }
 
-  private async createModels(tables: string[], connector: PostgresConnector) {
+  private async createModels(
+    tables: string[],
+    connector: PostgresConnector,
+    dataSourceColumns: PostgresColumnResponse[],
+  ) {
     const projectId = this.project.id;
     const modelValues = tables.map((compactTableName) => {
       const { schema, tableName } =
         connector.parseCompactTableName(compactTableName);
       // make referenceName = schema + _ + tableName
       const referenceName = `${schema}_${tableName}`;
+
+      // store schema and table name in properties, for build tableReference in mdl
+      const dataSourceColumn = dataSourceColumns.find(
+        (col) => col.table_name === tableName && col.table_schema === schema,
+      );
+      const properties = {
+        schema,
+        table: tableName,
+        catalog: dataSourceColumn?.table_catalog,
+      };
+
       const model = {
         projectId,
         displayName: compactTableName, // use table name as displayName, referenceName and tableName
@@ -306,6 +352,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
         refSql: `select * from "${schema}"."${tableName}"`,
         cached: false,
         refreshTime: null,
+        properties: JSON.stringify(properties),
       } as Partial<Model>;
       return model;
     });
@@ -402,5 +449,9 @@ export class PostgresStrategy implements IDataSourceStrategy {
       columns.push(...res);
     }
     return columns;
+  }
+
+  private getConnectionInfo(): PostgresConnectionInfo {
+    return this.project.connectionInfo as PostgresConnectionInfo;
   }
 }
