@@ -586,7 +586,7 @@ export class ModelResolver {
   }
 
   public async previewViewData(_root: any, args: any, ctx: IContext) {
-    const viewId = args.where.id;
+    const { id: viewId, limit } = args.where;
     const view = await ctx.viewRepository.findOneBy({ id: viewId });
     if (!view) {
       throw new Error('View not found');
@@ -599,7 +599,7 @@ export class ModelResolver {
     const data = await ctx.queryService.preview(view.statement, {
       datasource,
       connectionInfo,
-      limit: PREVIEW_MAX_OUTPUT_ROW,
+      limit: limit || PREVIEW_MAX_OUTPUT_ROW,
       mdl: manifest,
       modelingOnly: false,
     });

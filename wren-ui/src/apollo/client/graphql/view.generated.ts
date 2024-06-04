@@ -30,7 +30,7 @@ export type ListViewsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 export type ListViewsQuery = { __typename?: 'Query', listViews: Array<{ __typename?: 'ViewInfo', id: number, name: string, displayName: string, statement: string }> };
 
 export type PreviewViewDataMutationVariables = Types.Exact<{
-  where: Types.ViewWhereUniqueInput;
+  where: Types.PreviewViewDataInput;
 }>;
 
 
@@ -185,7 +185,7 @@ export type ListViewsQueryHookResult = ReturnType<typeof useListViewsQuery>;
 export type ListViewsLazyQueryHookResult = ReturnType<typeof useListViewsLazyQuery>;
 export type ListViewsQueryResult = Apollo.QueryResult<ListViewsQuery, ListViewsQueryVariables>;
 export const PreviewViewDataDocument = gql`
-    mutation PreviewViewData($where: ViewWhereUniqueInput!) {
+    mutation PreviewViewData($where: PreviewViewDataInput!) {
   previewViewData(where: $where)
 }
     `;

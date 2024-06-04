@@ -326,6 +326,16 @@ export type FieldInfo = {
   type?: Maybe<Scalars['String']>;
 };
 
+export type GetMdlInput = {
+  hash: Scalars['String'];
+};
+
+export type GetMdlResult = {
+  __typename?: 'GetMDLResult';
+  hash: Scalars['String'];
+  mdl?: Maybe<Scalars['String']>;
+};
+
 export type MdlModelSubmitInput = {
   columns: Array<Scalars['String']>;
   name: Scalars['String'];
@@ -372,8 +382,10 @@ export type Mutation = {
   deleteThread: Scalars['Boolean'];
   deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
+  getMDL: GetMdlResult;
   previewData: Scalars['JSON'];
   previewModelData: Scalars['JSON'];
+  previewSql: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
   resetCurrentProject: Scalars['Boolean'];
   saveDataSource: DataSource;
@@ -458,6 +470,11 @@ export type MutationDeleteViewArgs = {
 };
 
 
+export type MutationGetMdlArgs = {
+  data?: InputMaybe<GetMdlInput>;
+};
+
+
 export type MutationPreviewDataArgs = {
   where: PreviewDataInput;
 };
@@ -468,8 +485,13 @@ export type MutationPreviewModelDataArgs = {
 };
 
 
+export type MutationPreviewSqlArgs = {
+  data?: InputMaybe<PreviewSqlDataInput>;
+};
+
+
 export type MutationPreviewViewDataArgs = {
-  where: ViewWhereUniqueInput;
+  where: PreviewViewDataInput;
 };
 
 
@@ -565,8 +587,20 @@ export type OnboardingStatusResponse = {
 };
 
 export type PreviewDataInput = {
+  limit?: InputMaybe<Scalars['Int']>;
   responseId: Scalars['Int'];
   stepIndex?: InputMaybe<Scalars['Int']>;
+};
+
+export type PreviewSqlDataInput = {
+  limit?: InputMaybe<Scalars['Int']>;
+  projectId: Scalars['Int'];
+  sql: Scalars['String'];
+};
+
+export type PreviewViewDataInput = {
+  id: Scalars['Int'];
+  limit?: InputMaybe<Scalars['Int']>;
 };
 
 export type Query = {
