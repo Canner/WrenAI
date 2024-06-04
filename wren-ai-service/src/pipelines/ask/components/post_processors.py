@@ -5,9 +5,8 @@ from typing import Any, Dict, List, Optional
 import orjson
 from haystack import component
 
+from src.engine import classify_invalid_generation_results, clean_generation_result
 from src.utils import (
-    classify_invalid_generation_results,
-    clean_generation_result,
     load_env_vars,
 )
 

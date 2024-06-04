@@ -12,13 +12,15 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
+from src.engine import (
+    add_quotes,
+    check_if_sql_executable,
+    clean_generation_result,
+)
 from src.pipelines.ask_details.components.prompts import (
     ask_details_system_prompt,
 )
 from src.utils import (
-    add_quotes,
-    check_if_sql_executable,
-    clean_generation_result,
     init_providers,
     load_env_vars,
 )
