@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -221,7 +222,7 @@ class AskDetailsUser(FastHttpUser):
                             response.content.decode("utf-8")
                         )
                     else:
-                        time.sleep(1.0)
+                        asyncio.sleep(1.0)
                 except AssertionError:
                     finished_ask_details_query.append(query_id)
                     response.failure(response.content.decode("utf-8"))
