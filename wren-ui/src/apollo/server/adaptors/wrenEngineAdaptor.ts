@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -259,7 +259,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         'Content-Type': 'application/json',
       };
 
-      const res = await axios({
+      const res: AxiosResponse<EngineQueryResponse> = await axios({
         method: 'get',
         url: url.href,
         headers,
@@ -270,7 +270,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         },
       });
 
-      return res.data as EngineQueryResponse;
+      return res.data;
     } catch (err: any) {
       logger.debug(`Got error when previewing data: ${err.message}`);
       throw err;
@@ -303,7 +303,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       const url = new URL(this.dryPlanUrlPath, this.wrenEngineBaseEndpoint);
       const headers = { 'Content-Type': 'application/json' };
 
-      const res = await axios({
+      const res: AxiosResponse<string> = await axios({
         method: 'get',
         url: url.href,
         headers,
