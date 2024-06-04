@@ -12,7 +12,7 @@ logger.level = 'debug';
 
 const config = getConfig();
 
-export interface POSTGRESConnectionInfo {
+export interface PostgresConnectionInfo {
   host: string;
   port: number;
   database: string;
@@ -31,7 +31,7 @@ export interface IIbisAdaptor {
   query: (
     query: string,
     dataSource: DataSourceName,
-    connectionInfo: BIGQUERYConnectionInfo | POSTGRESConnectionInfo,
+    connectionInfo: BIGQUERYConnectionInfo | PostgresConnectionInfo,
     mdl: Manifest,
   ) => Promise<IbisQueryResponse>;
 }

@@ -5,7 +5,7 @@ import {
   SupportedDataSource,
   IIbisAdaptor,
   IbisQueryResponse,
-  POSTGRESConnectionInfo,
+  PostgresConnectionInfo,
   BIGQUERYConnectionInfo,
 } from '../adaptors/ibisAdaptor';
 import { Encryptor, getLogger } from '@server/utils';
@@ -29,7 +29,7 @@ export interface PreviewDataResponse {
 
 export interface PreviewOptions {
   datasource: DataSourceName;
-  connectionInfo: POSTGRESConnectionInfo | BIGQUERYConnectionInfo;
+  connectionInfo: PostgresConnectionInfo | BIGQUERYConnectionInfo;
   modelingOnly?: boolean;
   mdl: Manifest;
   limit?: number;
@@ -38,14 +38,14 @@ export interface PreviewOptions {
 
 export interface SqlValidateOptions {
   datasource: DataSourceName;
-  connectionInfo: POSTGRESConnectionInfo | BIGQUERYConnectionInfo;
+  connectionInfo: PostgresConnectionInfo | BIGQUERYConnectionInfo;
   mdl: Manifest;
   modelingOnly?: boolean;
 }
 
 export interface ComposeConnectionInfoResult {
   datasource: DataSourceName;
-  connectionInfo?: POSTGRESConnectionInfo | BIGQUERYConnectionInfo;
+  connectionInfo?: PostgresConnectionInfo | BIGQUERYConnectionInfo;
 }
 
 export interface IQueryService {
@@ -138,7 +138,7 @@ export class QueryService implements IQueryService {
           connectionInfo: {
             ...connectionInfo,
             password,
-          } as POSTGRESConnectionInfo,
+          } as PostgresConnectionInfo,
         };
       }
       case DataSourceName.BIG_QUERY: {
