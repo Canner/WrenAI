@@ -6,7 +6,7 @@ import {
   IIbisAdaptor,
   IbisQueryResponse,
   PostgresConnectionInfo,
-  BIGQUERYConnectionInfo,
+  BigQueryConnectionInfo,
 } from '../adaptors/ibisAdaptor';
 import { Encryptor, getLogger } from '@server/utils';
 import { BIG_QUERY_CONNECTION_INFO, Project } from '../repositories';
@@ -33,7 +33,7 @@ export interface DescribeStatementResponse {
 
 export interface PreviewOptions {
   datasource: DataSourceName;
-  connectionInfo: PostgresConnectionInfo | BIGQUERYConnectionInfo;
+  connectionInfo: PostgresConnectionInfo | BigQueryConnectionInfo;
   modelingOnly?: boolean;
   mdl: Manifest;
   limit?: number;
@@ -42,14 +42,14 @@ export interface PreviewOptions {
 
 export interface SqlValidateOptions {
   datasource: DataSourceName;
-  connectionInfo: PostgresConnectionInfo | BIGQUERYConnectionInfo;
+  connectionInfo: PostgresConnectionInfo | BigQueryConnectionInfo;
   mdl: Manifest;
   modelingOnly?: boolean;
 }
 
 export interface ComposeConnectionInfoResult {
   datasource: DataSourceName;
-  connectionInfo?: PostgresConnectionInfo | BIGQUERYConnectionInfo;
+  connectionInfo?: PostgresConnectionInfo | BigQueryConnectionInfo;
 }
 
 export interface IQueryService {
@@ -162,7 +162,7 @@ export class QueryService implements IQueryService {
             project_id: connectionInfo.projectId,
             dataset_id: connectionInfo.datasetId,
             credentials: credential,
-          } as BIGQUERYConnectionInfo,
+          } as BigQueryConnectionInfo,
         };
       }
       case DataSourceName.DUCKDB: {

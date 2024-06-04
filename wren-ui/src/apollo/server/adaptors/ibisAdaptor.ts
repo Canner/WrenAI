@@ -21,7 +21,7 @@ export interface PostgresConnectionInfo {
   ssl: boolean;
 }
 
-export interface BIGQUERYConnectionInfo {
+export interface BigQueryConnectionInfo {
   project_id: string;
   dataset_id: string;
   credentials: string; // base64 encoded
@@ -31,7 +31,7 @@ export interface IIbisAdaptor {
   query: (
     query: string,
     dataSource: DataSourceName,
-    connectionInfo: BIGQUERYConnectionInfo | PostgresConnectionInfo,
+    connectionInfo: BigQueryConnectionInfo | PostgresConnectionInfo,
     mdl: Manifest,
   ) => Promise<IbisQueryResponse>;
 }
