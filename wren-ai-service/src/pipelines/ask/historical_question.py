@@ -10,9 +10,9 @@ from haystack import Document, component
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import (
+    async_timer,
     init_providers,
     load_env_vars,
-    timer,
 )
 
 load_env_vars()
@@ -97,7 +97,7 @@ class HistoricalQuestion(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @timer
+    @async_timer
     async def run(self, query: str):
         logger.info("Try to extract historical question")
         return await self._pipe.execute(

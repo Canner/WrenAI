@@ -16,7 +16,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import init_providers, load_env_vars, timer
+from src.utils import async_timer, init_providers, load_env_vars
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
@@ -131,7 +131,7 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @timer
+    @async_timer
     async def run(
         self,
         query: str,

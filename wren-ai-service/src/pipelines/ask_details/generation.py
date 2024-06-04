@@ -22,6 +22,7 @@ from src.pipelines.ask_details.components.prompts import (
     ask_details_system_prompt,
 )
 from src.utils import (
+    async_timer,
     init_providers,
     load_env_vars,
 )
@@ -152,6 +153,7 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    @async_timer
     async def run(self, sql: str):
         logger.info("Ask Details Generation pipeline is running...")
         return await self._pipe.execute(

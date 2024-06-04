@@ -14,7 +14,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import init_providers, load_env_vars, timer
+from src.utils import async_timer, init_providers, load_env_vars
 from src.web.v1.services.ask import AskRequest
 
 load_env_vars()
@@ -173,7 +173,7 @@ class FollowUpGeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @timer
+    @async_timer
     async def run(
         self,
         query: str,
