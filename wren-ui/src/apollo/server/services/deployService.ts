@@ -129,12 +129,8 @@ export class DeployService implements IDeployService {
     if (!deploy) {
       return null;
     }
-    let mdl = deploy.manifest;
-    if (typeof deploy.manifest === 'string') {
-      mdl = JSON.parse(deploy.manifest);
-    }
     // return base64 encoded manifest
-    return Buffer.from(JSON.stringify(mdl)).toString('base64');
+    return Buffer.from(JSON.stringify(deploy.manifest)).toString('base64');
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {

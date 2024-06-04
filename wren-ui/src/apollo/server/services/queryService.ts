@@ -89,7 +89,7 @@ export class QueryService implements IQueryService {
     this.wrenEngineAdaptor = wrenEngineAdaptor;
   }
 
-  async preview(
+  public async preview(
     sql: string,
     options: PreviewOptions,
   ): Promise<PreviewDataResponse> {
@@ -175,7 +175,7 @@ export class QueryService implements IQueryService {
     }
   }
 
-  async sqlValidate(sql, options): Promise<any> {
+  public async sqlValidate(sql, options): Promise<any> {
     const { mdl, limit, datasource, connectionInfo } = options;
     if (this.useEngine(datasource)) {
       return await this.wrenEngineAdaptor.previewData(sql, limit, mdl);

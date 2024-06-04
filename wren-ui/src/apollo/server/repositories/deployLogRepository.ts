@@ -64,6 +64,7 @@ export class DeployLogRepository
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
       if (['manifest'].includes(key)) {
+        // sqlite return a string for json field, but postgres return an object
         return typeof value === 'string' ? JSON.parse(value) : value;
       }
       return value;
