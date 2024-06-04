@@ -85,7 +85,9 @@ def timer(func):
             endTime = time.perf_counter()
             elapsed_time = endTime - startTime
 
-            print(f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds")
+            logger.info(
+                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
+            )
 
             test_records.append(
                 f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
@@ -116,10 +118,10 @@ def async_timer(func):
 
     async def process(func, *args, **kwargs):
         if asyncio.iscoroutinefunction(func):
-            print("this function is a coroutine: {}".format(func.__name__))
+            logger.info("this function is a coroutine: {}".format(func.__name__))
             return await func(*args, **kwargs)
         else:
-            print("this is not a coroutine")
+            logger.info("this is not a coroutine")
             return func(*args, **kwargs)
 
     @functools.wraps(func)
@@ -130,7 +132,9 @@ def async_timer(func):
             endTime = time.perf_counter()
             elapsed_time = endTime - startTime
 
-            print(f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds")
+            logger.info(
+                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
+            )
 
             return result
 
