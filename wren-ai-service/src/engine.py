@@ -1,65 +1,27 @@
 import logging
+import os
 import re
-from typing import Dict, List, Optional
+from typing import Dict
 
-import requests
+import aiohttp
 import sqlglot
 
 logger = logging.getLogger("wren-ai-service")
 
 
-def classify_invalid_generation_results(
-    api_endpoint: str,
-    generation_results: List[Dict[str, str]],
-) -> List[Optional[Dict[str, str]]]:
-    valid_generation_results = []
-    invalid_generation_results = []
-
-    for generation_result in generation_results:
-        quoted_sql = add_quotes(generation_result["sql"])
-
-        response = requests.get(
-            f"{api_endpoint}/v1/mdl/dry-run",
-            json={
-                "sql": remove_limit_statement(quoted_sql),
-                "limit": 1,
-            },
-        )
-        if response.status_code == 200:
-            valid_generation_results.append(
-                {
-                    "sql": quoted_sql,
-                    "summary": generation_result["summary"],
-                }
-            )
-        else:
-            invalid_generation_results.append(
-                {
-                    "sql": quoted_sql,
-                    "summary": generation_result["summary"],
-                    "error": response.json()["message"],
-                }
-            )
-
-    return valid_generation_results, invalid_generation_results
-
-
-def check_if_sql_executable(
-    api_endpoint: str,
+async def dry_run_sql(
     sql: str,
-):
-    response = requests.get(
-        f"{api_endpoint}/v1/mdl/dry-run",
+    session: aiohttp.ClientSession = None,
+    endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT"),
+) -> Dict[str, str]:
+    async with session.get(
+        f"{endpoint}/v1/mdl/dry-run",
         json={
-            "sql": remove_limit_statement(add_quotes(sql)),
+            "sql": _remove_limit_statement(add_quotes(sql)),
             "limit": 1,
         },
-    )
-
-    if response.status_code != 200:
-        logger.debug(f"SQL is not executable: {response.json()}")
-
-    return True if response.status_code == 200 else False
+    ) as response:
+        return {"status": response.status, "body": await response.json()}
 
 
 def clean_generation_result(result: str) -> str:
@@ -77,7 +39,7 @@ def clean_generation_result(result: str) -> str:
     )
 
 
-def remove_limit_statement(sql: str) -> str:
+def _remove_limit_statement(sql: str) -> str:
     pattern = r"\s*LIMIT\s+\d+(\s*;?\s*--.*|\s*;?\s*)$"
     modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
 

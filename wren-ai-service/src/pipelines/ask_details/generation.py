@@ -1,9 +1,9 @@
 import logging
-import os
 import sys
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
+import aiohttp
 import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
@@ -14,8 +14,8 @@ from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.engine import (
     add_quotes,
-    check_if_sql_executable,
     clean_generation_result,
+    dry_run_sql,
 )
 from src.pipelines.ask_details.components.prompts import (
     ask_details_system_prompt,
@@ -56,7 +56,7 @@ class GenerationPostProcessor:
     @component.output_types(
         results=Optional[Dict[str, Any]],
     )
-    def run(self, replies: List[str]) -> Dict[str, Any]:
+    async def run(self, replies: List[str]) -> Dict[str, Any]:
         cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
 
         steps = cleaned_generation_result.get("steps", [])
@@ -75,7 +75,7 @@ class GenerationPostProcessor:
         logger.debug(f"GenerationPostProcessor: steps: {pformat(steps)}")
         logger.debug(f"GenerationPostProcessor: final sql: {sql}")
 
-        if not check_if_sql_executable(os.getenv("WREN_ENGINE_ENDPOINT"), sql):
+        if not await self._check_if_sql_executable(sql):
             return {
                 "results": {
                     "description": cleaned_generation_result["description"],
@@ -102,6 +102,18 @@ class GenerationPostProcessor:
 
         return f"WITH {ctes}\n" + steps[-1]["sql"] if ctes else steps[-1]["sql"]
 
+    async def _check_if_sql_executable(
+        self,
+        sql: str,
+    ):
+        async with aiohttp.ClientSession() as session:
+            response = await dry_run_sql(sql, session)
+
+        if response.get("status") != 200:
+            logger.debug(f"SQL is not executable: {response.get("body")}")
+
+        return response.get("status") == 200
+
 
 ## Start of Pipeline
 def prompt(sql: str, prompt_builder: PromptBuilder) -> dict:
@@ -114,9 +126,9 @@ async def generate(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
-    return post_processor.run(generate.get("replies"))
+    return await post_processor.run(generate.get("replies"))
 
 
 ## End of Pipeline

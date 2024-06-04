@@ -108,9 +108,9 @@ async def generate(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
-    return post_processor.run(generate.get("replies"))
+    return await post_processor.run(generate.get("replies"))
 
 
 ## End of Pipeline
