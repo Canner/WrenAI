@@ -19,9 +19,9 @@ def embedding(query: str, embedder: Any) -> dict:
     return embedder.run(query)
 
 
-def retrieval(embedding: dict, retriever: Any) -> dict:
+async def retrieval(embedding: dict, retriever: Any) -> dict:
     logger.debug(f"embedding: {embedding}")
-    return retriever.run(query_embedding=embedding.get("embedding"))
+    return await retriever.run(query_embedding=embedding.get("embedding"))
 
 
 ## End of Pipeline

@@ -167,11 +167,12 @@ class AskUser(FastHttpUser):
                         "generating",
                         "finished",
                     ]
+                    response.success()
                     if status == "finished":
                         finished_ask_query.append(query_id)
                         successful_ask_query.append(response.content.decode("utf-8"))
-                    response.success()
-                    time.sleep(1.0)
+                    else:
+                        time.sleep(1.0)
                 except AssertionError:
                     finished_ask_query.append(query_id)
                     response.failure(response.content.decode("utf-8"))
@@ -213,13 +214,14 @@ class AskDetailsUser(FastHttpUser):
                         "generating",
                         "finished",
                     ]
+                    response.success()
                     if status == "finished":
                         finished_ask_details_query.append(query_id)
                         successful_ask_details_query.append(
                             response.content.decode("utf-8")
                         )
-                    response.success()
-                    time.sleep(1.0)
+                    else:
+                        time.sleep(1.0)
                 except AssertionError:
                     finished_ask_details_query.append(query_id)
                     response.failure(response.content.decode("utf-8"))

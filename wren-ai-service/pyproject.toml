@@ -20,7 +20,8 @@ numpy = "==1.26.4"
 sqlparse = "==0.5.0"
 sqlglot = "==22.5.0"
 orjson = "==3.10.3"
-sf-hamilton = {version = "1.63.0", extras = ["visualization"]}
+sf-hamilton = {version = "==1.63.0", extras = ["visualization"]}
+aiohttp = "==3.9.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "==8.2.0"
@@ -39,12 +40,3 @@ locust = "==2.28.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.locust]
-locustfile = "tests/locust/locustfile.py"
-headless = true
-host = "http://localhost:5556"
-users = 10
-spawn-rate = 5
-run-time = "10s"
-config-users = "tests/locust/config_users.json"
