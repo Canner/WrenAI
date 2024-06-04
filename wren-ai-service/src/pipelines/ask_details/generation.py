@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from pprint import pformat
 from typing import Any, Dict, List, Optional
@@ -107,7 +108,9 @@ class GenerationPostProcessor:
         sql: str,
     ):
         async with aiohttp.ClientSession() as session:
-            response = await dry_run_sql(sql, session)
+            response = await dry_run_sql(
+                sql, session, endpoint=os.getenv("WREN_ENGINE_ENDPOINT")
+            )
 
         if response.get("status") != 200:
             logger.debug(f"SQL is not executable: {response.get("body")}")
