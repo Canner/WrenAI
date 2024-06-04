@@ -48,56 +48,164 @@ def get_llm_client() -> AsyncClient:
     )
 
 
+def remove_limit_statement(sql: str) -> str:
+    pattern = r"\s*LIMIT\s+\d+(\s*;?\s*--.*|\s*;?\s*)$"
+    modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
+
+    return modified_sql
+
+
 async def is_sql_valid(sql: str) -> bool:
     sql = sql[:-1] if sql.endswith(";") else sql
     async with aiohttp.request(
         "GET",
         f'{os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")}/v1/mdl/dry-run',
-        json={"sql": sql, "limit": 1},
+        json={"sql": remove_limit_statement(sql), "limit": 1},
     ) as response:
         return response.status == 200
 
 
-async def get_sql_analysis(sql: str) -> list[dict]:
-    async with aiohttp.request(
-        "GET",
-        f'{os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")}/v1/analysis/sql',
-        json={"sql": sql},
-    ) as response:
-        result = await response.json()
-        if response.status == 200:
-            return result
-        else:
-            return []
-
-
 async def get_valid_question_sql_pairs(question_sql_pairs: list[dict]) -> list[dict]:
-    is_sql_valid_tasks = []
-    get_sql_analysis_tasks = []
+    tasks = []
 
     async with aiohttp.ClientSession():
         for question_sql_pair in question_sql_pairs:
             task = asyncio.ensure_future(is_sql_valid(question_sql_pair["sql"]))
-            is_sql_valid_tasks.append(task)
+            tasks.append(task)
 
-        is_sql_valid_tasks_results = await asyncio.gather(*is_sql_valid_tasks)
-        temp_results = [
+        results = await asyncio.gather(*tasks)
+        return [
             {**question_sql_pairs[i], "context": [], "is_valid": valid}
-            for i, valid in enumerate(is_sql_valid_tasks_results)
+            for i, valid in enumerate(results)
             if valid
         ]
 
-        for temp_result in temp_results:
-            task = asyncio.ensure_future(get_sql_analysis(temp_result["sql"]))
-            get_sql_analysis_tasks.append(task)
 
-        get_sql_analysis_tasks_results = await asyncio.gather(*get_sql_analysis_tasks)
-        results = [
-            {**temp_results[i], "context": result}
-            for i, result in enumerate(get_sql_analysis_tasks_results)
-        ]
+def get_ddl_commands(mdl_json: dict) -> str:
+    def _convert_models_and_relationships(
+        models: List[dict], relationships: List[dict]
+    ):
+        ddl_commands = []
 
-        return results
+        # A map to store model primary keys for foreign key relationships
+        primary_keys_map = {model["name"]: model["primaryKey"] for model in models}
+
+        for model in models:
+            table_name = model["name"]
+            columns_ddl = []
+            for column in model["columns"]:
+                if "relationship" not in column:
+                    if "properties" in column:
+                        comment = f"-- {orjson.dumps(column['properties']).decode("utf-8")}\n  "
+                    else:
+                        comment = ""
+                    if "isCalculated" in column and column["isCalculated"]:
+                        comment = (
+                            comment
+                            + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
+                        )
+                    column_name = column["name"]
+                    column_type = column["type"]
+                    column_ddl = f"{comment}{column_name} {column_type}"
+
+                    # If column is a primary key
+                    if column_name == model.get("primaryKey", ""):
+                        column_ddl += " PRIMARY KEY"
+
+                    columns_ddl.append(column_ddl)
+
+            # Add foreign key constraints based on relationships
+            for relationship in relationships:
+                if (
+                    table_name == relationship["models"][0]
+                    and relationship["joinType"].upper() == "MANY_TO_ONE"
+                ):
+                    related_table = relationship["models"][1]
+                    fk_column = relationship["condition"].split(" = ")[0].split(".")[1]
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    columns_ddl.append(fk_constraint)
+                elif (
+                    table_name == relationship["models"][1]
+                    and relationship["joinType"].upper() == "ONE_TO_MANY"
+                ):
+                    related_table = relationship["models"][0]
+                    fk_column = relationship["condition"].split(" = ")[1].split(".")[1]
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    columns_ddl.append(fk_constraint)
+                elif (
+                    table_name in relationship["models"]
+                    and relationship["joinType"].upper() == "ONE_TO_ONE"
+                ):
+                    index = relationship["models"].index(table_name)
+                    related_table = [
+                        m for m in relationship["models"] if m != table_name
+                    ][0]
+                    fk_column = (
+                        relationship["condition"].split(" = ")[index].split(".")[1]
+                    )
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    columns_ddl.append(fk_constraint)
+
+            if "properties" in model:
+                comment = (
+                    f"\n/* {orjson.dumps(model['properties']).decode("utf-8")} */\n"
+                )
+            else:
+                comment = ""
+
+            create_table_ddl = (
+                f"{comment}CREATE TABLE {table_name} (\n  "
+                + ",\n  ".join(columns_ddl)
+                + "\n);"
+            )
+            ddl_commands.append(create_table_ddl)
+
+        return ddl_commands
+
+    def _convert_metrics(metrics: List[dict]):
+        ddl_commands = []
+
+        for metric in metrics:
+            table_name = metric["name"]
+            columns_ddl = []
+            for dimension in metric["dimension"]:
+                column_name = dimension["name"]
+                column_type = dimension["type"]
+                comment = "-- This column is a dimension\n  "
+                column_ddl = f"{comment}{column_name} {column_type}"
+                columns_ddl.append(column_ddl)
+
+            for measure in metric["measure"]:
+                column_name = measure["name"]
+                column_type = measure["type"]
+                comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
+                column_ddl = f"{comment}{column_name} {column_type}"
+                columns_ddl.append(column_ddl)
+
+            comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
+            create_table_ddl = (
+                f"{comment}CREATE TABLE {table_name} (\n  "
+                + ",\n  ".join(columns_ddl)
+                + "\n);"
+            )
+
+            ddl_commands.append(create_table_ddl)
+
+        return ddl_commands
+
+    def _convert_views(views: List[dict]):
+        def _format(view: dict[str, Any]) -> str:
+            properties = view["properties"] if "properties" in view else ""
+            return f"/* {properties} */\nCREATE VIEW {view['name']}\nAS ({view['statement']})"
+
+        return [_format(view) for view in views]
+
+    ddl_commands = (
+        _convert_models_and_relationships(mdl_json["models"], mdl_json["relationships"])
+        + _convert_metrics(mdl_json["metrics"])
+        + _convert_views(mdl_json["views"])
+    )
+    return "\n\n".join(ddl_commands)
 
 
 async def get_question_sql_pairs(
@@ -112,8 +220,7 @@ async def get_question_sql_pairs(
             "role": "user",
             "content": f"""
 ### TASK ###
-Given the MDL file, which is kind of a database data model, 
-generate {num_pairs} of the questions and corresponding SQL queries following the spec of the MDL file.
+Given the database DDL, generate {num_pairs} of the questions and corresponding SQL queries.
 
 ### Output Format ###
 {{
@@ -131,7 +238,7 @@ generate {num_pairs} of the questions and corresponding SQL queries following th
 }}
 
 ### Input ###
-MDL File: {mdl_json}
+Data Model: {get_ddl_commands(mdl_json)}
 
 Generate {num_pairs} of the questions and corresponding SQL queries according to the Output Format in JSON
 Think step by step
