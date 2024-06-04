@@ -224,9 +224,9 @@ export class ModelService implements IModelService {
 
   public async updatePrimaryKeys(tables: SampleDatasetTable[]) {
     logger.debug('start update primary keys');
-    const project = await this.projectService.getCurrentProject();
+    const { id } = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
-      projectId: project.id,
+      projectId: id,
     });
     const tableToUpdate = tables.filter((t) => t.primaryKey);
     for (const table of tableToUpdate) {
@@ -243,9 +243,9 @@ export class ModelService implements IModelService {
 
   public async batchUpdateModelProperties(tables: SampleDatasetTable[]) {
     logger.debug('start batch update model description');
-    const project = await this.projectService.getCurrentProject();
+    const { id } = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
-      projectId: project.id,
+      projectId: id,
     });
 
     await Promise.all([
@@ -267,9 +267,9 @@ export class ModelService implements IModelService {
 
   public async batchUpdateColumnProperties(tables: SampleDatasetTable[]) {
     logger.debug('start batch update column description');
-    const project = await this.projectService.getCurrentProject();
+    const { id } = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
-      projectId: project.id,
+      projectId: id,
     });
     const sourceColumns =
       (await this.modelColumnRepository.findColumnsByModelIds(
@@ -329,10 +329,10 @@ export class ModelService implements IModelService {
     if (isEmpty(relations)) {
       return [];
     }
-    const project = await this.projectService.getCurrentProject();
+    const { id } = await this.projectService.getCurrentProject();
 
     const models = await this.modelRepository.findAllBy({
-      projectId: project.id,
+      projectId: id,
     });
 
     const columnIds = relations
@@ -355,7 +355,7 @@ export class ModelService implements IModelService {
       }
       const relationName = this.generateRelationName(relation, models, columns);
       return {
-        projectId: project.id,
+        projectId: id,
         name: relationName,
         fromColumnId: relation.fromColumnId,
         toColumnId: relation.toColumnId,
@@ -370,7 +370,7 @@ export class ModelService implements IModelService {
   }
 
   public async createRelation(relation: RelationData): Promise<Relation> {
-    const project = await this.projectService.getCurrentProject();
+    const { id } = await this.projectService.getCurrentProject();
     const modelIds = [relation.fromModelId, relation.toModelId];
     const models = await this.modelRepository.findAllByIds(modelIds);
     const columnIds = [relation.fromColumnId, relation.toColumnId];
@@ -387,7 +387,7 @@ export class ModelService implements IModelService {
     }
     const relationName = this.generateRelationName(relation, models, columns);
     const savedRelation = await this.relationRepository.createOne({
-      projectId: project.id,
+      projectId: id,
       name: relationName,
       fromColumnId: relation.fromColumnId,
       toColumnId: relation.toColumnId,

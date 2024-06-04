@@ -9,30 +9,37 @@ import {
   isEmpty,
 } from 'lodash';
 
+export interface BIG_QUERY_CONNECTION_INFO {
+  projectId: string;
+  datasetId: string;
+  credentials: string;
+}
+export interface POSTGRES_CONNECTION_INFO {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  ssl: boolean;
+}
+
+export interface DUCKDB_CONNECTION_INFO {
+  initSql: string;
+  extensions: Array<string>;
+  configurations: Record<string, any>;
+}
+
 export interface Project {
   id: number; // ID
   type: string; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
   displayName: string; // Project display name
-  credentials: string; // Database credentials. General purpose field for storing credentials
-  configurations: Record<string, any>; // Project connection configurations
-
-  // bq
-  projectId: string; // BigQuery project id
-  datasetId: string; // BigQuery datasetId
-
-  // duckdb
-  initSql: string; // DuckDB init sql
-  extensions: string[];
-
-  // pg
-  host: string; // Host
-  port: number; // Port
-  database: string; // Database
-  user: string; // User
-
   catalog: string; // Catalog name
   schema: string; // Schema name
   sampleDataset: string; // Sample dataset name
+  connectionInfo:
+    | BIG_QUERY_CONNECTION_INFO
+    | POSTGRES_CONNECTION_INFO
+    | DUCKDB_CONNECTION_INFO;
 }
 
 export interface IProjectRepository extends IBasicRepository<Project> {
@@ -60,16 +67,13 @@ export class ProjectRepository
 
   public override transformFromDBData: (data: any) => Project = (data: any) => {
     if (!isPlainObject(data)) {
-      throw new Error('Unexpected dbdata');
+      throw new Error('Unexpected db data');
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
-      if (key === 'configurations') {
+      if (key === 'connectionInfo' && typeof value === 'string') {
         // should return {} if value is null / {}, use value ? {} : JSON.parse(value) will throw error when value is null
         return isEmpty(value) ? {} : JSON.parse(value);
-      }
-      if (key === 'extensions') {
-        return isEmpty(value) ? [] : JSON.parse(value);
       }
       return value;
     });
@@ -80,11 +84,11 @@ export class ProjectRepository
     data: Project,
   ) => {
     if (!isPlainObject(data)) {
-      throw new Error('Unexpected dbdata');
+      throw new Error('Unexpected db data');
     }
     const snakeCaseData = mapKeys(data, (_value, key) => snakeCase(key));
     const formattedData = mapValues(snakeCaseData, (value, key) => {
-      if (['configurations', 'extensions'].includes(key)) {
+      if (key === 'connectionInfo') {
         return JSON.stringify(value);
       }
       return value;

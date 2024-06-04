@@ -27,6 +27,8 @@ import { ThreadRepository } from '@/apollo/server/repositories/threadRepository'
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
 import { Telemetry } from '@/apollo/server/telemetry/telemetry';
+import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
+import { QueryService } from '@/apollo/server/services';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -65,6 +67,9 @@ const bootstrapServer = async () => {
   const wrenAIAdaptor = new WrenAIAdaptor({
     wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
   });
+  const ibisAdaptor = new IbisAdaptor({
+    ibisServerEndpoint: serverConfig.ibisServerEndpoint,
+  });
 
   const projectService = new ProjectService({ projectRepository });
   const mdlService = new MDLService({
@@ -90,15 +95,20 @@ const bootstrapServer = async () => {
     telemetry,
   });
 
+  const queryService = new QueryService({
+    ibisAdaptor,
+    wrenEngineAdaptor,
+  });
+
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
-    wrenEngineAdaptor,
     deployService,
     projectService,
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    queryService,
   });
 
   // initialize services
@@ -138,6 +148,7 @@ const bootstrapServer = async () => {
       telemetry,
       // adaptor
       wrenEngineAdaptor,
+      ibisServerAdaptor: ibisAdaptor,
 
       // services
       projectService,
@@ -145,6 +156,7 @@ const bootstrapServer = async () => {
       mdlService,
       deployService,
       askingService,
+      queryService,
 
       // repository
       projectRepository,

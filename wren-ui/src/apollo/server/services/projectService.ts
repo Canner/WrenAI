@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
 import { Encryptor, getLogger } from '@server/utils';
-import { IProjectRepository } from '../repositories';
+import { BIG_QUERY_CONNECTION_INFO, IProjectRepository } from '../repositories';
 import { Project } from '../repositories';
 import { getConfig } from '../config';
 
@@ -13,6 +13,7 @@ logger.level = 'debug';
 
 export interface IProjectService {
   getCurrentProject: () => Promise<Project>;
+  getProjectById: (projectId: number) => Promise<Project>;
   getCredentialFilePath: (project?: Project) => Promise<string>;
   writeCredentialFile: (
     credentials: JSON,
@@ -32,11 +33,16 @@ export class ProjectService implements IProjectService {
     return await this.projectRepository.getCurrentProject();
   }
 
+  public async getProjectById(projectId: number) {
+    return await this.projectRepository.findOneBy({ id: projectId });
+  }
+
   public async getCredentialFilePath(project?: Project) {
     if (!project) {
       project = await this.getCurrentProject();
     }
-    const { credentials: encryptedCredentials } = project;
+    const connectionInfo = project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
+    const encryptedCredentials = connectionInfo.credentials;
     const encryptor = new Encryptor(config);
     const credentials = encryptor.decrypt(encryptedCredentials);
     const filePath = this.writeCredentialFile(

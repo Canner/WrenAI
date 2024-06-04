@@ -1,5 +1,10 @@
 import { IConnector, CompactTable } from '../connectors/connector';
-import { Model, ModelColumn, Project } from '../repositories';
+import {
+  DUCKDB_CONNECTION_INFO,
+  Model,
+  ModelColumn,
+  Project,
+} from '../repositories';
 import { DataSourceName, DuckDBDataSourceProperties, IContext } from '../types';
 import {
   DuckDBConnector,
@@ -40,6 +45,11 @@ export class DuckDBStrategy implements IDataSourceStrategy {
     });
 
     await this.patchConfigToWrenEngine();
+    const connectionInfo = {
+      initSql: trim(initSql),
+      extensions,
+      configurations,
+    } as DUCKDB_CONNECTION_INFO;
 
     // save DataSource to database
     const project = await this.ctx.projectRepository.createOne({
@@ -47,9 +57,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       schema: 'public',
       catalog: 'wrenai',
       type: DataSourceName.DUCKDB,
-      initSql: trim(initSql),
-      configurations,
-      extensions,
+      connectionInfo,
     });
     return project;
   }
@@ -67,13 +75,16 @@ export class DuckDBStrategy implements IDataSourceStrategy {
 
     await this.patchConfigToWrenEngine();
 
+    const connectionInfo = {
+      initSql: trim(initSql),
+      extensions,
+      configurations,
+    } as DUCKDB_CONNECTION_INFO;
     const project = await this.ctx.projectRepository.updateOne(
       this.project.id,
       {
         displayName,
-        initSql: trim(initSql),
-        configurations,
-        extensions,
+        connectionInfo,
       },
     );
     return project;
@@ -231,9 +242,9 @@ export class DuckDBStrategy implements IDataSourceStrategy {
       const compactTable = compactTables.find(
         (table) => table.name === tableName,
       );
-      const properties = compactTable.properties
-        ? JSON.stringify(compactTable.properties)
-        : null;
+
+      // compactTable contain schema and catalog, these information are for building tableReference in mdl
+      const properties = { ...compactTable.properties, table: tableName };
       const model = {
         projectId,
         displayName: tableName, //use table name as displayName, referenceName and tableName
@@ -242,7 +253,7 @@ export class DuckDBStrategy implements IDataSourceStrategy {
         refSql: `select * from ${compactTable.properties.schema}.${tableName}`,
         cached: false,
         refreshTime: null,
-        properties,
+        properties: properties ? JSON.stringify(properties) : null,
       } as Partial<Model>;
       return model;
     });

@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 volumes:
   data:
@@ -55,6 +55,19 @@ services:
     depends_on:
       - qdrant
       - wren-engine
+
+  ibis-server:
+    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    expose:
+      - 8000
+    ports:
+      - ${IBIS_SERVER_PORT}:8000
+    environment:
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+    networks:
+      - wren
 
   qdrant:
     image: qdrant/qdrant:v1.7.4

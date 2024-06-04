@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -38,7 +38,7 @@ export interface ColumnMetadata {
   type: string;
 }
 
-export interface QueryResponse {
+export interface EngineQueryResponse {
   columns: ColumnMetadata[];
   data: any[][];
 }
@@ -66,19 +66,24 @@ export interface ValidationResponse {
   message?: string;
 }
 
+export interface DryPlanOption {
+  modelingOnly?: boolean;
+  manifest?: Manifest;
+}
+
 export interface IWrenEngineAdaptor {
   deploy(deployData: deployData): Promise<DeployResponse>;
   initDatabase(sql: string): Promise<void>;
   putSessionProps(props: Record<string, any>): Promise<void>;
-  queryDuckdb(sql: string): Promise<QueryResponse>;
+  queryDuckdb(sql: string): Promise<EngineQueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
   previewData(
     sql: string,
     limit?: number,
     mdl?: Manifest,
-  ): Promise<QueryResponse>;
+  ): Promise<EngineQueryResponse>;
   describeStatement(sql: string): Promise<DescribeStatementResponse>;
-  getNativeSQL(sql: string): Promise<string>;
+  getNativeSQL(sql: string, options?: DryPlanOption): Promise<string>;
   validateColumnIsValid(
     manifest: Manifest,
     modelName: string,
@@ -210,14 +215,14 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
-  public async queryDuckdb(sql: string): Promise<QueryResponse> {
+  public async queryDuckdb(sql: string): Promise<EngineQueryResponse> {
     try {
       const url = new URL(this.queryDuckdbUrlPath, this.wrenEngineBaseEndpoint);
       const headers = {
         'Content-Type': 'text/plain; charset=utf-8',
       };
       const res = await axios.post(url.href, sql, { headers });
-      return res.data as QueryResponse;
+      return res.data as EngineQueryResponse;
     } catch (err: any) {
       logger.debug(`Got error when querying duckdb: ${err.message}`);
       throw err;
@@ -247,14 +252,14 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     sql: string,
     limit: number = DEFAULT_PREVIEW_LIMIT,
     manifest?: Manifest,
-  ): Promise<QueryResponse> {
+  ): Promise<EngineQueryResponse> {
     try {
       const url = new URL(this.previewUrlPath, this.wrenEngineBaseEndpoint);
       const headers = {
         'Content-Type': 'application/json',
       };
 
-      const res = await axios({
+      const res: AxiosResponse<EngineQueryResponse> = await axios({
         method: 'get',
         url: url.href,
         headers,
@@ -265,7 +270,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         },
       });
 
-      return res.data as QueryResponse;
+      return res.data;
     } catch (err: any) {
       logger.debug(`Got error when previewing data: ${err.message}`);
       throw err;
@@ -285,18 +290,26 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
-  public async getNativeSQL(sql: string): Promise<string> {
+  public async getNativeSQL(
+    sql: string,
+    options: DryPlanOption,
+  ): Promise<string> {
     try {
+      const props = {
+        modelingOnly: options?.modelingOnly ? true : false,
+        manifest: options?.manifest,
+      };
+
       const url = new URL(this.dryPlanUrlPath, this.wrenEngineBaseEndpoint);
       const headers = { 'Content-Type': 'application/json' };
 
-      const res = await axios({
+      const res: AxiosResponse<string> = await axios({
         method: 'get',
         url: url.href,
         headers,
         data: {
           sql,
-          modelingOnly: false,
+          ...props,
         },
       });
 
