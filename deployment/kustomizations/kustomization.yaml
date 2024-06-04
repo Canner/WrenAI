@@ -1,0 +1,61 @@
+##### Dependancies used in this kustomization:
+# nginx.ingress
+# external-dns
+# cert-manager
+# kubectl kustomize
+
+#test output like this:
+#kubectl kustomize deployment/kustomizations --enable-helm > deployment/kustomizations/wrenai.kustimized.yaml
+#kubectl create namespace wren
+#kubectl apply -f deployment/kustomizations/wrenai.kustimized.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace for all resources here and in the Helm charts
+namespace: wren
+helmCharts:
+
+### Uncomment if you are planing to use postgresql
+#  - name: postgresql
+#    repo: https://charts.bitnami.com/bitnami
+#    version: 14.3.3
+#    releaseName: wren-postgresql
+#    valuesFile: helm-values_postgresql_14.yaml
+#    includeCRDs: true
+#    # the Same Namespace
+#    namespace: wren
+
+  - name: qdrant
+    repo: https://qdrant.github.io/qdrant-helm
+    version: 0.9.0
+    releaseName: wren-qdrant
+    valuesFile: helm-values-qdrant_0.9.0.yaml
+    includeCRDs: true
+    # The Same Namespace
+    namespace: wren
+
+
+images:
+  - name: ghcr.io/canner/wren-bootstrap
+    newTag: 0.1.4 # Update to new version
+  - name: ghcr.io/canner/wren-engine
+    newTag: 0.4.5 # Update to new version
+  - name: ghcr.io/canner/wren-ui
+    newTag: 0.6.0 # Update to new version. Mimumal version is 0.6.0 to use postgress for wren-ui, if you are using older version, you may use only sqlite, please adjust ConfigMap (deployment/kustomizations/base/cm.yaml), Secret (deployment/kustomizations/examples/secret-wren_example.yaml) and the deployment/kustomizations/base/deploy-wren-ui.yaml manifests.
+  - name: ghcr.io/canner/wren-ai-service
+    newTag: 0.4.0 # Update to new version
+
+resources:
+  - base/cm.yaml
+  - base/deploy-wren-ui.yaml
+  - base/deploy-wren-engine.yaml
+  - base/deploy-wren-ai-service.yaml
+  - base/pvc.yaml
+  - base/svc.yaml
+### Modify these examples first and uncomment them:
+  - examples/ingress-wren_example.yaml
+  - examples/certificate-wren_example.yaml
+### Usually you do not need to generate a certificate for Qdrant
+#  - examples/certificate-qdrant_example.yaml
+### Best practice is to create and deploy Secrets manually, not as part of kustomization or GitOps!
+#  - examples/secret-wren_example.yaml

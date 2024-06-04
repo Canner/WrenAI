@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wren-config
+data:
+
+  # Wren Engine Service Port
+  WREN_ENGINE_PORT: "8080"
+  # Wren AI Service Port
+  WREN_AI_SERVICE_PORT: "5555"
+
+  #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
+  WREN_PRODUCT_VERSION: "0.3.5"
+  WREN_ENGINE_VERSION: "0.4.5"
+  WREN_AI_SERVICE_VERSION: "0.4.0"
+  WREN_UI_VERSION: "0.5.7"
+
+  # OpenAI
+  OPENAI_GENERATION_MODEL: "gpt-3.5-turbo"
+
+  # Telemetry
+  POSTHOG_HOST: "https://app.posthog.com"
+  TELEMETRY_ENABLED: "false"
+  
+  # service endpoints of AI service & engine service
+  WREN_ENGINE_ENDPOINT: "https://wren-ui.myhost.net"
+  WREN_AI_ENDPOINT: "http://wren-ai-service.ai-system.svc.cluster.local:5555"
+
+  # "sqlite", or "postgres" as application database.
+  DB_TYPE: postgres
+
+  ### if DB_TYPE = "sqlite" also make sure to uncomment the "wren-sqlite" in the volumeMounts & PVC sections of the deployment/kustomizations/base/deploy-wren-ui.yaml
+  #SQLITE_FILE: /app/data/db.sqlite3
+  #DATA_PATH: "/app/data"
+
+  ### if DB_TYPE = "postgres" you must provide PG_URL string in the *Secret* manifest file (deployment/kustomizations/examples/secret-wren_example.yaml) to connect to postgres  
