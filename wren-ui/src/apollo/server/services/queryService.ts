@@ -27,6 +27,10 @@ export interface PreviewDataResponse {
   data: any[][];
 }
 
+export interface DescribeStatementResponse {
+  columns: ColumnMetadata[];
+}
+
 export interface PreviewOptions {
   datasource: DataSourceName;
   connectionInfo: PostgresConnectionInfo | BIGQUERYConnectionInfo;
@@ -51,7 +55,10 @@ export interface ComposeConnectionInfoResult {
 export interface IQueryService {
   preview(sql: string, options: PreviewOptions): Promise<PreviewDataResponse>;
 
-  describeStatement(sql: string, options: PreviewOptions): Promise<any>;
+  describeStatement(
+    sql: string,
+    options: PreviewOptions,
+  ): Promise<DescribeStatementResponse>;
 
   /**
    * DTO to compose connection info from project settings for ibis server
@@ -113,7 +120,7 @@ export class QueryService implements IQueryService {
   public async describeStatement(
     sql: string,
     options: PreviewOptions,
-  ): Promise<any> {
+  ): Promise<DescribeStatementResponse> {
     try {
       // preview data with limit 1 to get column metadata
       options.limit = 1;
@@ -129,7 +136,7 @@ export class QueryService implements IQueryService {
     const { type } = project;
     switch (type) {
       case DataSourceName.POSTGRES: {
-        const connectionInfo = project.connectionInfo as POSTGRESConnectionInfo;
+        const connectionInfo = project.connectionInfo as PostgresConnectionInfo;
         const encryptor = new Encryptor(config);
         const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
         const { password } = JSON.parse(decryptedCredentials);

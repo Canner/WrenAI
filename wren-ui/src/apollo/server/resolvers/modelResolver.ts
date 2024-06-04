@@ -163,8 +163,8 @@ export class ModelResolver {
     return await ctx.deployService.deploy(manifest, id);
   }
 
-  public async getMDL(_root: any, _args: any, ctx: IContext) {
-    const { hash } = _args.data;
+  public async getMDL(_root: any, args: any, ctx: IContext) {
+    const { hash } = args.data;
     const mdl = await ctx.deployService.getMDLByHash(hash);
     return {
       hash,

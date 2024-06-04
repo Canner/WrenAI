@@ -18,7 +18,7 @@ import {
   updateModelPrimaryKey,
   transformInvalidColumnName,
 } from './util';
-import { POSTGRESConnectionInfo } from '../adaptors/ibisAdaptor';
+import { PostgresConnectionInfo } from '../adaptors/ibisAdaptor';
 
 const logger = getLogger('PostgresStrategy');
 logger.level = 'debug';
@@ -51,7 +51,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
       user,
       password: encryptedCredentials,
       ssl,
-    } as POSTGRESConnectionInfo;
+    } as PostgresConnectionInfo;
 
     const project = await this.ctx.projectRepository.createOne({
       displayName,
@@ -451,7 +451,7 @@ export class PostgresStrategy implements IDataSourceStrategy {
     return columns;
   }
 
-  private getConnectionInfo(): POSTGRESConnectionInfo {
-    return this.project.connectionInfo as POSTGRESConnectionInfo;
+  private getConnectionInfo(): PostgresConnectionInfo {
+    return this.project.connectionInfo as PostgresConnectionInfo;
   }
 }

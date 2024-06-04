@@ -48,13 +48,14 @@ export interface IbisQueryResponse {
   dtypes: Record<string, string>;
 }
 
+const dataSourceUrlMap: Record<SupportedDataSource, string> = {
+  [SupportedDataSource.POSTGRES]: 'postgres',
+  [SupportedDataSource.BIG_QUERY]: 'bigquery',
+  [SupportedDataSource.SNOWFLAKE]: 'snowflake',
+};
+
 export class IbisAdaptor implements IIbisAdaptor {
-  private readonly ibisServerEndpoint: string;
-  private readonly dataSourceUrlMap: Record<SupportedDataSource, string> = {
-    [SupportedDataSource.POSTGRES]: 'postgres',
-    [SupportedDataSource.BIG_QUERY]: 'bigquery',
-    [SupportedDataSource.SNOWFLAKE]: 'snowflake',
-  };
+  private ibisServerEndpoint: string;
 
   constructor({ ibisServerEndpoint }: { ibisServerEndpoint: string }) {
     this.ibisServerEndpoint = ibisServerEndpoint;
@@ -78,7 +79,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Querying ibis with body: ${JSON.stringify(body, null, 2)}`);
     try {
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${this.dataSourceUrlMap[dataSource]}/query`,
+        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query`,
         body,
       );
       const response = res.data;
