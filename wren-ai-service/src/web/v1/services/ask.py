@@ -5,7 +5,7 @@ import sqlparse
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.utils import remove_duplicates, timer
+from src.utils import remove_duplicates
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -153,7 +153,6 @@ class AskService:
             and self.ask_results[query_id].status == "stopped"
         )
 
-    # @timer # comment out for now, as it will cause error in FastAPI backgound task
     async def ask(
         self,
         ask_request: AskRequest,
@@ -340,7 +339,6 @@ class AskService:
             status="stopped",
         )
 
-    @timer
     def get_ask_result(
         self,
         ask_result_request: AskResultRequest,

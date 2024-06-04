@@ -14,6 +14,7 @@ if not Path("./outputs/locust").exists():
 os.system(
     f"""
     poetry run locust \
+    --config tests/locust/locust.conf \
     --logfile outputs/locust/{filename}.log \
     --html outputs/locust/{filename}.html \
     --json > outputs/locust/{filename}.json
