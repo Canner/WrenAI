@@ -27,7 +27,7 @@ export type GetViewQuery = { __typename?: 'Query', view: { __typename?: 'ViewInf
 export type ListViewsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type ListViewsQuery = { __typename?: 'Query', listViews: Array<{ __typename?: 'ViewInfo', id: number, name: string, statement: string }> };
+export type ListViewsQuery = { __typename?: 'Query', listViews: Array<{ __typename?: 'ViewInfo', id: number, name: string, displayName: string, statement: string }> };
 
 export type PreviewViewDataMutationVariables = Types.Exact<{
   where: Types.ViewWhereUniqueInput;
@@ -152,6 +152,7 @@ export const ListViewsDocument = gql`
   listViews {
     id
     name
+    displayName
     statement
   }
 }

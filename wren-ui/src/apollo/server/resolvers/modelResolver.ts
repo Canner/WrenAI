@@ -446,7 +446,12 @@ export class ModelResolver {
   public async listViews(_root: any, _args: any, ctx: IContext) {
     const { id } = await ctx.projectService.getCurrentProject();
     const views = await ctx.viewRepository.findAllBy({ projectId: id });
-    return views;
+    return views.map((view) => ({
+      ...view,
+      displayName: view.properties
+        ? JSON.parse(view.properties)?.displayName
+        : view.name,
+    }));
   }
 
   public async getView(_root: any, args: any, ctx: IContext) {
@@ -455,7 +460,10 @@ export class ModelResolver {
     if (!view) {
       throw new Error('View not found');
     }
-    return view;
+    const displayName = view.properties
+      ? JSON.parse(view.properties)?.displayName
+      : view.name;
+    return { ...view, displayName };
   }
 
   // validate a view name
@@ -540,7 +548,7 @@ export class ModelResolver {
       displayName,
     });
 
-    return view;
+    return { ...view, displayName };
   }
 
   // delete view

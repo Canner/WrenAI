@@ -31,6 +31,7 @@ export const LIST_VIEWS = gql`
     listViews {
       id
       name
+      displayName
       statement
     }
   }
