@@ -14,7 +14,8 @@ from src.web.v1 import routers
 
 env = load_env_vars()
 setup_custom_logger(
-    "wren-ai-service", level=logging.DEBUG if env == "dev" else logging.INFO
+    "wren-ai-service",
+    level=logging.INFO,  # level=logging.DEBUG if env == "dev" else logging.INFO
 )
 
 
