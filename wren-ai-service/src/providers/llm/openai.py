@@ -143,17 +143,20 @@ class OpenAILLMProvider(LLMProvider):
     ):
         def _get_generation_kwargs(
             model_kwargs: Optional[Dict[str, Any]] = GENERATION_MODEL_KWARGS,
+            api_base: str = OPENAI_API_BASE,
         ):
-            if model_kwargs != GENERATION_MODEL_KWARGS:
+            if api_base != OPENAI_API_BASE:
                 return model_kwargs
-            return GENERATION_MODEL_KWARGS
+            elif model_kwargs != GENERATION_MODEL_KWARGS:
+                return model_kwargs
+            return None
 
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._generation_model,
             system_prompt=system_prompt,
-            generation_kwargs=_get_generation_kwargs(model_kwargs),
+            generation_kwargs=_get_generation_kwargs(model_kwargs, self._api_base),
         )
 
     def get_text_embedder(
