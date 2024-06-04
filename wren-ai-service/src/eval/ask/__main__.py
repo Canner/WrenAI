@@ -315,8 +315,8 @@ if __name__ == "__main__":
             ) as f:
                 json.dump(mdl_data, f)
 
-    if not Path("./outputs/ask").exists():
-        Path("./outputs/ask").mkdir(parents=True)
+    if not Path("./outputs/eval/ask").exists():
+        Path("./outputs/eval/ask").mkdir(parents=True)
 
     if ENABLE_SEMANTIC_DESCRIPTION:
         if os.path.exists(f"./src/eval/data/{DATASET_NAME}_with_semantic_mdl.json"):
@@ -434,10 +434,10 @@ if __name__ == "__main__":
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         print(
-            f"Write predictions to ./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json"
+            f"Write predictions to ./outputs/eval/ask/{DATASET_NAME}_predictions_{timestamp}.json"
         )
         write_prediction_results(
-            f"./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json",
+            f"./outputs/eval/ask/{DATASET_NAME}_predictions_{timestamp}.json",
             ground_truths,
             outputs,
             {
@@ -450,7 +450,7 @@ if __name__ == "__main__":
 
         if EVAL_AFTER_PREDICTION:
             eval(
-                Path(f"./outputs/ask/{DATASET_NAME}_predictions_{timestamp}.json"),
+                Path(f"./outputs/eval/ask/{DATASET_NAME}_predictions_{timestamp}.json"),
                 DATASET_NAME,
                 ground_truths,
             )
