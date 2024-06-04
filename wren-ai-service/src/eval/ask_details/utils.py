@@ -12,7 +12,7 @@ from haystack_integrations.components.evaluators.ragas import (
 )
 
 from src.eval.utils import get_generation_model_pricing
-from src.pipelines.ask_details.generation_pipeline import Generation
+from src.pipelines.ask_details.generation import Generation
 from src.utils import init_providers
 
 

@@ -2,9 +2,9 @@ import logging
 from typing import List, Literal, Optional
 
 import sqlparse
-from haystack import Pipeline
 from pydantic import BaseModel
 
+from src.core.pipeline import BasicPipeline
 from src.utils import remove_duplicates, timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -107,17 +107,19 @@ class AskResultResponse(BaseModel):
 
 
 class AskService:
-    def __init__(self, pipelines: dict[str, Pipeline]):
+    def __init__(self, pipelines: dict[str, BasicPipeline]):
         self._pipelines = pipelines
         self.prepare_semantics_statuses: dict[
             str, SemanticsPreparationStatusResponse.status
         ] = {}
         self.ask_results: dict[str, AskResultResponse] = {}
 
-    def prepare_semantics(self, prepare_semantics_request: SemanticsPreparationRequest):
+    async def prepare_semantics(
+        self, prepare_semantics_request: SemanticsPreparationRequest
+    ):
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            self._pipelines["indexing"].run(prepare_semantics_request.mdl)
+            await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
             self.prepare_semantics_statuses[
                 prepare_semantics_request.id
@@ -151,8 +153,8 @@ class AskService:
             and self.ask_results[query_id].status == "stopped"
         )
 
-    @timer
-    def ask(
+    # @timer # comment out for now, as it will cause error in FastAPI backgound task
+    async def ask(
         self,
         ask_request: AskRequest,
     ):
@@ -164,11 +166,13 @@ class AskService:
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="understanding")
 
-                query_understanding_result = self._pipelines["query_understanding"].run(
+                query_understanding_result = await self._pipelines[
+                    "query_understanding"
+                ].run(
                     query=ask_request.query,
                 )
 
-                if not query_understanding_result["post_processor"]["is_valid_query"]:
+                if not query_understanding_result["post_process"]["is_valid_query"]:
                     logger.error(
                         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
                     )
@@ -184,10 +188,10 @@ class AskService:
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="searching")
 
-                retrieval_result = self._pipelines["retrieval"].run(
+                retrieval_result = await self._pipelines["retrieval"].run(
                     query=ask_request.query,
                 )
-                documents = retrieval_result["retriever"]["documents"]
+                documents = retrieval_result.get("retrieval", {}).get("documents", [])
 
                 if not documents:
                     logger.error(
@@ -205,15 +209,16 @@ class AskService:
             if not self._is_stopped(query_id):
                 self.ask_results[query_id] = AskResultResponse(status="generating")
 
-                historical_question_result = (
-                    self._pipelines["historical_question"]
-                    .run(query=ask_request.query)
-                    .get("output_formatter", {})
-                    .get("documents")
+                historical_question = await self._pipelines["historical_question"].run(
+                    query=ask_request.query
                 )
 
+                historical_question_result = historical_question.get(
+                    "formatted_output", {}
+                ).get("documents", [])
+
                 if ask_request.history:
-                    text_to_sql_generation_results = self._pipelines[
+                    text_to_sql_generation_results = await self._pipelines[
                         "followup_generation"
                     ].run(
                         query=ask_request.query,
@@ -221,18 +226,20 @@ class AskService:
                         history=ask_request.history,
                     )
                 else:
-                    text_to_sql_generation_results = self._pipelines["generation"].run(
+                    text_to_sql_generation_results = await self._pipelines[
+                        "generation"
+                    ].run(
                         query=ask_request.query,
                         contexts=documents,
                         exclude=historical_question_result,
                     )
 
                 valid_generation_results = []
-                if text_to_sql_generation_results["post_processor"][
+                if text_to_sql_generation_results["post_process"][
                     "valid_generation_results"
                 ]:
                     valid_generation_results += text_to_sql_generation_results[
-                        "post_processor"
+                        "post_process"
                     ]["valid_generation_results"]
 
                 logger.debug("Documents:")
@@ -243,24 +250,26 @@ class AskService:
                 logger.debug("Before sql correction:")
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
 
-                if text_to_sql_generation_results["post_processor"][
+                if text_to_sql_generation_results["post_process"][
                     "invalid_generation_results"
                 ]:
-                    sql_correction_results = self._pipelines["sql_correction"].run(
+                    sql_correction_results = await self._pipelines[
+                        "sql_correction"
+                    ].run(
                         contexts=documents,
                         invalid_generation_results=text_to_sql_generation_results[
-                            "post_processor"
+                            "post_process"
                         ]["invalid_generation_results"],
                     )
-                    valid_generation_results += sql_correction_results[
-                        "post_processor"
-                    ]["valid_generation_results"]
+                    valid_generation_results += sql_correction_results["post_process"][
+                        "valid_generation_results"
+                    ]
 
                     logger.debug(
-                        f'sql_correction_results: {sql_correction_results["post_processor"]}'
+                        f'sql_correction_results: {sql_correction_results["post_process"]}'
                     )
 
-                    for results in sql_correction_results["post_processor"][
+                    for results in sql_correction_results["post_process"][
                         "invalid_generation_results"
                     ]:
                         logger.debug(

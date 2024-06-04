@@ -1,7 +1,7 @@
 from haystack import Document
 from haystack.document_stores.types import DocumentStore
 
-from src.pipelines.ask.indexing_pipeline import DocumentCleaner
+from src.pipelines.ask.indexing import DocumentCleaner
 from src.utils import init_providers
 
 
