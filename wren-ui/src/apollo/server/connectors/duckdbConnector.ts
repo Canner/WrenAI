@@ -1,6 +1,6 @@
 import {
   IWrenEngineAdaptor,
-  QueryResponse,
+  EngineQueryResponse,
 } from '../adaptors/wrenEngineAdaptor';
 import { CompactTable } from './connector';
 import { IConnector } from './connector';
@@ -75,7 +75,7 @@ export class DuckDBConnector
     return [];
   }
 
-  private formatToCompactTable(columns: QueryResponse): CompactTable[] {
+  private formatToCompactTable(columns: EngineQueryResponse): CompactTable[] {
     return columns.data.reduce((acc: CompactTable[], row: any) => {
       const [
         table_catalog,

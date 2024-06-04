@@ -1,6 +1,9 @@
 import { pickBy } from 'lodash';
 
 export interface IConfig {
+  // wren ui
+  otherServiceUsingDocker: boolean;
+
   // database
   dbType: string;
   // pg
@@ -17,6 +20,9 @@ export interface IConfig {
   // wren AI
   wrenAIEndpoint: string;
   openaiGenerationModel?: string;
+
+  // ibis server
+  ibisServerEndpoint: string;
 
   // encryption
   encryptionPassword: string;
@@ -40,6 +46,9 @@ export interface IConfig {
 }
 
 const defaultConfig = {
+  // wren ui
+  otherServiceUsingDocker: false,
+
   // database
   dbType: 'sqlite',
 
@@ -58,12 +67,18 @@ const defaultConfig = {
   // wren AI
   wrenAIEndpoint: 'http://localhost:5555',
 
+  // ibis server
+  ibisServerEndpoint: 'http://localhost:8000',
+
   // encryption
   encryptionPassword: 'sementic',
   encryptionSalt: 'layer',
 };
 
 const config = {
+  // node
+  otherServiceUsingDocker: process.env.OTHER_SERVICE_USING_DOCKER === 'true',
+
   // database
   dbType: process.env.DB_TYPE,
   // pg
@@ -88,6 +103,9 @@ const config = {
   // wren AI
   wrenAIEndpoint: process.env.WREN_AI_ENDPOINT,
   openaiGenerationModel: process.env.OPENAI_GENERATION_MODEL,
+
+  // ibis server
+  ibisServerEndpoint: process.env.IBIS_SERVER_ENDPOINT,
 
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,

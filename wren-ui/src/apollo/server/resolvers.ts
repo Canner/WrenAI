@@ -44,6 +44,7 @@ const resolvers = {
   },
   Mutation: {
     deploy: modelResolver.deploy,
+    getMDL: modelResolver.getMDL,
     saveDataSource: projectResolver.saveDataSource,
     startSampleDataset: projectResolver.startSampleDataset,
     saveTables: projectResolver.saveTables,
@@ -86,6 +87,9 @@ const resolvers = {
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,
     updateDataSource: projectResolver.updateDataSource,
+
+    // preview
+    previewSql: modelResolver.previewSql,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),
