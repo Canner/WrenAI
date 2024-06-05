@@ -61,7 +61,7 @@ def init_globals(
             host=os.getenv("REDIS_HOST", "redis"),
             port=int(os.getenv("REDIS_PORT", 6379)),
         )
-        if int(os.getenv("WORKERS"), 1) > 1
+        if int(os.getenv("WORKERS", 1)) > 1
         else StrictRedis(
             "./redis.db",
         )
