@@ -23,4 +23,4 @@ COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 COPY src src
 
-ENTRYPOINT uvicorn src.__main__:app --host 0.0.0.0 --port $WREN_AI_SERVICE_PORT --workers $WORKERS
+ENTRYPOINT python -m src.pre_run && uvicorn src.__main__:app --host 0.0.0.0 --port $WREN_AI_SERVICE_PORT --workers $WORKERS
