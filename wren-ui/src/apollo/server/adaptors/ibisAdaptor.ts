@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 
 import { getLogger } from '@server/utils/logger';
 import { DataSourceName } from '../types';
@@ -27,6 +27,44 @@ export interface BigQueryConnectionInfo {
   credentials: string; // base64 encoded
 }
 
+export interface CompactColumn {
+  name: string;
+  type: string;
+  notNull: boolean;
+  description?: string;
+  properties?: Record<string, any>;
+}
+
+export interface CompactTable {
+  name: string;
+  columns: CompactColumn[];
+  description?: string;
+  properties?: Record<string, any>;
+}
+
+export interface TableResponse {
+  tables: CompactTable[];
+}
+
+export enum ConstraintType {
+  PRIMARY_KEY = 'PRIMARY KEY',
+  FOREIGN_KEY = 'FOREIGN KEY',
+  UNIQUE = 'UNIQUE',
+}
+
+export interface RecommendConstraint {
+  constraint_name: string;
+  constraint_type: ConstraintType;
+  constraint_table: string;
+  constraint_column: string;
+  constrainted_table: string;
+  constrainted_column: string;
+}
+
+export interface ConstraintResponse {
+  constraints: RecommendConstraint[];
+}
+
 export interface IIbisAdaptor {
   query: (
     query: string,
@@ -34,6 +72,14 @@ export interface IIbisAdaptor {
     connectionInfo: BigQueryConnectionInfo | PostgresConnectionInfo,
     mdl: Manifest,
   ) => Promise<IbisQueryResponse>;
+  get_table: (
+    dataSource: DataSourceName,
+    connectionInfo: BigQueryConnectionInfo | PostgresConnectionInfo,
+  ) => Promise<TableResponse>;
+  get_constraint: (
+    dataSource: DataSourceName,
+    connectionInfo: BigQueryConnectionInfo | PostgresConnectionInfo,
+  ) => Promise<ConstraintResponse>;
 }
 
 export enum SupportedDataSource {
@@ -89,6 +135,66 @@ export class IbisAdaptor implements IIbisAdaptor {
 
       throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
         customMessage: e.response.data || 'Error querying ibis server',
+        originalError: e,
+      });
+    }
+  }
+
+  async get_table(
+    dataSource: DataSourceName,
+    connectionInfo: Record<string, any>,
+  ): Promise<TableResponse> {
+    if (config.otherServiceUsingDocker) {
+      connectionInfo.host = toDockerHost(connectionInfo.host);
+      logger.debug(`Rewritten host: ${connectionInfo.host}`);
+    }
+    const body = {
+      connectionInfo,
+    };
+    logger.debug(`Getting table with body: ${JSON.stringify(body, null, 2)}`);
+    try {
+      const res: AxiosResponse<TableResponse> = await axios.post(
+        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/tables`,
+        body,
+      );
+      return res.data;
+    } catch (e) {
+      logger.debug(`Got error when getting table: ${e.response.data}`);
+
+      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
+        customMessage:
+          e.response.data || 'Error getting table from ibis server',
+        originalError: e,
+      });
+    }
+  }
+
+  async get_constraint(
+    dataSource: DataSourceName,
+    connectionInfo: Record<string, any>,
+  ): Promise<ConstraintResponse> {
+    if (config.otherServiceUsingDocker) {
+      connectionInfo.host = toDockerHost(connectionInfo.host);
+      logger.debug(`Rewritten host: ${connectionInfo.host}`);
+    }
+    const body = {
+      connectionInfo,
+    };
+    logger.debug(
+      `Getting constraint with body: ${JSON.stringify(body, null, 2)}`,
+    );
+    try {
+      const res: AxiosResponse<ConstraintResponse> = await axios.post(
+        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
+        body,
+      );
+      return res.data;
+    } catch (e) {
+      logger.debug(`Got error when getting constraint: ${e.response.data}`);
+
+      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
+        customMessage:
+          e.response.data || 'Error getting constraint from ibis server',
         originalError: e,
       });
     }
