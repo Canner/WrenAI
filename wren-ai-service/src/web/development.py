@@ -34,8 +34,29 @@ REDIS_DB = (
 
 @async_timer
 async def dummy_ask_task(ask_request: AskRequest):
+    """
+    settings:
+    uvicorn workers 4
+
+    {
+        "user_class_name": "DummyAskUser",
+        "fixed_count": 100
+    }
+
+    users = 100
+    spawn-rate = 50
+    run-time = 20s
+
+    with only await asyncio.sleep, number of finished task is about 300
+    with time.sleep(0.5) added, number of finished task is about 100
+    with time.sleep(1) added, number of finished task is about 4
+    with await asyncio.to_thread(time.sleep, 0.5) added, number of finished task is about 230
+    with await asyncio.to_thread(time.sleep, 1) added, number of finished task is about 240-250
+    """
+    SYNC_SLEEP_TIME = 1
     await asyncio.sleep(random.randint(3, 7))
-    time.sleep(0.5)
+    # time.sleep(SYNC_SLEEP_TIME)
+    await asyncio.to_thread(time.sleep, SYNC_SLEEP_TIME)
 
     REDIS_DB.hset(
         "test_ask_results",
