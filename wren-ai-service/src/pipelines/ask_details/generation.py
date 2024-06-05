@@ -25,6 +25,7 @@ from src.utils import (
     async_timer,
     init_providers,
     load_env_vars,
+    timer,
 )
 
 load_env_vars()
@@ -120,16 +121,19 @@ class GenerationPostProcessor:
 
 
 ## Start of Pipeline
+@timer
 def prompt(sql: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"sql: {sql}")
     return prompt_builder.run(sql=sql)
 
 
+@async_timer
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@async_timer
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))

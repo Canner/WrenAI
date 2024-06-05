@@ -7,18 +7,20 @@ from hamilton.experimental.h_async import AsyncDriver
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.utils import async_timer, init_providers, load_env_vars
+from src.utils import async_timer, init_providers, load_env_vars, timer
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
 ## Start of Pipeline
+@timer
 def embedding(query: str, embedder: Any) -> dict:
     logger.debug(f"query: {query}")
     return embedder.run(query)
 
 
+@async_timer
 async def retrieval(embedding: dict, retriever: Any) -> dict:
     return await retriever.run(query_embedding=embedding.get("embedding"))
 

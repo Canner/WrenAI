@@ -10,7 +10,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.utils import async_timer, init_providers
+from src.utils import async_timer, init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -60,16 +60,19 @@ class QueryUnderstandingPostProcessor:
 
 
 ## Start of Pipeline
+@timer
 def prompt(query: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"query: {query}")
     return prompt_builder.run(query=query)
 
 
+@async_timer
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@timer
 def post_process(
     generate: dict, post_processor: QueryUnderstandingPostProcessor
 ) -> dict:

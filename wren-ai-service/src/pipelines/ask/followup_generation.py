@@ -14,7 +14,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import async_timer, init_providers, load_env_vars
+from src.utils import async_timer, init_providers, load_env_vars, timer
 from src.web.v1.services.ask import AskRequest
 
 load_env_vars()
@@ -128,6 +128,7 @@ Let's think step by step.
 
 
 ## Start of Pipeline
+@timer
 def prompt(
     query: str,
     documents: List[Document],
@@ -143,11 +144,13 @@ def prompt(
     )
 
 
+@async_timer
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@async_timer
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))

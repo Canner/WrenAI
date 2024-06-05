@@ -13,6 +13,7 @@ from src.utils import (
     async_timer,
     init_providers,
     load_env_vars,
+    timer,
 )
 
 load_env_vars()
@@ -55,22 +56,26 @@ class OutputFormatter:
 
 
 ## Start of Pipeline
+@timer
 def embedding(query: str, embedder: Any) -> dict:
     logger.debug(f"query: {query}")
     return embedder.run(query)
 
 
+@async_timer
 async def retrieval(embedding: dict, retriever: Any) -> dict:
     res = await retriever.run(query_embedding=embedding.get("embedding"))
     documents = res.get("documents")
     return dict(documents=documents)
 
 
+@timer
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     logger.debug(f"retrieval: {retrieval}")
     return score_filter.run(documents=retrieval.get("documents"))
 
 
+@timer
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
 ) -> dict:
