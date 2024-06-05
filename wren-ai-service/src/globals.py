@@ -56,9 +56,15 @@ def init_globals(
         SQL_REGENERATION_SERVICE, \
         REDIS_DB
 
-    REDIS_DB = StrictRedis(
-        host=os.getenv("REDIS_HOST", "redis"),
-        port=int(os.getenv("REDIS_PORT", 6379)),
+    REDIS_DB = (
+        StrictRedis(
+            host=os.getenv("REDIS_HOST", "redis"),
+            port=int(os.getenv("REDIS_PORT", 6379)),
+        )
+        if int(os.getenv("WORKERS")) > 1
+        else StrictRedis(
+            "./redis.db",
+        )
     )
 
     llm_provider, document_store_provider = init_providers()
