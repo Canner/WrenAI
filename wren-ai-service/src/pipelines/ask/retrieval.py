@@ -7,9 +7,8 @@ from hamilton.experimental.h_async import AsyncDriver
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.utils import async_timer, init_providers, load_env_vars
+from src.utils import async_timer, init_providers
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -57,6 +56,10 @@ class Retrieval(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, document_store_provider = init_providers()
     pipeline = Retrieval(
         llm_provider=llm_provider,

@@ -15,9 +15,8 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.utils import async_timer, init_providers, load_env_vars, timer
+from src.utils import async_timer, init_providers, timer
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 DATASET_NAME = os.getenv("DATASET_NAME")
@@ -411,6 +410,10 @@ class Indexing(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     pipeline = Indexing(*init_providers())
 
     async_validate(

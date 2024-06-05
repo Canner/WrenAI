@@ -14,10 +14,9 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import async_timer, init_providers, load_env_vars, timer
+from src.utils import async_timer, init_providers, timer
 from src.web.v1.services.ask import AskRequest
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -199,6 +198,10 @@ class FollowUpGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, _ = init_providers()
     pipeline = FollowUpGeneration(
         llm_provider=llm_provider,

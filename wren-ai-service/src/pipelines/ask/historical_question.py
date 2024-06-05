@@ -12,11 +12,9 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import (
     async_timer,
     init_providers,
-    load_env_vars,
     timer,
 )
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -118,6 +116,10 @@ class HistoricalQuestion(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     pipeline = HistoricalQuestion(*init_providers())
 
     async_validate(lambda: pipeline.run("this is a query"))

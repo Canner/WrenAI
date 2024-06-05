@@ -124,6 +124,10 @@ class SQLCorrection(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, _ = init_providers()
     pipeline = SQLCorrection(
         llm_provider=llm_provider,

@@ -62,8 +62,6 @@ def load_env_vars() -> str:
 
 
 def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
-    load_env_vars()
-
     logger.info("Initializing providers...")
     loader.import_mods()
 
@@ -75,8 +73,6 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
 
 
 def timer(func):
-    load_env_vars()
-
     @functools.wraps(func)
     def wrapper_timer(*args, **kwargs):
         if os.getenv("ENABLE_TIMER", False):
@@ -114,15 +110,10 @@ def timer(func):
 
 
 def async_timer(func):
-    load_env_vars()
-
     async def process(func, *args, **kwargs):
-        if asyncio.iscoroutinefunction(func):
-            logger.info("this function is a coroutine: {}".format(func.__name__))
-            return await func(*args, **kwargs)
-        else:
-            logger.info("this is not a coroutine")
-            return func(*args, **kwargs)
+        assert asyncio.iscoroutinefunction(func)
+        logger.info("this function is a coroutine: {}".format(func.__name__))
+        return await func(*args, **kwargs)
 
     @functools.wraps(func)
     async def wrapper_timer(*args, **kwargs):

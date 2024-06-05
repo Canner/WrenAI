@@ -12,11 +12,7 @@ from src.engine import (
     clean_generation_result,
     dry_run_sql,
 )
-from src.utils import (
-    load_env_vars,
-)
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 

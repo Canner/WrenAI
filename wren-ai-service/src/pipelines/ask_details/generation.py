@@ -24,11 +24,9 @@ from src.pipelines.ask_details.components.prompts import (
 from src.utils import (
     async_timer,
     init_providers,
-    load_env_vars,
     timer,
 )
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -172,6 +170,10 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, _ = init_providers()
     pipeline = Generation(
         llm_provider=llm_provider,
