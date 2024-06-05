@@ -17,6 +17,9 @@ services:
       OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       QDRANT_HOST: ${QDRANT_HOST}
       WREN_ENGINE_ENDPOINT: ${WREN_ENGINE_ENDPOINT}
+      ENABLE_TIMER: ${ENABLE_TIMER}
+      LOGGING_LEVEL: ${LOGGING_LEVEL}
+      WORKERS: ${WORKERS}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
