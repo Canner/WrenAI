@@ -230,4 +230,4 @@ class AskDetailsUser(FastHttpUser):
 class DummyUser(FastHttpUser):
     @task
     def dummy(self):
-        self.client.get(url="/dummy")
+        self.client.get(url="/dev/dummy")
