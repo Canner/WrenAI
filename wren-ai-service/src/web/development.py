@@ -2,9 +2,18 @@ import asyncio
 import os
 import random
 import time
+import uuid
 
-from fastapi import APIRouter
+import orjson
+from fastapi import APIRouter, BackgroundTasks
 from redislite import StrictRedis
+
+from src.web.v1.services.ask import (
+    AskRequest,
+    AskResponse,
+    AskResultRequest,
+    AskResultResponse,
+)
 
 router = APIRouter()
 
@@ -18,6 +27,36 @@ REDIS_DB = (
         "./redis.db",
     )
 )
+
+
+async def dummy_ask_task(ask_request: AskRequest):
+    await asyncio.sleep(random.randint(3, 7))
+    time.sleep(4)
+
+    REDIS_DB.hset(
+        "test_ask_results",
+        ask_request.query_id,
+        AskResultResponse(
+            status="finished",
+        ).model_dump_json(),
+    )
+
+
+def get_dummy_ask_task_result(
+    ask_result_request: AskResultRequest,
+) -> AskResultResponse:
+    if (
+        result := REDIS_DB.hget("test_ask_results", ask_result_request.query_id)
+    ) is None:
+        return AskResultResponse(
+            status="failed",
+            error=AskResultResponse.AskError(
+                code="OTHERS",
+                message=f"{ask_result_request.query_id} is not found",
+            ),
+        )
+
+    return AskResultResponse(**orjson.loads(result))
 
 
 @router.get("/dummy")
@@ -34,3 +73,30 @@ async def dummy(sleep: int = 4, is_async: bool = True, should_sleep: bool = True
             time.sleep(sleep)
 
     return {"dummy": REDIS_DB.hget("dummy", "dummy")}
+
+
+@router.post("/dummy-asks")
+async def dummy_ask(
+    ask_request: AskRequest,
+    background_tasks: BackgroundTasks,
+) -> AskResponse:
+    query_id = str(uuid.uuid4())
+    ask_request.query_id = query_id
+    REDIS_DB.hset(
+        "test_ask_results",
+        query_id,
+        AskResultResponse(
+            status="understanding",
+        ).model_dump_json(),
+    )
+
+    background_tasks.add_task(
+        dummy_ask_task,
+        ask_request,
+    )
+    return AskResponse(query_id=query_id)
+
+
+@router.get("/dummy-asks/{query_id}/result")
+async def get_dummy_ask_result(query_id: str) -> AskResultResponse:
+    return get_dummy_ask_task_result(AskResultRequest(query_id=query_id))
