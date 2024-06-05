@@ -125,7 +125,7 @@ class AskService:
                 "prepare_semantics_statuses",
                 prepare_semantics_request.id,
                 SemanticsPreparationStatusResponse(
-                    status="success",
+                    status="finished",
                 ).model_dump_json(),
             )
         except Exception as e:
