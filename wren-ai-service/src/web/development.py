@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import random
 import time
@@ -8,6 +9,7 @@ import orjson
 from fastapi import APIRouter, BackgroundTasks
 from redislite import StrictRedis
 
+from src.utils import async_timer
 from src.web.v1.services.ask import (
     AskRequest,
     AskResponse,
@@ -15,6 +17,7 @@ from src.web.v1.services.ask import (
     AskResultResponse,
 )
 
+logger = logging.getLogger("wren-ai-service")
 router = APIRouter()
 
 REDIS_DB = (
@@ -29,9 +32,10 @@ REDIS_DB = (
 )
 
 
+@async_timer
 async def dummy_ask_task(ask_request: AskRequest):
     await asyncio.sleep(random.randint(3, 7))
-    time.sleep(4)
+    time.sleep(0.5)
 
     REDIS_DB.hset(
         "test_ask_results",
