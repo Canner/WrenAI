@@ -393,6 +393,7 @@ class Indexing(BasicPipeline):
 
     @async_timer
     async def run(self, mdl_str: str) -> Dict[str, Any]:
+        logger.info("Ask Indexing pipeline is running...")
         return await self._pipe.execute(
             ["write_ddl", "write_view"],
             inputs={

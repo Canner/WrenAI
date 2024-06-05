@@ -102,7 +102,7 @@ class HistoricalQuestion(BasicPipeline):
 
     @async_timer
     async def run(self, query: str):
-        logger.info("Try to extract historical question")
+        logger.info("Ask HistoricalQuestion pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
