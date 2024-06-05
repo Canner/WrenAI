@@ -95,6 +95,7 @@ if __name__ == "__main__":
         "src.__main__:app",
         host=server_host,
         port=server_port,
-        reload=(env == "dev"),
+        reload=(env == "dev") and int(os.getenv("WORKERS", 1)) == 1,
         reload_dirs=["src"],
+        workers=int(os.getenv("WORKERS", 1)),
     )
