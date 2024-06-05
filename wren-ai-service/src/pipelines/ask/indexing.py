@@ -326,10 +326,12 @@ def convert_to_ddl(mdl: Dict[str, Any], ddl_converter: DDLConverter) -> Dict[str
     return ddl_converter.run(mdl=mdl)
 
 
-@timer
-def embed_ddl(convert_to_ddl: Dict[str, Any], ddl_embedder: Any) -> Dict[str, Any]:
+@async_timer
+async def embed_ddl(
+    convert_to_ddl: Dict[str, Any], ddl_embedder: Any
+) -> Dict[str, Any]:
     logger.debug(f"input in embed_ddl: {convert_to_ddl}")
-    return ddl_embedder.run(documents=convert_to_ddl["documents"])
+    return await ddl_embedder.run(documents=convert_to_ddl["documents"])
 
 
 @timer
@@ -346,10 +348,12 @@ def convert_to_view(
     return view_converter.run(mdl=mdl)
 
 
-@timer
-def embed_view(convert_to_view: Dict[str, Any], view_embedder: Any) -> Dict[str, Any]:
+@async_timer
+async def embed_view(
+    convert_to_view: Dict[str, Any], view_embedder: Any
+) -> Dict[str, Any]:
     logger.debug(f"input in embed_view: {convert_to_view}")
-    return view_embedder.run(documents=convert_to_view["documents"])
+    return await view_embedder.run(documents=convert_to_view["documents"])
 
 
 @timer

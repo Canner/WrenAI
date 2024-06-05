@@ -56,10 +56,10 @@ class OutputFormatter:
 
 
 ## Start of Pipeline
-@timer
-def embedding(query: str, embedder: Any) -> dict:
+@async_timer
+async def embedding(query: str, embedder: Any) -> dict:
     logger.debug(f"query: {query}")
-    return embedder.run(query)
+    return await embedder.run(query)
 
 
 @async_timer
