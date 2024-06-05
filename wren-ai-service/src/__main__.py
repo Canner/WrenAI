@@ -36,7 +36,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, redoc_url=None)
 
-app.include_router(routers.router, prefix="/v1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,6 +43,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(routers.router, prefix="/v1")
+if os.getenv("ENV") == "dev":
+    from src.web import development
+
+    app.include_router(development.router, prefix="/dev")
 
 
 @app.exception_handler(Exception)
