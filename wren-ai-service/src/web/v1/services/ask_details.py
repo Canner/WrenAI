@@ -4,7 +4,7 @@ from typing import List, Literal, Optional
 import orjson
 from haystack import Pipeline
 from pydantic import BaseModel
-from redislite import Redis
+from redislite import StrictRedis
 
 from src.utils import async_timer
 
@@ -57,7 +57,11 @@ class AskDetailsResultResponse(BaseModel):
 
 
 class AskDetailsService:
-    def __init__(self, pipelines: dict[str, Pipeline], redis_db: Redis):
+    def __init__(
+        self,
+        pipelines: dict[str, Pipeline],
+        redis_db: StrictRedis = StrictRedis("./redis.db"),
+    ):
         self._pipelines = pipelines
         self._redis_db = redis_db
 
