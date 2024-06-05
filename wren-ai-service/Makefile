@@ -32,14 +32,22 @@ stop-wren-engine:
 psql:
 	docker exec -it wren-wren-engine-1 bash launch-cli.sh
 
+run-redis:
+	docker run -d -p 6379:6379 --name redis redis:7.0.15-alpine
+
+stop-redis:
+	docker stop redis && docker rm redis
+
 run-all:
 	poetry run python -m src.prepare_mdl_json && \
 	make run-qdrant && \
-	make run-wren-engine
+	make run-wren-engine && \
+	make run-redis
 
 stop-all:
 	make stop-qdrant && \
-	make stop-wren-engine
+	make stop-wren-engine && \
+	make stop-redis
 
 # present the evaluation result on the streamlit app
 # example: make streamlit pipeline=ask_details

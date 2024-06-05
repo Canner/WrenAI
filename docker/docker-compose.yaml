@@ -49,6 +49,8 @@ services:
       OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       QDRANT_HOST: qdrant
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      REDIS_HOST: ${AI_SERVICE_REDIS_HOST}
+      REDIS_PORT: ${AI_SERVICE_REDIS_PORT}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
       LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
       WORKERS: ${AI_SERVICE_WORKERS}
@@ -69,6 +71,14 @@ services:
       - 6334
     volumes:
       - data:/qdrant/storage
+    networks:
+      - wren
+
+  redis:
+    image: redis:7.0.15-alpine
+    restart: on-failure
+    ports:
+      - 6379:6379
     networks:
       - wren
 

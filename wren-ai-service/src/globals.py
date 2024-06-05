@@ -1,7 +1,7 @@
 import os
 from typing import Callable, Tuple
 
-from redislite import Redis
+from redislite import StrictRedis
 
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask import (
@@ -41,7 +41,6 @@ SQL_EXPLANATION_SERVICE = None
 SQL_REGENERATION_SERVICE = None
 
 REDIS_DB = None
-REDIS_DB_PATH = os.getenv("REDIS_DB_PATH", "./redis.db")
 
 
 def init_globals(
@@ -57,7 +56,10 @@ def init_globals(
         SQL_REGENERATION_SERVICE, \
         REDIS_DB
 
-    REDIS_DB = Redis(REDIS_DB_PATH)
+    REDIS_DB = StrictRedis(
+        host=os.getenv("REDIS_HOST", "redis"),
+        port=int(os.getenv("REDIS_PORT", 6379)),
+    )
 
     llm_provider, document_store_provider = init_providers()
 
