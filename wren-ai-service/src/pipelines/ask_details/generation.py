@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from pprint import pformat
 from typing import Any, Dict, List, Optional
@@ -21,11 +22,11 @@ from src.pipelines.ask_details.components.prompts import (
     ask_details_system_prompt,
 )
 from src.utils import (
+    async_timer,
     init_providers,
-    load_env_vars,
+    timer,
 )
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -107,7 +108,9 @@ class GenerationPostProcessor:
         sql: str,
     ):
         async with aiohttp.ClientSession() as session:
-            response = await dry_run_sql(sql, session)
+            response = await dry_run_sql(
+                sql, session, endpoint=os.getenv("WREN_ENGINE_ENDPOINT")
+            )
 
         if response.get("status") != 200:
             logger.debug(f"SQL is not executable: {response.get("body")}")
@@ -116,16 +119,19 @@ class GenerationPostProcessor:
 
 
 ## Start of Pipeline
+@timer
 def prompt(sql: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"sql: {sql}")
     return prompt_builder.run(sql=sql)
 
 
+@async_timer
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@async_timer
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))
@@ -149,6 +155,7 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    @async_timer
     async def run(self, sql: str):
         logger.info("Ask Details Generation pipeline is running...")
         return await self._pipe.execute(
@@ -163,6 +170,10 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, _ = init_providers()
     pipeline = Generation(
         llm_provider=llm_provider,

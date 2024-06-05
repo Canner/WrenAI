@@ -15,9 +15,8 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.utils import init_providers, load_env_vars, timer
+from src.utils import async_timer, init_providers, timer
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 DATASET_NAME = os.getenv("DATASET_NAME")
@@ -303,11 +302,13 @@ class DDLConverter:
 
 
 ## Start of Pipeline
+@timer
 def clean_document_store(mdl_str: str, cleaner: DocumentCleaner) -> Dict[str, Any]:
     logger.debug(f"input in clean_document_store: {mdl_str}")
     return cleaner.run(mdl=mdl_str)
 
 
+@timer
 @extract_fields(dict(mdl=Dict[str, Any]))
 def validate_mdl(
     clean_document_store: Dict[str, Any], validator: MDLValidator
@@ -318,21 +319,27 @@ def validate_mdl(
     return dict(mdl=res["mdl"])
 
 
+@timer
 def convert_to_ddl(mdl: Dict[str, Any], ddl_converter: DDLConverter) -> Dict[str, Any]:
     logger.debug(f"input in convert_to_ddl: {mdl}")
     return ddl_converter.run(mdl=mdl)
 
 
-def embed_ddl(convert_to_ddl: Dict[str, Any], ddl_embedder: Any) -> Dict[str, Any]:
+@async_timer
+async def embed_ddl(
+    convert_to_ddl: Dict[str, Any], ddl_embedder: Any
+) -> Dict[str, Any]:
     logger.debug(f"input in embed_ddl: {convert_to_ddl}")
-    return ddl_embedder.run(documents=convert_to_ddl["documents"])
+    return await ddl_embedder.run(documents=convert_to_ddl["documents"])
 
 
+@timer
 def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_ddl: {embed_ddl}")
     return ddl_writer.run(documents=embed_ddl["documents"])
 
 
+@timer
 def convert_to_view(
     mdl: Dict[str, Any], view_converter: ViewConverter
 ) -> Dict[str, Any]:
@@ -340,11 +347,15 @@ def convert_to_view(
     return view_converter.run(mdl=mdl)
 
 
-def embed_view(convert_to_view: Dict[str, Any], view_embedder: Any) -> Dict[str, Any]:
+@async_timer
+async def embed_view(
+    convert_to_view: Dict[str, Any], view_embedder: Any
+) -> Dict[str, Any]:
     logger.debug(f"input in embed_view: {convert_to_view}")
-    return view_embedder.run(documents=convert_to_view["documents"])
+    return await view_embedder.run(documents=convert_to_view["documents"])
 
 
+@timer
 def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_view: {embed_view}")
     return view_writer.run(documents=embed_view["documents"])
@@ -380,7 +391,7 @@ class Indexing(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @timer
+    @async_timer
     async def run(self, mdl_str: str) -> Dict[str, Any]:
         return await self._pipe.execute(
             ["write_ddl", "write_view"],
@@ -399,6 +410,10 @@ class Indexing(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     pipeline = Indexing(*init_providers())
 
     async_validate(

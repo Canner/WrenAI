@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import logging
 import os
@@ -61,8 +62,6 @@ def load_env_vars() -> str:
 
 
 def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
-    load_env_vars()
-
     logger.info("Initializing providers...")
     loader.import_mods()
 
@@ -74,15 +73,17 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
 
 
 def timer(func):
-    load_env_vars()
-
     @functools.wraps(func)
     def wrapper_timer(*args, **kwargs):
         if os.getenv("ENABLE_TIMER", False):
             startTime = time.perf_counter()
-            value = func(*args, **kwargs)
+            result = func(*args, **kwargs)
             endTime = time.perf_counter()
             elapsed_time = endTime - startTime
+
+            logger.info(
+                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
+            )
 
             test_records.append(
                 f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
@@ -90,7 +91,7 @@ def timer(func):
 
             if (
                 func.__qualname__ == "AskService.get_ask_result"
-                and value.status == "finished"
+                and result.status == "finished"
             ):
                 if not Path("./outputs").exists():
                     Path("./outputs").mkdir()
@@ -101,8 +102,33 @@ def timer(func):
                     f.write("\n-----------------------\n")
                     f.write(test_records[-1])
 
-            return value
+            return result
 
         return func(*args, **kwargs)
+
+    return wrapper_timer
+
+
+def async_timer(func):
+    async def process(func, *args, **kwargs):
+        assert asyncio.iscoroutinefunction(func)
+        logger.info("this function is a coroutine: {}".format(func.__name__))
+        return await func(*args, **kwargs)
+
+    @functools.wraps(func)
+    async def wrapper_timer(*args, **kwargs):
+        if os.getenv("ENABLE_TIMER", False):
+            startTime = time.perf_counter()
+            result = await process(func, *args, **kwargs)
+            endTime = time.perf_counter()
+            elapsed_time = endTime - startTime
+
+            logger.info(
+                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
+            )
+
+            return result
+
+        return await process(func, *args, **kwargs)
 
     return wrapper_timer

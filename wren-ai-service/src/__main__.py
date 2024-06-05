@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -14,7 +16,10 @@ from src.web.v1 import routers
 
 env = load_env_vars()
 setup_custom_logger(
-    "wren-ai-service", level=logging.DEBUG if env == "dev" else logging.INFO
+    "wren-ai-service",
+    level=(
+        logging.DEBUG if os.getenv("LOGGING_LEVEL", "INFO") == "DEBUG" else logging.INFO
+    ),
 )
 
 
@@ -67,6 +72,20 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/dummy")
+async def dummy(sleep: int = 4, is_async: bool = True, should_sleep: bool = True):
+    """
+    Dummy endpoint to test async behavior by sleeping for several seconds
+    """
+    if should_sleep:
+        if is_async:
+            await asyncio.sleep(sleep)
+        else:
+            time.sleep(sleep)
+
+    return {"status": "dummy"}
+
+
 if __name__ == "__main__":
     server_host = os.getenv("WREN_AI_SERVICE_HOST") or "127.0.0.1"
     server_port = (
@@ -79,6 +98,7 @@ if __name__ == "__main__":
         "src.__main__:app",
         host=server_host,
         port=server_port,
-        reload=(env == "dev"),
+        reload=(env == "dev") and int(os.getenv("WORKERS", 1)) == 1,
         reload_dirs=["src"],
+        workers=int(os.getenv("WORKERS", 1)),
     )

@@ -16,9 +16,8 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import init_providers, load_env_vars, timer
+from src.utils import async_timer, init_providers, timer
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -88,6 +87,7 @@ Let's think step by step.
 
 
 ## Start of Pipeline
+@timer
 def prompt(
     query: str,
     documents: List[Document],
@@ -103,11 +103,13 @@ def prompt(
     )
 
 
+@async_timer
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@async_timer
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))
@@ -131,7 +133,7 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @timer
+    @async_timer
     async def run(
         self,
         query: str,
@@ -154,6 +156,10 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, _ = init_providers()
     pipeline = Generation(
         llm_provider=llm_provider,

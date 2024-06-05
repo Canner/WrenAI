@@ -4,6 +4,8 @@ from typing import List, Literal, Optional
 from haystack import Pipeline
 from pydantic import BaseModel
 
+from src.utils import async_timer
+
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -57,6 +59,7 @@ class AskDetailsService:
         self._pipelines = pipelines
         self.ask_details_results: dict[str, AskDetailsResultResponse] = {}
 
+    @async_timer
     async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,

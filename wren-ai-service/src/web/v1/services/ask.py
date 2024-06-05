@@ -5,6 +5,7 @@ import sqlparse
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.utils import async_timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -113,6 +114,7 @@ class AskService:
         ] = {}
         self.ask_results: dict[str, AskResultResponse] = {}
 
+    @async_timer
     async def prepare_semantics(
         self, prepare_semantics_request: SemanticsPreparationRequest
     ):
@@ -152,6 +154,7 @@ class AskService:
             and self.ask_results[query_id].status == "stopped"
         )
 
+    @async_timer
     async def ask(
         self,
         ask_request: AskRequest,

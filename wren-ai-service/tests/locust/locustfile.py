@@ -225,3 +225,9 @@ class AskDetailsUser(FastHttpUser):
                 except AssertionError:
                     finished_ask_details_query.append(query_id)
                     response.failure(response.content.decode("utf-8"))
+
+
+class DummyUser(FastHttpUser):
+    @task
+    def dummy(self):
+        self.client.get(url="/dummy")

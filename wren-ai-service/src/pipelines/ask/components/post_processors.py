@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -11,11 +12,7 @@ from src.engine import (
     clean_generation_result,
     dry_run_sql,
 )
-from src.utils import (
-    load_env_vars,
-)
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -63,7 +60,9 @@ class GenerationPostProcessor:
         async def _task(result: Dict[str, str]):
             quoted_sql = add_quotes(result["sql"])
 
-            response = await dry_run_sql(quoted_sql, session)
+            response = await dry_run_sql(
+                quoted_sql, session, endpoint=os.getenv("WREN_ENGINE_ENDPOINT")
+            )
 
             if response.get("status") == 200:
                 valid_generation_results.append(

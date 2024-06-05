@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 from typing import Dict
 
@@ -11,8 +10,8 @@ logger = logging.getLogger("wren-ai-service")
 
 async def dry_run_sql(
     sql: str,
-    session: aiohttp.ClientSession = None,
-    endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT"),
+    session: aiohttp.ClientSession,
+    endpoint: str,
 ) -> Dict[str, str]:
     async with session.get(
         f"{endpoint}/v1/mdl/dry-run",

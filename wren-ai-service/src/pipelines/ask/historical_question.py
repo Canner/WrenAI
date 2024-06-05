@@ -10,12 +10,11 @@ from haystack import Document, component
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import (
+    async_timer,
     init_providers,
-    load_env_vars,
     timer,
 )
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -55,23 +54,26 @@ class OutputFormatter:
 
 
 ## Start of Pipeline
-def embedding(query: str, embedder: Any) -> dict:
+@async_timer
+async def embedding(query: str, embedder: Any) -> dict:
     logger.debug(f"query: {query}")
-    return embedder.run(query)
+    return await embedder.run(query)
 
 
+@async_timer
 async def retrieval(embedding: dict, retriever: Any) -> dict:
-    logger.debug(f"embedding: {embedding}")
     res = await retriever.run(query_embedding=embedding.get("embedding"))
     documents = res.get("documents")
     return dict(documents=documents)
 
 
+@timer
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     logger.debug(f"retrieval: {retrieval}")
     return score_filter.run(documents=retrieval.get("documents"))
 
 
+@timer
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
 ) -> dict:
@@ -98,7 +100,7 @@ class HistoricalQuestion(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @timer
+    @async_timer
     async def run(self, query: str):
         logger.info("Try to extract historical question")
         return await self._pipe.execute(
@@ -114,6 +116,10 @@ class HistoricalQuestion(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     pipeline = HistoricalQuestion(*init_providers())
 
     async_validate(lambda: pipeline.run("this is a query"))
