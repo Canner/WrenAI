@@ -1,4 +1,6 @@
-from src.utils import init_providers
+from src.utils import init_providers, load_env_vars
+
+load_env_vars()
 
 # in order to prevent from multiple qdrant document store initialization that may cause "collection already exists error"
 # this error is caused by the fact that we may run multiple workers concurrently

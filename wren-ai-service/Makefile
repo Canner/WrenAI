@@ -1,5 +1,5 @@
 start:
-	poetry run python -m src.__main__
+	poetry run python -m src.pre_run && poetry run python -m src.__main__
 
 build:
 	docker compose -f docker/docker-compose.yml --env-file .env.prod build

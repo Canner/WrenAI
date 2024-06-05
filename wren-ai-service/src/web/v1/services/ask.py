@@ -185,28 +185,29 @@ class AskService:
                     ).model_dump_json(),
                 )
 
-                query_understanding_result = await self._pipelines[
-                    "query_understanding"
-                ].run(
-                    query=ask_request.query,
-                )
+                ## currently, the query understanding pipeline is easily broken due to openai model(gpt 3.5-turbo) changes
+                # query_understanding_result = await self._pipelines[
+                #     "query_understanding"
+                # ].run(
+                #     query=ask_request.query,
+                # )
 
-                if not query_understanding_result["post_process"]["is_valid_query"]:
-                    logger.error(
-                        f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
-                    )
-                    self._redis_db.hset(
-                        "ask_results",
-                        query_id,
-                        AskResultResponse(
-                            status="failed",
-                            error=AskResultResponse.AskError(
-                                code="MISLEADING_QUERY",
-                                message="Misleading query, please ask a more specific question.",
-                            ),
-                        ).model_dump_json(),
-                    )
-                    return
+                # if not query_understanding_result["post_process"]["is_valid_query"]:
+                #     logger.error(
+                #         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
+                #     )
+                #     self._redis_db.hset(
+                #         "ask_results",
+                #         query_id,
+                #         AskResultResponse(
+                #             status="failed",
+                #             error=AskResultResponse.AskError(
+                #                 code="MISLEADING_QUERY",
+                #                 message="Misleading query, please ask a more specific question.",
+                #             ),
+                #         ).model_dump_json(),
+                #     )
+                #     return
 
             if not self._is_stopped(query_id):
                 self._redis_db.hset(
