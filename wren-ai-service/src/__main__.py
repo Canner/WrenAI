@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -65,6 +67,20 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/dummy")
+async def dummy(sleep: int = 4, is_async: bool = True, should_sleep: bool = True):
+    """
+    Dummy endpoint to test async behavior by sleeping for several seconds
+    """
+    if should_sleep:
+        if is_async:
+            await asyncio.sleep(sleep)
+        else:
+            time.sleep(sleep)
+
+    return {"status": "dummy"}
 
 
 if __name__ == "__main__":
