@@ -18,9 +18,7 @@ env = load_env_vars()
 setup_custom_logger(
     "wren-ai-service",
     level=(
-        logging.DEBUG
-        if env == "dev" and os.getenv("LOGGING_LEVEL", "INFO") == "DEBUG"
-        else logging.INFO
+        logging.DEBUG if os.getenv("LOGGING_LEVEL", "INFO") == "DEBUG" else logging.INFO
     ),
 )
 
