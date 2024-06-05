@@ -1,4 +1,7 @@
+import os
 from typing import Callable, Tuple
+
+from redislite import Redis
 
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask import (
@@ -37,6 +40,9 @@ ASK_DETAILS_SERVICE = None
 SQL_EXPLANATION_SERVICE = None
 SQL_REGENERATION_SERVICE = None
 
+REDIS_DB = None
+REDIS_DB_PATH = os.getenv("REDIS_DB_PATH", "./redis.db")
+
 
 def init_globals(
     init_providers: Callable[
@@ -48,7 +54,10 @@ def init_globals(
         ASK_SERVICE, \
         ASK_DETAILS_SERVICE, \
         SQL_EXPLANATION_SERVICE, \
-        SQL_REGENERATION_SERVICE
+        SQL_REGENERATION_SERVICE, \
+        REDIS_DB
+
+    REDIS_DB = Redis(REDIS_DB_PATH)
 
     llm_provider, document_store_provider = init_providers()
 
@@ -58,7 +67,7 @@ def init_globals(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
-        }
+        },
     )
 
     ASK_SERVICE = AskService(
@@ -87,7 +96,8 @@ def init_globals(
             "followup_generation": ask_followup_generation.FollowUpGeneration(
                 llm_provider=llm_provider,
             ),
-        }
+        },
+        redis_db=REDIS_DB,
     )
 
     ASK_DETAILS_SERVICE = AskDetailsService(
@@ -95,5 +105,6 @@ def init_globals(
             "generation": ask_details_generation.Generation(
                 llm_provider=llm_provider,
             ),
-        }
+        },
+        redis_db=REDIS_DB,
     )
