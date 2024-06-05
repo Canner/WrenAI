@@ -230,12 +230,4 @@ class AskDetailsUser(FastHttpUser):
 class DummyUser(FastHttpUser):
     @task
     def dummy(self):
-        with self.client.get(
-            url="/dummy",
-            catch_response=True,
-        ) as response:
-            try:
-                assert response.status_code == 200
-                response.success()
-            except AssertionError:
-                response.failure(response.content.decode("utf-8"))
+        self.client.get(url="/dummy")
