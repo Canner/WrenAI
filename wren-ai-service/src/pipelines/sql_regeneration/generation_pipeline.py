@@ -7,11 +7,12 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.engine import clean_generation_result
 from src.pipelines.sql_regeneration.components.prompts import (
     description_regeneration_system_prompt,
     sql_regeneration_system_prompt,
 )
-from src.utils import clean_generation_result, init_providers, load_env_vars
+from src.utils import init_providers, load_env_vars
 from src.web.v1.services.sql_regeneration import (
     SQLExplanationWithUserCorrections,
 )
