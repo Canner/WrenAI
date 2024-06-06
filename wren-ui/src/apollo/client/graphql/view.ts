@@ -31,13 +31,14 @@ export const LIST_VIEWS = gql`
     listViews {
       id
       name
+      displayName
       statement
     }
   }
 `;
 
 export const PREVIEW_VIEW_DATA = gql`
-  mutation PreviewViewData($where: ViewWhereUniqueInput!) {
+  mutation PreviewViewData($where: PreviewViewDataInput!) {
     previewViewData(where: $where)
   }
 `;
