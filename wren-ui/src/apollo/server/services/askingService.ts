@@ -69,6 +69,7 @@ export interface IAskingService {
   previewData(
     responseId: number,
     stepIndex?: number,
+    limit?: number,
   ): Promise<PreviewDataResponse>;
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
@@ -459,6 +460,7 @@ export class AskingService implements IAskingService {
   public async previewData(
     responseId: number,
     stepIndex?: number,
+    limit?: number,
   ): Promise<PreviewDataResponse> {
     const response = await this.getResponse(responseId);
     if (!response) {
@@ -476,6 +478,7 @@ export class AskingService implements IAskingService {
       datasource,
       connectionInfo,
       mdl,
+      limit,
     });
 
     this.telemetry.send_event('preview_data', { sql });

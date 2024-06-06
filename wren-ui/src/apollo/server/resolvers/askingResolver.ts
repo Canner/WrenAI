@@ -277,12 +277,12 @@ export class AskingResolver {
 
   public async previewData(
     _root: any,
-    args: { where: { responseId: number; stepIndex?: number } },
+    args: { where: { responseId: number; stepIndex?: number; limit?: number } },
     ctx: IContext,
   ): Promise<any> {
-    const { responseId, stepIndex } = args.where;
+    const { responseId, stepIndex, limit } = args.where;
     const askingService = ctx.askingService;
-    const data = await askingService.previewData(responseId, stepIndex);
+    const data = await askingService.previewData(responseId, stepIndex, limit);
     return data;
   }
 
