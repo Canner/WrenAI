@@ -8,6 +8,7 @@ import {
   snakeCase,
   isEmpty,
 } from 'lodash';
+import { DataSourceName } from '@/apollo/client/graphql/__types__';
 
 export interface BIG_QUERY_CONNECTION_INFO {
   projectId: string;
@@ -31,7 +32,7 @@ export interface DUCKDB_CONNECTION_INFO {
 
 export interface Project {
   id: number; // ID
-  type: string; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
+  type: DataSourceName; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
   displayName: string; // Project display name
   catalog: string; // Catalog name
   schema: string; // Schema name
@@ -74,6 +75,9 @@ export class ProjectRepository
       if (key === 'connectionInfo' && typeof value === 'string') {
         // should return {} if value is null / {}, use value ? {} : JSON.parse(value) will throw error when value is null
         return isEmpty(value) ? {} : JSON.parse(value);
+      }
+      if (key === 'type') {
+        return DataSourceName[value];
       }
       return value;
     });

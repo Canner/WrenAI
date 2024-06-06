@@ -1,18 +1,19 @@
 import axios, { AxiosResponse } from 'axios';
 
 import { getLogger } from '@server/utils/logger';
-import { DataSourceName } from '../types';
-import { Manifest } from '../mdl/type';
+import { DataSourceName } from '@server/types';
+import { Manifest } from '@server/mdl/type';
 import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
-import { toDockerHost } from '../utils';
+import { toDockerHost } from '@server/utils';
+import { CompactTable, RecommendConstraint } from '@server/services';
 
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
 
 const config = getConfig();
 
-export interface PostgresConnectionInfo {
+export interface IbisPostgresConnectionInfo {
   host: string;
   port: number;
   database: string;
@@ -21,44 +22,14 @@ export interface PostgresConnectionInfo {
   ssl: boolean;
 }
 
-export interface BigQueryConnectionInfo {
+export interface IbisBigQueryConnectionInfo {
   project_id: string;
   dataset_id: string;
   credentials: string; // base64 encoded
 }
 
-export interface CompactColumn {
-  name: string;
-  type: string;
-  notNull: boolean;
-  description?: string;
-  properties?: Record<string, any>;
-}
-
-export interface CompactTable {
-  name: string;
-  columns: CompactColumn[];
-  description?: string;
-  properties?: Record<string, any>;
-}
-
 export interface TableResponse {
   tables: CompactTable[];
-}
-
-export enum ConstraintType {
-  PRIMARY_KEY = 'PRIMARY KEY',
-  FOREIGN_KEY = 'FOREIGN KEY',
-  UNIQUE = 'UNIQUE',
-}
-
-export interface RecommendConstraint {
-  constraint_name: string;
-  constraint_type: ConstraintType;
-  constraint_table: string;
-  constraint_column: string;
-  constrainted_table: string;
-  constrainted_column: string;
 }
 
 export interface ConstraintResponse {
@@ -69,16 +40,16 @@ export interface IIbisAdaptor {
   query: (
     query: string,
     dataSource: DataSourceName,
-    connectionInfo: BigQueryConnectionInfo | PostgresConnectionInfo,
+    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
     mdl: Manifest,
   ) => Promise<IbisQueryResponse>;
-  get_table: (
+  getTables: (
     dataSource: DataSourceName,
-    connectionInfo: BigQueryConnectionInfo | PostgresConnectionInfo,
+    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
   ) => Promise<TableResponse>;
-  get_constraint: (
+  getConstraints: (
     dataSource: DataSourceName,
-    connectionInfo: BigQueryConnectionInfo | PostgresConnectionInfo,
+    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
   ) => Promise<ConstraintResponse>;
 }
 
@@ -140,7 +111,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     }
   }
 
-  async get_table(
+  async getTables(
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
   ): Promise<TableResponse> {
@@ -169,7 +140,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     }
   }
 
-  async get_constraint(
+  async getConstraints(
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
   ): Promise<ConstraintResponse> {

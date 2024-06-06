@@ -1,5 +1,15 @@
-import { IModelColumnRepository, ModelColumn } from '../repositories';
-import { replaceAllowableSyntax } from '@server/utils/regex';
+import { IModelColumnRepository, ModelColumn } from '@server/repositories';
+import { replaceAllowableSyntax } from './regex';
+
+export function transformInvalidColumnName(columnName: string) {
+  let referenceName = replaceAllowableSyntax(columnName);
+  // If the reference name does not start with a letter, add a prefix
+  const startWithLetterRegex = /^[A-Za-z]/;
+  if (!startWithLetterRegex.test(referenceName)) {
+    referenceName = `col_${referenceName}`;
+  }
+  return referenceName;
+}
 
 export function findColumnsToUpdate(
   columns: string[],
@@ -35,14 +45,4 @@ export async function updateModelPrimaryKey(
   if (primaryKey) {
     await repository.setModelPrimaryKey(modelId, primaryKey);
   }
-}
-
-export function transformInvalidColumnName(columnName: string) {
-  let referenceName = replaceAllowableSyntax(columnName);
-  // If the reference name does not start with a letter, add a prefix
-  const startWithLetterRegex = /^[A-Za-z]/;
-  if (!startWithLetterRegex.test(referenceName)) {
-    referenceName = `col_${referenceName}`;
-  }
-  return referenceName;
 }

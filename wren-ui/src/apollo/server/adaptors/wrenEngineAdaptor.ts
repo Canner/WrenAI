@@ -2,6 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
+import { CompactTable } from '../services';
 
 const logger = getLogger('WrenEngineAdaptor');
 logger.level = 'debug';
@@ -71,9 +72,15 @@ export interface DryPlanOption {
   manifest?: Manifest;
 }
 
+export interface DuckDBPrepareOptions {
+  initSql: string;
+  sessionProps: Record<string, any>;
+}
+
 export interface IWrenEngineAdaptor {
   deploy(deployData: deployData): Promise<DeployResponse>;
-  initDatabase(sql: string): Promise<void>;
+  prepareDuckDB(options: DuckDBPrepareOptions): Promise<void>;
+  listTables(): Promise<CompactTable[]>;
   putSessionProps(props: Record<string, any>): Promise<void>;
   queryDuckdb(sql: string): Promise<EngineQueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
@@ -144,6 +151,21 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
+  public async prepareDuckDB(options: DuckDBPrepareOptions): Promise<void> {
+    const { initSql, sessionProps } = options;
+    await this.initDatabase(initSql);
+    await this.putSessionProps(sessionProps);
+  }
+
+  public async listTables() {
+    const sql =
+      'SELECT \
+      table_catalog, table_schema, table_name, column_name, ordinal_position, is_nullable, data_type\
+      FROM INFORMATION_SCHEMA.COLUMNS;';
+    const response = await this.queryDuckdb(sql);
+    return this.formatToCompactTable(response);
+  }
+
   public async deploy(deployData: deployData): Promise<DeployResponse> {
     const { manifest, hash } = deployData;
     const deployPayload = { manifest, version: hash } as DeployPayload;
@@ -168,24 +190,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         status: WrenEngineDeployStatusEnum.FAILED,
         error: `WrenEngine Error, deployment hash:${hash}: ${err.message}`,
       };
-    }
-  }
-
-  public async initDatabase(sql) {
-    try {
-      const url = new URL(this.initSqlUrlPath, this.wrenEngineBaseEndpoint);
-      logger.debug(`Endpoint: ${url.href}`);
-      const headers = {
-        'Content-Type': 'text/plain; charset=utf-8',
-      };
-      await axios.put(url.href, sql, { headers });
-    } catch (err: any) {
-      logger.debug(`Got error when init database: ${err}`);
-      throw Errors.create(Errors.GeneralErrorCodes.INIT_SQL_ERROR, {
-        customMessage:
-          Errors.errorMessages[Errors.GeneralErrorCodes.INIT_SQL_ERROR],
-        originalError: err,
-      });
     }
   }
 
@@ -332,5 +336,62 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       );
       throw err;
     }
+  }
+
+  private async initDatabase(sql) {
+    try {
+      const url = new URL(this.initSqlUrlPath, this.wrenEngineBaseEndpoint);
+      logger.debug(`Endpoint: ${url.href}`);
+      const headers = {
+        'Content-Type': 'text/plain; charset=utf-8',
+      };
+      await axios.put(url.href, sql, { headers });
+    } catch (err: any) {
+      logger.debug(`Got error when init database: ${err}`);
+      throw Errors.create(Errors.GeneralErrorCodes.INIT_SQL_ERROR, {
+        customMessage:
+          Errors.errorMessages[Errors.GeneralErrorCodes.INIT_SQL_ERROR],
+        originalError: err,
+      });
+    }
+  }
+
+  private formatToCompactTable(columns: EngineQueryResponse): CompactTable[] {
+    return columns.data.reduce((acc: CompactTable[], row: any) => {
+      const [
+        table_catalog,
+        table_schema,
+        table_name,
+        column_name,
+        _ordinal_position,
+        is_nullable,
+        data_type,
+      ] = row;
+      let table = acc.find(
+        (t) => t.name === table_name && t.properties.schema === table_schema,
+      );
+      if (!table) {
+        table = {
+          name: table_name,
+          description: '',
+          columns: [],
+          properties: {
+            schema: table_schema,
+            catalog: table_catalog,
+            table: table_name,
+          },
+          primaryKey: null,
+        };
+        acc.push(table);
+      }
+      table.columns.push({
+        name: column_name,
+        type: data_type,
+        notNull: is_nullable.toLocaleLowerCase() !== 'yes',
+        description: '',
+        properties: {},
+      });
+      return acc;
+    }, []);
   }
 }

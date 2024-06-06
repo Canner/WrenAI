@@ -28,7 +28,10 @@ import { ThreadResponseRepository } from '@/apollo/server/repositories/threadRes
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
 import { Telemetry } from '@/apollo/server/telemetry/telemetry';
 import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
-import { QueryService } from '@/apollo/server/services';
+import {
+  DataSourceMetadataService,
+  QueryService,
+} from '@/apollo/server/services';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -71,7 +74,15 @@ const bootstrapServer = async () => {
     ibisServerEndpoint: serverConfig.ibisServerEndpoint,
   });
 
-  const projectService = new ProjectService({ projectRepository });
+  const metadataService = new DataSourceMetadataService({
+    ibisAdaptor,
+    wrenEngineAdaptor,
+  });
+
+  const projectService = new ProjectService({
+    projectRepository,
+    metadataService,
+  });
   const mdlService = new MDLService({
     projectRepository,
     modelRepository,

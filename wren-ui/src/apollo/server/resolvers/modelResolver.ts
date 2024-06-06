@@ -8,15 +8,16 @@ import {
   PreviewSQLData,
 } from '../models';
 import { IContext, RelationData, UpdateRelationData } from '../types';
-import { getLogger } from '@server/utils';
-import { CompactTable } from '../connectors/connector';
+import { getLogger, transformInvalidColumnName } from '@server/utils';
 import { DeployResponse } from '../services/deployService';
 import { constructCteSql } from '../services/askingService';
 import { format } from 'sql-formatter';
 import { isEmpty, isNil } from 'lodash';
-import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 import * as Errors from '@server/utils/error';
+import { Model, ModelColumn } from '../repositories';
+import { findColumnsToUpdate, updateModelPrimaryKey } from '../utils/model';
+import { CompactTable } from '@server/services';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -241,26 +242,51 @@ export class ModelResolver {
     const { sourceTableName, fields, primaryKey } = args.data;
 
     const project = await ctx.projectService.getCurrentProject();
-    const dataSourceType = project.type;
-    const strategyOptions = {
-      ctx,
-      project,
-    };
-    const strategy = DataSourceStrategyFactory.create(
-      dataSourceType,
-      strategyOptions,
-    );
-    const dataSourceTables = await strategy.listTable({
-      formatToCompactTable: true,
-    });
+    const dataSourceTables =
+      await ctx.projectService.getProjectDataSourceTables(project);
     this.validateTableExist(sourceTableName, dataSourceTables);
     this.validateColumnsExist(sourceTableName, fields, dataSourceTables);
 
-    const { model, _columns } = await strategy.saveModel(
-      sourceTableName,
-      fields,
-      primaryKey,
+    // create model
+    const dataSourceTable = dataSourceTables.find(
+      (table) => table.name === sourceTableName,
     );
+    if (!dataSourceTable) {
+      throw new Error('Table not found in the data source');
+    }
+    const properties = dataSourceTable?.properties;
+    const modelValue = {
+      projectId: project.id,
+      displayName: sourceTableName, //use table name as displayName, referenceName and tableName
+      referenceName: sourceTableName,
+      sourceTableName: sourceTableName,
+      cached: false,
+      refreshTime: null,
+      properties: properties ? JSON.stringify(properties) : null,
+    } as Partial<Model>;
+    const model = await ctx.modelRepository.createOne(modelValue);
+
+    const columnValues = [];
+    fields.forEach((field) => {
+      const compactColumn = dataSourceTable.columns.find(
+        (c) => c.name === field,
+      );
+      const columnValue = {
+        modelId: model.id,
+        isCalculated: false,
+        displayName: compactColumn.name,
+        referenceName: transformInvalidColumnName(compactColumn.name),
+        sourceColumnName: compactColumn.name,
+        type: compactColumn.type || 'string',
+        notNull: compactColumn.notNull || false,
+        isPk: primaryKey === field,
+        properties: compactColumn.properties
+          ? JSON.stringify(compactColumn.properties)
+          : null,
+      } as Partial<ModelColumn>;
+      columnValues.push(columnValue);
+    });
+    await ctx.modelColumnRepository.createMany(columnValues);
     logger.info(`Model created: ${JSON.stringify(model)}`);
 
     return model;
@@ -274,24 +300,53 @@ export class ModelResolver {
     const { fields, primaryKey } = args.data;
 
     const project = await ctx.projectService.getCurrentProject();
-    const dataSourceType = project.type;
-    const strategyOptions = {
-      ctx,
-      project,
-    };
-    const strategy = DataSourceStrategyFactory.create(
-      dataSourceType,
-      strategyOptions,
-    );
-    const dataSourceTables = await strategy.listTable({
-      formatToCompactTable: true,
-    });
+    const dataSourceTables =
+      await ctx.projectService.getProjectDataSourceTables(project);
     const model = await ctx.modelRepository.findOneBy({ id: args.where.id });
+    const existingColumns = await ctx.modelColumnRepository.findAllBy({
+      modelId: model.id,
+    });
     const { sourceTableName } = model;
     this.validateTableExist(sourceTableName, dataSourceTables);
     this.validateColumnsExist(sourceTableName, fields, dataSourceTables);
 
-    await strategy.updateModel(model, fields, primaryKey);
+    const sourceTableColumns = dataSourceTables.find(
+      (table) => table.name === sourceTableName,
+    )?.columns;
+    const { toDeleteColumnIds, toCreateColumns } = findColumnsToUpdate(
+      fields,
+      existingColumns,
+    );
+    await updateModelPrimaryKey(
+      ctx.modelColumnRepository,
+      model.id,
+      primaryKey,
+    );
+    if (toCreateColumns.length) {
+      const columnValues = toCreateColumns.map((columnName) => {
+        const sourceTableColumn = sourceTableColumns.find(
+          (col) => col.name === columnName,
+        );
+        if (!sourceTableColumn) {
+          throw new Error(`Column not found: ${columnName}`);
+        }
+        const columnValue = {
+          modelId: model.id,
+          isCalculated: false,
+          displayName: columnName,
+          sourceColumnName: columnName,
+          referenceName: transformInvalidColumnName(columnName),
+          type: sourceTableColumn.type || 'string',
+          notNull: sourceTableColumn.notNull,
+          isPk: primaryKey === columnName,
+        } as Partial<ModelColumn>;
+        return columnValue;
+      });
+      await ctx.modelColumnRepository.createMany(columnValues);
+    }
+    if (toDeleteColumnIds.length) {
+      await ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+    }
     logger.info(`Model created: ${JSON.stringify(model)}`);
 
     return model;
@@ -498,11 +553,8 @@ export class ModelResolver {
     const statement = format(constructCteSql(steps));
 
     // describe columns
-    const { connectionInfo, datasource } =
-      ctx.queryService.composeConnectionInfo(project);
     const { columns } = await ctx.queryService.describeStatement(statement, {
-      datasource,
-      connectionInfo,
+      project,
       limit: PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
       mdl,
@@ -570,13 +622,10 @@ export class ModelResolver {
     }
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const { datasource, connectionInfo } =
-      ctx.queryService.composeConnectionInfo(project);
     const sql = `select * from ${model.referenceName}`;
 
     const data = await ctx.queryService.preview(sql, {
-      datasource,
-      connectionInfo,
+      project,
       limit: PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
       mdl: manifest,
@@ -593,13 +642,10 @@ export class ModelResolver {
     }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const project = await ctx.projectService.getCurrentProject();
-    const { datasource, connectionInfo } =
-      ctx.queryService.composeConnectionInfo(project);
 
     const data = await ctx.queryService.preview(view.statement, {
-      datasource,
-      connectionInfo,
-      limit: limit || PREVIEW_MAX_OUTPUT_ROW,
+      project,
+      limit: limit | PREVIEW_MAX_OUTPUT_ROW,
       mdl: manifest,
       modelingOnly: false,
     });
@@ -615,11 +661,8 @@ export class ModelResolver {
     const project = await ctx.projectService.getProjectById(projectId);
     const deployment = await ctx.deployService.getLastDeployment(project.id);
     const mdl = deployment.manifest;
-    const { datasource, connectionInfo } =
-      ctx.queryService.composeConnectionInfo(project);
     return await ctx.queryService.preview(sql, {
-      datasource,
-      connectionInfo,
+      project,
       limit: limit || PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
       mdl,
@@ -750,8 +793,11 @@ export class ModelResolver {
     };
   }
 
-  private validateTableExist(tableName: string, columns: CompactTable[]) {
-    if (!columns.find((c) => c.name === tableName)) {
+  private validateTableExist(
+    tableName: string,
+    dataSourceTables: CompactTable[],
+  ) {
+    if (!dataSourceTables.find((c) => c.name === tableName)) {
       throw new Error(`Table ${tableName} not found in the data Source`);
     }
   }
@@ -759,9 +805,11 @@ export class ModelResolver {
   private validateColumnsExist(
     tableName: string,
     fields: string[],
-    columns: CompactTable[],
+    dataSourceTables: CompactTable[],
   ) {
-    const tableColumns = columns.find((c) => c.name === tableName)?.columns;
+    const tableColumns = dataSourceTables.find(
+      (c) => c.name === tableName,
+    )?.columns;
     for (const field of fields) {
       if (!tableColumns.find((c) => c.name === field)) {
         throw new Error(
