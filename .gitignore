@@ -6,6 +6,8 @@ wren-ai-service/.env.*
 !wren-ai-service/src/eval/wren-engine/.env
 wren-ai-service/src/eval/wren-engine/**/config.properties
 wren-ai-service/src/eval/wren-engine/etc/mdl/*
+wren-ai-service/src/eval/wren-engine/etc/duckdb
+wren-ai-service/src/eval/wren-engine/etc/archived
 wren-ai-service/src/eval/data
 wren-ai-service/**/outputs/
 wren-ai-service/**/spider/
@@ -15,6 +17,7 @@ wren-ai-service/**/spider/
 !wren-ai-service/src/eval/data/college_3*.json
 !wren-ai-service/src/eval/data/college_3_optimal_ddl.json
 wren-ai-service/assertion.log
+wren-ai-service/redis.*
 wren-ai-service/demo/spider
 wren-ai-service/demo/poetry.lock
 wren-ai-service/demo/custom_dataset

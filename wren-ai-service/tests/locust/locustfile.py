@@ -231,3 +231,49 @@ class DummyUser(FastHttpUser):
     @task
     def dummy(self):
         self.client.get(url="/dev/dummy")
+
+
+class DummyAskUser(FastHttpUser):
+    @task
+    def ask(self):
+        with self.client.post(
+            url="/dev/dummy-asks",
+            json={
+                "query": "How many books?",
+                "id": deployment_id,
+            },
+            catch_response=True,
+        ) as response:
+            query_id = json.loads(response.content.decode("utf-8"))["query_id"]
+            try:
+                assert response.status_code == 200
+                assert query_id != ""
+                response.success()
+            except AssertionError:
+                response.failure(response.content.decode("utf-8"))
+
+        status = "understanding"
+
+        while status in ["understanding", "searching", "generating"]:
+            with self.client.get(
+                url=f"/dev/dummy-asks/{query_id}/result",
+                catch_response=True,
+            ) as response:
+                try:
+                    assert response.status_code == 200
+                    status = json.loads(response.content.decode("utf-8"))["status"]
+                    assert status in [
+                        "understanding",
+                        "searching",
+                        "generating",
+                        "finished",
+                    ]
+                    response.success()
+                    if status == "finished":
+                        finished_ask_query.append(query_id)
+                        successful_ask_query.append(response.content.decode("utf-8"))
+                    else:
+                        time.sleep(1.0)
+                except AssertionError:
+                    finished_ask_query.append(query_id)
+                    response.failure(response.content.decode("utf-8"))

@@ -3,8 +3,6 @@ import functools
 import logging
 import os
 import time
-from datetime import datetime
-from pathlib import Path
 from typing import Tuple
 
 from dotenv import load_dotenv
@@ -13,7 +11,6 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.providers import loader
 
 logger = logging.getLogger("wren-ai-service")
-test_records = []
 
 
 class CustomFormatter(logging.Formatter):
@@ -85,23 +82,6 @@ def timer(func):
                 f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
             )
 
-            test_records.append(
-                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
-            )
-
-            if (
-                func.__qualname__ == "AskService.get_ask_result"
-                and result.status == "finished"
-            ):
-                if not Path("./outputs").exists():
-                    Path("./outputs").mkdir()
-
-                output_file = f"./outputs/test_record_{datetime.now().strftime("%Y%m%d%H%M%S")}.txt"
-                with open(output_file, "a") as f:
-                    f.write("\n".join(test_records[:-1:]))
-                    f.write("\n-----------------------\n")
-                    f.write(test_records[-1])
-
             return result
 
         return func(*args, **kwargs)
@@ -112,7 +92,6 @@ def timer(func):
 def async_timer(func):
     async def process(func, *args, **kwargs):
         assert asyncio.iscoroutinefunction(func)
-        logger.info("this function is a coroutine: {}".format(func.__name__))
         return await func(*args, **kwargs)
 
     @functools.wraps(func)

@@ -1,7 +1,7 @@
 # reference: https://medium.com/@albertazzir/blazing-fast-python-docker-builds-with-poetry-a78a66f5aed0
 FROM python:3.12.0-bookworm as builder
 
-RUN pip install poetry==1.7.1
+RUN pip install poetry==1.8.3
 
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
@@ -23,4 +23,4 @@ COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 COPY src src
 
-ENTRYPOINT uvicorn src.__main__:app --host 0.0.0.0 --port $WREN_AI_SERVICE_PORT --workers $WORKERS
+ENTRYPOINT python -m src.pre_run && uvicorn src.__main__:app --host 0.0.0.0 --port $WREN_AI_SERVICE_PORT --workers $WORKERS

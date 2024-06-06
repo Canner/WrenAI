@@ -157,7 +157,7 @@ class Generation(BasicPipeline):
 
     @async_timer
     async def run(self, sql: str):
-        logger.info("Ask Details Generation pipeline is running...")
+        logger.info("Ask_Details Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={

@@ -1,8 +1,10 @@
 import logging
 from typing import List, Literal, Optional
 
+import orjson
 from haystack import Pipeline
 from pydantic import BaseModel
+from redislite import StrictRedis
 
 from src.utils import async_timer
 
@@ -55,9 +57,13 @@ class AskDetailsResultResponse(BaseModel):
 
 
 class AskDetailsService:
-    def __init__(self, pipelines: dict[str, Pipeline]):
+    def __init__(
+        self,
+        pipelines: dict[str, Pipeline],
+        redis_db: StrictRedis = StrictRedis("./redis.db"),
+    ):
         self._pipelines = pipelines
-        self.ask_details_results: dict[str, AskDetailsResultResponse] = {}
+        self._redis_db = redis_db
 
     @async_timer
     async def ask_details(
@@ -69,16 +75,28 @@ class AskDetailsService:
             # we will need to handle business logic for each status
             query_id = ask_details_request.query_id
 
-            self.ask_details_results[query_id] = AskDetailsResultResponse(
-                status="understanding"
+            self._redis_db.hset(
+                "ask_details_results",
+                query_id,
+                AskDetailsResultResponse(
+                    status="understanding",
+                ).model_dump_json(),
             )
 
-            self.ask_details_results[query_id] = AskDetailsResultResponse(
-                status="searching"
+            self._redis_db.hset(
+                "ask_details_results",
+                query_id,
+                AskDetailsResultResponse(
+                    status="searching",
+                ).model_dump_json(),
             )
 
-            self.ask_details_results[query_id] = AskDetailsResultResponse(
-                status="generating"
+            self._redis_db.hset(
+                "ask_details_results",
+                query_id,
+                AskDetailsResultResponse(
+                    status="generating",
+                ).model_dump_json(),
             )
 
             generation_result = await self._pipelines["generation"].run(
@@ -96,36 +114,39 @@ class AskDetailsService:
                     }
                 ]
 
-                self.ask_details_results[query_id] = AskDetailsResultResponse(
+            self._redis_db.hset(
+                "ask_details_results",
+                query_id,
+                AskDetailsResultResponse(
                     status="finished",
                     response=AskDetailsResultResponse.AskDetailsResponseDetails(
                         **ask_details_result
                     ),
-                )
-            else:
-                self.ask_details_results[query_id] = AskDetailsResultResponse(
-                    status="finished",
-                    response=AskDetailsResultResponse.AskDetailsResponseDetails(
-                        **ask_details_result
-                    ),
-                )
+                ).model_dump_json(),
+            )
         except Exception as e:
             logger.error(f"ask-details pipeline - OTHERS: {e}")
-            self.ask_details_results[
-                ask_details_request.query_id
-            ] = AskDetailsResultResponse(
-                status="failed",
-                error=AskDetailsResultResponse.AskDetailsError(
-                    code="OTHERS",
-                    message=str(e),
-                ),
+            self._redis_db.hset(
+                "ask_details_results",
+                query_id,
+                AskDetailsResultResponse(
+                    status="failed",
+                    error=AskDetailsResultResponse.AskDetailsError(
+                        code="OTHERS",
+                        message=str(e),
+                    ),
+                ).model_dump_json(),
             )
 
     def get_ask_details_result(
         self,
         ask_details_result_request: AskDetailsResultRequest,
     ) -> AskDetailsResultResponse:
-        if ask_details_result_request.query_id not in self.ask_details_results:
+        if (
+            result := self._redis_db.hget(
+                "ask_details_results", ask_details_result_request.query_id
+            )
+        ) is None:
             logger.error(
                 f"ask-details pipeline - OTHERS: {ask_details_result_request.query_id} is not found"
             )
@@ -137,4 +158,4 @@ class AskDetailsService:
                 ),
             )
 
-        return self.ask_details_results[ask_details_result_request.query_id]
+        return AskDetailsResultResponse(**orjson.loads(result))

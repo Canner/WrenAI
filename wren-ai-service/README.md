@@ -38,9 +38,9 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 ### Speed Evaluation
 
 - to evaluate the speed of the pipeline, you can enable the timer
-  - add environment variables `ENABLE_TIMER=True` in `.env.dev`
+  - add environment variables `ENABLE_TIMER=1` in `.env.dev`
   - restart wren ai service
-  - check `outputs` folder for the evaluation result file
+  - check the logs in the terminal
 - to run the load test
   - setup `DATASET_NAME` in `.env.dev`
   - adjust test config if needed
