@@ -53,10 +53,11 @@ async def dummy_ask_task(ask_request: AskRequest):
     with await asyncio.to_thread(time.sleep, 0.5) added, number of finished task is about 230
     with await asyncio.to_thread(time.sleep, 1) added, number of finished task is about 240-250
     """
-    SYNC_SLEEP_TIME = 1
     await asyncio.sleep(random.randint(3, 7))
+
+    # SYNC_SLEEP_TIME = 0.5
     # time.sleep(SYNC_SLEEP_TIME)
-    await asyncio.to_thread(time.sleep, SYNC_SLEEP_TIME)
+    # await asyncio.to_thread(time.sleep, SYNC_SLEEP_TIME)
 
     REDIS_DB.hset(
         "test_ask_results",
