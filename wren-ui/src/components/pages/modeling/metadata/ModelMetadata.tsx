@@ -44,27 +44,27 @@ export default function ModelMetadata(props: Props) {
   return (
     <>
       <Row className="mb-6">
-        <Col span={12}>
+        <Col span={12} data-testid="metadata__name">
           <Typography.Text className="d-block gray-7 mb-2">
             Name
           </Typography.Text>
           <div>{referenceName || '-'}</div>
         </Col>
-        <Col span={12}>
+        <Col span={12} data-testid="metadata__alias">
           <Typography.Text className="d-block gray-7 mb-2">
             Alias
           </Typography.Text>
           <div>{displayName || '-'}</div>
         </Col>
       </Row>
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__description">
         <Typography.Text className="d-block gray-7 mb-2">
           Description
         </Typography.Text>
         <div>{description || '-'}</div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__columns">
         <Typography.Text className="d-block gray-7 mb-2">
           Columns ({fields.length})
         </Typography.Text>
@@ -72,7 +72,7 @@ export default function ModelMetadata(props: Props) {
       </div>
 
       {!!calculatedFields.length && (
-        <div className="mb-6">
+        <div className="mb-6" data-testid="metadata__calculated-fields">
           <Typography.Text className="d-block gray-7 mb-2">
             Calculated fields ({calculatedFields.length})
           </Typography.Text>
@@ -81,7 +81,7 @@ export default function ModelMetadata(props: Props) {
       )}
 
       {!!relationFields.length && (
-        <div className="mb-6">
+        <div className="mb-6" data-testid="metadata__relationships">
           <Typography.Text className="d-block gray-7 mb-2">
             Relationships ({relationFields.length})
           </Typography.Text>
@@ -89,7 +89,7 @@ export default function ModelMetadata(props: Props) {
         </div>
       )}
 
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__preview-data">
         <Typography.Text className="d-block gray-7 mb-2">
           Data preview (100 rows)
         </Typography.Text>

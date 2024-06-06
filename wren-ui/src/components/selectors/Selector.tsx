@@ -18,6 +18,7 @@ const getOption = (item) => {
   return {
     ...item,
     value,
+    'data-testid': 'common__fields__select-option',
   };
 };
 

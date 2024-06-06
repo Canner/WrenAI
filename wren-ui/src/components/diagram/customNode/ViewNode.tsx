@@ -40,7 +40,10 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
   );
 
   return (
-    <StyledNode onClick={onNodeClick}>
+    <StyledNode
+      onClick={onNodeClick}
+      data-testid={`diagram__view-node__${data.originalData.displayName}`}
+    >
       <NodeHeader className="dragHandle" color="var(--green-6)">
         <span className="adm-model-header">
           <ViewIcon />

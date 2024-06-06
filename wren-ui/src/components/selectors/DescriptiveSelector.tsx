@@ -131,6 +131,7 @@ export default function DescriptiveSelector(props: Props) {
       listHeight={maxHeight}
       placeholder={placeholder}
       dropdownMatchSelectWidth={dropdownMatchSelectWidth}
+      data-testid="common__descriptive-select"
     />
   );
 }

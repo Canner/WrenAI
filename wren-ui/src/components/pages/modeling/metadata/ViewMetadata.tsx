@@ -28,19 +28,19 @@ export default function ViewMetadata(props: Props) {
   // View only can input Name (alias), so it should show alias as Name in metadata.
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__name">
         <Typography.Text className="d-block gray-7 mb-2">Name</Typography.Text>
         <div>{displayName || '-'}</div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__description">
         <Typography.Text className="d-block gray-7 mb-2">
           Description
         </Typography.Text>
         <div>{description || '-'}</div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__columns">
         <Typography.Text className="d-block gray-7 mb-2">
           Columns ({fields.length})
         </Typography.Text>
@@ -51,14 +51,14 @@ export default function ViewMetadata(props: Props) {
         />
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__sql-statement">
         <Typography.Text className="d-block gray-7 mb-2">
           SQL statement
         </Typography.Text>
         <CodeBlock code={statement} showLineNumbers maxHeight="300" />
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6" data-testid="metadata__preview-data">
         <Typography.Text className="d-block gray-7 mb-2">
           Data preview (100 rows)
         </Typography.Text>

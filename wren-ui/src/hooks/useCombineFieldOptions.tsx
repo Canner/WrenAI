@@ -121,6 +121,7 @@ export default function useCombineFieldOptions(props: Props) {
       filteredModels.map((model) => ({
         label: model.displayName,
         value: convertObjectToIdentifier(model, modelKeys),
+        'data-testid': 'common__models__select-option',
       })),
     [filteredModels],
   );
@@ -135,6 +136,7 @@ export default function useCombineFieldOptions(props: Props) {
       (selectedModel?.fields || []).map((field) => ({
         label: field.displayName,
         value: convertObjectToIdentifier(field, fieldKeys),
+        'data-testid': 'common__fields__select-option',
       })),
     [selectedModel],
   );

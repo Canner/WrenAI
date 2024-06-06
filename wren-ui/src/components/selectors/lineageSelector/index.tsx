@@ -82,6 +82,7 @@ export default function LineageSelector(props: Props) {
       className={`d-flex align-center bg-gray-3 px-8 py-12${
         status ? ` adm-${status}` : ''
       }`}
+      data-testid="common__lineage"
     >
       <SelectResult
         data={data}
