@@ -12,7 +12,7 @@ spec:
       labels:
         app: wren-ui
     spec:
-      #if you are using sqlite, then volume is required, please uncomment next and the volumeMounts sections
+      #if you are using sqlite, then volume is required, please uncomment next, SQLITE_FILE and the volumeMounts sections
       #if you are using postgres, then volume is not required
       #volumes:
       #  - name: wren-sqlite
@@ -28,11 +28,12 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: DB_TYPE
-            - name: SQLITE_FILE
-              valueFrom:
-                configMapKeyRef:
-                  name: wren-config
-                  key: SQLITE_FILE
+          # Uncomment if you are intending to use sqlite:
+          #  - name: SQLITE_FILE
+          #    valueFrom:
+          #      configMapKeyRef:
+          #        name: wren-config
+          #        key: SQLITE_FILE
             - name: WREN_ENGINE_ENDPOINT
               valueFrom:
                 configMapKeyRef:

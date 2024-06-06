@@ -53,13 +53,13 @@ kubectl get pods -n wren
 
 #### Wren-UI Database
 Starting with wren-ui version 0.6.0 by default the postgres database is used for wren-ui in this kuberenetes kustomization and will be installed in the same namespace as wren-ai. If you are using older version, you may use only `sqlite`.
-- `sqlite`: If you are planing to use sqlite as your database instead of postgres, you will need to uncomment `wren-sqlite` in the volumeMounts & PVC sections of the `deployment/kustomizations/base/deploy-wren-ui.yaml` manifest. And adjust the ConfigMap file `deployment/kustomizations/base/cm.yaml` to match your database: `DB_TYPE = "sqlite"`, comment out postgres helm chart section in the `deployment/kustomizations/kustomization.yaml` file and comment out the `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
+- `sqlite`: If you are planing to use sqlite as your database instead of postgres, you will need to uncomment `wren-sqlite` in the SQLITE_FILE, volumeMounts & PVC sections of the `deployment/kustomizations/base/deploy-wren-ui.yaml` manifest. And adjust the ConfigMap file `deployment/kustomizations/base/cm.yaml` to match your database: `DB_TYPE = "sqlite"`, comment out postgres helm chart section in the `deployment/kustomizations/kustomization.yaml` file and comment out the `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
 - `postgres` (default): Database that will be installed in the same namespace as wren-ai. You *must* update `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
 
-Example: `PG_URL: "postgres://postgres:postgres@wren-postgresql:5432/admin_ui"`
+Example: `PG_URL: "postgres://postgres:postgres@wrenai-postgresql:5432/admin_ui"`
 - `postgres://`        This is the protocol. It tells the system that you’re connecting to a PostgreSQL database.
 - `postgres:postgres`  These are the username(first) and password(second) for the database respectively, separated by a colon. In this case, both the username and password are “postgres”.
-- `@wren-postgresql`   This is the hostname of the database server. "wren-postgresql" means the database server is running in a Kubernetes cluster and it is named "wren-postgresql" in the *same* namespace. If you are using another namespace you must provide the full hostname, example: `wren-postgresql.wrenai.svc.cluster.local`, "wrenai" is the namespace name, "svc.cluster.local" is the default domain name for Kubernetes services no need to change it.
+- `@wrenai-postgresql`   This is the hostname of the database server. "wren-postgresql" means the database server is running in a Kubernetes cluster and it is named "wren-postgresql" in the *same* namespace. If you are using another namespace you must provide the full hostname, example: `wren-postgresql.wrenai.svc.cluster.local`, "wrenai" is the namespace name, "svc.cluster.local" is the default domain name for Kubernetes services no need to change it.
 - `:5432`              This is the port number. PostgreSQL servers listen on port 5432 by default.
 - `/admin_ui`          This is the name of the database you’re connecting to. In this case, the database name is `admin_ui`. It can be found in the helm values file in the auth.database parameter `deployment/kustomizations/helm-values_postgresql_14.yaml`
 
