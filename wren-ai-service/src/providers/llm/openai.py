@@ -277,7 +277,7 @@ class OpenAILLMProvider(LLMProvider):
         api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
         api_base: str = os.getenv("OPENAI_API_BASE") or OPENAI_API_BASE,
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
-        embedding_model_dim: int = int(os.getenv("EMBEDDING_MODEL_DIM"))
+        embedding_model_dim: int = int(os.getenv("EMBEDDING_MODEL_DIM"), 0)
         or EMBEDDING_MODEL_DIMENSION,
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL_NAME,
     ):
