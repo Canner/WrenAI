@@ -26,6 +26,11 @@ spec:
               secretKeyRef:
                 name: wrenai-secrets
                 key: OPENAI_API_KEY
+          - name: LLM_PROVIDER
+            valueFrom: 
+              secretKeyRef:
+                name: wrenai-secrets
+                key: LLM_PROVIDER
           - name: OPENAI_GENERATION_MODEL
             valueFrom: 
               configMapKeyRef:
@@ -36,6 +41,11 @@ spec:
               secretKeyRef:
                 name: wrenai-secrets
                 key: QDRANT_HOST
+          - name: DOCUMENT_STORE_PROVIDER
+            valueFrom: 
+              secretKeyRef:
+                name: wrenai-secrets
+                key: DOCUMENT_STORE_PROVIDER
           - name: WREN_ENGINE_ENDPOINT
             valueFrom:
               configMapKeyRef:
