@@ -10,6 +10,7 @@ spec:
   issuerRef:
     group: cert-manager.io
     kind: ClusterIssuer
-    ### Replace with the name of your issuer
+    ### Replace with the name of your issuer, otherwise the secret will be produce randoom name and the ingress will not work.
     name: myhost.net-prod
+  ### Your ingress will be looking for this exact name:
   secretName: wren-ui.myhost.net-tls

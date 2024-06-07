@@ -37,7 +37,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: wren-ui-service
+                name: wren-ui-svc
                 port:
                   number: 3000
 ### Comment TLS section if you are not going to use https
