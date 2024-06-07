@@ -21,6 +21,11 @@ spec:
               configMapKeyRef:
                 name: wren-config
                 key: WREN_AI_SERVICE_PORT
+          - name: WORKERS
+            valueFrom: 
+              configMapKeyRef:
+                name: wren-config
+                key: AI_SERVICE_WORKERS
           - name: OPENAI_API_KEY
             valueFrom: 
               secretKeyRef:
