@@ -42,7 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(routers.router, prefix="/v1")
-if os.getenv("ENV") == "dev":
+if env == "dev":
     from src.web import development
 
     app.include_router(development.router, prefix="/dev")
@@ -82,11 +82,14 @@ if __name__ == "__main__":
         else 8000
     )
 
+    num_workers = int(os.getenv("WORKERS", 1))
+    should_reload = (env == "dev") and num_workers == 1
+
     uvicorn.run(
         "src.__main__:app",
         host=server_host,
         port=server_port,
-        reload=(env == "dev") and int(os.getenv("WORKERS", 1)) == 1,
-        reload_dirs=["src"],
-        workers=int(os.getenv("WORKERS", 1)),
+        reload=should_reload,
+        reload_dirs=["src"] if should_reload else None,
+        workers=num_workers,
     )
