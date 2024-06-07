@@ -23,6 +23,7 @@ orjson = "==3.10.3"
 sf-hamilton = {version = "==1.63.0", extras = ["visualization"]}
 aiohttp = "==3.9.5"
 redislite = "==6.2.912183"
+langfuse = "==2.35.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "==8.2.0"
