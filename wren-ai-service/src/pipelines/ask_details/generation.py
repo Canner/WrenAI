@@ -10,6 +10,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import langfuse_context, observe
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
@@ -23,6 +24,7 @@ from src.pipelines.ask_details.components.prompts import (
 )
 from src.utils import (
     async_timer,
+    init_langfuse,
     init_providers,
     timer,
 )
@@ -120,18 +122,21 @@ class GenerationPostProcessor:
 
 ## Start of Pipeline
 @timer
+@observe()
 def prompt(sql: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"sql: {sql}")
     return prompt_builder.run(sql=sql)
 
 
 @async_timer
+@observe(as_type="generation")
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
+@observe()
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))
@@ -156,6 +161,7 @@ class Generation(BasicPipeline):
         )
 
     @async_timer
+    @observe(name="Ask_Details Generation")
     async def run(self, sql: str):
         logger.info("Ask_Details Generation pipeline is running...")
         return await self._pipe.execute(
@@ -173,6 +179,7 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
     llm_provider, _ = init_providers()
     pipeline = Generation(
@@ -180,3 +187,5 @@ if __name__ == "__main__":
     )
 
     async_validate(lambda: pipeline.run("SELECT * FROM table_name"))
+
+    langfuse_context.flush()

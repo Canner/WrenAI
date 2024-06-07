@@ -6,6 +6,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import langfuse_context, observe
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
@@ -14,7 +15,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, init_langfuse, init_providers, timer
 from src.web.v1.services.ask import AskRequest
 
 logger = logging.getLogger("wren-ai-service")
@@ -128,6 +129,7 @@ Let's think step by step.
 
 ## Start of Pipeline
 @timer
+@observe()
 def prompt(
     query: str,
     documents: List[Document],
@@ -144,12 +146,14 @@ def prompt(
 
 
 @async_timer
+@observe(as_type="generation")
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
+@observe()
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))
@@ -176,6 +180,7 @@ class FollowUpGeneration(BasicPipeline):
         )
 
     @async_timer
+    @observe(name="Ask Follow Up Generation")
     async def run(
         self,
         query: str,
@@ -201,6 +206,7 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
     llm_provider, _ = init_providers()
     pipeline = FollowUpGeneration(
@@ -216,3 +222,5 @@ if __name__ == "__main__":
             ),
         )
     )
+
+    langfuse_context.flush()

@@ -6,11 +6,13 @@ from typing import Any, Dict, List, Optional
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document, component
+from langfuse.decorators import langfuse_context, observe
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import (
     async_timer,
+    init_langfuse,
     init_providers,
     timer,
 )
@@ -55,12 +57,14 @@ class OutputFormatter:
 
 ## Start of Pipeline
 @async_timer
+@observe()
 async def embedding(query: str, embedder: Any) -> dict:
     logger.debug(f"query: {query}")
     return await embedder.run(query)
 
 
 @async_timer
+@observe()
 async def retrieval(embedding: dict, retriever: Any) -> dict:
     res = await retriever.run(query_embedding=embedding.get("embedding"))
     documents = res.get("documents")
@@ -68,12 +72,14 @@ async def retrieval(embedding: dict, retriever: Any) -> dict:
 
 
 @timer
+@observe()
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     logger.debug(f"retrieval: {retrieval}")
     return score_filter.run(documents=retrieval.get("documents"))
 
 
 @timer
+@observe()
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
 ) -> dict:
@@ -101,6 +107,7 @@ class HistoricalQuestion(BasicPipeline):
         )
 
     @async_timer
+    @observe(name="Ask Historical Question")
     async def run(self, query: str):
         logger.info("Ask HistoricalQuestion pipeline is running...")
         return await self._pipe.execute(
@@ -119,7 +126,10 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
     pipeline = HistoricalQuestion(*init_providers())
 
     async_validate(lambda: pipeline.run("this is a query"))
+
+    langfuse_context.flush()

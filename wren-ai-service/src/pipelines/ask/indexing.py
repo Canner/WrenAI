@@ -11,11 +11,12 @@ from hamilton.function_modifiers import extract_fields
 from haystack import Document, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
+from langfuse.decorators import langfuse_context, observe
 from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, init_langfuse, init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -303,12 +304,14 @@ class DDLConverter:
 
 ## Start of Pipeline
 @timer
+@observe()
 def clean_document_store(mdl_str: str, cleaner: DocumentCleaner) -> Dict[str, Any]:
     logger.debug(f"input in clean_document_store: {mdl_str}")
     return cleaner.run(mdl=mdl_str)
 
 
 @timer
+@observe()
 @extract_fields(dict(mdl=Dict[str, Any]))
 def validate_mdl(
     clean_document_store: Dict[str, Any], validator: MDLValidator
@@ -320,12 +323,14 @@ def validate_mdl(
 
 
 @timer
+@observe()
 def convert_to_ddl(mdl: Dict[str, Any], ddl_converter: DDLConverter) -> Dict[str, Any]:
     logger.debug(f"input in convert_to_ddl: {mdl}")
     return ddl_converter.run(mdl=mdl)
 
 
 @async_timer
+@observe()
 async def embed_ddl(
     convert_to_ddl: Dict[str, Any], ddl_embedder: Any
 ) -> Dict[str, Any]:
@@ -334,12 +339,14 @@ async def embed_ddl(
 
 
 @timer
+@observe()
 def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_ddl: {embed_ddl}")
     return ddl_writer.run(documents=embed_ddl["documents"])
 
 
 @timer
+@observe()
 def convert_to_view(
     mdl: Dict[str, Any], view_converter: ViewConverter
 ) -> Dict[str, Any]:
@@ -348,6 +355,7 @@ def convert_to_view(
 
 
 @async_timer
+@observe()
 async def embed_view(
     convert_to_view: Dict[str, Any], view_embedder: Any
 ) -> Dict[str, Any]:
@@ -356,6 +364,7 @@ async def embed_view(
 
 
 @timer
+@observe()
 def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_view: {embed_view}")
     return view_writer.run(documents=embed_view["documents"])
@@ -392,6 +401,7 @@ class Indexing(BasicPipeline):
         )
 
     @async_timer
+    @observe(name="Ask Indexing")
     async def run(self, mdl_str: str) -> Dict[str, Any]:
         logger.info("Ask Indexing pipeline is running...")
         return await self._pipe.execute(
@@ -414,6 +424,7 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
     pipeline = Indexing(*init_providers())
 
@@ -422,3 +433,5 @@ if __name__ == "__main__":
             '{"models": [], "views": [], "relationships": [], "metrics": []}'
         )
     )
+
+    langfuse_context.flush()

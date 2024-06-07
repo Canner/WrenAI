@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
 
 import src.globals as container
-from src.utils import load_env_vars, setup_custom_logger
+from src.utils import init_langfuse, load_env_vars, setup_custom_logger
 from src.web.v1 import routers
 
 env = load_env_vars()
@@ -26,6 +26,7 @@ setup_custom_logger(
 async def lifespan(app: FastAPI):
     # startup events
     container.init_globals()
+    init_langfuse()
 
     yield
 

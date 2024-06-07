@@ -101,7 +101,7 @@ class QueryUnderstanding(BasicPipeline):
         )
 
     @async_timer
-    @observe(name="QueryUnderstanding")
+    @observe(name="Ask Query Understanding")
     async def run(
         self,
         query: str,
