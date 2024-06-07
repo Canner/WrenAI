@@ -6,6 +6,7 @@ import time
 from typing import Tuple
 
 from dotenv import load_dotenv
+from langfuse.decorators import langfuse_context
 
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.providers import loader
@@ -111,3 +112,10 @@ def async_timer(func):
         return await process(func, *args, **kwargs)
 
     return wrapper_timer
+
+
+def init_langfuse():
+    enabled = os.getenv("LANGFUSE_ENABLE", "false")
+    langfuse_context.configure(
+        enabled=False if enabled.lower() == "false" else True,
+    )

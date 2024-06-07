@@ -7,10 +7,11 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import langfuse_context, observe
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, init_langfuse, init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -61,18 +62,21 @@ class QueryUnderstandingPostProcessor:
 
 ## Start of Pipeline
 @timer
+@observe()
 def prompt(query: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"query: {query}")
     return prompt_builder.run(query=query)
 
 
 @async_timer
+@observe(as_type="generation")
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @timer
+@observe()
 def post_process(
     generate: dict, post_processor: QueryUnderstandingPostProcessor
 ) -> dict:
@@ -97,6 +101,7 @@ class QueryUnderstanding(BasicPipeline):
         )
 
     @async_timer
+    @observe(name="QueryUnderstanding")
     async def run(
         self,
         query: str,
@@ -117,6 +122,7 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
     llm_provider, _ = init_providers()
     pipeline = QueryUnderstanding(
@@ -124,3 +130,5 @@ if __name__ == "__main__":
     )
 
     async_validate(lambda: pipeline.run("this is a test query"))
+
+    langfuse_context.flush()
