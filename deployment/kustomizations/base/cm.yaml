@@ -23,7 +23,7 @@ data:
   TELEMETRY_ENABLED: "false"
   
   # service endpoints of AI service & engine service
-  WREN_ENGINE_ENDPOINT: "https://wren-ui.myhost.net"
+  WREN_ENGINE_ENDPOINT: "http://wren-engine-svc:8080"
   WREN_AI_ENDPOINT: "http://wren-ai-service:5555"
   #WREN_AI_ENDPOINT: "http://wren-ai-service.ai-system.svc.cluster.local:5555"
 
