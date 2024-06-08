@@ -125,24 +125,32 @@ class AskService:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
             await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
-            self._redis_db.hset(
-                "prepare_semantics_statuses",
-                prepare_semantics_request.id,
-                SemanticsPreparationStatusResponse(
-                    status="finished",
-                ).model_dump_json(),
+            # self._redis_db.hset(
+            #     "prepare_semantics_statuses",
+            #     prepare_semantics_request.id,
+            #     SemanticsPreparationStatusResponse(
+            #         status="finished",
+            #     ).model_dump_json(),
+            # )
+            yield SemanticsPreparationStatusResponse(
+                status="finished",
             )
         except Exception as e:
             logger.error(f"ask pipeline - Failed to prepare semantics: {e}")
 
-            self._redis_db.hset(
-                "prepare_semantics_statuses",
-                prepare_semantics_request.id,
-                SemanticsPreparationStatusResponse(
-                    status="failed",
-                    error=f"Failed to prepare semantics: {e}",
-                ).model_dump_json(),
+            yield SemanticsPreparationStatusResponse(
+                status="failed",
+                error=f"Failed to prepare semantics: {e}",
             )
+
+            # self._redis_db.hset(
+            #     "prepare_semantics_statuses",
+            #     prepare_semantics_request.id,
+            #     SemanticsPreparationStatusResponse(
+            #         status="failed",
+            #         error=f"Failed to prepare semantics: {e}",
+            #     ).model_dump_json(),
+            # )
 
     def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest

@@ -96,6 +96,23 @@ yarl = ">=1.0,<2.0"
 speedups = ["Brotli", "aiodns", "brotlicffi"]
 
 [[package]]
+name = "aiohttp-sse-client"
+version = "0.2.1"
+description = "A Server-Sent Event python client base on aiohttp"
+optional = false
+python-versions = "*"
+files = [
+    {file = "aiohttp-sse-client-0.2.1.tar.gz", hash = "sha256:5004e29271624af586158dc7166cb0687a7a5997aab5b808f4b53400e1b72e3b"},
+    {file = "aiohttp_sse_client-0.2.1-py2.py3-none-any.whl", hash = "sha256:42c81ee9213e9fc8bc412b063bac3a813e02e75250c4c8049222234d41c9b024"},
+]
+
+[package.dependencies]
+aiohttp = ">=3"
+attrs = "*"
+multidict = "*"
+yarl = "*"
+
+[[package]]
 name = "aiosignal"
 version = "1.3.1"
 description = "aiosignal: a list of registered asynchronous callbacks"
@@ -3832,6 +3849,25 @@ dev = ["build", "hatch"]
 doc = ["sphinx"]
 
 [[package]]
+name = "sse-starlette"
+version = "2.1.0"
+description = "SSE plugin for Starlette"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "sse_starlette-2.1.0-py3-none-any.whl", hash = "sha256:ea92bcb366c12482c1e23cab6b5afed19eb1320efe9ddfba8a0cf1f7f73ffba9"},
+    {file = "sse_starlette-2.1.0.tar.gz", hash = "sha256:ffff6e7d948f925f347e662be77af5783a6b93efce15d42c03004dcd7d6d91d3"},
+]
+
+[package.dependencies]
+anyio = "*"
+starlette = "*"
+uvicorn = "*"
+
+[package.extras]
+examples = ["fastapi"]
+
+[[package]]
 name = "starlette"
 version = "0.36.3"
 description = "The little ASGI library that shines."
@@ -4675,4 +4711,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = "==3.12.0"
-content-hash = "b01be3faf727fa7739bf7a76595a7367ddc0f8f0595643bef2af32ce23b2c4b1"
+content-hash = "c22f33579e6b9a976b83fdf6ae0b72475836c2ecdd09e0ca30636d46e86326fd"

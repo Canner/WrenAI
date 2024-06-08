@@ -2,6 +2,7 @@ import uuid
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks
+from sse_starlette.sse import EventSourceResponse
 
 import src.globals as container
 from src.web.v1.services.ask import (
@@ -10,7 +11,6 @@ from src.web.v1.services.ask import (
     AskResultRequest,
     AskResultResponse,
     SemanticsPreparationRequest,
-    SemanticsPreparationResponse,
     SemanticsPreparationStatusRequest,
     SemanticsPreparationStatusResponse,
     StopAskRequest,
@@ -43,21 +43,24 @@ async def bulk_generate_description(
 @router.post("/semantics-preparations")
 async def prepare_semantics(
     prepare_semantics_request: SemanticsPreparationRequest,
-    background_tasks: BackgroundTasks,
-) -> SemanticsPreparationResponse:
-    container.REDIS_DB.hset(
-        "prepare_semantics_statuses",
-        prepare_semantics_request.id,
-        SemanticsPreparationStatusResponse(
-            status="indexing",
-        ).model_dump_json(),
-    )
+    # background_tasks: BackgroundTasks,
+) -> SemanticsPreparationStatusResponse:  # SemanticsPreparationResponse:
+    # container.REDIS_DB.hset(
+    #     "prepare_semantics_statuses",
+    #     prepare_semantics_request.id,
+    #     SemanticsPreparationStatusResponse(
+    #         status="indexing",
+    #     ).model_dump_json(),
+    # )
 
-    background_tasks.add_task(
-        container.ASK_SERVICE.prepare_semantics,
-        prepare_semantics_request,
+    # background_tasks.add_task(
+    #     container.ASK_SERVICE.prepare_semantics,
+    #     prepare_semantics_request,
+    # )
+    # return SemanticsPreparationResponse(id=prepare_semantics_request.id)
+    return EventSourceResponse(
+        container.ASK_SERVICE.prepare_semantics(prepare_semantics_request)
     )
-    return SemanticsPreparationResponse(id=prepare_semantics_request.id)
 
 
 @router.get("/semantics-preparations/{task_id}/status")

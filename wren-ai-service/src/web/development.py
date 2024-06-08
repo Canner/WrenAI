@@ -6,8 +6,9 @@ import time
 import uuid
 
 import orjson
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Request
 from redislite import StrictRedis
+from sse_starlette.sse import EventSourceResponse
 
 from src.utils import async_timer
 from src.web.v1.services.ask import (
@@ -126,3 +127,33 @@ async def dummy_ask(
 @router.get("/dummy-asks/{query_id}/result")
 async def get_dummy_ask_result(query_id: str) -> AskResultResponse:
     return get_dummy_ask_task_result(AskResultRequest(query_id=query_id))
+
+
+STREAM_DELAY = 1  # second
+RETRY_TIMEOUT = 15000  # milisecond
+
+
+@router.get("/stream")
+async def message_stream(request: Request):
+    def new_messages():
+        # Add logic here to check for new messages
+        yield "Hello World"
+
+    async def event_generator():
+        while True:
+            # If client closes connection, stop sending events
+            if await request.is_disconnected():
+                break
+
+            # Checks for new messages and return them to client if any
+            if new_messages():
+                yield {
+                    "event": "new_message",
+                    "id": "message_id",
+                    "retry": RETRY_TIMEOUT,
+                    "data": "message_content",
+                }
+
+            await asyncio.sleep(STREAM_DELAY)
+
+    return EventSourceResponse(event_generator())
