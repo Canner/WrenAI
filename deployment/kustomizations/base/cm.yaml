@@ -26,7 +26,7 @@ data:
   WREN_ENGINE_ENDPOINT: "http://wren-engine-svc:8080"
   WREN_AI_ENDPOINT: "http://wren-ai-service-svc:5555"
   #WREN_AI_ENDPOINT: "http://wren-ai-service-svc.ai-system.svc.cluster.local:5555"
-  AI_SERVICE_WORKERS: "4"
+  AI_SERVICE_WORKERS: "1"
   # "sqlite", or "pg" for postgres as UI application database
   DB_TYPE: pg
 
