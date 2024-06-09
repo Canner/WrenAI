@@ -82,11 +82,7 @@ export class DataSourceMetadataService implements IDataSourceMetadataService {
       return tables;
     } else {
       const { connectionInfo } = this.transformToIbisConnectionInfo(project);
-      const { tables } = await this.ibisAdaptor.getTables(
-        datasource,
-        connectionInfo,
-      );
-      return tables;
+      return await this.ibisAdaptor.getTables(datasource, connectionInfo);
     }
   }
 
@@ -98,12 +94,7 @@ export class DataSourceMetadataService implements IDataSourceMetadataService {
       return [];
     } else {
       const { connectionInfo } = this.transformToIbisConnectionInfo(project);
-      const { constraints } = await this.ibisAdaptor.getConstraints(
-        datasource,
-        connectionInfo,
-      );
-      logger.debug(`Constraint len: ${constraints.length}`);
-      return constraints;
+      return await this.ibisAdaptor.getConstraints(datasource, connectionInfo);
     }
   }
 

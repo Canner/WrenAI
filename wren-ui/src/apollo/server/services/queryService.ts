@@ -7,6 +7,7 @@ import {
   IbisQueryResponse,
   IbisPostgresConnectionInfo,
   IbisBigQueryConnectionInfo,
+  ValidationRules,
 } from '../adaptors/ibisAdaptor';
 import { Encryptor, getLogger } from '@server/utils';
 import {
@@ -55,6 +56,11 @@ export interface ComposeConnectionInfoResult {
   connectionInfo?: IbisPostgresConnectionInfo | IbisBigQueryConnectionInfo;
 }
 
+export interface ValidateResponse {
+  valid: boolean;
+  message?: string;
+}
+
 export interface IQueryService {
   preview(sql: string, options: PreviewOptions): Promise<PreviewDataResponse>;
 
@@ -69,6 +75,12 @@ export interface IQueryService {
    * @param options :
    */
   sqlValidate(sql: string, options: SqlValidateOptions): Promise<any>;
+  validate(
+    project: Project,
+    rule: ValidationRules,
+    manifest: Manifest,
+    parameters: Record<string, any>,
+  ): Promise<ValidateResponse>;
 }
 
 export class QueryService implements IQueryService {
@@ -151,6 +163,24 @@ export class QueryService implements IQueryService {
         mdl,
       );
     }
+  }
+
+  public async validate(
+    project,
+    rule: ValidationRules,
+    manifest: Manifest,
+    parameters: Record<string, any>,
+  ): Promise<ValidateResponse> {
+    const { connectionInfo } = this.transformToIbisConnectionInfo(project);
+    const dataSource = project.type;
+    const res = await this.ibisAdaptor.validate(
+      dataSource,
+      rule,
+      connectionInfo,
+      manifest,
+      parameters,
+    );
+    return res;
   }
 
   // transform connection info to ibis connection info format

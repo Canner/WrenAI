@@ -7,6 +7,7 @@ import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
 import { toDockerHost } from '@server/utils';
 import { CompactTable, RecommendConstraint } from '@server/services';
+import { snakeCase } from 'lodash';
 
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
@@ -32,8 +33,13 @@ export interface TableResponse {
   tables: CompactTable[];
 }
 
-export interface ConstraintResponse {
-  constraints: RecommendConstraint[];
+export enum ValidationRules {
+  COLUMN_IS_VALID = 'COLUMN_IS_VALID',
+}
+
+export interface ValidationResponse {
+  valid: boolean;
+  message: string | null;
 }
 
 export interface IIbisAdaptor {
@@ -46,11 +52,19 @@ export interface IIbisAdaptor {
   getTables: (
     dataSource: DataSourceName,
     connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
-  ) => Promise<TableResponse>;
+  ) => Promise<CompactTable[]>;
   getConstraints: (
     dataSource: DataSourceName,
     connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
-  ) => Promise<ConstraintResponse>;
+  ) => Promise<RecommendConstraint[]>;
+
+  validate: (
+    dataSource: DataSourceName,
+    rule: ValidationRules,
+    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
+    mdl: Manifest,
+    parameters: Record<string, any>,
+  ) => Promise<ValidationResponse>;
 }
 
 export enum SupportedDataSource {
@@ -114,7 +128,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   async getTables(
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
-  ): Promise<TableResponse> {
+  ): Promise<CompactTable[]> {
     if (config.otherServiceUsingDocker) {
       connectionInfo.host = toDockerHost(connectionInfo.host);
       logger.debug(`Rewritten host: ${connectionInfo.host}`);
@@ -124,7 +138,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     logger.debug(`Getting table with body: ${JSON.stringify(body, null, 2)}`);
     try {
-      const res: AxiosResponse<TableResponse> = await axios.post(
+      const res: AxiosResponse<CompactTable[]> = await axios.post(
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/tables`,
         body,
       );
@@ -143,7 +157,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   async getConstraints(
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
-  ): Promise<ConstraintResponse> {
+  ): Promise<RecommendConstraint[]> {
     if (config.otherServiceUsingDocker) {
       connectionInfo.host = toDockerHost(connectionInfo.host);
       logger.debug(`Rewritten host: ${connectionInfo.host}`);
@@ -155,7 +169,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       `Getting constraint with body: ${JSON.stringify(body, null, 2)}`,
     );
     try {
-      const res: AxiosResponse<ConstraintResponse> = await axios.post(
+      const res: AxiosResponse<RecommendConstraint[]> = await axios.post(
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
         body,
       );
@@ -170,4 +184,38 @@ export class IbisAdaptor implements IIbisAdaptor {
       });
     }
   }
+
+  async validate(
+    dataSource: DataSourceName,
+    validationRule: ValidationRules,
+    connectionInfo: Record<string, any>,
+    mdl: Manifest,
+    parameters: Record<string, any>,
+  ): Promise<ValidationResponse> {
+    if (config.otherServiceUsingDocker) {
+      connectionInfo.host = toDockerHost(connectionInfo.host);
+      logger.debug(`Rewritten host: ${connectionInfo.host}`);
+    }
+    const body = {
+      connectionInfo,
+      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+      parameters,
+    };
+    logger.debug(
+      `Validating connection with body: ${JSON.stringify(body, null, 2)}`,
+    );
+    try {
+      await axios.post(
+        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
+        body,
+      );
+      return { valid: true, message: null };
+    } catch (e) {
+      logger.debug(`Got error when validating connection: ${e.response.data}`);
+
+      return { valid: false, message: e.response.data };
+    }
+  }
+
+  private;
 }

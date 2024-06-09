@@ -90,6 +90,10 @@ const bootstrapServer = async () => {
     relationRepository,
     viewRepository,
   });
+  const queryService = new QueryService({
+    ibisAdaptor,
+    wrenEngineAdaptor,
+  });
   const modelService = new ModelService({
     projectService,
     modelRepository,
@@ -98,17 +102,13 @@ const bootstrapServer = async () => {
     viewRepository,
     mdlService,
     wrenEngineAdaptor,
+    queryService,
   });
   const deployService = new DeployService({
     wrenAIAdaptor,
     wrenEngineAdaptor,
     deployLogRepository,
     telemetry,
-  });
-
-  const queryService = new QueryService({
-    ibisAdaptor,
-    wrenEngineAdaptor,
   });
 
   const askingService = new AskingService({

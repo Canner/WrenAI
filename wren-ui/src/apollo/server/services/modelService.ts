@@ -1,4 +1,4 @@
-import { SampleDatasetTable } from '../data';
+import { SampleDatasetTable } from '@server/data';
 import {
   IModelColumnRepository,
   IModelRepository,
@@ -7,21 +7,27 @@ import {
   Model,
   ModelColumn,
   Relation,
-} from '../repositories';
+} from '@server/repositories';
 import { getLogger } from '@server/utils';
-import { RelationData, UpdateRelationData } from '../types';
+import { RelationData, UpdateRelationData } from '@server/types';
 import { IProjectService } from './projectService';
 import {
   CreateCalculatedFieldData,
   ExpressionName,
   UpdateCalculatedFieldData,
   CheckCalculatedFieldCanQueryData,
-} from '../models';
+} from '@server/models';
 import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
+import { ValidationRules } from '@server/adaptors/ibisAdaptor';
 import { isEmpty, capitalize } from 'lodash';
-import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
+import {
+  replaceAllowableSyntax,
+  validateDisplayName,
+} from '@server/utils/regex';
 import * as Errors from '@server/utils/error';
+import { DataSourceName } from '@server/types';
+import { IQueryService } from './queryService';
 
 const logger = getLogger('ModelService');
 logger.level = 'debug';
@@ -69,6 +75,7 @@ export class ModelService implements IModelService {
   private viewRepository: IViewRepository;
   private mdlService: IMDLService;
   private wrenEngineAdaptor: IWrenEngineAdaptor;
+  private queryService: IQueryService;
 
   constructor({
     projectService,
@@ -78,6 +85,7 @@ export class ModelService implements IModelService {
     viewRepository,
     mdlService,
     wrenEngineAdaptor,
+    queryService,
   }: {
     projectService: IProjectService;
     modelRepository: IModelRepository;
@@ -86,6 +94,7 @@ export class ModelService implements IModelService {
     viewRepository: IViewRepository;
     mdlService: IMDLService;
     wrenEngineAdaptor: IWrenEngineAdaptor;
+    queryService: IQueryService;
   }) {
     this.projectService = projectService;
     this.modelRepository = modelRepository;
@@ -94,6 +103,7 @@ export class ModelService implements IModelService {
     this.viewRepository = viewRepository;
     this.mdlService = mdlService;
     this.wrenEngineAdaptor = wrenEngineAdaptor;
+    this.queryService = queryService;
   }
 
   public async createCalculatedField(
@@ -589,6 +599,7 @@ export class ModelService implements IModelService {
     modelName: string,
     data: CheckCalculatedFieldCanQueryData,
   ) {
+    const project = await this.projectService.getCurrentProject();
     const { mdlBuilder } = await this.mdlService.makeCurrentModelMDL();
     const { referenceName, expression, lineage } = data;
     const inputFieldId = lineage[lineage.length - 1];
@@ -621,16 +632,24 @@ export class ModelService implements IModelService {
       ?.columns.find((c) => c.name === referenceName);
 
     logger.debug(`Calculated field MDL: ${JSON.stringify(calculatedField)}`);
-    const { valid, message } =
-      await this.wrenEngineAdaptor.validateColumnIsValid(
+
+    // validate calculated field can query
+    const dataSource = project.type;
+    if (dataSource === DataSourceName.DUCKDB) {
+      return await this.wrenEngineAdaptor.validateColumnIsValid(
         manifest,
         modelName,
         referenceName,
       );
-    if (!valid) {
-      logger.debug(`Calculated field can not query: ${message}`);
+    } else {
+      const parameters = { modelName, columnName: referenceName };
+      return await this.queryService.validate(
+        project,
+        ValidationRules.COLUMN_IS_VALID,
+        manifest,
+        parameters,
+      );
     }
-    return { valid, message };
   }
 
   private async validateCreateRelation(
