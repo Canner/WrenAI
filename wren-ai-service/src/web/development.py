@@ -6,7 +6,7 @@ import time
 import uuid
 
 import orjson
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks
 from redislite import StrictRedis
 from sse_starlette.sse import EventSourceResponse
 
@@ -20,6 +20,7 @@ from src.web.v1.services.ask import (
 
 logger = logging.getLogger("wren-ai-service")
 router = APIRouter()
+_state = {}
 
 REDIS_DB = (
     StrictRedis(
@@ -66,6 +67,31 @@ async def dummy_ask_task(ask_request: AskRequest):
         AskResultResponse(
             status="finished",
         ).model_dump_json(),
+    )
+
+
+@async_timer
+async def dummy_ask_task_v2(ask_request: AskRequest):
+    global _state
+
+    _state[ask_request.query_id] = AskResultResponse(
+        status="understanding",
+    )
+    await asyncio.sleep(random.randint(1, 2))
+    _state[ask_request.query_id] = AskResultResponse(
+        status="searching",
+    )
+    await asyncio.sleep(random.randint(1, 2))
+    _state[ask_request.query_id] = AskResultResponse(
+        status="generating",
+    )
+    await asyncio.sleep(random.randint(2, 6))
+    # SYNC_SLEEP_TIME = 0.5
+    # time.sleep(SYNC_SLEEP_TIME)
+    # await asyncio.to_thread(time.sleep, SYNC_SLEEP_TIME)
+
+    _state[ask_request.query_id] = AskResultResponse(
+        status="finished",
     )
 
 
@@ -129,31 +155,30 @@ async def get_dummy_ask_result(query_id: str) -> AskResultResponse:
     return get_dummy_ask_task_result(AskResultRequest(query_id=query_id))
 
 
-STREAM_DELAY = 1  # second
-RETRY_TIMEOUT = 15000  # milisecond
+@router.post("/dummy-asks/v2")
+async def dummy_ask_v2(
+    ask_request: AskRequest,
+    background_tasks: BackgroundTasks,
+) -> AskResponse:
+    query_id = str(uuid.uuid4())
+    ask_request.query_id = query_id
+
+    background_tasks.add_task(
+        dummy_ask_task_v2,
+        ask_request,
+    )
+    return AskResponse(query_id=query_id)
 
 
-@router.get("/stream")
-async def message_stream(request: Request):
-    def new_messages():
-        # Add logic here to check for new messages
-        yield "Hello World"
-
-    async def event_generator():
+@router.get("/dummy-asks/v2/{query_id}/result")
+async def get_dummy_ask_result_v2(query_id: str) -> AskResultResponse:
+    async def _task():
         while True:
-            # If client closes connection, stop sending events
-            if await request.is_disconnected():
-                break
+            if query_id in _state:
+                yield _state[query_id]
+                if _state[query_id].status == "finished":
+                    break
 
-            # Checks for new messages and return them to client if any
-            if new_messages():
-                yield {
-                    "event": "new_message",
-                    "id": "message_id",
-                    "retry": RETRY_TIMEOUT,
-                    "data": "message_content",
-                }
+            await asyncio.sleep(0.1)
 
-            await asyncio.sleep(STREAM_DELAY)
-
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(_task())
