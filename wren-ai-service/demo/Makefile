@@ -1,12 +1,11 @@
 prepare:
-	cd ../../docker; docker compose --env-file .env.local -f docker-compose-dev.yaml up -d
+	cd ..; make run-all
 
 stop:
-	cd ../../docker; docker compose --env-file .env.local -f docker-compose-dev.yaml down
+	cd ..; make stop-all
 
 ui:
-	cd ../../wren-ui; export DB_TYPE=sqlite export SQLITE_FILE=db.sqlite3 export WREN_AI_ENDPOINT=http://localhost:5556 && \
-	yarn install && yarn rollback --all && yarn migrate && yarn dev
+	cd ..; make ui
 
 ai:
 	cd ..; make start
