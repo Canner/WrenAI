@@ -161,27 +161,34 @@ export default class DataSourceSchemaDetector
         isEqual,
       );
       if (diffColumns.length > 0) {
+        const deletedColumnChange = { name: currentTable.name, columns: [] };
+        const modifiedColumnChange = { name: currentTable.name, columns: [] };
+
         for (const currentColumn of diffColumns) {
           const latestColumn = lastestTable.columns.find(
             (column) => column.name === currentColumn.name,
           );
           // If the column is not found in the latest schema, it means the column has been deleted.
           if (!latestColumn) {
-            result[SchemaChangeType.DELETED_COLUMNS] = [
-              ...(result[SchemaChangeType.DELETED_COLUMNS] || []),
-              { name: currentTable.name, columns: [currentColumn] },
-            ];
+            deletedColumnChange.columns.push(currentColumn);
             continue;
           }
-
           // If the column is found in the latest schema, it means the column has been modified.
+          // save latest column as modified column
+          modifiedColumnChange.columns.push(latestColumn);
+        }
+
+        // If there are any deleted or modified columns, we need to add them to the result.
+        if (deletedColumnChange.columns.length > 0) {
+          result[SchemaChangeType.DELETED_COLUMNS] = [
+            ...(result[SchemaChangeType.DELETED_COLUMNS] || []),
+            deletedColumnChange,
+          ];
+        }
+        if (modifiedColumnChange.columns.length > 0) {
           result[SchemaChangeType.MODIFIED_COLUMNS] = [
             ...(result[SchemaChangeType.MODIFIED_COLUMNS] || []),
-            {
-              name: currentTable.name,
-              // show the latest column type
-              columns: [latestColumn],
-            },
+            modifiedColumnChange,
           ];
         }
       }
