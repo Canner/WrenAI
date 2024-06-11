@@ -5,6 +5,7 @@ from typing import Any, List, Optional, Tuple
 
 import aiohttp
 import orjson
+import sqlparse
 import streamlit as st
 from dotenv import load_dotenv
 from openai import AsyncClient
@@ -208,6 +209,120 @@ def get_ddl_commands(mdl_json: dict) -> str:
     return "\n\n".join(ddl_commands)
 
 
+async def get_question_sql_pairs_with_context(
+    llm_client: AsyncClient,
+    question_sql_pairs: list[dict],
+) -> list[dict]:
+    messages = [
+        {
+            "role": "system",
+            "content": "",
+        },
+        {
+            "role": "user",
+            "content": f"""
+### TASK ###
+Given the question sql pairs, provide the context for each sql.
+
+### EXAMPLES ###
+
+EAMPLE1:
+
+INPUT
+{{
+    "question": "orjson.loads(response.choices[0].message.content)["results"]",
+    "context": [],
+    "is_valid": True,
+    "sql": "SELECT SUM(p.Value) FROM payments p JOIN orders o ON p.OrderId = o.OrderId WHERE o.Status = 'Delivered';"
+}}
+
+OUTPUT
+{{
+    "question": "orjson.loads(response.choices[0].message.content)["results"]",
+    "context": ["payments.Value", "orders.OrderId", "payments.OrderId", "orders.Status"],
+    "is_valid": True,
+    "sql": "SELECT SUM(p.Value) FROM payments p JOIN orders o ON p.OrderId = o.OrderId WHERE o.Status = 'Delivered';"
+}}
+
+EXAMPLE2:
+
+INPUT
+{{
+    "question": "What is the average score given in the reviews?",
+    "context": [],
+    "is_valid": True,
+    "sql": "SELECT AVG(Score) FROM reviews;"
+}}
+
+OUTPUT
+{{
+    "question": "What is the average score given in the reviews?",
+    "context": ["reviews.Score"],
+    "is_valid": True,
+    "sql": "SELECT AVG(Score) FROM reviews;"
+}}
+
+EXAMPLE3:
+
+INPUT
+{{
+    "question": "Show me the details of customer?",
+    "context": [],
+    "is_valid": True,
+    "sql": "SELECT * FROM customers;"
+}}
+
+OUTPUT
+{{
+    "question": "Show me the details of customer?",
+    "context": ["customers.*"],
+    "is_valid": True,
+    "sql": "SELECT * FROM customers;"
+}}
+
+### Output Format ###
+{{
+    "results": [
+        {{
+            "question": <question_string>,
+            "context": [<context_string>],
+            "is_valid": <boolean>,
+            "sql": <sql_query_string>
+        }},
+        {{
+            "question": <question_string>,
+            "context": [<context_string>],
+            "is_valid": <boolean>,
+            "sql": <sql_query_string>
+        }},
+        ...
+    ]
+}}
+
+### Input ###
+Question SQL Pairs: {question_sql_pairs}
+
+Generate the context for the corresponding SQL queries of each question-sql-pair according to the Output Format in JSON
+Think step by step
+""",
+        },
+    ]
+
+    try:
+        response = await llm_client.chat.completions.create(
+            model=os.getenv("OPENAI_GENERATION_MODEL", "gpt-3.5-turbo"),
+            messages=messages,
+            response_format={"type": "json_object"},
+            max_tokens=4096,
+            temperature=0,
+        )
+
+        return orjson.loads(response.choices[0].message.content)["results"]
+    except Exception as e:
+        st.error(f"Error generating question-sql-pairs with context: {e}")
+        return []
+
+
 async def get_question_sql_pairs(
     llm_client: AsyncClient, mdl_json: dict, num_pairs: int = 10
 ) -> list[dict]:
@@ -252,12 +367,12 @@ Think step by step
             messages=messages,
             response_format={"type": "json_object"},
             max_tokens=4096,
-            seed=123,
             temperature=0,
         )
 
         results = orjson.loads(response.choices[0].message.content)["results"]
-        return await get_valid_question_sql_pairs(results)
+        question_sql_pairs = await get_valid_question_sql_pairs(results)
+        return await get_question_sql_pairs_with_context(llm_client, question_sql_pairs)
     except Exception as e:
         st.error(f"Error generating question-sql-pairs: {e}")
         return []
@@ -306,3 +421,11 @@ def show_er_diagram(models: List[dict], relationships: List[dict]):
     graphviz += "}"
 
     st.graphviz_chart(graphviz)
+
+
+def prettify_sql(sql: str) -> str:
+    return sqlparse.format(
+        sql,
+        reindent=True,
+        keyword_case="upper",
+    )

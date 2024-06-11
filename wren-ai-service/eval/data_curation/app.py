@@ -6,6 +6,7 @@ from utils import (
     get_question_sql_pairs,
     is_sql_valid,
     is_valid_mdl_file,
+    prettify_sql,
     show_er_diagram,
 )
 
@@ -90,7 +91,7 @@ with tab_create_dataset:
                         st.json(question_sql_pair["context"], expanded=True)
                         sql = st.text_area(
                             f"SQL {i}",
-                            question_sql_pair["sql"],
+                            prettify_sql(question_sql_pair["sql"]),
                             key=f"sql_{i}",
                         )
                         assert sql, "SQL should not be empty"
