@@ -92,4 +92,5 @@ if __name__ == "__main__":
         reload=should_reload,
         reload_dirs=["src"] if should_reload else None,
         workers=num_workers,
+        loop="uvloop",
     )
