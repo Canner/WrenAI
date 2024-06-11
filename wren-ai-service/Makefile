@@ -77,3 +77,5 @@ test:
 
 load-test:
 	poetry run python -m tests.locust.locust_script
+
+.PHONY: demo
