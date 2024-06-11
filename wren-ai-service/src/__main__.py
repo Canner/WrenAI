@@ -93,4 +93,5 @@ if __name__ == "__main__":
         reload_dirs=["src"] if should_reload else None,
         workers=num_workers,
         loop="uvloop",
+        http="httptools",
     )
