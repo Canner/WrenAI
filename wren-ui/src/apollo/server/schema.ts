@@ -42,6 +42,12 @@ export const typeDefs = gql`
     UNSYNCRONIZED
   }
 
+  enum SchemaChangeType {
+    DELETED_TABLES
+    DELETED_COLUMNS
+    MODIFIED_COLUMNS
+  }
+
   type DataSource {
     type: DataSourceName!
     properties: JSON!
@@ -621,6 +627,10 @@ export const typeDefs = gql`
     modifiedColumns: JSON
   }
 
+  input ResolveSchemaChangeWhereInput {
+    type: SchemaChangeType!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -669,6 +679,7 @@ export const typeDefs = gql`
     deleteModel(where: ModelWhereInput!): Boolean!
     previewModelData(where: WhereIdInput!): JSON!
     triggerDataSourceDetection: Boolean!
+    resolveSchemaChange(where: ResolveSchemaChangeWhereInput!): Boolean!
 
     # Metadata
     updateModelMetadata(

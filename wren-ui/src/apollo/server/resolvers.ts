@@ -56,6 +56,7 @@ const resolvers = {
     previewModelData: modelResolver.previewModelData,
     updateModelMetadata: modelResolver.updateModelMetadata,
     triggerDataSourceDetection: projectResolver.triggerDataSourceDetection,
+    resolveSchemaChange: projectResolver.resolveSchemaChange,
 
     // calculated field
     createCalculatedField: modelResolver.createCalculatedField,

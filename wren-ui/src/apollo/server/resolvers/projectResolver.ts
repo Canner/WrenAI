@@ -28,7 +28,9 @@ import { snakeCase } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
-import DataSourceSchemaDetector from '@server/managers/dataSourceSchemaDetector';
+import DataSourceSchemaDetector, {
+  SchemaChangeType,
+} from '@server/managers/dataSourceSchemaDetector';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -437,8 +439,8 @@ export class ProjectResolver {
       await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
 
     if (lastSchemaChange) {
-      const changes = JSON.parse(lastSchemaChange.change) || {};
-      const resolves = JSON.parse(lastSchemaChange.resolve) || {};
+      const changes = lastSchemaChange.change;
+      const resolves = lastSchemaChange.resolve;
       const unresolvedChanges = Object.keys(resolves).reduce(
         (result, key) =>
           resolves[key] === false ? { ...result, [key]: changes[key] } : result,
@@ -455,8 +457,27 @@ export class ProjectResolver {
     _arg: any,
     ctx: IContext,
   ) {
-    const schemaDetector = new DataSourceSchemaDetector({ ctx });
+    const project = await ctx.projectService.getCurrentProject();
+    const schemaDetector = new DataSourceSchemaDetector({
+      ctx,
+      projectId: project.id,
+    });
     await schemaDetector.detectSchemaChange();
+    return true;
+  }
+
+  public async resolveSchemaChange(
+    _root: any,
+    arg: { where: { type: SchemaChangeType } },
+    ctx: IContext,
+  ) {
+    const { type } = arg.where;
+    const project = await ctx.projectService.getCurrentProject();
+    const schemaDetector = new DataSourceSchemaDetector({
+      ctx,
+      projectId: project.id,
+    });
+    await schemaDetector.resolveSchemaChange(type);
     return true;
   }
 
