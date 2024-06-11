@@ -53,6 +53,9 @@ ui:
 	cd ../wren-ui; export DB_TYPE=sqlite export SQLITE_FILE=db.sqlite3 export WREN_AI_ENDPOINT=http://localhost:5556 && \
 	yarn install && yarn rollback --all && yarn migrate && yarn dev
 
+demo:
+	cd demo; poetry run streamlit run app.py
+
 # present the evaluation result on the streamlit app
 # example: make streamlit pipeline=ask_details
 streamlit:

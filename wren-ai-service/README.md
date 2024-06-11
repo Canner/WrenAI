@@ -59,10 +59,10 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 ## Demo
 
 - go to the `demo` folder and run `poetry install` to install the dependencies
-- in the `demo` folder, open three terminals
-  - in the first terminal, run `make prepare` to start the docker containers and `make run` to start the demo service
-  - in the second terminal, run `make ui` to start the wren-ui service
-  - in the third terminal, run `make ai` to start the wren-ai service
+- in the `wren-ai-service` folder, open three terminals
+  - in the first terminal, run `make run-all` to start the docker containers and `make ui` to start the wren-ui service
+  - in the second terminal, run `make start` to start the wren-ai service
+  - in the third terminal, run `make demo` to start the demo service
 - ports of the services:
   - wren-engine: ports should be 8080
   - wren-ai-service: port should be 5556
