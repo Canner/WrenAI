@@ -211,7 +211,7 @@ export default class DataSourceSchemaDetector
       JSON.stringify(lastSchemaChange?.change) !== JSON.stringify(diffSchema);
 
     if (isNewSchemaChange) {
-      this.ctx.schemaChangeRepository.createOne({
+      await this.ctx.schemaChangeRepository.createOne({
         projectId: this.projectId,
         change: diffSchema,
         // Set the resolve to false if there are any changes. It will set resolve to true once the schema has been synced.
