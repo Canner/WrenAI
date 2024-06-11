@@ -6,7 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import ORJSONResponse, RedirectResponse
 
 import src.globals as container
 from src.utils import load_env_vars, setup_custom_logger
@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     # shutdown events
 
 
-app = FastAPI(lifespan=lifespan, redoc_url=None)
+app = FastAPI(lifespan=lifespan, redoc_url=None, default_response_class=ORJSONResponse)
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,7 +50,7 @@ if env == "dev":
 
 @app.exception_handler(Exception)
 async def exception_handler(request, exc: Exception):
-    return JSONResponse(
+    return ORJSONResponse(
         status_code=500,
         content={"detail": str(exc)},
     )
@@ -58,7 +58,7 @@ async def exception_handler(request, exc: Exception):
 
 @app.exception_handler(RequestValidationError)
 async def request_exception_handler(request, exc: Exception):
-    return JSONResponse(
+    return ORJSONResponse(
         status_code=400,
         content={"detail": str(exc)},
     )
