@@ -15,14 +15,14 @@ logger = logging.getLogger("wren-ai-service")
 
 ## Start of Pipeline
 @async_timer
-@observe()
+@observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any) -> dict:
     logger.debug(f"query: {query}")
     return await embedder.run(query)
 
 
 @async_timer
-@observe()
+@observe(capture_input=False)
 async def retrieval(embedding: dict, retriever: Any) -> dict:
     return await retriever.run(query_embedding=embedding.get("embedding"))
 

@@ -57,7 +57,7 @@ Let's think step by step.
 
 ## Start of Pipeline
 @timer
-@observe()
+@observe(capture_input=False)
 def prompt(
     documents: List[Document],
     invalid_generation_results: List[Dict],
@@ -74,14 +74,14 @@ def prompt(
 
 
 @async_timer
-@observe(as_type="generation")
+@observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
-@observe()
+@observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))

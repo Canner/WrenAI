@@ -57,14 +57,14 @@ class OutputFormatter:
 
 ## Start of Pipeline
 @async_timer
-@observe()
+@observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any) -> dict:
     logger.debug(f"query: {query}")
     return await embedder.run(query)
 
 
 @async_timer
-@observe()
+@observe(capture_input=False)
 async def retrieval(embedding: dict, retriever: Any) -> dict:
     res = await retriever.run(query_embedding=embedding.get("embedding"))
     documents = res.get("documents")
@@ -72,14 +72,14 @@ async def retrieval(embedding: dict, retriever: Any) -> dict:
 
 
 @timer
-@observe()
+@observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     logger.debug(f"retrieval: {retrieval}")
     return score_filter.run(documents=retrieval.get("documents"))
 
 
 @timer
-@observe()
+@observe(capture_input=False)
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
 ) -> dict:

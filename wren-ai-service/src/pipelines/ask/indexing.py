@@ -304,14 +304,14 @@ class DDLConverter:
 
 ## Start of Pipeline
 @timer
-@observe()
+@observe(capture_input=False, capture_output=False)
 def clean_document_store(mdl_str: str, cleaner: DocumentCleaner) -> Dict[str, Any]:
     logger.debug(f"input in clean_document_store: {mdl_str}")
     return cleaner.run(mdl=mdl_str)
 
 
 @timer
-@observe()
+@observe(capture_input=False, capture_output=False)
 @extract_fields(dict(mdl=Dict[str, Any]))
 def validate_mdl(
     clean_document_store: Dict[str, Any], validator: MDLValidator
@@ -323,14 +323,14 @@ def validate_mdl(
 
 
 @timer
-@observe()
+@observe(capture_input=False)
 def convert_to_ddl(mdl: Dict[str, Any], ddl_converter: DDLConverter) -> Dict[str, Any]:
     logger.debug(f"input in convert_to_ddl: {mdl}")
     return ddl_converter.run(mdl=mdl)
 
 
 @async_timer
-@observe()
+@observe(capture_input=False, capture_output=False)
 async def embed_ddl(
     convert_to_ddl: Dict[str, Any], ddl_embedder: Any
 ) -> Dict[str, Any]:
@@ -339,14 +339,14 @@ async def embed_ddl(
 
 
 @timer
-@observe()
+@observe(capture_input=False)
 def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_ddl: {embed_ddl}")
     return ddl_writer.run(documents=embed_ddl["documents"])
 
 
 @timer
-@observe()
+@observe(capture_input=False)
 def convert_to_view(
     mdl: Dict[str, Any], view_converter: ViewConverter
 ) -> Dict[str, Any]:
@@ -355,7 +355,7 @@ def convert_to_view(
 
 
 @async_timer
-@observe()
+@observe(capture_input=False, capture_output=False)
 async def embed_view(
     convert_to_view: Dict[str, Any], view_embedder: Any
 ) -> Dict[str, Any]:
@@ -364,7 +364,7 @@ async def embed_view(
 
 
 @timer
-@observe()
+@observe(capture_input=False)
 def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
     logger.debug(f"input in write_view: {embed_view}")
     return view_writer.run(documents=embed_view["documents"])

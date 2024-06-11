@@ -62,21 +62,21 @@ class QueryUnderstandingPostProcessor:
 
 ## Start of Pipeline
 @timer
-@observe()
+@observe(capture_input=False)
 def prompt(query: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"query: {query}")
     return prompt_builder.run(query=query)
 
 
 @async_timer
-@observe(as_type="generation")
+@observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @timer
-@observe()
+@observe(capture_input=False)
 def post_process(
     generate: dict, post_processor: QueryUnderstandingPostProcessor
 ) -> dict:
