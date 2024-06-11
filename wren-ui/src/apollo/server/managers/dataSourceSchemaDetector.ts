@@ -1,4 +1,4 @@
-import { differenceWith, isEmpty, isEqual } from 'lodash';
+import { camelCase, differenceWith, isEmpty, isEqual } from 'lodash';
 import { CompactTable } from '@server/connectors/connector';
 import { DataSourceStrategyFactory } from '@server/factories/onboardingFactory';
 import { IContext } from '@server/types';
@@ -7,7 +7,7 @@ import { getLogger } from 'log4js';
 const logger = getLogger('DataSourceSchemaDetector');
 logger.level = 'debug';
 
-type DataSourceSchema = {
+export type DataSourceSchema = {
   name: string;
   columns: {
     name: string;
@@ -15,13 +15,19 @@ type DataSourceSchema = {
   }[];
 };
 
-type DataSourceSchemaChange = {
-  [SchemaChangeType.DELETED_TABLES]: DataSourceSchema[];
-  [SchemaChangeType.DELETED_COLUMNS]: DataSourceSchema[];
-  [SchemaChangeType.MODIFIED_COLUMNS]: DataSourceSchema[];
+export type DataSourceSchemaChange = {
+  [SchemaChangeType.DELETED_TABLES]?: DataSourceSchema[];
+  [SchemaChangeType.DELETED_COLUMNS]?: DataSourceSchema[];
+  [SchemaChangeType.MODIFIED_COLUMNS]?: DataSourceSchema[];
 };
 
-enum SchemaChangeType {
+export type DataSourceSchemaResolve = {
+  [SchemaChangeType.DELETED_TABLES]?: boolean;
+  [SchemaChangeType.DELETED_COLUMNS]?: boolean;
+  [SchemaChangeType.MODIFIED_COLUMNS]?: boolean;
+};
+
+export enum SchemaChangeType {
   // the tables has been deleted
   DELETED_TABLES = 'deletedTables',
   // the columns has been deleted
@@ -30,24 +36,103 @@ enum SchemaChangeType {
   MODIFIED_COLUMNS = 'modifiedColumns',
 }
 
-interface IDataSourceSchemaDetector {
+export interface IDataSourceSchemaDetector {
   detectSchemaChange(): Promise<void>;
+  resolveSchemaChange(type: string): Promise<void>;
 }
 
 export default class DataSourceSchemaDetector
   implements IDataSourceSchemaDetector
 {
   public ctx: IContext;
-  public projectId: string;
+  public projectId: number;
 
-  constructor({ ctx }: { ctx: IContext }) {
+  constructor({ ctx, projectId }: { ctx: IContext; projectId: number }) {
     this.ctx = ctx;
+    this.projectId = projectId;
   }
 
   public async detectSchemaChange() {
     const diffSchema = await this.getDiffSchema();
     if (diffSchema) {
       this.addSchemaChange(diffSchema);
+    }
+  }
+
+  public async resolveSchemaChange(type: string) {
+    const schemaChangeType = camelCase(type) as SchemaChangeType;
+    const supportedTypes = [
+      SchemaChangeType.DELETED_TABLES,
+      SchemaChangeType.DELETED_COLUMNS,
+    ];
+    if (supportedTypes.includes(schemaChangeType)) {
+      const lastSchemaChange =
+        await this.ctx.schemaChangeRepository.findLastSchemaChange(
+          this.projectId,
+        );
+      const changes = lastSchemaChange?.change[schemaChangeType];
+      const isResolved = lastSchemaChange?.resolve[schemaChangeType];
+
+      if (isResolved !== false) {
+        throw new Error(
+          `Schema change "${schemaChangeType}" has nothing to resolve.`,
+        );
+      }
+
+      // Handle resolve deleted tables
+      if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
+        const affectedTableNames = changes.map((table) => table.name);
+        logger.debug(
+          `Start to remove tables "${affectedTableNames}" from models.`,
+        );
+        await this.ctx.modelRepository.deleteAllBySourceTableNames(
+          affectedTableNames,
+        );
+        await updateResolveToSchemaChange(this.ctx);
+      }
+
+      // Handle resolve deleted table columns
+      if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
+        const models = await this.ctx.modelRepository.findAllBy({
+          projectId: this.projectId,
+        });
+        const affectedModels = models.filter(
+          (model) =>
+            changes.findIndex(
+              (table) => table.name === model.sourceTableName,
+            ) !== -1,
+        );
+        await Promise.all(
+          affectedModels.map(async (model) => {
+            const affectedColumnNames = changes
+              .find((table) => table.name === model.sourceTableName)
+              .columns.map((column) => column.name);
+            logger.debug(
+              `Start to remove columns "${affectedColumnNames}" from model "${model.referenceName}".`,
+            );
+            return await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
+              model.id,
+              affectedColumnNames,
+            );
+          }),
+        );
+        await updateResolveToSchemaChange(this.ctx);
+      }
+
+      async function updateResolveToSchemaChange(ctx: IContext) {
+        await ctx.schemaChangeRepository.updateOne(lastSchemaChange.id, {
+          ...lastSchemaChange,
+          resolve: {
+            ...lastSchemaChange.resolve,
+            [schemaChangeType]: true,
+          },
+        });
+        logger.info(
+          `Schema change "${schemaChangeType}" resolved successfully.`,
+        );
+      }
+    } else {
+      throw new Error('Resolved scheme change type is not supported.');
     }
   }
 
@@ -115,22 +200,22 @@ export default class DataSourceSchemaDetector
   }
 
   private async addSchemaChange(diffSchema: DataSourceSchemaChange) {
-    const project = await this.ctx.projectService.getCurrentProject();
-
     const getResolveState = (change) => (!!change ? false : null);
 
-    const schemaChange = JSON.stringify(diffSchema);
     const lastSchemaChange =
-      await this.ctx.schemaChangeRepository.findLastSchemaChange(project.id);
+      await this.ctx.schemaChangeRepository.findLastSchemaChange(
+        this.projectId,
+      );
     // If the schema change is the same as the last one, we don't need to create a new one.
-    const isNewSchemaChange = lastSchemaChange?.change !== schemaChange;
+    const isNewSchemaChange =
+      JSON.stringify(lastSchemaChange?.change) !== JSON.stringify(diffSchema);
 
     if (isNewSchemaChange) {
       this.ctx.schemaChangeRepository.createOne({
-        projectId: project.id,
-        change: schemaChange,
+        projectId: this.projectId,
+        change: diffSchema,
         // Set the resolve to false if there are any changes. It will set resolve to true once the schema has been synced.
-        resolve: JSON.stringify({
+        resolve: {
           [SchemaChangeType.DELETED_TABLES]: getResolveState(
             diffSchema[SchemaChangeType.DELETED_TABLES],
           ),
@@ -140,15 +225,14 @@ export default class DataSourceSchemaDetector
           [SchemaChangeType.MODIFIED_COLUMNS]: getResolveState(
             diffSchema[SchemaChangeType.MODIFIED_COLUMNS],
           ),
-        }),
+        },
       });
     }
   }
 
   private async getCurrentSchema(): Promise<DataSourceSchema[]> {
-    const project = await this.ctx.projectService.getCurrentProject();
     const models = await this.ctx.modelRepository.findAllBy({
-      projectId: project.id,
+      projectId: this.projectId,
     });
     const modelIds = models.map((model) => model.id);
     const modelColumns =
@@ -170,7 +254,9 @@ export default class DataSourceSchemaDetector
   }
 
   private async getLatestSchema(): Promise<DataSourceSchema[]> {
-    const project = await this.ctx.projectService.getCurrentProject();
+    const project = await this.ctx.projectRepository.findOneBy({
+      id: this.projectId,
+    });
     const dataSourceType = project.type;
     const strategy = DataSourceStrategyFactory.create(dataSourceType, {
       ctx: this.ctx,

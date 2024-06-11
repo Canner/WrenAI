@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  IQueryOptions,
+} from './baseRepository';
 
 export interface Model {
   id: number; // ID
@@ -15,6 +19,10 @@ export interface Model {
 
 export interface IModelRepository extends IBasicRepository<Model> {
   findAllByIds(ids: number[]): Promise<Model[]>;
+  deleteAllBySourceTableNames(
+    sourceTableNames: string[],
+    queryOptions?: IQueryOptions,
+  ): Promise<number>;
 }
 
 export class ModelRepository
@@ -27,5 +35,16 @@ export class ModelRepository
   public async findAllByIds(ids: number[]) {
     const res = await this.knex<Model>(this.tableName).whereIn('id', ids);
     return res.map((r) => this.transformFromDBData(r));
+  }
+
+  public async deleteAllBySourceTableNames(
+    sourceTableNames: string[],
+    queryOptions?: IQueryOptions,
+  ) {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const builder = executer(this.tableName)
+      .whereIn('source_table_name', sourceTableNames)
+      .delete();
+    return await builder;
   }
 }

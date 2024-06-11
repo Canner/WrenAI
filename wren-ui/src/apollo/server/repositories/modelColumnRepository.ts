@@ -36,6 +36,11 @@ export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
   ): Promise<void>;
   resetModelPrimaryKey(modelId: number): Promise<void>;
   setModelPrimaryKey(modelId: number, sourceColumnName: string): Promise<void>;
+  deleteAllBySourceColumnNames(
+    modelId: number,
+    sourceColumnNames: string[],
+    queryOptions?: IQueryOptions,
+  ): Promise<number>;
 }
 
 export class ModelColumnRepository
@@ -95,5 +100,18 @@ export class ModelColumnRepository
     await this.knex<ModelColumn>('model_column')
       .where(this.transformToDBData({ modelId, sourceColumnName }))
       .update(this.transformToDBData({ isPk: true }));
+  }
+
+  public async deleteAllBySourceColumnNames(
+    modelId: number,
+    sourceColumnNames: string[],
+    queryOptions?: IQueryOptions,
+  ): Promise<number> {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const builder = executer(this.tableName)
+      .where(this.transformToDBData({ modelId }))
+      .whereIn('source_column_name', sourceColumnNames)
+      .delete();
+    return await builder;
   }
 }
