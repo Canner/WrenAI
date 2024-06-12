@@ -84,6 +84,8 @@ export class ProjectResolver {
       return true;
     }
 
+    await ctx.schemaChangeRepository.deleteAllBy({ projectId: id });
+
     await ctx.deployService.deleteAllByProjectId(id);
     await ctx.askingService.deleteAllByProjectId(id);
     await ctx.modelService.deleteAllViewsByProjectId(id);

@@ -1,6 +1,4 @@
 import { camelCase, differenceWith, isEmpty, isEqual } from 'lodash';
-import { CompactTable } from '@server/connectors/connector';
-import { DataSourceStrategyFactory } from '@server/factories/onboardingFactory';
 import { IContext } from '@server/types';
 import { getLogger } from 'log4js';
 
@@ -264,14 +262,8 @@ export default class DataSourceSchemaDetector
     const project = await this.ctx.projectRepository.findOneBy({
       id: this.projectId,
     });
-    const dataSourceType = project.type;
-    const strategy = DataSourceStrategyFactory.create(dataSourceType, {
-      ctx: this.ctx,
-      project,
-    });
-    const latestDataSourceTables = (await strategy.listTable({
-      formatToCompactTable: true,
-    })) as CompactTable[];
+    const latestDataSourceTables =
+      await this.ctx.projectService.getProjectDataSourceTables(project);
     const result = latestDataSourceTables.map((table) => {
       return {
         name: table.name,
