@@ -21,7 +21,7 @@ import {
   replaceInvalidReferenceName,
   updateModelPrimaryKey,
 } from '../utils/model';
-import { CompactTable } from '@server/services';
+import { CompactTable, PreviewDataResponse } from '@server/services';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -628,12 +628,12 @@ export class ModelResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const sql = `select * from ${model.referenceName}`;
 
-    const data = await ctx.queryService.preview(sql, {
+    const data = (await ctx.queryService.preview(sql, {
       project,
       limit: PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
       mdl: manifest,
-    });
+    })) as PreviewDataResponse;
 
     return data;
   }
@@ -647,12 +647,12 @@ export class ModelResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const project = await ctx.projectService.getCurrentProject();
 
-    const data = await ctx.queryService.preview(view.statement, {
+    const data = (await ctx.queryService.preview(view.statement, {
       project,
       limit: limit | PREVIEW_MAX_OUTPUT_ROW,
       mdl: manifest,
       modelingOnly: false,
-    });
+    })) as PreviewDataResponse;
     return data;
   }
 
@@ -661,16 +661,20 @@ export class ModelResolver {
     args: { data: PreviewSQLData },
     ctx: IContext,
   ) {
-    const { sql, projectId, limit } = args.data;
-    const project = await ctx.projectService.getProjectById(projectId);
+    const { sql, projectId, limit, dryRun } = args.data;
+    const project = projectId
+      ? await ctx.projectService.getProjectById(projectId)
+      : await ctx.projectService.getCurrentProject();
     const deployment = await ctx.deployService.getLastDeployment(project.id);
     const mdl = deployment.manifest;
-    return await ctx.queryService.preview(sql, {
+    const previewRes = await ctx.queryService.preview(sql, {
       project,
       limit: limit || PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
       mdl,
+      dryRun,
     });
+    return dryRun ? { dryRun: previewRes } : previewRes;
   }
 
   public async getNativeSql(

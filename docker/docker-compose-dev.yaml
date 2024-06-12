@@ -46,7 +46,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       QDRANT_HOST: qdrant
-      WREN_UI_ENDPOINT: http://wren-ui:${WREN_UI_PORT}
+      WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
       REDIS_HOST: ${AI_SERVICE_REDIS_HOST}
       REDIS_PORT: ${AI_SERVICE_REDIS_PORT}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
@@ -72,6 +72,7 @@ services:
       - ${IBIS_SERVER_PORT}:8000
     environment:
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      LOG_LEVEL: DEBUG
     networks:
       - wren
 

@@ -42,13 +42,15 @@ export interface ValidationResponse {
   message: string | null;
 }
 
+export interface QueryOptions {
+  dataSource: DataSourceName;
+  connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo;
+  mdl: Manifest;
+}
+
 export interface IIbisAdaptor {
-  query: (
-    query: string,
-    dataSource: DataSourceName,
-    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
-    mdl: Manifest,
-  ) => Promise<IbisQueryResponse>;
+  query: (query: string, options: QueryOptions) => Promise<IbisQueryResponse>;
+  dryRun: (query: string, options: QueryOptions) => Promise<boolean>;
   getTables: (
     dataSource: DataSourceName,
     connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
@@ -94,14 +96,10 @@ export class IbisAdaptor implements IIbisAdaptor {
 
   public async query(
     query: string,
-    dataSource: DataSourceName,
-    connectionInfo: Record<string, any>,
-    mdl: Manifest,
+    options: QueryOptions,
   ): Promise<IbisQueryResponse> {
-    if (config.otherServiceUsingDocker) {
-      connectionInfo.host = toDockerHost(connectionInfo.host);
-      logger.debug(`Rewritten host: ${connectionInfo.host}`);
-    }
+    const { dataSource, mdl } = options;
+    const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const body = {
       sql: query,
       connectionInfo,
@@ -122,6 +120,27 @@ export class IbisAdaptor implements IIbisAdaptor {
         customMessage: e.response.data || 'Error querying ibis server',
         originalError: e,
       });
+    }
+  }
+
+  public async dryRun(query: string, options: QueryOptions): Promise<boolean> {
+    const { dataSource, mdl } = options;
+    const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
+    const body = {
+      sql: query,
+      connectionInfo,
+      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+    };
+    logger.debug(`Dry run ibis with body: ${JSON.stringify(body, null, 2)}`);
+    try {
+      await axios.post(
+        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
+        body,
+      );
+      return true;
+    } catch (e) {
+      logger.debug(`Got error when dry run ibis: ${e.response.data}`);
+      return false;
     }
   }
 
@@ -215,5 +234,16 @@ export class IbisAdaptor implements IIbisAdaptor {
 
       return { valid: false, message: e.response.data };
     }
+  }
+
+  private updateConnectionInfo(connectionInfo: any) {
+    if (
+      config.otherServiceUsingDocker &&
+      Object.hasOwnProperty.call(connectionInfo, 'host')
+    ) {
+      connectionInfo.host = toDockerHost(connectionInfo.host);
+      logger.debug(`Rewritten host: ${connectionInfo.host}`);
+    }
+    return connectionInfo;
   }
 }

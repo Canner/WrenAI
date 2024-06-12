@@ -8,6 +8,7 @@ import {
   IbisPostgresConnectionInfo,
   IbisBigQueryConnectionInfo,
   ValidationRules,
+  QueryOptions,
 } from '../adaptors/ibisAdaptor';
 import { Encryptor, getLogger } from '@server/utils';
 import {
@@ -41,12 +42,12 @@ export interface PreviewOptions {
   modelingOnly?: boolean;
   mdl: Manifest;
   limit?: number;
+  dryRun?: boolean;
   // if not given, will use the deployed manifest
 }
 
 export interface SqlValidateOptions {
-  datasource: DataSourceName;
-  connectionInfo: IbisPostgresConnectionInfo | IbisBigQueryConnectionInfo;
+  project: Project;
   mdl: Manifest;
   modelingOnly?: boolean;
 }
@@ -62,19 +63,16 @@ export interface ValidateResponse {
 }
 
 export interface IQueryService {
-  preview(sql: string, options: PreviewOptions): Promise<PreviewDataResponse>;
+  preview(
+    sql: string,
+    options: PreviewOptions,
+  ): Promise<PreviewDataResponse | boolean>;
 
   describeStatement(
     sql: string,
     options: PreviewOptions,
   ): Promise<DescribeStatementResponse>;
 
-  /**
-   * To know a mdl sql is valid for datasource
-   * @param sql : mdl sql
-   * @param options :
-   */
-  sqlValidate(sql: string, options: SqlValidateOptions): Promise<any>;
   validate(
     project: Project,
     rule: ValidationRules,
@@ -101,11 +99,11 @@ export class QueryService implements IQueryService {
   public async preview(
     sql: string,
     options: PreviewOptions,
-  ): Promise<PreviewDataResponse> {
-    const { project, mdl, limit } = options;
+  ): Promise<PreviewDataResponse | boolean> {
+    const { project, mdl, limit, dryRun } = options;
 
-    const datasource = project.type;
-    if (this.useEngine(datasource)) {
+    const dataSource = project.type;
+    if (this.useEngine(dataSource)) {
       logger.debug('Using wren engine for preview');
       const data = await this.wrenEngineAdaptor.previewData(sql, limit, mdl);
       return data as PreviewDataResponse;
@@ -117,14 +115,19 @@ export class QueryService implements IQueryService {
         ? `SELECT tmp.* FROM (${sql}) tmp LIMIT ${limit}`
         : sql;
       const { connectionInfo } = this.transformToIbisConnectionInfo(project);
-      this.checkDataSourceIsSupported(datasource);
-      const data = await this.ibisAdaptor.query(
-        rewrittenSql,
-        datasource,
+      this.checkDataSourceIsSupported(dataSource);
+      const queryOptions = {
+        dataSource,
         connectionInfo,
         mdl,
-      );
-      return this.transformDataType(data);
+        dryRun,
+      } as QueryOptions;
+      if (dryRun) {
+        return await this.tryDryRun(rewrittenSql, queryOptions);
+      } else {
+        const data = await this.ibisAdaptor.query(rewrittenSql, queryOptions);
+        return this.transformDataType(data);
+      }
     }
   }
 
@@ -135,33 +138,11 @@ export class QueryService implements IQueryService {
     try {
       // preview data with limit 1 to get column metadata
       options.limit = 1;
-      const res = await this.preview(sql, options);
+      const res = (await this.preview(sql, options)) as PreviewDataResponse;
       return { columns: res.columns };
     } catch (err: any) {
       logger.debug(`Got error when describing statement: ${err.message}`);
       throw err;
-    }
-  }
-
-  public async sqlValidate(sql, options): Promise<any> {
-    const { mdl, limit, datasource, connectionInfo } = options;
-    if (this.useEngine(datasource)) {
-      return await this.wrenEngineAdaptor.previewData(sql, limit, mdl);
-    } else {
-      const nativeSql = await this.wrenEngineAdaptor.getNativeSQL(sql, {
-        modelingOnly: options.modelingOnly,
-        manifest: mdl,
-      });
-
-      // throw error if datasource not in supported list
-      this.checkDataSourceIsSupported(datasource);
-
-      return await this.ibisAdaptor.query(
-        nativeSql,
-        datasource as any,
-        connectionInfo,
-        mdl,
-      );
     }
   }
 
@@ -259,6 +240,18 @@ export class QueryService implements IQueryService {
       !Object.prototype.hasOwnProperty.call(SupportedDataSource, dataSource)
     ) {
       throw new Error(`Unsupported datasource for ibis: "${dataSource}"`);
+    }
+  }
+
+  private async tryDryRun(
+    rewrittenSql: string,
+    queryOptions: QueryOptions,
+  ): Promise<boolean> {
+    try {
+      await this.ibisAdaptor.dryRun(rewrittenSql, queryOptions);
+      return true;
+    } catch (_err) {
+      return false;
     }
   }
 }
