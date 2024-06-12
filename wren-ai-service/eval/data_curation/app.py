@@ -23,27 +23,76 @@ with tab_create_dataset:
         st.session_state["mdl_file"] = None
     if "mdl_json" not in st.session_state:
         st.session_state["mdl_json"] = None
-    if "question_sql_pairs" not in st.session_state:
-        st.session_state["question_sql_pairs"] = []
+    if "llm_question_sql_pairs" not in st.session_state:
+        st.session_state["llm_question_sql_pairs"] = []
+    if "user_question_sql_pair" not in st.session_state:
+        st.session_state["user_question_sql_pair"] = {}
     if "candidate_dataset" not in st.session_state:
         st.session_state["candidate_dataset"] = []
 
     # widget callbacks
-    def on_change_sql(i: int):
-        sql = st.session_state[f"sql_{i}"]
+    def on_change_sql(i: int, key: str):
+        sql = st.session_state[key]
 
-        st.session_state["question_sql_pairs"][i]["sql"] = sql
-        if asyncio.run(is_sql_valid(sql)):
-            st.session_state["question_sql_pairs"][i]["is_valid"] = True
-            new_context = asyncio.run(
-                get_contexts_from_sqls(
-                    llm_client,
-                    [sql],
+        if i != -1:
+            st.session_state["llm_question_sql_pairs"][i]["sql"] = sql
+            if asyncio.run(is_sql_valid(sql)):
+                st.session_state["llm_question_sql_pairs"][i]["is_valid"] = True
+                new_context = asyncio.run(
+                    get_contexts_from_sqls(
+                        llm_client,
+                        [sql],
+                    )
                 )
-            )
-            st.session_state["question_sql_pairs"][i]["context"] = new_context
+                st.session_state["llm_question_sql_pairs"][i]["context"] = new_context
+            else:
+                st.session_state["llm_question_sql_pairs"][i]["is_valid"] = False
         else:
-            st.session_state["question_sql_pairs"][i]["is_valid"] = False
+            st.session_state["user_question_sql_pair"]["sql"] = sql
+            if asyncio.run(is_sql_valid(sql)):
+                st.session_state["user_question_sql_pair"]["is_valid"] = True
+                new_context = asyncio.run(
+                    get_contexts_from_sqls(
+                        llm_client,
+                        [sql],
+                    )
+                )
+                st.session_state["user_question_sql_pair"]["context"] = new_context
+            else:
+                st.session_state["user_question_sql_pair"]["is_valid"] = False
+
+    def on_click_add_candidate_dataset(i: int):
+        if i != -1:
+            dataset_to_add = {
+                "question": st.session_state["llm_question_sql_pairs"][i]["question"],
+                "context": st.session_state["llm_question_sql_pairs"][i]["context"],
+                "sql": st.session_state["llm_question_sql_pairs"][i]["sql"],
+            }
+        else:
+            dataset_to_add = {
+                "question": st.session_state["user_question_sql_pair"]["question"],
+                "context": st.session_state["user_question_sql_pair"]["context"],
+                "sql": st.session_state["user_question_sql_pair"]["sql"],
+            }
+
+        print(f"dataset_to_add: {dataset_to_add}")
+
+        should_add = True
+        for dataset in st.session_state["candidate_dataset"]:
+            if dataset == dataset_to_add:
+                should_add = False
+                break
+
+        if should_add:
+            st.session_state["candidate_dataset"].append(dataset_to_add)
+
+    def on_change_user_question():
+        st.session_state["user_question_sql_pair"] = {
+            "question": st.session_state["user_question"],
+            "context": [],
+            "sql": "",
+            "is_valid": False,
+        }
 
     def on_click_remove_candidate_dataset_button(i: int):
         st.session_state["candidate_dataset"].pop(i)
@@ -91,17 +140,17 @@ with tab_create_dataset:
                     "Regenerate question-sql-pairs"
                 )
                 if (
-                    not st.session_state["question_sql_pairs"]
+                    not st.session_state["llm_question_sql_pairs"]
                     or regenerate_question_sql_pairs
                 ):
                     st.toast("Generating question-sql-pairs...")
-                    st.session_state["question_sql_pairs"] = asyncio.run(
+                    st.session_state["llm_question_sql_pairs"] = asyncio.run(
                         get_question_sql_pairs(llm_client, st.session_state["mdl_json"])
                     )
 
                 with st.container(border=True, height=550):
                     for i, question_sql_pair in enumerate(
-                        st.session_state["question_sql_pairs"]
+                        st.session_state["llm_question_sql_pairs"]
                     ):
                         st.text_input(
                             f"Question {i}",
@@ -122,40 +171,69 @@ with tab_create_dataset:
                             key=f"sql_{i}",
                             height=250,
                             on_change=on_change_sql,
-                            args=(i,),
+                            args=(i, f"sql_{i}"),
                         )
-                        if st.session_state["question_sql_pairs"][i]["is_valid"]:
+
+                        if st.session_state["llm_question_sql_pairs"][i]["is_valid"]:
                             st.success("SQL is valid")
                         else:
                             st.error("SQL is invalid")
 
-                        shoud_move_to_dataset = st.button(
+                        st.button(
                             "Move it to the dataset",
                             key=f"move_to_dataset_{i}",
-                            disabled=not st.session_state["question_sql_pairs"][i][
+                            disabled=not st.session_state["llm_question_sql_pairs"][i][
                                 "is_valid"
                             ],
+                            on_click=on_click_add_candidate_dataset,
+                            args=(i,),
                         )
-                        if shoud_move_to_dataset:
-                            dataset_to_add = {
-                                "question": question_sql_pair["question"],
-                                "context": question_sql_pair["context"],
-                                "sql": question_sql_pair["sql"],
-                            }
-                            should_add = True
-                            for dataset in st.session_state["candidate_dataset"]:
-                                if dataset == dataset_to_add:
-                                    should_add = False
-                                    break
 
-                            if should_add:
-                                st.session_state["candidate_dataset"].append(
-                                    dataset_to_add
-                                )
                         st.markdown("---")
 
             with tab_generate_by_user:
-                pass
+                with st.container(border=True, height=550):
+                    st.text_input(
+                        "Question",
+                        disabled=False,
+                        key="user_question",
+                        on_change=on_change_user_question,
+                    )
+                    st.multiselect(
+                        f"Context {i}",
+                        options=st.session_state.get("user_question_sql_pair", {}).get(
+                            "context", []
+                        ),
+                        default=st.session_state.get("user_question_sql_pair", {}).get(
+                            "context", []
+                        ),
+                        disabled=True,
+                        key="user_context",
+                    )
+                    st.text_area(
+                        "SQL",
+                        key="user_sql",
+                        height=250,
+                        on_change=on_change_sql,
+                        args=(-1, "user_sql"),
+                    )
+
+                    if st.session_state.get("user_question_sql_pair", {}).get(
+                        "is_valid", False
+                    ):
+                        st.success("SQL is valid")
+                    else:
+                        st.error("SQL is invalid")
+
+                    st.button(
+                        "Move it to the dataset",
+                        key="move_to_dataset",
+                        disabled=not st.session_state.get(
+                            "user_question_sql_pair", {}
+                        ).get("is_valid", False),
+                        on_click=on_click_add_candidate_dataset,
+                        args=(-1,),
+                    )
         with col2:
             st.markdown("### Candidate Dataset")
 
@@ -163,14 +241,14 @@ with tab_create_dataset:
                 for i, dataset in enumerate(st.session_state["candidate_dataset"]):
                     st.text_input(
                         f"Question {i}",
-                        question_sql_pair["question"],
+                        dataset["question"],
                         disabled=True,
                         key=f"candidate_dataset_question_{i}",
                     )
                     st.multiselect(
                         f"Context {i}",
-                        options=question_sql_pair["context"],
-                        default=question_sql_pair["context"],
+                        options=dataset["context"],
+                        default=dataset["context"],
                         disabled=True,
                         key=f"candidate_dataset_context_{i}",
                     )
@@ -185,6 +263,12 @@ with tab_create_dataset:
                         args=(i,),
                     )
                     st.markdown("---")
+
+            st.button(
+                "Save as Evaluation Dataset",
+                key="save_as_evaluation_dataset",
+                disabled=not st.session_state["candidate_dataset"],
+            )
 
 with tab_modify_dataset:
     pass
