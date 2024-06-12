@@ -1,32 +1,19 @@
 import asyncio
 import os
 import re
-from typing import Any, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, List, Tuple
 
 import aiohttp
 import orjson
 import requests
 import sqlparse
 import streamlit as st
+import tomlkit
 from dotenv import load_dotenv
 from openai import AsyncClient
-from pydantic import BaseModel
 
 load_dotenv()
-
-
-# only brief validation is provided
-class MDLModel(BaseModel):
-    catalog: str
-    schema: str
-    models: Optional[list[dict]] = []
-    relationships: Optional[list[dict]] = []
-    enumDefinitions: Optional[list[dict]] = []
-    metrics: Optional[list[dict]] = []
-    cumulativeMetrics: Optional[list[dict]] = []
-    views: Optional[list[dict]] = []
-    macros: Optional[list[dict]] = []
-    dateSpine: Optional[dict] = {}
 
 
 def get_current_manifest() -> Tuple[str, dict]:
@@ -259,6 +246,14 @@ OUTPUT
     ]
 }}
 
+EXAMPLE4:
+
+INPUT
+"SELECT 1"
+
+OUTPUT
+[]
+
 ### Input ###
 List of SQLs: {sqls}
 
@@ -394,3 +389,14 @@ def prettify_sql(sql: str) -> str:
         reindent=True,
         keyword_case="upper",
     )
+
+
+@st.cache_data
+def get_eval_dataset_in_toml_string(mdl: dict, dataset: list) -> str:
+    doc = tomlkit.document()
+
+    doc.add("date", datetime.today().strftime("%Y_%m_%d"))
+    doc.add("mdl", mdl)
+    doc.add("eval_dataset", dataset)
+
+    return tomlkit.dumps(doc)
