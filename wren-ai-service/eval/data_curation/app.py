@@ -2,9 +2,9 @@ import asyncio
 
 import streamlit as st
 from utils import (
+    get_contexts_from_sqls,
     get_llm_client,
     get_question_sql_pairs,
-    get_question_sql_pairs_with_context,
     is_sql_valid,
     is_valid_mdl_file,
     show_er_diagram,
@@ -26,6 +26,23 @@ with tab_create_dataset:
         st.session_state["question_sql_pairs"] = []
     if "candidate_dataset" not in st.session_state:
         st.session_state["candidate_dataset"] = []
+
+    # widget callbacks
+    def on_change_sql(i: int):
+        sql = st.session_state[f"sql_{i}"]
+
+        st.session_state["question_sql_pairs"][i]["sql"] = sql
+        if asyncio.run(is_sql_valid(sql)):
+            st.session_state["question_sql_pairs"][i]["is_valid"] = True
+            new_context = asyncio.run(
+                get_contexts_from_sqls(
+                    llm_client,
+                    [sql],
+                )
+            )
+            st.session_state["question_sql_pairs"][i]["context"] = new_context
+        else:
+            st.session_state["question_sql_pairs"][i]["is_valid"] = False
 
     st.markdown(
         """
@@ -82,8 +99,6 @@ with tab_create_dataset:
                     for i, question_sql_pair in enumerate(
                         st.session_state["question_sql_pairs"]
                     ):
-                        if question_sql_pair:
-                            print(f'{i} {question_sql_pair['context']}')
                         st.text_input(
                             f"Question {i}",
                             question_sql_pair["question"],
@@ -97,39 +112,18 @@ with tab_create_dataset:
                             disabled=True,
                             key=f"context_{i}",
                         )
-                        sql = st.text_area(
+                        st.text_area(
                             f"SQL {i}",
                             question_sql_pair["sql"],
                             key=f"sql_{i}",
                             height=200,
+                            on_change=on_change_sql,
+                            args=(i,),
                         )
-                        assert sql, "SQL should not be empty"
-                        if sql != question_sql_pair["sql"]:
-                            st.session_state["question_sql_pairs"][i]["sql"] = sql
-                            st.session_state["question_sql_pairs"][i][
-                                "context"
-                            ] = asyncio.run(
-                                get_question_sql_pairs_with_context(
-                                    llm_client,
-                                    [st.session_state["question_sql_pairs"][i]],
-                                )
-                            )[0]["context"]
-                            print(st.session_state["question_sql_pairs"][i]["context"])
-                            if asyncio.run(is_sql_valid(sql)):
-                                st.session_state["question_sql_pairs"][i][
-                                    "is_valid"
-                                ] = True
-                                st.success("SQL is valid")
-                            else:
-                                st.session_state["question_sql_pairs"][i][
-                                    "is_valid"
-                                ] = False
-                                st.error("SQL is invalid")
+                        if st.session_state["question_sql_pairs"][i]["is_valid"]:
+                            st.success("SQL is valid")
                         else:
-                            if st.session_state["question_sql_pairs"][i]["is_valid"]:
-                                st.success("SQL is valid")
-                            else:
-                                st.error("SQL is invalid")
+                            st.error("SQL is invalid")
 
                         shoud_move_to_dataset = st.button(
                             "Move it to the dataset",
