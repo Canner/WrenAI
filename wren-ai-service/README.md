@@ -31,7 +31,8 @@ The following commands can quickly start the service for development:
 ### Pipeline Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
 
 - go to the `eval` folder and run `poetry install` to install the dependencies
-- to run the evaluation dataset curation app: `make data_curation_app`
+- execute commands in the `wren-ai-service` folder
+  - to run the evaluation dataset curation app: `make data_curation_app`
 - These will be deprecated soon, we are working on a new LLM evaluation system
   - install `psql`
   - fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
