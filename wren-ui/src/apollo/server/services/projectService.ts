@@ -2,16 +2,54 @@ import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
 import { Encryptor, getLogger } from '@server/utils';
-import { BIG_QUERY_CONNECTION_INFO, IProjectRepository } from '../repositories';
+import {
+  BIG_QUERY_CONNECTION_INFO,
+  DUCKDB_CONNECTION_INFO,
+  POSTGRES_CONNECTION_INFO,
+  IProjectRepository,
+} from '../repositories';
 import { Project } from '../repositories';
 import { getConfig } from '../config';
+import {
+  CompactTable,
+  IDataSourceMetadataService,
+  RecommendConstraint,
+} from './metadataService';
+import { DataSourceName } from '../types';
 
 const config = getConfig();
 
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
 
+const SENSITIVE_PROPERTY_NAME = new Set(['credentials', 'password']);
+export interface ProjectData {
+  displayName: string;
+  type: DataSourceName;
+  connectionInfo:
+    | BIG_QUERY_CONNECTION_INFO
+    | POSTGRES_CONNECTION_INFO
+    | DUCKDB_CONNECTION_INFO;
+}
+
 export interface IProjectService {
+  createProject: (projectData: ProjectData) => Promise<Project>;
+  getSensitiveConnectionInfo: () => Set<string>;
+  encryptSensitiveConnectionInfo: (
+    connectionInfo:
+      | BIG_QUERY_CONNECTION_INFO
+      | POSTGRES_CONNECTION_INFO
+      | DUCKDB_CONNECTION_INFO,
+  ) => any;
+  getProjectDataSourceTables: (
+    project?: Project,
+    projectId?: number,
+  ) => Promise<CompactTable[]>;
+  getProjectSuggestedConstraint: (
+    project?: Project,
+    projectId?: number,
+  ) => Promise<RecommendConstraint[]>;
+
   getCurrentProject: () => Promise<Project>;
   getProjectById: (projectId: number) => Promise<Project>;
   getCredentialFilePath: (project?: Project) => Promise<string>;
@@ -24,9 +62,17 @@ export interface IProjectService {
 
 export class ProjectService implements IProjectService {
   private projectRepository: IProjectRepository;
+  private metadataService: IDataSourceMetadataService;
 
-  constructor({ projectRepository }: { projectRepository: any }) {
+  constructor({
+    projectRepository,
+    metadataService,
+  }: {
+    projectRepository: IProjectRepository;
+    metadataService: IDataSourceMetadataService;
+  }) {
     this.projectRepository = projectRepository;
+    this.metadataService = metadataService;
   }
 
   public async getCurrentProject() {
@@ -35,6 +81,46 @@ export class ProjectService implements IProjectService {
 
   public async getProjectById(projectId: number) {
     return await this.projectRepository.findOneBy({ id: projectId });
+  }
+
+  public async getProjectDataSourceTables(
+    project?: Project,
+    projectId?: number,
+  ) {
+    const usedProject = project
+      ? project
+      : projectId
+        ? await this.getProjectById(projectId)
+        : await this.getCurrentProject();
+    return await this.metadataService.listTables(usedProject);
+  }
+
+  public async getProjectSuggestedConstraint(
+    project?: Project,
+    projectId?: number,
+  ) {
+    const usedProject = project
+      ? project
+      : projectId
+        ? await this.getProjectById(projectId)
+        : await this.getCurrentProject();
+    return await this.metadataService.listConstraints(usedProject);
+  }
+
+  public async createProject(projectData: ProjectData) {
+    const projectValue = {
+      displayName: projectData.displayName,
+      type: projectData.type,
+      catalog: 'wrenai',
+      schema: 'public',
+      connectionInfo: this.encryptSensitiveConnectionInfo(
+        projectData.connectionInfo,
+      ),
+    };
+    logger.debug('Creating project...');
+    logger.debug({ projectValue });
+    const project = await this.projectRepository.createOne(projectValue);
+    return project;
   }
 
   public async getCredentialFilePath(project?: Project) {
@@ -78,5 +164,29 @@ export class ProjectService implements IProjectService {
 
   public async deleteProject(projectId: number): Promise<void> {
     await this.projectRepository.deleteOne(projectId);
+  }
+
+  public getSensitiveConnectionInfo() {
+    return SENSITIVE_PROPERTY_NAME;
+  }
+
+  public encryptSensitiveConnectionInfo(
+    connectionInfo:
+      | BIG_QUERY_CONNECTION_INFO
+      | POSTGRES_CONNECTION_INFO
+      | DUCKDB_CONNECTION_INFO,
+  ) {
+    const encryptor = new Encryptor(config);
+    const encryptConnectionInfo = Object.entries(connectionInfo).reduce(
+      (acc, [key, value]) => {
+        if (SENSITIVE_PROPERTY_NAME.has(key)) {
+          const toEncrypt = key === 'password' ? { password: value } : value;
+          acc[key] = encryptor.encrypt(toEncrypt);
+        }
+        return acc;
+      },
+      connectionInfo,
+    );
+    return encryptConnectionInfo;
   }
 }

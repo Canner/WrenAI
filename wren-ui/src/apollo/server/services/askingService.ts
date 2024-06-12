@@ -471,12 +471,8 @@ export class AskingService implements IAskingService {
     const mdl = deployment.manifest;
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps, stepIndex));
-    const { datasource, connectionInfo } =
-      this.queryService.composeConnectionInfo(project);
-
     const data = await this.queryService.preview(sql, {
-      datasource,
-      connectionInfo,
+      project,
       mdl,
       limit,
     });

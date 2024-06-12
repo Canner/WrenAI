@@ -368,7 +368,7 @@ export const typeDefs = gql`
     displayName: String!
     referenceName: String!
     sourceTableName: String!
-    refSql: String!
+    refSql: String
     cached: Boolean!
     refreshTime: String
     description: String
