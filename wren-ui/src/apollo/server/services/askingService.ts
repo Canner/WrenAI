@@ -471,11 +471,11 @@ export class AskingService implements IAskingService {
     const mdl = deployment.manifest;
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps, stepIndex));
-    const data = await this.queryService.preview(sql, {
+    const data = (await this.queryService.preview(sql, {
       project,
       mdl,
       limit,
-    });
+    })) as PreviewDataResponse;
 
     this.telemetry.send_event('preview_data', { sql });
     return data;

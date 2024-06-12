@@ -609,8 +609,9 @@ export const typeDefs = gql`
 
   input PreviewSQLDataInput {
     sql: String!
-    projectId: Int!
+    projectId: Int
     limit: Int
+    dryRun: Boolean
   }
 
   # Query and Mutation
