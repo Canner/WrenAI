@@ -1,13 +1,22 @@
 import {
+  AnalysisRelationInfo,
   DataSource,
   DataSourceName,
   DataSourceProperties,
   IContext,
   RelationData,
+  RelationType,
   SampleDatasetData,
 } from '../types';
-import { getLogger } from '@server/utils';
-import { Model, ModelColumn, Project } from '../repositories';
+import { getLogger, replaceInvalidReferenceName, trim } from '@server/utils';
+import {
+  BIG_QUERY_CONNECTION_INFO,
+  DUCKDB_CONNECTION_INFO,
+  Model,
+  ModelColumn,
+  POSTGRES_CONNECTION_INFO,
+  Project,
+} from '../repositories';
 import {
   SampleDatasetName,
   SampleDatasetRelationship,
@@ -16,7 +25,9 @@ import {
   sampleDatasets,
 } from '@server/data';
 import { snakeCase } from 'lodash';
-import { DataSourceStrategyFactory } from '../factories/onboardingFactory';
+import { CompactTable, ProjectData } from '../services';
+import { replaceAllowableSyntax } from '../utils/regex';
+import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -57,20 +68,21 @@ export class ProjectResolver {
   }
 
   public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {
-    let project: Project;
+    let id: number;
     try {
-      project = await ctx.projectService.getCurrentProject();
+      const project = await ctx.projectService.getCurrentProject();
+      id = project.id;
     } catch {
       // no project found
       return true;
     }
 
-    await ctx.deployService.deleteAllByProjectId(project.id);
-    await ctx.askingService.deleteAllByProjectId(project.id);
-    await ctx.modelService.deleteAllViewsByProjectId(project.id);
-    await ctx.modelService.deleteAllModelsByProjectId(project.id);
+    await ctx.deployService.deleteAllByProjectId(id);
+    await ctx.askingService.deleteAllByProjectId(id);
+    await ctx.modelService.deleteAllViewsByProjectId(id);
+    await ctx.modelService.deleteAllModelsByProjectId(id);
 
-    await ctx.projectService.deleteProject(project.id);
+    await ctx.projectService.deleteProject(id);
 
     return true;
   }
@@ -175,8 +187,50 @@ export class ProjectResolver {
     // Currently only can create one project
     await this.resetCurrentProject(_root, args, ctx);
 
-    const strategy = DataSourceStrategyFactory.create(type, { ctx });
-    const project = await strategy.createDataSource(properties);
+    const { displayName, ...connectionInfo } = properties;
+    const project = await ctx.projectService.createProject({
+      displayName,
+      type,
+      connectionInfo,
+    } as ProjectData);
+    logger.debug(`Created project: ${JSON.stringify(project)}`);
+    // try to connect to the data source
+    try {
+      if (type === DataSourceName.DUCKDB) {
+        // handle duckdb connection
+        connectionInfo as DUCKDB_CONNECTION_INFO;
+        const { initSql, extensions } = connectionInfo;
+        const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
+
+        // prepare duckdb environment in wren-engine
+        await ctx.wrenEngineAdaptor.prepareDuckDB({
+          sessionProps: connectionInfo.configurations,
+          initSql: initSqlWithExtensions,
+        } as DuckDBPrepareOptions);
+
+        // check can list dataset table
+        await ctx.wrenEngineAdaptor.listTables();
+
+        // patch wren-engine config
+        const config = {
+          'wren.datasource.type': 'duckdb',
+        };
+        await ctx.wrenEngineAdaptor.patchConfig(config);
+      } else {
+        const tables =
+          await ctx.projectService.getProjectDataSourceTables(project);
+        logger.debug(
+          `Can connect to the data source, tables: ${JSON.stringify(tables[0])}...`,
+        );
+      }
+    } catch (err) {
+      logger.error(
+        'Failed to get project tables',
+        JSON.stringify(err, null, 2),
+      );
+      await ctx.projectRepository.deleteOne(project.id);
+      throw err;
+    }
 
     // telemetry
     ctx.telemetry.send_event('save_data_source', { dataSourceType: type });
@@ -194,13 +248,54 @@ export class ProjectResolver {
     ctx: IContext,
   ) {
     const { properties } = args.data;
+    const { displayName, ...connectionInfo } = properties;
     const project = await ctx.projectService.getCurrentProject();
+    const dataSourceType = project.type;
 
-    const strategy = DataSourceStrategyFactory.create(project.type, {
-      ctx,
-      project,
+    // only new connection info needed to encrypt
+    const toUpdateConnectionInfo =
+      ctx.projectService.encryptSensitiveConnectionInfo(connectionInfo as any);
+
+    if (dataSourceType === DataSourceName.DUCKDB) {
+      // prepare duckdb environment in wren-engine
+      const { initSql, extensions } = toUpdateConnectionInfo;
+      const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
+      await ctx.wrenEngineAdaptor.prepareDuckDB({
+        sessionProps: toUpdateConnectionInfo.configurations,
+        initSql: initSqlWithExtensions,
+      } as DuckDBPrepareOptions);
+
+      // check can list dataset table
+      try {
+        await ctx.wrenEngineAdaptor.listTables();
+      } catch (_e) {
+        throw new Error('Can not list tables in dataset');
+      }
+
+      // patch wren-engine config
+      const config = {
+        'wren.datasource.type': 'duckdb',
+      };
+      await ctx.wrenEngineAdaptor.patchConfig(config);
+    } else {
+      const updatedProject = {
+        ...project,
+        displayName,
+        connectionInfo: {
+          ...project.connectionInfo,
+          ...toUpdateConnectionInfo,
+        },
+      } as Project;
+      const tables =
+        await ctx.projectService.getProjectDataSourceTables(updatedProject);
+      logger.debug(
+        `Can connect to the data source, tables: ${JSON.stringify(tables[0])}...`,
+      );
+    }
+    const nextProject = await ctx.projectRepository.updateOne(project.id, {
+      displayName,
+      connectionInfo: { ...project.connectionInfo, ...toUpdateConnectionInfo },
     });
-    const nextProject = await strategy.updateDataSource(properties);
     return {
       type: nextProject.type,
       properties: this.getDataSourceProperties(nextProject),
@@ -208,13 +303,7 @@ export class ProjectResolver {
   }
 
   public async listDataSourceTables(_root: any, _arg, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
-    const dataSourceType = project.type;
-    const strategy = DataSourceStrategyFactory.create(dataSourceType, {
-      ctx,
-      project,
-    });
-    return await strategy.listTable({ formatToCompactTable: true });
+    return await ctx.projectService.getProjectDataSourceTables();
   }
 
   public async saveTables(
@@ -258,13 +347,58 @@ export class ProjectResolver {
     const modelIds = models.map((m) => m.id);
     const columns =
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+    const constraints =
+      await ctx.projectService.getProjectSuggestedConstraint(project);
 
     // generate relation
-    const strategy = DataSourceStrategyFactory.create(project.type, {
-      project,
-      ctx,
-    });
-    const relations = await strategy.analysisRelation(models, columns);
+    const relations = [];
+    for (const constraint of constraints) {
+      const {
+        constraintTable,
+        constraintColumn,
+        constraintedTable,
+        constraintedColumn,
+      } = constraint;
+      // validate tables and columns exists in our models and model columns
+      const fromModel = models.find(
+        (m) => m.sourceTableName === constraintTable,
+      );
+      const toModel = models.find(
+        (m) => m.sourceTableName === constraintedTable,
+      );
+      if (!fromModel || !toModel) {
+        continue;
+      }
+      const fromColumn = columns.find(
+        (c) =>
+          c.modelId === fromModel.id && c.sourceColumnName === constraintColumn,
+      );
+      const toColumn = columns.find(
+        (c) =>
+          c.modelId === toModel.id && c.sourceColumnName === constraintedColumn,
+      );
+      if (!fromColumn || !toColumn) {
+        continue;
+      }
+      // create relation
+      const relation: AnalysisRelationInfo = {
+        // upper case the first letter of the sourceTableName
+        name: constraint.constraintName,
+        fromModelId: fromModel.id,
+        fromModelReferenceName: fromModel.referenceName,
+        fromColumnId: fromColumn.id,
+        fromColumnReferenceName: fromColumn.referenceName,
+        toModelId: toModel.id,
+        toModelReferenceName: toModel.referenceName,
+        toColumnId: toColumn.id,
+        toColumnReferenceName: toColumn.referenceName,
+        // TODO: add join type
+        type: RelationType.ONE_TO_MANY,
+      };
+      relations.push(relation);
+    }
+    logger.debug({ relations });
+    // group by model
     return models.map(({ id, displayName, referenceName }) => ({
       id,
       displayName,
@@ -294,9 +428,9 @@ export class ProjectResolver {
   }
 
   private async deploy(ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
+    const { id } = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, project.id);
+    return await ctx.deployService.deploy(manifest, id);
   }
 
   private buildRelationInput(
@@ -353,11 +487,57 @@ export class ProjectResolver {
     await ctx.modelService.deleteAllModelsByProjectId(project.id);
 
     // create model and columns
-    const strategy = DataSourceStrategyFactory.create(project.type, {
-      ctx,
-      project,
+    const compactTables: CompactTable[] =
+      await ctx.projectService.getProjectDataSourceTables(project);
+
+    const modelValues = tables.map((tableName) => {
+      const compactTable = compactTables.find(
+        (table) => table.name === tableName,
+      );
+      if (!compactTable) {
+        throw new Error(`Table not found in data source: ${tableName}`);
+      }
+      const properties = compactTable?.properties;
+      // compactTable contain schema and catalog, these information are for building tableReference in mdl
+      const model = {
+        projectId: project.id,
+        displayName: tableName, //use table name as displayName, referenceName and tableName
+        referenceName: replaceInvalidReferenceName(tableName),
+        sourceTableName: tableName,
+        cached: false,
+        refreshTime: null,
+        properties: properties ? JSON.stringify(properties) : null,
+      } as Partial<Model>;
+      return model;
     });
-    const { models, columns } = await strategy.saveModels(tables);
+    const models = await ctx.modelRepository.createMany(modelValues);
+
+    const columnValues = [];
+    tables.forEach((tableName) => {
+      const compactTable = compactTables.find(
+        (table) => table.name === tableName,
+      );
+      const compactColumns = compactTable.columns;
+      const primaryKey = compactTable.primaryKey;
+      const model = models.find((m) => m.sourceTableName === compactTable.name);
+      compactColumns.forEach((column) => {
+        const columnValue = {
+          modelId: model.id,
+          isCalculated: false,
+          displayName: column.name,
+          referenceName: this.transformInvalidColumnName(column.name),
+          sourceColumnName: column.name,
+          type: column.type || 'string',
+          notNull: column.notNull || false,
+          isPk: primaryKey === column.name,
+          properties: column.properties
+            ? JSON.stringify(column.properties)
+            : null,
+        } as Partial<ModelColumn>;
+        columnValues.push(columnValue);
+      });
+    });
+    const columns = await ctx.modelColumnRepository.createMany(columnValues);
 
     return { models, columns };
   }
@@ -369,20 +549,43 @@ export class ProjectResolver {
     } as DataSourceProperties;
 
     if (dataSourceType === DataSourceName.BIG_QUERY) {
-      properties.projectId = project.projectId;
-      properties.datasetId = project.datasetId;
+      const { projectId, datasetId } =
+        project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
+      properties.projectId = projectId;
+      properties.datasetId = datasetId;
     } else if (dataSourceType === DataSourceName.DUCKDB) {
-      properties.initSql = project.initSql;
-      properties.extensions = project.extensions;
-      properties.configurations = project.configurations;
+      const { initSql, extensions, configurations } =
+        project.connectionInfo as DUCKDB_CONNECTION_INFO;
+      properties.initSql = initSql;
+      properties.extensions = extensions;
+      properties.configurations = configurations;
     } else if (dataSourceType === DataSourceName.POSTGRES) {
-      properties.host = project.host;
-      properties.port = project.port;
-      properties.database = project.database;
-      properties.user = project.user;
-      properties.ssl = project.configurations?.ssl;
+      const { host, port, database, user, ssl } =
+        project.connectionInfo as POSTGRES_CONNECTION_INFO;
+      properties.host = host;
+      properties.port = port;
+      properties.database = database;
+      properties.user = user;
+      properties.ssl = ssl;
     }
 
     return properties;
+  }
+
+  private transformInvalidColumnName(columnName: string) {
+    let referenceName = replaceAllowableSyntax(columnName);
+    // If the reference name does not start with a letter, add a prefix
+    const startWithLetterRegex = /^[A-Za-z]/;
+    if (!startWithLetterRegex.test(referenceName)) {
+      referenceName = `col_${referenceName}`;
+    }
+    return referenceName;
+  }
+
+  private concatInitSql(initSql: string, extensions: string[]) {
+    const installExtensions = extensions
+      .map((ext) => `INSTALL ${ext};`)
+      .join('\n');
+    return trim(`${installExtensions}\n${initSql}`);
   }
 }

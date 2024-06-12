@@ -1,9 +1,11 @@
+import { DataSourceName } from '@server/types';
 import {
   Model,
   Project,
   ModelColumn,
   RelationInfo,
   View,
+  BIG_QUERY_CONNECTION_INFO,
 } from '../../repositories';
 import { MDLBuilder, MDLBuilderBuildFromOptions } from '../mdlBuilder';
 import { ModelMDL, RelationMDL, ViewMDL } from '../type';
@@ -32,11 +34,13 @@ describe('MDLBuilder', () => {
       // Arrange
       const project = {
         id: 1,
-        type: 'bigquery',
+        type: DataSourceName.BIG_QUERY,
         displayName: 'my project',
-        projectId: 'bq-project-id',
-        datasetId: 'my-dataset',
-        credentials: 'my-credential',
+        connectionInfo: {
+          projectId: 'bq-project-id',
+          datasetId: 'bq-project-id.my-dataset',
+          credentials: 'my-credential',
+        } as BIG_QUERY_CONNECTION_INFO,
         catalog: 'wrenai',
         schema: 'public',
         sampleDataset: null,
@@ -51,7 +55,12 @@ describe('MDLBuilder', () => {
           refSql: 'SELECT * FROM order',
           cached: false,
           refreshTime: null,
-          properties: JSON.stringify({ description: 'foo table' }),
+          properties: JSON.stringify({
+            description: 'foo table',
+            schema: 'my-dataset',
+            catalog: 'bq-project-id',
+            table: 'order',
+          }),
         },
         {
           id: 2,
@@ -62,7 +71,11 @@ describe('MDLBuilder', () => {
           refSql: 'SELECT * FROM customer',
           cached: false,
           refreshTime: null,
-          properties: null,
+          properties: JSON.stringify({
+            schema: null,
+            catalog: null,
+            table: 'customer',
+          }),
         },
       ] as Model[];
       const columns = [
@@ -134,7 +147,12 @@ describe('MDLBuilder', () => {
       const expectedModels = [
         {
           name: 'order',
-          refSql: 'SELECT * FROM order',
+          tableReference: {
+            schema: 'my-dataset',
+            catalog: 'bq-project-id',
+            table: 'order',
+          },
+          refSql: null,
           columns: [
             {
               name: 'orderKey',
@@ -156,11 +174,19 @@ describe('MDLBuilder', () => {
           cached: false,
           refreshTime: null,
           primaryKey: 'orderKey',
-          properties: { description: 'foo table', displayName: 'order' },
+          properties: {
+            description: 'foo table',
+            displayName: 'order',
+          },
         },
         {
           name: 'customer',
-          refSql: 'SELECT * FROM customer',
+          tableReference: {
+            schema: null,
+            catalog: null,
+            table: 'customer',
+          },
+          refSql: null,
           columns: [
             {
               name: 'orderKey',
@@ -182,7 +208,9 @@ describe('MDLBuilder', () => {
           primaryKey: '',
           cached: false,
           refreshTime: null,
-          properties: { displayName: 'customer' },
+          properties: {
+            displayName: 'customer',
+          },
         },
       ] as ModelMDL[];
 
@@ -207,11 +235,13 @@ describe('MDLBuilder', () => {
     // Arrange
     const project = {
       id: 1,
-      type: 'bigquery',
+      type: DataSourceName.BIG_QUERY,
       displayName: 'my project',
-      projectId: 'bq-project-id',
-      datasetId: 'my-dataset',
-      credentials: 'my-credential',
+      connectionInfo: {
+        projectId: 'bq-project-id',
+        datasetId: 'my-dataset',
+        credentials: 'my-credential',
+      } as BIG_QUERY_CONNECTION_INFO,
       catalog: 'wrenai',
       schema: 'public',
       sampleDataset: null,
@@ -226,7 +256,12 @@ describe('MDLBuilder', () => {
         refSql: 'SELECT * FROM order',
         cached: false,
         refreshTime: null,
-        properties: JSON.stringify({ description: 'foo table' }),
+        properties: JSON.stringify({
+          description: 'foo table',
+          catalog: 'bq-project-id',
+          schema: 'my-dataset',
+          table: 'order',
+        }),
       },
       {
         id: 2,
@@ -237,7 +272,11 @@ describe('MDLBuilder', () => {
         refSql: 'SELECT * FROM customer',
         cached: false,
         refreshTime: null,
-        properties: null,
+        properties: JSON.stringify({
+          catalog: 'bq-project-id',
+          schema: 'my-dataset',
+          table: 'customer',
+        }),
       },
     ] as Model[];
     const columns = [
@@ -324,7 +363,12 @@ describe('MDLBuilder', () => {
     const expectedModels = [
       {
         name: 'order',
-        refSql: 'SELECT * FROM order',
+        refSql: null,
+        tableReference: {
+          schema: 'my-dataset',
+          catalog: 'bq-project-id',
+          table: 'order',
+        },
         columns: [
           {
             name: 'orderKey',
@@ -350,7 +394,12 @@ describe('MDLBuilder', () => {
       },
       {
         name: 'customer',
-        refSql: 'SELECT * FROM customer',
+        refSql: null,
+        tableReference: {
+          schema: 'my-dataset',
+          catalog: 'bq-project-id',
+          table: 'customer',
+        },
         columns: [
           {
             name: 'orderKey',

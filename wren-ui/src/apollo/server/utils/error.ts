@@ -11,6 +11,9 @@ export enum GeneralErrorCodes {
   // Exception error for AI service (e.g., network connection error)
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
 
+  // IBIS Error
+  IBIS_SERVER_ERROR = 'IBIS_SERVER_ERROR',
+
   // Connector errors
   CONNECTION_ERROR = 'CONNECTION_ERROR',
   // duckdb
@@ -50,6 +53,10 @@ export const errorMessages = {
   [GeneralErrorCodes.CONNECTION_REFUSED]:
     'Connection refused by the server, Please check your connection settings and try again.',
 
+  // ibis service errors
+  [GeneralErrorCodes.IBIS_SERVER_ERROR]:
+    'Error occurred while querying ibis server, please try again later.',
+
   // calculated field validation
   [GeneralErrorCodes.DUPLICATED_FIELD_NAME]: 'This field name already exists',
   [GeneralErrorCodes.INVALID_EXPRESSION]:
@@ -67,6 +74,7 @@ export const shortMessages = {
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'No relevant data',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
+  [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Ibis server error',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]: 'Invalid session properties',
   [GeneralErrorCodes.CONNECTION_REFUSED]: 'Connection refused',

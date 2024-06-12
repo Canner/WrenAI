@@ -2,6 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
+import { CompactTable } from '../services';
 
 const logger = getLogger('WrenEngineAdaptor');
 logger.level = 'debug';
@@ -38,7 +39,7 @@ export interface ColumnMetadata {
   type: string;
 }
 
-export interface QueryResponse {
+export interface EngineQueryResponse {
   columns: ColumnMetadata[];
   data: any[][];
 }
@@ -66,19 +67,30 @@ export interface ValidationResponse {
   message?: string;
 }
 
+export interface DryPlanOption {
+  modelingOnly?: boolean;
+  manifest?: Manifest;
+}
+
+export interface DuckDBPrepareOptions {
+  initSql: string;
+  sessionProps: Record<string, any>;
+}
+
 export interface IWrenEngineAdaptor {
   deploy(deployData: deployData): Promise<DeployResponse>;
-  initDatabase(sql: string): Promise<void>;
+  prepareDuckDB(options: DuckDBPrepareOptions): Promise<void>;
+  listTables(): Promise<CompactTable[]>;
   putSessionProps(props: Record<string, any>): Promise<void>;
-  queryDuckdb(sql: string): Promise<QueryResponse>;
+  queryDuckdb(sql: string): Promise<EngineQueryResponse>;
   patchConfig(config: Record<string, any>): Promise<void>;
   previewData(
     sql: string,
     limit?: number,
     mdl?: Manifest,
-  ): Promise<QueryResponse>;
+  ): Promise<EngineQueryResponse>;
   describeStatement(sql: string): Promise<DescribeStatementResponse>;
-  getNativeSQL(sql: string): Promise<string>;
+  getNativeSQL(sql: string, options?: DryPlanOption): Promise<string>;
   validateColumnIsValid(
     manifest: Manifest,
     modelName: string,
@@ -139,6 +151,21 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
+  public async prepareDuckDB(options: DuckDBPrepareOptions): Promise<void> {
+    const { initSql, sessionProps } = options;
+    await this.initDatabase(initSql);
+    await this.putSessionProps(sessionProps);
+  }
+
+  public async listTables() {
+    const sql =
+      'SELECT \
+      table_catalog, table_schema, table_name, column_name, ordinal_position, is_nullable, data_type\
+      FROM INFORMATION_SCHEMA.COLUMNS;';
+    const response = await this.queryDuckdb(sql);
+    return this.formatToCompactTable(response);
+  }
+
   public async deploy(deployData: deployData): Promise<DeployResponse> {
     const { manifest, hash } = deployData;
     const deployPayload = { manifest, version: hash } as DeployPayload;
@@ -163,24 +190,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         status: WrenEngineDeployStatusEnum.FAILED,
         error: `WrenEngine Error, deployment hash:${hash}: ${err.message}`,
       };
-    }
-  }
-
-  public async initDatabase(sql) {
-    try {
-      const url = new URL(this.initSqlUrlPath, this.wrenEngineBaseEndpoint);
-      logger.debug(`Endpoint: ${url.href}`);
-      const headers = {
-        'Content-Type': 'text/plain; charset=utf-8',
-      };
-      await axios.put(url.href, sql, { headers });
-    } catch (err: any) {
-      logger.debug(`Got error when init database: ${err}`);
-      throw Errors.create(Errors.GeneralErrorCodes.INIT_SQL_ERROR, {
-        customMessage:
-          Errors.errorMessages[Errors.GeneralErrorCodes.INIT_SQL_ERROR],
-        originalError: err,
-      });
     }
   }
 
@@ -210,14 +219,14 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
-  public async queryDuckdb(sql: string): Promise<QueryResponse> {
+  public async queryDuckdb(sql: string): Promise<EngineQueryResponse> {
     try {
       const url = new URL(this.queryDuckdbUrlPath, this.wrenEngineBaseEndpoint);
       const headers = {
         'Content-Type': 'text/plain; charset=utf-8',
       };
       const res = await axios.post(url.href, sql, { headers });
-      return res.data as QueryResponse;
+      return res.data as EngineQueryResponse;
     } catch (err: any) {
       logger.debug(`Got error when querying duckdb: ${err.message}`);
       throw err;
@@ -247,14 +256,14 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     sql: string,
     limit: number = DEFAULT_PREVIEW_LIMIT,
     manifest?: Manifest,
-  ): Promise<QueryResponse> {
+  ): Promise<EngineQueryResponse> {
     try {
       const url = new URL(this.previewUrlPath, this.wrenEngineBaseEndpoint);
       const headers = {
         'Content-Type': 'application/json',
       };
 
-      const res: AxiosResponse<QueryResponse> = await axios({
+      const res: AxiosResponse<EngineQueryResponse> = await axios({
         method: 'get',
         url: url.href,
         headers,
@@ -285,8 +294,16 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
-  public async getNativeSQL(sql: string): Promise<string> {
+  public async getNativeSQL(
+    sql: string,
+    options: DryPlanOption,
+  ): Promise<string> {
     try {
+      const props = {
+        modelingOnly: options?.modelingOnly ? true : false,
+        manifest: options?.manifest,
+      };
+
       const url = new URL(this.dryPlanUrlPath, this.wrenEngineBaseEndpoint);
       const headers = { 'Content-Type': 'application/json' };
 
@@ -296,7 +313,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         headers,
         data: {
           sql,
-          modelingOnly: false,
+          ...props,
         },
       });
 
@@ -319,5 +336,62 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       );
       throw err;
     }
+  }
+
+  private async initDatabase(sql) {
+    try {
+      const url = new URL(this.initSqlUrlPath, this.wrenEngineBaseEndpoint);
+      logger.debug(`Endpoint: ${url.href}`);
+      const headers = {
+        'Content-Type': 'text/plain; charset=utf-8',
+      };
+      await axios.put(url.href, sql, { headers });
+    } catch (err: any) {
+      logger.debug(`Got error when init database: ${err}`);
+      throw Errors.create(Errors.GeneralErrorCodes.INIT_SQL_ERROR, {
+        customMessage:
+          Errors.errorMessages[Errors.GeneralErrorCodes.INIT_SQL_ERROR],
+        originalError: err,
+      });
+    }
+  }
+
+  private formatToCompactTable(columns: EngineQueryResponse): CompactTable[] {
+    return columns.data.reduce((acc: CompactTable[], row: any) => {
+      const [
+        table_catalog,
+        table_schema,
+        table_name,
+        column_name,
+        _ordinal_position,
+        is_nullable,
+        data_type,
+      ] = row;
+      let table = acc.find(
+        (t) => t.name === table_name && t.properties.schema === table_schema,
+      );
+      if (!table) {
+        table = {
+          name: table_name,
+          description: '',
+          columns: [],
+          properties: {
+            schema: table_schema,
+            catalog: table_catalog,
+            table: table_name,
+          },
+          primaryKey: null,
+        };
+        acc.push(table);
+      }
+      table.columns.push({
+        name: column_name,
+        type: data_type,
+        notNull: is_nullable.toLocaleLowerCase() !== 'yes',
+        description: '',
+        properties: {},
+      });
+      return acc;
+    }, []);
   }
 }

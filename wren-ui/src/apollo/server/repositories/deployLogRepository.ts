@@ -1,5 +1,6 @@
 import { Knex } from 'knex';
 import { BaseRepository, IBasicRepository } from './baseRepository';
+import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
 
 export interface Deploy {
   id: number; // ID
@@ -55,4 +56,19 @@ export class DeployLogRepository
       .first();
     return (res && this.transformFromDBData(res)) || null;
   }
+
+  public override transformFromDBData: (data: any) => Deploy = (data: any) => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
+    const formattedData = mapValues(camelCaseData, (value, key) => {
+      if (['manifest'].includes(key)) {
+        // sqlite return a string for json field, but postgres return an object
+        return typeof value === 'string' ? JSON.parse(value) : value;
+      }
+      return value;
+    });
+    return formattedData as Deploy;
+  };
 }

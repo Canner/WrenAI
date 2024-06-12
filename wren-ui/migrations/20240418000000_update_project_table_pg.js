@@ -31,6 +31,6 @@ exports.up = function (knex) {
  */
 exports.down = function (knex) {
   return knex.schema.alterTable('project', (table) => {
-    table.dropColumns('host', 'port', 'database', 'username', 'password');
+    table.dropColumns('host', 'port', 'database', 'user');
   });
 };

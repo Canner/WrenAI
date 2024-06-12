@@ -306,6 +306,13 @@ export const typeDefs = gql`
     id: Int!
   }
 
+  input PreviewViewDataInput {
+    id: Int!
+    # It will return default 100 rows if not specified limit
+    # refer: PREVIEW_MAX_OUTPUT_ROW
+    limit: Int
+  }
+
   input CreateViewInput {
     name: String!
     responseId: Int!
@@ -361,7 +368,7 @@ export const typeDefs = gql`
     displayName: String!
     referenceName: String!
     sourceTableName: String!
-    refSql: String!
+    refSql: String
     cached: Boolean!
     refreshTime: String
     description: String
@@ -515,6 +522,9 @@ export const typeDefs = gql`
     responseId: Int!
     # Optional, only used for preview data of a single step
     stepIndex: Int
+    # It will return default 500 rows if not specified limit
+    # refer: DEFAULT_PREVIEW_LIMIT
+    limit: Int
   }
 
   type DetailStep {
@@ -588,6 +598,22 @@ export const typeDefs = gql`
     dataSource: DataSource!
   }
 
+  input GetMDLInput {
+    hash: String!
+  }
+
+  type GetMDLResult {
+    hash: String!
+    mdl: String
+  }
+
+  input PreviewSQLDataInput {
+    sql: String!
+    projectId: Int
+    limit: Int
+    dryRun: Boolean
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -627,6 +653,7 @@ export const typeDefs = gql`
     saveTables(data: SaveTablesInput!): JSON!
     saveRelations(data: SaveRelationInput!): JSON!
     deploy: JSON!
+    getMDL(data: GetMDLInput): GetMDLResult!
 
     # Modeling Page
     createModel(data: CreateModelInput!): JSON!
@@ -663,7 +690,7 @@ export const typeDefs = gql`
     # View
     createView(data: CreateViewInput!): ViewInfo!
     deleteView(where: ViewWhereUniqueInput!): Boolean!
-    previewViewData(where: ViewWhereUniqueInput!): JSON!
+    previewViewData(where: PreviewViewDataInput!): JSON!
     validateView(data: ValidateViewInput!): ViewValidationResponse!
 
     # Ask
@@ -688,5 +715,8 @@ export const typeDefs = gql`
     # Settings
     resetCurrentProject: Boolean!
     updateDataSource(data: UpdateDataSourceInput!): DataSource!
+
+    # preview
+    previewSql(data: PreviewSQLDataInput): JSON!
   }
 `;

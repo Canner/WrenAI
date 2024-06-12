@@ -27,6 +27,11 @@ import { ThreadRepository } from '@/apollo/server/repositories/threadRepository'
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
 import { Telemetry } from '@/apollo/server/telemetry/telemetry';
+import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
+import {
+  DataSourceMetadataService,
+  QueryService,
+} from '@/apollo/server/services';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -65,14 +70,29 @@ const bootstrapServer = async () => {
   const wrenAIAdaptor = new WrenAIAdaptor({
     wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
   });
+  const ibisAdaptor = new IbisAdaptor({
+    ibisServerEndpoint: serverConfig.ibisServerEndpoint,
+  });
 
-  const projectService = new ProjectService({ projectRepository });
+  const metadataService = new DataSourceMetadataService({
+    ibisAdaptor,
+    wrenEngineAdaptor,
+  });
+
+  const projectService = new ProjectService({
+    projectRepository,
+    metadataService,
+  });
   const mdlService = new MDLService({
     projectRepository,
     modelRepository,
     modelColumnRepository,
     relationRepository,
     viewRepository,
+  });
+  const queryService = new QueryService({
+    ibisAdaptor,
+    wrenEngineAdaptor,
   });
   const modelService = new ModelService({
     projectService,
@@ -82,6 +102,7 @@ const bootstrapServer = async () => {
     viewRepository,
     mdlService,
     wrenEngineAdaptor,
+    queryService,
   });
   const deployService = new DeployService({
     wrenAIAdaptor,
@@ -93,12 +114,12 @@ const bootstrapServer = async () => {
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
-    wrenEngineAdaptor,
     deployService,
     projectService,
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    queryService,
   });
 
   // initialize services
@@ -138,6 +159,7 @@ const bootstrapServer = async () => {
       telemetry,
       // adaptor
       wrenEngineAdaptor,
+      ibisServerAdaptor: ibisAdaptor,
 
       // services
       projectService,
@@ -145,6 +167,7 @@ const bootstrapServer = async () => {
       mdlService,
       deployService,
       askingService,
+      queryService,
 
       // repository
       projectRepository,
