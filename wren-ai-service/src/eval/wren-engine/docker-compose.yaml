@@ -6,7 +6,7 @@ networks:
 
 services:
   wren-engine:
-    image: ghcr.io/canner/wren-engine:nightly
+    image: ghcr.io/canner/wren-engine:main-f0fc003
     pull_policy: always
     platform: ${PLATFORM}
     ports:
