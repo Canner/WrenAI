@@ -622,9 +622,21 @@ export const typeDefs = gql`
 
   # Schema Change
   type SchemaChange {
-    deletedTables: JSON
-    deletedColumns: JSON
-    modifiedColumns: JSON
+    deletedTables: [DetailedChangeTable!]
+    deletedColumns: [DetailedChangeTable!]
+    modifiedColumns: [DetailedChangeTable!]
+  }
+
+  type DetailedChangeTable {
+    sourceTableName: String!
+    displayName: String!
+    columns: [DetailedChangeColumn!]!
+  }
+
+  type DetailedChangeColumn {
+    sourceColumnName: String!
+    displayName: String!
+    type: String!
   }
 
   input ResolveSchemaChangeWhereInput {
