@@ -22,6 +22,10 @@ services:
       ENABLE_TIMER: ${ENABLE_TIMER}
       LOGGING_LEVEL: ${LOGGING_LEVEL}
       WORKERS: ${WORKERS}
+      LANGFUSE_ENABLE: ${LANGFUSE_ENABLE}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
