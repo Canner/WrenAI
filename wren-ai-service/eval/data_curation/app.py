@@ -147,7 +147,7 @@ with tab_modify_dataset:
     )
 
     st.warning(
-        "Uploading the evaluation dataset will overwrite the current candidate dataset"
+        "WARNING: Uploading the evaluation dataset will overwrite the current candidate dataset"
     )
     st.file_uploader(
         "Upload Evaluation Dataset",
