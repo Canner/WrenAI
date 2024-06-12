@@ -8,7 +8,7 @@ import {
   RelationType,
   SampleDatasetData,
 } from '../types';
-import { getLogger, trim } from '@server/utils';
+import { getLogger, replaceInvalidReferenceName, trim } from '@server/utils';
 import {
   BIG_QUERY_CONNECTION_INFO,
   DUCKDB_CONNECTION_INFO,
@@ -507,12 +507,15 @@ export class ProjectResolver {
       const compactTable = compactTables.find(
         (table) => table.name === tableName,
       );
+      if (!compactTable) {
+        throw new Error(`Table not found in data source: ${tableName}`);
+      }
       const properties = compactTable?.properties;
       // compactTable contain schema and catalog, these information are for building tableReference in mdl
       const model = {
         projectId: project.id,
         displayName: tableName, //use table name as displayName, referenceName and tableName
-        referenceName: tableName,
+        referenceName: replaceInvalidReferenceName(tableName),
         sourceTableName: tableName,
         cached: false,
         refreshTime: null,
@@ -523,7 +526,10 @@ export class ProjectResolver {
     const models = await ctx.modelRepository.createMany(modelValues);
 
     const columnValues = [];
-    compactTables.forEach((compactTable) => {
+    tables.forEach((tableName) => {
+      const compactTable = compactTables.find(
+        (table) => table.name === tableName,
+      );
       const compactColumns = compactTable.columns;
       const primaryKey = compactTable.primaryKey;
       const model = models.find((m) => m.sourceTableName === compactTable.name);

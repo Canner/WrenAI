@@ -11,6 +11,11 @@ export function transformInvalidColumnName(columnName: string) {
   return referenceName;
 }
 
+export function replaceInvalidReferenceName(referenceName: string) {
+  // replace dot with underscore
+  return referenceName.replace(/\./g, '_');
+}
+
 export function findColumnsToUpdate(
   columns: string[],
   existingColumns: ModelColumn[],

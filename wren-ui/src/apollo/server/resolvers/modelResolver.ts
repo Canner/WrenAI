@@ -16,7 +16,11 @@ import { isEmpty, isNil } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 import * as Errors from '@server/utils/error';
 import { Model, ModelColumn } from '../repositories';
-import { findColumnsToUpdate, updateModelPrimaryKey } from '../utils/model';
+import {
+  findColumnsToUpdate,
+  replaceInvalidReferenceName,
+  updateModelPrimaryKey,
+} from '../utils/model';
 import { CompactTable } from '@server/services';
 
 const logger = getLogger('ModelResolver');
@@ -258,7 +262,7 @@ export class ModelResolver {
     const modelValue = {
       projectId: project.id,
       displayName: sourceTableName, //use table name as displayName, referenceName and tableName
-      referenceName: sourceTableName,
+      referenceName: replaceInvalidReferenceName(sourceTableName),
       sourceTableName: sourceTableName,
       cached: false,
       refreshTime: null,
