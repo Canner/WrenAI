@@ -25,7 +25,7 @@ load_env_vars()
 
 def get_mdl_from_wren_engine():
     response = requests.get(
-        f'{os.getenv("WREN_ENGINE_ENDPOINT")}/v1/mdl',
+        f'{os.getenv("WREN_UI_ENDPOINT")}/v1/mdl',
     )
     assert response.status_code == 200
 

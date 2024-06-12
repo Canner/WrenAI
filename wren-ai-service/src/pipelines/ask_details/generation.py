@@ -109,7 +109,7 @@ class GenerationPostProcessor:
     ):
         async with aiohttp.ClientSession() as session:
             response = await dry_run_sql(
-                sql, session, endpoint=os.getenv("WREN_ENGINE_ENDPOINT")
+                sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
             )
 
         if response.get("status") != 200:

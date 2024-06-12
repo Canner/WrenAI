@@ -13,11 +13,17 @@ async def dry_run_sql(
     session: aiohttp.ClientSession,
     endpoint: str,
 ) -> Dict[str, str]:
-    async with session.get(
-        f"{endpoint}/v1/mdl/dry-run",
+    async with session.post(
+        f"{endpoint}/api/graphql",
         json={
-            "sql": _remove_limit_statement(add_quotes(sql)),
-            "limit": 1,
+            "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
+            "variables": {
+                "data": {
+                    "dryRun": True,
+                    "limit": 1,
+                    "sql": _remove_limit_statement(add_quotes(sql)),
+                }
+            },
         },
     ) as response:
         return {"status": response.status, "body": await response.json()}
