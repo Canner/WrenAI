@@ -7,6 +7,7 @@ from utils import (
     get_question_sql_pairs,
     is_sql_valid,
     is_valid_mdl_file,
+    prettify_sql,
     show_er_diagram,
 )
 
@@ -43,6 +44,9 @@ with tab_create_dataset:
             st.session_state["question_sql_pairs"][i]["context"] = new_context
         else:
             st.session_state["question_sql_pairs"][i]["is_valid"] = False
+
+    def on_click_remove_candidate_dataset_button(i: int):
+        st.session_state["candidate_dataset"].pop(i)
 
     st.markdown(
         """
@@ -95,7 +99,7 @@ with tab_create_dataset:
                         get_question_sql_pairs(llm_client, st.session_state["mdl_json"])
                     )
 
-                with st.container(border=True):
+                with st.container(border=True, height=550):
                     for i, question_sql_pair in enumerate(
                         st.session_state["question_sql_pairs"]
                     ):
@@ -114,9 +118,9 @@ with tab_create_dataset:
                         )
                         st.text_area(
                             f"SQL {i}",
-                            question_sql_pair["sql"],
+                            prettify_sql(question_sql_pair["sql"]),
                             key=f"sql_{i}",
-                            height=200,
+                            height=250,
                             on_change=on_change_sql,
                             args=(i,),
                         )
@@ -133,12 +137,21 @@ with tab_create_dataset:
                             ],
                         )
                         if shoud_move_to_dataset:
-                            st.session_state["candidate_dataset"].append(
-                                {
-                                    "question": question_sql_pair["question"],
-                                    "sql": question_sql_pair["sql"],
-                                }
-                            )
+                            dataset_to_add = {
+                                "question": question_sql_pair["question"],
+                                "context": question_sql_pair["context"],
+                                "sql": question_sql_pair["sql"],
+                            }
+                            should_add = True
+                            for dataset in st.session_state["candidate_dataset"]:
+                                if dataset == dataset_to_add:
+                                    should_add = False
+                                    break
+
+                            if should_add:
+                                st.session_state["candidate_dataset"].append(
+                                    dataset_to_add
+                                )
                         st.markdown("---")
 
             with tab_generate_by_user:
@@ -146,7 +159,32 @@ with tab_create_dataset:
         with col2:
             st.markdown("### Candidate Dataset")
 
-            st.json(st.session_state["candidate_dataset"], expanded=True)
+            with st.container(border=True, height=600):
+                for i, dataset in enumerate(st.session_state["candidate_dataset"]):
+                    st.text_input(
+                        f"Question {i}",
+                        question_sql_pair["question"],
+                        disabled=True,
+                        key=f"candidate_dataset_question_{i}",
+                    )
+                    st.multiselect(
+                        f"Context {i}",
+                        options=question_sql_pair["context"],
+                        default=question_sql_pair["context"],
+                        disabled=True,
+                        key=f"candidate_dataset_context_{i}",
+                    )
+                    st.markdown(f"SQL {i}")
+                    st.code(
+                        prettify_sql(dataset["sql"]), language="sql", line_numbers=True
+                    )
+                    st.button(
+                        "Remove",
+                        key=f"remove_{i}",
+                        on_click=on_click_remove_candidate_dataset_button,
+                        args=(i,),
+                    )
+                    st.markdown("---")
 
 with tab_modify_dataset:
     pass
