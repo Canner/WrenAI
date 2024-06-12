@@ -3,6 +3,7 @@ from typing import List, Literal, Optional
 
 import orjson
 import sqlparse
+from langfuse.decorators import observe
 from pydantic import BaseModel
 from redislite import StrictRedis
 
@@ -118,6 +119,7 @@ class AskService:
         self._redis_db = redis_db
 
     @async_timer
+    @observe(name="Prepare Semantics")
     async def prepare_semantics(
         self, prepare_semantics_request: SemanticsPreparationRequest
     ):
@@ -171,6 +173,7 @@ class AskService:
         return False
 
     @async_timer
+    @observe(name="Ask Question")
     async def ask(
         self,
         ask_request: AskRequest,

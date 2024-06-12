@@ -3,6 +3,7 @@ from typing import List, Literal, Optional
 
 import orjson
 from haystack import Pipeline
+from langfuse.decorators import observe
 from pydantic import BaseModel
 from redislite import StrictRedis
 
@@ -66,6 +67,7 @@ class AskDetailsService:
         self._redis_db = redis_db
 
     @async_timer
+    @observe(name="Ask Details(Breakdown SQL)")
     async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,
