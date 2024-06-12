@@ -24,11 +24,12 @@ import {
   getRelations,
   sampleDatasets,
 } from '@server/data';
-import { snakeCase } from 'lodash';
+import { snakeCase, flatMap } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
 import DataSourceSchemaDetector, {
+  DataSourceSchema,
   SchemaChangeType,
 } from '@server/managers/dataSourceSchemaDetector';
 
@@ -439,17 +440,56 @@ export class ProjectResolver {
       await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
 
     if (lastSchemaChange) {
-      const changes = lastSchemaChange.change;
+      const models = await ctx.modelRepository.findAllBy({
+        projectId: project.id,
+      });
+      const modelIds = models.map((model) => model.id);
+      const modelColumns =
+        await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+
+      // Mapping with affected models and columns data into schame change
+      const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
+        const affecteds = flatMap(changes, (change) => {
+          const affectedModel = models.find(
+            (model) => model.sourceTableName === change.name,
+          );
+          return affectedModel
+            ? {
+                sourceTableName: change.name,
+                displayName: affectedModel.displayName,
+                columns: flatMap(change.columns, (column) => {
+                  const affectedColumn = modelColumns.find(
+                    (modelColumn) =>
+                      modelColumn.sourceColumnName === column.name &&
+                      modelColumn.modelId === affectedModel.id,
+                  );
+                  return affectedColumn
+                    ? {
+                        sourceColumnName: column.name,
+                        displayName: affectedColumn?.displayName,
+                        type: column.type,
+                      }
+                    : [];
+                }),
+              }
+            : [];
+        });
+        return affecteds.length ? affecteds : null;
+      };
+
       const resolves = lastSchemaChange.resolve;
-      const unresolvedChanges = Object.keys(resolves).reduce(
-        (result, key) =>
-          resolves[key] === false ? { ...result, [key]: changes[key] } : result,
-        {},
-      );
+      const unresolvedChanges = Object.keys(resolves).reduce((result, key) => {
+        const isResolved = resolves[key];
+        const changes = lastSchemaChange.change[key];
+        // return if resolved or no changes
+        if (isResolved || !changes) return result;
+
+        const affectedChanges = mappingAffectedToSchemaChange(changes);
+        return { ...result, [key]: affectedChanges };
+      }, {});
+
       return unresolvedChanges;
     }
-
-    return {};
   }
 
   public async triggerDataSourceDetection(
