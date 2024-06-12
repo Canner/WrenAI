@@ -2,15 +2,15 @@ start:
 	poetry run python -m src.pre_run && poetry run python -m src.__main__
 
 build:
-	docker compose -f docker/docker-compose.yml --env-file .env.prod build
+	docker compose -f docker/docker-compose.yaml --env-file .env.prod build
 
 up:
 	make run-wren-engine && \
-	docker compose -f docker/docker-compose.yml --env-file .env.prod up -d
+	docker compose -f docker/docker-compose.yaml --env-file .env.prod up -d
 
 down:
 	make stop-wren-engine && \
-	docker compose -f docker/docker-compose.yml --env-file .env.prod down
+	docker compose -f docker/docker-compose.yaml --env-file .env.prod down
 
 run-qdrant:
 	docker run \
@@ -24,10 +24,10 @@ stop-qdrant:
 	docker stop qdrant && docker rm qdrant
 
 run-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
+	docker compose -f ./src/eval/wren-engine/docker-compose.yaml --env-file ./src/eval/wren-engine/.env up -d
 
 stop-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env down
+	docker compose -f ./src/eval/wren-engine/docker-compose.yaml --env-file ./src/eval/wren-engine/.env down
 
 psql:
 	docker exec -it wren-wren-engine-1 bash launch-cli.sh
