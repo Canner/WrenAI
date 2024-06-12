@@ -195,8 +195,8 @@ export class ProjectResolver {
     } as ProjectData);
     logger.debug(`Created project: ${JSON.stringify(project)}`);
     // try to connect to the data source
-    if (type === DataSourceName.DUCKDB) {
-      try {
+    try {
+      if (type === DataSourceName.DUCKDB) {
         // handle duckdb connection
         connectionInfo as DUCKDB_CONNECTION_INFO;
         const { initSql, extensions } = connectionInfo;
@@ -209,40 +209,27 @@ export class ProjectResolver {
         } as DuckDBPrepareOptions);
 
         // check can list dataset table
-        try {
-          await ctx.wrenEngineAdaptor.listTables();
-        } catch (_e) {
-          throw new Error('Can not list tables in dataset');
-        }
+        await ctx.wrenEngineAdaptor.listTables();
 
         // patch wren-engine config
         const config = {
           'wren.datasource.type': 'duckdb',
         };
         await ctx.wrenEngineAdaptor.patchConfig(config);
-      } catch (err) {
-        logger.error(
-          'Failed to connect to the Duckdb data source',
-          JSON.stringify(err, null, 2),
-        );
-        await ctx.projectRepository.deleteOne(project.id);
-        throw err;
-      }
-    } else {
-      try {
+      } else {
         const tables =
           await ctx.projectService.getProjectDataSourceTables(project);
         logger.debug(
           `Can connect to the data source, tables: ${JSON.stringify(tables[0])}...`,
         );
-      } catch (err) {
-        logger.error(
-          'Failed to get project tables',
-          JSON.stringify(err, null, 2),
-        );
-        await ctx.projectRepository.deleteOne(project.id);
-        throw err;
       }
+    } catch (err) {
+      logger.error(
+        'Failed to get project tables',
+        JSON.stringify(err, null, 2),
+      );
+      await ctx.projectRepository.deleteOne(project.id);
+      throw err;
     }
 
     // telemetry

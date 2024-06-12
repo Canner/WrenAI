@@ -22,7 +22,7 @@ const config = getConfig();
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
 
-const sensitiveConnectionInfo = new Set(['credentials', 'password']);
+const SENSITIVE_PROPERTY_NAME = new Set(['credentials', 'password']);
 export interface ProjectData {
   displayName: string;
   type: DataSourceName;
@@ -167,7 +167,7 @@ export class ProjectService implements IProjectService {
   }
 
   public getSensitiveConnectionInfo() {
-    return sensitiveConnectionInfo;
+    return SENSITIVE_PROPERTY_NAME;
   }
 
   public encryptSensitiveConnectionInfo(
@@ -179,7 +179,7 @@ export class ProjectService implements IProjectService {
     const encryptor = new Encryptor(config);
     const encryptConnectionInfo = Object.entries(connectionInfo).reduce(
       (acc, [key, value]) => {
-        if (sensitiveConnectionInfo.has(key)) {
+        if (SENSITIVE_PROPERTY_NAME.has(key)) {
           const toEncrypt = key === 'password' ? { password: value } : value;
           acc[key] = encryptor.encrypt(toEncrypt);
         }

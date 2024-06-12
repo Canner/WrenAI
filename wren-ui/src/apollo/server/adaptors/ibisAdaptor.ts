@@ -92,7 +92,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     this.ibisServerEndpoint = ibisServerEndpoint;
   }
 
-  async query(
+  public async query(
     query: string,
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
@@ -125,7 +125,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     }
   }
 
-  async getTables(
+  public async getTables(
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
   ): Promise<CompactTable[]> {
@@ -154,7 +154,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     }
   }
 
-  async getConstraints(
+  public async getConstraints(
     dataSource: DataSourceName,
     connectionInfo: Record<string, any>,
   ): Promise<RecommendConstraint[]> {
@@ -185,7 +185,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     }
   }
 
-  async validate(
+  public async validate(
     dataSource: DataSourceName,
     validationRule: ValidationRules,
     connectionInfo: Record<string, any>,
@@ -216,6 +216,4 @@ export class IbisAdaptor implements IIbisAdaptor {
       return { valid: false, message: e.response.data };
     }
   }
-
-  private;
 }
