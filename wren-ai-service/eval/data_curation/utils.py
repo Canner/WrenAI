@@ -5,12 +5,12 @@ from typing import Any, List, Optional, Tuple
 
 import aiohttp
 import orjson
+import requests
 import sqlparse
 import streamlit as st
 from dotenv import load_dotenv
 from openai import AsyncClient
-from pydantic import BaseModel, ValidationError
-from streamlit.runtime.uploaded_file_manager import UploadedFile
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -29,18 +29,13 @@ class MDLModel(BaseModel):
     dateSpine: Optional[dict] = {}
 
 
-def is_valid_mdl_file(file: UploadedFile) -> Tuple[bool, Any]:
-    try:
-        file_data = file.getvalue().decode("utf-8")
-        MDLModel.model_validate_json(file_data)
+def get_current_manifest() -> Tuple[str, dict]:
+    response = requests.get(
+        f"{os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")}/v1/mdl",
+    )
 
-        return True, orjson.loads(file_data)
-    except orjson.JSONDecodeError as e:
-        print(f"Error parsing JSON: {e}")
-        return False, None
-    except ValidationError as e:
-        print(f"Error validating JSON: {e}")
-        return False, None
+    assert response.status_code == 200
+    return response.json()
 
 
 def get_llm_client() -> AsyncClient:
@@ -56,17 +51,23 @@ def remove_limit_statement(sql: str) -> str:
     return modified_sql
 
 
-async def is_sql_valid(sql: str) -> bool:
+async def is_sql_valid(sql: str) -> Tuple[bool, str]:
     sql = sql[:-1] if sql.endswith(";") else sql
     async with aiohttp.request(
         "GET",
         f'{os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")}/v1/mdl/dry-run',
         json={"sql": remove_limit_statement(sql), "limit": 1},
     ) as response:
-        return response.status == 200
+        result = await response.json()
+        if response.status == 200:
+            return True, ""
+
+        return False, result["message"]
 
 
-async def get_valid_question_sql_pairs(question_sql_pairs: list[dict]) -> list[dict]:
+async def get_validated_question_sql_pairs(
+    question_sql_pairs: list[dict],
+) -> list[dict]:
     tasks = []
 
     async with aiohttp.ClientSession():
@@ -76,9 +77,8 @@ async def get_valid_question_sql_pairs(question_sql_pairs: list[dict]) -> list[d
 
         results = await asyncio.gather(*tasks)
         return [
-            {**question_sql_pairs[i], "context": [], "is_valid": valid}
-            for i, valid in enumerate(results)
-            if valid
+            {**question_sql_pairs[i], "context": [], "is_valid": valid, "error": error}
+            for i, (valid, error) in enumerate(results)
         ]
 
 
@@ -222,7 +222,7 @@ async def get_contexts_from_sqls(
             "role": "user",
             "content": f"""
 ### TASK ###
-Given the question sql pairs, provide the context for each sql.
+Given the sqls, provide the context for each sql.
 
 ### EXAMPLES ###
 
@@ -331,7 +331,7 @@ Think step by step
         )
 
         results = orjson.loads(response.choices[0].message.content)["results"]
-        question_sql_pairs = await get_valid_question_sql_pairs(results)
+        question_sql_pairs = await get_validated_question_sql_pairs(results)
         sqls = [question_sql_pair["sql"] for question_sql_pair in question_sql_pairs]
         contexts = await get_contexts_from_sqls(llm_client, sqls)
         return [
