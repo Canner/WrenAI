@@ -2,11 +2,11 @@ import asyncio
 from datetime import datetime
 
 import streamlit as st
-import tomlkit
-import tomlkit.toml_file
+from openai import AsyncClient
 from utils import (
     get_contexts_from_sqls,
     get_current_manifest,
+    get_eval_dataset_in_toml_string,
     get_llm_client,
     get_question_sql_pairs,
     is_sql_valid,
@@ -31,18 +31,13 @@ with tab_create_dataset:
     if "candidate_dataset" not in st.session_state:
         st.session_state["candidate_dataset"] = []
 
-    @st.cache_data
-    def get_eval_dataset_in_toml_string(dataset: list) -> str:
-        doc = tomlkit.document()
-
-        array = tomlkit.array()
-        for row in enumerate(dataset):
-            array.append(row)
-        doc.add("dataset", array)
-
-        return tomlkit.dumps(doc)
-
     # widget callbacks
+    def on_click_generate_question_sql_pairs(llm_client: AsyncClient):
+        st.toast("Generating question-sql-pairs...")
+        st.session_state["llm_question_sql_pairs"] = asyncio.run(
+            get_question_sql_pairs(llm_client, st.session_state["mdl_json"])
+        )
+
     def on_change_sql(i: int, key: str):
         sql = st.session_state[key]
 
@@ -142,17 +137,12 @@ with tab_create_dataset:
             )
 
             with tab_generated_by_llm:
-                regenerate_question_sql_pairs = st.button(
-                    "Regenerate question-sql-pairs",
+                st.button(
+                    "Generate 10 question-sql-pairs",
+                    key="generate_question_sql_pairs",
+                    on_click=on_click_generate_question_sql_pairs,
+                    args=(llm_client,),
                 )
-                if (
-                    not st.session_state["llm_question_sql_pairs"]
-                    or regenerate_question_sql_pairs
-                ):
-                    st.toast("Generating question-sql-pairs...")
-                    st.session_state["llm_question_sql_pairs"] = asyncio.run(
-                        get_question_sql_pairs(llm_client, st.session_state["mdl_json"])
-                    )
 
                 with st.container(border=True, height=550):
                     for i, question_sql_pair in enumerate(
@@ -284,16 +274,17 @@ with tab_create_dataset:
                     key="eval_dataset_file_name",
                 )
                 download_btn = st.download_button(
-                    "Save",
+                    "Download",
                     get_eval_dataset_in_toml_string(
-                        st.session_state["candidate_dataset"]
+                        st.session_state["mdl_json"],
+                        st.session_state["candidate_dataset"],
                     ),
                     file_name=file_name,
-                    key="save_eval_dataset_confirmed",
+                    key="download_eval_dataset_confirmed",
                     disabled=not st.session_state["candidate_dataset"],
                 )
                 if download_btn:
-                    st.toast("Saving the evaluation dataset...")
+                    st.toast("Downloading the evaluation dataset...")
 
 with tab_modify_dataset:
     pass
