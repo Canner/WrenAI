@@ -24,8 +24,9 @@ data:
   
   # service endpoints of AI service & engine service
   WREN_ENGINE_ENDPOINT: "http://wren-engine-svc:8080"
-  WREN_AI_ENDPOINT: "http://wren-ai-service:5555"
-  #WREN_AI_ENDPOINT: "http://wren-ai-service.ai-system.svc.cluster.local:5555"
+  WREN_AI_ENDPOINT: "http://wren-ai-service-svc:5555"
+  #WREN_AI_ENDPOINT: "http://wren-ai-service-svc.ai-system.svc.cluster.local:5555"
+  AI_SERVICE_WORKERS: "1"
 
   # "sqlite", or "pg" for postgres as UI application database
   DB_TYPE: pg
@@ -35,4 +36,4 @@ data:
   #For bootstrap
   DATA_PATH: "/app/data"
 
-  ### if DB_TYPE = "postgres" you must provide PG_URL string in the *Secret* manifest file (deployment/kustomizations/examples/secret-wren_example.yaml) to connect to postgres  
+  ### if DB_TYPE = "postgres" you must provide PG_URL string in the *Secret* manifest file (deployment/kustomizations/examples/secret-wren_example.yaml) to connect to postgres
