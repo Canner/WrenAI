@@ -61,7 +61,7 @@ class GenerationPostProcessor:
             quoted_sql = add_quotes(result["sql"])
 
             response = await dry_run_sql(
-                quoted_sql, session, endpoint=os.getenv("WREN_ENGINE_ENDPOINT")
+                quoted_sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
             )
 
             if response.get("status") == 200:

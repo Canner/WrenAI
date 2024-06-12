@@ -40,7 +40,7 @@ services:
     platform: ${PLATFORM}
     expose:
       - ${WREN_AI_SERVICE_PORT}
-    ports: 
+    ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
       WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
@@ -48,7 +48,7 @@ services:
       OPENAI_API_BASE: ${OPENAI_API_BASE}
       OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       QDRANT_HOST: qdrant
-      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      WREN_UI_ENDPOINT: http://wren-ui:${WREN_UI_PORT}
       REDIS_HOST: ${AI_SERVICE_REDIS_HOST}
       REDIS_PORT: ${AI_SERVICE_REDIS_PORT}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
