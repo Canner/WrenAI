@@ -1,3 +1,4 @@
+import { DataSourceName } from '@server/types';
 import {
   Model,
   Project,
@@ -33,7 +34,7 @@ describe('MDLBuilder', () => {
       // Arrange
       const project = {
         id: 1,
-        type: 'bigquery',
+        type: DataSourceName.BIG_QUERY,
         displayName: 'my project',
         connectionInfo: {
           projectId: 'bq-project-id',
@@ -234,7 +235,7 @@ describe('MDLBuilder', () => {
     // Arrange
     const project = {
       id: 1,
-      type: 'bigquery',
+      type: DataSourceName.BIG_QUERY,
       displayName: 'my project',
       connectionInfo: {
         projectId: 'bq-project-id',
