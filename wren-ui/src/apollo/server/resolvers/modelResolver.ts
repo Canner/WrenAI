@@ -674,7 +674,7 @@ export class ModelResolver {
       mdl,
       dryRun,
     });
-    return dryRun ? { dryRun: previewRes } : previewRes;
+    return dryRun ? { dryRun: 'success' } : previewRes;
   }
 
   public async getNativeSql(

@@ -143,8 +143,10 @@ export class IbisAdaptor implements IIbisAdaptor {
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
         body,
       );
+      logger.debug(`Ibis server Dry run success`);
       return true;
     } catch (err) {
+      logger.debug(`Got error when dry running ibis: ${err.response.data}`);
       throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
         customMessage: err.response.data,
         originalError: err,

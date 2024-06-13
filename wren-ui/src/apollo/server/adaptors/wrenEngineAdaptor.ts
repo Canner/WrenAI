@@ -359,6 +359,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         url: url.href,
         data: body,
       });
+      logger.debug(`Wren Engine Dry run success`);
       return res.data;
     } catch (err: any) {
       logger.debug(
