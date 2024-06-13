@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict
+from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 import sqlglot
@@ -12,7 +12,7 @@ async def dry_run_sql(
     sql: str,
     session: aiohttp.ClientSession,
     endpoint: str,
-) -> Dict[str, str]:
+) -> Tuple[bool, Optional[Dict[str, Any]]]:
     async with session.post(
         f"{endpoint}/api/graphql",
         json={
@@ -26,7 +26,10 @@ async def dry_run_sql(
             },
         },
     ) as response:
-        return {"status": response.status, "body": await response.json()}
+        res = await response.json()
+        if res.get("data"):
+            return True, None
+        return False, res.get("errors", [{}])[0].get("message", "Unknown error")
 
 
 def clean_generation_result(result: str) -> str:

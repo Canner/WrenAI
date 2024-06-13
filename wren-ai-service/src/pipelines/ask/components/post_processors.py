@@ -60,11 +60,11 @@ class GenerationPostProcessor:
         async def _task(result: Dict[str, str]):
             quoted_sql = add_quotes(result["sql"])
 
-            response = await dry_run_sql(
+            status, error = await dry_run_sql(
                 quoted_sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
             )
 
-            if response.get("status") == 200:
+            if status:
                 valid_generation_results.append(
                     {
                         "sql": quoted_sql,
@@ -76,7 +76,7 @@ class GenerationPostProcessor:
                     {
                         "sql": quoted_sql,
                         "summary": result["summary"],
-                        "error": response.get("body", {}).get("message"),
+                        "error": error,
                     }
                 )
 
