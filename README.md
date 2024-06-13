@@ -31,16 +31,19 @@
 
 > WrenAI is a **text-to-SQL solution** for data teams to get results and insights faster by asking business questions without writing SQL.
 
+![wrenai_overview](./misc/wrenai_view.png)
+
 ## ▶️ Video Introduction
 
 [![WrenAI Introduction](https://img.youtube.com/vi/Fw0Wxd2G3jY/maxresdefault.jpg)](https://www.youtube.com/watch?v=Fw0Wxd2G3jY)
 
 
-## 🎯 Our Mission
+## 🎯 Our Mission & Vision
 
 WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any data source and industry. We believe that breakthroughs in Text-to-SQL technology will usher in a new era of Data Democratization.
 
-![wrenai_overview](./misc/wrenai_view.png)
+![wrenai_vision](./misc/wrenai_vision.png)
+> Our vision of the WrenAI project
 
 👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
 
