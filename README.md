@@ -43,7 +43,6 @@
 WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any data source and industry. We believe that breakthroughs in Text-to-SQL technology will usher in a new era of Data Democratization.
 
 ![wrenai_vision](./misc/wrenai_vision.png)
-> Our vision of the WrenAI project
 
 👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
 
