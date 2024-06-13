@@ -154,7 +154,9 @@ def get_data_from_wren_engine(sql: str):
         },
     )
 
-    assert response.status_code == 200
+    if response.status_code != 200:
+        st.error(response.json())
+        st.stop()
 
     data = response.json()
     column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]
