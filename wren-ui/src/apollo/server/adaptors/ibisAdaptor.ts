@@ -42,15 +42,18 @@ export interface ValidationResponse {
   message: string | null;
 }
 
-export interface QueryOptions {
+export interface IbisQueryOptions {
   dataSource: DataSourceName;
   connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo;
   mdl: Manifest;
 }
 
 export interface IIbisAdaptor {
-  query: (query: string, options: QueryOptions) => Promise<IbisQueryResponse>;
-  dryRun: (query: string, options: QueryOptions) => Promise<boolean>;
+  query: (
+    query: string,
+    options: IbisQueryOptions,
+  ) => Promise<IbisQueryResponse>;
+  dryRun: (query: string, options: IbisQueryOptions) => Promise<boolean>;
   getTables: (
     dataSource: DataSourceName,
     connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
@@ -96,7 +99,7 @@ export class IbisAdaptor implements IIbisAdaptor {
 
   public async query(
     query: string,
-    options: QueryOptions,
+    options: IbisQueryOptions,
   ): Promise<IbisQueryResponse> {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
@@ -123,7 +126,10 @@ export class IbisAdaptor implements IIbisAdaptor {
     }
   }
 
-  public async dryRun(query: string, options: QueryOptions): Promise<boolean> {
+  public async dryRun(
+    query: string,
+    options: IbisQueryOptions,
+  ): Promise<boolean> {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const body = {
@@ -138,9 +144,11 @@ export class IbisAdaptor implements IIbisAdaptor {
         body,
       );
       return true;
-    } catch (e) {
-      logger.debug(`Got error when dry run ibis: ${e.response.data}`);
-      return false;
+    } catch (err) {
+      throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
+        customMessage: err.response.data,
+        originalError: err,
+      });
     }
   }
 

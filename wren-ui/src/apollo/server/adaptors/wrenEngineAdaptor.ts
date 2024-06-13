@@ -72,9 +72,20 @@ export interface DryPlanOption {
   manifest?: Manifest;
 }
 
+export interface WrenEngineDryRunOption {
+  manifest?: Manifest;
+  limit?: number;
+}
+
 export interface DuckDBPrepareOptions {
   initSql: string;
   sessionProps: Record<string, any>;
+}
+
+// The response consists of an array containing columns. Each column contains a name and a type.
+export interface DryRunResponse {
+  name: string;
+  type: string;
 }
 
 export interface IWrenEngineAdaptor {
@@ -96,6 +107,10 @@ export interface IWrenEngineAdaptor {
     modelName: string,
     columnName: string,
   ): Promise<ValidationResponse>;
+  dryRun(
+    sql: string,
+    options: WrenEngineDryRunOption,
+  ): Promise<DryRunResponse[]>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -105,6 +120,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private initSqlUrlPath = '/v1/data-source/duckdb/settings/init-sql';
   private previewUrlPath = '/v1/mdl/preview';
   private dryPlanUrlPath = '/v1/mdl/dry-plan';
+  private dryRunUrlPath = '/v1/mdl/dry-run';
   private validateUrlPath = '/v1/mdl/validate';
 
   constructor({ wrenEngineEndpoint }: { wrenEngineEndpoint: string }) {
@@ -321,6 +337,37 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     } catch (err: any) {
       logger.debug(`Got error when getting native SQL: ${err.message}`);
       throw err;
+    }
+  }
+
+  public async dryRun(
+    sql: string,
+    options: WrenEngineDryRunOption,
+  ): Promise<DryRunResponse[]> {
+    try {
+      const { manifest } = options;
+      const body = {
+        sql,
+        manifest,
+      };
+      logger.debug(
+        `Dry run wren engine with body: ${JSON.stringify(body, null, 2)}`,
+      );
+      const url = new URL(this.dryRunUrlPath, this.wrenEngineBaseEndpoint);
+      const res: AxiosResponse<DryRunResponse[]> = await axios({
+        method: 'get',
+        url: url.href,
+        data: body,
+      });
+      return res.data;
+    } catch (err: any) {
+      logger.debug(
+        `Got error when dry running: ${JSON.stringify(err.response.data)}`,
+      );
+      throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
+        customMessage: err.response.data.message,
+        originalError: err,
+      });
     }
   }
 

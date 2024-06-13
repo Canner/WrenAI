@@ -8,7 +8,7 @@ import {
   IbisPostgresConnectionInfo,
   IbisBigQueryConnectionInfo,
   ValidationRules,
-  QueryOptions,
+  IbisQueryOptions,
 } from '../adaptors/ibisAdaptor';
 import { Encryptor, getLogger } from '@server/utils';
 import {
@@ -104,16 +104,28 @@ export class QueryService implements IQueryService {
 
     const dataSource = project.type;
     if (this.useEngine(dataSource)) {
-      logger.debug('Using wren engine for preview');
-      const data = await this.wrenEngineAdaptor.previewData(sql, limit, mdl);
-      return data as PreviewDataResponse;
+      if (dryRun) {
+        logger.debug('Using wren engine to dry run');
+        await this.wrenEngineAdaptor.dryRun(sql, {
+          manifest: mdl,
+          limit: limit,
+        });
+        return true;
+      } else {
+        logger.debug('Using wren engine to preview');
+        const data = await this.wrenEngineAdaptor.previewData(sql, limit, mdl);
+        return data as PreviewDataResponse;
+      }
     } else {
-      logger.debug('Use ibis adaptor for preview');
-      // add alias to FROM clause to prevent ibis error
-      // ibis server does not have limit parameter, should handle it in sql
+      logger.debug('Use ibis adaptor to preview');
+      /**
+       * add alias to FROM clause to prevent ibis error
+       * ibis server does not have limit parameter, should handle it in sql
+       */
       const rewrittenSql = limit
         ? `SELECT tmp.* FROM (${sql}) tmp LIMIT ${limit}`
         : sql;
+
       const { connectionInfo } = this.transformToIbisConnectionInfo(project);
       this.checkDataSourceIsSupported(dataSource);
       const queryOptions = {
@@ -121,9 +133,9 @@ export class QueryService implements IQueryService {
         connectionInfo,
         mdl,
         dryRun,
-      } as QueryOptions;
+      } as IbisQueryOptions;
       if (dryRun) {
-        return await this.tryDryRun(rewrittenSql, queryOptions);
+        await this.ibisAdaptor.dryRun(rewrittenSql, queryOptions);
       } else {
         const data = await this.ibisAdaptor.query(rewrittenSql, queryOptions);
         return this.transformDataType(data);
@@ -240,18 +252,6 @@ export class QueryService implements IQueryService {
       !Object.prototype.hasOwnProperty.call(SupportedDataSource, dataSource)
     ) {
       throw new Error(`Unsupported datasource for ibis: "${dataSource}"`);
-    }
-  }
-
-  private async tryDryRun(
-    rewrittenSql: string,
-    queryOptions: QueryOptions,
-  ): Promise<boolean> {
-    try {
-      await this.ibisAdaptor.dryRun(rewrittenSql, queryOptions);
-      return true;
-    } catch (_err) {
-      return false;
     }
   }
 }
