@@ -23,12 +23,12 @@ services:
 
   ibis:
     image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
-    restart: on-failure
+    pull_policy: always
     platform: ${PLATFORM}
     expose:
       - ${IBIS_SERVER_PORT}
     environment:
-      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT}
     networks:
       - wren
 
@@ -51,15 +51,15 @@ services:
 
   ui:
     image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
-    restart: on-failure
+    pull_policy: always
     platform: ${PLATFORM}
     environment:
       DB_TYPE: sqlite
       # /app is the working directory in the container
       SQLITE_FILE: /app/data/db.sqlite3
-      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT}
       WREN_AI_ENDPOINT: http://host.docker.internal:${WREN_AI_SERVICE_PORT}
-      IBIS_SERVER_ENDPOINT: http://ibis-server:${IBIS_SERVER_PORT}
+      IBIS_SERVER_ENDPOINT: http://ibis:${IBIS_SERVER_PORT}
       OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       # telemetry
       WREN_ENGINE_PORT: ${WREN_ENGINE_PORT}
