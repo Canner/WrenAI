@@ -78,4 +78,10 @@ test:
 load-test:
 	poetry run python -m tests.locust.locust_script
 
+dev-up:
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
+
+dev-down:
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example down
+
 .PHONY: demo
