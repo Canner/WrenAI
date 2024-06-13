@@ -441,57 +441,63 @@ export class ProjectResolver {
     const lastSchemaChange =
       await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
 
-    if (lastSchemaChange) {
-      const models = await ctx.modelRepository.findAllBy({
-        projectId: project.id,
-      });
-      const modelIds = models.map((model) => model.id);
-      const modelColumns =
-        await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
-
-      // Mapping with affected models and columns data into schame change
-      const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
-        const affecteds = flatMap(changes, (change) => {
-          const affectedModel = models.find(
-            (model) => model.sourceTableName === change.name,
-          );
-          return affectedModel
-            ? {
-                sourceTableName: change.name,
-                displayName: affectedModel.displayName,
-                columns: flatMap(change.columns, (column) => {
-                  const affectedColumn = modelColumns.find(
-                    (modelColumn) =>
-                      modelColumn.sourceColumnName === column.name &&
-                      modelColumn.modelId === affectedModel.id,
-                  );
-                  return affectedColumn
-                    ? {
-                        sourceColumnName: column.name,
-                        displayName: affectedColumn?.displayName,
-                        type: column.type,
-                      }
-                    : [];
-                }),
-              }
-            : [];
-        });
-        return affecteds.length ? affecteds : null;
+    if (!lastSchemaChange) {
+      return {
+        deletedTables: null,
+        deletedColumns: null,
+        modifiedColumns: null,
       };
-
-      const resolves = lastSchemaChange.resolve;
-      const unresolvedChanges = Object.keys(resolves).reduce((result, key) => {
-        const isResolved = resolves[key];
-        const changes = lastSchemaChange.change[key];
-        // return if resolved or no changes
-        if (isResolved || !changes) return result;
-
-        const affectedChanges = mappingAffectedToSchemaChange(changes);
-        return { ...result, [key]: affectedChanges };
-      }, {});
-
-      return unresolvedChanges;
     }
+
+    const models = await ctx.modelRepository.findAllBy({
+      projectId: project.id,
+    });
+    const modelIds = models.map((model) => model.id);
+    const modelColumns =
+      await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+
+    // Mapping with affected models and columns data into schame change
+    const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
+      const affecteds = flatMap(changes, (change) => {
+        const affectedModel = models.find(
+          (model) => model.sourceTableName === change.name,
+        );
+        return affectedModel
+          ? {
+              sourceTableName: change.name,
+              displayName: affectedModel.displayName,
+              columns: flatMap(change.columns, (column) => {
+                const affectedColumn = modelColumns.find(
+                  (modelColumn) =>
+                    modelColumn.sourceColumnName === column.name &&
+                    modelColumn.modelId === affectedModel.id,
+                );
+                return affectedColumn
+                  ? {
+                      sourceColumnName: column.name,
+                      displayName: affectedColumn?.displayName,
+                      type: column.type,
+                    }
+                  : [];
+              }),
+            }
+          : [];
+      });
+      return affecteds.length ? affecteds : null;
+    };
+
+    const resolves = lastSchemaChange.resolve;
+    const unresolvedChanges = Object.keys(resolves).reduce((result, key) => {
+      const isResolved = resolves[key];
+      const changes = lastSchemaChange.change[key];
+      // return if resolved or no changes
+      if (isResolved || !changes) return result;
+
+      const affectedChanges = mappingAffectedToSchemaChange(changes);
+      return { ...result, [key]: affectedChanges };
+    }, {});
+
+    return unresolvedChanges;
   }
 
   public async triggerDataSourceDetection(

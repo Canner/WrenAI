@@ -63,74 +63,70 @@ export default class DataSourceSchemaDetector
       SchemaChangeType.DELETED_TABLES,
       SchemaChangeType.DELETED_COLUMNS,
     ];
-    if (supportedTypes.includes(schemaChangeType)) {
-      const lastSchemaChange =
-        await this.ctx.schemaChangeRepository.findLastSchemaChange(
-          this.projectId,
-        );
-      const changes = lastSchemaChange?.change[schemaChangeType];
-      const isResolved = lastSchemaChange?.resolve[schemaChangeType];
-
-      if (isResolved !== false) {
-        throw new Error(
-          `Schema change "${schemaChangeType}" has nothing to resolve.`,
-        );
-      }
-
-      // Handle resolve deleted tables
-      if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
-        const affectedTableNames = changes.map((table) => table.name);
-        logger.debug(
-          `Start to remove tables "${affectedTableNames}" from models.`,
-        );
-        await this.ctx.modelRepository.deleteAllBySourceTableNames(
-          affectedTableNames,
-        );
-        await updateResolveToSchemaChange(this.ctx);
-      }
-
-      // Handle resolve deleted table columns
-      if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
-        const models = await this.ctx.modelRepository.findAllBy({
-          projectId: this.projectId,
-        });
-        const affectedModels = models.filter(
-          (model) =>
-            changes.findIndex(
-              (table) => table.name === model.sourceTableName,
-            ) !== -1,
-        );
-        await Promise.all(
-          affectedModels.map(async (model) => {
-            const affectedColumnNames = changes
-              .find((table) => table.name === model.sourceTableName)
-              .columns.map((column) => column.name);
-            logger.debug(
-              `Start to remove columns "${affectedColumnNames}" from model "${model.referenceName}".`,
-            );
-            return await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
-              model.id,
-              affectedColumnNames,
-            );
-          }),
-        );
-        await updateResolveToSchemaChange(this.ctx);
-      }
-
-      async function updateResolveToSchemaChange(ctx: IContext) {
-        await ctx.schemaChangeRepository.updateOne(lastSchemaChange.id, {
-          ...lastSchemaChange,
-          resolve: {
-            ...lastSchemaChange.resolve,
-            [schemaChangeType]: true,
-          },
-        });
-        logger.info(
-          `Schema change "${schemaChangeType}" resolved successfully.`,
-        );
-      }
-    } else {
+    if (!supportedTypes.includes(schemaChangeType)) {
       throw new Error('Resolved scheme change type is not supported.');
+    }
+
+    const lastSchemaChange =
+      await this.ctx.schemaChangeRepository.findLastSchemaChange(
+        this.projectId,
+      );
+    const changes = lastSchemaChange?.change[schemaChangeType];
+    const isResolved = lastSchemaChange?.resolve[schemaChangeType];
+
+    if (isResolved) {
+      throw new Error(
+        `Schema change "${schemaChangeType}" has nothing to resolve.`,
+      );
+    }
+
+    // Handle resolve deleted tables
+    if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
+      const affectedTableNames = changes.map((table) => table.name);
+      logger.debug(
+        `Start to remove tables "${affectedTableNames}" from models.`,
+      );
+      await this.ctx.modelRepository.deleteAllBySourceTableNames(
+        affectedTableNames,
+      );
+      await updateResolveToSchemaChange(this.ctx);
+    }
+
+    // Handle resolve deleted table columns
+    if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
+      const models = await this.ctx.modelRepository.findAllBy({
+        projectId: this.projectId,
+      });
+      const affectedModels = models.filter(
+        (model) =>
+          changes.findIndex((table) => table.name === model.sourceTableName) !==
+          -1,
+      );
+      await Promise.all(
+        affectedModels.map(async (model) => {
+          const affectedColumnNames = changes
+            .find((table) => table.name === model.sourceTableName)
+            .columns.map((column) => column.name);
+          logger.debug(
+            `Start to remove columns "${affectedColumnNames}" from model "${model.referenceName}".`,
+          );
+          return await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
+            model.id,
+            affectedColumnNames,
+          );
+        }),
+      );
+      await updateResolveToSchemaChange(this.ctx);
+    }
+
+    async function updateResolveToSchemaChange(ctx: IContext) {
+      await ctx.schemaChangeRepository.updateOne(lastSchemaChange.id, {
+        resolve: {
+          ...lastSchemaChange.resolve,
+          [schemaChangeType]: true,
+        },
+      });
+      logger.info(`Schema change "${schemaChangeType}" resolved successfully.`);
     }
   }
 
@@ -205,7 +201,7 @@ export default class DataSourceSchemaDetector
   }
 
   private async addSchemaChange(diffSchema: DataSourceSchemaChange) {
-    const getResolveState = (change) => (!!change ? false : null);
+    const getResolveState = (change) => (!!change ? false : undefined);
 
     const lastSchemaChange =
       await this.ctx.schemaChangeRepository.findLastSchemaChange(
