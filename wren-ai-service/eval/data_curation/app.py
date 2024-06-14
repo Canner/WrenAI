@@ -4,6 +4,7 @@ from datetime import datetime
 import streamlit as st
 import tomlkit
 from openai import AsyncClient
+from streamlit_tags import st_tags
 from utils import (
     get_contexts_from_sqls,
     get_current_manifest,
@@ -77,12 +78,14 @@ def on_change_sql(i: int, key: str):
 def on_click_add_candidate_dataset(i: int):
     if i != -1:
         dataset_to_add = {
+            "categories": st.session_state["llm_question_sql_pairs"][i]["categories"],
             "question": st.session_state["llm_question_sql_pairs"][i]["question"],
             "context": st.session_state["llm_question_sql_pairs"][i]["context"],
             "sql": st.session_state["llm_question_sql_pairs"][i]["sql"],
         }
     else:
         dataset_to_add = {
+            "categories": st.session_state["user_question_sql_pair"]["categories"],
             "question": st.session_state["user_question_sql_pair"]["question"],
             "context": st.session_state["user_question_sql_pair"]["context"],
             "sql": st.session_state["user_question_sql_pair"]["sql"],
@@ -108,6 +111,7 @@ def on_change_user_question():
         st.session_state["user_question_sql_pair"] = {
             "question": st.session_state["user_question"],
             "context": [],
+            "categories": [],
             "sql": "",
             "is_valid": False,
             "error": "",
@@ -123,7 +127,9 @@ def on_click_remove_candidate_dataset_button(i: int):
     st.session_state["candidate_dataset"].pop(i)
 
 
-tab_create_dataset, tab_modify_dataset = st.tabs(["Create Dataset", "Modify Dataset"])
+tab_create_dataset, tab_modify_dataset = st.tabs(
+    ["Create New Evaluation Dataset", "Modify Saved Evaluation Dataset"]
+)
 with tab_create_dataset:
     st.markdown(
         """
@@ -193,6 +199,12 @@ if st.session_state["mdl_json"] is not None:
                         disabled=True,
                         key=f"question_{i}",
                     )
+                    categories = st_tags(
+                        label=f"Categories {i}",
+                        text="Press enter to add more",
+                        value=[],
+                        key=f"categories_{i}",
+                    )
                     st.multiselect(
                         f"Context {i}",
                         options=question_sql_pair["context"],
@@ -220,9 +232,12 @@ if st.session_state["mdl_json"] is not None:
                     st.button(
                         "Move it to the candidate dataset",
                         key=f"move_to_dataset_{i}",
-                        disabled=not st.session_state["llm_question_sql_pairs"][i][
-                            "is_valid"
-                        ],
+                        disabled=(
+                            not st.session_state["llm_question_sql_pairs"][i][
+                                "is_valid"
+                            ]
+                            or not categories
+                        ),
                         on_click=on_click_add_candidate_dataset,
                         args=(i,),
                     )
@@ -236,6 +251,12 @@ if st.session_state["mdl_json"] is not None:
                     disabled=False,
                     key="user_question",
                     on_change=on_change_user_question,
+                )
+                categories = st_tags(
+                    label="Categories",
+                    text="Press enter to add more",
+                    value=[],
+                    key="categories",
                 )
                 st.multiselect(
                     "Context",
@@ -269,10 +290,13 @@ if st.session_state["mdl_json"] is not None:
                 st.button(
                     "Move it to the candidate dataset",
                     key="move_to_dataset",
-                    disabled=not st.session_state.get("user_question_sql_pair", {}).get(
-                        "is_valid", False
-                    )
-                    or not st.session_state["user_question"],
+                    disabled=(
+                        not st.session_state.get("user_question_sql_pair", {}).get(
+                            "is_valid", False
+                        )
+                        or not st.session_state["user_question"]
+                        or not categories
+                    ),
                     on_click=on_click_add_candidate_dataset,
                     args=(-1,),
                 )
