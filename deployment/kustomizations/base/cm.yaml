@@ -44,4 +44,4 @@ data:
   #DEBUG, INFO
   LOGGING_LEVEL: INFO
 
-  IBIS_SERVER_ENDPOINT: http://ibis-server-svc:8000
+  IBIS_SERVER_ENDPOINT: http://wren-ibis-server-svc:8000
