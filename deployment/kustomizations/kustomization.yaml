@@ -43,7 +43,7 @@ images:
   - name: ghcr.io/canner/wren-ui
     newTag: 0.7.2 # WREN_UI_VERSION Mimumal version is 0.6.0 to use postgress for wren-ui, if you are using older version, you may use only sqlite, please adjust ConfigMap (deployment/kustomizations/base/cm.yaml), Secret (deployment/kustomizations/examples/secret-wren_example.yaml) and the deployment/kustomizations/base/deploy-wren-ui.yaml manifests.
   - name: ghcr.io/canner/wren-ai-service
-    newTag: 0.5.4 # WREN_AI_SERVICE_VERSION
+    newTag: 0.5.5 # WREN_AI_SERVICE_VERSION
   - name: ghcr.io/canner/wren-engine-ibis
     newTag: 0.5.0 # IBIS_SERVER_VERSION
 
