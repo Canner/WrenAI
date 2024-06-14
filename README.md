@@ -44,9 +44,9 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ![wrenai_vision](./misc/wrenai_vision.png)
 
-🤩 [About our Vision](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
+🤩 [About our Vision - The new wave of Composable Data Systems and the Interface to LLM agents.](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
 
-🙌 [About our mission](https://docs.getwren.ai/overview/introduction)
+🙌 [About our Mission - Top 4 Challenges using RAG with LLMs to Query Database and how to solve it.](https://docs.getwren.ai/overview/introduction)
 
 ## 👊 Text-to-SQL End-To-End Solution
 
