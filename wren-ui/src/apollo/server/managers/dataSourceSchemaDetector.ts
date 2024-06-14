@@ -1,6 +1,7 @@
 import { camelCase, differenceWith, isEmpty, isEqual } from 'lodash';
 import { IContext } from '@server/types';
 import { getLogger } from 'log4js';
+import { SchemaChange } from '@server/repositories/schemaChangeRepository';
 
 const logger = getLogger('DataSourceSchemaDetector');
 logger.level = 'debug';
@@ -54,7 +55,25 @@ export default class DataSourceSchemaDetector
     const diffSchema = await this.getDiffSchema();
     if (diffSchema) {
       await this.addSchemaChange(diffSchema);
+    } else {
+      // Mark resolve all in last schema change if it has unresolved flag when no schema change detected.
+      const lastSchemaChange =
+        await this.ctx.schemaChangeRepository.findLastSchemaChange(
+          this.projectId,
+        );
+      if (lastSchemaChange !== null) {
+        const hasUnresolved = Object.values(lastSchemaChange.resolve).some(
+          (resolve) => !resolve,
+        );
+        if (hasUnresolved) {
+          await this.updateResolveToSchemaChange(
+            lastSchemaChange,
+            Object.values(SchemaChangeType),
+          );
+        }
+      }
     }
+
     return !!diffSchema;
   }
 
@@ -90,7 +109,9 @@ export default class DataSourceSchemaDetector
       await this.ctx.modelRepository.deleteAllBySourceTableNames(
         affectedTableNames,
       );
-      await updateResolveToSchemaChange(this.ctx);
+      await this.updateResolveToSchemaChange(lastSchemaChange, [
+        schemaChangeType,
+      ]);
     }
 
     // Handle resolve deleted table columns
@@ -117,17 +138,9 @@ export default class DataSourceSchemaDetector
           );
         }),
       );
-      await updateResolveToSchemaChange(this.ctx);
-    }
-
-    async function updateResolveToSchemaChange(ctx: IContext) {
-      await ctx.schemaChangeRepository.updateOne(lastSchemaChange.id, {
-        resolve: {
-          ...lastSchemaChange.resolve,
-          [schemaChangeType]: true,
-        },
-      });
-      logger.info(`Schema change "${schemaChangeType}" resolved successfully.`);
+      await this.updateResolveToSchemaChange(lastSchemaChange, [
+        schemaChangeType,
+      ]);
     }
   }
 
@@ -273,5 +286,21 @@ export default class DataSourceSchemaDetector
       };
     });
     return result;
+  }
+
+  private async updateResolveToSchemaChange(
+    lastSchemaChange: SchemaChange,
+    schemaChangeTypes: SchemaChangeType[],
+  ) {
+    await this.ctx.schemaChangeRepository.updateOne(lastSchemaChange.id, {
+      resolve: {
+        ...lastSchemaChange.resolve,
+        ...schemaChangeTypes.reduce(
+          (result, type) => ({ ...result, [type]: true }),
+          {},
+        ),
+      },
+    });
+    logger.info(`Schema change "${schemaChangeTypes}" resolved successfully.`);
   }
 }
