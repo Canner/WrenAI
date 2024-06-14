@@ -108,14 +108,14 @@ class GenerationPostProcessor:
         sql: str,
     ):
         async with aiohttp.ClientSession() as session:
-            response = await dry_run_sql(
-                sql, session, endpoint=os.getenv("WREN_ENGINE_ENDPOINT")
+            status, error = await dry_run_sql(
+                sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
             )
 
-        if response.get("status") != 200:
-            logger.debug(f"SQL is not executable: {response.get("body")}")
+        if status:
+            logger.debug(f"SQL is not executable: {error}")
 
-        return response.get("status") == 200
+        return status
 
 
 ## Start of Pipeline

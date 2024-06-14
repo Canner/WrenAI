@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 volumes:
   data:
@@ -46,9 +46,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       QDRANT_HOST: qdrant
-      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
-      REDIS_HOST: ${AI_SERVICE_REDIS_HOST}
-      REDIS_PORT: ${AI_SERVICE_REDIS_PORT}
+      WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
       LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
       WORKERS: ${AI_SERVICE_WORKERS}
@@ -60,7 +58,20 @@ services:
     depends_on:
       - qdrant
       - wren-engine
-      - redis
+
+  ibis-server:
+    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    expose:
+      - 8000
+    ports:
+      - ${IBIS_SERVER_PORT}:8000
+    environment:
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      LOG_LEVEL: DEBUG
+    networks:
+      - wren
 
   qdrant:
     image: qdrant/qdrant:v1.7.4
@@ -68,14 +79,6 @@ services:
     ports:
       - 6333:6333
       - 6334:6334
-    networks:
-      - wren
-
-  redis:
-    image: redis:7.0.15-alpine
-    pull_policy: always
-    ports:
-      - 6379:6379
     networks:
       - wren
 

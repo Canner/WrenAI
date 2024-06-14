@@ -6,7 +6,7 @@ import {
   RelationInfo,
   View,
 } from '../repositories';
-import { Manifest, ModelMDL } from './type';
+import { Manifest, ModelMDL, TableReference } from './type';
 import { getLogger } from '@server/utils';
 
 const logger = getLogger('MDLBuilder');
@@ -93,14 +93,20 @@ export class MDLBuilder implements IMDLBuilder {
       if (model.displayName) {
         properties.displayName = model.displayName;
       }
+      const tableReference = this.buildTableReference(model);
 
       return {
         name: model.referenceName,
         columns: [],
-        refSql: model.refSql,
+        tableReference,
+        // can only have one of refSql or tableReference
+        refSql: tableReference ? null : model.refSql,
         cached: model.cached,
         refreshTime: model.refreshTime,
-        properties,
+        properties: {
+          displayName: model.displayName,
+          description: properties.description,
+        },
         primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
     });
@@ -385,5 +391,20 @@ export class MDLBuilder implements IMDLBuilder {
     const { fromColumnName, toColumnName, fromModelName, toModelName } =
       relation;
     return `"${fromModelName}".${fromColumnName} = "${toModelName}".${toColumnName}`;
+  }
+
+  private buildTableReference(model: Model): TableReference | null {
+    const modelProps =
+      model.properties && typeof model.properties === 'string'
+        ? JSON.parse(model.properties)
+        : {};
+    if (!modelProps.table) {
+      return null;
+    }
+    return {
+      catalog: modelProps.catalog || null,
+      schema: modelProps.schema || null,
+      table: modelProps.table,
+    };
   }
 }

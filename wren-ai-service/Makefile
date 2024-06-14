@@ -49,6 +49,13 @@ stop-all:
 	make stop-wren-engine && \
 	make stop-redis
 
+ui:
+	cd ../wren-ui; export DB_TYPE=sqlite export SQLITE_FILE=db.sqlite3 export WREN_AI_ENDPOINT=http://localhost:5556 && \
+	yarn install && yarn rollback --all && yarn migrate && yarn dev
+
+demo:
+	cd demo; poetry run streamlit run app.py
+
 # present the evaluation result on the streamlit app
 # example: make streamlit pipeline=ask_details
 streamlit:
@@ -70,3 +77,11 @@ test:
 
 load-test:
 	poetry run python -m tests.locust.locust_script
+
+dev-up:
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
+
+dev-down:
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example down
+
+.PHONY: demo

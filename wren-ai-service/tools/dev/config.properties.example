@@ -1,0 +1,11 @@
+node.environment=production
+pg-wire-protocol.auth.file=
+wren.directory=/usr/src/app/etc/mdl
+wren.experimental-enable-dynamic-fields=false
+wren.datasource.type=bigquery
+bigquery.project-id=wrenai
+bigquery.credentials-key=
+bigquery.location=asia-east1
+bigquery.bucket-name=
+duckdb.storage.access-key=
+duckdb.storage.secret-key=

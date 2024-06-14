@@ -31,18 +31,22 @@
 
 > WrenAI is a **text-to-SQL solution** for data teams to get results and insights faster by asking business questions without writing SQL.
 
+![wrenai_overview](./misc/wrenai_view.png)
+
 ## ▶️ Video Introduction
 
 [![WrenAI Introduction](https://img.youtube.com/vi/Fw0Wxd2G3jY/maxresdefault.jpg)](https://www.youtube.com/watch?v=Fw0Wxd2G3jY)
 
 
-## 🎯 Our Mission
+## 🎯 Our Mission & Vision
 
 WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any data source and industry. We believe that breakthroughs in Text-to-SQL technology will usher in a new era of Data Democratization.
 
-![wrenai_overview](./misc/wrenai_view.png)
+![wrenai_vision](./misc/wrenai_vision.png)
 
-👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
+🤩 [About our Vision - The new wave of Composable Data Systems and the Interface to LLM agents.](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
+
+🙌 [About our Mission - Top 4 Challenges using RAG with LLMs to Query Database and how to solve it.](https://docs.getwren.ai/overview/introduction)
 
 ## 👊 Text-to-SQL End-To-End Solution
 
@@ -102,6 +106,7 @@ WrenAI consists of three core services:
 
 ## 🤩 Learn More About Text-to-SQL
 
+- [The new wave of Composable Data Systems and the Interface to LLM agents](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
 - [How do you use OpenAI GPT-4o to query your database?](https://medium.com/wrenai/how-do-you-use-openai-gpt-4o-to-query-your-database-f24be68b0b70)
 - [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
 - [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa)

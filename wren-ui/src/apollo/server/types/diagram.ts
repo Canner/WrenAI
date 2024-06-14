@@ -40,7 +40,7 @@ export interface DiagramModel {
   displayName: string;
   referenceName: string;
   sourceTableName: string;
-  refSql: string;
+  refSql?: string;
   cached: boolean;
   refreshTime: string;
   description: string;

@@ -14,6 +14,7 @@ export interface ColumnMDL {
 export interface ModelMDL {
   name: string; // eg: "OrdersModel", "LineitemModel"
   refSql?: string; // eg: "select * from orders", "select * from lineitem"
+  tableReference?: TableReference;
   columns?: ColumnMDL[];
   primaryKey?: string; // eg: "orderkey", "custkey"
   cached: boolean; // eg true, false
@@ -73,4 +74,10 @@ export interface Manifest {
   relationships?: RelationMDL[];
   enumDefinitions?: EnumDefinition[];
   views?: ViewMDL[];
+}
+
+export interface TableReference {
+  schema?: string;
+  catalog?: string;
+  table: string;
 }

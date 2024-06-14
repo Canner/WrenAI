@@ -164,7 +164,6 @@ export class AskingResolver {
 
     const askingService = ctx.askingService;
     const responses = await askingService.getResponsesWithThread(threadId);
-
     // reduce responses to group by thread id
     const thread = reduce(
       responses,
@@ -278,12 +277,12 @@ export class AskingResolver {
 
   public async previewData(
     _root: any,
-    args: { where: { responseId: number; stepIndex?: number } },
+    args: { where: { responseId: number; stepIndex?: number; limit?: number } },
     ctx: IContext,
   ): Promise<any> {
-    const { responseId, stepIndex } = args.where;
+    const { responseId, stepIndex, limit } = args.where;
     const askingService = ctx.askingService;
-    const data = await askingService.previewData(responseId, stepIndex);
+    const data = await askingService.previewData(responseId, stepIndex, limit);
     return data;
   }
 
@@ -292,22 +291,25 @@ export class AskingResolver {
    */
   public getThreadResponseNestedResolver = () => ({
     detail: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
+      if (!parent.detail) {
+        return null;
+      }
       // extend view & sql to detail
+
+      // handle sql
+      const sql = format(constructCteSql(parent.detail.steps));
+
+      // handle view
+      let view = null;
       const viewId = parent?.detail?.viewId;
-      if (!viewId) return parent.detail;
-      const view = viewId
-        ? await ctx.viewRepository.findOneBy({ id: viewId })
-        : null;
-      const displayName = view.properties
-        ? JSON.parse(view.properties)?.displayName
-        : view.name;
-      return parent.detail
-        ? {
-            ...parent.detail,
-            sql: format(constructCteSql(parent.detail.steps)),
-            view: { ...view, displayName },
-          }
-        : null;
+      if (viewId) {
+        view = await ctx.viewRepository.findOneBy({ id: viewId });
+        const displayName = view.properties
+          ? JSON.parse(view.properties)?.displayName
+          : view.name;
+        view = { ...view, displayName };
+      }
+      return { ...parent.detail, sql, view };
     },
   });
 

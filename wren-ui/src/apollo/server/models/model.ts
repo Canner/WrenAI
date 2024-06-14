@@ -81,3 +81,10 @@ export interface CheckCalculatedFieldCanQueryData {
   expression: ExpressionName;
   lineage: number[];
 }
+
+export interface PreviewSQLData {
+  sql: string;
+  projectId?: number;
+  limit?: number;
+  dryRun?: boolean;
+}

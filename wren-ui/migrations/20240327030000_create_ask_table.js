@@ -37,5 +37,5 @@ exports.up = function (knex) {
  * @returns { Promise<void> }
  */
 exports.down = function (knex) {
-  return knex.schema.dropTable('thread').dropTable('thread_response');
+  return knex.schema.dropTable('thread_response').dropTable('thread');
 };

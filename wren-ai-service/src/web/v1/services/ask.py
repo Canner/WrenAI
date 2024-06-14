@@ -91,9 +91,7 @@ class AskResultResponse(BaseModel):
         sql: str
         summary: str
         type: Literal["llm", "view"] = "llm"
-
-    class ViewResult(AskResult):
-        viewId: str
+        viewId: Optional[str] = None
 
     class AskError(BaseModel):
         code: Literal[
@@ -104,7 +102,7 @@ class AskResultResponse(BaseModel):
     status: Literal[
         "understanding", "searching", "generating", "finished", "failed", "stopped"
     ]
-    response: Optional[List[AskResult | ViewResult]] = None
+    response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
 
@@ -260,6 +258,10 @@ class AskService:
                     "formatted_output", {}
                 ).get("documents", [])
 
+                logger.debug(
+                    f"historical_question_result: {historical_question_result}"
+                )
+
                 if ask_request.history:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_generation"
@@ -347,7 +349,7 @@ class AskService:
                     return
 
                 results = [
-                    AskResultResponse.ViewResult(
+                    AskResultResponse.AskResult(
                         **{
                             "sql": result.get("statement"),
                             "summary": result.get("summary"),

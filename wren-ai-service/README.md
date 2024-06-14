@@ -7,7 +7,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 ## Environment Setup
 
 - Python 3.12.0, recommended to use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage the Python versions
-- install `poetry` with version 1.7.1: `curl -sSL https://install.python-poetry.org | python3 - --version 1.7.1`
+- install `poetry` with version 1.8.3: `curl -sSL https://install.python-poetry.org | python3 - --version 1.8.3`
 - execute `poetry install` to install the dependencies
 - copy `.env.example` file to `.env`, and `.env.dev.example` file to `.env.dev` and fill in the environment variables
 - [for development] execute `poetry run pre-commit install` to install the pre-commit hooks and `poetry run pre-commit run --all-files` to run the pre-commit checks at the first time to check if everything is set up correctly
@@ -15,13 +15,15 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 
 ## Start the service for development
 
+- execute `make run-all` to start needed containers (e.g. qdrant, wren-engine)
+- execute `make ui` to start the ui
 - execute `make start` to start the service and go to `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT` to see the API documentation and try the APIs
 
 ## Production Environment Setup
 
 - copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
 - `make build` to build the docker image
-- `make up` to run the docker container
+- `make up` to run the wren-ai-service
 - `make down` to stop the docker container
 
 ## Pipeline Evaluation(for development)
@@ -56,17 +58,11 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 
 ## Demo
 
-- prerequisites
-  - install and run the docker service, and you should stop all WrenAI services first before running the demo
-  - go to the `../docker` folder and prepare the `.env.local` file
-  - make sure the node version is v16.19.0
-  - if you are using Python 3.12+, please also install `setuptools` in order to successfully install the dependencies of the wren-ui service
-  - go to the `demo` folder and create a `.env` file and fill in the environment variables if you want to use BigQuery as data source
 - go to the `demo` folder and run `poetry install` to install the dependencies
-- in the `demo` folder, open three terminals
-  - in the first terminal, run `make prepare` to start the docker containers and `make run` to start the demo service
-  - in the second terminal, run `make ui` to start the wren-ui service
-  - in the third terminal, run `make ai` to start the wren-ai service
+- in the `wren-ai-service` folder, open three terminals
+  - in the first terminal, run `make run-all` to start the docker containers and `make ui` to start the wren-ui service
+  - in the second terminal, run `make start` to start the wren-ai service
+  - in the third terminal, run `make demo` to start the demo service
 - ports of the services:
   - wren-engine: ports should be 8080
   - wren-ai-service: port should be 5556

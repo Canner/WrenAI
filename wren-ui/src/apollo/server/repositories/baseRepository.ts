@@ -113,9 +113,19 @@ export class BaseRepository<T> implements IBasicRepository<T> {
 
   public async createMany(data: Partial<T>[], queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const result = await executer(this.tableName)
-      .insert(data.map(this.transformToDBData))
-      .returning('*');
+    const batchSize = 100;
+    const batchCount = Math.ceil(data.length / batchSize);
+    const result = [];
+    for (let i = 0; i < batchCount; i++) {
+      const start = i * batchSize;
+      const end = Math.min((i + 1) * batchSize, data.length);
+      const batchValues = data.slice(start, end);
+      const chunk = await executer(this.tableName)
+        .insert(batchValues.map(this.transformToDBData))
+        .returning('*');
+      result.push(...chunk);
+    }
+
     return result.map((data) => this.transformFromDBData(data));
   }
 
