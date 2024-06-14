@@ -254,9 +254,10 @@ class AskService:
                     query=ask_request.query
                 )
 
+                # we only return top 1 result
                 historical_question_result = historical_question.get(
                     "formatted_output", {}
-                ).get("documents", [])
+                ).get("documents", [])[:1]
 
                 logger.debug(
                     f"historical_question_result: {historical_question_result}"
