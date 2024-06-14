@@ -23,7 +23,7 @@ class ScoreFilter:
     @component.output_types(
         documents=List[Document],
     )
-    def run(self, documents: List[Document], score: float = 0):
+    def run(self, documents: List[Document], score: float = 0.8):
         return {
             "documents": list(
                 filter(lambda document: document.score >= score, documents)
