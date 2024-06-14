@@ -44,7 +44,8 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ![wrenai_vision](./misc/wrenai_vision.png)
 
-👉 [Learn more about our mission](https://docs.getwren.ai/overview/introduction)
+🤩 [About our Vision](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
+🙌 [About our mission](https://docs.getwren.ai/overview/introduction)
 
 ## 👊 Text-to-SQL End-To-End Solution
 
@@ -104,6 +105,7 @@ WrenAI consists of three core services:
 
 ## 🤩 Learn More About Text-to-SQL
 
+- [The new wave of Composable Data Systems and the Interface to LLM agents](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
 - [How do you use OpenAI GPT-4o to query your database?](https://medium.com/wrenai/how-do-you-use-openai-gpt-4o-to-query-your-database-f24be68b0b70)
 - [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
 - [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa)
