@@ -48,6 +48,23 @@ export type SaveRelationsMutationVariables = Types.Exact<{
 
 export type SaveRelationsMutation = { __typename?: 'Mutation', saveRelations: any };
 
+export type SchemaChangeQueryVariables = Types.Exact<{ [key: string]: never; }>;
+
+
+export type SchemaChangeQuery = { __typename?: 'Query', schemaChange: { __typename?: 'SchemaChange', lastSchemaChangeTime?: string | null, deletedTables?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }> }> | null, deletedColumns?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }> }> | null, modifiedColumns?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }> }> | null } };
+
+export type TriggerDataSourceDetectionMutationVariables = Types.Exact<{ [key: string]: never; }>;
+
+
+export type TriggerDataSourceDetectionMutation = { __typename?: 'Mutation', triggerDataSourceDetection: boolean };
+
+export type ResolveSchemaChangeMutationVariables = Types.Exact<{
+  where: Types.ResolveSchemaChangeWhereInput;
+}>;
+
+
+export type ResolveSchemaChangeMutation = { __typename?: 'Mutation', resolveSchemaChange: boolean };
+
 
 export const StartSampleDatasetDocument = gql`
     mutation StartSampleDataset($data: SampleDatasetInput!) {
@@ -296,3 +313,125 @@ export function useSaveRelationsMutation(baseOptions?: Apollo.MutationHookOption
 export type SaveRelationsMutationHookResult = ReturnType<typeof useSaveRelationsMutation>;
 export type SaveRelationsMutationResult = Apollo.MutationResult<SaveRelationsMutation>;
 export type SaveRelationsMutationOptions = Apollo.BaseMutationOptions<SaveRelationsMutation, SaveRelationsMutationVariables>;
+export const SchemaChangeDocument = gql`
+    query SchemaChange {
+  schemaChange {
+    deletedTables {
+      sourceTableName
+      displayName
+      columns {
+        sourceColumnName
+        displayName
+        type
+      }
+    }
+    deletedColumns {
+      sourceTableName
+      displayName
+      columns {
+        sourceColumnName
+        displayName
+        type
+      }
+    }
+    modifiedColumns {
+      sourceTableName
+      displayName
+      columns {
+        sourceColumnName
+        displayName
+        type
+      }
+    }
+    lastSchemaChangeTime
+  }
+}
+    `;
+
+/**
+ * __useSchemaChangeQuery__
+ *
+ * To run a query within a React component, call `useSchemaChangeQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSchemaChangeQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSchemaChangeQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useSchemaChangeQuery(baseOptions?: Apollo.QueryHookOptions<SchemaChangeQuery, SchemaChangeQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<SchemaChangeQuery, SchemaChangeQueryVariables>(SchemaChangeDocument, options);
+      }
+export function useSchemaChangeLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SchemaChangeQuery, SchemaChangeQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<SchemaChangeQuery, SchemaChangeQueryVariables>(SchemaChangeDocument, options);
+        }
+export type SchemaChangeQueryHookResult = ReturnType<typeof useSchemaChangeQuery>;
+export type SchemaChangeLazyQueryHookResult = ReturnType<typeof useSchemaChangeLazyQuery>;
+export type SchemaChangeQueryResult = Apollo.QueryResult<SchemaChangeQuery, SchemaChangeQueryVariables>;
+export const TriggerDataSourceDetectionDocument = gql`
+    mutation TriggerDataSourceDetection {
+  triggerDataSourceDetection
+}
+    `;
+export type TriggerDataSourceDetectionMutationFn = Apollo.MutationFunction<TriggerDataSourceDetectionMutation, TriggerDataSourceDetectionMutationVariables>;
+
+/**
+ * __useTriggerDataSourceDetectionMutation__
+ *
+ * To run a mutation, you first call `useTriggerDataSourceDetectionMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useTriggerDataSourceDetectionMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [triggerDataSourceDetectionMutation, { data, loading, error }] = useTriggerDataSourceDetectionMutation({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useTriggerDataSourceDetectionMutation(baseOptions?: Apollo.MutationHookOptions<TriggerDataSourceDetectionMutation, TriggerDataSourceDetectionMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<TriggerDataSourceDetectionMutation, TriggerDataSourceDetectionMutationVariables>(TriggerDataSourceDetectionDocument, options);
+      }
+export type TriggerDataSourceDetectionMutationHookResult = ReturnType<typeof useTriggerDataSourceDetectionMutation>;
+export type TriggerDataSourceDetectionMutationResult = Apollo.MutationResult<TriggerDataSourceDetectionMutation>;
+export type TriggerDataSourceDetectionMutationOptions = Apollo.BaseMutationOptions<TriggerDataSourceDetectionMutation, TriggerDataSourceDetectionMutationVariables>;
+export const ResolveSchemaChangeDocument = gql`
+    mutation ResolveSchemaChange($where: ResolveSchemaChangeWhereInput!) {
+  resolveSchemaChange(where: $where)
+}
+    `;
+export type ResolveSchemaChangeMutationFn = Apollo.MutationFunction<ResolveSchemaChangeMutation, ResolveSchemaChangeMutationVariables>;
+
+/**
+ * __useResolveSchemaChangeMutation__
+ *
+ * To run a mutation, you first call `useResolveSchemaChangeMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useResolveSchemaChangeMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [resolveSchemaChangeMutation, { data, loading, error }] = useResolveSchemaChangeMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *   },
+ * });
+ */
+export function useResolveSchemaChangeMutation(baseOptions?: Apollo.MutationHookOptions<ResolveSchemaChangeMutation, ResolveSchemaChangeMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<ResolveSchemaChangeMutation, ResolveSchemaChangeMutationVariables>(ResolveSchemaChangeDocument, options);
+      }
+export type ResolveSchemaChangeMutationHookResult = ReturnType<typeof useResolveSchemaChangeMutation>;
+export type ResolveSchemaChangeMutationResult = Apollo.MutationResult<ResolveSchemaChangeMutation>;
+export type ResolveSchemaChangeMutationOptions = Apollo.BaseMutationOptions<ResolveSchemaChangeMutation, ResolveSchemaChangeMutationVariables>;

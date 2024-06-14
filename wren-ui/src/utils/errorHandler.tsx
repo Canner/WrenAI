@@ -230,6 +230,24 @@ class UpdateViewMetadataErrorHandler extends ErrorHandler {
   }
 }
 
+class TriggerDataSourceDetectionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to scan data source.';
+    }
+  }
+}
+
+class ResolveSchemaChangeErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to resolve schema change.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -264,6 +282,13 @@ errorHandlers.set(
 errorHandlers.set('CreateRelationship', new CreateRelationshipErrorHandler());
 errorHandlers.set('UpdateRelationship', new UpdateRelationshipErrorHandler());
 errorHandlers.set('DeleteRelationship', new DeleteRelationshipErrorHandler());
+
+// Schema change
+errorHandlers.set(
+  'TriggerDataSourceDetection',
+  new TriggerDataSourceDetectionErrorHandler(),
+);
+errorHandlers.set('ResolveSchemaChange', new ResolveSchemaChangeErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   // networkError
