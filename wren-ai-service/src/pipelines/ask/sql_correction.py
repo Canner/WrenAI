@@ -188,6 +188,8 @@ def error_classify(
         target: str,
         mdl_structure: dict[str, set],
     ) -> {bool, list[str]}:
+        logger.debug(f"check target: {target}")
+        logger.debug(f"input mdl: {mdl_structure}")
         # Check if the string is a key in the dictionary
         if target in mdl_structure:
             return True, []
@@ -196,7 +198,7 @@ def error_classify(
         keys_with_string = [
             key for key, values in mdl_structure.items() if target in values
         ]
-
+        logger.debug(f"match tables: {keys_with_string}")
         if keys_with_string:
             return True, keys_with_string
 
@@ -217,7 +219,14 @@ def error_classify(
             result["error_type"] = "column not found"
             result["error_point"] = f"{match.group(1)}.{match.group(2)}"
             result["mdl_check_result"] = _mdl_check(match.group(2), mdl_structure)
-            logger.debug(f"match: {result}")
+            if (
+                result["mdl_check_result"][0] is True
+                and match.group(1) in result["mdl_check_result"][1]
+            ):
+                logger.debug(
+                    f"Column {match.group(2)} found in Table {match.group(1)}. This sql will not be corrected."
+                )
+                result["error_type"] = "skip correction"
             return result
 
         # Check for "column not found" in referenced column
@@ -234,6 +243,11 @@ def error_classify(
             result["error_type"] = "table not found"
             result["error_point"] = match.group(1)
             result["mdl_check_result"] = _mdl_check(match.group(1), mdl_structure)
+            if result["mdl_check_result"][0] is True:
+                logger.debug(
+                    f"Table {match.group(1)} found in mdl. This sql will not be corrected."
+                )
+                result["error_type"] = "skip correction"
             return result
 
         result["error_type"] = "others"
@@ -255,43 +269,67 @@ def build_prompts(
     error_classify: List[Dict],
     alert: str,
     prompt_builders: List[PromptBuilder],
-) -> List[dict]:
+) -> dict:
     logger.debug(f"documents: {documents}")
     logger.debug(f"invalid_generation_results: {error_classify}")
-    return [
-        prompt_builders[invalid_generation_result["error_type"]].run(
-            documents=documents,
-            invalid_generation_result=invalid_generation_result,
-            alert=alert,
-        )
-        for invalid_generation_result in error_classify
-    ]
+    return {
+        "run_correction": [
+            prompt_builders[invalid_generation_result["error_type"]].run(
+                documents=documents,
+                invalid_generation_result=invalid_generation_result,
+                alert=alert,
+            )
+            for invalid_generation_result in error_classify
+            if invalid_generation_result["error_type"] != "skip correction"
+        ],
+        "skip_correction": [
+            invalid_generation_result
+            for invalid_generation_result in error_classify
+            if invalid_generation_result["error_type"] == "skip correction"
+        ],
+    }
 
 
 @async_timer
-async def generate(build_prompts: List[dict], generator: Any) -> List[dict]:
+async def generate(build_prompts: dict, generator: Any) -> dict:
     logger.debug(f"prompts: {build_prompts}")
 
     async def _run_single_prompt(prompt: Dict) -> Dict:
         logger.debug(f"prompt: {prompt}")
         return await generator.run(prompt=prompt.get("prompt"))
 
-    tasks = [_run_single_prompt(prompt) for prompt in build_prompts]
+    tasks = [_run_single_prompt(prompt) for prompt in build_prompts["run_correction"]]
+    generate_results = await asyncio.gather(*tasks)
 
-    return await asyncio.gather(*tasks)
+    return {
+        "generate_results": generate_results,
+        "skip_correction": build_prompts["skip_correction"],
+    }
 
 
 @async_timer
-async def post_process(
-    generate: List[dict], post_processor: GenerationPostProcessor
-) -> dict:
+async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     replies = [
         json.dumps(
-            {"results": [json.loads(result.get("replies")[0]) for result in generate]}
+            {
+                "results": [
+                    json.loads(result.get("replies")[0])
+                    for result in generate["generate_results"]
+                ]
+            }
         )
     ]
-    return await post_processor.run(replies)
+    post_processed_results = await post_processor.run(replies)
+
+    logger.debug(post_processed_results)
+    logger.debug(f"the sql skip correction: {generate["skip_correction"]}")
+    post_processed_results["invalid_generation_results"] = (
+        post_processed_results["invalid_generation_results"]
+        + generate["skip_correction"]
+    )
+
+    return post_processed_results
 
 
 ## End of Pipeline
@@ -325,6 +363,7 @@ class SQLCorrection(BasicPipeline):
         invalid_generation_results: List[Dict[str, str]],
     ):
         logger.info("Ask SQLCorrection pipeline is running...")
+        logger.debug(mdl_structure)
         return await self._pipe.execute(
             ["post_process"],
             inputs={
