@@ -24,7 +24,7 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: wren-config
-                  key: DATA_PATH
+                  key: WREN_ENGINE_DATA_PATH
             - name: PG_PASSWORD
               valueFrom:
                 secretKeyRef:

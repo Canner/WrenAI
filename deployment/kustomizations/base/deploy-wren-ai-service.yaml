@@ -36,6 +36,11 @@ spec:
               secretKeyRef:
                 name: wrenai-secrets
                 key: LLM_PROVIDER
+          - name: OPENAI_API_BASE
+            valueFrom: 
+              configMapKeyRef:
+                name: wren-config
+                key: OPENAI_API_BASE
           - name: OPENAI_GENERATION_MODEL
             valueFrom: 
               configMapKeyRef:
@@ -56,6 +61,21 @@ spec:
               configMapKeyRef:
                 name: wren-config
                 key: WREN_ENGINE_ENDPOINT
+          - name: LOGGING_LEVEL
+            valueFrom:
+              configMapKeyRef:
+                name: wren-config
+                key: LOGGING_LEVEL
+          - name: WREN_UI_ENDPOINT
+            valueFrom:
+              configMapKeyRef:
+                name: wren-config
+                key: WREN_UI_ENDPOINT
+          - name: ENABLE_TIMER
+            valueFrom:
+              configMapKeyRef:
+                name: wren-config
+                key: WREN_AI_SERVICE_ENABLE_TIMER
           - name: PYTHONUNBUFFERED
             value: "1"
           ports:

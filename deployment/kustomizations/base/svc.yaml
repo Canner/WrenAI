@@ -51,3 +51,16 @@ spec:
       port: 5555
       targetPort: 5555
       name: wren-ai-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-ibis-server-svc
+spec:
+  selector:
+    app: wren-ibis
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: wren-ibis
