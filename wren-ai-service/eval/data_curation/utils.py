@@ -82,7 +82,6 @@ async def get_validated_question_sql_pairs(
                 "context": [],
                 "is_valid": valid,
                 "error": error,
-                "categories": [],
             }
             for i, (valid, error) in enumerate(results)
         ]

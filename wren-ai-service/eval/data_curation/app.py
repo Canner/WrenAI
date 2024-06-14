@@ -75,17 +75,17 @@ def on_change_sql(i: int, key: str):
             st.session_state["user_question_sql_pair"]["context"] = new_context
 
 
-def on_click_add_candidate_dataset(i: int):
+def on_click_add_candidate_dataset(i: int, categories: list):
     if i != -1:
         dataset_to_add = {
-            "categories": st.session_state["llm_question_sql_pairs"][i]["categories"],
+            "categories": categories,
             "question": st.session_state["llm_question_sql_pairs"][i]["question"],
             "context": st.session_state["llm_question_sql_pairs"][i]["context"],
             "sql": st.session_state["llm_question_sql_pairs"][i]["sql"],
         }
     else:
         dataset_to_add = {
-            "categories": st.session_state["user_question_sql_pair"]["categories"],
+            "categories": categories,
             "question": st.session_state["user_question_sql_pair"]["question"],
             "context": st.session_state["user_question_sql_pair"]["context"],
             "sql": st.session_state["user_question_sql_pair"]["sql"],
@@ -106,12 +106,24 @@ def on_click_add_candidate_dataset(i: int):
         st.session_state["candidate_dataset"].append(dataset_to_add)
 
 
+def on_change_sql_context(i: int):
+    if i == -1:
+        st.session_state.get("user_question_sql_pair", {}).get("context", []).append(
+            st.session_state["user_context_input"]
+        )
+        st.session_state["user_context_input"] = ""
+    else:
+        st.session_state["llm_question_sql_pairs"][i]["context"].append(
+            st.session_state[f"context_input_{i}"]
+        )
+        st.session_state[f"context_input_{i}"] = ""
+
+
 def on_change_user_question():
     if not st.session_state["user_question_sql_pair"]:
         st.session_state["user_question_sql_pair"] = {
             "question": st.session_state["user_question"],
             "context": [],
-            "categories": [],
             "sql": "",
             "is_valid": False,
             "error": "",
@@ -205,13 +217,20 @@ if st.session_state["mdl_json"] is not None:
                         value=[],
                         key=f"categories_{i}",
                     )
-                    st.multiselect(
+                    st.text_input(
                         f"Context {i}",
+                        placeholder="Enter the context of SQL manually with format <table_name>.<column_name>",
+                        key=f"context_input_{i}",
+                        on_change=on_change_sql_context,
+                        args=(i,),
+                    )
+                    st.multiselect(
+                        label=f"Context {i}",
                         options=question_sql_pair["context"],
                         default=question_sql_pair["context"],
-                        disabled=True,
                         key=f"context_{i}",
                         help="Contexts are automatically generated based on the SQL once you save the changes of the it(ctrl+enter or command+enter)",
+                        label_visibility="hidden",
                     )
                     st.text_area(
                         f"SQL {i}",
@@ -236,10 +255,14 @@ if st.session_state["mdl_json"] is not None:
                             not st.session_state["llm_question_sql_pairs"][i][
                                 "is_valid"
                             ]
+                            or not st.session_state[f"context_{i}"]
                             or not categories
                         ),
                         on_click=on_click_add_candidate_dataset,
-                        args=(i,),
+                        args=(
+                            i,
+                            categories,
+                        ),
                     )
 
                     st.markdown("---")
@@ -256,19 +279,26 @@ if st.session_state["mdl_json"] is not None:
                     label="Categories",
                     text="Press enter to add more",
                     value=[],
-                    key="categories",
+                    key="user_categories",
+                )
+                st.text_input(
+                    "Context",
+                    placeholder="Enter the context of SQL manually with format <table_name>.<column_name>",
+                    key="user_context_input",
+                    on_change=on_change_sql_context,
+                    args=(-1,),
                 )
                 st.multiselect(
-                    "Context",
+                    label="Context",
                     options=st.session_state.get("user_question_sql_pair", {}).get(
                         "context", []
                     ),
                     default=st.session_state.get("user_question_sql_pair", {}).get(
                         "context", []
                     ),
-                    disabled=True,
                     key="user_context",
                     help="Contexts are automatically generated based on the SQL once you save the changes of the it(ctrl+enter or command+enter)",
+                    label_visibility="hidden",
                 )
                 st.text_area(
                     "SQL",
@@ -294,11 +324,15 @@ if st.session_state["mdl_json"] is not None:
                         not st.session_state.get("user_question_sql_pair", {}).get(
                             "is_valid", False
                         )
+                        or not st.session_state["user_context"]
                         or not st.session_state["user_question"]
                         or not categories
                     ),
                     on_click=on_click_add_candidate_dataset,
-                    args=(-1,),
+                    args=(
+                        -1,
+                        categories,
+                    ),
                 )
     with col2:
         st.markdown("### Candidate Dataset")
@@ -310,6 +344,13 @@ if st.session_state["mdl_json"] is not None:
                     dataset["question"],
                     disabled=True,
                     key=f"candidate_dataset_question_{i}",
+                )
+                st.multiselect(
+                    f"Categories {i}",
+                    options=dataset["categories"],
+                    default=dataset["categories"],
+                    disabled=True,
+                    key=f"candidate_dataset_categories_{i}",
                 )
                 st.multiselect(
                     f"Context {i}",
