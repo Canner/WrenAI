@@ -1,5 +1,6 @@
+import json
 import logging
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 import orjson
 import sqlparse
@@ -116,6 +117,11 @@ class AskService:
     ):
         self._pipelines = pipelines
         self._redis_db = redis_db
+        self.prepare_semantics_statuses: dict[
+            str, SemanticsPreparationStatusResponse.status
+        ] = {}
+        self.ask_results: dict[str, AskResultResponse] = {}
+        self.mdl_structure: dict[str, set] = {}
 
     @async_timer
     async def prepare_semantics(
@@ -132,6 +138,17 @@ class AskService:
                     status="finished",
                 ).model_dump_json(),
             )
+            mdl_dict = json.loads(prepare_semantics_request.mdl)
+            logger.debug(f"mdl_dict: {mdl_dict}")
+            self.mdl_structure = {
+                model["name"]: {column["name"] for column in model["columns"]}
+                for model in mdl_dict["models"]
+            }
+            logger.debug(f"MDL_STRUCTURE: {self.mdl_structure}")
+
+            self.prepare_semantics_statuses[
+                prepare_semantics_request.id
+            ] = SemanticsPreparationStatusResponse(status="finished")
         except Exception as e:
             logger.error(f"ask pipeline - Failed to prepare semantics: {e}")
 
@@ -300,6 +317,7 @@ class AskService:
                         "sql_correction"
                     ].run(
                         contexts=documents,
+                        mdl_structure=self.mdl_structure,
                         invalid_generation_results=text_to_sql_generation_results[
                             "post_process"
                         ]["invalid_generation_results"],
@@ -386,6 +404,69 @@ class AskService:
                     ),
                 ).model_dump_json(),
             )
+
+    async def sql_correction(
+        self, query: str, invalid_generation_results: List[Dict]
+    ) -> List[Dict]:
+        try:
+            retrieval_result = await self._pipelines["retrieval"].run(
+                query=query,
+            )
+            documents = retrieval_result.get("retrieval", {}).get("documents", [])
+
+            if not documents:
+                logger.error(f"ask pipeline - NO_RELEVANT_DATA: {query}")
+                return [{"status": "failed"}]
+
+            logger.debug("Documents:")
+            for document in documents:
+                logger.debug(f"score: {document.score}")
+                logger.debug(f"content: {document.content}")
+
+            sql_correction_results = await self._pipelines["sql_correction"].run(
+                contexts=documents,
+                mdl_structure=self.mdl_structure,
+                invalid_generation_results=invalid_generation_results,
+            )
+            valid_generation_results = sql_correction_results["post_process"][
+                "valid_generation_results"
+            ]
+
+            logger.debug(
+                f'sql_correction_results: {sql_correction_results["post_process"]}'
+            )
+
+            for results in sql_correction_results["post_process"][
+                "invalid_generation_results"
+            ]:
+                logger.debug(
+                    f"{sqlparse.format(
+                        results['sql'],
+                        reindent=True,
+                        keyword_case='upper')
+                    }"
+                )
+                logger.debug(results["error"])
+                logger.debug("\n\n")
+
+            # remove duplicates of valid_generation_results, which consists of a sql and a summary
+            valid_generation_results = remove_duplicates(valid_generation_results)
+
+            logger.debug("After sql correction:")
+            logger.debug(f"valid_generation_results: {valid_generation_results}")
+
+            if not valid_generation_results:
+                logger.error(f"ask pipeline - NO_RELEVANT_SQL: {query}")
+                return [{"status": "failed"}]
+
+            # only return top 3 results, thus remove the rest
+            if len(valid_generation_results) > 3:
+                del valid_generation_results[3:]
+
+            return valid_generation_results
+
+        except Exception as e:
+            logger.error(f"ask pipeline - OTHERS: {e}")
 
     def stop_ask(
         self,

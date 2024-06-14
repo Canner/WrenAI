@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 import re
 import sys
@@ -19,12 +21,12 @@ from src.utils import async_timer, init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
-
-sql_correction_user_prompt_template = """
+sql_correction_prompt_templates_by_error_type = {
+    "table not found": """
 You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### TASK ###
-Now you are given a list of syntactically incorrect Trino SQL queries and related error messages.
+Now you are given a syntactically incorrect Trino SQL query and related error information.
 With given database schema, please follow the instruction step by step to correct these wrong Trino SQL quries.
 
 ### DATABASE SCHEMA ###
@@ -32,88 +34,82 @@ With given database schema, please follow the instruction step by step to correc
     {{ document.content }}
 {% endfor %}
 
-### Step 1: Identify the error ###
-First step of the correction process is to identify the error point.
-By analyzing the "error" of each invalid generation result, identify the "error_type" and find the "error point" in the sql.
-For the "error_type", there are 2 types of error, choose 1 between them:
-- Table does not exist
-- Column does not exist
-
-For the "error_point", it should be either a table name or a column name from the sql, display the error point as 1 of the 3 format:
-- Table \"table_name\"
-- Column \"column_name\"
-- Column \"table_name.column_name\"
-
-Example 1: given the invalid generation result
-{
-    sql: "SELECT EXTRACT(MONTH FROM "PurchaseTimestamp") AS "Month", SUM("PriceSum") AS "TotalRevenue" FROM "Revenue" GROUP BY 1 ORDER BY "TotalRevenue" DESC"
-    summary: "Retrieve the month which has the best revenue."
-    error: "java.sql.SQLException: java.sql.SQLException: Catalog Error: Table with name Revenue does not exist!\nDid you mean \"reviews\"?"
-}
-
-Then the "error_type" and the "error_point" of the above example input are "Table does not exist" and "Table \"Revenue\"" respectively.
-
-Example 2: given the invalid generation result
-{
-    sql: "SELECT "Value"
-            FROM "payments"
-            WHERE LOWER("Type") = 'mrr'
-            AND "PurchaseTimestamp" >= CAST('2022-01-01' AS TIMESTAMP)
-            AND "PurchaseTimestamp" < CAST('2023-01-01' AS TIMESTAMP)"
-    summary: "Retrive the mrr type payments"
-    error: "java.sql.SQLException: Binder Error: Referenced column \"PurchaseTimestamp\" not found in FROM clause!"
-}
-
-Then the "error_type" and the "error_point" of the above example input are "Column does not exist" and "Column \"payments.PurchaseTimestamp\"" respectively.
-
-Example 3: given the invalid generation result
-{
-    sql: "WITH "ranked_products" AS
-            (SELECT "p"."Name",
-                    "p"."Category",
-                    "p"."Id",
-                    ROW_NUMBER() OVER (PARTITION BY "oi"."City"
-                                        ORDER BY "oi"."Price" DESC) AS "rn"
-            FROM "products" AS "p"
-            JOIN "order_items" AS "oi" ON "p"."Id" = "oi"."ProductId")
-            SELECT "oi"."City",
-                "ranked_products"."Name",
-                "ranked_products"."Category"
-            FROM "ranked_products"
-            WHERE "rn" <= 3"
-    summary: "Show the top 3 products of each city"
-    error: "java.sql.SQLException: Binder Error: Values list \"oi\" does not have a column named \"City\""
-}
-
-The "error_type" and the "error_point" of the above example input are "Column does not exist" and "Column \"oi.City\"" respectively.
-
-### Step 2: Rewrite the sql ###
-Given the error type and error point from the previous step, the second step is to rewrite the incorrect sql to a correct one.
-
-1. If the error type is "Table does not exist":
-It means the original sql uses a non-existed table. The wrong table name is mentioned in the error point.
-Locate the table position in the sql, then regenerate a sql that is relevent to the summary, but without using the wrong table.
+### TASK INSTRUCTIONS ###
+The input sql has the problem of using non-existed tables. The wrong table name can be found in the "error_point" attribute of the input data.
+To solve this problem, you should locate the table position in the sql, then regenerate a sql that is relevent to the summary, but without using the wrong table.
 Search through the given database schema for the correct table to replace the wrong one.
 Join tables and use aggregation functions if necessary.
 
-For example, given the invalid generation result:
+### INPUT STRUCTURE ###
+The input is constructed of 5 elements:
+1. "sql": This is the incorrect sql you need to rewrite.
+2. "summary": The brief explanation of the purpose of the sql, your rewritten sql still needs to follow the meaning of this summary.
+3. "error": The error message return from the sql engine.
+4. "error_type": The type of the sql error, it is "table not found" in this case.
+5. "error_point": This attribute indicate the error table name of the input sql.
+6. "mdl_check_result": This attribute contains 2 components: the first component is a boolean value, which shows if the incorrect table name is actually existed in the db schema. The second attribute is typically a empty list in this case.
+
+### EXAMPLE ###
+For example, given the input:
 {
     sql: "SELECT EXTRACT(MONTH FROM "PurchaseTimestamp") AS "Month", SUM("PriceSum") AS "TotalRevenue" FROM "Revenue" GROUP BY 1 ORDER BY "TotalRevenue" DESC"
     summary: "Retrieve the month which has the best revenue."
     error: "java.sql.SQLException: java.sql.SQLException: Catalog Error: Table with name Revenue does not exist!\nDid you mean \"reviews\"?"
+    error_type: "table not found"
+    error_point: "Revenue"
+    mdl_check_result: (False, [])
 }
-From the previous step, the error type is "Table does not exist" and the error point is "Table \"Revenue\"", so the "FROM "Revenue"" clause should be replaced.
+The error type is "table not found" and the error point is "Table \"Revenue\"", so the "FROM "Revenue"" clause should be replaced.
 According to the semantics of the sql summary and the db schema, you can use the "orders" table to retrieve "PurchaseTimestamp" column, and the "payments" table to retrive "Value" column.
 So the final corrected sql will be:
 "SELECT EXTRACT(MONTH FROM "o.PurchaseTimestamp") AS "Month", SUM("p.Value") AS "TotalRevenue" FROM "payments" AS "p" JOIN "orders" AS "o" on "p"."OrderId" = "o"."OrderId" GROUP BY 1 ORDER BY "TotalRevenue" DESC"
 
-2. If the error type is "Column does not exist":
+### FINAL ANSWER FORMAT ###
+The final answer must be the corrected SQL quries and its original corresponding summary in JSON format.
+You only need to keep these 2 elements.
+
+{
+    "sql": <CORRECTED_SQL_QUERY_STRING>, 
+    "summary": <ORIGINAL_SUMMARY_STRING>
+}
+
+{{ alert }}
+
+### QUESTION ###
+{{ invalid_generation_result }}
+
+Let's think step by step.
+""",
+    "column not found": """
+You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
+
+### TASK ###
+Now you are given a syntactically incorrect Trino SQL query and related error information.
+With given database schema, please follow the instruction step by step to correct these wrong Trino SQL quries.
+
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document.content }}
+{% endfor %}
+
+### TASK INSTRUCTIONS ###
 It means the original sql uses a non-existed column. The wrong column name is mentioned in the error point.
-Locate the column position in the sql, then regenerate a sql that is relevent to the summary, but without using the wrong column.
-Search through the given database schema for the correct column to replace the wrong one.
+If the first part of "mdl_check_result" is True, which means the column name is existed in the db schema, but the table of original sql is wrong.
+You can use the corrected table names listed in the second part of "mdl_check_result".
+If the first part of "mdl_check_result" is False, the current column name is not found in the db schema, please search through the db schema for another column to replace it.
 Join tables and use aggregation functions if necessary.
 
-For example, given the invalid generation result:
+### INPUT STRUCTURE ###
+The input is constructed of 5 elements:
+1. "sql": This is the incorrect sql you need to rewrite.
+2. "summary": The brief explanation of the purpose of the sql, your rewritten sql still needs to follow the meaning of this summary.
+3. "error": The error message return from the sql engine.
+4. "error_type": The type of the sql error, it is "column not found" in this case.
+5. "error_point": This attribute indicate the wrong column name of the input sql.
+6. "mdl_check_result": This attribute contains 2 components: the first component is a boolean value, which shows if the incorrect column name is actually existed in the db schema. If the first value is True, the second attribute will be a list containing the table names which the column actually belongs to; else, the second attribute is an empty list.
+
+### EXAMPLE ###
+For example, given the input:
 {
     sql: "SELECT "Value"
             FROM "payments"
@@ -123,8 +119,8 @@ For example, given the invalid generation result:
     summary: "Retrive the mrr type payments"
     error: " java.sql.SQLException: Binder Error: Referenced column \"PurchaseTimestamp\" not found in FROM clause!"
 }
-From the previous step, the error type is "Column does not exist" and the error point is "Column \"payments.PurchaseTimestamp\"", so you should either replace the "PurchaseTimestamp" column used in the sql, or join other table that has the "PurchaseTimestamp" column.
-Since "PurchaseTimestamp" exists in the "orders" table, you can join the orders table to retrieve the "PurchaseTimestamp".
+The error type is "column not found" and the error point is "Column \"payments.PurchaseTimestamp\"", so you should either replace the "PurchaseTimestamp" column used in the sql, or join other table that has the "PurchaseTimestamp" column.
+According to the "mdl_check_result", the "PurchaseTimestamp" exists in the "orders" table, so you can join the orders table to retrieve the "PurchaseTimestamp".
 So the final corrected sql will be:
 SELECT "Value"
     FROM "payments" p
@@ -134,30 +130,50 @@ SELECT "Value"
     AND "o.PurchaseTimestamp" < CAST('2023-01-01' AS TIMESTAMP)
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a list of corrected SQL quries and its original corresponding summary in JSON format
+The final answer must be the corrected SQL quries and its original corresponding summary in JSON format
+You only need to keep these 2 elements.
 
 {
-    "results": [
-        {"sql": <CORRECTED_SQL_QUERY_STRING_1>, "summary": <ORIGINAL_SUMMARY_STRING_1>},
-        {"sql": <CORRECTED_SQL_QUERY_STRING_2>, "summary": <ORIGINAL_SUMMARY_STRING_2>}
-    ]
+    "sql": <CORRECTED_SQL_QUERY_STRING>, 
+    "summary": <ORIGINAL_SUMMARY_STRING>
 }
 
 {{ alert }}
 
 ### QUESTION ###
-{% for invalid_generation_result in invalid_generation_results %}
-    sql: {{ invalid_generation_result.sql }}
-    summary: {{ invalid_generation_result.summary }}
-    error: {{ invalid_generation_result.error }}
-    error_type: {{ invalid_generation_result.error_type }}
-    error_point: {{ invalid_generation_result.error_point }}
-    mdl_check_result: {{ invalid_generation_result.mdl_check_result }}
-{% endfor %}
+{{ invalid_generation_result }}
 
 Let's think step by step.
-"""
+""",
+    "others": """
+You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
 
+### TASK ###
+Now you are given a list of syntactically incorrect Trino SQL queries and related error messages.
+With given database schema, please think step by step to correct these wrong Trino SQL quries.
+
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document.content }}
+{% endfor %}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be the corrected SQL quries and its original corresponding summary in JSON format
+You only need to keep these 2 elements.
+
+{
+    "sql": <CORRECTED_SQL_QUERY_STRING>, 
+    "summary": <ORIGINAL_SUMMARY_STRING>
+}
+
+{{ alert }}
+
+### QUESTION ###
+{{ invalid_generation_result }}
+
+Let's think step by step.
+""",
+}
 
 ## Start of Pipeline
 
@@ -234,31 +250,48 @@ def error_classify(
 
 
 @timer
-def prompt(
+def build_prompts(
     documents: List[Document],
     error_classify: List[Dict],
     alert: str,
-    prompt_builder: PromptBuilder,
-) -> dict:
+    prompt_builders: List[PromptBuilder],
+) -> List[dict]:
     logger.debug(f"documents: {documents}")
     logger.debug(f"invalid_generation_results: {error_classify}")
-    return prompt_builder.run(
-        documents=documents,
-        invalid_generation_results=error_classify,
-        alert=alert,
-    )
+    return [
+        prompt_builders[invalid_generation_result["error_type"]].run(
+            documents=documents,
+            invalid_generation_result=invalid_generation_result,
+            alert=alert,
+        )
+        for invalid_generation_result in error_classify
+    ]
 
 
 @async_timer
-async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {prompt}")
-    return await generator.run(prompt=prompt.get("prompt"))
+async def generate(build_prompts: List[dict], generator: Any) -> List[dict]:
+    logger.debug(f"prompts: {build_prompts}")
+
+    async def _run_single_prompt(prompt: Dict) -> Dict:
+        logger.debug(f"prompt: {prompt}")
+        return await generator.run(prompt=prompt.get("prompt"))
+
+    tasks = [_run_single_prompt(prompt) for prompt in build_prompts]
+
+    return await asyncio.gather(*tasks)
 
 
 @async_timer
-async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+async def post_process(
+    generate: List[dict], post_processor: GenerationPostProcessor
+) -> dict:
     logger.debug(f"generate: {generate}")
-    return await post_processor.run(generate.get("replies"))
+    replies = [
+        json.dumps(
+            {"results": [json.loads(result.get("replies")[0]) for result in generate]}
+        )
+    ]
+    return await post_processor.run(replies)
 
 
 ## End of Pipeline
@@ -272,9 +305,12 @@ class SQLCorrection(BasicPipeline):
         self.generator = llm_provider.get_generator(
             system_prompt=text_to_sql_system_prompt
         )
-        self.prompt_builder = PromptBuilder(
-            template=sql_correction_user_prompt_template
-        )
+        self.prompt_builders = {
+            error_type: PromptBuilder(
+                template=sql_correction_prompt_templates_by_error_type[error_type]
+            )
+            for error_type in sql_correction_prompt_templates_by_error_type.keys()
+        }
         self.post_processor = GenerationPostProcessor()
 
         super().__init__(
@@ -297,7 +333,7 @@ class SQLCorrection(BasicPipeline):
                 "mdl_structure": mdl_structure,
                 "alert": TEXT_TO_SQL_RULES,
                 "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
+                "prompt_builders": self.prompt_builders,
                 "post_processor": self.post_processor,
             },
         )
