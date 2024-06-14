@@ -16,7 +16,6 @@ from src.web.v1.services.ask import AskRequest, AskResultResponse, SQLExplanatio
 
 GLOBAL_DATA = {
     "contexts": None,
-    "mdl_structure": None,
 }
 
 
@@ -30,7 +29,7 @@ def mdl_str():
 def mdl_structure():
     with open("tests/data/book_2_mdl.json", "r") as f:
         mdl_dict = json.load(f)
-        GLOBAL_DATA["mdl_structure"] = {
+        return {
             model["name"]: {column["name"] for column in model["columns"]}
             for model in mdl_dict["models"]
         }
@@ -196,7 +195,7 @@ def test_followup_generation_pipeline():
     )
 
 
-def test_sql_correction_pipeline():
+def test_sql_correction_pipeline(mdl_structure: dict):
     llm_provider, _ = init_providers()
     sql_correction_pipeline = SQLCorrection(
         llm_provider=llm_provider,
@@ -205,6 +204,7 @@ def test_sql_correction_pipeline():
     sql_correction_result = async_validate(
         lambda: sql_correction_pipeline.run(
             contexts=GLOBAL_DATA["contexts"],
+            mdl_structure=mdl_structure,
             invalid_generation_results=[
                 {
                     "sql": "Select count(*) from books",
