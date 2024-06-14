@@ -17,6 +17,8 @@ export interface SchemaChange {
   projectId: number; // Reference to project.id
   change: DataSourceSchemaChange; // Schema change
   resolve: DataSourceSchemaResolve; // Save resolve
+  createdAt: string; // Created at
+  updateAt: string; // Updated at
 }
 
 export interface ISchemaChangeRepository

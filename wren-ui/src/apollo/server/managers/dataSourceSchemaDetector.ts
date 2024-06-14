@@ -35,7 +35,7 @@ export enum SchemaChangeType {
 }
 
 export interface IDataSourceSchemaDetector {
-  detectSchemaChange(): Promise<void>;
+  detectSchemaChange(): Promise<boolean>;
   resolveSchemaChange(type: string): Promise<void>;
 }
 
@@ -53,8 +53,9 @@ export default class DataSourceSchemaDetector
   public async detectSchemaChange() {
     const diffSchema = await this.getDiffSchema();
     if (diffSchema) {
-      this.addSchemaChange(diffSchema);
+      await this.addSchemaChange(diffSchema);
     }
+    return !!diffSchema;
   }
 
   public async resolveSchemaChange(type: string) {

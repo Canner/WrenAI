@@ -625,6 +625,7 @@ export const typeDefs = gql`
     deletedTables: [DetailedChangeTable!]
     deletedColumns: [DetailedChangeTable!]
     modifiedColumns: [DetailedChangeTable!]
+    lastSchemaChangeTime: String
   }
 
   type DetailedChangeTable {

@@ -446,6 +446,7 @@ export class ProjectResolver {
         deletedTables: null,
         deletedColumns: null,
         modifiedColumns: null,
+        lastSchemaChangeTime: null,
       };
     }
 
@@ -497,7 +498,10 @@ export class ProjectResolver {
       return { ...result, [key]: affectedChanges };
     }, {});
 
-    return unresolvedChanges;
+    return {
+      ...unresolvedChanges,
+      lastSchemaChangeTime: lastSchemaChange.createdAt,
+    };
   }
 
   public async triggerDataSourceDetection(
@@ -510,8 +514,8 @@ export class ProjectResolver {
       ctx,
       projectId: project.id,
     });
-    await schemaDetector.detectSchemaChange();
-    return true;
+    const hasSchemaChange = await schemaDetector.detectSchemaChange();
+    return hasSchemaChange;
   }
 
   public async resolveSchemaChange(
