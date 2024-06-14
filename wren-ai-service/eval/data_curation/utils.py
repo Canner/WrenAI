@@ -77,7 +77,13 @@ async def get_validated_question_sql_pairs(
 
         results = await asyncio.gather(*tasks)
         return [
-            {**question_sql_pairs[i], "context": [], "is_valid": valid, "error": error}
+            {
+                **question_sql_pairs[i],
+                "context": [],
+                "is_valid": valid,
+                "error": error,
+                "categories": [],
+            }
             for i, (valid, error) in enumerate(results)
         ]
 

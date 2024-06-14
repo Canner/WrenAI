@@ -17,6 +17,7 @@ aiohttp = {extras = ["speedups"], version = "==3.9.5"}
 sqlparse = "^0.5.0"
 tomlkit = "^0.12.5"
 sqlglot = "^25.1.0"
+streamlit-tags = "^1.2.8"
 
 [build-system]
 requires = ["poetry-core"]
