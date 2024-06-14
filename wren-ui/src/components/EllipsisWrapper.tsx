@@ -6,6 +6,7 @@ interface Props {
   children?: ReactNode;
   multipleLine?: number;
   minHeight?: number;
+  showMoreCount?: boolean;
 }
 
 const Wrapper = styled.div<{ multipleLine?: number }>`
@@ -24,10 +25,29 @@ const Wrapper = styled.div<{ multipleLine?: number }>`
 `;
 
 export default function EllipsisWrapper(props: Props) {
-  const { text, multipleLine, minHeight, children } = props;
+  const { text, multipleLine, minHeight, children, showMoreCount } = props;
   const ref = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(undefined);
   const hasWidth = width !== undefined;
+  // Stage for counting the children that will be shown
+  const [stage, setStage] = useState([]);
+
+  const isStageEnd = useRef(false);
+  const calculateStageShow = () => {
+    if (isStageEnd.current) return;
+    const remainSpace = 60; // remain space for showing more tip
+    const stageWidth = stageRef.current?.clientWidth;
+    const canPrintNext = stageWidth < width - remainSpace;
+
+    if (canPrintNext) {
+      const hasMoreChildren = (children as ReactNode[]).length > stage.length;
+      hasMoreChildren && setStage([...stage, children[stage.length]]);
+    } else {
+      setStage(stage.slice(0, stage.length - 1));
+      isStageEnd.current = true;
+    }
+  };
 
   // Auto setup client width itself
   useEffect(() => {
@@ -35,10 +55,40 @@ export default function EllipsisWrapper(props: Props) {
       const cellWidth = ref.current.clientWidth;
       setWidth(cellWidth);
     }
+
+    // Reset state when unmount
+    return () => {
+      isStageEnd.current = false;
+      setStage([]);
+      setWidth(undefined);
+    };
   }, []);
+
+  // Only work when showMoreCount is provided
+  useEffect(() => {
+    if (!showMoreCount) return;
+    // Run only once when showMoreCount is true
+    if (stage.length === 0) {
+      setStage([children[0]]);
+      return;
+    }
+    calculateStageShow();
+  }, [showMoreCount, stage]);
 
   const renderContent = () => {
     if (!children) return text || '-';
+
+    // Turn another template if showMoreCount is provided
+    if (showMoreCount) {
+      const moreCount = (children as ReactNode[]).length - stage.length;
+      return (
+        <span className="d-inline-block" ref={stageRef}>
+          {stage}
+          {moreCount > 0 && <span className="gray-7">...{moreCount} more</span>}
+        </span>
+      );
+    }
+
     return children;
   };
 
