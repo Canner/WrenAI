@@ -16,6 +16,7 @@ from src.web.v1.services.ask import AskRequest, AskResultResponse, SQLExplanatio
 
 GLOBAL_DATA = {
     "contexts": None,
+    "mdl_structure": None,
 }
 
 
@@ -23,6 +24,16 @@ GLOBAL_DATA = {
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
         return orjson.dumps(json.load(f)).decode("utf-8")
+
+
+@pytest.fixture
+def mdl_structure():
+    with open("tests/data/book_2_mdl.json", "r") as f:
+        mdl_dict = json.load(f)
+        GLOBAL_DATA["mdl_structure"] = {
+            model["name"]: {column["name"] for column in model["columns"]}
+            for model in mdl_dict["models"]
+        }
 
 
 @pytest.fixture
