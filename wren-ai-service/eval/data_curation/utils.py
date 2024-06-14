@@ -7,6 +7,7 @@ from typing import Any, List, Tuple
 import aiohttp
 import orjson
 import requests
+import sqlglot
 import sqlparse
 import streamlit as st
 import tomlkit
@@ -38,18 +39,30 @@ def remove_limit_statement(sql: str) -> str:
     return modified_sql
 
 
+def add_quotes(sql: str) -> str:
+    return sqlglot.transpile(sql, read="trino", identify=True)[0]
+
+
 async def is_sql_valid(sql: str) -> Tuple[bool, str]:
     sql = sql[:-1] if sql.endswith(";") else sql
     async with aiohttp.request(
-        "GET",
-        f'{os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")}/v1/mdl/dry-run',
-        json={"sql": remove_limit_statement(sql), "limit": 1},
+        "POST",
+        f'{os.getenv("WREN_UI_ENDPOINT", "http://localhost:3000")}/api/graphql',
+        json={
+            "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
+            "variables": {
+                "data": {
+                    "dryRun": True,
+                    "limit": 1,
+                    "sql": remove_limit_statement(add_quotes(sql)),
+                }
+            },
+        },
     ) as response:
-        result = await response.json()
-        if response.status == 200:
-            return True, ""
-
-        return False, result["message"]
+        res = await response.json()
+        if res.get("data"):
+            return True, None
+        return False, res.get("errors", [{}])[0].get("message", "Unknown error")
 
 
 async def get_validated_question_sql_pairs(
