@@ -2,6 +2,7 @@
 
 ## wrenai related ##
 dev-up:
+	make prepare-wren-engine
 	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
 
 dev-down:
@@ -45,8 +46,12 @@ demo:
 
 
 ## wren-engine related ##
+prepare-wren-engine:
+	rm -rf tools/dev/etc && mkdir -p tools/dev/etc && cp tools/dev/config.properties.example tools/dev/etc/config.properties
+	mkdir -p tools/dev/etc/mdl && echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" > tools/dev/etc//mdl/sample.json
+
 psql:
-	docker exec -it wren-wren-engine-1 bash launch-cli.sh
+	docker exec -it wren-engine-1 bash launch-cli.sh
 ## wren-engine related ##
 
 
