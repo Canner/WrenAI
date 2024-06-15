@@ -15,15 +15,14 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 
 ## Start the service for development
 
-- execute `make run-all` to start needed containers (e.g. qdrant, wren-engine)
-- execute `make ui` to start the ui
+- execute `make dev-up` to start needed containers
 - execute `make start` to start the service and go to `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT` to see the API documentation and try the APIs
 
 ## Production Environment Setup
 
 - copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
 - `make build` to build the docker image
-- `make up` to run the wren-ai-service
+- `make up` to run the wren-ai-service and other containers
 - `make down` to stop the docker container
 
 ## Pipeline Evaluation(for development)
@@ -34,7 +33,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 - evaluation
   - `make eval pipeline=ask args="--help"`
   - `make eval pipeline=ask_details args="--help"`
-- `make streamlit` to compare between the evaluation results
+- `make eval_visualzation` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
 
 ### Speed Evaluation
@@ -48,7 +47,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
   - adjust test config if needed
     - adjust test config in pyproject.toml `tool.locust` section
     - adjust user count in `tests/locust/config_users.json`
-  - in wren-ai-service folder, run `make run-all` to start the docker containers
+  - in wren-ai-service folder, run `make dev-up` to start the docker containers
   - in wren-ai-service folder, run `make start` to start the ai service
   - run `make load-test`
   - check reports in /outputs/locust folder, there are 3 files with filename **locust_report_{test_timestamp}**:
@@ -60,7 +59,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 
 - go to the `demo` folder and run `poetry install` to install the dependencies
 - in the `wren-ai-service` folder, open three terminals
-  - in the first terminal, run `make run-all` to start the docker containers and `make ui` to start the wren-ui service
+  - in the first terminal, run `make dev-up` to start the docker container
   - in the second terminal, run `make start` to start the wren-ai service
   - in the third terminal, run `make demo` to start the demo service
 - ports of the services:
