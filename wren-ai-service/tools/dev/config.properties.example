@@ -1,5 +1,6 @@
 node.environment=production
 pg-wire-protocol.auth.file=
+pg-wire-protocol.enabled=true
 wren.directory=/usr/src/app/etc/mdl
 wren.experimental-enable-dynamic-fields=false
 wren.datasource.type=bigquery

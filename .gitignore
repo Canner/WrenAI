@@ -23,9 +23,6 @@ wren-ai-service/demo/poetry.lock
 wren-ai-service/demo/custom_dataset
 wren-ai-service/demo/.env
 wren-ai-service/tools/dev/etc/**
-!wren-ai-service/tools/dev/etc/mdl
-!wren-ai-service/tools/dev/etc/mdl/sample.json
-!wren-ai-service/tools/dev/etc/config.properties
 
 # python
 .python-version
