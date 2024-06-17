@@ -37,13 +37,15 @@ helmCharts:
 
 images:
   - name: ghcr.io/canner/wren-bootstrap
-    newTag: 0.1.4 # Update to new version
+    newTag: 0.1.4 # WREN_BOOTSTRAP_VERSION
   - name: ghcr.io/canner/wren-engine
-    newTag: 0.4.7 # Update to new version
+    newTag: 0.5.0 # WREN_ENGINE_VERSION
   - name: ghcr.io/canner/wren-ui
-    newTag: 0.6.0 # Update to new version. Mimumal version is 0.6.0 to use postgress for wren-ui, if you are using older version, you may use only sqlite, please adjust ConfigMap (deployment/kustomizations/base/cm.yaml), Secret (deployment/kustomizations/examples/secret-wren_example.yaml) and the deployment/kustomizations/base/deploy-wren-ui.yaml manifests.
+    newTag: 0.7.2 # WREN_UI_VERSION Mimumal version is 0.6.0 to use postgress for wren-ui, if you are using older version, you may use only sqlite, please adjust ConfigMap (deployment/kustomizations/base/cm.yaml), Secret (deployment/kustomizations/examples/secret-wren_example.yaml) and the deployment/kustomizations/base/deploy-wren-ui.yaml manifests.
   - name: ghcr.io/canner/wren-ai-service
-    newTag: 0.5.0 # Update to new version
+    newTag: 0.5.6 # WREN_AI_SERVICE_VERSION
+  - name: ghcr.io/canner/wren-engine-ibis
+    newTag: 0.5.0 # IBIS_SERVER_VERSION
 
 resources:
   - base/cm.yaml

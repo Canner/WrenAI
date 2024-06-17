@@ -27,7 +27,7 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: wren-config
-                  key: DB_TYPE
+                  key: WREN_UI_DB_TYPE
           # Uncomment if you are intending to use sqlite:
           #  - name: SQLITE_FILE
           #    valueFrom:
@@ -122,6 +122,11 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: WREN_PRODUCT_VERSION
+            - name: IBIS_SERVER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: IBIS_SERVER_ENDPOINT
           ports:
             - containerPort: 3000
           #if you are using sqlite, then volume is required, please uncomment next and the persistentVolumeClaim sections
