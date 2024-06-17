@@ -192,4 +192,5 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
+    pipeline.visualize("this is a test query", [], [])
     async_validate(lambda: pipeline.run("this is a test query", [], []))
