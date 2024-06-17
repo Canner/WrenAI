@@ -31,7 +31,7 @@ The following commands can quickly start the service for development:
 - `make up` to run the wren-ai-service and other containers
 - `make down` to stop the docker container
 
-## Pipeline Evaluation(for development)
+## Pipeline Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
 
 - install `psql`
 - fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
@@ -42,7 +42,7 @@ The following commands can quickly start the service for development:
 - `make eval_visualzation` to compare between the evaluation results
 - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
 
-### Speed Evaluation
+### Speed Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
 
 - to evaluate the speed of the pipeline, you can enable the timer
   - add environment variables `ENABLE_TIMER=1` in `.env.dev`
@@ -61,7 +61,7 @@ The following commands can quickly start the service for development:
     - .html: test report in html format, showing tables and charts
     - .log: test log
 
-## Demo
+## Demo(Deprecated)
 
 - go to the `demo` folder and run `poetry install` to install the dependencies
 - in the `wren-ai-service` folder, open three terminals
