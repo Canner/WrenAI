@@ -35,7 +35,7 @@
 
 ## 🚀 Live Demo
 
-[Playaround with our live demo!](https://demo.getwren.ai/)
+[Play around with our live demo!](https://demo.getwren.ai/)
 
 
 ## 🎯 Our Vision & Mission
