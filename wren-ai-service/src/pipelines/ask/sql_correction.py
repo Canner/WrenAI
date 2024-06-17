@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
 from hamilton import base
@@ -103,6 +104,30 @@ class SQLCorrection(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(
+        self,
+        contexts: List[Document],
+        invalid_generation_results: List[Dict[str, str]],
+    ) -> None:
+        destination = "outputs/pipelines/ask"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["post_process"],
+            output_file_path=f"{destination}/sql_correction.dot",
+            inputs={
+                "invalid_generation_results": invalid_generation_results,
+                "documents": contexts,
+                "alert": TEXT_TO_SQL_RULES,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
     async def run(
         self,
@@ -133,4 +158,5 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
+    pipeline.visualize([], [])
     async_validate(lambda: pipeline.run([], []))

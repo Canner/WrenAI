@@ -45,12 +45,10 @@ async def prepare_semantics(
     prepare_semantics_request: SemanticsPreparationRequest,
     background_tasks: BackgroundTasks,
 ) -> SemanticsPreparationResponse:
-    container.REDIS_DB.hset(
-        "prepare_semantics_statuses",
-        prepare_semantics_request.id,
-        SemanticsPreparationStatusResponse(
-            status="indexing",
-        ).model_dump_json(),
+    container.ASK_SERVICE._prepare_semantics_statuses[
+        prepare_semantics_request.id
+    ] = SemanticsPreparationStatusResponse(
+        status="indexing",
     )
 
     background_tasks.add_task(
@@ -76,12 +74,8 @@ async def ask(
 ) -> AskResponse:
     query_id = str(uuid.uuid4())
     ask_request.query_id = query_id
-    container.REDIS_DB.hset(
-        "ask_results",
-        query_id,
-        AskResultResponse(
-            status="understanding",
-        ).model_dump_json(),
+    container.ASK_SERVICE._ask_results[query_id] = AskResultResponse(
+        status="understanding",
     )
 
     background_tasks.add_task(
@@ -117,13 +111,12 @@ async def ask_details(
 ) -> AskDetailsResponse:
     query_id = str(uuid.uuid4())
     ask_details_request.query_id = query_id
-    container.REDIS_DB.hset(
-        "ask_details_results",
-        query_id,
-        AskDetailsResultResponse(
-            status="understanding",
-        ).model_dump_json(),
+    container.ASK_DETAILS_SERVICE._ask_details_results[
+        query_id
+    ] = AskDetailsResultResponse(
+        status="understanding",
     )
+
     background_tasks.add_task(
         container.ASK_DETAILS_SERVICE.ask_details,
         ask_details_request,

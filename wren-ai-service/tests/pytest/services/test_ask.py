@@ -8,11 +8,11 @@ from src.core.pipeline import async_validate
 from src.pipelines.ask import (
     generation,
     historical_question,
-    indexing,
     query_understanding,
     retrieval,
     sql_correction,
 )
+from src.pipelines.indexing import indexing
 from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,

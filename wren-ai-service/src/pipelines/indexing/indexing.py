@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
 import orjson
@@ -391,6 +392,29 @@ class Indexing(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(self, mdl_str: str) -> None:
+        destination = "outputs/pipelines/indexing"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["write_ddl", "write_view"],
+            output_file_path=f"{destination}/indexing.dot",
+            inputs={
+                "mdl_str": mdl_str,
+                "cleaner": self.cleaner,
+                "validator": self.validator,
+                "ddl_converter": self.ddl_converter,
+                "ddl_embedder": self.ddl_embedder,
+                "ddl_writer": self.ddl_writer,
+                "view_converter": self.view_converter,
+                "view_embedder": self.view_embedder,
+                "view_writer": self.view_writer,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
     async def run(self, mdl_str: str) -> Dict[str, Any]:
         logger.info("Ask Indexing pipeline is running...")
@@ -417,8 +441,6 @@ if __name__ == "__main__":
 
     pipeline = Indexing(*init_providers())
 
-    async_validate(
-        lambda: pipeline.run(
-            '{"models": [], "views": [], "relationships": [], "metrics": []}'
-        )
-    )
+    input = '{"models": [], "views": [], "relationships": [], "metrics": []}'
+    pipeline.visualize(input)
+    async_validate(lambda: pipeline.run(input))

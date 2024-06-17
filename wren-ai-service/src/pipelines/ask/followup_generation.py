@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 from typing import Any, List
 
 from hamilton import base
@@ -175,6 +176,32 @@ class FollowUpGeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(
+        self,
+        query: str,
+        contexts: List[Document],
+        history: AskRequest.AskResponseDetails,
+    ) -> None:
+        destination = "outputs/pipelines/ask"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["post_process"],
+            output_file_path=f"{destination}/followup_generation.dot",
+            inputs={
+                "query": query,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
+                "documents": contexts,
+                "history": history,
+                "alert": TEXT_TO_SQL_RULES,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
     async def run(
         self,
@@ -207,6 +234,13 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
+    pipeline.visualize(
+        "this is a test query",
+        [],
+        AskRequest.AskResponseDetails(
+            sql="SELECT * FROM table", summary="Summary", steps=[]
+        ),
+    )
     async_validate(
         lambda: pipeline.run(
             "this is a test query",

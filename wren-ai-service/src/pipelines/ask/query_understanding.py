@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 from typing import Any, List
 
 import orjson
@@ -96,6 +97,27 @@ class QueryUnderstanding(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(
+        self,
+        query: str,
+    ) -> None:
+        destination = "outputs/pipelines/ask"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["post_process"],
+            output_file_path=f"{destination}/query_understanding.dot",
+            inputs={
+                "query": query,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
     async def run(
         self,
@@ -123,4 +145,6 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    async_validate(lambda: pipeline.run("this is a test query"))
+    input = "this is a test query"
+    pipeline.visualize(input)
+    async_validate(lambda: pipeline.run(input))

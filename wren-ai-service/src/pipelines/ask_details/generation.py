@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from pathlib import Path
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
@@ -155,6 +156,24 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(self, sql: str) -> None:
+        destination = "outputs/pipelines/ask_details"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["post_process"],
+            output_file_path=f"{destination}/generation.dot",
+            inputs={
+                "sql": sql,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
+                "post_processor": self.post_processor,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
     async def run(self, sql: str):
         logger.info("Ask_Details Generation pipeline is running...")
@@ -179,4 +198,5 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
+    pipeline.visualize("SELECT * FROM table_name")
     async_validate(lambda: pipeline.run("SELECT * FROM table_name"))

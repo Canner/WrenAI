@@ -1,6 +1,6 @@
 from haystack import Document
 
-from src.pipelines.ask.indexing import ViewConverter
+from src.pipelines.indexing.indexing import ViewConverter
 
 
 def test_empty_views():

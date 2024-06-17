@@ -1,10 +1,8 @@
 import logging
 from typing import List, Literal, Optional
 
-import orjson
 import sqlparse
 from pydantic import BaseModel
-from redislite import StrictRedis
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer
@@ -110,10 +108,10 @@ class AskService:
     def __init__(
         self,
         pipelines: dict[str, BasicPipeline],
-        redis_db: StrictRedis = StrictRedis("./redis.db"),
     ):
         self._pipelines = pipelines
-        self._redis_db = redis_db
+        self._ask_results = {}
+        self._prepare_semantics_statuses = {}
 
     @async_timer
     async def prepare_semantics(
@@ -123,31 +121,27 @@ class AskService:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
             await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
-            self._redis_db.hset(
-                "prepare_semantics_statuses",
-                prepare_semantics_request.id,
-                SemanticsPreparationStatusResponse(
-                    status="finished",
-                ).model_dump_json(),
+            self._prepare_semantics_statuses[
+                prepare_semantics_request.id
+            ] = SemanticsPreparationStatusResponse(
+                status="finished",
             )
         except Exception as e:
             logger.error(f"ask pipeline - Failed to prepare semantics: {e}")
 
-            self._redis_db.hset(
-                "prepare_semantics_statuses",
-                prepare_semantics_request.id,
-                SemanticsPreparationStatusResponse(
-                    status="failed",
-                    error=f"Failed to prepare semantics: {e}",
-                ).model_dump_json(),
+            self._prepare_semantics_statuses[
+                prepare_semantics_request.id
+            ] = SemanticsPreparationStatusResponse(
+                status="failed",
+                error=f"Failed to prepare semantics: {e}",
             )
 
     def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
     ) -> SemanticsPreparationStatusResponse:
         if (
-            result := self._redis_db.hget(
-                "prepare_semantics_statuses", prepare_semantics_status_request.id
+            result := self._prepare_semantics_statuses.get(
+                prepare_semantics_status_request.id
             )
         ) is None:
             logger.error(
@@ -158,12 +152,12 @@ class AskService:
                 error=f"{prepare_semantics_status_request.id} is not found",
             )
 
-        return SemanticsPreparationStatusResponse(**orjson.loads(result))
+        return result
 
     def _is_stopped(self, query_id: str):
         if (
-            result := self._redis_db.hget("ask_results", query_id)
-        ) is not None and AskResultResponse(**orjson.loads(result)).status == "stopped":
+            result := self._ask_results.get(query_id)
+        ) is not None and result.status == "stopped":
             return True
 
         return False
@@ -179,12 +173,8 @@ class AskService:
             query_id = ask_request.query_id
 
             if not self._is_stopped(query_id):
-                self._redis_db.hset(
-                    "ask_results",
-                    query_id,
-                    AskResultResponse(
-                        status="understanding",
-                    ).model_dump_json(),
+                self._ask_results[query_id] = AskResultResponse(
+                    status="understanding",
                 )
 
                 query_understanding_result = await self._pipelines[
@@ -197,26 +187,18 @@ class AskService:
                     logger.error(
                         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
                     )
-                    self._redis_db.hset(
-                        "ask_results",
-                        query_id,
-                        AskResultResponse(
-                            status="failed",
-                            error=AskResultResponse.AskError(
-                                code="MISLEADING_QUERY",
-                                message="Misleading query, please ask a more specific question.",
-                            ),
-                        ).model_dump_json(),
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="failed",
+                        error=AskResultResponse.AskError(
+                            code="MISLEADING_QUERY",
+                            message="Misleading query, please ask a more specific question.",
+                        ),
                     )
                     return
 
             if not self._is_stopped(query_id):
-                self._redis_db.hset(
-                    "ask_results",
-                    query_id,
-                    AskResultResponse(
-                        status="searching",
-                    ).model_dump_json(),
+                self._ask_results[query_id] = AskResultResponse(
+                    status="searching",
                 )
 
                 retrieval_result = await self._pipelines["retrieval"].run(
@@ -228,26 +210,18 @@ class AskService:
                     logger.error(
                         f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
                     )
-                    self._redis_db.hset(
-                        "ask_results",
-                        query_id,
-                        AskResultResponse(
-                            status="failed",
-                            error=AskResultResponse.AskError(
-                                code="NO_RELEVANT_DATA",
-                                message="No relevant data",
-                            ),
-                        ).model_dump_json(),
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="failed",
+                        error=AskResultResponse.AskError(
+                            code="NO_RELEVANT_DATA",
+                            message="No relevant data",
+                        ),
                     )
                     return
 
             if not self._is_stopped(query_id):
-                self._redis_db.hset(
-                    "ask_results",
-                    query_id,
-                    AskResultResponse(
-                        status="generating",
-                    ).model_dump_json(),
+                self._ask_results[query_id] = AskResultResponse(
+                    status="generating",
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
@@ -336,16 +310,12 @@ class AskService:
 
                 if not valid_generation_results and not historical_question_result:
                     logger.error(f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}")
-                    self._redis_db.hset(
-                        "ask_results",
-                        query_id,
-                        AskResultResponse(
-                            status="failed",
-                            error=AskResultResponse.AskError(
-                                code="NO_RELEVANT_SQL",
-                                message="No relevant SQL",
-                            ),
-                        ).model_dump_json(),
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="failed",
+                        error=AskResultResponse.AskError(
+                            code="NO_RELEVANT_SQL",
+                            message="No relevant SQL",
+                        ),
                     )
                     return
 
@@ -368,47 +338,33 @@ class AskService:
                 if len(results) > 3:
                     del results[3:]
 
-                self._redis_db.hset(
-                    "ask_results",
-                    query_id,
-                    AskResultResponse(
-                        status="finished",
-                        response=results,
-                    ).model_dump_json(),
+                self._ask_results[query_id] = AskResultResponse(
+                    status="finished",
+                    response=results,
                 )
         except Exception as e:
             logger.error(f"ask pipeline - OTHERS: {e}")
-            self._redis_db.hset(
-                "ask_results",
-                query_id,
-                AskResultResponse(
-                    status="failed",
-                    error=AskResultResponse.AskError(
-                        code="OTHERS",
-                        message=str(e),
-                    ),
-                ).model_dump_json(),
+            self._ask_results[query_id] = AskResultResponse(
+                status="failed",
+                error=AskResultResponse.AskError(
+                    code="OTHERS",
+                    message=str(e),
+                ),
             )
 
     def stop_ask(
         self,
         stop_ask_request: StopAskRequest,
     ):
-        self._redis_db.hset(
-            "ask_results",
-            stop_ask_request.query_id,
-            AskResultResponse(
-                status="stopped",
-            ).model_dump_json(),
+        self._ask_results[stop_ask_request.query_id] = AskResultResponse(
+            status="stopped",
         )
 
     def get_ask_result(
         self,
         ask_result_request: AskResultRequest,
     ) -> AskResultResponse:
-        if (
-            result := self._redis_db.hget("ask_results", ask_result_request.query_id)
-        ) is None:
+        if (result := self._ask_results.get(ask_result_request.query_id)) is None:
             logger.error(
                 f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
             )
@@ -420,7 +376,7 @@ class AskService:
                 ),
             )
 
-        return AskResultResponse(**orjson.loads(result))
+        return result
 
 
 def remove_duplicates(dicts):
