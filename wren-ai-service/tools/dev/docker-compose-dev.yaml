@@ -73,7 +73,7 @@ services:
     ports:
       - ${WREN_UI_PORT}:3000
     volumes:
-      - data:/app/data
+      - ./etc:/app/data
     networks:
       - wren
     depends_on:
