@@ -33,9 +33,9 @@
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
-## 🚀 Live Demo
+## 🕶 Try it live!
 
-[Play around with our live demo!](https://demo.getwren.ai/)
+[Play around with WrenAI yourself!](https://demo.getwren.ai/)
 
 
 ## 🎯 Our Vision & Mission
