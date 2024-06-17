@@ -33,7 +33,7 @@
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
-## 🕶 Try it live!
+## 🕶 Try It Live!
 
 [Play around with WrenAI yourself!](https://demo.getwren.ai/)
 
