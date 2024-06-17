@@ -41,10 +41,10 @@ const resolvers = {
 
     // Settings
     settings: projectResolver.getSettings,
+    getMDL: modelResolver.getMDL,
   },
   Mutation: {
     deploy: modelResolver.deploy,
-    getMDL: modelResolver.getMDL,
     saveDataSource: projectResolver.saveDataSource,
     startSampleDataset: projectResolver.startSampleDataset,
     saveTables: projectResolver.saveTables,

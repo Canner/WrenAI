@@ -598,10 +598,6 @@ export const typeDefs = gql`
     dataSource: DataSource!
   }
 
-  input GetMDLInput {
-    hash: String!
-  }
-
   type GetMDLResult {
     hash: String!
     mdl: String
@@ -644,6 +640,9 @@ export const typeDefs = gql`
 
     # Settings
     settings: Settings!
+
+    # System
+    getMDL(hash: String!): GetMDLResult!
   }
 
   type Mutation {
@@ -653,7 +652,6 @@ export const typeDefs = gql`
     saveTables(data: SaveTablesInput!): JSON!
     saveRelations(data: SaveRelationInput!): JSON!
     deploy: JSON!
-    getMDL(data: GetMDLInput): GetMDLResult!
 
     # Modeling Page
     createModel(data: CreateModelInput!): JSON!
