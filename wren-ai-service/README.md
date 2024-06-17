@@ -15,8 +15,14 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 
 ## Start the service for development
 
-- execute `make dev-up` to start needed containers
-- execute `make start` to start the service and go to `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT` to see the API documentation and try the APIs
+The following commands can quickly start the service for development:
+
+- `make dev-up` to start needed containers
+- `make start` to start the service 
+    - go to `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT`(default is http://localhost:5556) to see the API 
+    documentation and try them.
+    - go to `http://WREN_UI_HOST:WREN_UI_PORT`(default is http://localhost:3000) to interact interact from the UI
+- `make dev-down` to stop the needed containers
 
 ## Production Environment Setup
 
