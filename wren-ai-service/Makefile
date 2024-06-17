@@ -61,8 +61,6 @@ psql:
 
 ## test related ##
 test:
-	mkdir -p tools/dev/etc && cp tools/dev/config.properties.example tools/dev/etc/config.properties
-	poetry run python -m src.prepare_mdl_json --dataset_name book_2
 	make dev-up
 	poetry run pytest -s $(args)
 	make dev-down
