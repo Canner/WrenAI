@@ -33,9 +33,9 @@
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
-## ▶️ Video Introduction
+## 🚀 Live Demo
 
-[![WrenAI Introduction](https://img.youtube.com/vi/Fw0Wxd2G3jY/maxresdefault.jpg)](https://www.youtube.com/watch?v=Fw0Wxd2G3jY)
+[Playaround with our live demo!](https://demo.getwren.ai/)
 
 
 ## 🎯 Our Vision & Mission
