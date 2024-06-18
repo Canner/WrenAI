@@ -14,12 +14,16 @@ import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
 import SchemaChangeModal from '@/components/modals/SchemaChangeModal';
-import { SchemaChangeType } from '@/apollo/client/graphql/__types__';
+import {
+  SchemaChange,
+  SchemaChangeType,
+} from '@/apollo/client/graphql/__types__';
 import {
   useResolveSchemaChangeMutation,
   useSchemaChangeQuery,
   useTriggerDataSourceDetectionMutation,
 } from '@/apollo/client/graphql/dataSource.generated';
+import { DIAGRAM } from '@/apollo/client/graphql/diagram';
 
 dayJs.extend(utc);
 dayJs.extend(relativeTime);
@@ -29,6 +33,14 @@ interface Props {
   models: DiagramModel[];
   onOpenModelDrawer: () => void;
 }
+
+const getHasSchemaChange = (schemaChange: SchemaChange) => {
+  return [
+    schemaChange?.deletedTables,
+    schemaChange?.deletedColumns,
+    schemaChange?.modifiedColumns,
+  ].some((changes) => !!changes);
+};
 
 export default function ModelTree(props: Props) {
   const { onOpenModelDrawer, models } = props;
@@ -57,20 +69,20 @@ export default function ModelTree(props: Props) {
           message.success('Source column deleted resolved successfully.');
         }
 
-        await refetchSchemaChange();
+        const { data } = await refetchSchemaChange();
+        // if all schema changes are resolved, close the modal
+        if (!getHasSchemaChange(data.schemaChange)) {
+          schemaChangeModal.closeModal();
+        }
       },
+      refetchQueries: [{ query: DIAGRAM }],
     });
   const { data: schemaChangeData, refetch: refetchSchemaChange } =
     useSchemaChangeQuery({
       fetchPolicy: 'cache-and-network',
     });
   const hasSchemaChange = useMemo(
-    () =>
-      [
-        schemaChangeData?.schemaChange.deletedTables,
-        schemaChangeData?.schemaChange.deletedColumns,
-        schemaChangeData?.schemaChange.modifiedColumns,
-      ].some((changes) => !!changes),
+    () => getHasSchemaChange(schemaChangeData?.schemaChange),
     [schemaChangeData],
   );
   const onOpenSchemaChange = () => {

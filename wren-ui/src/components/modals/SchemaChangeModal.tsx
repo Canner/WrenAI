@@ -66,7 +66,7 @@ const PanelHeader = (props) => {
       <b className="text-medium">{title}</b>
       <span className="flex-grow-1 text-right d-flex justify-end">
         <Typography.Text className="gray-6">
-          {count} tables affected
+          {count} table(s) affected
         </Typography.Text>
         <div style={{ width: 150 }}>
           {!!onResolve && (
