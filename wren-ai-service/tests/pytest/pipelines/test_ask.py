@@ -26,6 +26,16 @@ def mdl_str():
 
 
 @pytest.fixture
+def mdl_structure():
+    with open("tests/data/book_2_mdl.json", "r") as f:
+        mdl_dict = json.load(f)
+        return {
+            model["name"]: {column["name"] for column in model["columns"]}
+            for model in mdl_dict["models"]
+        }
+
+
+@pytest.fixture
 def llm_provider():
     llm_provider, _ = init_providers()
 
@@ -185,7 +195,7 @@ def test_followup_generation_pipeline():
     )
 
 
-def test_sql_correction_pipeline():
+def test_sql_correction_pipeline(mdl_structure: dict):
     llm_provider, _ = init_providers()
     sql_correction_pipeline = SQLCorrection(
         llm_provider=llm_provider,
@@ -194,6 +204,7 @@ def test_sql_correction_pipeline():
     sql_correction_result = async_validate(
         lambda: sql_correction_pipeline.run(
             contexts=GLOBAL_DATA["contexts"],
+            mdl_structure=mdl_structure,
             invalid_generation_results=[
                 {
                     "sql": "Select count(*) from books",
