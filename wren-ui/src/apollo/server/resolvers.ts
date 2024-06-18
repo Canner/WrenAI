@@ -21,6 +21,7 @@ const resolvers = {
     onboardingStatus: projectResolver.getOnboardingStatus,
     modelSync: modelResolver.checkModelSync,
     diagram: diagramResolver.getDiagram,
+    schemaChange: projectResolver.getSchemaChange,
 
     // Ask
     askingTask: askingResolver.getAskingTask,
@@ -54,6 +55,8 @@ const resolvers = {
     deleteModel: modelResolver.deleteModel,
     previewModelData: modelResolver.previewModelData,
     updateModelMetadata: modelResolver.updateModelMetadata,
+    triggerDataSourceDetection: projectResolver.triggerDataSourceDetection,
+    resolveSchemaChange: projectResolver.resolveSchemaChange,
 
     // calculated field
     createCalculatedField: modelResolver.createCalculatedField,

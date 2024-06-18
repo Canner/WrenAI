@@ -8,6 +8,7 @@ import {
   IRelationRepository,
   IViewRepository,
 } from '../repositories';
+import { ISchemaChangeRepository } from '../repositories/schemaChangeRepository';
 import { IDeployLogRepository } from '../repositories/deployLogRepository';
 import {
   IQueryService,
@@ -42,4 +43,5 @@ export interface IContext {
   relationRepository: IRelationRepository;
   viewRepository: IViewRepository;
   deployRepository: IDeployLogRepository;
+  schemaChangeRepository: ISchemaChangeRepository;
 }

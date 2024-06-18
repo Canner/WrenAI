@@ -42,6 +42,12 @@ export const typeDefs = gql`
     UNSYNCRONIZED
   }
 
+  enum SchemaChangeType {
+    DELETED_TABLES
+    DELETED_COLUMNS
+    MODIFIED_COLUMNS
+  }
+
   type DataSource {
     type: DataSourceName!
     properties: JSON!
@@ -614,6 +620,30 @@ export const typeDefs = gql`
     dryRun: Boolean
   }
 
+  # Schema Change
+  type SchemaChange {
+    deletedTables: [DetailedChangeTable!]
+    deletedColumns: [DetailedChangeTable!]
+    modifiedColumns: [DetailedChangeTable!]
+    lastSchemaChangeTime: String
+  }
+
+  type DetailedChangeTable {
+    sourceTableName: String!
+    displayName: String!
+    columns: [DetailedChangeColumn!]!
+  }
+
+  type DetailedChangeColumn {
+    sourceColumnName: String!
+    displayName: String!
+    type: String!
+  }
+
+  input ResolveSchemaChangeWhereInput {
+    type: SchemaChangeType!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -626,6 +656,7 @@ export const typeDefs = gql`
     model(where: ModelWhereInput!): DetailedModel!
     modelSync: ModelSyncResponse!
     diagram: Diagram!
+    schemaChange: SchemaChange!
 
     # View
     listViews: [ViewInfo!]!
@@ -660,6 +691,8 @@ export const typeDefs = gql`
     updateModel(where: ModelWhereInput!, data: UpdateModelInput!): JSON!
     deleteModel(where: ModelWhereInput!): Boolean!
     previewModelData(where: WhereIdInput!): JSON!
+    triggerDataSourceDetection: Boolean!
+    resolveSchemaChange(where: ResolveSchemaChangeWhereInput!): Boolean!
 
     # Metadata
     updateModelMetadata(

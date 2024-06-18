@@ -24,10 +24,14 @@ import {
   getRelations,
   sampleDatasets,
 } from '@server/data';
-import { snakeCase } from 'lodash';
+import { snakeCase, flatMap } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
+import DataSourceSchemaDetector, {
+  DataSourceSchema,
+  SchemaChangeType,
+} from '@server/managers/dataSourceSchemaDetector';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -51,6 +55,9 @@ export class ProjectResolver {
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
     this.startSampleDataset = this.startSampleDataset.bind(this);
+    this.triggerDataSourceDetection =
+      this.triggerDataSourceDetection.bind(this);
+    this.getSchemaChange = this.getSchemaChange.bind(this);
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
@@ -76,6 +83,8 @@ export class ProjectResolver {
       // no project found
       return true;
     }
+
+    await ctx.schemaChangeRepository.deleteAllBy({ projectId: id });
 
     await ctx.deployService.deleteAllByProjectId(id);
     await ctx.askingService.deleteAllByProjectId(id);
@@ -425,6 +434,103 @@ export class ProjectResolver {
     // async deploy
     this.deploy(ctx);
     return savedRelations;
+  }
+
+  public async getSchemaChange(_root: any, _arg: any, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    const lastSchemaChange =
+      await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
+
+    if (!lastSchemaChange) {
+      return {
+        deletedTables: null,
+        deletedColumns: null,
+        modifiedColumns: null,
+        lastSchemaChangeTime: null,
+      };
+    }
+
+    const models = await ctx.modelRepository.findAllBy({
+      projectId: project.id,
+    });
+    const modelIds = models.map((model) => model.id);
+    const modelColumns =
+      await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+
+    // Mapping with affected models and columns data into schame change
+    const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
+      const affecteds = flatMap(changes, (change) => {
+        const affectedModel = models.find(
+          (model) => model.sourceTableName === change.name,
+        );
+        return affectedModel
+          ? {
+              sourceTableName: change.name,
+              displayName: affectedModel.displayName,
+              columns: flatMap(change.columns, (column) => {
+                const affectedColumn = modelColumns.find(
+                  (modelColumn) =>
+                    modelColumn.sourceColumnName === column.name &&
+                    modelColumn.modelId === affectedModel.id,
+                );
+                return affectedColumn
+                  ? {
+                      sourceColumnName: column.name,
+                      displayName: affectedColumn?.displayName,
+                      type: column.type,
+                    }
+                  : [];
+              }),
+            }
+          : [];
+      });
+      return affecteds.length ? affecteds : null;
+    };
+
+    const resolves = lastSchemaChange.resolve;
+    const unresolvedChanges = Object.keys(resolves).reduce((result, key) => {
+      const isResolved = resolves[key];
+      const changes = lastSchemaChange.change[key];
+      // return if resolved or no changes
+      if (isResolved || !changes) return result;
+
+      const affectedChanges = mappingAffectedToSchemaChange(changes);
+      return { ...result, [key]: affectedChanges };
+    }, {});
+
+    return {
+      ...unresolvedChanges,
+      lastSchemaChangeTime: lastSchemaChange.createdAt,
+    };
+  }
+
+  public async triggerDataSourceDetection(
+    _root: any,
+    _arg: any,
+    ctx: IContext,
+  ) {
+    const project = await ctx.projectService.getCurrentProject();
+    const schemaDetector = new DataSourceSchemaDetector({
+      ctx,
+      projectId: project.id,
+    });
+    const hasSchemaChange = await schemaDetector.detectSchemaChange();
+    return hasSchemaChange;
+  }
+
+  public async resolveSchemaChange(
+    _root: any,
+    arg: { where: { type: SchemaChangeType } },
+    ctx: IContext,
+  ) {
+    const { type } = arg.where;
+    const project = await ctx.projectService.getCurrentProject();
+    const schemaDetector = new DataSourceSchemaDetector({
+      ctx,
+      projectId: project.id,
+    });
+    await schemaDetector.resolveSchemaChange(type);
+    return true;
   }
 
   private async deploy(ctx: IContext) {
