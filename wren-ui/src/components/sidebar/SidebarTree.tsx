@@ -180,6 +180,10 @@ const StyledTree = styled(Tree)`
           padding: 2px;
           cursor: inherit;
         }
+        &--disabled {
+          color: var(--gray-6);
+          cursor: not-allowed;
+        }
       }
     }
   }

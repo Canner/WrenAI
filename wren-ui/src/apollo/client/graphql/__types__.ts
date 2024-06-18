@@ -146,6 +146,20 @@ export type DetailStep = {
   summary: Scalars['String'];
 };
 
+export type DetailedChangeColumn = {
+  __typename?: 'DetailedChangeColumn';
+  displayName: Scalars['String'];
+  sourceColumnName: Scalars['String'];
+  type: Scalars['String'];
+};
+
+export type DetailedChangeTable = {
+  __typename?: 'DetailedChangeTable';
+  columns: Array<DetailedChangeColumn>;
+  displayName: Scalars['String'];
+  sourceTableName: Scalars['String'];
+};
+
 export type DetailedColumn = {
   __typename?: 'DetailedColumn';
   displayName: Scalars['String'];
@@ -209,7 +223,7 @@ export type DiagramModel = {
   id: Scalars['String'];
   modelId: Scalars['Int'];
   nodeType: NodeType;
-  refSql: Scalars['String'];
+  refSql?: Maybe<Scalars['String']>;
   referenceName: Scalars['String'];
   refreshTime?: Maybe<Scalars['String']>;
   relationFields: Array<Maybe<DiagramModelRelationField>>;
@@ -388,10 +402,12 @@ export type Mutation = {
   previewSql: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
   resetCurrentProject: Scalars['Boolean'];
+  resolveSchemaChange: Scalars['Boolean'];
   saveDataSource: DataSource;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
   startSampleDataset: Scalars['JSON'];
+  triggerDataSourceDetection: Scalars['Boolean'];
   updateCalculatedField: Scalars['JSON'];
   updateDataSource: DataSource;
   updateModel: Scalars['JSON'];
@@ -495,6 +511,11 @@ export type MutationPreviewViewDataArgs = {
 };
 
 
+export type MutationResolveSchemaChangeArgs = {
+  where: ResolveSchemaChangeWhereInput;
+};
+
+
 export type MutationSaveDataSourceArgs = {
   data: DataSourceInput;
 };
@@ -593,8 +614,9 @@ export type PreviewDataInput = {
 };
 
 export type PreviewSqlDataInput = {
+  dryRun?: InputMaybe<Scalars['Boolean']>;
   limit?: InputMaybe<Scalars['Int']>;
-  projectId: Scalars['Int'];
+  projectId?: InputMaybe<Scalars['Int']>;
   sql: Scalars['String'];
 };
 
@@ -616,6 +638,7 @@ export type Query = {
   modelSync: ModelSyncResponse;
   nativeSql: Scalars['String'];
   onboardingStatus: OnboardingStatusResponse;
+  schemaChange: SchemaChange;
   settings: Settings;
   suggestedQuestions: SuggestedQuestionResponse;
   thread: DetailedThread;
@@ -690,6 +713,10 @@ export enum RelationType {
   ONE_TO_ONE = 'ONE_TO_ONE'
 }
 
+export type ResolveSchemaChangeWhereInput = {
+  type: SchemaChangeType;
+};
+
 export type ResultCandidate = {
   __typename?: 'ResultCandidate';
   sql: Scalars['String'];
@@ -720,6 +747,20 @@ export type SaveRelationInput = {
 export type SaveTablesInput = {
   tables: Array<Scalars['String']>;
 };
+
+export type SchemaChange = {
+  __typename?: 'SchemaChange';
+  deletedColumns?: Maybe<Array<DetailedChangeTable>>;
+  deletedTables?: Maybe<Array<DetailedChangeTable>>;
+  lastSchemaChangeTime?: Maybe<Scalars['String']>;
+  modifiedColumns?: Maybe<Array<DetailedChangeTable>>;
+};
+
+export enum SchemaChangeType {
+  DELETED_COLUMNS = 'DELETED_COLUMNS',
+  DELETED_TABLES = 'DELETED_TABLES',
+  MODIFIED_COLUMNS = 'MODIFIED_COLUMNS'
+}
 
 export type Settings = {
   __typename?: 'Settings';

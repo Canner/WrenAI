@@ -69,3 +69,50 @@ export const SAVE_RELATIONS = gql`
     saveRelations(data: $data)
   }
 `;
+
+export const GET_SCHEMA_CHANGE = gql`
+  query SchemaChange {
+    schemaChange {
+      deletedTables {
+        sourceTableName
+        displayName
+        columns {
+          sourceColumnName
+          displayName
+          type
+        }
+      }
+      deletedColumns {
+        sourceTableName
+        displayName
+        columns {
+          sourceColumnName
+          displayName
+          type
+        }
+      }
+      modifiedColumns {
+        sourceTableName
+        displayName
+        columns {
+          sourceColumnName
+          displayName
+          type
+        }
+      }
+      lastSchemaChangeTime
+    }
+  }
+`;
+
+export const TRIGGER_DATA_SOURCE_DETECTION = gql`
+  mutation TriggerDataSourceDetection {
+    triggerDataSourceDetection
+  }
+`;
+
+export const RESOLVE_SCHEMA_CHANGE = gql`
+  mutation ResolveSchemaChange($where: ResolveSchemaChangeWhereInput!) {
+    resolveSchemaChange(where: $where)
+  }
+`;

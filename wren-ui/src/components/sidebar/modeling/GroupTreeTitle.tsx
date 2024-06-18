@@ -11,6 +11,7 @@ export type IconsType = {
 interface GroupTitleProps {
   title: string;
   quotaUsage?: number;
+  appendSlot?: React.ReactNode;
   icons: IconsType[];
 }
 
@@ -28,21 +29,27 @@ const ActionIcons = ({ icons }: { icons: IconsType[] }) => {
     ),
   );
 
-  return <>{iconComponents}</>;
+  return (
+    <span className="d-inline-flex align-center flex-shrink-0 g-2">
+      {iconComponents}
+    </span>
+  );
 };
 
 export default function GroupTreeTitle({
   title,
   quotaUsage = 0,
+  appendSlot,
   ...restProps
 }: GroupTitleProps) {
   return (
     <>
-      <span>
+      <span className="d-inline-flex align-center">
         {title}
-        <span className="adm-treeNode-group-count ml-1 text-xs">
+        <span className="adm-treeNode-group-count ml-1 text-xs flex-grow-0">
           ({quotaUsage})
         </span>
+        {appendSlot}
       </span>
       <ActionIcons {...restProps} />
     </>

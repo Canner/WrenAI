@@ -85,6 +85,7 @@ interface GroupSet {
   groupName: string;
   groupKey: string;
   quotaUsage?: number;
+  appendSlot?: React.ReactNode;
   children?: DataNode[];
   icons: IconsType[];
 }
@@ -97,6 +98,7 @@ export const createTreeGroupNode =
       quotaUsage,
       icons,
       children = [],
+      appendSlot,
     } = assign(sourceData, updatedData);
 
     const emptyChildren = [
@@ -116,6 +118,7 @@ export const createTreeGroupNode =
           <GroupTreeTitle
             title={groupName}
             quotaUsage={quotaUsage}
+            appendSlot={appendSlot}
             icons={icons}
           />
         ),
