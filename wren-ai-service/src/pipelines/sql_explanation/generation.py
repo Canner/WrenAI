@@ -115,7 +115,7 @@ class SQLAnalysisPreprocessor:
     def run(
         self,
         sql_analysis_results: List[Dict],
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, List[Dict]]:
         preprocessed_sql_analysis_results = []
         for sql_analysis_result in sql_analysis_results:
             if not sql_analysis_result.get("isSubqueryOrCte", False):
