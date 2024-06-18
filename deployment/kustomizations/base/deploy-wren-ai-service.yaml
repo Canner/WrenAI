@@ -17,22 +17,17 @@ spec:
           image: ghcr.io/canner/wren-ai-service:0.3.7
           env:
           - name: WREN_AI_SERVICE_PORT
-            valueFrom: 
+            valueFrom:
               configMapKeyRef:
                 name: wren-config
                 key: WREN_AI_SERVICE_PORT
-          - name: WORKERS
-            valueFrom: 
-              configMapKeyRef:
-                name: wren-config
-                key: AI_SERVICE_WORKERS
           - name: OPENAI_API_KEY
-            valueFrom: 
+            valueFrom:
               secretKeyRef:
                 name: wrenai-secrets
                 key: OPENAI_API_KEY
           - name: LLM_PROVIDER
-            valueFrom: 
+            valueFrom:
               secretKeyRef:
                 name: wrenai-secrets
                 key: LLM_PROVIDER
@@ -42,7 +37,7 @@ spec:
                 name: wren-config
                 key: OPENAI_API_BASE
           - name: OPENAI_GENERATION_MODEL
-            valueFrom: 
+            valueFrom:
               configMapKeyRef:
                 name: wren-config
                 key: OPENAI_GENERATION_MODEL
@@ -52,7 +47,7 @@ spec:
                 name: wrenai-secrets
                 key: QDRANT_HOST
           - name: DOCUMENT_STORE_PROVIDER
-            valueFrom: 
+            valueFrom:
               secretKeyRef:
                 name: wrenai-secrets
                 key: DOCUMENT_STORE_PROVIDER
