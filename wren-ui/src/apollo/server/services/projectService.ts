@@ -4,9 +4,8 @@ import path from 'path';
 import { Encryptor, getLogger } from '@server/utils';
 import {
   BIG_QUERY_CONNECTION_INFO,
-  DUCKDB_CONNECTION_INFO,
-  POSTGRES_CONNECTION_INFO,
   IProjectRepository,
+  WREN_AI_CONNECTION_INFO,
 } from '../repositories';
 import { Project } from '../repositories';
 import { getConfig } from '../config';
@@ -26,21 +25,15 @@ const SENSITIVE_PROPERTY_NAME = new Set(['credentials', 'password']);
 export interface ProjectData {
   displayName: string;
   type: DataSourceName;
-  connectionInfo:
-    | BIG_QUERY_CONNECTION_INFO
-    | POSTGRES_CONNECTION_INFO
-    | DUCKDB_CONNECTION_INFO;
+  connectionInfo: WREN_AI_CONNECTION_INFO;
 }
 
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
-  getSensitiveConnectionInfo: () => Set<string>;
   encryptSensitiveConnectionInfo: (
-    connectionInfo:
-      | BIG_QUERY_CONNECTION_INFO
-      | POSTGRES_CONNECTION_INFO
-      | DUCKDB_CONNECTION_INFO,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
   ) => any;
+  getGeneralConnectionInfo: (project: Project) => Record<string, any>;
   getProjectDataSourceTables: (
     project?: Project,
     projectId?: number,
@@ -166,15 +159,20 @@ export class ProjectService implements IProjectService {
     await this.projectRepository.deleteOne(projectId);
   }
 
-  public getSensitiveConnectionInfo() {
-    return SENSITIVE_PROPERTY_NAME;
+  public getGeneralConnectionInfo(project) {
+    return Object.entries(project.connectionInfo).reduce(
+      (acc, [key, value]) => {
+        if (!SENSITIVE_PROPERTY_NAME.has(key)) {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {},
+    );
   }
 
   public encryptSensitiveConnectionInfo(
-    connectionInfo:
-      | BIG_QUERY_CONNECTION_INFO
-      | POSTGRES_CONNECTION_INFO
-      | DUCKDB_CONNECTION_INFO,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
   ) {
     const encryptor = new Encryptor(config);
     const encryptConnectionInfo = Object.entries(connectionInfo).reduce(

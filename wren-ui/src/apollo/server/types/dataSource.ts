@@ -2,6 +2,7 @@ export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
   DUCKDB = 'DUCKDB',
   POSTGRES = 'POSTGRES',
+  MYSQL = 'MYSQL',
 }
 
 export interface DataSource {

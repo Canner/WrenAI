@@ -244,10 +244,9 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { sourceTableName, fields, primaryKey } = args.data;
-
     const project = await ctx.projectService.getCurrentProject();
     const dataSourceTables =
-      await ctx.projectService.getProjectDataSourceTables(project);
+      await ctx.projectService.getProjectDataSourceTables();
     this.validateTableExist(sourceTableName, dataSourceTables);
     this.validateColumnsExist(sourceTableName, fields, dataSourceTables);
 

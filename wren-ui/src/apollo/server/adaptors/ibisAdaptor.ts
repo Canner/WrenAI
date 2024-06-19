@@ -5,9 +5,15 @@ import { DataSourceName } from '@server/types';
 import { Manifest } from '@server/mdl/type';
 import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
-import { toDockerHost } from '@server/utils';
+import { Encryptor, toDockerHost } from '@server/utils';
 import { CompactTable, RecommendConstraint } from '@server/services';
 import { snakeCase } from 'lodash';
+import {
+  BIG_QUERY_CONNECTION_INFO,
+  MYSQL_CONNECTION_INFO,
+  POSTGRES_CONNECTION_INFO,
+  WREN_AI_CONNECTION_INFO,
+} from '../repositories';
 
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
@@ -23,11 +29,24 @@ export interface IbisPostgresConnectionInfo {
   ssl: boolean;
 }
 
+export interface IbisMySQLConnectionInfo {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
 export interface IbisBigQueryConnectionInfo {
   project_id: string;
   dataset_id: string;
   credentials: string; // base64 encoded
 }
+
+export type IbisConnectionInfo =
+  | IbisPostgresConnectionInfo
+  | IbisMySQLConnectionInfo
+  | IbisBigQueryConnectionInfo;
 
 export interface TableResponse {
   tables: CompactTable[];
@@ -44,7 +63,7 @@ export interface ValidationResponse {
 
 export interface IbisQueryOptions {
   dataSource: DataSourceName;
-  connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo;
+  connectionInfo: WREN_AI_CONNECTION_INFO;
   mdl: Manifest;
 }
 
@@ -56,17 +75,17 @@ export interface IIbisAdaptor {
   dryRun: (query: string, options: IbisQueryOptions) => Promise<boolean>;
   getTables: (
     dataSource: DataSourceName,
-    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
   ) => Promise<CompactTable[]>;
   getConstraints: (
     dataSource: DataSourceName,
-    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
   ) => Promise<RecommendConstraint[]>;
 
   validate: (
     dataSource: DataSourceName,
     rule: ValidationRules,
-    connectionInfo: IbisBigQueryConnectionInfo | IbisPostgresConnectionInfo,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
     mdl: Manifest,
     parameters: Record<string, any>,
   ) => Promise<ValidationResponse>;
@@ -76,6 +95,7 @@ export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
   BIG_QUERY = 'BIG_QUERY',
   SNOWFLAKE = 'SNOWFLAKE',
+  MYSQL = 'MYSQL',
 }
 
 export interface IbisQueryResponse {
@@ -88,6 +108,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.POSTGRES]: 'postgres',
   [SupportedDataSource.BIG_QUERY]: 'bigquery',
   [SupportedDataSource.SNOWFLAKE]: 'snowflake',
+  [SupportedDataSource.MYSQL]: 'mysql',
 };
 
 export class IbisAdaptor implements IIbisAdaptor {
@@ -103,9 +124,13 @@ export class IbisAdaptor implements IIbisAdaptor {
   ): Promise<IbisQueryResponse> {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
+    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
+      dataSource,
+      connectionInfo,
+    );
     const body = {
       sql: query,
-      connectionInfo,
+      connectionInfo: ibisConnectionInfo,
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
     };
     logger.debug(`Querying ibis with body: ${JSON.stringify(body, null, 2)}`);
@@ -132,12 +157,16 @@ export class IbisAdaptor implements IIbisAdaptor {
   ): Promise<boolean> {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
+    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
+      dataSource,
+      connectionInfo,
+    );
     const body = {
       sql: query,
-      connectionInfo,
+      connectionInfo: ibisConnectionInfo,
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
     };
-    logger.debug(`Dry run ibis with body: ${JSON.stringify(body, null, 2)}`);
+    logger.debug(`Dry run sql from ibis with body:`);
     try {
       await axios.post(
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
@@ -156,17 +185,18 @@ export class IbisAdaptor implements IIbisAdaptor {
 
   public async getTables(
     dataSource: DataSourceName,
-    connectionInfo: Record<string, any>,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<CompactTable[]> {
-    if (config.otherServiceUsingDocker) {
-      connectionInfo.host = toDockerHost(connectionInfo.host);
-      logger.debug(`Rewritten host: ${connectionInfo.host}`);
-    }
-    const body = {
+    connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
+      dataSource,
       connectionInfo,
+    );
+    const body = {
+      connectionInfo: ibisConnectionInfo,
     };
-    logger.debug(`Getting table with body: ${JSON.stringify(body, null, 2)}`);
     try {
+      logger.debug(`Getting tables from ibis`);
       const res: AxiosResponse<CompactTable[]> = await axios.post(
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/tables`,
         body,
@@ -185,19 +215,18 @@ export class IbisAdaptor implements IIbisAdaptor {
 
   public async getConstraints(
     dataSource: DataSourceName,
-    connectionInfo: Record<string, any>,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<RecommendConstraint[]> {
-    if (config.otherServiceUsingDocker) {
-      connectionInfo.host = toDockerHost(connectionInfo.host);
-      logger.debug(`Rewritten host: ${connectionInfo.host}`);
-    }
-    const body = {
+    connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
+      dataSource,
       connectionInfo,
-    };
-    logger.debug(
-      `Getting constraint with body: ${JSON.stringify(body, null, 2)}`,
     );
+    const body = {
+      connectionInfo: ibisConnectionInfo,
+    };
     try {
+      logger.debug(`Getting constraint from ibis`);
       const res: AxiosResponse<RecommendConstraint[]> = await axios.post(
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
         body,
@@ -217,23 +246,22 @@ export class IbisAdaptor implements IIbisAdaptor {
   public async validate(
     dataSource: DataSourceName,
     validationRule: ValidationRules,
-    connectionInfo: Record<string, any>,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
     mdl: Manifest,
     parameters: Record<string, any>,
   ): Promise<ValidationResponse> {
-    if (config.otherServiceUsingDocker) {
-      connectionInfo.host = toDockerHost(connectionInfo.host);
-      logger.debug(`Rewritten host: ${connectionInfo.host}`);
-    }
-    const body = {
+    connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
+      dataSource,
       connectionInfo,
+    );
+    const body = {
+      connectionInfo: ibisConnectionInfo,
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
       parameters,
     };
-    logger.debug(
-      `Validating connection with body: ${JSON.stringify(body, null, 2)}`,
-    );
     try {
+      logger.debug(`Run validation rule "${validationRule}" with ibis`);
       await axios.post(
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
         body,
@@ -255,5 +283,50 @@ export class IbisAdaptor implements IIbisAdaptor {
       logger.debug(`Rewritten host: ${connectionInfo.host}`);
     }
     return connectionInfo;
+  }
+
+  private transformToIbisConnectionInfo(
+    dataSource: DataSourceName,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
+  ): IbisConnectionInfo {
+    switch (dataSource) {
+      case DataSourceName.POSTGRES: {
+        connectionInfo = connectionInfo as POSTGRES_CONNECTION_INFO;
+        const encryptor = new Encryptor(config);
+        const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
+        const { password } = JSON.parse(decryptedCredentials);
+        return {
+          ...connectionInfo,
+          password: password,
+        } as IbisPostgresConnectionInfo;
+      }
+      case DataSourceName.BIG_QUERY: {
+        connectionInfo = connectionInfo as BIG_QUERY_CONNECTION_INFO;
+        const encryptor = new Encryptor(config);
+        const decryptedCredentials = encryptor.decrypt(
+          connectionInfo.credentials,
+        );
+        const credential = Buffer.from(decryptedCredentials).toString('base64');
+        return {
+          project_id: connectionInfo.projectId,
+          dataset_id: connectionInfo.datasetId,
+          credentials: credential,
+        } as IbisBigQueryConnectionInfo;
+      }
+      case DataSourceName.MYSQL: {
+        connectionInfo = connectionInfo as MYSQL_CONNECTION_INFO;
+        const encryptor = new Encryptor(config);
+        const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
+        console.log(decryptedCredentials);
+        console.log(typeof decryptedCredentials);
+        const { password } = JSON.parse(decryptedCredentials);
+        return {
+          ...connectionInfo,
+          password: password,
+        } as IbisMySQLConnectionInfo;
+      }
+      default:
+        throw new Error(`Unsupported project type: ${dataSource}`);
+    }
   }
 }
