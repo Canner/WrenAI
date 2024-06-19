@@ -136,6 +136,7 @@ export type DataSourceInput = {
 export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
   DUCKDB = 'DUCKDB',
+  MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES'
 }
 

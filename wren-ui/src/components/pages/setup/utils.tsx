@@ -9,6 +9,7 @@ import SelectModels from './SelectModels';
 import DefineRelations from './DefineRelations';
 import BigQueryProperties from './dataSources/BigQueryProperties';
 import DuckDBProperties from './dataSources/DuckDBProperties';
+import MySQLProperties from './dataSources/MySQLProperties';
 import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 import { ERROR_CODES } from '@/utils/errorHandler';
@@ -74,12 +75,19 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/guide/connect/postgresql',
     disabled: false,
   },
+  [DATA_SOURCES.MYSQL]: {
+    label: 'MySQL',
+    logo: '/images/dataSource/mysql.svg',
+    guide: 'https://docs.getwren.ai/guide/connect/mysql',
+    disabled: false,
+  },
 } as { [key: string]: ButtonOption };
 
 export const DATA_SOURCE_FORM = {
   [DATA_SOURCES.BIG_QUERY]: { component: BigQueryProperties },
   [DATA_SOURCES.DUCKDB]: { component: DuckDBProperties },
   [DATA_SOURCES.PG_SQL]: { component: PostgreSQLProperties },
+  [DATA_SOURCES.MYSQL]: { component: MySQLProperties },
 };
 
 export const TEMPLATE_OPTIONS = {
@@ -115,6 +123,10 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
       [DATA_SOURCES.PG_SQL]: merge(
         DATA_SOURCE_OPTIONS[DATA_SOURCES.PG_SQL],
         DATA_SOURCE_FORM[DATA_SOURCES.PG_SQL],
+      ),
+      [DATA_SOURCES.MYSQL]: merge(
+        DATA_SOURCE_OPTIONS[DATA_SOURCES.MYSQL],
+        DATA_SOURCE_FORM[DATA_SOURCES.MYSQL],
       ),
     }[dataSource] || defaultDataSource
   );
