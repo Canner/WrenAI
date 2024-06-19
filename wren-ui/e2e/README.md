@@ -1,49 +1,52 @@
 ## How to run e2e test locally
 
 1. Make sure you have start all WrenAI services. ([How to start](https://github.com/Canner/WrenAI/blob/3234dc218b105caba04e1cdab7b1cb7140fc9b90/docker/README.md#how-to-start))
-  
+
 2. Create a `e2e.config.json` file under `wren-ui/e2e` folder and replace all data sources needed values in `./config.ts`.
 
-    ```ts
-    // Replace the default test config with your own e2e.config.json
-    const defaultTestConfig = {
-      bigQuery: {
-        projectId: 'wrenai',
-        datasetId: 'wrenai.tpch_sf1',
-        // The credential file should be under "wren-ui" folder
-        // For example: .tmp/credential.json
-        credentialPath: 'bigquery-credential-path',
-      },
-      duckDb: {
-        sqlCsvPath: 'https://duckdb.org/data/flights.csv',
-      },
-      postgreSql: {
-        host: 'postgresql-host',
-        port: '5432',
-        username: 'postgresql-username',
-        password: 'postgresql-password',
-        database: 'postgresql-database',
-        ssl: false,
-      },
-    };
-    ```
+   ```ts
+   // Replace the default test config with your own e2e.config.json
+   const defaultTestConfig = {
+     bigQuery: {
+       projectId: 'wrenai',
+       datasetId: 'wrenai.tpch_sf1',
+       // The credential file should be under "wren-ui" folder
+       // For example: .tmp/credential.json
+       credentialPath: 'bigquery-credential-path',
+     },
+     duckDb: {
+       sqlCsvPath: 'https://duckdb.org/data/flights.csv',
+     },
+     postgreSql: {
+       host: 'postgresql-host',
+       port: '5432',
+       username: 'postgresql-username',
+       password: 'postgresql-password',
+       database: 'postgresql-database',
+       ssl: false,
+     },
+   };
+   ```
+
 3. Build UI before starting e2e server
 
-    ```bash
-    yarn build
-    ```
+   ```bash
+   yarn build
+   ```
+
+   > Ensure port 3000 is available for E2E testing. The AI service needs WREN_UI_ENDPOINT to connect to this port for accurate and reliable test results.
+
 4. Run test
 
-    ```bash
-    yarn test:e2e
-    ```
+   ```bash
+   yarn test:e2e
+   ```
 
-    Run test with browser open
+   Run test with browser open
 
-    ```bash
-    yarn test:e2e --headed
-    ```
-
+   ```bash
+   yarn test:e2e --headed
+   ```
 
 ## How to develop
 
@@ -64,4 +67,3 @@
   ```
   npx playwright codegen http://localhost:3000
   ```
-

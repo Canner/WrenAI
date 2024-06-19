@@ -125,4 +125,85 @@ test.describe('Test E-commerce sample dataset', () => {
       },
     );
   });
+
+  test('Calculated Fields CRUD successfully', async ({ page }) => {
+    await page.goto('/modeling');
+    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+
+    const modelDisplayName = 'Orders';
+    const calculatedFieldName = 'Sum of review scores';
+    const expression = 'Sum';
+    const toFieldModelDisplayName = 'reviews';
+    const toFieldColumnDisplayName = 'Score';
+
+    const newCfName = 'total product items';
+    const newExpression = 'COUNT';
+    const newToFieldModelDisplayName = 'order_items';
+    const newToFieldColumnDisplayName = 'OrderId';
+
+    await modelingHelper.addCalculatedField(page, {
+      calculatedFieldName,
+      expression,
+      modelDisplayName,
+      toFieldModelDisplayName,
+      toFieldColumnDisplayName,
+    });
+
+    // update calculated field
+    await page
+      .getByTestId(`diagram__model-node__${modelDisplayName}`)
+      .getByRole('button', { name: 'more' })
+      .nth(1)
+      .click();
+
+    await page.getByText('Edit').click();
+
+    await page.getByLabel('Name').click();
+    await page.getByLabel('Name').fill(newCfName);
+
+    await page.getByTestId('common__descriptive-select').click();
+    await page.getByTitle(newExpression).locator('div').click();
+
+    await page
+      .getByTestId('common__lineage-field-block')
+      .filter({ hasText: modelDisplayName })
+      .getByText(toFieldModelDisplayName, { exact: true })
+      .click();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: newToFieldModelDisplayName })
+      .scrollIntoViewIfNeeded();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: newToFieldModelDisplayName })
+      .click();
+
+    await expect(
+      page
+        .getByTestId('common__lineage-field-block')
+        .getByText(newToFieldModelDisplayName, { exact: true }),
+    ).toHaveCount(2);
+    await expect(page.getByText('Please select a field.')).toBeVisible();
+    await page.getByTestId('common__lineage-fields-select').last().click();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: newToFieldColumnDisplayName })
+      .scrollIntoViewIfNeeded();
+
+    await page
+      .getByTestId('common__fields__select-option')
+      .filter({ hasText: newToFieldColumnDisplayName })
+      .click();
+
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Successfully updated calculated field.'),
+    ).toBeVisible();
+
+    // delete calculated field
+    await modelingHelper.deleteCalculatedField(page, modelDisplayName);
+  });
 });
