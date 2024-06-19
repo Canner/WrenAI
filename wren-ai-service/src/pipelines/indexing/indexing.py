@@ -197,6 +197,11 @@ class DDLConverter:
             for column in model["columns"]:
                 if "relationship" not in column:
                     if "properties" in column:
+                        column["properties"]["alias"] = column["properties"].get(
+                            "displayName", ""
+                        )
+                        if "displayName" in column["properties"]:
+                            del column["properties"]["displayName"]
                         comment = f"-- {orjson.dumps(column['properties']).decode("utf-8")}\n  "
                     else:
                         comment = ""
@@ -217,6 +222,7 @@ class DDLConverter:
 
             # Add foreign key constraints based on relationships
             for relationship in relationships:
+                comment = f'-- {{"condition": {relationship["condition"]}, "joinType": {relationship["joinType"]}}}\n  '
                 if (
                     table_name == relationship["models"][0]
                     and relationship["joinType"].upper() == "MANY_TO_ONE"
@@ -224,7 +230,7 @@ class DDLConverter:
                     related_table = relationship["models"][1]
                     fk_column = relationship["condition"].split(" = ")[0].split(".")[1]
                     fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(fk_constraint)
+                    columns_ddl.append(f"{comment}{fk_constraint}")
                 elif (
                     table_name == relationship["models"][1]
                     and relationship["joinType"].upper() == "ONE_TO_MANY"
@@ -232,7 +238,7 @@ class DDLConverter:
                     related_table = relationship["models"][0]
                     fk_column = relationship["condition"].split(" = ")[1].split(".")[1]
                     fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(fk_constraint)
+                    columns_ddl.append(f"{comment}{fk_constraint}")
                 elif (
                     table_name in relationship["models"]
                     and relationship["joinType"].upper() == "ONE_TO_ONE"
@@ -245,9 +251,14 @@ class DDLConverter:
                         relationship["condition"].split(" = ")[index].split(".")[1]
                     )
                     fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(fk_constraint)
+                    columns_ddl.append(f"{comment}{fk_constraint}")
 
             if "properties" in model:
+                model["properties"]["alias"] = model["properties"].get(
+                    "displayName", ""
+                )
+                if "displayName" in model["properties"]:
+                    del model["properties"]["displayName"]
                 comment = (
                     f"\n/* {orjson.dumps(model['properties']).decode("utf-8")} */\n"
                 )
@@ -260,6 +271,8 @@ class DDLConverter:
                 + "\n);"
             )
             ddl_commands.append(create_table_ddl)
+
+        logger.debug(f"DDL Commands: {ddl_commands}")
 
         return ddl_commands
 

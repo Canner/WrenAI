@@ -1,5 +1,6 @@
 TEXT_TO_SQL_RULES = """
 ### ALERT ###
+- YOU MUST USE the value of "alias" in DATABASE SCHEMA as ALIAS for the column name or table name while generating SQL.
 - DON'T USE "*" in SELECT queries.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
