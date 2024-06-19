@@ -41,14 +41,6 @@ services:
     networks:
       - wren
 
-  redis:
-    image: redis:7.0.15-alpine
-    pull_policy: always
-    ports:
-      - 6379:6379
-    networks:
-    - wren
-
   ui:
     image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
     pull_policy: always
@@ -81,7 +73,7 @@ services:
     ports:
       - ${WREN_UI_PORT}:3000
     volumes:
-      - data:/app/data
+      - ./etc:/app/data
     networks:
       - wren
     depends_on:

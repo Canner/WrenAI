@@ -17,11 +17,8 @@ services:
       OPENAI_GENERATION_MODEL: ${OPENAI_GENERATION_MODEL}
       QDRANT_HOST: ${QDRANT_HOST}
       WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: ${REDIS_PORT}
       ENABLE_TIMER: ${ENABLE_TIMER}
       LOGGING_LEVEL: ${LOGGING_LEVEL}
-      WORKERS: ${WORKERS}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
@@ -29,15 +26,9 @@ services:
       - ${WREN_AI_SERVICE_PORT}:${WREN_AI_SERVICE_PORT}
     depends_on:
       - qdrant
-      - redis
 
   qdrant:
     image: qdrant/qdrant:v1.7.4
     ports:
       - 6333:6333
       - 6334:6334
-
-  redis:
-    image: redis:7.0.15-alpine
-    ports:
-      - 6379:6379

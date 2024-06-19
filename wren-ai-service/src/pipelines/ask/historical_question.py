@@ -1,6 +1,7 @@
 import ast
 import logging
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hamilton import base
@@ -100,6 +101,28 @@ class HistoricalQuestion(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(
+        self,
+        query: str,
+    ) -> None:
+        destination = "outputs/pipelines/ask"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["formatted_output"],
+            output_file_path=f"{destination}/historical_question.dot",
+            inputs={
+                "query": query,
+                "embedder": self._embedder,
+                "retriever": self._retriever,
+                "score_filter": self._score_filter,
+                "output_formatter": self._output_formatter,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
     async def run(self, query: str):
         logger.info("Ask HistoricalQuestion pipeline is running...")
@@ -122,4 +145,5 @@ if __name__ == "__main__":
 
     pipeline = HistoricalQuestion(*init_providers())
 
+    pipeline.visualize("this is a query")
     async_validate(lambda: pipeline.run("this is a query"))

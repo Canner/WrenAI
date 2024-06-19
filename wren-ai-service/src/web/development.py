@@ -1,13 +1,10 @@
 import asyncio
 import logging
-import os
 import random
 import time
 import uuid
 
-import orjson
 from fastapi import APIRouter, BackgroundTasks
-from redislite import StrictRedis
 
 from src.utils import async_timer
 from src.web.v1.services.ask import (
@@ -19,17 +16,7 @@ from src.web.v1.services.ask import (
 
 logger = logging.getLogger("wren-ai-service")
 router = APIRouter()
-
-REDIS_DB = (
-    StrictRedis(
-        host=os.getenv("REDIS_HOST", "redis"),
-        port=int(os.getenv("REDIS_PORT", 6379)),
-    )
-    if int(os.getenv("WORKERS", 1)) > 1
-    else StrictRedis(
-        "./redis.db",
-    )
-)
+test_ask_results = {}
 
 
 @async_timer
@@ -59,21 +46,15 @@ async def dummy_ask_task(ask_request: AskRequest):
     # time.sleep(SYNC_SLEEP_TIME)
     # await asyncio.to_thread(time.sleep, SYNC_SLEEP_TIME)
 
-    REDIS_DB.hset(
-        "test_ask_results",
-        ask_request.query_id,
-        AskResultResponse(
-            status="finished",
-        ).model_dump_json(),
+    test_ask_results[ask_request.query_id] = AskResultResponse(
+        status="finished",
     )
 
 
 def get_dummy_ask_task_result(
     ask_result_request: AskResultRequest,
 ) -> AskResultResponse:
-    if (
-        result := REDIS_DB.hget("test_ask_results", ask_result_request.query_id)
-    ) is None:
+    if (result := test_ask_results[ask_result_request.query_id]) is None:
         return AskResultResponse(
             status="failed",
             error=AskResultResponse.AskError(
@@ -82,7 +63,7 @@ def get_dummy_ask_task_result(
             ),
         )
 
-    return AskResultResponse(**orjson.loads(result))
+    return result
 
 
 @router.get("/dummy")
@@ -90,15 +71,13 @@ async def dummy(sleep: int = 4, is_async: bool = True, should_sleep: bool = True
     """
     Dummy endpoint to test async behavior by sleeping for several seconds
     """
-    REDIS_DB.hset("dummy", "dummy", random.randint(1, 10))
-
     if should_sleep:
         if is_async:
             await asyncio.sleep(sleep)
         else:
             time.sleep(sleep)
 
-    return {"dummy": REDIS_DB.hget("dummy", "dummy")}
+    return {"dummy": "dummy"}
 
 
 @router.post("/dummy-asks")
@@ -108,12 +87,8 @@ async def dummy_ask(
 ) -> AskResponse:
     query_id = str(uuid.uuid4())
     ask_request.query_id = query_id
-    REDIS_DB.hset(
-        "test_ask_results",
-        query_id,
-        AskResultResponse(
-            status="understanding",
-        ).model_dump_json(),
+    test_ask_results[query_id] = AskResultResponse(
+        status="understanding",
     )
 
     background_tasks.add_task(

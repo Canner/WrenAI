@@ -1,10 +1,8 @@
 import logging
 from typing import List, Literal, Optional
 
-import orjson
 from haystack import Pipeline
 from pydantic import BaseModel
-from redislite import StrictRedis
 
 from src.utils import async_timer
 
@@ -60,10 +58,9 @@ class AskDetailsService:
     def __init__(
         self,
         pipelines: dict[str, Pipeline],
-        redis_db: StrictRedis = StrictRedis("./redis.db"),
     ):
         self._pipelines = pipelines
-        self._redis_db = redis_db
+        self._ask_details_results = {}
 
     @async_timer
     async def ask_details(
@@ -75,28 +72,16 @@ class AskDetailsService:
             # we will need to handle business logic for each status
             query_id = ask_details_request.query_id
 
-            self._redis_db.hset(
-                "ask_details_results",
-                query_id,
-                AskDetailsResultResponse(
-                    status="understanding",
-                ).model_dump_json(),
+            self._ask_details_results[query_id] = AskDetailsResultResponse(
+                status="understanding",
             )
 
-            self._redis_db.hset(
-                "ask_details_results",
-                query_id,
-                AskDetailsResultResponse(
-                    status="searching",
-                ).model_dump_json(),
+            self._ask_details_results[query_id] = AskDetailsResultResponse(
+                status="searching",
             )
 
-            self._redis_db.hset(
-                "ask_details_results",
-                query_id,
-                AskDetailsResultResponse(
-                    status="generating",
-                ).model_dump_json(),
+            self._ask_details_results[query_id] = AskDetailsResultResponse(
+                status="generating",
             )
 
             generation_result = await self._pipelines["generation"].run(
@@ -114,28 +99,20 @@ class AskDetailsService:
                     }
                 ]
 
-            self._redis_db.hset(
-                "ask_details_results",
-                query_id,
-                AskDetailsResultResponse(
-                    status="finished",
-                    response=AskDetailsResultResponse.AskDetailsResponseDetails(
-                        **ask_details_result
-                    ),
-                ).model_dump_json(),
+            self._ask_details_results[query_id] = AskDetailsResultResponse(
+                status="finished",
+                response=AskDetailsResultResponse.AskDetailsResponseDetails(
+                    **ask_details_result
+                ),
             )
         except Exception as e:
             logger.error(f"ask-details pipeline - OTHERS: {e}")
-            self._redis_db.hset(
-                "ask_details_results",
-                query_id,
-                AskDetailsResultResponse(
-                    status="failed",
-                    error=AskDetailsResultResponse.AskDetailsError(
-                        code="OTHERS",
-                        message=str(e),
-                    ),
-                ).model_dump_json(),
+            self._ask_details_results[query_id] = AskDetailsResultResponse(
+                status="failed",
+                error=AskDetailsResultResponse.AskDetailsError(
+                    code="OTHERS",
+                    message=str(e),
+                ),
             )
 
     def get_ask_details_result(
@@ -143,9 +120,7 @@ class AskDetailsService:
         ask_details_result_request: AskDetailsResultRequest,
     ) -> AskDetailsResultResponse:
         if (
-            result := self._redis_db.hget(
-                "ask_details_results", ask_details_result_request.query_id
-            )
+            result := self._ask_details_results.get(ask_details_result_request.query_id)
         ) is None:
             logger.error(
                 f"ask-details pipeline - OTHERS: {ask_details_result_request.query_id} is not found"
@@ -158,4 +133,4 @@ class AskDetailsService:
                 ),
             )
 
-        return AskDetailsResultResponse(**orjson.loads(result))
+        return result

@@ -27,11 +27,11 @@ if __name__ == "__main__":
     ).exists(), f"File not found in src/eval/data: {dataset_name}_mdl.json"
 
     # remove all files in src/eval/wren-engine/etc/mdl
-    os.system("rm -rf src/eval/wren-engine/etc/mdl/*")
-    os.makedirs("src/eval/wren-engine/etc/mdl", exist_ok=True)
+    os.system("rm -rf tools/dev/etc/mdl/*")
+    os.makedirs("tools/dev/etc/mdl", exist_ok=True)
 
     # move the file to src/eval/wren-engine/etc/mdl
     shutil.copyfile(
         f"src/eval/data/{dataset_name}_mdl.json",
-        f"src/eval/wren-engine/etc/mdl/{dataset_name}_mdl.json",
+        f"tools/dev/etc/mdl/{dataset_name}_mdl.json",
     )

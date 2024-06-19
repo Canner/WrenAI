@@ -49,7 +49,6 @@ services:
       WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
       LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
-      WORKERS: ${AI_SERVICE_WORKERS}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1

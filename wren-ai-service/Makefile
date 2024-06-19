@@ -1,87 +1,70 @@
+.PHONY: demo
+
+## wrenai related ##
+dev-up:
+	make prepare-wren-engine
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
+
+dev-down:
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example down
+## wrenai related ##
+
+
+## wren-ai-service related ##
 start:
-	poetry run python -m src.pre_run && poetry run python -m src.__main__
+	poetry run python -m src.__main__
 
 build:
-	docker compose -f docker/docker-compose.yml --env-file .env.prod build
+	docker compose -f docker/docker-compose.yaml --env-file .env.prod build
 
 up:
-	make run-wren-engine && \
-	docker compose -f docker/docker-compose.yml --env-file .env.prod up -d
+	make dev-up
+	docker compose -f docker/docker-compose.yaml --env-file .env.prod up -d
 
 down:
-	make stop-wren-engine && \
-	docker compose -f docker/docker-compose.yml --env-file .env.prod down
+	make dev-down
+	docker compose -f docker/docker-compose.yaml --env-file .env.prod down
+## wren-ai-service related ##
 
-run-qdrant:
-	docker run \
-	-p 6333:6333 \
-	-p 6334:6334 \
-	-d \
-	--name qdrant \
-	qdrant/qdrant:v1.7.4
 
-stop-qdrant:
-	docker stop qdrant && docker rm qdrant
-
-run-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env up -d
-
-stop-wren-engine:
-	docker compose -f ./src/eval/wren-engine/docker-compose.yml --env-file ./src/eval/wren-engine/.env down
-
-psql:
-	docker exec -it wren-wren-engine-1 bash launch-cli.sh
-
-run-redis:
-	docker run -d -p 6379:6379 --name redis redis:7.0.15-alpine
-
-stop-redis:
-	docker stop redis && docker rm redis
-
-run-all:
-	poetry run python -m src.prepare_mdl_json && \
-	make run-qdrant && \
-	make run-wren-engine && \
-	make run-redis
-
-stop-all:
-	make stop-qdrant && \
-	make stop-wren-engine && \
-	make stop-redis
-
-ui:
-	cd ../wren-ui; export DB_TYPE=sqlite export SQLITE_FILE=db.sqlite3 export WREN_AI_ENDPOINT=http://localhost:5556 && \
-	yarn install && yarn rollback --all && yarn migrate && yarn dev
-
-demo:
-	cd demo; poetry run streamlit run app.py
-
+## utilities related ##
 # present the evaluation result on the streamlit app
 # example: make streamlit pipeline=ask_details
-streamlit:
+eval_visualzation:
 	poetry run streamlit run src/eval/${pipeline}/streamlit_app.py
 
 # example: make eval pipeline=ask_details
 # example: make eval pipeline=ask args="--help" to check all available arguments
 eval:
-	make run-all && \
+	make dev-up
 	poetry run python -m src.eval.$(pipeline) $(args)
-	make stop-all
+	make dev-down
 
+demo:
+	cd demo; poetry run streamlit run app.py
+## utilities related ##
+
+
+## wren-engine related ##
+prepare-wren-engine:
+	rm -rf tools/dev/etc
+	mkdir -p tools/dev/etc
+	cp tools/dev/config.properties.example tools/dev/etc/config.properties
+	mkdir -p tools/dev/etc/mdl
+	echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" \\
+		> tools/dev/etc/mdl/sample.json
+
+psql:
+	docker exec -it wren-engine-1 bash launch-cli.sh
+## wren-engine related ##
+
+
+## test related ##
 test:
-	poetry run python -m src.prepare_mdl_json --dataset_name book_2 && \
-	make run-qdrant && \
-	make run-wren-engine && \
-	poetry run pytest -s $(args) && \
-	make stop-all
+	make dev-up
+	poetry run pytest -s $(args)
+	make dev-down
 
 load-test:
 	poetry run python -m tests.locust.locust_script
-
-dev-up:
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
-
-dev-down:
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example down
-
-.PHONY: demo
+## test related ##

@@ -82,8 +82,7 @@ if __name__ == "__main__":
         else 8000
     )
 
-    num_workers = int(os.getenv("WORKERS", 1))
-    should_reload = (env == "dev") and num_workers == 1
+    should_reload = env == "dev"
 
     uvicorn.run(
         "src.__main__:app",
@@ -91,7 +90,7 @@ if __name__ == "__main__":
         port=server_port,
         reload=should_reload,
         reload_dirs=["src"] if should_reload else None,
-        workers=num_workers,
+        workers=1,
         loop="uvloop",
         http="httptools",
     )

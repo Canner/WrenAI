@@ -1,7 +1,4 @@
-import os
 from typing import Callable, Tuple
-
-from redislite import StrictRedis
 
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask import (
@@ -12,9 +9,6 @@ from src.pipelines.ask import (
 )
 from src.pipelines.ask import (
     historical_question,
-)
-from src.pipelines.ask import (
-    indexing as ask_indexing,
 )
 from src.pipelines.ask import (
     query_understanding as ask_query_understanding,
@@ -28,6 +22,9 @@ from src.pipelines.ask import (
 from src.pipelines.ask_details import (
     generation as ask_details_generation,
 )
+from src.pipelines.indexing import (
+    indexing,
+)
 from src.pipelines.semantics import description
 from src.utils import init_providers
 from src.web.v1.services.ask import AskService
@@ -37,10 +34,6 @@ from src.web.v1.services.semantics import SemanticsService
 SEMANTIC_SERVICE = None
 ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
-SQL_EXPLANATION_SERVICE = None
-SQL_REGENERATION_SERVICE = None
-
-REDIS_DB = None
 
 
 def init_globals(
@@ -48,24 +41,7 @@ def init_globals(
         [], Tuple[LLMProvider, DocumentStoreProvider]
     ] = init_providers,
 ):
-    global \
-        SEMANTIC_SERVICE, \
-        ASK_SERVICE, \
-        ASK_DETAILS_SERVICE, \
-        SQL_EXPLANATION_SERVICE, \
-        SQL_REGENERATION_SERVICE, \
-        REDIS_DB
-
-    REDIS_DB = (
-        StrictRedis(
-            host=os.getenv("REDIS_HOST", "redis"),
-            port=int(os.getenv("REDIS_PORT", 6379)),
-        )
-        if int(os.getenv("WORKERS", 1)) > 1
-        else StrictRedis(
-            "./redis.db",
-        )
-    )
+    global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
 
     llm_provider, document_store_provider = init_providers()
 
@@ -80,7 +56,7 @@ def init_globals(
 
     ASK_SERVICE = AskService(
         pipelines={
-            "indexing": ask_indexing.Indexing(
+            "indexing": indexing.Indexing(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
             ),
@@ -105,7 +81,6 @@ def init_globals(
                 llm_provider=llm_provider,
             ),
         },
-        redis_db=REDIS_DB,
     )
 
     ASK_DETAILS_SERVICE = AskDetailsService(
@@ -114,5 +89,4 @@ def init_globals(
                 llm_provider=llm_provider,
             ),
         },
-        redis_db=REDIS_DB,
     )

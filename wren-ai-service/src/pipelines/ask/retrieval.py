@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 from typing import Any
 
 from hamilton import base
@@ -42,6 +43,26 @@ class Retrieval(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(
+        self,
+        query: str,
+    ) -> None:
+        destination = "outputs/pipelines/ask"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["retrieval"],
+            output_file_path=f"{destination}/retrieval.dot",
+            inputs={
+                "query": query,
+                "embedder": self._embedder,
+                "retriever": self._retriever,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
     async def run(self, query: str):
         logger.info("Ask Retrieval pipeline is running...")
@@ -66,4 +87,5 @@ if __name__ == "__main__":
         document_store_provider=document_store_provider,
     )
 
+    pipeline.visualize("this is a query")
     async_validate(lambda: pipeline.run("this is a query"))
