@@ -69,9 +69,8 @@ export class DataSourceMetadataService implements IDataSourceMetadataService {
     if (dataSource === DataSourceName.DUCKDB) {
       const tables = await this.wrenEngineAdaptor.listTables();
       return tables;
-    } else {
-      return await this.ibisAdaptor.getTables(dataSource, connectionInfo);
     }
+    return await this.ibisAdaptor.getTables(dataSource, connectionInfo);
   }
 
   public async listConstraints(
@@ -80,8 +79,7 @@ export class DataSourceMetadataService implements IDataSourceMetadataService {
     const { type: dataSource, connectionInfo } = project;
     if (dataSource === DataSourceName.DUCKDB) {
       return [];
-    } else {
-      return await this.ibisAdaptor.getConstraints(dataSource, connectionInfo);
     }
+    return await this.ibisAdaptor.getConstraints(dataSource, connectionInfo);
   }
 }

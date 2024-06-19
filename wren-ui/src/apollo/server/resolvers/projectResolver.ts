@@ -307,15 +307,15 @@ export class ProjectResolver {
         `Can connect to the data source, tables: ${JSON.stringify(tables[0])}...`,
       );
     }
-    const nextProject = await ctx.projectRepository.updateOne(project.id, {
+    const updatedProject = await ctx.projectRepository.updateOne(project.id, {
       displayName,
       connectionInfo: { ...project.connectionInfo, ...toUpdateConnectionInfo },
     });
     return {
-      type: nextProject.type,
+      type: updatedProject.type,
       properties: {
-        displayName: nextProject.displayName,
-        ...ctx.projectService.getGeneralConnectionInfo(nextProject),
+        displayName: updatedProject.displayName,
+        ...ctx.projectService.getGeneralConnectionInfo(updatedProject),
       },
     };
   }
