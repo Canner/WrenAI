@@ -1,10 +1,12 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Callable, Dict, List, Optional
 
-import backoff
-import openai
-from haystack import component
+import aiohttp
+import tqdm
+from haystack import Document, component
+from haystack.dataclasses import StreamingChunk
 from haystack_integrations.components.embedders.ollama import (
     OllamaDocumentEmbedder,
     OllamaTextEmbedder,
@@ -26,14 +28,182 @@ EMBEDDING_MODEL_DIMENSION = 768
 
 
 @component
-class CustomOllamaGenerator(OllamaGenerator):
-    @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
-    def run(self, prompt: str, generation_kwargs: Optional[Dict[str, Any]] = None):
-        logger.debug(f"Running OpenAI generator with prompt: {prompt}")
-        return super(CustomOllamaGenerator, self).run(
-            prompt=prompt, generation_kwargs=generation_kwargs
+class AsyncGenerator(OllamaGenerator):
+    def __init__(
+        self,
+        model: str = "orca-mini",
+        url: str = "http://localhost:11434/api/generate",
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+        system_prompt: Optional[str] = None,
+        template: Optional[str] = None,
+        raw: bool = False,
+        timeout: int = 120,
+        streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
+    ):
+        super(AsyncGenerator, self).__init__(
+            model=model,
+            url=url,
+            generation_kwargs=generation_kwargs,
+            system_prompt=system_prompt,
+            template=template,
+            raw=raw,
+            timeout=timeout,
+            streaming_callback=streaming_callback,
         )
+
+    @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
+    async def run(
+        self,
+        prompt: str,
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        logger.debug(f"Running Ollama generator with prompt: {prompt}")
+
+        generation_kwargs = {**self.generation_kwargs, **(generation_kwargs or {})}
+
+        stream = self.streaming_callback is not None
+
+        json_payload = self._create_json_payload(prompt, stream, generation_kwargs)
+
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            async with session.post(
+                self.url,
+                json=json_payload,
+            ) as response:
+                result = await response.json()
+
+        return self._convert_to_response(result)
+
+
+@component
+class AsyncTextEmbedder(OllamaTextEmbedder):
+    def __init__(
+        self,
+        model: str = "nomic-embed-text",
+        url: str = "http://localhost:11434/api/embeddings",
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+        timeout: int = 120,
+    ):
+        super(AsyncTextEmbedder, self).__init__(
+            model=model,
+            url=url,
+            generation_kwargs=generation_kwargs,
+            timeout=timeout,
+        )
+
+    @component.output_types(embedding=List[float], meta=Dict[str, Any])
+    async def run(
+        self,
+        text: str,
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        logger.debug(f"Running Ollama text embedder with text: {text}")
+
+        payload = self._create_json_payload(text, generation_kwargs)
+
+        start = time.perf_counter()
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            async with session.post(
+                self.url,
+                json=payload,
+            ) as response:
+                elapsed = time.perf_counter() - start
+                result = await response.json()
+
+        result["meta"] = {"model": self.model, "duration": elapsed}
+
+        return result
+
+
+@component
+class AsyncDocumentEmbedder(OllamaDocumentEmbedder):
+    def __init__(
+        self,
+        model: str = "nomic-embed-text",
+        url: str = "http://localhost:11434/api/embeddings",
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+        timeout: int = 120,
+        prefix: str = "",
+        suffix: str = "",
+        progress_bar: bool = True,
+        meta_fields_to_embed: Optional[List[str]] = None,
+        embedding_separator: str = "\n",
+    ):
+        super(AsyncDocumentEmbedder, self).__init__(
+            model=model,
+            url=url,
+            generation_kwargs=generation_kwargs,
+            timeout=timeout,
+            prefix=prefix,
+            suffix=suffix,
+            progress_bar=progress_bar,
+            meta_fields_to_embed=meta_fields_to_embed,
+            embedding_separator=embedding_separator,
+        )
+
+    async def _embed_batch(
+        self,
+        texts_to_embed: List[str],
+        batch_size: int,
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Ollama Embedding only allows single uploads, not batching. Currently the batch size is set to 1.
+        If this changes in the future, line 86 (the first line within the for loop), can contain:
+            batch = texts_to_embed[i + i + batch_size]
+        """
+
+        all_embeddings = []
+        meta: Dict[str, Any] = {"model": self.model}
+
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            for i in tqdm(
+                range(0, len(texts_to_embed), batch_size),
+                disable=not self.progress_bar,
+                desc="Calculating embeddings",
+            ):
+                batch = texts_to_embed[i]  # Single batch only
+                payload = self._create_json_payload(batch, generation_kwargs)
+
+                async with session.post(
+                    self.url,
+                    json=payload,
+                ) as response:
+                    result = await response.json()
+                    all_embeddings.append(result["embedding"])
+
+        return all_embeddings, meta
+
+    @component.output_types(embedding=List[float], meta=Dict[str, Any])
+    async def run(
+        self,
+        documents: List[str],
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        logger.debug(f"Running Ollama document embedder with documents: {documents}")
+
+        if (
+            not isinstance(documents, list)
+            or documents
+            and not isinstance(documents[0], Document)
+        ):
+            msg = (
+                "OllamaDocumentEmbedder expects a list of Documents as input."
+                "In case you want to embed a list of strings, please use the OllamaTextEmbedder."
+            )
+            raise TypeError(msg)
+
+        texts_to_embed = self._prepare_texts_to_embed(documents=documents)
+        embeddings, meta = await self._embed_batch(
+            texts_to_embed=texts_to_embed,
+            batch_size=self.batch_size,
+            generation_kwargs=generation_kwargs,
+        )
+
+        for doc, emb in zip(documents, embeddings):
+            doc.embedding = emb
+
+        return {"documents": documents, "meta": meta}
 
 
 @provider("ollama")
@@ -52,18 +222,18 @@ class OllamaLLMProvider(LLMProvider):
         model_kwargs: Optional[Dict[str, Any]] = GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
-        return CustomOllamaGenerator(
+        return AsyncGenerator(
             model=self._generation_model,
             url=f"{self._url}/api/generate",
-            system_prompt=system_prompt,
             generation_kwargs=model_kwargs,
+            system_prompt=system_prompt,
         )
 
     def get_text_embedder(
         self,
         model_name: str = EMBEDDING_MODEL_NAME,
     ):
-        return OllamaTextEmbedder(
+        return AsyncTextEmbedder(
             model=model_name,
             url=f"{self._url}/api/embeddings",
         )
@@ -72,7 +242,7 @@ class OllamaLLMProvider(LLMProvider):
         self,
         model_name: str = EMBEDDING_MODEL_NAME,
     ):
-        return OllamaDocumentEmbedder(
+        return AsyncDocumentEmbedder(
             model=model_name,
             url=f"{self._url}/api/embeddings",
         )
