@@ -37,9 +37,9 @@ func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGeneration
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
 
-	// replace OPENAI_GENERATION_MODEL
-	reg = regexp.MustCompile(`OPENAI_GENERATION_MODEL=(.*)`)
-	str = reg.ReplaceAllString(str, "OPENAI_GENERATION_MODEL="+OpenaiGenerationModel)
+	// replace GENERATION_MODEL
+	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)
+	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+OpenaiGenerationModel)
 
 	// replace USER_UUID
 	reg = regexp.MustCompile(`USER_UUID=(.*)`)
@@ -153,7 +153,7 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
+func PrepareDockerFiles(openaiApiKey string, generationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -186,7 +186,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		return err
 	}
 	// replace the content with regex
-	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, openaiGenerationModel, hostPort, aiPort, pg_pwd, userUUID, telemetryEnabled)
+	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, generationModel, hostPort, aiPort, pg_pwd, userUUID, telemetryEnabled)
 	newEnvFile := getEnvFilePath(projectDir)
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)

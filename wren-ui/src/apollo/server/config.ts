@@ -19,7 +19,7 @@ export interface IConfig {
 
   // wren AI
   wrenAIEndpoint: string;
-  openaiGenerationModel?: string;
+  generationModel?: string;
 
   // ibis server
   ibisServerEndpoint: string;
@@ -102,7 +102,7 @@ const config = {
 
   // wren AI
   wrenAIEndpoint: process.env.WREN_AI_ENDPOINT,
-  openaiGenerationModel: process.env.OPENAI_GENERATION_MODEL,
+  generationModel: process.env.GENERATION_MODEL,
 
   // ibis server
   ibisServerEndpoint: process.env.IBIS_SERVER_ENDPOINT,

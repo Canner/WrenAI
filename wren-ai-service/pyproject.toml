@@ -22,6 +22,7 @@ sqlglot = "==22.5.0"
 orjson = "==3.10.3"
 sf-hamilton = {version = "==1.63.0", extras = ["visualization"]}
 aiohttp = "==3.9.5"
+ollama-haystack = "==0.0.6"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "==8.2.0"

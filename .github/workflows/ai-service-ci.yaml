@@ -52,7 +52,7 @@ jobs:
           LLM_PROVIDER: openai
           DOCUMENT_STORE_PROVIDER: qdrant
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_GENERATION_MODEL: gpt-3.5-turbo
+          GENERATION_MODEL: gpt-3.5-turbo
           WREN_ENGINE_ENDPOINT: http://localhost:8080
           WREN_UI_ENDPOINT: http://localhost:3000
           QDRANT_HOST: localhost
