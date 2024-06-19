@@ -10,9 +10,8 @@ from src.core.provider import LLMProvider
 from src.pipelines.sql_explanation.components.prompts import (
     sql_explanation_system_prompt,
 )
-from src.utils import init_providers, load_env_vars
+from src.utils import init_providers
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -280,12 +279,11 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, _ = init_providers()
     generation_pipeline = Generation(
         llm_provider=llm_provider,
-    )
-
-    print("generating generation_pipeline.jpg to outputs/pipelines/sql_explanation...")
-    generation_pipeline.draw(
-        "./outputs/pipelines/sql_explanation/generation_pipeline.jpg"
     )

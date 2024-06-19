@@ -21,10 +21,10 @@ from src.pipelines.indexing import (
 )
 from src.pipelines.semantics import description
 from src.pipelines.sql_explanation import (
-    generation_pipeline as sql_explanation_generation_pipeline,
+    generation as sql_explanation_generation,
 )
 from src.pipelines.sql_regeneration import (
-    generation_pipeline as sql_regeneration_pipeline,
+    generation as sql_regeneration,
 )
 from src.utils import init_providers
 from src.web.v1.services.ask import AskService
@@ -107,7 +107,7 @@ def init_globals():
 
     SQL_EXPLANATION_SERVICE = SQLExplanationService(
         pipelines={
-            "generation": sql_explanation_generation_pipeline.Generation(
+            "generation": sql_explanation_generation.Generation(
                 llm_provider=llm_provider,
             )
         }
@@ -115,7 +115,7 @@ def init_globals():
 
     SQL_REGENERATION_SERVICE = SQLRegenerationService(
         pipelines={
-            "generation": sql_regeneration_pipeline.Generation(
+            "generation": sql_regeneration.Generation(
                 llm_provider=llm_provider,
             )
         }
