@@ -13,10 +13,7 @@ from src.pipelines.sql_regeneration.components.prompts import (
 )
 from src.utils import clean_generation_result, init_providers, load_env_vars
 from src.web.v1.services.sql_regeneration import (
-    CorrectionPoint,
-    DecisionPoint,
     SQLExplanationWithUserCorrections,
-    UserCorrection,
 )
 
 load_env_vars()
@@ -274,77 +271,7 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    results = generation_pipeline.run(
-        description="This query identifies the customer who bought the most products within a specific time frame.",
-        steps=[
-            SQLExplanationWithUserCorrections(
-                sql='SELECT * FROM "customers"',
-                summary="Selects all columns from the customers table to retrieve customer information.",
-                cte_name="customer_data",
-                corrections=[],
-            ),
-            SQLExplanationWithUserCorrections(
-                sql='SELECT * FROM "orders" WHERE "PurchaseTimestamp" >= \'2023-01-01\' AND "PurchaseTimestamp" < \'2024-01-01\'',
-                summary="Filters orders based on the purchase timestamp to include only orders within the specified time frame.",
-                cte_name="filtered_orders",
-                corrections=[
-                    UserCorrection(
-                        before=DecisionPoint(
-                            type="filter",
-                            value="('PurchaseTimestamp' >= '2023-01-01') AND ('PurchaseTimestamp' < '2024-01-01')",
-                        ),
-                        after=CorrectionPoint(
-                            type="nl_expression", value="change the time to 2022 only"
-                        ),
-                    )
-                ],
-            ),
-            SQLExplanationWithUserCorrections(
-                sql='SELECT * FROM "order_items"',
-                summary="Selects all columns from the order_items table to retrieve information about the products in each order.",
-                cte_name="order_items_data",
-                corrections=[],
-            ),
-            SQLExplanationWithUserCorrections(
-                sql="""
-SELECT "c"."Id", COUNT("oi"."ProductId") AS "TotalProductsBought"
-FROM "customer_data" AS "c"
-JOIN "filtered_orders" AS "o" ON "c"."Id" = "o"."CustomerId"
-JOIN "order_items_data" AS "oi" ON "o"."OrderId" = "oi"."OrderId"
-GROUP BY "c"."Id"
-""",
-                summary="Joins customer, order, and order item data to count the total products bought by each customer.",
-                cte_name="product_count_per_customer",
-                corrections=[],
-            ),
-            SQLExplanationWithUserCorrections(
-                sql="""
-SELECT "Id",
-       "TotalProductsBought"
-FROM "product_count_per_customer"
-ORDER BY "TotalProductsBought" DESC
-LIMIT 1
-""",
-                summary="Orders the customers based on the total products bought in descending order and limits the result to the top customer.",
-                cte_name="",
-                corrections=[
-                    UserCorrection(
-                        before=DecisionPoint(
-                            type="sortings", value="('TotalProductsBought' DESC)"
-                        ),
-                        after=CorrectionPoint(
-                            type="nl_expression",
-                            value="sort by 'TotalProductsBought' ASC",
-                        ),
-                    )
-                ],
-            ),
-        ],
-        include_outputs_from=["sql_regeneration_post_processor"],
+    print("generating generation_pipeline.jpg to outputs/pipelines/sql_regeneration...")
+    generation_pipeline.draw(
+        "./outputs/pipelines/sql_regeneration/generation_pipeline.jpg"
     )
-    print(results)
-
-    # print("generating generation_pipeline.jpg to outputs/pipelines/sql_regeneration...")
-    # generation_pipeline.draw(
-    #     "./outputs/pipelines/sql_regeneration/generation_pipeline.jpg"
-    # )
