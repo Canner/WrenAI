@@ -30,14 +30,18 @@ The following commands can quickly start the service for development:
 
 ### Pipeline Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
 
-- install `psql`
-- fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
-- start the docker service
-- evaluation
-  - `make eval pipeline=ask args="--help"`
-  - `make eval pipeline=ask_details args="--help"`
-- `make eval_visualzation` to compare between the evaluation results
-- to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
+- go to the `eval` folder and run `poetry install` to install the dependencies
+- to run the evaluation dataset curation app: `make data_curation_app`
+- These will be deprecated soon, we are working on a new LLM evaluation system
+  - install `psql`
+  - fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
+  - start the docker service
+  - evaluation
+    - `make eval pipeline=ask args="--help"`
+    - `make eval pipeline=ask_details args="--help"`
+  - `make streamlit` to compare between the evaluation results
+  - to run individual pipeline: `poetry run python -m src.pipelines.ask.[pipeline_name]` (e.g. `poetry run python -m src.pipelines.ask.retrieval_pipeline`)
+
 
 ### Speed Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
 
