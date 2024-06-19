@@ -48,4 +48,5 @@ Results:
 - ONLY USE the tables and columns mentioned in the original sql query.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - ONLY THE last step should not have a CTE name.
+- ALWAYS SHOW alias for columns and tables such as SELECT [column_name] AS [alias_column_name].
 """

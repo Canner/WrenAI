@@ -1,6 +1,5 @@
 TEXT_TO_SQL_RULES = """
 ### ALERT ###
-- YOU MUST USE the value of "alias" in DATABASE SCHEMA as ALIAS for the column name or table name while generating SQL.
 - DON'T USE "*" in SELECT queries.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
@@ -9,6 +8,7 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
+- ALWAYS SHOW alias for columns and tables such as SELECT [column_name] AS [alias_column_name].
 """
 
 
