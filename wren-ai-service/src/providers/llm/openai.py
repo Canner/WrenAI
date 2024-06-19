@@ -276,8 +276,10 @@ class OpenAILLMProvider(LLMProvider):
         self,
         api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
         api_base: str = os.getenv("OPENAI_API_BASE") or OPENAI_API_BASE,
-        generation_model: str = os.getenv("OPENAI_GENERATION_MODEL")
-        or GENERATION_MODEL_NAME,
+        embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
+        embedding_model_dim: int = int(os.getenv("EMBEDDING_MODEL_DIM"))
+        or EMBEDDING_MODEL_DIMENSION,
+        generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL_NAME,
     ):
         def _verify_api_key(api_key: str, api_base: str) -> None:
             """
@@ -289,6 +291,8 @@ class OpenAILLMProvider(LLMProvider):
         logger.info(f"Using OpenAI Generation Model: {generation_model}")
         self._api_key = api_key
         self._api_base = api_base
+        self._embedding_model = embedding_model
+        self._embedding_model_dim = embedding_model_dim
         self._generation_model = generation_model
 
     def get_generator(
@@ -313,26 +317,18 @@ class OpenAILLMProvider(LLMProvider):
             generation_kwargs=_get_generation_kwargs(self._api_base, model_kwargs),
         )
 
-    def get_text_embedder(
-        self,
-        model_name: str = EMBEDDING_MODEL_NAME,
-        model_dim: int = EMBEDDING_MODEL_DIMENSION,
-    ):
+    def get_text_embedder(self):
         return AsyncTextEmbedder(
             api_key=self._api_key,
             api_base_url=self._api_base,
-            model=model_name,
-            dimensions=model_dim,
+            model=self._embedding_model,
+            dimensions=self._embedding_model_dim,
         )
 
-    def get_document_embedder(
-        self,
-        model_name: str = EMBEDDING_MODEL_NAME,
-        model_dim: int = EMBEDDING_MODEL_DIMENSION,
-    ):
+    def get_document_embedder(self):
         return AsyncDocumentEmbedder(
             api_key=self._api_key,
             api_base_url=self._api_base,
-            model=model_name,
-            dimensions=model_dim,
+            model=self._embedding_model,
+            dimensions=self._embedding_model_dim,
         )

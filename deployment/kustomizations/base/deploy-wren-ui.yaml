@@ -44,11 +44,11 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: WREN_AI_ENDPOINT
-            - name: OPENAI_GENERATION_MODEL
+            - name: GENERATION_MODEL
               valueFrom:
                 configMapKeyRef:
                   name: wren-config
-                  key: OPENAI_GENERATION_MODEL
+                  key: GENERATION_MODEL
             - name: PG_URL
               valueFrom:
                 secretKeyRef:

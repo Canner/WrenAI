@@ -32,14 +32,14 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, OpenaiGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
+func replaceEnvFileContent(content string, OpenaiApiKey string, generationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
 
 	// replace GENERATION_MODEL
 	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)
-	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+OpenaiGenerationModel)
+	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+generationModel)
 
 	// replace USER_UUID
 	reg = regexp.MustCompile(`USER_UUID=(.*)`)
@@ -186,7 +186,16 @@ func PrepareDockerFiles(openaiApiKey string, generationModel string, hostPort in
 		return err
 	}
 	// replace the content with regex
-	envFileContent := replaceEnvFileContent(string(envExampleFileContent), openaiApiKey, generationModel, hostPort, aiPort, pg_pwd, userUUID, telemetryEnabled)
+	envFileContent := replaceEnvFileContent(
+		string(envExampleFileContent),
+		openaiApiKey,
+		generationModel,
+		hostPort,
+		aiPort,
+		pg_pwd,
+		userUUID,
+		telemetryEnabled,
+	)
 	newEnvFile := getEnvFilePath(projectDir)
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
