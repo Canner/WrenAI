@@ -10,11 +10,9 @@ import {
 } from '../types';
 import { getLogger, replaceInvalidReferenceName, trim } from '@server/utils';
 import {
-  BIG_QUERY_CONNECTION_INFO,
   DUCKDB_CONNECTION_INFO,
   Model,
   ModelColumn,
-  POSTGRES_CONNECTION_INFO,
   Project,
 } from '../repositories';
 import {
@@ -62,13 +60,18 @@ export class ProjectResolver {
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
+    const generalConnectionInfo =
+      ctx.projectService.getGeneralConnectionInfo(project);
     const dataSourceType = project.type;
 
     return {
       productVersion: ctx.config.wrenProductVersion || '',
       dataSource: {
         type: dataSourceType,
-        properties: this.getDataSourceProperties(project),
+        properties: {
+          displayName: project.displayName,
+          ...generalConnectionInfo,
+        } as DataSourceProperties,
         sampleDataset: project.sampleDataset,
       },
     };
@@ -247,7 +250,10 @@ export class ProjectResolver {
 
     return {
       type: project.type,
-      properties: this.getDataSourceProperties(project),
+      properties: {
+        displayName: project.displayName,
+        ...ctx.projectService.getGeneralConnectionInfo(project),
+      },
     };
   }
 
@@ -301,13 +307,16 @@ export class ProjectResolver {
         `Can connect to the data source, tables: ${JSON.stringify(tables[0])}...`,
       );
     }
-    const nextProject = await ctx.projectRepository.updateOne(project.id, {
+    const updatedProject = await ctx.projectRepository.updateOne(project.id, {
       displayName,
       connectionInfo: { ...project.connectionInfo, ...toUpdateConnectionInfo },
     });
     return {
-      type: nextProject.type,
-      properties: this.getDataSourceProperties(nextProject),
+      type: updatedProject.type,
+      properties: {
+        displayName: updatedProject.displayName,
+        ...ctx.projectService.getGeneralConnectionInfo(updatedProject),
+      },
     };
   }
 
@@ -646,36 +655,6 @@ export class ProjectResolver {
     const columns = await ctx.modelColumnRepository.createMany(columnValues);
 
     return { models, columns };
-  }
-
-  private getDataSourceProperties(project: Project) {
-    const dataSourceType = project.type;
-    const properties = {
-      displayName: project.displayName,
-    } as DataSourceProperties;
-
-    if (dataSourceType === DataSourceName.BIG_QUERY) {
-      const { projectId, datasetId } =
-        project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
-      properties.projectId = projectId;
-      properties.datasetId = datasetId;
-    } else if (dataSourceType === DataSourceName.DUCKDB) {
-      const { initSql, extensions, configurations } =
-        project.connectionInfo as DUCKDB_CONNECTION_INFO;
-      properties.initSql = initSql;
-      properties.extensions = extensions;
-      properties.configurations = configurations;
-    } else if (dataSourceType === DataSourceName.POSTGRES) {
-      const { host, port, database, user, ssl } =
-        project.connectionInfo as POSTGRES_CONNECTION_INFO;
-      properties.host = host;
-      properties.port = port;
-      properties.database = database;
-      properties.user = user;
-      properties.ssl = ssl;
-    }
-
-    return properties;
   }
 
   private transformInvalidColumnName(columnName: string) {

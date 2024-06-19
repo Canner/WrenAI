@@ -244,7 +244,6 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { sourceTableName, fields, primaryKey } = args.data;
-
     const project = await ctx.projectService.getCurrentProject();
     const dataSourceTables =
       await ctx.projectService.getProjectDataSourceTables(project);

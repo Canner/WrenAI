@@ -10,18 +10,11 @@ import {
   ValidationRules,
   IbisQueryOptions,
 } from '../adaptors/ibisAdaptor';
-import { Encryptor, getLogger } from '@server/utils';
-import {
-  BIG_QUERY_CONNECTION_INFO,
-  POSTGRES_CONNECTION_INFO,
-  Project,
-} from '../repositories';
-import { getConfig } from '../config';
+import { getLogger } from '@server/utils';
+import { Project } from '../repositories';
 
 const logger = getLogger('QueryService');
 logger.level = 'debug';
-
-const config = getConfig();
 
 export interface ColumnMetadata {
   name: string;
@@ -101,8 +94,7 @@ export class QueryService implements IQueryService {
     options: PreviewOptions,
   ): Promise<PreviewDataResponse | boolean> {
     const { project, mdl, limit, dryRun } = options;
-
-    const dataSource = project.type;
+    const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
       if (dryRun) {
         logger.debug('Using wren engine to dry run');
@@ -126,7 +118,6 @@ export class QueryService implements IQueryService {
         ? `SELECT tmp.* FROM (${sql}) tmp LIMIT ${limit}`
         : sql;
 
-      const { connectionInfo } = this.transformToIbisConnectionInfo(project);
       this.checkDataSourceIsSupported(dataSource);
       const queryOptions = {
         dataSource,
@@ -164,8 +155,7 @@ export class QueryService implements IQueryService {
     manifest: Manifest,
     parameters: Record<string, any>,
   ): Promise<ValidateResponse> {
-    const { connectionInfo } = this.transformToIbisConnectionInfo(project);
-    const dataSource = project.type;
+    const { type: dataSource, connectionInfo } = project;
     const res = await this.ibisAdaptor.validate(
       dataSource,
       rule,
@@ -174,44 +164,6 @@ export class QueryService implements IQueryService {
       parameters,
     );
     return res;
-  }
-
-  // transform connection info to ibis connection info format
-  private transformToIbisConnectionInfo(project: Project) {
-    const { type } = project;
-    switch (type) {
-      case DataSourceName.POSTGRES: {
-        const connectionInfo =
-          project.connectionInfo as POSTGRES_CONNECTION_INFO;
-        const encryptor = new Encryptor(config);
-        const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
-        const { password } = JSON.parse(decryptedCredentials);
-        return {
-          connectionInfo: {
-            ...connectionInfo,
-            password,
-          } as IbisPostgresConnectionInfo,
-        };
-      }
-      case DataSourceName.BIG_QUERY: {
-        const connectionInfo =
-          project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
-        const encryptor = new Encryptor(config);
-        const decryptedCredentials = encryptor.decrypt(
-          connectionInfo.credentials,
-        );
-        const credential = Buffer.from(decryptedCredentials).toString('base64');
-        return {
-          connectionInfo: {
-            project_id: connectionInfo.projectId,
-            dataset_id: connectionInfo.datasetId,
-            credentials: credential,
-          } as IbisBigQueryConnectionInfo,
-        };
-      }
-      default:
-        throw new Error(`Unsupported project type: ${type}`);
-    }
   }
 
   private useEngine(dataSource: DataSourceName): boolean {

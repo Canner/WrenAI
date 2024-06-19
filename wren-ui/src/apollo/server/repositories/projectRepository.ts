@@ -8,7 +8,7 @@ import {
   snakeCase,
   isEmpty,
 } from 'lodash';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import { DataSourceName } from '@server/types';
 
 export interface BIG_QUERY_CONNECTION_INFO {
   projectId: string;
@@ -24,11 +24,25 @@ export interface POSTGRES_CONNECTION_INFO {
   ssl: boolean;
 }
 
+export interface MYSQL_CONNECTION_INFO {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+}
+
 export interface DUCKDB_CONNECTION_INFO {
   initSql: string;
   extensions: Array<string>;
   configurations: Record<string, any>;
 }
+
+export type WREN_AI_CONNECTION_INFO =
+  | BIG_QUERY_CONNECTION_INFO
+  | POSTGRES_CONNECTION_INFO
+  | MYSQL_CONNECTION_INFO
+  | DUCKDB_CONNECTION_INFO;
 
 export interface Project {
   id: number; // ID
@@ -37,10 +51,7 @@ export interface Project {
   catalog: string; // Catalog name
   schema: string; // Schema name
   sampleDataset: string; // Sample dataset name
-  connectionInfo:
-    | BIG_QUERY_CONNECTION_INFO
-    | POSTGRES_CONNECTION_INFO
-    | DUCKDB_CONNECTION_INFO;
+  connectionInfo: WREN_AI_CONNECTION_INFO;
 }
 
 export interface IProjectRepository extends IBasicRepository<Project> {
