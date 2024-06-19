@@ -27,6 +27,13 @@ const defaultTestConfig = {
     database: 'postgresql-database',
     ssl: false,
   },
+  mysql: {
+    host: 'mysql-host',
+    port: '3306',
+    username: 'mysql-username',
+    password: 'mysql-password',
+    database: 'mysql-database',
+  },
 };
 
 let userTestConfig = {};
