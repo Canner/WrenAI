@@ -209,10 +209,10 @@ def get_ddl_commands(mdl_json: dict) -> str:
     return "\n\n".join(ddl_commands)
 
 
-async def get_question_sql_pairs_with_context(
+async def get_contexts_from_sqls(
     llm_client: AsyncClient,
-    question_sql_pairs: list[dict],
-) -> list[dict]:
+    sqls: list[str],
+) -> list[str]:
     messages = [
         {
             "role": "system",
@@ -229,80 +229,40 @@ Given the question sql pairs, provide the context for each sql.
 EAMPLE1:
 
 INPUT
-{{
-    "question": "orjson.loads(response.choices[0].message.content)["results"]",
-    "context": [],
-    "is_valid": True,
-    "sql": "SELECT SUM(p.Value) FROM payments p JOIN orders o ON p.OrderId = o.OrderId WHERE o.Status = 'Delivered';"
-}}
+"SELECT SUM(p.Value) FROM payments p JOIN orders o ON p.OrderId = o.OrderId WHERE o.Status = 'Delivered';"
 
 OUTPUT
-{{
-    "question": "orjson.loads(response.choices[0].message.content)["results"]",
-    "context": ["payments.Value", "orders.OrderId", "payments.OrderId", "orders.Status"],
-    "is_valid": True,
-    "sql": "SELECT SUM(p.Value) FROM payments p JOIN orders o ON p.OrderId = o.OrderId WHERE o.Status = 'Delivered';"
-}}
+["payments.Value", "orders.OrderId", "payments.OrderId", "orders.Status"]
 
 EXAMPLE2:
 
 INPUT
-{{
-    "question": "What is the average score given in the reviews?",
-    "context": [],
-    "is_valid": True,
-    "sql": "SELECT AVG(Score) FROM reviews;"
-}}
+"SELECT AVG(Score) FROM reviews;"
 
 OUTPUT
-{{
-    "question": "What is the average score given in the reviews?",
-    "context": ["reviews.Score"],
-    "is_valid": True,
-    "sql": "SELECT AVG(Score) FROM reviews;"
-}}
+["reviews.Score"
 
 EXAMPLE3:
 
 INPUT
-{{
-    "question": "Show me the details of customer?",
-    "context": [],
-    "is_valid": True,
-    "sql": "SELECT * FROM customers;"
-}}
+"SELECT * FROM customers;"
 
 OUTPUT
-{{
-    "question": "Show me the details of customer?",
-    "context": ["customers.*"],
-    "is_valid": True,
-    "sql": "SELECT * FROM customers;"
-}}
+["customers.*"]
 
 ### Output Format ###
 {{
     "results": [
-        {{
-            "question": <question_string>,
-            "context": [<context_string>],
-            "is_valid": <boolean>,
-            "sql": <sql_query_string>
-        }},
-        {{
-            "question": <question_string>,
-            "context": [<context_string>],
-            "is_valid": <boolean>,
-            "sql": <sql_query_string>
-        }},
+        <context_string1>,
+        <context_string2>,
         ...
     ]
 }}
 
 ### Input ###
-Question SQL Pairs: {question_sql_pairs}
+List of SQLs: {sqls}
 
-Generate the context for the corresponding SQL queries of each question-sql-pair according to the Output Format in JSON
+Generate the context for the corresponding SQL query according to the Output Format in JSON
 Think step by step
 """,
         },
@@ -372,7 +332,12 @@ Think step by step
 
         results = orjson.loads(response.choices[0].message.content)["results"]
         question_sql_pairs = await get_valid_question_sql_pairs(results)
-        return await get_question_sql_pairs_with_context(llm_client, question_sql_pairs)
+        sqls = [question_sql_pair["sql"] for question_sql_pair in question_sql_pairs]
+        contexts = await get_contexts_from_sqls(llm_client, sqls)
+        return [
+            {**quesiton_sql_pair, "context": context}
+            for quesiton_sql_pair, context in zip(question_sql_pairs, contexts)
+        ]
     except Exception as e:
         st.error(f"Error generating question-sql-pairs: {e}")
         return []

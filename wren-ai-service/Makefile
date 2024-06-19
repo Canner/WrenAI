@@ -31,6 +31,9 @@ eval:
 
 demo:
 	cd demo; poetry run streamlit run app.py
+
+data_curation_app:
+	cd eval; poetry run streamlit run data_curation/app.py
 ## utilities related ##
 
 
