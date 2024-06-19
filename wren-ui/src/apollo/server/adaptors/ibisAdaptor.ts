@@ -20,14 +20,21 @@ logger.level = 'debug';
 
 const config = getConfig();
 
-export interface IbisPostgresConnectionInfo {
+export interface HostBasedConnectionInfo {
   host: string;
   port: number;
   database: string;
   user: string;
   password: string;
-  ssl: boolean;
 }
+
+export interface UrlBasedConnectionInfo {
+  connectionUrl: string;
+}
+
+export type IbisPostgresConnectionInfo =
+  | UrlBasedConnectionInfo
+  | HostBasedConnectionInfo;
 
 export interface IbisMySQLConnectionInfo {
   host: string;
@@ -291,14 +298,18 @@ export class IbisAdaptor implements IIbisAdaptor {
   ): IbisConnectionInfo {
     switch (dataSource) {
       case DataSourceName.POSTGRES: {
-        connectionInfo = connectionInfo as POSTGRES_CONNECTION_INFO;
+        const { host, port, database, user, password, ssl } =
+          connectionInfo as POSTGRES_CONNECTION_INFO;
         const encryptor = new Encryptor(config);
-        const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
-        const { password } = JSON.parse(decryptedCredentials);
+        const decryption = encryptor.decrypt(password);
+        const { password: decryptedPassword } = JSON.parse(decryption);
+        let connectionUrl = `postgresql://${user}:${decryptedPassword}@${host}:${port}/${database}?`;
+        if (ssl) {
+          connectionUrl += 'sslmode=require';
+        }
         return {
-          ...connectionInfo,
-          password: password,
-        } as IbisPostgresConnectionInfo;
+          connectionUrl,
+        } as UrlBasedConnectionInfo;
       }
       case DataSourceName.BIG_QUERY: {
         connectionInfo = connectionInfo as BIG_QUERY_CONNECTION_INFO;

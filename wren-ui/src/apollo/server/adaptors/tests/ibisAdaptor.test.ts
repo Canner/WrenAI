@@ -34,8 +34,10 @@ describe('IbisAdaptor', () => {
     database: 'my-database',
     user: 'my-user',
     password: 'my-password',
-    ssl: false,
+    ssl: true,
   };
+  const { host, port, database, user, password } = mockPostgresConnectionInfo;
+  const postgresConnectionUrl = `postgresql://${user}:${password}@${host}:${port}/${database}?sslmode=require`;
 
   const mockBigQueryConnectionInfo: BIG_QUERY_CONNECTION_INFO = {
     projectId: 'my-bq-project-id',
@@ -128,7 +130,11 @@ describe('IbisAdaptor', () => {
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v2/ibis/postgres/metadata/constraints`,
-      { connectionInfo: mockPostgresConnectionInfo },
+      {
+        connectionInfo: {
+          connectionUrl: postgresConnectionUrl,
+        },
+      },
     );
   });
 
@@ -184,7 +190,7 @@ describe('IbisAdaptor', () => {
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v2/ibis/postgres/validate/column_is_valid`,
       {
-        connectionInfo: mockPostgresConnectionInfo,
+        connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
           'base64',
         ),
@@ -216,7 +222,7 @@ describe('IbisAdaptor', () => {
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v2/ibis/postgres/validate/column_is_valid`,
       {
-        connectionInfo: mockPostgresConnectionInfo,
+        connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
           'base64',
         ),
