@@ -12,12 +12,11 @@ from src.pipelines.sql_regeneration.components.prompts import (
     description_regeneration_system_prompt,
     sql_regeneration_system_prompt,
 )
-from src.utils import init_providers, load_env_vars
+from src.utils import init_providers
 from src.web.v1.services.sql_regeneration import (
     SQLExplanationWithUserCorrections,
 )
 
-load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -267,12 +266,11 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     llm_provider, _ = init_providers()
     generation_pipeline = Generation(
         llm_provider=llm_provider,
-    )
-
-    print("generating generation_pipeline.jpg to outputs/pipelines/sql_regeneration...")
-    generation_pipeline.draw(
-        "./outputs/pipelines/sql_regeneration/generation_pipeline.jpg"
     )
