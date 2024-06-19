@@ -4,9 +4,9 @@ import streamlit as st
 from utils import (
     get_llm_client,
     get_question_sql_pairs,
+    get_question_sql_pairs_with_context,
     is_sql_valid,
     is_valid_mdl_file,
-    prettify_sql,
     show_er_diagram,
 )
 
@@ -82,21 +82,39 @@ with tab_create_dataset:
                     for i, question_sql_pair in enumerate(
                         st.session_state["question_sql_pairs"]
                     ):
+                        if question_sql_pair:
+                            print(f'{i} {question_sql_pair['context']}')
                         st.text_input(
                             f"Question {i}",
                             question_sql_pair["question"],
                             disabled=True,
                             key=f"question_{i}",
                         )
-                        st.json(question_sql_pair["context"], expanded=True)
+                        st.multiselect(
+                            f"Context {i}",
+                            options=question_sql_pair["context"],
+                            default=question_sql_pair["context"],
+                            disabled=True,
+                            key=f"context_{i}",
+                        )
                         sql = st.text_area(
                             f"SQL {i}",
-                            prettify_sql(question_sql_pair["sql"]),
+                            question_sql_pair["sql"],
                             key=f"sql_{i}",
+                            height=200,
                         )
                         assert sql, "SQL should not be empty"
                         if sql != question_sql_pair["sql"]:
                             st.session_state["question_sql_pairs"][i]["sql"] = sql
+                            st.session_state["question_sql_pairs"][i][
+                                "context"
+                            ] = asyncio.run(
+                                get_question_sql_pairs_with_context(
+                                    llm_client,
+                                    [st.session_state["question_sql_pairs"][i]],
+                                )
+                            )[0]["context"]
+                            print(st.session_state["question_sql_pairs"][i]["context"])
                             if asyncio.run(is_sql_valid(sql)):
                                 st.session_state["question_sql_pairs"][i][
                                     "is_valid"
