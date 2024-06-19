@@ -328,8 +328,6 @@ export class IbisAdaptor implements IIbisAdaptor {
         connectionInfo = connectionInfo as MYSQL_CONNECTION_INFO;
         const encryptor = new Encryptor(config);
         const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
-        console.log(decryptedCredentials);
-        console.log(typeof decryptedCredentials);
         const { password } = JSON.parse(decryptedCredentials);
         return {
           ...connectionInfo,
