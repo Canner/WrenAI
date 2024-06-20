@@ -212,10 +212,12 @@ class OllamaLLMProvider(LLMProvider):
         self,
         url: str = os.getenv("OLLAMA_URL") or OLLAMA_URL,
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL_NAME,
+        embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
     ):
         logger.info(f"Using Ollama Generation Model: {generation_model}")
         self._url = url
         self._generation_model = generation_model
+        self._embedding_model = embedding_model
 
     def get_generator(
         self,
@@ -231,18 +233,20 @@ class OllamaLLMProvider(LLMProvider):
 
     def get_text_embedder(
         self,
-        model_name: str = EMBEDDING_MODEL_NAME,
+        model_kwargs: Optional[Dict[str, Any]] = None,
     ):
         return AsyncTextEmbedder(
-            model=model_name,
+            model=self._embedding_model,
             url=f"{self._url}/api/embeddings",
+            generation_kwargs=model_kwargs,
         )
 
     def get_document_embedder(
         self,
-        model_name: str = EMBEDDING_MODEL_NAME,
+        model_kwargs: Optional[Dict[str, Any]] = None,
     ):
         return AsyncDocumentEmbedder(
-            model=model_name,
+            model=self._embedding_model,
             url=f"{self._url}/api/embeddings",
+            generation_kwargs=model_kwargs,
         )
