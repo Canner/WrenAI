@@ -21,6 +21,8 @@ from src.providers.loader import provider
 
 if os.getenv("LLM_PROVIDER") == "ollama":
     from src.providers.llm.ollama import EMBEDDING_MODEL_DIMENSION
+elif os.getenv("LLM_PROVIDER") == "azure_openai":
+    from src.providers.llm.azure_openai import EMBEDDING_MODEL_DIMENSION
 else:
     from src.providers.llm.openai import EMBEDDING_MODEL_DIMENSION
 
