@@ -1,10 +1,10 @@
 import logging
 import os
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import backoff
 import openai
-from openai import AsyncAzureOpenAI, AzureOpenAI, Stream, OpenAI
 from haystack import Document, component
-from typing import Dict, Optional, Callable, Any, List, Union, Tuple
 from haystack.components.embedders import (
     AzureOpenAIDocumentEmbedder,
     AzureOpenAITextEmbedder,
@@ -12,7 +12,7 @@ from haystack.components.embedders import (
 from haystack.components.generators import AzureOpenAIGenerator
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from haystack.utils import Secret
-
+from openai import AsyncAzureOpenAI, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from tqdm import tqdm
 
@@ -85,13 +85,13 @@ class AsyncAzureGenerator(AzureOpenAIGenerator):
 
         openai_formatted_messages = [message.to_openai_format() for message in messages]
 
-        completion: Union[Stream[ChatCompletionChunk], ChatCompletion] = (
-            await self.client.chat.completions.create(
-                model=self.model,
-                messages=openai_formatted_messages,
-                stream=self.streaming_callback is not None,
-                **generation_kwargs,
-            )
+        completion: Union[
+            Stream[ChatCompletionChunk], ChatCompletion
+        ] = await self.client.chat.completions.create(
+            model=self.model,
+            messages=openai_formatted_messages,
+            stream=self.streaming_callback is not None,
+            **generation_kwargs,
         )
 
         completions: List[ChatMessage] = []
@@ -287,7 +287,7 @@ class AsyncAzureDocumentEmbedder(AzureOpenAIDocumentEmbedder):
         return {"documents": documents, "meta": meta}
 
 
-@provider("azureopenai")
+@provider("azure_openai")
 class AzureOpenAILLMProvider(LLMProvider):
     def __init__(
         self,
@@ -300,7 +300,6 @@ class AzureOpenAILLMProvider(LLMProvider):
         generation_model: str = os.getenv("AZURE_GENERATION_MODEL")
         or AZURE_GENERATION_MODEL,
     ):
-
         logger.info(f"Using Azure OpenAI Generation Model: {generation_model}")
         self.chat_api_key = chat_api_key
         self.chat_api_base = chat_api_base
@@ -316,7 +315,6 @@ class AzureOpenAILLMProvider(LLMProvider):
         model_kwargs: Optional[Dict[str, Any]] = AZURE_GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
-
         return AsyncAzureGenerator(
             api_key=self.chat_api_key,
             model=self.generation_model,
