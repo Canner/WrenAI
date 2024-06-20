@@ -29,17 +29,6 @@ generate three SQL statements that could potentially answer each interpreted ver
 Provide three different interpretations and corresponding SQL queries that reflect these interpretations.
 Ensure that your SQL queries are diverse, covering a range of possible meanings behind the ambiguous query.
 
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document.content }}
-{% endfor %}
-
-### EXCLUDED STATEMETS ###
-Ensure that the following excluded statements are not used in the generated queries to maintain variety and avoid repetition.
-{% for doc in exclude %}
-    {{ doc.statement}}
-{% endfor %}
-
 ### EXAMPLES ###
 Consider the structure of a generic database which includes common tables like users, orders, products, and transactions.
 Here are the ambiguous user queries:
@@ -67,6 +56,17 @@ SQL Query 3: SELECT * FROM "transactions" WHERE "transaction_date" >= NOW() - IN
 SUMMARY 3: Above-average transactions last week.
 
 Proceed in a similar manner for the other queries.
+
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document.content }}
+{% endfor %}
+
+### EXCLUDED STATEMETS ###
+Ensure that the following excluded statements are not used in the generated queries to maintain variety and avoid repetition.
+{% for doc in exclude %}
+    {{ doc.statement}}
+{% endfor %}
 
 {{ alert }}
 
