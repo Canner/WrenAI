@@ -17,7 +17,7 @@ from haystack_integrations.document_stores.qdrant.filters import (
 from qdrant_client.http import models as rest
 
 from src.core.provider import DocumentStoreProvider
-from src.providers.loader import get_embedding_model_dim, provider
+from src.providers.loader import get_default_embedding_model_dim, provider
 
 
 class AsyncQdrantDocumentStore(QdrantDocumentStore):
@@ -199,7 +199,7 @@ class QdrantProvider(DocumentStoreProvider):
     def get_store(
         self,
         embedding_model_dim: int = int(os.getenv("EMBEDDING_MODEL_DIMENSION", 0))
-        or get_embedding_model_dim(os.getenv("LLM_PROVIDER", "opeani")),
+        or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "opeani")),
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):

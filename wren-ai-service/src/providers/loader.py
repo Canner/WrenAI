@@ -93,7 +93,7 @@ def get_provider(name: str):
     return PROVIDERS[name]
 
 
-def get_embedding_model_dim(llm_provider: str):
+def get_default_embedding_model_dim(llm_provider: str):
     if llm_provider == "ollama":
         from src.providers.llm.ollama import EMBEDDING_MODEL_DIMENSION
 
