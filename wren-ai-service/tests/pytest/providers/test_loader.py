@@ -15,5 +15,5 @@ def test_get_provider():
     provider = loader.get_provider("qdrant")
     assert provider.__name__ == "QdrantProvider"
 
-    provider = loader.get_provider("azureopenai")
+    provider = loader.get_provider("azure_openai")
     assert provider.__name__ == "AzureOpenAILLMProvider"
