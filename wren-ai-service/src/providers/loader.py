@@ -94,15 +94,6 @@ def get_provider(name: str):
 
 
 def get_default_embedding_model_dim(llm_provider: str):
-    if llm_provider == "ollama":
-        from src.providers.llm.ollama import EMBEDDING_MODEL_DIMENSION
-
-        return EMBEDDING_MODEL_DIMENSION
-    elif llm_provider == "azure_openai":
-        from src.providers.llm.azure_openai import EMBEDDING_MODEL_DIMENSION
-
-        return EMBEDDING_MODEL_DIMENSION
-    else:
-        from src.providers.llm.openai import EMBEDDING_MODEL_DIMENSION
-
-        return EMBEDDING_MODEL_DIMENSION
+    return importlib.import_module(
+        f"src.providers.llm.{llm_provider}"
+    ).EMBEDDING_MODEL_DIMENSION
