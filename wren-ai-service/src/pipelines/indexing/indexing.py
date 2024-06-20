@@ -197,11 +197,9 @@ class DDLConverter:
             for column in model["columns"]:
                 if "relationship" not in column:
                     if "properties" in column:
-                        column["properties"]["alias"] = column["properties"].get(
+                        column["properties"]["alias"] = column["properties"].pop(
                             "displayName", ""
                         )
-                        if "displayName" in column["properties"]:
-                            del column["properties"]["displayName"]
                         comment = f"-- {orjson.dumps(column['properties']).decode("utf-8")}\n  "
                     else:
                         comment = ""
@@ -254,11 +252,9 @@ class DDLConverter:
                     columns_ddl.append(f"{comment}{fk_constraint}")
 
             if "properties" in model:
-                model["properties"]["alias"] = model["properties"].get(
+                model["properties"]["alias"] = model["properties"].pop(
                     "displayName", ""
                 )
-                if "displayName" in model["properties"]:
-                    del model["properties"]["displayName"]
                 comment = (
                     f"\n/* {orjson.dumps(model['properties']).decode("utf-8")} */\n"
                 )
