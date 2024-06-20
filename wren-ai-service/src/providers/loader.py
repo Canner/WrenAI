@@ -91,3 +91,18 @@ def get_provider(name: str):
     logger.debug(f"Getting provider: {name} from {PROVIDERS}")
 
     return PROVIDERS[name]
+
+
+def get_embedding_model_dim(llm_provider: str):
+    if llm_provider == "ollama":
+        from src.providers.llm.ollama import EMBEDDING_MODEL_DIMENSION
+
+        return EMBEDDING_MODEL_DIMENSION
+    elif llm_provider == "azure_openai":
+        from src.providers.llm.azure_openai import EMBEDDING_MODEL_DIMENSION
+
+        return EMBEDDING_MODEL_DIMENSION
+    else:
+        from src.providers.llm.openai import EMBEDDING_MODEL_DIMENSION
+
+        return EMBEDDING_MODEL_DIMENSION
