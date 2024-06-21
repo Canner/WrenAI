@@ -629,12 +629,25 @@ export const typeDefs = gql`
     sourceTableName: String!
     displayName: String!
     columns: [DetailedChangeColumn!]!
+    calculatedFields: [DetailedAffectedCalculatedFields!]!
+    relationships: [DetailedAffectedRelationships!]!
   }
 
   type DetailedChangeColumn {
     sourceColumnName: String!
     displayName: String!
     type: String!
+  }
+
+  type DetailedAffectedCalculatedFields {
+    displayName: String!
+    referenceName: String!
+    type: String!
+  }
+
+  type DetailedAffectedRelationships {
+    displayName: String!
+    referenceName: String!
   }
 
   input ResolveSchemaChangeWhereInput {

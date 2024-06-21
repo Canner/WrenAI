@@ -41,6 +41,7 @@ export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
     sourceColumnNames: string[],
     queryOptions?: IQueryOptions,
   ): Promise<number>;
+  findAllCalculatedFields(): Promise<ModelColumn[]>;
 }
 
 export class ModelColumnRepository
@@ -113,5 +114,12 @@ export class ModelColumnRepository
       .whereIn('source_column_name', sourceColumnNames)
       .delete();
     return await builder;
+  }
+
+  public async findAllCalculatedFields(): Promise<ModelColumn[]> {
+    const result = await this.knex<ModelColumn>('model_column')
+      .where('is_calculated', true)
+      .select('*');
+    return result.map((r) => this.transformFromDBData(r));
   }
 }

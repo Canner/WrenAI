@@ -22,7 +22,7 @@ import {
   getRelations,
   sampleDatasets,
 } from '@server/data';
-import { snakeCase, flatMap } from 'lodash';
+import { snakeCase, flatMap, uniqBy } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
@@ -466,7 +466,15 @@ export class ProjectResolver {
     const modelColumns =
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
 
-    // Mapping with affected models and columns data into schame change
+    const modelRelationships = await ctx.relationRepository.findRelationInfoBy({
+      columnIds: modelColumns.map((column) => column.id),
+    });
+
+    const allCalculatedFields =
+      await ctx.modelColumnRepository.findAllCalculatedFields();
+
+    // Not only Mapping with affected models and columns data,
+    // But also finding out affected relationships and affected calculated fields into schema change
     const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
       const affecteds = flatMap(changes, (change) => {
         const affectedModel = models.find(
@@ -475,28 +483,109 @@ export class ProjectResolver {
 
         if (!affectedModel) return [];
 
-        const columns = flatMap(change.columns, (column) => {
-          const affectedColumn = modelColumns.find(
-            (modelColumn) =>
-              modelColumn.sourceColumnName === column.name &&
-              modelColumn.modelId === affectedModel.id,
-          );
+        // collect the model's calculated fields
+        const selfModelCalculatedFields = modelColumns.filter(
+          (column) =>
+            column.modelId === affectedModel.id && column.isCalculated,
+        );
 
-          if (!affectedColumn) return [];
+        // collect all columns and affected relationships and affected calculated fields affected by relationships
+        const affectedMaterials = change.columns.reduce(
+          (result, column) => {
+            const affectedColumn = modelColumns.find(
+              (modelColumn) =>
+                modelColumn.sourceColumnName === column.name &&
+                modelColumn.modelId === affectedModel.id,
+            );
 
-          return {
-            sourceColumnName: column.name,
-            displayName: affectedColumn.displayName,
-            type: column.type,
-          };
-        });
+            // collect column
+            if (affectedColumn) {
+              result.columns.push({
+                sourceColumnName: column.name,
+                displayName: affectedColumn.displayName,
+                type: column.type,
+              });
+
+              // collect affected calculated fields if it's target column
+              const affectedCalculatedFieldsByColumnId =
+                allCalculatedFields.filter((calculatedField) => {
+                  const lineage = JSON.parse(calculatedField.lineage);
+                  return (
+                    lineage && lineage[lineage.length - 1] === affectedColumn.id
+                  );
+                });
+
+              result.calculatedFields.push(
+                ...affectedCalculatedFieldsByColumnId,
+              );
+
+              // collect affected relationships
+              const affectedRelationships = modelRelationships
+                .map((relationship) =>
+                  [relationship.fromColumnId, relationship.toColumnId].includes(
+                    affectedColumn.id,
+                  )
+                    ? relationship
+                    : null,
+                )
+                .filter((relationship) => !!relationship);
+
+              affectedRelationships.forEach((relationship) => {
+                const referenceName =
+                  affectedModel.referenceName === relationship.fromModelName
+                    ? relationship.toModelName
+                    : relationship.fromModelName;
+
+                const displayName = models.find(
+                  (model) => model.referenceName === referenceName,
+                )?.displayName;
+
+                result.relationships.push({
+                  displayName,
+                  referenceName,
+                });
+
+                // collect affected calculated fields if the relationship is in use
+                const affectedCalculatedFieldsByRelationshipId =
+                  allCalculatedFields.filter((calculatedField) => {
+                    const lineage = JSON.parse(calculatedField.lineage);
+                    return lineage && lineage.includes(relationship.id);
+                  });
+
+                result.calculatedFields.push(
+                  ...affectedCalculatedFieldsByRelationshipId,
+                );
+              });
+            }
+
+            return result;
+          },
+          {
+            columns: [],
+            relationships: [],
+            calculatedFields: [],
+          },
+        );
+
+        // unique calculated fields by id since it can be duplicated
+        const calculatedFields = uniqBy(
+          [...selfModelCalculatedFields, ...affectedMaterials.calculatedFields],
+          'id',
+        ).map((calculatedField) => ({
+          displayName: calculatedField.displayName,
+          referenceName: calculatedField.referenceName,
+          type: calculatedField.type,
+        }));
 
         return {
           sourceTableName: change.name,
           displayName: affectedModel.displayName,
-          columns,
+          columns: affectedMaterials.columns,
+          calculatedFields,
+          relationships: affectedMaterials.relationships,
         };
       });
+
       return affecteds.length ? affecteds : null;
     };
 

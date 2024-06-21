@@ -81,6 +81,15 @@ export const GET_SCHEMA_CHANGE = gql`
           displayName
           type
         }
+        relationships {
+          displayName
+          referenceName
+        }
+        calculatedFields {
+          displayName
+          referenceName
+          type
+        }
       }
       deletedColumns {
         sourceTableName
@@ -90,6 +99,15 @@ export const GET_SCHEMA_CHANGE = gql`
           displayName
           type
         }
+        relationships {
+          displayName
+          referenceName
+        }
+        calculatedFields {
+          displayName
+          referenceName
+          type
+        }
       }
       modifiedColumns {
         sourceTableName
@@ -97,6 +115,15 @@ export const GET_SCHEMA_CHANGE = gql`
         columns {
           sourceColumnName
           displayName
+          type
+        }
+        relationships {
+          displayName
+          referenceName
+        }
+        calculatedFields {
+          displayName
+          referenceName
           type
         }
       }

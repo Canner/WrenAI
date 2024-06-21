@@ -147,6 +147,19 @@ export type DetailStep = {
   summary: Scalars['String'];
 };
 
+export type DetailedAffectedCalculatedFields = {
+  __typename?: 'DetailedAffectedCalculatedFields';
+  displayName: Scalars['String'];
+  referenceName: Scalars['String'];
+  type: Scalars['String'];
+};
+
+export type DetailedAffectedRelationships = {
+  __typename?: 'DetailedAffectedRelationships';
+  displayName: Scalars['String'];
+  referenceName: Scalars['String'];
+};
+
 export type DetailedChangeColumn = {
   __typename?: 'DetailedChangeColumn';
   displayName: Scalars['String'];
@@ -156,8 +169,10 @@ export type DetailedChangeColumn = {
 
 export type DetailedChangeTable = {
   __typename?: 'DetailedChangeTable';
+  calculatedFields: Array<DetailedAffectedCalculatedFields>;
   columns: Array<DetailedChangeColumn>;
   displayName: Scalars['String'];
+  relationships: Array<DetailedAffectedRelationships>;
   sourceTableName: Scalars['String'];
 };
 
@@ -341,10 +356,6 @@ export type FieldInfo = {
   type?: Maybe<Scalars['String']>;
 };
 
-export type GetMdlInput = {
-  hash: Scalars['String'];
-};
-
 export type GetMdlResult = {
   __typename?: 'GetMDLResult';
   hash: Scalars['String'];
@@ -397,7 +408,6 @@ export type Mutation = {
   deleteThread: Scalars['Boolean'];
   deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
-  getMDL: GetMdlResult;
   previewData: Scalars['JSON'];
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
@@ -484,11 +494,6 @@ export type MutationDeleteThreadArgs = {
 
 export type MutationDeleteViewArgs = {
   where: ViewWhereUniqueInput;
-};
-
-
-export type MutationGetMdlArgs = {
-  data?: InputMaybe<GetMdlInput>;
 };
 
 
@@ -632,6 +637,7 @@ export type Query = {
   autoGenerateRelation: Array<RecommendRelations>;
   connectionInfo: ConnectionInfo;
   diagram: Diagram;
+  getMDL: GetMdlResult;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
   listViews: Array<ViewInfo>;
@@ -651,6 +657,11 @@ export type Query = {
 
 export type QueryAskingTaskArgs = {
   taskId: Scalars['String'];
+};
+
+
+export type QueryGetMdlArgs = {
+  hash: Scalars['String'];
 };
 
 
