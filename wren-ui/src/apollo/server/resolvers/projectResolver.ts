@@ -472,26 +472,30 @@ export class ProjectResolver {
         const affectedModel = models.find(
           (model) => model.sourceTableName === change.name,
         );
-        return affectedModel
-          ? {
-              sourceTableName: change.name,
-              displayName: affectedModel.displayName,
-              columns: flatMap(change.columns, (column) => {
-                const affectedColumn = modelColumns.find(
-                  (modelColumn) =>
-                    modelColumn.sourceColumnName === column.name &&
-                    modelColumn.modelId === affectedModel.id,
-                );
-                return affectedColumn
-                  ? {
-                      sourceColumnName: column.name,
-                      displayName: affectedColumn?.displayName,
-                      type: column.type,
-                    }
-                  : [];
-              }),
-            }
-          : [];
+
+        if (!affectedModel) return [];
+
+        const columns = flatMap(change.columns, (column) => {
+          const affectedColumn = modelColumns.find(
+            (modelColumn) =>
+              modelColumn.sourceColumnName === column.name &&
+              modelColumn.modelId === affectedModel.id,
+          );
+
+          if (!affectedColumn) return [];
+
+          return {
+            sourceColumnName: column.name,
+            displayName: affectedColumn.displayName,
+            type: column.type,
+          };
+        });
+
+        return {
+          sourceTableName: change.name,
+          displayName: affectedModel.displayName,
+          columns,
+        };
       });
       return affecteds.length ? affecteds : null;
     };
