@@ -1,11 +1,23 @@
 import logging
 import re
+from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 import sqlglot
 
 logger = logging.getLogger("wren-ai-service")
+
+
+class Engine(metatclass=ABCMeta):
+    @abstractmethod
+    async def dry_run_sql(
+        self,
+        sql: str,
+        session: aiohttp.ClientSession,
+        endpoint: str,
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        ...
 
 
 async def dry_run_sql(

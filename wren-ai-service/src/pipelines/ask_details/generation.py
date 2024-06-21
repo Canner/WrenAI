@@ -12,13 +12,13 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.core.pipeline import BasicPipeline, async_validate
-from src.core.provider import LLMProvider
-from src.engine import (
+from src.core.engine import (
+    Engine,
     add_quotes,
     clean_generation_result,
-    dry_run_sql,
 )
+from src.core.pipeline import BasicPipeline, async_validate
+from src.core.provider import LLMProvider
 from src.pipelines.ask_details.components.prompts import (
     ask_details_system_prompt,
 )
@@ -55,6 +55,9 @@ Let's think step by step.
 
 @component
 class GenerationPostProcessor:
+    def __init__(self, engine: Engine):
+        self._engine = engine
+
     @component.output_types(
         results=Optional[Dict[str, Any]],
     )
@@ -109,7 +112,7 @@ class GenerationPostProcessor:
         sql: str,
     ):
         async with aiohttp.ClientSession() as session:
-            status, error = await dry_run_sql(
+            status, error = await self._engine.dry_run_sql(
                 sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
             )
 
@@ -145,12 +148,13 @@ class Generation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        engine: Engine,
     ):
         self.generator = llm_provider.get_generator(
             system_prompt=ask_details_system_prompt
         )
         self.prompt_builder = PromptBuilder(template=ask_details_user_prompt_template)
-        self.post_processor = GenerationPostProcessor()
+        self.post_processor = GenerationPostProcessor(engine=engine)
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())

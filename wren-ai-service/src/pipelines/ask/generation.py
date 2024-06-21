@@ -8,6 +8,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
+from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.pipelines.ask.components.post_processors import (
@@ -123,12 +124,13 @@ class Generation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        engine: Engine,
     ):
         self.generator = llm_provider.get_generator(
             system_prompt=text_to_sql_system_prompt
         )
         self.prompt_builder = PromptBuilder(template=text_to_sql_user_prompt_template)
-        self.post_processor = GenerationPostProcessor()
+        self.post_processor = GenerationPostProcessor(engine=engine)
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())

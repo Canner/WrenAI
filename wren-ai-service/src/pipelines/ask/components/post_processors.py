@@ -7,10 +7,10 @@ import aiohttp
 import orjson
 from haystack import component
 
-from src.engine import (
+from src.core.engine import (
+    Engine,
     add_quotes,
     clean_generation_result,
-    dry_run_sql,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -18,6 +18,9 @@ logger = logging.getLogger("wren-ai-service")
 
 @component
 class GenerationPostProcessor:
+    def __init__(self, engine: Engine):
+        self._engine = engine
+
     @component.output_types(
         valid_generation_results=List[Optional[Dict[str, Any]]],
         invalid_generation_results=List[Optional[Dict[str, Any]]],
@@ -60,7 +63,7 @@ class GenerationPostProcessor:
         async def _task(result: Dict[str, str]):
             quoted_sql = add_quotes(result["sql"])
 
-            status, error = await dry_run_sql(
+            status, error = await self._engine.dry_run_sql(
                 quoted_sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
             )
 
