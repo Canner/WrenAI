@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -63,9 +62,7 @@ class GenerationPostProcessor:
         async def _task(result: Dict[str, str]):
             quoted_sql = add_quotes(result["sql"])
 
-            status, error = await self._engine.dry_run_sql(
-                quoted_sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
-            )
+            status, error = await self._engine.dry_run_sql(quoted_sql, session)
 
             if status:
                 valid_generation_results.append(

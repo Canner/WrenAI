@@ -15,33 +15,8 @@ class Engine(metatclass=ABCMeta):
         self,
         sql: str,
         session: aiohttp.ClientSession,
-        endpoint: str,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         ...
-
-
-async def dry_run_sql(
-    sql: str,
-    session: aiohttp.ClientSession,
-    endpoint: str,
-) -> Tuple[bool, Optional[Dict[str, Any]]]:
-    async with session.post(
-        f"{endpoint}/api/graphql",
-        json={
-            "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
-            "variables": {
-                "data": {
-                    "dryRun": True,
-                    "limit": 1,
-                    "sql": _remove_limit_statement(add_quotes(sql)),
-                }
-            },
-        },
-    ) as response:
-        res = await response.json()
-        if res.get("data"):
-            return True, None
-        return False, res.get("errors", [{}])[0].get("message", "Unknown error")
 
 
 def clean_generation_result(result: str) -> str:
@@ -59,7 +34,7 @@ def clean_generation_result(result: str) -> str:
     )
 
 
-def _remove_limit_statement(sql: str) -> str:
+def remove_limit_statement(sql: str) -> str:
     pattern = r"\s*LIMIT\s+\d+(\s*;?\s*--.*|\s*;?\s*)$"
     modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
 

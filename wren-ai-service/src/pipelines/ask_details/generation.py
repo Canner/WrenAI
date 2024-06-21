@@ -1,5 +1,4 @@
 import logging
-import os
 import sys
 from pathlib import Path
 from pprint import pformat
@@ -112,9 +111,7 @@ class GenerationPostProcessor:
         sql: str,
     ):
         async with aiohttp.ClientSession() as session:
-            status, error = await self._engine.dry_run_sql(
-                sql, session, endpoint=os.getenv("WREN_UI_ENDPOINT")
-            )
+            status, error = await self._engine.dry_run_sql(sql, session)
 
         if status:
             logger.debug(f"SQL is not executable: {error}")
