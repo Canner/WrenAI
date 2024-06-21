@@ -25,8 +25,8 @@ services:
     image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
     pull_policy: always
     platform: ${PLATFORM}
-    expose:
-      - ${IBIS_SERVER_PORT}
+    ports:
+      - ${IBIS_SERVER_PORT}:${IBIS_SERVER_PORT}
     environment:
       WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT}
     networks:
