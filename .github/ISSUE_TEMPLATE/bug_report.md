@@ -23,6 +23,15 @@ A clear and concise description of what you expected to happen.
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
+**Container Logs **
+You can execute the following command to get the logs of containers and provide them here:
+```
+docker logs wrenai-wren-ui-1 >& wren-ui.log && \
+docker logs wrenai-wren-ai-service-1 >& wren-ai-service.log && \
+docker logs wrenai-wren-engine-1 >& wren-engine.log
+docker logs wrenai-ibis-server-1 >& wrenai-ibis-server-1.log
+```
+
 **Desktop (please complete the following information):**
  - OS: [e.g. iOS]
  - Browser [e.g. chrome, safari]
