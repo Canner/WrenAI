@@ -7,6 +7,7 @@ from typing import Tuple
 
 from dotenv import load_dotenv
 
+from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.providers import loader
 
@@ -58,7 +59,7 @@ def load_env_vars() -> str:
     return "dev" if is_dev_env else "prod"
 
 
-def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
+def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider, Engine]:
     logger.info("Initializing providers...")
     loader.import_mods()
 
@@ -66,7 +67,8 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider]:
     document_store_provider = loader.get_provider(
         os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
     )
-    return llm_provider(), document_store_provider()
+    engine = loader.get_provider(os.getenv("ENGINE", "wren-ui"))
+    return llm_provider(), document_store_provider(), engine()
 
 
 def timer(func):
