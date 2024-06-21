@@ -9,7 +9,7 @@ import sqlglot
 logger = logging.getLogger("wren-ai-service")
 
 
-class Engine(metatclass=ABCMeta):
+class Engine(metaclass=ABCMeta):
     @abstractmethod
     async def dry_run_sql(
         self,
