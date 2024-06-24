@@ -54,15 +54,15 @@ class WrenIbis(Engine):
         session: aiohttp.ClientSession,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
-            f"{self._endpoint}/v2/ibis/{self._source}/query",
+            f"{self._endpoint}/v2/ibis/{self._source}/query?dryRun=true",
             json={
-                "sql": remove_limit_statement(add_quotes(sql)) + " LIMIT 1",
+                "sql": remove_limit_statement(add_quotes(sql)),
                 "manifestStr": self._manifest,
                 "connectionInfo": self._connection_info,
             },
         ) as response:
-            res = await response.json()
-            print(f"res: {res}")
-            if res.get("data"):
+            if response.status == 204:
                 return True, None
-            return False, res.get("errors", [{}])[0].get("message", "Unknown error")
+            res = await response.text()
+
+            return False, res
