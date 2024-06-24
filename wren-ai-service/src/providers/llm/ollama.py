@@ -77,6 +77,24 @@ class AsyncGenerator(OllamaGenerator):
 
         return {"replies": replies, "meta": [meta]}
 
+    def _create_json_payload(
+        self, prompt: str, stream: bool, generation_kwargs=None
+    ) -> Dict[str, Any]:
+        """
+        Returns a dictionary of JSON arguments for a POST request to an Ollama service.
+        """
+        generation_kwargs = generation_kwargs or {}
+        return {
+            "prompt": prompt,
+            "model": self.model,
+            "stream": stream,
+            "raw": self.raw,
+            "format": "json",  # https://github.com/ollama/ollama/blob/main/docs/api.md#request-json-mode
+            "template": self.template,
+            "system": self.system_prompt,
+            "options": generation_kwargs,
+        }
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     async def run(
         self,

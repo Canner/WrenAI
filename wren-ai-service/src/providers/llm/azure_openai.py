@@ -302,7 +302,7 @@ class AzureOpenAILLMProvider(LLMProvider):
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
         embedding_model_dim: int = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
-            if os.getenv("EMBEDDING_MODEL_DIMENSION") is not None
+            if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
         )
         or EMBEDDING_MODEL_DIMENSION,

@@ -200,7 +200,7 @@ class QdrantProvider(DocumentStoreProvider):
         self,
         embedding_model_dim: int = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
-            if os.getenv("EMBEDDING_MODEL_DIMENSION") is not None
+            if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
         )
         or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "opeani")),
