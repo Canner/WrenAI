@@ -42,7 +42,7 @@ class QueryUnderstandingPostProcessor:
     )
     def run(self, replies: List[str]):
         try:
-            result = orjson.loads(replies[0])["result"]
+            result = orjson.loads(replies[0])["result"].lower()
 
             if result == "yes":
                 return {
