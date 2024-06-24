@@ -35,10 +35,10 @@ func evaluateTelemetryPreferences() (bool, error) {
 	// let users know we're asking for telemetry consent
 	disableTelemetry := config.IsTelemetryDisabled()
 	if disableTelemetry {
-		fmt.Println("You have disabled telemetry, WrenAI will not collect any data.")
+		fmt.Println("You have disabled telemetry, Wren AI will not collect any data.")
 		return false, nil
 	}
-	fmt.Println("WrenAI relies on anonymous usage statistics to continuously improve.")
+	fmt.Println("Wren AI relies on anonymous usage statistics to continuously improve.")
 	fmt.Println("You can opt out of sharing these statistics by manually adding flag `--disable-telemetry` as described at https://docs.getwren.ai/overview/telemetry")
 	return true, nil
 }
@@ -102,7 +102,7 @@ func Launch() {
 		}
 	}()
 
-	// print WrenAI header
+	// print Wren AI header
 	fmt.Println(strings.Repeat("=", 55))
 	myFigure := figure.NewFigure("WrenAI", "", true)
 	myFigure.Print()
@@ -146,7 +146,7 @@ func Launch() {
 	pterm.Info.Println("Preparing project directory")
 	projectDir := prepareProjectDir()
 
-	// download docker-compose file and env file template for WrenAI
+	// download docker-compose file and env file template for Wren AI
 	pterm.Info.Println("Downloading docker-compose file and env file")
 	// find an available port
 	uiPort := utils.FindAvailablePort(3000)
@@ -157,8 +157,8 @@ func Launch() {
 		panic(err)
 	}
 
-	// launch WrenAI
-	pterm.Info.Println("Launching WrenAI")
+	// launch Wren AI
+	pterm.Info.Println("Launching Wren AI")
 	const projectName string = "wrenai"
 	err = utils.RunDockerCompose(projectName, projectDir)
 	if err != nil {
@@ -166,7 +166,7 @@ func Launch() {
 	}
 
 	// wait for 10 seconds
-	pterm.Info.Println("WrenAI is starting, please wait for a moment...")
+	pterm.Info.Println("Wren AI is starting, please wait for a moment...")
 	url := fmt.Sprintf("http://localhost:%d", uiPort)
 	// wait until checking if CheckWrenAIStarted return without error
 	// if timeout 2 minutes, panic

@@ -1,4 +1,4 @@
-# AI Service of WrenAI
+# AI Service of Wren AI
 
 ## Concepts
 

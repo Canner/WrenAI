@@ -319,7 +319,7 @@ func CheckUIServiceStarted(url string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("WrenAI is not started yet")
+		return fmt.Errorf("Wren AI is not started yet")
 	}
 	return nil
 }

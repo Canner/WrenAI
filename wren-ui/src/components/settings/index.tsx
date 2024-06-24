@@ -139,7 +139,7 @@ export default function Settings(props: Props) {
           {!!productVersion && (
             <div className="gray-7 d-flex align-center p-3 px-5">
               <InfoCircleOutlined className="mr-2 text-sm" />
-              WrenAI version: {productVersion}
+              Wren AI version: {productVersion}
             </div>
           )}
         </StyledSider>

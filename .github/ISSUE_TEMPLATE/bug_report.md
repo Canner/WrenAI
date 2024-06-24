@@ -36,7 +36,7 @@ docker logs wrenai-ibis-server-1 >& wrenai-ibis-server-1.log
  - OS: [e.g. iOS]
  - Browser [e.g. chrome, safari]
 
-**WrenAI Information**
+**Wren AI Information**
 - Version: [e.g, 0.1.0]
 
 **Additional context**
