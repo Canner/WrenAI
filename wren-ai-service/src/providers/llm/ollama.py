@@ -72,9 +72,7 @@ class AsyncGenerator(OllamaGenerator):
                 self.url,
                 json=json_payload,
             ) as response:
-                result = await response.json()
-
-        return self._convert_to_response(result)
+                return await self._convert_to_response(response)
 
 
 @component
