@@ -74,10 +74,12 @@ class AsyncGenerator(OllamaGenerator):
             )
 
             if stream:
-                chunks: List[StreamingChunk] = self._handle_streaming_response(response)
+                chunks: List[StreamingChunk] = await self._handle_streaming_response(
+                    response
+                )
                 return self._convert_to_streaming_response(chunks)
 
-            return self._convert_to_response(response)
+            return await self._convert_to_response(response)
 
 
 @component
