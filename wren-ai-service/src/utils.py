@@ -74,7 +74,10 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider, Engine]:
 def timer(func):
     @functools.wraps(func)
     def wrapper_timer(*args, **kwargs):
-        if os.getenv("ENABLE_TIMER", False):
+        if (
+            os.getenv("ENABLE_TIMER", False)
+            and os.getenv("LLM_PROVIDER", "openai") != "ollama"
+        ):
             startTime = time.perf_counter()
             result = func(*args, **kwargs)
             endTime = time.perf_counter()
@@ -98,7 +101,10 @@ def async_timer(func):
 
     @functools.wraps(func)
     async def wrapper_timer(*args, **kwargs):
-        if os.getenv("ENABLE_TIMER", False):
+        if (
+            os.getenv("ENABLE_TIMER", False)
+            and os.getenv("LLM_PROVIDER", "openai") != "ollama"
+        ):
             startTime = time.perf_counter()
             result = await process(func, *args, **kwargs)
             endTime = time.perf_counter()
