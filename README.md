@@ -6,7 +6,7 @@
       <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
       <img src="./misc/wrenai_logo.png">
     </picture>
-    <h1 align="center">WrenAI</h1>
+    <h1 align="center">Wren AI</h1>
   </a>
 </p>
 
@@ -29,13 +29,13 @@
 </p>
 
 
-> WrenAI is a **text-to-SQL solution** for data teams to get results and insights faster by asking business questions without writing SQL.
+> Wren AI is a **text-to-SQL solution** for data teams to get results and insights faster by asking business questions without writing SQL.
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
 ## 🕶 Try It Live!
 
-[Play around with WrenAI yourself!](https://demo.getwren.ai/)
+[Play around with Wren AI yourself!](https://demo.getwren.ai/)
 
 
 ## 🎯 Our Vision & Mission
@@ -50,7 +50,7 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ### 1. Indexing With Semantics
 
-> WrenAI has implemented a [semantic engine architecture](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
+> Wren AI has implemented a [semantic engine architecture](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
 ### 2. Augment LLM Prompts
 
@@ -80,7 +80,7 @@ We focus on providing an open, secure, and reliable text-to-SQL solution for eve
 
 ### 1. Turnkey Solution
 
-> WrenAI makes it easy to onboard your data. Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
+> Wren AI makes it easy to onboard your data. Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
 
 ### 2. Secure By Design
 
@@ -88,11 +88,11 @@ We focus on providing an open, secure, and reliable text-to-SQL solution for eve
 
 ### 3. Open-Source
 
-> Deploy WrenAI anywhere you like on your own data, LLM APIs, and environment, it's free.
+> Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
 
 ## 🤖 WrenAI's Architecture
 
-WrenAI consists of three core services:
+Wren AI consists of three core services:
 
 - ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within WrenAI's framework.
 
@@ -115,22 +115,22 @@ WrenAI consists of three core services:
 
 ## 🚧 Project Status
 
-WrenAI is currently in ***alpha version***. The project team is actively working on progress and aiming to release new versions at least biweekly.
+Wren AI is currently in ***alpha version***. The project team is actively working on progress and aiming to release new versions at least biweekly.
 
 ## 🚀 Getting Started
 
-Using WrenAI is super simple, you can setup within 3 minutes, and start to interact with your own data!
+Using Wren AI is super simple, you can setup within 3 minutes, and start to interact with your own data!
 
 - Visit our [Installation Guide of WrenAI](http://docs.getwren.ai/installation).
 - Visit the [Usage Guides](http://docs.getwren.ai/guide/connect/overview) to learn more about how to use WrenAI.
 
 ## 📚 Documentation
 
-Visit [WrenAI documentation](https://docs.getwren.ai) to view the full documentation.
+Visit [Wren AI documentation](https://docs.getwren.ai) to view the full documentation.
 
 ## ⭐️ Community
 
 - Welcome to our [Discord server](https://discord.gg/5DvshJqG8Z) to give us feedback!
 - If there is any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
 
-Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all WrenAI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.

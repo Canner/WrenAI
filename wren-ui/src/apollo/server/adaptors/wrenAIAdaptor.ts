@@ -250,7 +250,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       return {
         status: WrenAIDeployStatusEnum.FAILED,
-        error: `WrenAI Error: deployment hash:${hash}, ${err.message}`,
+        error: `Wren AI Error: deployment hash:${hash}, ${err.message}`,
       };
     }
   }
@@ -270,7 +270,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         } else if (status === WrenAISystemStatus.INDEXING) {
           // do nothing
         } else {
-          logger.debug(`WrenAI: Unknown WrenAI deploy status: ${status}`);
+          logger.debug(`WrenAI: Unknown Wren AI deploy status: ${status}`);
           return;
         }
       } catch (err: any) {

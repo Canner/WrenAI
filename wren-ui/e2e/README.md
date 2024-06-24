@@ -1,6 +1,6 @@
 ## How to run e2e test locally
 
-1. Make sure you have start all WrenAI services. ([How to start](https://github.com/Canner/WrenAI/blob/3234dc218b105caba04e1cdab7b1cb7140fc9b90/docker/README.md#how-to-start))
+1. Make sure you have start all Wren AI services. ([How to start](https://github.com/Canner/WrenAI/blob/3234dc218b105caba04e1cdab7b1cb7140fc9b90/docker/README.md#how-to-start))
 
 2. Create a `e2e.config.json` file under `wren-ui/e2e` folder and replace all data sources needed values in `./config.ts`.
 
