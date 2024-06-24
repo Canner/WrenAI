@@ -4,7 +4,6 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 import aiohttp
-import tqdm
 from haystack import Document, component
 from haystack.dataclasses import StreamingChunk
 from haystack_integrations.components.embedders.ollama import (
@@ -12,6 +11,7 @@ from haystack_integrations.components.embedders.ollama import (
     OllamaTextEmbedder,
 )
 from haystack_integrations.components.generators.ollama import OllamaGenerator
+from tqdm import tqdm
 
 from src.core.provider import LLMProvider
 from src.providers.loader import provider
