@@ -54,11 +54,11 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ### 2. Augment LLM Prompts
 
-> With WrenAI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language” (MDL)](https://docs.getwren.ai/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
+> With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language” (MDL)](https://docs.getwren.ai/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
 
 ### 3. Generate Insights
 
-> When starting a new conversation in WrenAI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
+> When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
 
 ### 4. Self-Learning Feedback Loop (Coming Soon)
 
@@ -74,7 +74,7 @@ WrenAI’s mission is to democratize data by bringing text-to-SQL ability to any
 
 ![](./misc/preview_model.png)
 
-## 🤔 Why WrenAI?
+## 🤔 Why Wren AI?
 
 We focus on providing an open, secure, and reliable text-to-SQL solution for everyone.
 
@@ -90,11 +90,11 @@ We focus on providing an open, secure, and reliable text-to-SQL solution for eve
 
 > Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
 
-## 🤖 WrenAI's Architecture
+## 🤖 Wren AI's Architecture
 
 Wren AI consists of three core services:
 
-- ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within WrenAI's framework.
+- ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within Wren AI's framework.
 
 - ***[Wren AI Service](https://github.com/Canner/WrenAI/tree/main/wren-ai-service):*** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
 
@@ -121,8 +121,8 @@ Wren AI is currently in ***alpha version***. The project team is actively workin
 
 Using Wren AI is super simple, you can setup within 3 minutes, and start to interact with your own data!
 
-- Visit our [Installation Guide of WrenAI](http://docs.getwren.ai/installation).
-- Visit the [Usage Guides](http://docs.getwren.ai/guide/connect/overview) to learn more about how to use WrenAI.
+- Visit our [Installation Guide of Wren AI](http://docs.getwren.ai/installation).
+- Visit the [Usage Guides](http://docs.getwren.ai/guide/connect/overview) to learn more about how to use Wren AI.
 
 ## 📚 Documentation
 

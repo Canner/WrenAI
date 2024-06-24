@@ -146,7 +146,7 @@ func Launch() {
 	pterm.Info.Println("Preparing project directory")
 	projectDir := prepareProjectDir()
 
-	// download docker-compose file and env file template for WrenAI
+	// download docker-compose file and env file template for Wren AI
 	pterm.Info.Println("Downloading docker-compose file and env file")
 	// find an available port
 	uiPort := utils.FindAvailablePort(3000)
@@ -157,8 +157,8 @@ func Launch() {
 		panic(err)
 	}
 
-	// launch WrenAI
-	pterm.Info.Println("Launching WrenAI")
+	// launch Wren AI
+	pterm.Info.Println("Launching Wren AI")
 	const projectName string = "wrenai"
 	err = utils.RunDockerCompose(projectName, projectDir)
 	if err != nil {

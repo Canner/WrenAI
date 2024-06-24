@@ -232,16 +232,16 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       const deployId = res.data.id;
       logger.debug(
-        `WrenAI: Deploying wren AI, hash: ${hash}, deployId: ${deployId}`,
+        `Wren AI: Deploying wren AI, hash: ${hash}, deployId: ${deployId}`,
       );
       const deploySuccess = await this.waitDeployFinished(deployId);
       if (deploySuccess) {
-        logger.debug(`WrenAI: Deploy wren AI success, hash: ${hash}`);
+        logger.debug(`Wren AI: Deploy wren AI success, hash: ${hash}`);
         return { status: WrenAIDeployStatusEnum.SUCCESS };
       } else {
         return {
           status: WrenAIDeployStatusEnum.FAILED,
-          error: `WrenAI: Deploy wren AI failed or timeout, hash: ${hash}`,
+          error: `Wren AI: Deploy wren AI failed or timeout, hash: ${hash}`,
         };
       }
     } catch (err: any) {
@@ -261,7 +261,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     for (let waitTime = 1; waitTime <= 7; waitTime++) {
       try {
         const status = await this.getDeployStatus(deployId);
-        logger.debug(`WrenAI: Deploy status: ${status}`);
+        logger.debug(`Wren AI: Deploy status: ${status}`);
         if (status === WrenAISystemStatus.FINISHED) {
           deploySuccess = true;
           break;
@@ -270,7 +270,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         } else if (status === WrenAISystemStatus.INDEXING) {
           // do nothing
         } else {
-          logger.debug(`WrenAI: Unknown Wren AI deploy status: ${status}`);
+          logger.debug(`Wren AI: Unknown Wren AI deploy status: ${status}`);
           return;
         }
       } catch (err: any) {

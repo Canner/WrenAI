@@ -1,5 +1,5 @@
 # Deployment of Wren AI to Kubernetes with Kustomization
-1. Ensure you satisfy the dependencies required to deploy WrenAI.
+1. Ensure you satisfy the dependencies required to deploy Wren AI.
 2. Adjust the values and manifests accordingly to fit your Kubernetes environment.
 3. Deploy Secrets separately.
 4. Deploy the inflated kustomized app.
