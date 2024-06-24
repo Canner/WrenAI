@@ -68,11 +68,16 @@ class AsyncGenerator(OllamaGenerator):
         async with aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(self.timeout)
         ) as session:
-            async with session.post(
+            response = await session.post(
                 self.url,
                 json=json_payload,
-            ) as response:
-                return await self._convert_to_response(response)
+            )
+
+            if stream:
+                chunks: List[StreamingChunk] = self._handle_streaming_response(response)
+                return self._convert_to_streaming_response(chunks)
+
+            return self._convert_to_response(response)
 
 
 @component
