@@ -231,10 +231,8 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, _ = init_providers()
-    pipeline = FollowUpGeneration(
-        llm_provider=llm_provider,
-    )
+    llm_provider, _, engine = init_providers()
+    pipeline = FollowUpGeneration(llm_provider=llm_provider, engine=engine)
 
     pipeline.visualize(
         "this is a test query",

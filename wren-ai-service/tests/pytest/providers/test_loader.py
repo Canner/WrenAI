@@ -3,7 +3,7 @@ from src.providers import loader
 
 def test_import_mods():
     loader.import_mods("src.providers")
-    assert len(loader.PROVIDERS) == 3
+    assert len(loader.PROVIDERS) == 5
 
 
 def test_get_provider():
@@ -17,3 +17,9 @@ def test_get_provider():
 
     provider = loader.get_provider("azure_openai")
     assert provider.__name__ == "AzureOpenAILLMProvider"
+
+    provider = loader.get_provider("wren-ui")
+    assert provider.__name__ == "WrenUI"
+
+    provider = loader.get_provider("wren-ibis")
+    assert provider.__name__ == "WrenIbis"

@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, _ = init_providers()
+    llm_provider, _, _ = init_providers()
     pipeline = QueryUnderstanding(
         llm_provider=llm_provider,
     )

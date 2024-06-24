@@ -155,9 +155,10 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, _ = init_providers()
+    llm_provider, _, engine = init_providers()
     pipeline = SQLCorrection(
         llm_provider=llm_provider,
+        engine=engine,
     )
 
     pipeline.visualize([], [])
