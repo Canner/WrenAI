@@ -300,7 +300,11 @@ class AzureOpenAILLMProvider(LLMProvider):
         generation_model: str = os.getenv("AZURE_GENERATION_MODEL")
         or AZURE_GENERATION_MODEL,
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
-        embedding_model_dim: int = int(os.getenv("EMBEDDING_MODEL_DIM", 0))
+        embedding_model_dim: int = (
+            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
+            if os.getenv("EMBEDDING_MODEL_DIMENSION") is not None
+            else 0
+        )
         or EMBEDDING_MODEL_DIMENSION,
     ):
         logger.info(f"Using Azure OpenAI Generation Model: {generation_model}")

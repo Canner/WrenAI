@@ -19,6 +19,7 @@ Path structure as following:
 * Check out [Network drivers overview](https://docs.docker.com/network/drivers/) to learn more about `bridge` network driver.
 
 ## How to start
-1. copy `.env.example` to `.env.local` and modify the OpenAI API key.
-1. (optional) if your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.local`.
-1. run `docker-compose --env-file .env.local up` to start all services.
+1. copy `.env.ai.example` to `.env.ai` and fill in necessary information for LLM configurations.
+2. (optional) if your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.example`.
+3. start all services: `docker-compose --env-file .env.example --env-file .env.ai up -d`
+4. stop all services: `docker-compose --env-file .env.example --env-file .env.ai down`

@@ -198,7 +198,11 @@ class QdrantProvider(DocumentStoreProvider):
 
     def get_store(
         self,
-        embedding_model_dim: int = int(os.getenv("EMBEDDING_MODEL_DIMENSION", 0))
+        embedding_model_dim: int = (
+            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
+            if os.getenv("EMBEDDING_MODEL_DIMENSION") is not None
+            else 0
+        )
         or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "opeani")),
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
