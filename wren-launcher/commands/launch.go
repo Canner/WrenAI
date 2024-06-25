@@ -141,6 +141,10 @@ func Launch() {
 	myFigure.Print()
 	fmt.Println(strings.Repeat("=", 55))
 
+	// prepare a project directory
+	pterm.Info.Println("Preparing project directory")
+	projectDir := prepareProjectDir()
+
 	// ask for LLM provider
 	pterm.Print("\n")
 	llmProvider, err := askForLLMProvider()
@@ -154,6 +158,12 @@ func Launch() {
 		// ask for OpenAI generation model
 		pterm.Print("\n")
 		openaiGenerationModel, _ = askForGenerationModel()
+	} else {
+		// check if .env.ai file exists
+		err = isEnvFileValidForCustomLLM(projectDir)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// ask for telemetry consent
@@ -180,18 +190,6 @@ func Launch() {
 		}
 
 		time.Sleep(5 * time.Second)
-	}
-
-	// prepare a project directory
-	pterm.Info.Println("Preparing project directory")
-	projectDir := prepareProjectDir()
-
-	if llmProvider == "Custom" {
-		// check if .env.ai file exists
-		err = isEnvFileValidForCustomLLM(projectDir)
-		if err != nil {
-			panic(err)
-		}
 	}
 
 	// download docker-compose file and env file template for Wren AI
