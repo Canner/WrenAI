@@ -124,7 +124,7 @@ func isEnvFileValidForCustomLLM() error {
 	envFilePath := path.Join(projectDir, ".env.ai")
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
-		return errors.New("Please create a .env.ai file in ~/.wrenai first, more details at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
+		return errors.New("Please create a .env.ai file in %s first, more details at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
 	}
 
 	return nil
