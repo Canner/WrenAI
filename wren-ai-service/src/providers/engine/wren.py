@@ -20,6 +20,7 @@ class WrenUI(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        properties: Dict[str, Any] = {},
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
             f"{self._endpoint}/api/graphql",
@@ -44,21 +45,25 @@ class WrenUI(Engine):
 class WrenIbis(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_IBIS_ENDPOINT")):
         self._endpoint = endpoint
-        self._source = os.getenv("WREN_IBIS_SOURCE")
-        self._manifest = os.getenv("WREN_IBIS_MANIFEST")
-        self._connection_info = orjson.loads(os.getenv("WREN_IBIS_CONNECTION_INFO"))
 
     async def dry_run_sql(
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        properties: Dict[str, Any] = {
+            "source": os.getenv("WREN_IBIS_SOURCE"),
+            "manifest": os.getenv("WREN_IBIS_MANIFEST"),
+            "connection_info": orjson.loads(
+                os.getenv("WREN_IBIS_CONNECTION_INFO", "{}")
+            ),
+        },
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
-            f"{self._endpoint}/v2/ibis/{self._source}/query?dryRun=true",
+            f"{self._endpoint}/v2/ibis/{properties.get('source', '')}/query?dryRun=true",
             json={
                 "sql": remove_limit_statement(add_quotes(sql)),
-                "manifestStr": self._manifest,
-                "connectionInfo": self._connection_info,
+                "manifestStr": properties.get("manifest", ""),
+                "connectionInfo": properties.get("connection_info", {}),
             },
         ) as response:
             if response.status == 204:
