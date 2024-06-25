@@ -211,23 +211,11 @@ export class ProjectResolver {
       if (type === DataSourceName.DUCKDB) {
         // handle duckdb connection
         connectionInfo as DUCKDB_CONNECTION_INFO;
-        const { initSql, extensions } = connectionInfo;
-        const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
-
-        // prepare duckdb environment in wren-engine
-        await ctx.wrenEngineAdaptor.prepareDuckDB({
-          sessionProps: connectionInfo.configurations,
-          initSql: initSqlWithExtensions,
-        } as DuckDBPrepareOptions);
-
-        // check can list dataset table
-        await ctx.wrenEngineAdaptor.listTables();
-
-        // patch wren-engine config
-        const config = {
-          'wren.datasource.type': 'duckdb',
-        };
-        await ctx.wrenEngineAdaptor.patchConfig(config);
+        await this.buildDuckDbEnvironment(ctx, {
+          initSql: connectionInfo.initSql,
+          extensions: connectionInfo.extensions,
+          configurations: connectionInfo.configurations,
+        });
       } else {
         const tables =
           await ctx.projectService.getProjectDataSourceTables(project);
@@ -274,24 +262,11 @@ export class ProjectResolver {
     if (dataSourceType === DataSourceName.DUCKDB) {
       // prepare duckdb environment in wren-engine
       const { initSql, extensions } = toUpdateConnectionInfo;
-      const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
-      await ctx.wrenEngineAdaptor.prepareDuckDB({
-        sessionProps: toUpdateConnectionInfo.configurations,
-        initSql: initSqlWithExtensions,
-      } as DuckDBPrepareOptions);
-
-      // check can list dataset table
-      try {
-        await ctx.wrenEngineAdaptor.listTables();
-      } catch (_e) {
-        throw new Error('Can not list tables in dataset');
-      }
-
-      // patch wren-engine config
-      const config = {
-        'wren.datasource.type': 'duckdb',
-      };
-      await ctx.wrenEngineAdaptor.patchConfig(config);
+      await this.buildDuckDbEnvironment(ctx, {
+        initSql,
+        extensions,
+        configurations: toUpdateConnectionInfo.configurations,
+      });
     } else {
       const updatedProject = {
         ...project,
@@ -672,5 +647,30 @@ export class ProjectResolver {
       .map((ext) => `INSTALL ${ext};`)
       .join('\n');
     return trim(`${installExtensions}\n${initSql}`);
+  }
+
+  private async buildDuckDbEnvironment(
+    ctx: IContext,
+    options: {
+      initSql: string;
+      extensions: string[];
+      configurations: Record<string, any>;
+    },
+  ): Promise<void> {
+    const { initSql, extensions, configurations } = options;
+    const initSqlWithExtensions = this.concatInitSql(initSql, extensions);
+    await ctx.wrenEngineAdaptor.prepareDuckDB({
+      sessionProps: configurations,
+      initSql: initSqlWithExtensions,
+    } as DuckDBPrepareOptions);
+
+    // check can list dataset table
+    await ctx.wrenEngineAdaptor.listTables();
+
+    // patch wren-engine config
+    const config = {
+      'wren.datasource.type': 'duckdb',
+    };
+    await ctx.wrenEngineAdaptor.patchConfig(config);
   }
 }
