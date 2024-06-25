@@ -65,7 +65,9 @@ class AsyncGenerator(OllamaGenerator):
 
         json_payload = self._create_json_payload(prompt, stream, generation_kwargs)
 
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(self.timeout)
+        ) as session:
             async with session.post(
                 self.url,
                 json=json_payload,
@@ -102,7 +104,9 @@ class AsyncTextEmbedder(OllamaTextEmbedder):
         payload = self._create_json_payload(text, generation_kwargs)
 
         start = time.perf_counter()
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(self.timeout)
+        ) as session:
             async with session.post(
                 self.url,
                 json=payload,
@@ -156,7 +160,9 @@ class AsyncDocumentEmbedder(OllamaDocumentEmbedder):
         all_embeddings = []
         meta: Dict[str, Any] = {"model": self.model}
 
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(self.timeout)
+        ) as session:
             for i in tqdm(
                 range(0, len(texts_to_embed), batch_size),
                 disable=not self.progress_bar,

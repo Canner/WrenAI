@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import traceback
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -45,7 +46,9 @@ class GenerationPostProcessor:
                 "invalid_generation_results": invalid_generation_results,
             }
         except Exception as e:
-            logger.error(f"Error in GenerationPostProcessor: {e}")
+            logger.error(
+                f"Error in GenerationPostProcessor: {e}, {traceback.format_exc()}"
+            )
 
             return {
                 "valid_generation_results": [],

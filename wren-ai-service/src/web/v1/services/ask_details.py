@@ -1,4 +1,5 @@
 import logging
+import traceback
 from typing import List, Literal, Optional
 
 from haystack import Pipeline
@@ -106,7 +107,9 @@ class AskDetailsService:
                 ),
             )
         except Exception as e:
-            logger.error(f"ask-details pipeline - OTHERS: {e}")
+            logger.error(
+                f"ask-details pipeline - OTHERS: {e}, {traceback.format_exc()}"
+            )
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="failed",
                 error=AskDetailsResultResponse.AskDetailsError(
