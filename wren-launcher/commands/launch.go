@@ -46,7 +46,7 @@ func evaluateTelemetryPreferences() (bool, error) {
 func askForLLMProvider() (string, error) {
 	// let users know we're asking for a LLM provider
 	fmt.Println("Please provide the LLM provider you want to use")
-	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/overview/custom-llm")
+	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
 
 	prompt := promptui.Select{
 		Label: "Select an LLM provider",
@@ -124,7 +124,7 @@ func isEnvFileValidForCustomLLM() error {
 	envFilePath := path.Join(projectDir, ".env.ai")
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
-		return errors.New("Please create a .env.ai file in ~/.wrenai first, more details at https://docs.getwren.ai/overview/custom-llm")
+		return errors.New("Please create a .env.ai file in ~/.wrenai first, more details at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
 	}
 
 	return nil
