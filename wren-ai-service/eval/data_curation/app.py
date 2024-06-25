@@ -146,7 +146,7 @@ with tab_create_dataset:
     st.markdown(
         """
         ### Usage Guide
-        1. Use WrenUI to deploy the MDL model first and make sure it's deployed successfully
+        1. Use Wren AI AI Service Demo site to deploy the MDL model first and make sure it's deployed successfully
         2. Get question-sql-pairs given by LLM or you manually enter question and corresponding sql
         3. Do validation on each group of question, context and SQL, and move it to the candidate dataset if you think it's valid
         3. Save the candidate dataset by clicking the "Save as Evaluation Dataset" button.
@@ -157,7 +157,7 @@ with tab_modify_dataset:
     st.markdown(
         """
         ### Usage Guide
-        1. Use WrenUI to deploy the MDL model first and make sure it's deployed successfully
+        1. Use Wren AI AI Service Demo site to deploy the MDL model first and make sure it's deployed successfully
         2. Upload the evaluation dataset(`.toml` file) you want to modify, and please make sure the model in the dataset is the same as the deployed model
         3. Modify the evaluation dataset the same as you create a new one
         4. Save the candidate dataset by clicking the "Save as Evaluation Dataset" button.
