@@ -7,10 +7,8 @@ from utils import (
     DATA_SOURCES,
     ask,
     ask_details,
-    get_current_manifest,
     get_mdl_json,
     get_new_mdl_json,
-    is_current_manifest_available,
     prepare_duckdb,
     prepare_semantics,
     rerun_wren_engine,
@@ -59,11 +57,7 @@ if __name__ == "__main__":
     col1, col2 = st.columns([2, 4])
 
     with col1:
-        with st.expander("Current Deployed Model", expanded=True):
-            manifest_name, models, relationships = get_current_manifest()
-            st.markdown(f"Current Deployed Model: {manifest_name}")
-            show_er_diagram(models, relationships)
-        with st.expander("Deploy New Model"):
+        with st.expander("Deploy New Model", expanded=True):
             uploaded_file = st.file_uploader(
                 f"Upload an MDL json file, and the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}",
                 type="json",
@@ -154,8 +148,7 @@ if __name__ == "__main__":
 
     query = st.chat_input(
         "Ask a question about the database",
-        disabled=(not is_current_manifest_available())
-        and st.session_state["semantics_preparation_status"] != "finished",
+        disabled=st.session_state["semantics_preparation_status"] != "finished",
     )
 
     with col2:

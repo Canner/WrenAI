@@ -15,7 +15,6 @@ class Engine(metaclass=ABCMeta):
         self,
         sql: str,
         session: aiohttp.ClientSession,
-        properties: Dict[str, Any] = {},
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         ...
 
