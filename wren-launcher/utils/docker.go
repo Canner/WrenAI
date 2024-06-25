@@ -32,14 +32,14 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, OpenaiApiKey string, generationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
+func replaceEnvFileContent(content string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
 	// replace OPENAI_API_KEY
 	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
-	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+OpenaiApiKey)
+	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
 	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)
-	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+generationModel)
+	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+openAIGenerationModel)
 
 	// replace USER_UUID
 	reg = regexp.MustCompile(`USER_UUID=(.*)`)
@@ -153,7 +153,7 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, generationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -185,11 +185,12 @@ func PrepareDockerFiles(openaiApiKey string, generationModel string, hostPort in
 	if err != nil {
 		return err
 	}
+
 	// replace the content with regex
 	envFileContent := replaceEnvFileContent(
 		string(envExampleFileContent),
 		openaiApiKey,
-		generationModel,
+		openaiGenerationModel,
 		hostPort,
 		aiPort,
 		pg_pwd,
@@ -216,10 +217,17 @@ func getEnvFilePath(projectDir string) string {
 	return path.Join(projectDir, ".env")
 }
 
-func RunDockerCompose(projectName string, projectDir string) error {
+func RunDockerCompose(projectName string, projectDir string, llmProvider string) error {
 	ctx := context.Background()
 	composeFilePath := path.Join(projectDir, "docker-compose.yaml")
 	envFile := path.Join(projectDir, ".env")
+	envFiles := []string{envFile}
+
+	if llmProvider == "Custom" {
+		customEnvFile := path.Join(projectDir, ".env.ai")
+		envFiles = append(envFiles, customEnvFile)
+	}
+	fmt.Println("envFiles", envFiles)
 
 	// docker-compose up
 	dockerCli, err := command.NewDockerCli()
@@ -246,7 +254,7 @@ func RunDockerCompose(projectName string, projectDir string) error {
 		ProjectName: projectName,
 		ConfigPaths: []string{composeFilePath},
 		WorkDir:     projectDir,
-		EnvFiles:    []string{envFile},
+		EnvFiles:    envFiles,
 	}
 
 	// Turn projectOptions into a project with default values

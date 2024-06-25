@@ -43,6 +43,26 @@ func evaluateTelemetryPreferences() (bool, error) {
 	return true, nil
 }
 
+func askForLLMProvider() (string, error) {
+	// let users know we're asking for a LLM provider
+	fmt.Println("Please provide the LLM provider you want to use")
+	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/overview/custom-llm")
+
+	prompt := promptui.Select{
+		Label: "Select an LLM provider",
+		Items: []string{"OpenAI", "Custom"},
+	}
+
+	_, result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
 func askForAPIKey() (string, error) {
 	// let users know we're asking for an API key
 	fmt.Println("Please provide your OpenAI API key")
@@ -93,6 +113,24 @@ func askForGenerationModel() (string, error) {
 	return result, nil
 }
 
+func isEnvFileValidForCustomLLM() error {
+	// validate if .env.ai file exists in ~/.wrenai
+	homedir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	projectDir := path.Join(homedir, ".wrenai")
+	envFilePath := path.Join(projectDir, ".env.ai")
+
+	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
+		return errors.New("Please create a .env.ai file in ~/.wrenai first, more details at https://docs.getwren.ai/overview/custom-llm")
+	}
+
+	return nil
+}
+
+
 func Launch() {
 	// recover from panic
 	defer func() {
@@ -108,13 +146,26 @@ func Launch() {
 	myFigure.Print()
 	fmt.Println(strings.Repeat("=", 55))
 
-	// ask for OpenAI API key
+	// ask for LLM provider
 	pterm.Print("\n")
-	apiKey, err := askForAPIKey()
+	llmProvider, err := askForLLMProvider()
+	openaiApiKey := ""
+	openaiGenerationModel := ""
+	if llmProvider == "OpenAI" {
+		// ask for OpenAI API key
+		pterm.Print("\n")
+		openaiApiKey, _ = askForAPIKey()
 
-	// ask for OpenAI generation model
-	pterm.Print("\n")
-	generationModel, err := askForGenerationModel()
+		// ask for OpenAI generation model
+		pterm.Print("\n")
+		openaiGenerationModel, _ = askForGenerationModel()
+	} else {
+		// validate if .env.ai file exists in ~/.wrenai
+		err = isEnvFileValidForCustomLLM()
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	// ask for telemetry consent
 	pterm.Print("\n")
@@ -152,7 +203,7 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
-	err = utils.PrepareDockerFiles(apiKey, generationModel, uiPort, aiPort, projectDir, telemetryEnabled)
+	err = utils.PrepareDockerFiles(openaiApiKey, openaiGenerationModel, uiPort, aiPort, projectDir, telemetryEnabled)
 	if err != nil {
 		panic(err)
 	}
@@ -160,7 +211,7 @@ func Launch() {
 	// launch Wren AI
 	pterm.Info.Println("Launching Wren AI")
 	const projectName string = "wrenai"
-	err = utils.RunDockerCompose(projectName, projectDir)
+	err = utils.RunDockerCompose(projectName, projectDir, llmProvider)
 	if err != nil {
 		panic(err)
 	}

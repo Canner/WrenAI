@@ -43,13 +43,13 @@ services:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
       WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GENERATION_MODEL: ${GENERATION_MODEL}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
       LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
-    env_file:
-      - .env.ai
     networks:
       - wren
     depends_on:
