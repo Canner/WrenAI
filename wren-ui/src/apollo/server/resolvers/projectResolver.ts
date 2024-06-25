@@ -475,7 +475,10 @@ export class ProjectResolver {
 
     // Not only Mapping with affected models and columns data,
     // But also finding out affected relationships and affected calculated fields into schema change
-    const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
+    const mappingAffectedToSchemaChange = (
+      changes: DataSourceSchema[],
+      key: SchemaChangeType,
+    ) => {
       const affecteds = flatMap(changes, (change) => {
         const affectedModel = models.find(
           (model) => model.sourceTableName === change.name,
@@ -484,10 +487,13 @@ export class ProjectResolver {
         if (!affectedModel) return [];
 
         // collect the model's calculated fields
-        const selfModelCalculatedFields = modelColumns.filter(
-          (column) =>
-            column.modelId === affectedModel.id && column.isCalculated,
-        );
+        const selfModelCalculatedFields =
+          key === SchemaChangeType.DELETED_TABLES
+            ? modelColumns.filter(
+                (column) =>
+                  column.modelId === affectedModel.id && column.isCalculated,
+              )
+            : [];
 
         // collect all columns and affected relationships and affected calculated fields affected by relationships
         const affectedMaterials = change.columns.reduce(
@@ -596,7 +602,10 @@ export class ProjectResolver {
       // return if resolved or no changes
       if (isResolved || !changes) return result;
 
-      const affectedChanges = mappingAffectedToSchemaChange(changes);
+      const affectedChanges = mappingAffectedToSchemaChange(
+        changes,
+        key as SchemaChangeType,
+      );
       return { ...result, [key]: affectedChanges };
     }, {});
 
@@ -631,6 +640,7 @@ export class ProjectResolver {
       ctx,
       projectId: project.id,
     });
+    await schemaDetector.detectSchemaChange();
     await schemaDetector.resolveSchemaChange(type);
     return true;
   }

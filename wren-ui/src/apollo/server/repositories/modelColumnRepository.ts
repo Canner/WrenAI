@@ -41,7 +41,11 @@ export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
     sourceColumnNames: string[],
     queryOptions?: IQueryOptions,
   ): Promise<number>;
-  findAllCalculatedFields(): Promise<ModelColumn[]>;
+  findAllCalculatedFields(queryOptions?: IQueryOptions): Promise<ModelColumn[]>;
+  deleteAllByColumnIds(
+    columnIds: number[],
+    queryOptions?: IQueryOptions,
+  ): Promise<void>;
 }
 
 export class ModelColumnRepository
@@ -116,10 +120,35 @@ export class ModelColumnRepository
     return await builder;
   }
 
-  public async findAllCalculatedFields(): Promise<ModelColumn[]> {
+  public async findAllCalculatedFields(
+    queryOptions?: IQueryOptions,
+  ): Promise<ModelColumn[]> {
+    if (queryOptions && queryOptions.tx) {
+      const { tx } = queryOptions;
+      const result = await tx(this.tableName)
+        .where('is_calculated', true)
+        .select('*');
+      return result.map((r) => this.transformFromDBData(r));
+    }
+
     const result = await this.knex<ModelColumn>('model_column')
       .where('is_calculated', true)
       .select('*');
     return result.map((r) => this.transformFromDBData(r));
+  }
+
+  public async deleteAllByColumnIds(
+    columnIds: number[],
+    queryOptions?: IQueryOptions,
+  ): Promise<void> {
+    if (queryOptions && queryOptions.tx) {
+      const { tx } = queryOptions;
+      await tx(this.tableName).whereIn('id', columnIds).delete();
+      return;
+    }
+
+    await this.knex<ModelColumn>(this.tableName)
+      .whereIn('id', columnIds)
+      .delete();
   }
 }
