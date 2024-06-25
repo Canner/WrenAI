@@ -24,7 +24,7 @@ from src.web.v1.services.ask import (
 
 @pytest.fixture
 def ask_service():
-    llm_provider, document_store_provider = init_providers()
+    llm_provider, document_store_provider, engine = init_providers()
 
     return AskService(
         {
@@ -45,9 +45,11 @@ def ask_service():
             ),
             "generation": generation.Generation(
                 llm_provider=llm_provider,
+                engine=engine,
             ),
             "sql_correction": sql_correction.SQLCorrection(
                 llm_provider=llm_provider,
+                engine=engine,
             ),
         }
     )

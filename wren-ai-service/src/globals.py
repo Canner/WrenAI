@@ -1,6 +1,3 @@
-from typing import Callable, Tuple
-
-from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask import (
     followup_generation as ask_followup_generation,
 )
@@ -36,14 +33,10 @@ ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
 
 
-def init_globals(
-    init_providers: Callable[
-        [], Tuple[LLMProvider, DocumentStoreProvider]
-    ] = init_providers,
-):
+def init_globals():
     global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
 
-    llm_provider, document_store_provider = init_providers()
+    llm_provider, document_store_provider, engine = init_providers()
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
@@ -73,12 +66,15 @@ def init_globals(
             ),
             "generation": ask_generation.Generation(
                 llm_provider=llm_provider,
+                engine=engine,
             ),
             "sql_correction": ask_sql_correction.SQLCorrection(
                 llm_provider=llm_provider,
+                engine=engine,
             ),
             "followup_generation": ask_followup_generation.FollowUpGeneration(
                 llm_provider=llm_provider,
+                engine=engine,
             ),
         },
     )
@@ -87,6 +83,7 @@ def init_globals(
         pipelines={
             "generation": ask_details_generation.Generation(
                 llm_provider=llm_provider,
+                engine=engine,
             ),
         },
     )

@@ -143,7 +143,11 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    pipeline = HistoricalQuestion(*init_providers())
+    llm_provider, document_store_provider, _ = init_providers()
+
+    pipeline = HistoricalQuestion(
+        llm_provider=llm_provider, store_provider=document_store_provider
+    )
 
     pipeline.visualize("this is a query")
     async_validate(lambda: pipeline.run("this is a query"))

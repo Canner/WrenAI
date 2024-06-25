@@ -10,13 +10,13 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import init_providers
 
 _TEMPLATE = """
-There are numerous experts dedicated to generating semantic descriptions and names for various types of 
+There are numerous experts dedicated to generating semantic descriptions and names for various types of
 data. They are working together to provide a comprehensive and accurate description of the data.
 
 ### EXTRA INFORMATION ###
 Given the following information to improve the description generation.
 
-Context: 
+Context:
 {% for document in documents %}
     {{ document.content }}
 {% endfor %}
@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, document_store_provider = init_providers()
+    llm_provider, document_store_provider, _ = init_providers()
     pipe = Generation(
         llm_provider=llm_provider,
         document_store_provider=document_store_provider,

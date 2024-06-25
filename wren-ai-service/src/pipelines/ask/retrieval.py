@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, document_store_provider = init_providers()
+    llm_provider, document_store_provider, _ = init_providers()
     pipeline = Retrieval(
         llm_provider=llm_provider,
         document_store_provider=document_store_provider,

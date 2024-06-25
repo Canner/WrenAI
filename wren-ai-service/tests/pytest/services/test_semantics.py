@@ -9,7 +9,7 @@ from src.web.v1.services.semantics import (
 
 @pytest.fixture
 def semantics_service():
-    llm_provider, document_store_provider = init_providers()
+    llm_provider, document_store_provider, _ = init_providers()
 
     return SemanticsService(
         pipelines={

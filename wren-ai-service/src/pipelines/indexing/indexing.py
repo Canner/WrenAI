@@ -447,8 +447,11 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
+    llm_provider, document_store_provider, _ = init_providers()
 
-    pipeline = Indexing(*init_providers())
+    pipeline = Indexing(
+        llm_provider=llm_provider, document_store_provider=document_store_provider
+    )
 
     input = '{"models": [], "views": [], "relationships": [], "metrics": []}'
     pipeline.visualize(input)

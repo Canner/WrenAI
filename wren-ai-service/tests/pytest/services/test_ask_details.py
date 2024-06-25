@@ -14,11 +14,12 @@ from src.web.v1.services.ask_details import (
 
 @pytest.fixture
 def ask_details_service():
-    llm_provider, _ = init_providers()
+    llm_provider, _, engine = init_providers()
     return AskDetailsService(
         {
             "generation": generation.Generation(
                 llm_provider=llm_provider,
+                engine=engine,
             ),
         }
     )
