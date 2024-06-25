@@ -104,6 +104,9 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
         with open("../.env.dev", "w") as f:
             f.writelines(lines)
 
+    # wait for wren-ai-service to restart
+    time.sleep(5)
+
 
 def save_mdl_json_file(file_name: str, mdl_json: Dict):
     if not Path("custom_dataset").exists():
