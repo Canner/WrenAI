@@ -51,6 +51,32 @@ class AsyncGenerator(OllamaGenerator):
             streaming_callback=streaming_callback,
         )
 
+    async def _handle_streaming_response(self, response) -> List[StreamingChunk]:
+        """
+        Handles Streaming response cases
+        """
+        chunks: List[StreamingChunk] = []
+        for chunk in await response.iter_lines():
+            chunk_delta: StreamingChunk = self._build_chunk(chunk)
+            chunks.append(chunk_delta)
+            if self.streaming_callback is not None:
+                self.streaming_callback(chunk_delta)
+        return chunks
+
+    async def _convert_to_response(
+        self, ollama_response: aiohttp.ClientResponse
+    ) -> Dict[str, List[Any]]:
+        """
+        Converts a response from the Ollama API to the required Haystack format.
+        """
+
+        resp_dict = await ollama_response.json()
+
+        replies = [resp_dict["response"]]
+        meta = {key: value for key, value in resp_dict.items() if key != "response"}
+
+        return {"replies": replies, "meta": [meta]}
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     async def run(
         self,
