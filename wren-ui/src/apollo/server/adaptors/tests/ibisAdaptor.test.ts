@@ -42,7 +42,7 @@ describe('IbisAdaptor', () => {
   const mockBigQueryConnectionInfo: BIG_QUERY_CONNECTION_INFO = {
     projectId: 'my-bq-project-id',
     datasetId: 'my-bq-dataset-id',
-    credentials: 'my-bq-credentials',
+    credentials: 'encrypted-credential-string',
   };
 
   const mockManifest: Manifest = {
@@ -142,7 +142,7 @@ describe('IbisAdaptor', () => {
     const mockResponse = { data: [] };
     mockedAxios.post.mockResolvedValue(mockResponse);
     mockedEncryptor.prototype.decrypt.mockReturnValue(
-      mockBigQueryConnectionInfo.credentials,
+      JSON.stringify({ credentials: mockBigQueryConnectionInfo.credentials }),
     );
     const result = await ibisAdaptor.getConstraints(
       DataSourceName.BIG_QUERY,
@@ -153,7 +153,7 @@ describe('IbisAdaptor', () => {
     ).reduce((acc, [key, value]) => {
       if (key === 'credentials') {
         acc['credentials'] = Buffer.from(
-          mockBigQueryConnectionInfo.credentials,
+          JSON.stringify(mockBigQueryConnectionInfo.credentials),
         ).toString('base64');
       } else {
         acc[snakeCase(key)] = value;

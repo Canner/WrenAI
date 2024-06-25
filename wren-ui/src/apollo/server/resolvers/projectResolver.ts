@@ -30,6 +30,7 @@ import DataSourceSchemaDetector, {
   DataSourceSchema,
   SchemaChangeType,
 } from '@server/managers/dataSourceSchemaDetector';
+import { encryptConnectionInfo } from '../dataSource';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -217,11 +218,8 @@ export class ProjectResolver {
           configurations: connectionInfo.configurations,
         });
       } else {
-        const tables =
-          await ctx.projectService.getProjectDataSourceTables(project);
-        logger.debug(
-          `Can connect to the data source, tables: ${JSON.stringify(tables[0])}...`,
-        );
+        await ctx.projectService.getProjectDataSourceTables(project);
+        logger.debug(`Data source tables fetched`);
       }
     } catch (err) {
       logger.error(
@@ -256,16 +254,19 @@ export class ProjectResolver {
     const dataSourceType = project.type;
 
     // only new connection info needed to encrypt
-    const toUpdateConnectionInfo =
-      ctx.projectService.encryptSensitiveConnectionInfo(connectionInfo as any);
+    const toUpdateConnectionInfo = encryptConnectionInfo(
+      dataSourceType,
+      connectionInfo as any,
+    );
 
     if (dataSourceType === DataSourceName.DUCKDB) {
       // prepare duckdb environment in wren-engine
-      const { initSql, extensions } = toUpdateConnectionInfo;
+      const { initSql, extensions, configurations } =
+        toUpdateConnectionInfo as DUCKDB_CONNECTION_INFO;
       await this.buildDuckDbEnvironment(ctx, {
         initSql,
         extensions,
-        configurations: toUpdateConnectionInfo.configurations,
+        configurations,
       });
     } else {
       const updatedProject = {
@@ -276,11 +277,9 @@ export class ProjectResolver {
           ...toUpdateConnectionInfo,
         },
       } as Project;
-      const tables =
-        await ctx.projectService.getProjectDataSourceTables(updatedProject);
-      logger.debug(
-        `Can connect to the data source, tables: ${JSON.stringify(tables[0])}...`,
-      );
+
+      await ctx.projectService.getProjectDataSourceTables(updatedProject);
+      logger.debug(`Data source tables fetched`);
     }
     const updatedProject = await ctx.projectRepository.updateOne(project.id, {
       displayName,
