@@ -1,19 +1,22 @@
 import asyncio
+import os
+import re
+import uuid
 from datetime import datetime
 
+import orjson
 import streamlit as st
 import tomlkit
 from openai import AsyncClient
 from streamlit_tags import st_tags
 from utils import (
+    DATA_SOURCES,
     get_contexts_from_sqls,
-    get_current_manifest,
     get_eval_dataset_in_toml_string,
     get_llm_client,
     get_question_sql_pairs,
     is_sql_valid,
     prettify_sql,
-    show_er_diagram,
 )
 
 st.set_page_config(layout="wide")
@@ -24,6 +27,8 @@ llm_client = get_llm_client()
 
 
 # session states
+if "deployment_id" not in st.session_state:
+    st.session_state["deployment_id"] = str(uuid.uuid4())
 if "mdl_json" not in st.session_state:
     st.session_state["mdl_json"] = None
 if "llm_question_sql_pairs" not in st.session_state:
@@ -32,11 +37,15 @@ if "user_question_sql_pair" not in st.session_state:
     st.session_state["user_question_sql_pair"] = {}
 if "candidate_dataset" not in st.session_state:
     st.session_state["candidate_dataset"] = []
+if "data_source" not in st.session_state:
+    st.session_state["data_source"] = None
+if "connection_info" not in st.session_state:
+    st.session_state["connection_info"] = None
 
 
 # widget callbacks
 def on_change_upload_eval_dataset():
-    doc = tomlkit.parse(st.session_state.uploaded_file.getvalue().decode("utf-8"))
+    doc = tomlkit.parse(st.session_state.uploaded_eval_file.getvalue().decode("utf-8"))
     assert (
         doc["mdl"] == st.session_state["mdl_json"]
     ), "The model in the uploaded dataset is different from the deployed model"
@@ -48,6 +57,31 @@ def on_click_generate_question_sql_pairs(llm_client: AsyncClient):
     st.session_state["llm_question_sql_pairs"] = asyncio.run(
         get_question_sql_pairs(llm_client, st.session_state["mdl_json"])
     )
+
+
+def on_click_setup_uploaded_file():
+    uploaded_file = st.session_state.get("uploaded_mdl_file")
+    match = re.match(
+        r".+_(" + "|".join(DATA_SOURCES) + r")_mdl\.json$",
+        uploaded_file.name,
+    )
+    if not match:
+        st.error(
+            f"the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}"
+        )
+        st.stop()
+
+    data_source = match.group(1)
+    st.session_state["data_source"] = data_source
+    st.session_state["mdl_json"] = orjson.loads(
+        uploaded_file.getvalue().decode("utf-8")
+    )
+
+    st.session_state["connection_info"] = {
+        "project_id": os.getenv("bigquery.project-id"),
+        "dataset_id": os.getenv("bigquery.dataset-id"),
+        "credentials": os.getenv("bigquery.credentials-key"),
+    }
 
 
 def on_change_sql(i: int, key: str):
@@ -170,20 +204,17 @@ with tab_modify_dataset:
     st.file_uploader(
         "Upload Evaluation Dataset",
         type="toml",
-        key="uploaded_file",
+        key="uploaded_eval_file",
         on_change=on_change_upload_eval_dataset,
     )
 
 
-if manifest := get_current_manifest():
-    st.session_state["mdl_json"] = manifest
-    st.markdown("### Deployed Model Information")
-    st.json(st.session_state["mdl_json"], expanded=False)
-    show_er_diagram(
-        st.session_state["mdl_json"]["models"],
-        st.session_state["mdl_json"]["relationships"],
-    )
-    st.markdown("---")
+st.file_uploader(
+    f"Upload an MDL json file, and the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}",
+    type="json",
+    key="uploaded_mdl_file",
+    on_change=on_click_setup_uploaded_file,
+)
 
 if st.session_state["mdl_json"] is not None:
     col1, col2 = st.columns(2)

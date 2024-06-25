@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import os
 import re
 from datetime import datetime
@@ -6,7 +7,6 @@ from typing import Any, List, Tuple
 
 import aiohttp
 import orjson
-import requests
 import sqlglot
 import sqlparse
 import streamlit as st
@@ -16,14 +16,8 @@ from openai import AsyncClient
 
 load_dotenv()
 
-
-def get_current_manifest() -> Tuple[str, dict]:
-    response = requests.get(
-        f"{os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")}/v1/mdl",
-    )
-
-    assert response.status_code == 200
-    return response.json()
+WREN_IBIS_ENDPOINT = os.getenv("WREN_IBIS_ENDPOINT", "http://localhost:8000")
+DATA_SOURCES = ["bigquery"]
 
 
 def get_llm_client() -> AsyncClient:
@@ -47,22 +41,21 @@ async def is_sql_valid(sql: str) -> Tuple[bool, str]:
     sql = sql[:-1] if sql.endswith(";") else sql
     async with aiohttp.request(
         "POST",
-        f'{os.getenv("WREN_UI_ENDPOINT", "http://localhost:3000")}/api/graphql',
+        f'{WREN_IBIS_ENDPOINT}/v2/ibis/{st.session_state['data_source']}/query?dryRun=true',
         json={
-            "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
-            "variables": {
-                "data": {
-                    "dryRun": True,
-                    "limit": 1,
-                    "sql": remove_limit_statement(add_quotes(sql)),
-                }
-            },
+            "sql": add_quotes(sql),
+            "manifestStr": base64.b64encode(
+                orjson.dumps(st.session_state["mdl_json"])
+            ).decode(),
+            "connectionInfo": st.session_state["connection_info"],
         },
+        timeout=aiohttp.ClientTimeout(total=60),
     ) as response:
-        res = await response.json()
-        if res.get("data"):
+        if response.status == 204:
             return True, None
-        return False, res.get("errors", [{}])[0].get("message", "Unknown error")
+        res = await response.text()
+
+        return False, res
 
 
 async def get_validated_question_sql_pairs(
@@ -206,10 +199,15 @@ def get_ddl_commands(mdl_json: dict) -> str:
 
         return [_format(view) for view in views]
 
+    models = mdl_json.get("models", [])
+    relationships = mdl_json.get("relationships", [])
+    metrics = mdl_json.get("metrics", [])
+    views = mdl_json.get("views", [])
+
     ddl_commands = (
-        _convert_models_and_relationships(mdl_json["models"], mdl_json["relationships"])
-        + _convert_metrics(mdl_json["metrics"])
-        + _convert_views(mdl_json["views"])
+        _convert_models_and_relationships(models, relationships)
+        + _convert_metrics(metrics)
+        + _convert_views(views)
     )
     return "\n\n".join(ddl_commands)
 
