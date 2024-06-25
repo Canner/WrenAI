@@ -227,7 +227,6 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 		customEnvFile := path.Join(projectDir, ".env.ai")
 		envFiles = append(envFiles, customEnvFile)
 	}
-	fmt.Println("envFiles", envFiles)
 
 	// docker-compose up
 	dockerCli, err := command.NewDockerCli()
