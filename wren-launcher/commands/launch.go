@@ -113,18 +113,13 @@ func askForGenerationModel() (string, error) {
 	return result, nil
 }
 
-func isEnvFileValidForCustomLLM() error {
+func isEnvFileValidForCustomLLM(projectDir string) error {
 	// validate if .env.ai file exists in ~/.wrenai
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	projectDir := path.Join(homedir, ".wrenai")
 	envFilePath := path.Join(projectDir, ".env.ai")
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
-		return errors.New("Please create a .env.ai file in %s first, more details at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
+		errMessage := fmt.Sprintf("Please create a .env.ai file in %s first, more details at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
+		return errors.New(errMessage)
 	}
 
 	return nil
@@ -159,12 +154,6 @@ func Launch() {
 		// ask for OpenAI generation model
 		pterm.Print("\n")
 		openaiGenerationModel, _ = askForGenerationModel()
-	} else {
-		// validate if .env.ai file exists in ~/.wrenai
-		err = isEnvFileValidForCustomLLM()
-		if err != nil {
-			panic(err)
-		}
 	}
 
 	// ask for telemetry consent
@@ -196,6 +185,14 @@ func Launch() {
 	// prepare a project directory
 	pterm.Info.Println("Preparing project directory")
 	projectDir := prepareProjectDir()
+
+	if llmProvider == "Custom" {
+		// check if .env.ai file exists
+		err = isEnvFileValidForCustomLLM(projectDir)
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	// download docker-compose file and env file template for Wren AI
 	pterm.Info.Println("Downloading docker-compose file and env file")
