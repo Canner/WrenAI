@@ -291,8 +291,13 @@ class OpenAILLMProvider(LLMProvider):
             """
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
-        _verify_api_key(api_key.resolve_value(), api_base)
-        logger.info(f"Using OpenAI Generation Model: {generation_model}")
+        if api_base == OPENAI_API_BASE:
+            _verify_api_key(api_key.resolve_value(), api_base)
+            logger.info(f"Using OpenAI Generation Model: {generation_model}")
+        else:
+            logger.info(
+                f"Using OpenAI API-compatible Generation Model: {generation_model}"
+            )
         self._api_key = api_key
         self._api_base = api_base
         self._embedding_model = embedding_model
