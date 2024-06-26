@@ -1,5 +1,4 @@
 import logging
-import traceback
 from typing import List, Literal, Optional
 
 import sqlparse
@@ -128,9 +127,8 @@ class AskService:
                 status="finished",
             )
         except Exception as e:
-            logger.error(
-                f"ask pipeline - Failed to prepare semantics: {e}, {traceback.format_exc()}"
-            )
+            logger.error(f"ask pipeline - Failed to prepare semantics: {e}")
+            logger.exception(e)
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.id
@@ -346,7 +344,8 @@ class AskService:
                     response=results,
                 )
         except Exception as e:
-            logger.error(f"ask pipeline - OTHERS: {e}, {traceback.format_exc()}")
+            logger.error(f"ask pipeline - OTHERS: {e}")
+            logger.exception(e)
             self._ask_results[query_id] = AskResultResponse(
                 status="failed",
                 error=AskResultResponse.AskError(
