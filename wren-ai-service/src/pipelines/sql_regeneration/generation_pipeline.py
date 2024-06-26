@@ -8,32 +8,173 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.sql_regeneration.components.prompts import (
+    description_regeneration_system_prompt,
     sql_regeneration_system_prompt,
 )
 from src.utils import init_providers, load_env_vars
-from src.web.v1.services.sql_regeneration import Correction
+from src.web.v1.services.sql_regeneration import (
+    CorrectionPoint,
+    DecisionPoint,
+    SQLExplanationWithUserCorrections,
+    UserCorrection,
+)
 
 load_env_vars()
 logger = logging.getLogger("wren-ai-service")
 
 
 sql_regeneration_user_prompt_template = """
-{% for correction in corrections %}
-    {{ correction }}
+### TASK ###
+
+Given each step of the SQL query, SQL summary, cte name and a list of user corrections, 
+your job is to regenerate the corresponding SQL query, SQL summary and cte given the user corrections.
+
+### INPUT STRUCTURE ###
+
+{
+    "index": <step_index>,
+    "step": {
+        "summary": "<original_sql_summary_string>",
+        "sql": "<original_sql_string>",
+        "cte_name": "<original_cte_name_string>",
+        "corrections": [
+            {
+                "before": {
+                    "type": "<filter/selectItems/relation/groupByKeys/sortings>",
+                    "value": "<original_value_string>"
+                },
+                "after": {
+                    "type": "<sql_expression/nl_expression>",
+                    "value": "<new_value_string>"
+                }
+            },...
+        ]
+    },...
+}
+
+### OUTPUT STRUCTURE ###
+[
+    {
+        "index": <step_index>,
+        "summary": "<modified_sql_summary_string>",
+        "sql": "<modified_sql_string>",
+        "cte_name": "<modified_cte_name_string>"
+    },
+    {
+        "index": <step_index>,
+        "summary": "<modified_sql_summary_string>",
+        "sql": "<modified_sql_string>",
+        "cte_name": "<modified_cte_name_string>"
+    },
+    ...
+]
+
+### INPUT ###
+
+{% for result in results %}
+    {{ result }}
 {% endfor %}
 
-return json object
-{}
+Generate modified results according to the OUTPUT STRUCTURE in JSON format:
+
+{
+    "results": <OUTPUT_STRUCTURE>
+}
+
+Think step by step
+"""
+
+
+description_regeneration_user_prompt_template = """
+### OUTPUT STRUCTURE ###
+
+{
+    "description": "<modified_description_string>"
+}
+
+### INPUT ###
+
+description: "<original_description_string>"
+steps:
+{% for step in steps %}
+    {{ step }}
+{% endfor %}
+
+
+Generate modified description according to the OUTPUT STRUCTURE in JSON format
+Think step by step
 """
 
 
 @component
-class GenerationPostProcessor:
+class StepsWithUserCorrectionsFilter:
+    @component.output_types(
+        results=Dict[str, Any],
+    )
+    def run(self, steps: List[SQLExplanationWithUserCorrections]) -> Dict[str, Any]:
+        return {
+            "results": list(
+                map(
+                    lambda step: {
+                        "index": step["index"],
+                        "step": step["step"].model_dump_json(),
+                    },
+                    filter(
+                        lambda step: step["step"].corrections,
+                        [{"index": i, "step": step} for i, step in enumerate(steps)],
+                    ),
+                )
+            )
+        }
+
+
+@component
+class SQLReGenerationByStepPostProcessor:
+    @component.output_types(
+        description=str,
+        steps=List[str],
+    )
+    def run(
+        self,
+        replies: List[str],
+        original_description: str,
+        original_steps: List[str],
+    ) -> Dict[str, Any]:
+        modified_steps = orjson.loads(replies[0])["results"]
+        new_steps = [
+            {
+                "sql": step.sql,
+                "summary": step.summary,
+                "cte_name": step.cte_name,
+            }
+            for step in original_steps
+        ]
+        for modified_step in modified_steps:
+            new_steps[modified_step["index"]] = {
+                "sql": modified_step.get("sql", ""),
+                "summary": modified_step.get("summary", ""),
+                "cte_name": modified_step.get("cte_name", ""),
+            }
+
+        return {"description": original_description, "steps": new_steps}
+
+
+@component
+class DescriptionRegenerationPostProcessor:
     @component.output_types(
         results=Optional[Dict[str, Any]],
     )
-    def run(self, replies: List[str]) -> Dict[str, Any]:
-        return {"results": orjson.loads(replies[0])}
+    def run(
+        self,
+        replies: List[str],
+        steps: List[str],
+    ) -> Dict[str, Any]:
+        return {
+            "results": {
+                "description": orjson.loads(replies[0]).get("description", ""),
+                "steps": steps,
+            }
+        }
 
 
 class Generation(BasicPipeline):
@@ -43,35 +184,82 @@ class Generation(BasicPipeline):
     ):
         self._pipeline = Pipeline()
         self._pipeline.add_component(
-            "sql_regeneration_prompt_builder",
+            "steps_with_user_corrections_filter",
+            StepsWithUserCorrectionsFilter(),
+        )
+        self._pipeline.add_component(
+            "sql_regeneration_by_step_prompt_builder",
             PromptBuilder(template=sql_regeneration_user_prompt_template),
         )
         self._pipeline.add_component(
-            "sql_regeneration_generator",
+            "sql_regeneration_by_step_generator",
             llm_provider.get_generator(system_prompt=sql_regeneration_system_prompt),
         )
-        self._pipeline.add_component("post_processor", GenerationPostProcessor())
+        self._pipeline.add_component(
+            "sql_regeneration_by_step_post_processor",
+            SQLReGenerationByStepPostProcessor(),
+        )
+        self._pipeline.add_component(
+            "description_regeneration_prompt_builder",
+            PromptBuilder(template=description_regeneration_user_prompt_template),
+        )
+        self._pipeline.add_component(
+            "description_regeneration_generator",
+            llm_provider.get_generator(
+                system_prompt=description_regeneration_system_prompt
+            ),
+        )
+        self._pipeline.add_component(
+            "description_regeneration_post_processor",
+            DescriptionRegenerationPostProcessor(),
+        )
 
         self._pipeline.connect(
-            "sql_regeneration_prompt_builder.prompt",
-            "sql_regeneration_generator.prompt",
+            "steps_with_user_corrections_filter.results",
+            "sql_regeneration_by_step_prompt_builder",
         )
         self._pipeline.connect(
-            "sql_regeneration_generator.replies", "post_processor.replies"
+            "sql_regeneration_by_step_prompt_builder.prompt",
+            "sql_regeneration_by_step_generator.prompt",
+        )
+        self._pipeline.connect(
+            "sql_regeneration_by_step_generator.replies",
+            "sql_regeneration_by_step_post_processor.replies",
+        )
+        self._pipeline.connect(
+            "sql_regeneration_by_step_post_processor",
+            "description_regeneration_prompt_builder",
+        )
+        self._pipeline.connect(
+            "description_regeneration_prompt_builder.prompt",
+            "description_regeneration_generator.prompt",
+        )
+        self._pipeline.connect(
+            "sql_regeneration_by_step_post_processor.steps",
+            "description_regeneration_post_processor.steps",
+        )
+        self._pipeline.connect(
+            "description_regeneration_generator.replies",
+            "description_regeneration_post_processor.replies",
         )
 
         super().__init__(self._pipeline)
 
     def run(
         self,
-        corrections: List[Correction],
-        include_outputs_from: List[str] | None = None,
+        description: str,
+        steps: List[SQLExplanationWithUserCorrections],
+        include_outputs_from: Optional[List[str]] = None,
     ):
         logger.info("SQL Regeneration Generation pipeline is running...")
         return self._pipeline.run(
             {
-                "sql_regeneration_prompt_builder": {
-                    "corrections": corrections,
+                "steps_with_user_corrections_filter": {
+                    "steps": steps,
+                },
+                "sql_regeneration_by_step_post_processor": {
+                    "original_description": description,
+                    "original_steps": steps,
                 },
             },
             include_outputs_from=(
@@ -86,7 +274,77 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    print("generating generation_pipeline.jpg to outputs/pipelines/sql_regeneration...")
-    generation_pipeline.draw(
-        "./outputs/pipelines/sql_regeneration/generation_pipeline.jpg"
+    results = generation_pipeline.run(
+        description="This query identifies the customer who bought the most products within a specific time frame.",
+        steps=[
+            SQLExplanationWithUserCorrections(
+                sql='SELECT * FROM "customers"',
+                summary="Selects all columns from the customers table to retrieve customer information.",
+                cte_name="customer_data",
+                corrections=[],
+            ),
+            SQLExplanationWithUserCorrections(
+                sql='SELECT * FROM "orders" WHERE "PurchaseTimestamp" >= \'2023-01-01\' AND "PurchaseTimestamp" < \'2024-01-01\'',
+                summary="Filters orders based on the purchase timestamp to include only orders within the specified time frame.",
+                cte_name="filtered_orders",
+                corrections=[
+                    UserCorrection(
+                        before=DecisionPoint(
+                            type="filter",
+                            value="('PurchaseTimestamp' >= '2023-01-01') AND ('PurchaseTimestamp' < '2024-01-01')",
+                        ),
+                        after=CorrectionPoint(
+                            type="nl_expression", value="change the time to 2022 only"
+                        ),
+                    )
+                ],
+            ),
+            SQLExplanationWithUserCorrections(
+                sql='SELECT * FROM "order_items"',
+                summary="Selects all columns from the order_items table to retrieve information about the products in each order.",
+                cte_name="order_items_data",
+                corrections=[],
+            ),
+            SQLExplanationWithUserCorrections(
+                sql="""
+SELECT "c"."Id", COUNT("oi"."ProductId") AS "TotalProductsBought"
+FROM "customer_data" AS "c"
+JOIN "filtered_orders" AS "o" ON "c"."Id" = "o"."CustomerId"
+JOIN "order_items_data" AS "oi" ON "o"."OrderId" = "oi"."OrderId"
+GROUP BY "c"."Id"
+""",
+                summary="Joins customer, order, and order item data to count the total products bought by each customer.",
+                cte_name="product_count_per_customer",
+                corrections=[],
+            ),
+            SQLExplanationWithUserCorrections(
+                sql="""
+SELECT "Id",
+       "TotalProductsBought"
+FROM "product_count_per_customer"
+ORDER BY "TotalProductsBought" DESC
+LIMIT 1
+""",
+                summary="Orders the customers based on the total products bought in descending order and limits the result to the top customer.",
+                cte_name="",
+                corrections=[
+                    UserCorrection(
+                        before=DecisionPoint(
+                            type="sortings", value="('TotalProductsBought' DESC)"
+                        ),
+                        after=CorrectionPoint(
+                            type="nl_expression",
+                            value="sort by 'TotalProductsBought' ASC",
+                        ),
+                    )
+                ],
+            ),
+        ],
+        include_outputs_from=["sql_regeneration_post_processor"],
     )
+    print(results)
+
+    # print("generating generation_pipeline.jpg to outputs/pipelines/sql_regeneration...")
+    # generation_pipeline.draw(
+    #     "./outputs/pipelines/sql_regeneration/generation_pipeline.jpg"
+    # )

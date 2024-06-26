@@ -198,11 +198,11 @@ class GenerationPostProcessor:
                 for relation in sql_explanation_results["relation"]
             ]
         if (
-            "filters" in sql_explanation_results
-            and sql_explanation_results["filters"]["expression"]
+            "filter" in sql_explanation_results
+            and sql_explanation_results["filter"]["expression"]
         ):
             results += [
-                {"type": "filters", "payload": sql_explanation_results["filters"]}
+                {"type": "filter", "payload": sql_explanation_results["filter"]}
             ]
         if "groupByKeys" in sql_explanation_results:
             results += [

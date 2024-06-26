@@ -9,23 +9,31 @@ logger = logging.getLogger("wren-ai-service")
 
 # POST /v1/sql-regenerations
 class DecisionPoint(BaseModel):
-    type: Literal["filters"]
+    type: Literal["filter", "selectItems", "relation", "groupByKeys", "sortings"]
     value: str
 
 
 class CorrectionPoint(BaseModel):
-    type: Literal["sql_highlight", "ui_highlight"]
-    value: str | DecisionPoint
+    type: Literal["sql_expression", "nl_expression"]
+    value: str
 
 
-class Correction(BaseModel):
+class UserCorrection(BaseModel):
     before: DecisionPoint
     after: CorrectionPoint
 
 
+class SQLExplanationWithUserCorrections(BaseModel):
+    summary: str
+    sql: str
+    cte_name: str
+    corrections: List[UserCorrection]
+
+
 class SQLRegenerationRequest(BaseModel):
     _query_id: str | None = None
-    corrections: List[Correction]
+    description: str
+    steps: List[SQLExplanationWithUserCorrections]
 
     @property
     def query_id(self) -> str:
@@ -86,10 +94,13 @@ class SQLRegenerationService:
             )
 
             generation_result = self._pipelines["generation"].run(
-                corrections=sql_regeneration_request.corrections,
+                description=sql_regeneration_request.description,
+                steps=sql_regeneration_request.steps,
             )
 
-            sql_regeneration_result = generation_result["post_processor"]["results"]
+            sql_regeneration_result = generation_result[
+                "description_regeneration_post_processor"
+            ]["results"]
 
             logger.debug(f"sql regeneration results: {sql_regeneration_result}")
 

@@ -23,6 +23,9 @@ from src.pipelines.semantics import description
 from src.pipelines.sql_explanation import (
     generation_pipeline as sql_explanation_generation_pipeline,
 )
+from src.pipelines.sql_regeneration import (
+    generation_pipeline as sql_regeneration_pipeline,
+)
 from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
@@ -33,10 +36,17 @@ from src.web.v1.services.sql_regeneration import SQLRegenerationService
 SEMANTIC_SERVICE = None
 ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
+SQL_EXPLANATION_SERVICE = None
+SQL_REGENERATION_SERVICE = None
 
 
 def init_globals():
-    global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
+    global \
+        SEMANTIC_SERVICE, \
+        ASK_SERVICE, \
+        ASK_DETAILS_SERVICE, \
+        SQL_EXPLANATION_SERVICE, \
+        SQL_REGENERATION_SERVICE
 
     llm_provider, embedder_provider, document_store_provider, engine = init_providers()
 
@@ -103,4 +113,10 @@ def init_globals():
         }
     )
 
-    SQL_REGENERATION_SERVICE = SQLRegenerationService(pipelines={})
+    SQL_REGENERATION_SERVICE = SQLRegenerationService(
+        pipelines={
+            "generation": sql_regeneration_pipeline.Generation(
+                llm_provider=llm_provider,
+            )
+        }
+    )
