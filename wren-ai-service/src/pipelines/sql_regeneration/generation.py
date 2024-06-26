@@ -8,9 +8,9 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 
+from src.core.engine import clean_generation_result
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.engine import clean_generation_result
 from src.pipelines.sql_regeneration.components.prompts import (
     description_regeneration_system_prompt,
     sql_regeneration_system_prompt,
