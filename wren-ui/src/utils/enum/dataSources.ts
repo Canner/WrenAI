@@ -3,4 +3,5 @@ export enum DATA_SOURCES {
   DUCKDB = 'DUCKDB',
   PG_SQL = 'POSTGRES',
   MYSQL = 'MYSQL',
+  MSSQL = 'MSSQL',
 }
