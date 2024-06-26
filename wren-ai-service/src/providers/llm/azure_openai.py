@@ -21,7 +21,7 @@ from src.providers.loader import provider
 
 EMBEDDING_MODEL_NAME = "text-embedding-3-small"
 EMBEDDING_MODEL_DIMENSION = 1536
-logger = logging.getLogger("azure-openai")
+logger = logging.getLogger("wren-ai-service")
 AZURE_GENERATION_MODEL = "gpt-4-turbo"
 AZURE_GENERATION_MODEL_KWARGS = {
     "temperature": 0,
@@ -299,16 +299,25 @@ class AzureOpenAILLMProvider(LLMProvider):
         embed_api_version: str = os.getenv("AZURE_EMBED_VERSION"),
         generation_model: str = os.getenv("AZURE_GENERATION_MODEL")
         or AZURE_GENERATION_MODEL,
+        embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
+        embedding_model_dim: int = (
+            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
+            if os.getenv("EMBEDDING_MODEL_DIMENSION")
+            else 0
+        )
+        or EMBEDDING_MODEL_DIMENSION,
     ):
         logger.info(f"Using Azure OpenAI Generation Model: {generation_model}")
-        self.chat_api_key = chat_api_key
-        self.chat_api_base = chat_api_base
-        self.chat_api_version = chat_api_version
 
-        self.embed_api_base = embed_api_base
-        self.embed_api_key = embed_api_key
-        self.embed_api_version = embed_api_version
-        self.generation_model = generation_model
+        self._generation_api_key = chat_api_key
+        self._generation_api_base = chat_api_base
+        self._generation_api_version = chat_api_version
+        self._generation_model = generation_model
+        self._embedding_api_base = embed_api_base
+        self._embedding_api_key = embed_api_key
+        self._embedding_api_version = embed_api_version
+        self._embedding_model = embedding_model
+        self._embedding_model_dim = embedding_model_dim
 
     def get_generator(
         self,
@@ -316,36 +325,28 @@ class AzureOpenAILLMProvider(LLMProvider):
         system_prompt: Optional[str] = None,
     ):
         return AsyncAzureGenerator(
-            api_key=self.chat_api_key,
-            model=self.generation_model,
-            api_base=self.chat_api_base,
-            api_version=self.chat_api_version,
+            api_key=self._generation_api_key,
+            model=self._generation_model,
+            api_base=self._generation_api_base,
+            api_version=self._generation_api_version,
             system_prompt=system_prompt,
             generation_kwargs=model_kwargs,
         )
 
-    def get_text_embedder(
-        self,
-        model_name: str = EMBEDDING_MODEL_NAME,
-        model_dim: int = EMBEDDING_MODEL_DIMENSION,
-    ):
+    def get_text_embedder(self):
         return AsyncAzureTextEmbedder(
-            api_key=self.embed_api_key,
-            model=model_name,
-            dimensions=model_dim,
-            api_base_url=self.embed_api_base,
-            api_version=self.embed_api_version,
+            api_key=self._embedding_api_key,
+            model=self._embedding_model,
+            dimensions=self._embedding_model_dim,
+            api_base_url=self._embedding_api_base,
+            api_version=self._embedding_api_version,
         )
 
-    def get_document_embedder(
-        self,
-        model_name: str = EMBEDDING_MODEL_NAME,
-        model_dim: int = EMBEDDING_MODEL_DIMENSION,
-    ):
+    def get_document_embedder(self):
         return AsyncAzureDocumentEmbedder(
-            api_key=self.embed_api_key,
-            model=model_name,
-            dimensions=model_dim,
-            api_base_url=self.embed_api_base,
-            api_version=self.embed_api_version,
+            api_key=self._embedding_api_key,
+            model=self._embedding_model,
+            dimensions=self._embedding_model_dim,
+            api_base_url=self._embedding_api_base,
+            api_version=self._embedding_api_version,
         )

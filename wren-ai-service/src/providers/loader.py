@@ -91,3 +91,9 @@ def get_provider(name: str):
     logger.debug(f"Getting provider: {name} from {PROVIDERS}")
 
     return PROVIDERS[name]
+
+
+def get_default_embedding_model_dim(llm_provider: str):
+    return importlib.import_module(
+        f"src.providers.llm.{llm_provider}"
+    ).EMBEDDING_MODEL_DIMENSION

@@ -127,7 +127,7 @@ class AskService:
                 status="finished",
             )
         except Exception as e:
-            logger.error(f"ask pipeline - Failed to prepare semantics: {e}")
+            logger.exception(f"ask pipeline - Failed to prepare semantics: {e}")
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.id
@@ -343,7 +343,8 @@ class AskService:
                     response=results,
                 )
         except Exception as e:
-            logger.error(f"ask pipeline - OTHERS: {e}")
+            logger.exception(f"ask pipeline - OTHERS: {e}")
+
             self._ask_results[query_id] = AskResultResponse(
                 status="failed",
                 error=AskResultResponse.AskError(

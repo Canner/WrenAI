@@ -26,7 +26,8 @@ with open(f"./outputs/locust/{filename}.json", "r") as f:
 
 formatted = {
     "llm provider": os.getenv("LLM_PROVIDER"),
-    "generation model": os.getenv("OPENAI_GENERATION_MODEL"),
+    "generation model": os.getenv("GENERATION_MODEL"),
+    "embedding model": os.getenv("EMBEDDING_MODEL"),
     "locustfile": "tests/locust/locustfile.py",
     "test results": test_results,
 }

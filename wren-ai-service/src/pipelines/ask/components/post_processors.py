@@ -45,7 +45,7 @@ class GenerationPostProcessor:
                 "invalid_generation_results": invalid_generation_results,
             }
         except Exception as e:
-            logger.error(f"Error in GenerationPostProcessor: {e}")
+            logger.exception(f"Error in GenerationPostProcessor: {e}")
 
             return {
                 "valid_generation_results": [],

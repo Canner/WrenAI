@@ -12,7 +12,7 @@ const {
   userUUID,
   telemetryEnabled,
   wrenAIVersion,
-  openaiGenerationModel,
+  generationModel,
   wrenEngineVersion,
   wrenUIVersion,
   posthogApiKey,
@@ -67,7 +67,7 @@ export class Telemetry {
       'wren-ai-service-version': wrenAIVersion || null,
 
       // collect AI model info
-      'openai-generation-model': openaiGenerationModel || null,
+      'generation-model': generationModel || null,
 
       // collect some system info from process module
       node_version: process.version,

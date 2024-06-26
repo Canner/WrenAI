@@ -276,8 +276,14 @@ class OpenAILLMProvider(LLMProvider):
         self,
         api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
         api_base: str = os.getenv("OPENAI_API_BASE") or OPENAI_API_BASE,
-        generation_model: str = os.getenv("OPENAI_GENERATION_MODEL")
-        or GENERATION_MODEL_NAME,
+        embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
+        embedding_model_dim: int = (
+            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
+            if os.getenv("EMBEDDING_MODEL_DIMENSION")
+            else 0
+        )
+        or EMBEDDING_MODEL_DIMENSION,
+        generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL_NAME,
     ):
         def _verify_api_key(api_key: str, api_base: str) -> None:
             """
@@ -285,54 +291,45 @@ class OpenAILLMProvider(LLMProvider):
             """
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
-        _verify_api_key(api_key.resolve_value(), api_base)
-        logger.info(f"Using OpenAI Generation Model: {generation_model}")
+        # TODO: currently only OpenAI api key can be verified
+        if api_base == OPENAI_API_BASE:
+            _verify_api_key(api_key.resolve_value(), api_base)
+            logger.info(f"Using OpenAI Generation Model: {generation_model}")
+        else:
+            logger.info(
+                f"Using OpenAI API-compatible Generation Model: {generation_model}"
+            )
         self._api_key = api_key
         self._api_base = api_base
+        self._embedding_model = embedding_model
+        self._embedding_model_dim = embedding_model_dim
         self._generation_model = generation_model
 
     def get_generator(
         self,
-        model_kwargs: Optional[Dict[str, Any]] = None,
+        model_kwargs: Optional[Dict[str, Any]] = GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
-        def _get_generation_kwargs(
-            api_base: str,
-            model_kwargs: Optional[Dict[str, Any]] = None,
-        ):
-            if api_base == OPENAI_API_BASE:
-                return GENERATION_MODEL_KWARGS
-
-            return model_kwargs
-
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._generation_model,
             system_prompt=system_prompt,
-            generation_kwargs=_get_generation_kwargs(self._api_base, model_kwargs),
+            generation_kwargs=model_kwargs,
         )
 
-    def get_text_embedder(
-        self,
-        model_name: str = EMBEDDING_MODEL_NAME,
-        model_dim: int = EMBEDDING_MODEL_DIMENSION,
-    ):
+    def get_text_embedder(self):
         return AsyncTextEmbedder(
             api_key=self._api_key,
             api_base_url=self._api_base,
-            model=model_name,
-            dimensions=model_dim,
+            model=self._embedding_model,
+            dimensions=self._embedding_model_dim,
         )
 
-    def get_document_embedder(
-        self,
-        model_name: str = EMBEDDING_MODEL_NAME,
-        model_dim: int = EMBEDDING_MODEL_DIMENSION,
-    ):
+    def get_document_embedder(self):
         return AsyncDocumentEmbedder(
             api_key=self._api_key,
             api_base_url=self._api_base,
-            model=model_name,
-            dimensions=model_dim,
+            model=self._embedding_model,
+            dimensions=self._embedding_model_dim,
         )

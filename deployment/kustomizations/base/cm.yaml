@@ -19,7 +19,7 @@ data:
   WREN_UI_VERSION: "0.8.0"
 
   # OpenAI
-  OPENAI_GENERATION_MODEL: "gpt-3.5-turbo"
+  GENERATION_MODEL: "gpt-3.5-turbo"
 
   # Telemetry
   POSTHOG_HOST: "https://app.posthog.com"
