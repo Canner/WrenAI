@@ -205,14 +205,13 @@ class QdrantProvider(DocumentStoreProvider):
         )
         or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "openai")),
         dataset_name: Optional[str] = None,
-        recreate_index: bool = False,
+        recreate_index: bool = True,
     ):
         return AsyncQdrantDocumentStore(
             location=self._location,
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,
-            # hnsw_config={"ef_construct": 200, "m": 32},  # https://qdrant.tech/documentation/concepts/indexing/#vector-index
         )
 
     def get_retriever(
