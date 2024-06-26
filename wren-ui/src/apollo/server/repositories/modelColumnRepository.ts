@@ -123,15 +123,8 @@ export class ModelColumnRepository
   public async findAllCalculatedFields(
     queryOptions?: IQueryOptions,
   ): Promise<ModelColumn[]> {
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      const result = await tx(this.tableName)
-        .where('is_calculated', true)
-        .select('*');
-      return result.map((r) => this.transformFromDBData(r));
-    }
-
-    const result = await this.knex<ModelColumn>('model_column')
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const result = await executer<ModelColumn>('model_column')
       .where('is_calculated', true)
       .select('*');
     return result.map((r) => this.transformFromDBData(r));
@@ -141,13 +134,8 @@ export class ModelColumnRepository
     columnIds: number[],
     queryOptions?: IQueryOptions,
   ): Promise<void> {
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      await tx(this.tableName).whereIn('id', columnIds).delete();
-      return;
-    }
-
-    await this.knex<ModelColumn>(this.tableName)
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    await executer<ModelColumn>(this.tableName)
       .whereIn('id', columnIds)
       .delete();
   }

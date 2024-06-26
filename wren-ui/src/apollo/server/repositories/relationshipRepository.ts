@@ -229,12 +229,7 @@ export class RelationRepository
     relationshipIds: number[],
     queryOptions?: IQueryOptions,
   ) {
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      await tx(this.tableName).whereIn('id', relationshipIds).delete();
-      return;
-    }
-
-    await this.knex(this.tableName).whereIn('id', relationshipIds).delete();
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    await executer(this.tableName).whereIn('id', relationshipIds).delete();
   }
 }
