@@ -173,6 +173,14 @@ def on_click_remove_candidate_dataset_button(i: int):
     st.session_state["candidate_dataset"].pop(i)
 
 
+st.file_uploader(
+    f"Upload an MDL json file, and the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}",
+    type="json",
+    key="uploaded_mdl_file",
+    on_change=on_click_setup_uploaded_file,
+)
+
+
 tab_create_dataset, tab_modify_dataset = st.tabs(
     ["Create New Evaluation Dataset", "Modify Saved Evaluation Dataset"]
 )
@@ -180,7 +188,7 @@ with tab_create_dataset:
     st.markdown(
         """
         ### Usage Guide
-        1. Use Wren AI AI Service Demo site to deploy the MDL model first and make sure it's deployed successfully
+        1. Upload an MDL json file first
         2. Get question-sql-pairs given by LLM or you manually enter question and corresponding sql
         3. Do validation on each group of question, context and SQL, and move it to the candidate dataset if you think it's valid
         3. Save the candidate dataset by clicking the "Save as Evaluation Dataset" button.
@@ -191,7 +199,7 @@ with tab_modify_dataset:
     st.markdown(
         """
         ### Usage Guide
-        1. Use Wren AI AI Service Demo site to deploy the MDL model first and make sure it's deployed successfully
+        1. Upload an MDL json file first
         2. Upload the evaluation dataset(`.toml` file) you want to modify, and please make sure the model in the dataset is the same as the deployed model
         3. Modify the evaluation dataset the same as you create a new one
         4. Save the candidate dataset by clicking the "Save as Evaluation Dataset" button.
@@ -206,15 +214,8 @@ with tab_modify_dataset:
         type="toml",
         key="uploaded_eval_file",
         on_change=on_change_upload_eval_dataset,
+        disabled=st.session_state["mdl_json"] is None,
     )
-
-
-st.file_uploader(
-    f"Upload an MDL json file, and the file name must be [xxx]_[datasource]_mdl.json, now we support these datasources: {DATA_SOURCES}",
-    type="json",
-    key="uploaded_mdl_file",
-    on_change=on_click_setup_uploaded_file,
-)
 
 if st.session_state["mdl_json"] is not None:
     col1, col2 = st.columns(2)
