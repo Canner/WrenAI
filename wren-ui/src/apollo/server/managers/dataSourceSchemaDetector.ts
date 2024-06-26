@@ -101,88 +101,6 @@ export default class DataSourceSchemaDetector
       );
     }
 
-    const getAffectedCalculatedFieldsAndRelationships = async (
-      model: Model,
-      columns: ModelColumn[],
-      {
-        models,
-        allCalculatedFields,
-        modelRelationships,
-      }: {
-        models: Model[];
-        allCalculatedFields: ModelColumn[];
-        modelRelationships: RelationInfo[];
-      },
-    ): Promise<{
-      relationships: Array<{
-        id: number;
-        displayName: string;
-        referenceName: string;
-      }>;
-      calculatedFields: ModelColumn[];
-    }> => {
-      return columns.reduce(
-        (result, column) => {
-          // collect affected calculated fields if it's target column
-          const affectedCalculatedFieldsByColumnId = allCalculatedFields.filter(
-            (calculatedField) => {
-              const lineage = JSON.parse(calculatedField.lineage);
-              return lineage && lineage[lineage.length - 1] === column.id;
-            },
-          );
-
-          result.calculatedFields.push(...affectedCalculatedFieldsByColumnId);
-
-          // collect affected relationships
-          const affectedRelationships = modelRelationships
-            .map((relationship) =>
-              [relationship.fromColumnId, relationship.toColumnId].includes(
-                column.id,
-              )
-                ? relationship
-                : null,
-            )
-            .filter((relationship) => !!relationship);
-
-          affectedRelationships.forEach((relationship) => {
-            const referenceName =
-              model.referenceName === relationship.fromModelName
-                ? relationship.toModelName
-                : relationship.fromModelName;
-
-            const displayName = models.find(
-              (model) => model.referenceName === referenceName,
-            )?.displayName;
-
-            result.relationships.push({
-              displayName,
-              id: relationship.id,
-              referenceName,
-            });
-
-            // collect affected calculated fields if the relationship is in use
-            const affectedCalculatedFieldsByRelationshipId =
-              allCalculatedFields.filter((calculatedField) => {
-                const lineage = JSON.parse(calculatedField.lineage);
-                return (
-                  lineage && lineage[lineage.length - 1] === relationship.id
-                );
-              });
-
-            result.calculatedFields.push(
-              ...affectedCalculatedFieldsByRelationshipId,
-            );
-          });
-
-          return result;
-        },
-        {
-          relationships: [],
-          calculatedFields: [],
-        },
-      );
-    };
-
     const models = await this.ctx.modelRepository.findAllBy({
       projectId: this.projectId,
     });
@@ -220,7 +138,7 @@ export default class DataSourceSchemaDetector
 
           // Get affected calculated fields and affected relationships
           const affectedMaterials =
-            await getAffectedCalculatedFieldsAndRelationships(
+            await this.getAffectedCalculatedFieldsAndRelationships(
               model,
               selfModelColumns,
               {
@@ -302,11 +220,15 @@ export default class DataSourceSchemaDetector
           );
 
           const affectedMaterials =
-            await getAffectedCalculatedFieldsAndRelationships(model, columns, {
-              models,
-              allCalculatedFields,
-              modelRelationships,
-            });
+            await this.getAffectedCalculatedFieldsAndRelationships(
+              model,
+              columns,
+              {
+                models,
+                allCalculatedFields,
+                modelRelationships,
+              },
+            );
 
           // delete calculated fields
           const affectedCalculatedFields = uniqBy(
@@ -518,5 +440,85 @@ export default class DataSourceSchemaDetector
       },
     });
     logger.info(`Schema change "${schemaChangeTypes}" resolved successfully.`);
+  }
+
+  private async getAffectedCalculatedFieldsAndRelationships(
+    model: Model,
+    columns: ModelColumn[],
+    {
+      models,
+      allCalculatedFields,
+      modelRelationships,
+    }: {
+      models: Model[];
+      allCalculatedFields: ModelColumn[];
+      modelRelationships: RelationInfo[];
+    },
+  ): Promise<{
+    relationships: Array<{
+      id: number;
+      displayName: string;
+      referenceName: string;
+    }>;
+    calculatedFields: ModelColumn[];
+  }> {
+    return columns.reduce(
+      (result, column) => {
+        // collect affected calculated fields if it's target column
+        const affectedCalculatedFieldsByColumnId = allCalculatedFields.filter(
+          (calculatedField) => {
+            const lineage = JSON.parse(calculatedField.lineage);
+            return lineage && lineage[lineage.length - 1] === column.id;
+          },
+        );
+
+        result.calculatedFields.push(...affectedCalculatedFieldsByColumnId);
+
+        // collect affected relationships
+        const affectedRelationships = modelRelationships
+          .map((relationship) =>
+            [relationship.fromColumnId, relationship.toColumnId].includes(
+              column.id,
+            )
+              ? relationship
+              : null,
+          )
+          .filter((relationship) => !!relationship);
+
+        affectedRelationships.forEach((relationship) => {
+          const referenceName =
+            model.referenceName === relationship.fromModelName
+              ? relationship.toModelName
+              : relationship.fromModelName;
+
+          const displayName = models.find(
+            (model) => model.referenceName === referenceName,
+          )?.displayName;
+
+          result.relationships.push({
+            displayName,
+            id: relationship.id,
+            referenceName,
+          });
+
+          // collect affected calculated fields if the relationship is in use
+          const affectedCalculatedFieldsByRelationshipId =
+            allCalculatedFields.filter((calculatedField) => {
+              const lineage = JSON.parse(calculatedField.lineage);
+              return lineage && lineage[lineage.length - 1] === relationship.id;
+            });
+
+          result.calculatedFields.push(
+            ...affectedCalculatedFieldsByRelationshipId,
+          );
+        });
+
+        return result;
+      },
+      {
+        relationships: [],
+        calculatedFields: [],
+      },
+    );
   }
 }
