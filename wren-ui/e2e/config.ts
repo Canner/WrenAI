@@ -34,6 +34,13 @@ const defaultTestConfig = {
     password: 'mysql-password',
     database: 'mysql-database',
   },
+  sqlServer: {
+    host: 'sqlserver-host',
+    port: '1433',
+    username: 'sqlserver-username',
+    password: 'sqlserver-password',
+    database: 'sqlserver-database',
+  },
 };
 
 let userTestConfig = {};

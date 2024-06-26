@@ -3,6 +3,7 @@ export enum DataSourceName {
   DUCKDB = 'DUCKDB',
   POSTGRES = 'POSTGRES',
   MYSQL = 'MYSQL',
+  MSSQL = 'MSSQL',
 }
 
 export interface DataSource {

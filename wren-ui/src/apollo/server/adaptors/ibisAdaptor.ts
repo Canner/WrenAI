@@ -5,15 +5,11 @@ import { DataSourceName } from '@server/types';
 import { Manifest } from '@server/mdl/type';
 import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
-import { Encryptor, toDockerHost } from '@server/utils';
+import { toDockerHost } from '@server/utils';
 import { CompactTable, RecommendConstraint } from '@server/services';
 import { snakeCase } from 'lodash';
-import {
-  BIG_QUERY_CONNECTION_INFO,
-  MYSQL_CONNECTION_INFO,
-  POSTGRES_CONNECTION_INFO,
-  WREN_AI_CONNECTION_INFO,
-} from '../repositories';
+import { WREN_AI_CONNECTION_INFO } from '../repositories';
+import { toIbisConnectionInfo } from '../dataSource';
 
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
@@ -44,6 +40,14 @@ export interface IbisMySQLConnectionInfo {
   password: string;
 }
 
+export interface IbisSqlServerConnectionInfo {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
 export interface IbisBigQueryConnectionInfo {
   project_id: string;
   dataset_id: string;
@@ -53,8 +57,24 @@ export interface IbisBigQueryConnectionInfo {
 export type IbisConnectionInfo =
   | IbisPostgresConnectionInfo
   | IbisMySQLConnectionInfo
-  | IbisBigQueryConnectionInfo;
+  | IbisBigQueryConnectionInfo
+  | IbisSqlServerConnectionInfo;
 
+export enum SupportedDataSource {
+  POSTGRES = 'POSTGRES',
+  BIG_QUERY = 'BIG_QUERY',
+  SNOWFLAKE = 'SNOWFLAKE',
+  MYSQL = 'MYSQL',
+  MSSQL = 'MSSQL',
+}
+
+const dataSourceUrlMap: Record<SupportedDataSource, string> = {
+  [SupportedDataSource.POSTGRES]: 'postgres',
+  [SupportedDataSource.BIG_QUERY]: 'bigquery',
+  [SupportedDataSource.SNOWFLAKE]: 'snowflake',
+  [SupportedDataSource.MYSQL]: 'mysql',
+  [SupportedDataSource.MSSQL]: 'mssql',
+};
 export interface TableResponse {
   tables: CompactTable[];
 }
@@ -98,25 +118,11 @@ export interface IIbisAdaptor {
   ) => Promise<ValidationResponse>;
 }
 
-export enum SupportedDataSource {
-  POSTGRES = 'POSTGRES',
-  BIG_QUERY = 'BIG_QUERY',
-  SNOWFLAKE = 'SNOWFLAKE',
-  MYSQL = 'MYSQL',
-}
-
 export interface IbisQueryResponse {
   columns: string[];
   data: any[];
   dtypes: Record<string, string>;
 }
-
-const dataSourceUrlMap: Record<SupportedDataSource, string> = {
-  [SupportedDataSource.POSTGRES]: 'postgres',
-  [SupportedDataSource.BIG_QUERY]: 'bigquery',
-  [SupportedDataSource.SNOWFLAKE]: 'snowflake',
-  [SupportedDataSource.MYSQL]: 'mysql',
-};
 
 export class IbisAdaptor implements IIbisAdaptor {
   private ibisServerEndpoint: string;
@@ -131,10 +137,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   ): Promise<IbisQueryResponse> {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
-    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
-      dataSource,
-      connectionInfo,
-    );
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
       sql: query,
       connectionInfo: ibisConnectionInfo,
@@ -164,10 +167,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   ): Promise<boolean> {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
-    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
-      dataSource,
-      connectionInfo,
-    );
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
       sql: query,
       connectionInfo: ibisConnectionInfo,
@@ -195,10 +195,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<CompactTable[]> {
     connectionInfo = this.updateConnectionInfo(connectionInfo);
-    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
-      dataSource,
-      connectionInfo,
-    );
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
       connectionInfo: ibisConnectionInfo,
     };
@@ -225,10 +222,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<RecommendConstraint[]> {
     connectionInfo = this.updateConnectionInfo(connectionInfo);
-    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
-      dataSource,
-      connectionInfo,
-    );
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
       connectionInfo: ibisConnectionInfo,
     };
@@ -258,10 +252,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     parameters: Record<string, any>,
   ): Promise<ValidationResponse> {
     connectionInfo = this.updateConnectionInfo(connectionInfo);
-    const ibisConnectionInfo = this.transformToIbisConnectionInfo(
-      dataSource,
-      connectionInfo,
-    );
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
       connectionInfo: ibisConnectionInfo,
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
@@ -290,52 +281,5 @@ export class IbisAdaptor implements IIbisAdaptor {
       logger.debug(`Rewritten host: ${connectionInfo.host}`);
     }
     return connectionInfo;
-  }
-
-  private transformToIbisConnectionInfo(
-    dataSource: DataSourceName,
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-  ): IbisConnectionInfo {
-    switch (dataSource) {
-      case DataSourceName.POSTGRES: {
-        const { host, port, database, user, password, ssl } =
-          connectionInfo as POSTGRES_CONNECTION_INFO;
-        const encryptor = new Encryptor(config);
-        const decryption = encryptor.decrypt(password);
-        const { password: decryptedPassword } = JSON.parse(decryption);
-        let connectionUrl = `postgresql://${user}:${decryptedPassword}@${host}:${port}/${database}?`;
-        if (ssl) {
-          connectionUrl += 'sslmode=require';
-        }
-        return {
-          connectionUrl,
-        } as UrlBasedConnectionInfo;
-      }
-      case DataSourceName.BIG_QUERY: {
-        connectionInfo = connectionInfo as BIG_QUERY_CONNECTION_INFO;
-        const encryptor = new Encryptor(config);
-        const decryptedCredentials = encryptor.decrypt(
-          connectionInfo.credentials,
-        );
-        const credential = Buffer.from(decryptedCredentials).toString('base64');
-        return {
-          project_id: connectionInfo.projectId,
-          dataset_id: connectionInfo.datasetId,
-          credentials: credential,
-        } as IbisBigQueryConnectionInfo;
-      }
-      case DataSourceName.MYSQL: {
-        connectionInfo = connectionInfo as MYSQL_CONNECTION_INFO;
-        const encryptor = new Encryptor(config);
-        const decryptedCredentials = encryptor.decrypt(connectionInfo.password);
-        const { password } = JSON.parse(decryptedCredentials);
-        return {
-          ...connectionInfo,
-          password: password,
-        } as IbisMySQLConnectionInfo;
-      }
-      default:
-        throw new Error(`Unsupported project type: ${dataSource}`);
-    }
   }
 }

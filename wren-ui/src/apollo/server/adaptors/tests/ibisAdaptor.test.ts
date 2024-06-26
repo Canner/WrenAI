@@ -4,6 +4,7 @@ import { DataSourceName } from '../../types';
 import { Manifest } from '../../mdl/type';
 import {
   BIG_QUERY_CONNECTION_INFO,
+  MS_SQL_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
 } from '../../repositories';
@@ -19,6 +20,14 @@ const mockedEncryptor = Encryptor as jest.MockedClass<typeof Encryptor>;
 describe('IbisAdaptor', () => {
   let ibisAdaptor: IbisAdaptor;
   const ibisServerEndpoint = 'http://localhost:8080';
+
+  const mockMSSQLConnectionInfo: MS_SQL_CONNECTION_INFO = {
+    host: 'localhost',
+    port: 1433,
+    database: 'my-database',
+    user: 'my-user',
+    password: 'my-password',
+  };
 
   const mockMySQLConnectionInfo: MYSQL_CONNECTION_INFO = {
     host: 'localhost',
@@ -42,7 +51,7 @@ describe('IbisAdaptor', () => {
   const mockBigQueryConnectionInfo: BIG_QUERY_CONNECTION_INFO = {
     projectId: 'my-bq-project-id',
     datasetId: 'my-bq-dataset-id',
-    credentials: 'my-bq-credentials',
+    credentials: 'encrypted-credential-string',
   };
 
   const mockManifest: Manifest = {
@@ -89,6 +98,30 @@ describe('IbisAdaptor', () => {
 
   afterEach(() => {
     jest.resetAllMocks();
+  });
+
+  it('should get mssql constraints', async () => {
+    const mockResponse = { data: [] };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+    // mock decrypt method in Encryptor to return the same password
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockMSSQLConnectionInfo.password }),
+    );
+
+    const result = await ibisAdaptor.getConstraints(
+      DataSourceName.MSSQL,
+      mockMSSQLConnectionInfo,
+    );
+    const expectConnectionInfo = Object.entries(mockMSSQLConnectionInfo).reduce(
+      (acc, [key, value]) => ((acc[snakeCase(key)] = value), acc),
+      {},
+    );
+
+    expect(result).toEqual([]);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/ibis/mssql/metadata/constraints`,
+      { connectionInfo: expectConnectionInfo },
+    );
   });
 
   it('should get mysql constraints', async () => {
@@ -142,7 +175,7 @@ describe('IbisAdaptor', () => {
     const mockResponse = { data: [] };
     mockedAxios.post.mockResolvedValue(mockResponse);
     mockedEncryptor.prototype.decrypt.mockReturnValue(
-      mockBigQueryConnectionInfo.credentials,
+      JSON.stringify({ credentials: mockBigQueryConnectionInfo.credentials }),
     );
     const result = await ibisAdaptor.getConstraints(
       DataSourceName.BIG_QUERY,
@@ -153,7 +186,7 @@ describe('IbisAdaptor', () => {
     ).reduce((acc, [key, value]) => {
       if (key === 'credentials') {
         acc['credentials'] = Buffer.from(
-          mockBigQueryConnectionInfo.credentials,
+          JSON.stringify(mockBigQueryConnectionInfo.credentials),
         ).toString('base64');
       } else {
         acc[snakeCase(key)] = value;

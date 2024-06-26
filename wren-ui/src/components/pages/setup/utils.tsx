@@ -11,6 +11,7 @@ import BigQueryProperties from './dataSources/BigQueryProperties';
 import DuckDBProperties from './dataSources/DuckDBProperties';
 import MySQLProperties from './dataSources/MySQLProperties';
 import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
+import SQLServerProperties from './dataSources/SQLServerProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 import { ERROR_CODES } from '@/utils/errorHandler';
 
@@ -81,6 +82,12 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/guide/connect/mysql',
     disabled: false,
   },
+  [DATA_SOURCES.MSSQL]: {
+    label: 'SQL Server',
+    logo: '/images/dataSource/sqlserver.svg',
+    guide: 'https://docs.getwren.ai/guide/connect/sqlserver',
+    disabled: false,
+  },
 } as { [key: string]: ButtonOption };
 
 export const DATA_SOURCE_FORM = {
@@ -88,6 +95,7 @@ export const DATA_SOURCE_FORM = {
   [DATA_SOURCES.DUCKDB]: { component: DuckDBProperties },
   [DATA_SOURCES.PG_SQL]: { component: PostgreSQLProperties },
   [DATA_SOURCES.MYSQL]: { component: MySQLProperties },
+  [DATA_SOURCES.MSSQL]: { component: SQLServerProperties },
 };
 
 export const TEMPLATE_OPTIONS = {
@@ -127,6 +135,10 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
       [DATA_SOURCES.MYSQL]: merge(
         DATA_SOURCE_OPTIONS[DATA_SOURCES.MYSQL],
         DATA_SOURCE_FORM[DATA_SOURCES.MYSQL],
+      ),
+      [DATA_SOURCES.MSSQL]: merge(
+        DATA_SOURCE_OPTIONS[DATA_SOURCES.MSSQL],
+        DATA_SOURCE_FORM[DATA_SOURCES.MSSQL],
       ),
     }[dataSource] || defaultDataSource
   );

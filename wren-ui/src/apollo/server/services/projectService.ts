@@ -1,22 +1,16 @@
 import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
-import { Encryptor, getLogger } from '@server/utils';
-import {
-  BIG_QUERY_CONNECTION_INFO,
-  IProjectRepository,
-  WREN_AI_CONNECTION_INFO,
-} from '../repositories';
+import { getLogger } from '@server/utils';
+import { IProjectRepository, WREN_AI_CONNECTION_INFO } from '../repositories';
 import { Project } from '../repositories';
-import { getConfig } from '../config';
 import {
   CompactTable,
   IDataSourceMetadataService,
   RecommendConstraint,
 } from './metadataService';
 import { DataSourceName } from '../types';
-
-const config = getConfig();
+import { encryptConnectionInfo } from '../dataSource';
 
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
@@ -30,9 +24,6 @@ export interface ProjectData {
 
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
-  encryptSensitiveConnectionInfo: (
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-  ) => any;
   getGeneralConnectionInfo: (project: Project) => Record<string, any>;
   getProjectDataSourceTables: (
     project?: Project,
@@ -45,7 +36,6 @@ export interface IProjectService {
 
   getCurrentProject: () => Promise<Project>;
   getProjectById: (projectId: number) => Promise<Project>;
-  getCredentialFilePath: (project?: Project) => Promise<string>;
   writeCredentialFile: (
     credentials: JSON,
     persistCredentialDir: string,
@@ -106,7 +96,8 @@ export class ProjectService implements IProjectService {
       type: projectData.type,
       catalog: 'wrenai',
       schema: 'public',
-      connectionInfo: this.encryptSensitiveConnectionInfo(
+      connectionInfo: encryptConnectionInfo(
+        projectData.type,
         projectData.connectionInfo,
       ),
     };
@@ -114,21 +105,6 @@ export class ProjectService implements IProjectService {
     logger.debug({ projectValue });
     const project = await this.projectRepository.createOne(projectValue);
     return project;
-  }
-
-  public async getCredentialFilePath(project?: Project) {
-    if (!project) {
-      project = await this.getCurrentProject();
-    }
-    const connectionInfo = project.connectionInfo as BIG_QUERY_CONNECTION_INFO;
-    const encryptedCredentials = connectionInfo.credentials;
-    const encryptor = new Encryptor(config);
-    const credentials = encryptor.decrypt(encryptedCredentials);
-    const filePath = this.writeCredentialFile(
-      JSON.parse(credentials),
-      config.persistCredentialDir,
-    );
-    return filePath;
   }
 
   public writeCredentialFile(credentials: JSON, persistCredentialDir: string) {
@@ -169,22 +145,5 @@ export class ProjectService implements IProjectService {
       },
       {},
     );
-  }
-
-  public encryptSensitiveConnectionInfo(
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-  ) {
-    const encryptor = new Encryptor(config);
-    const encryptConnectionInfo = Object.entries(connectionInfo).reduce(
-      (acc, [key, value]) => {
-        if (SENSITIVE_PROPERTY_NAME.has(key)) {
-          const toEncrypt = key === 'password' ? { password: value } : value;
-          acc[key] = encryptor.encrypt(toEncrypt);
-        }
-        return acc;
-      },
-      connectionInfo,
-    );
-    return encryptConnectionInfo;
   }
 }

@@ -1,35 +1,21 @@
-import { IDataSourceMetadataService, ProjectService } from '@server/services';
+import { encryptConnectionInfo } from '../../dataSource';
+import { DataSourceName } from '../../types';
 import {
   BIG_QUERY_CONNECTION_INFO,
   DUCKDB_CONNECTION_INFO,
+  MYSQL_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
-} from '@server/repositories';
+} from '../../repositories';
 import { Encryptor } from '@server/utils/encryptor';
 
 jest.mock('@server/utils/encryptor');
 
-describe('ProjectService', () => {
-  let projectService;
-  let mockProjectRepository;
-  let mockMetadataService;
-  let mockEncryptor;
+const mockedEncryptor = Encryptor as jest.MockedClass<typeof Encryptor>;
 
+describe('Encryptor', () => {
   beforeEach(() => {
-    mockProjectRepository = {
-      getCurrentProject: jest.fn(),
-    };
-    mockMetadataService = new (jest.fn<IDataSourceMetadataService, any[]>())();
-    mockEncryptor = {
-      encrypt: jest.fn().mockReturnValue('encrypted string'),
-      decrypt: jest.fn().mockReturnValue('decrypted string'),
-    };
-
-    projectService = new ProjectService({
-      projectRepository: mockProjectRepository,
-      metadataService: mockMetadataService,
-    });
-
-    (Encryptor as jest.Mock).mockImplementation(() => mockEncryptor);
+    mockedEncryptor.prototype.decrypt.mockReturnValue('decrypted string');
+    mockedEncryptor.prototype.encrypt.mockReturnValue('encrypted string');
   });
 
   it('should encrypt sensitive connection info for BigQuery connection info', async () => {
@@ -39,8 +25,10 @@ describe('ProjectService', () => {
       projectId: 'my-bq-project-id',
     } as BIG_QUERY_CONNECTION_INFO;
 
-    const encryptedConnectionInfo =
-      await projectService.encryptSensitiveConnectionInfo(connectionInfo);
+    const encryptedConnectionInfo = await encryptConnectionInfo(
+      DataSourceName.BIG_QUERY,
+      connectionInfo,
+    );
 
     expect(encryptedConnectionInfo).toEqual({
       credentials: 'encrypted string',
@@ -59,8 +47,10 @@ describe('ProjectService', () => {
       ssl: false,
     } as POSTGRES_CONNECTION_INFO;
 
-    const encryptedConnectionInfo =
-      await projectService.encryptSensitiveConnectionInfo(connectionInfo);
+    const encryptedConnectionInfo = await encryptConnectionInfo(
+      DataSourceName.POSTGRES,
+      connectionInfo,
+    );
 
     expect(encryptedConnectionInfo).toEqual({
       host: 'localhost',
@@ -72,6 +62,29 @@ describe('ProjectService', () => {
     });
   });
 
+  it('should encrypt sensitive connection info for MySQL connection info', async () => {
+    const connectionInfo = {
+      host: 'localhost',
+      port: 5432,
+      database: 'my-database',
+      user: 'my-user',
+      password: 'my-password',
+    } as MYSQL_CONNECTION_INFO;
+
+    const encryptedConnectionInfo = await encryptConnectionInfo(
+      DataSourceName.MYSQL,
+      connectionInfo,
+    );
+
+    expect(encryptedConnectionInfo).toEqual({
+      host: 'localhost',
+      port: 5432,
+      database: 'my-database',
+      user: 'my-user',
+      password: 'encrypted string',
+    });
+  });
+
   it('should encrypt sensitive connection info for DuckDB connection info', async () => {
     const connectionInfo = {
       initSql: 'some-sql',
@@ -79,8 +92,10 @@ describe('ProjectService', () => {
       configurations: { key: 'value' },
     } as DUCKDB_CONNECTION_INFO;
 
-    const encryptedConnectionInfo =
-      await projectService.encryptSensitiveConnectionInfo(connectionInfo);
+    const encryptedConnectionInfo = await encryptConnectionInfo(
+      DataSourceName.DUCKDB,
+      connectionInfo,
+    );
 
     expect(encryptedConnectionInfo).toEqual({
       initSql: 'some-sql',

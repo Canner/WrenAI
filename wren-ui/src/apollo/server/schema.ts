@@ -8,6 +8,7 @@ export const typeDefs = gql`
     DUCKDB
     POSTGRES
     MYSQL
+    MSSQL
   }
 
   enum ExpressionName {
