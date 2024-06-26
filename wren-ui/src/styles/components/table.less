@@ -21,6 +21,22 @@
       background-color: @gray-3;
     }
   }
+
+  .adm-nested-table {
+    .ant-table {
+      border: none;
+      border-radius: 0;
+
+      .ant-table-thead > tr > th {
+        background: #fafafa;
+      }
+
+      .ant-table-tbody > tr.ant-table-row:hover > td,
+      .ant-table-tbody > tr > td.ant-table-cell-row-hover {
+        background: #fafafa;
+      }
+    }
+  }
 }
 
 .ant-table-wrapper:not(.ant-table-has-header) {
