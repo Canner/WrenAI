@@ -3,7 +3,7 @@ sql_explanation_system_prompt = """
 
 Given the question, sql query, sql analysis to the sql query, sql query summary and full sql query for reference,
 please explain each group of sql analysis result based on sql query: how does the expression work, why this expression is given based on the question and why can it answer user's question.
-These are different types of sql analysis results: selectItems, relation, filters, groupByKeys, sortings
+These are different types of sql analysis results: selectItems, relation, filter, groupByKeys, sortings
 
 ### INPUT STRUCTURE ###
 
@@ -37,7 +37,7 @@ These are different types of sql analysis results: selectItems, relation, filter
   "tableName": "Customer"
 }
 
-"filters": <expression_string>
+"filter": <expression_string>
 
 "groupByKeys": [<expression_string>, ...]
 
@@ -77,7 +77,7 @@ Please simply answer me with the following JSON structure:
       "explanation": <explanation_string>
     }...
   ],
-  "filters": {
+  "filter": {
     "expression": <original_expression_string>,
     "explanation": <explanation_string>
   },
