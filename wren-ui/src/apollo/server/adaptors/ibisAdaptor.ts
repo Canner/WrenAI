@@ -40,6 +40,14 @@ export interface IbisMySQLConnectionInfo {
   password: string;
 }
 
+export interface IbisSqlServerConnectionInfo {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
 export interface IbisBigQueryConnectionInfo {
   project_id: string;
   dataset_id: string;
@@ -49,8 +57,24 @@ export interface IbisBigQueryConnectionInfo {
 export type IbisConnectionInfo =
   | IbisPostgresConnectionInfo
   | IbisMySQLConnectionInfo
-  | IbisBigQueryConnectionInfo;
+  | IbisBigQueryConnectionInfo
+  | IbisSqlServerConnectionInfo;
 
+export enum SupportedDataSource {
+  POSTGRES = 'POSTGRES',
+  BIG_QUERY = 'BIG_QUERY',
+  SNOWFLAKE = 'SNOWFLAKE',
+  MYSQL = 'MYSQL',
+  MSSQL = 'MSSQL',
+}
+
+const dataSourceUrlMap: Record<SupportedDataSource, string> = {
+  [SupportedDataSource.POSTGRES]: 'postgres',
+  [SupportedDataSource.BIG_QUERY]: 'bigquery',
+  [SupportedDataSource.SNOWFLAKE]: 'snowflake',
+  [SupportedDataSource.MYSQL]: 'mysql',
+  [SupportedDataSource.MSSQL]: 'mssql',
+};
 export interface TableResponse {
   tables: CompactTable[];
 }
@@ -94,25 +118,11 @@ export interface IIbisAdaptor {
   ) => Promise<ValidationResponse>;
 }
 
-export enum SupportedDataSource {
-  POSTGRES = 'POSTGRES',
-  BIG_QUERY = 'BIG_QUERY',
-  SNOWFLAKE = 'SNOWFLAKE',
-  MYSQL = 'MYSQL',
-}
-
 export interface IbisQueryResponse {
   columns: string[];
   data: any[];
   dtypes: Record<string, string>;
 }
-
-const dataSourceUrlMap: Record<SupportedDataSource, string> = {
-  [SupportedDataSource.POSTGRES]: 'postgres',
-  [SupportedDataSource.BIG_QUERY]: 'bigquery',
-  [SupportedDataSource.SNOWFLAKE]: 'snowflake',
-  [SupportedDataSource.MYSQL]: 'mysql',
-};
 
 export class IbisAdaptor implements IIbisAdaptor {
   private ibisServerEndpoint: string;

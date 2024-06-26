@@ -2,12 +2,14 @@ import {
   IbisBigQueryConnectionInfo,
   IbisMySQLConnectionInfo,
   IbisPostgresConnectionInfo,
+  IbisSqlServerConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
   BIG_QUERY_CONNECTION_INFO,
   DUCKDB_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
+  MS_SQL_CONNECTION_INFO,
   WREN_AI_CONNECTION_INFO,
 } from './repositories';
 import { DataSourceName } from './types';
@@ -109,6 +111,23 @@ const dataSource = {
   } as IDataSourceConnectionInfo<
     MYSQL_CONNECTION_INFO,
     IbisMySQLConnectionInfo
+  >,
+
+  // SQL Server
+  [DataSourceName.MSSQL]: {
+    sensitiveProps: ['password'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.MSSQL,
+        connectionInfo,
+      );
+      const { host, port, database, user, password } =
+        decryptedConnectionInfo as MS_SQL_CONNECTION_INFO;
+      return { host, port, database, user, password };
+    },
+  } as IDataSourceConnectionInfo<
+    MS_SQL_CONNECTION_INFO,
+    IbisSqlServerConnectionInfo
   >,
 
   // DuckDB
