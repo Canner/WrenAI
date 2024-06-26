@@ -79,39 +79,6 @@ export default function ModelForm(props: Props) {
     }
   }, [sourceTableFieldValue]);
 
-  useEffect(() => {
-    if (defaultValue) {
-      const fields: string[] = defaultValue.fields.map(
-        (field: DiagramModelField) => field.referenceName,
-      );
-
-      const primaryKeyField = defaultValue.fields.find(
-        (field: DiagramModelField) => field.isPrimaryKey,
-      );
-
-      form.setFieldsValue({
-        [FormFieldKey.COLUMNS]: fields,
-        [FormFieldKey.PRIMARY_KEY]: primaryKeyField?.referenceName,
-      });
-
-      setSourceTableName(defaultValue.sourceTableName);
-      setSelectedColumns(fields);
-    }
-  }, [defaultValue, form]);
-
-  const tableOptions: JSX.Element[] = dataSourceTables.map(
-    (table: CompactTable) => {
-      const disabled = inUsedModelList.includes(table.name);
-      const option = {
-        disabled,
-        children: table.name,
-        value: table.name,
-      };
-
-      return <Option {...option} key={option.value} />;
-    },
-  );
-
   const columns: Array<{
     key: string;
     name: string;
@@ -129,6 +96,39 @@ export default function ModelForm(props: Props) {
       key: column.name,
     }));
   }, [dataSourceTables, sourceTableName]);
+
+  useEffect(() => {
+    if (defaultValue) {
+      const fields: string[] = defaultValue.fields
+        .map((field: DiagramModelField) => field.referenceName)
+        .filter((col) => columns.find((c) => c.name === col));
+
+      const primaryKeyField = defaultValue.fields.find(
+        (field: DiagramModelField) => field.isPrimaryKey,
+      );
+
+      form.setFieldsValue({
+        [FormFieldKey.COLUMNS]: fields,
+        [FormFieldKey.PRIMARY_KEY]: primaryKeyField?.referenceName,
+      });
+
+      setSourceTableName(defaultValue.sourceTableName);
+      setSelectedColumns(fields);
+    }
+  }, [defaultValue, form, columns]);
+
+  const tableOptions: JSX.Element[] = dataSourceTables.map(
+    (table: CompactTable) => {
+      const disabled = inUsedModelList.includes(table.name);
+      const option = {
+        disabled,
+        children: table.name,
+        value: table.name,
+      };
+
+      return <Option {...option} key={option.value} />;
+    },
+  );
 
   const onChangeColumns = (newKeys: string[]) => setSelectedColumns(newKeys);
 

@@ -315,15 +315,20 @@ export class ModelResolver {
     const sourceTableColumns = dataSourceTables.find(
       (table) => table.name === sourceTableName,
     )?.columns;
-    const { toDeleteColumnIds, toCreateColumns } = findColumnsToUpdate(
-      fields,
-      existingColumns,
-    );
+    const { toDeleteColumnIds, toCreateColumns, toUpdateColumns } =
+      findColumnsToUpdate(fields, existingColumns, sourceTableColumns);
     await updateModelPrimaryKey(
       ctx.modelColumnRepository,
       model.id,
       primaryKey,
     );
+
+    // delete columns
+    if (toDeleteColumnIds.length) {
+      await ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+    }
+
+    // create columns
     if (toCreateColumns.length) {
       const columnValues = toCreateColumns.map((columnName) => {
         const sourceTableColumn = sourceTableColumns.find(
@@ -346,10 +351,15 @@ export class ModelResolver {
       });
       await ctx.modelColumnRepository.createMany(columnValues);
     }
-    if (toDeleteColumnIds.length) {
-      await ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+
+    // update columns
+    if (toUpdateColumns.length) {
+      for (const { id, type } of toUpdateColumns) {
+        await ctx.modelColumnRepository.updateOne(id, { type });
+      }
     }
-    logger.info(`Model created: ${JSON.stringify(model)}`);
+
+    logger.info(`Model updated: ${JSON.stringify(model)}`);
 
     return model;
   }
