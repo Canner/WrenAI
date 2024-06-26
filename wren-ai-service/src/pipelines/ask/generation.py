@@ -9,7 +9,7 @@ from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.core.engine import Engine
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.ask.components.post_processors import (
     GenerationPostProcessor,
@@ -185,6 +185,7 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.core.pipeline import async_validate
     from src.utils import load_env_vars
 
     load_env_vars()

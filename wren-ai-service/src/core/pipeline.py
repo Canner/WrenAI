@@ -3,10 +3,11 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Dict
 
 from hamilton.experimental.h_async import AsyncDriver
+from haystack import Pipeline
 
 
 class BasicPipeline(metaclass=ABCMeta):
-    def __init__(self, pipe: AsyncDriver):
+    def __init__(self, pipe: Pipeline | AsyncDriver):
         self._pipe = pipe
 
     @abstractmethod
