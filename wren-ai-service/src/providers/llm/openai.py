@@ -291,6 +291,7 @@ class OpenAILLMProvider(LLMProvider):
             """
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
+        # TODO: currently only OpenAI api key can be verified
         if api_base == OPENAI_API_BASE:
             _verify_api_key(api_key.resolve_value(), api_base)
             logger.info(f"Using OpenAI Generation Model: {generation_model}")

@@ -24,7 +24,7 @@ GENERATION_MODEL_KWARGS = {
     "temperature": 0,
 }
 EMBEDDING_MODEL_NAME = "nomic-embed-text"
-EMBEDDING_MODEL_DIMENSION = 768
+EMBEDDING_MODEL_DIMENSION = 768  # https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
 
 
 @component
