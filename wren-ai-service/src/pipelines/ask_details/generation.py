@@ -190,6 +190,7 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.core.pipeline import async_validate
     from src.utils import load_env_vars
 
     load_env_vars()
