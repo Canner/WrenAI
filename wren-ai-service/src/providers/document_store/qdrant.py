@@ -193,7 +193,7 @@ class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
 
 @provider("qdrant")
 class QdrantProvider(DocumentStoreProvider):
-    def __init__(self, location: str = os.getenv("QDRANT_HOST")):
+    def __init__(self, location: str = os.getenv("QDRANT_HOST", "qdrant")):
         self._location = location
 
     def get_store(
