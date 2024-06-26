@@ -60,13 +60,6 @@ def load_env_vars() -> str:
 
 
 def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider, Engine]:
-    def _clean_store(document_store_provider: DocumentStoreProvider):
-        # Recreate the document store to ensure a clean slate
-        document_store_provider.get_store(recreate_index=True)
-        document_store_provider.get_store(
-            dataset_name="view_questions", recreate_index=True
-        )
-
     logger.info("Initializing providers...")
     loader.import_mods()
 
@@ -75,8 +68,6 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider, Engine]:
         os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
     )()
     engine = loader.get_provider(os.getenv("ENGINE", "wren-ui"))()
-
-    _clean_store(document_store_provider)
 
     return llm_provider, document_store_provider, engine
 
