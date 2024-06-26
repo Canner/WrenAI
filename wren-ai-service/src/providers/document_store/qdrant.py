@@ -205,7 +205,7 @@ class QdrantProvider(DocumentStoreProvider):
         )
         or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "openai")),
         dataset_name: Optional[str] = None,
-        recreate_index: bool = True,
+        recreate_index: bool = False,
     ):
         return AsyncQdrantDocumentStore(
             location=self._location,
