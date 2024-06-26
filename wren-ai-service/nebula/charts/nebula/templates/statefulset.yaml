@@ -1,0 +1,226 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nebula-metad
+  labels:
+    app.kubernetes.io: nebula
+    app.kubernetes.io/component: nebula-metad
+    app.kubernetes.io/component-type: stateful
+spec:
+  serviceName: nebula-metad
+  replicas: {{ .Values.replication.metad.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: nebula-metad
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: nebula-metad
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                - nebula-metad
+            topologyKey: "kubernetes.io/hostname"
+      restartPolicy: Always
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      serviceAccountName: {{ include "nebula.serviceAccountName" . }}
+      containers:
+      - name: nebula-metad
+        image: "{{ .Values.image.metad.repository }}:{{ .Values.image.metad.tag }}"
+        imagePullPolicy: {{ .Values.image.metad.pullPolicy }}
+        command: ["/bin/bash", "-ecx"]
+        args: {{ template "nebula.metad.args" . }}
+        env:
+        - name: USER
+          value: root
+        resources:
+          requests:
+            cpu: {{ .Values.resources.metad.requests.cpu | quote }}
+            memory: {{ .Values.resources.metad.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.resources.metad.limits.cpu | quote }}
+            memory: {{ .Values.resources.metad.limits.memory | quote }}
+        ports:
+        - containerPort: {{ .Values.port.metad.thriftPort }}
+          name: thrift
+        - containerPort: {{ .Values.port.metad.httpPort }}
+          name: http
+        - containerPort: {{ .Values.port.metad.http2Port }}
+          name: http2
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.livenessProbe.httpGet.path }}
+            port: {{ .Values.port.metad.httpPort }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+        volumeMounts:
+        - name: config
+          mountPath: /usr/local/nebula/etc/
+        - name: timezone
+          mountPath: /etc/localtime
+        - name: metad
+          mountPath: /usr/local/nebula/data
+          subPath: data
+        - name: metad
+          mountPath: /usr/local/nebula/logs
+          subPath: logs
+      volumes:
+      - name: config
+        configMap:
+          name: nebula-metad
+      - name: timezone
+        hostPath:
+          path: /etc/localtime
+      - name: metad
+        persistentVolumeClaim:
+          claimName: metad
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- end }}
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: metad
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{ .Values.storage.storageClass }}
+      resources:
+        requests:
+          storage: {{ .Values.storage.metad.size }}
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nebula-storaged
+  labels:
+    app.kubernetes.io: nebula
+    app.kubernetes.io/component: nebula-storaged
+    app.kubernetes.io/component-type: stateful
+spec:
+  serviceName: nebula-storaged
+  replicas: {{ .Values.replication.storaged.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: nebula-storaged
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: nebula-storaged
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                - nebula-storaged
+            topologyKey: "kubernetes.io/hostname"
+      restartPolicy: Always
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      serviceAccountName: {{ include "nebula.serviceAccountName" . }}
+      containers:
+      - name: nebula-storaged
+        image: "{{ .Values.image.storaged.repository }}:{{ .Values.image.storaged.tag }}"
+        imagePullPolicy: {{ .Values.image.storaged.pullPolicy }}
+        command: ["/bin/bash", "-ecx"]
+        args: {{ template "nebula.storaged.args" . }}
+        env:
+        - name: USER
+          value: root
+        resources:
+          requests:
+            cpu: {{ .Values.resources.storaged.requests.cpu | quote }}
+            memory: {{ .Values.resources.storaged.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.resources.storaged.limits.cpu | quote }}
+            memory: {{ .Values.resources.storaged.limits.memory | quote }}
+        ports:
+        - containerPort: {{ .Values.port.storaged.thriftPort }}
+          name: thrift
+        - containerPort: {{ .Values.port.storaged.httpPort }}
+          name: http
+        - containerPort: {{ .Values.port.storaged.http2Port }}
+          name: http2
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.livenessProbe.httpGet.path }}
+            port: {{ .Values.port.storaged.httpPort }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+        volumeMounts:
+        - name: config
+          mountPath: /usr/local/nebula/etc/
+        - name: timezone
+          mountPath: /etc/localtime
+        - name: storaged
+          mountPath: /usr/local/nebula/data
+          subPath: data
+        - name: storaged
+          mountPath: /usr/local/nebula/logs
+          subPath: logs
+      volumes:
+      - name: config
+        configMap:
+          name: nebula-storaged
+      - name: timezone
+        hostPath:
+          path: /etc/localtime
+      - name: storaged
+        persistentVolumeClaim:
+          claimName: storaged
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- end }}
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: storaged
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{ .Values.storage.storageClass }}
+      resources:
+        requests:
+          storage: {{ .Values.storage.storaged.size }}

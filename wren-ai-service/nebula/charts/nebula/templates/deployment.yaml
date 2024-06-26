@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io: nebula
+    app.kubernetes.io/component: nebula-graphd
+  name: nebula-graphd
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: nebula-graphd
+  replicas: {{ .Values.replication.graphd.replicas }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: nebula-graphd
+    spec:
+      restartPolicy: Always
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      serviceAccountName: {{ include "nebula.serviceAccountName" . }}
+      containers:
+        - name: nebula-graphd
+          image: "{{ .Values.image.graphd.repository }}:{{ .Values.image.graphd.tag }}"
+          imagePullPolicy: {{ .Values.image.graphd.pullPolicy }}
+          command: ["/bin/bash", "-ecx"]
+          args: ["exec /usr/local/nebula/bin/nebula-graphd --flagfile=/usr/local/nebula/etc/nebula-graphd.conf --daemonize=false"]
+          env:
+          - name: USER
+            value: root
+          ports:
+            - name: thrift
+              containerPort: {{ .Values.port.graphd.thriftPort }}
+            - name: http
+              containerPort: {{ .Values.port.graphd.httpPort }}
+            - name: http2
+              containerPort: {{ .Values.port.graphd.http2Port }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.httpGet.path }}
+              port: {{ .Values.port.graphd.httpPort }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+          resources:
+            requests:
+              cpu: "{{ .Values.resources.graphd.requests.cpu }}"
+              memory: "{{ .Values.resources.graphd.requests.memory }}"
+            limits:
+              cpu: "{{ .Values.resources.graphd.limits.cpu }}"
+              memory: "{{ .Values.resources.graphd.limits.memory }}"
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/nebula/etc/
+            - name: timezone
+              mountPath: /etc/localtime
+      volumes:
+        - name: timezone
+          hostPath:
+            path: /etc/localtime
+        - name: config
+          configMap:
+            name: nebula-graphd
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- end }}

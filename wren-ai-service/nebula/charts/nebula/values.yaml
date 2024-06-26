@@ -1,0 +1,141 @@
+# Available parameters and default values for the Nebula Graph chart.
+
+image:
+  graphd:
+    repository: vesoft/nebula-graphd
+    tag: v2.0.0
+    pullPolicy: IfNotPresent
+  metad:
+    repository: vesoft/nebula-metad
+    tag: v2.0.0
+    pullPolicy: IfNotPresent
+  storaged:
+    repository: vesoft/nebula-storaged
+    tag: v2.0.0
+    pullPolicy: IfNotPresent
+
+storage:
+  # The StorageClass to use for StatefulSet storage.
+  storageClass: fast-disks
+  storaged:
+    # This defines the disk size for configuring the
+    # StatefulSet storage.
+    size: 10Gi
+  metad:
+    size: 10Gi
+
+# The resource requests (CPU, memory, etc.)
+# for each of the nebula components.
+resources:
+  graphd:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+  metad:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+  storaged:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+
+replication:
+  storaged:
+    replicas: 3
+  metad:
+    replicas: 3
+  graphd:
+    replicas: 2
+
+port:
+  graphd:
+    serviceType: ClusterIP
+    thriftPort: 9669
+    httpPort: 19669
+    http2Port: 19670
+  storaged:
+    serviceType: ClusterIP
+    thriftPort: 9779
+    httpPort: 19779
+    http2Port: 19780
+  metad:
+    serviceType: ClusterIP
+    thriftPort: 9559
+    httpPort: 19559
+    http2Port: 19560
+
+# nebula metad & storaged container command
+commandArgs:
+  metad:
+    - "exec /usr/local/nebula/bin/nebula-metad --flagfile=/usr/local/nebula/etc/nebula-metad.conf --daemonize=false"
+  storaged:
+    - "exec /usr/local/nebula/bin/nebula-storaged --flagfile=/usr/local/nebula/etc/nebula-storaged.conf --daemonize=false"
+
+# Time period for the controller pod to do a graceful shutdown
+terminationGracePeriodSeconds: 30
+
+# Liveness probe configuration for the nebula components
+livenessProbe:
+  failureThreshold: 2
+  httpGet:
+    path: /status
+    scheme: HTTP
+  initialDelaySeconds: 30
+  timeoutSeconds: 10
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: nebula
+
+# The maximum number of unavailable pods.
+disruptionBudget:
+  maxUnavailable: 1
+
+# Controls whether the pod may use the node network namespace.
+# This is required if using a custom CNI where your applications are unable to initiate network connections
+# to the pods outside the k8s cluster, for example using Flannel CNI plugin on K8S.
+hostNetwork: false
+
+# If 'hostNetwork' set to true, you should specify metadEndpoints with metad replicas properly.
+# Uncomment the following lines, adjust them as necessary, and remove the square brackets after 'metadEndpoints:'.
+metadEndpoints: []
+#  - 192.168.8.25:9559
+#  - 192.168.8.26:9559
+#  - 192.168.8.27:9559
+
+# Leverage a PriorityClass to ensure the controller will survive resource shortages
+# ref: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/#priorityclass
+priorityClassName: ""
+
+# This value defines `nodeSelector` (https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector)
+# labels for the pod to be scheduled on a node, formatted as a multi-line string.
+nodeSelector:
+  nebula: "cloud"
+
+# Toleration Settings
+tolerations: []
+
+# Affinity Settings
+affinity: {}
+
+# Override various naming aspects of this chart
+# Only edit these if you know what you're doing
+nameOverride: ""
+fullnameOverride: ""
+
+
