@@ -41,7 +41,7 @@ def document_store_provider():
 
 def test_clear_documents(mdl_str: str):
     llm_provider, document_store_provider, _ = init_providers()
-    store = document_store_provider.get_store()
+    store = document_store_provider.get_store(recreate_index=False)
 
     indexing_pipeline = Indexing(
         llm_provider=llm_provider,
@@ -89,10 +89,13 @@ def test_indexing_pipeline(
 
     async_validate(lambda: indexing_pipeline.run(mdl_str))
 
-    assert document_store_provider.get_store().count_documents() == 3
+    assert (
+        document_store_provider.get_store(recreate_index=False).count_documents() == 3
+    )
     assert (
         document_store_provider.get_store(
-            dataset_name="view_questions"
+            dataset_name="view_questions",
+            recreate_index=False,
         ).count_documents()
         == 1
     )
