@@ -106,8 +106,8 @@ class AskDetailsService:
                 ),
             )
         except Exception as e:
-            logger.error(f"ask-details pipeline - OTHERS: {e}")
-            logger.exception(e)
+            logger.exception(f"ask-details pipeline - OTHERS: {e}")
+
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="failed",
                 error=AskDetailsResultResponse.AskDetailsError(
