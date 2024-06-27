@@ -129,40 +129,35 @@ export default class DataSourceSchemaDetector
     if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
       await Promise.all(
         affectedModels.map(async (model) => {
-          // Get all columns of the model including calculated fields
-          const selfModelColumnsWithCalculatedFields = modelColumns.filter(
-            (column) => column.modelId === model.id,
-          );
-
-          // Get only columns of the model without calculated fields
-          const selfModelColumns = selfModelColumnsWithCalculatedFields.filter(
-            (column) => !column.isCalculated,
-          );
+          const affectedColumns = changes.find(
+            (table) => table.name === model.sourceTableName,
+          ).columns;
 
           // Get affected calculated fields and affected relationships
           const affectedMaterials = await this.getAffectedResources(
             model,
-            selfModelColumns,
+            affectedColumns,
             {
               models,
+              modelColumns,
               allCalculatedFields,
               modelRelationships,
             },
           );
 
           // delete calculated fields
-          const affectedColumns = uniqBy(
+          const affectedCalculatedFields = uniqBy(
             affectedMaterials.calculatedFields,
             'id',
           );
 
           logger.debug(
-            `Start to remove all affected calculated fields "${affectedColumns.map(
+            `Start to remove all affected calculated fields "${affectedCalculatedFields.map(
               (column) => `${column.displayName} (${column.referenceName})`,
             )}".`,
           );
 
-          const columnIds = affectedColumns.map((column) => column.id);
+          const columnIds = affectedCalculatedFields.map((column) => column.id);
           return await this.ctx.modelColumnRepository.deleteAllByColumnIds(
             columnIds,
           );
@@ -190,26 +185,12 @@ export default class DataSourceSchemaDetector
             (table) => table.name === model.sourceTableName,
           ).columns;
 
-          const columns: ModelColumn[] = affectedColumns.reduce(
-            (result, column) => {
-              const affectedColumn = modelColumns.find(
-                (modelColumn) =>
-                  modelColumn.sourceColumnName === column.name &&
-                  modelColumn.modelId === model.id,
-              );
-              if (affectedColumn) {
-                result.push(affectedColumn);
-              }
-              return result;
-            },
-            [],
-          );
-
           const affectedMaterials = await this.getAffectedResources(
             model,
-            columns,
+            affectedColumns,
             {
               models,
+              modelColumns,
               allCalculatedFields,
               modelRelationships,
             },
@@ -413,13 +394,15 @@ export default class DataSourceSchemaDetector
 
   private async getAffectedResources(
     model: Model,
-    columns: ModelColumn[],
+    affectedColumns: DataSourceSchema['columns'],
     {
       models,
+      modelColumns,
       allCalculatedFields,
       modelRelationships,
     }: {
       models: Model[];
+      modelColumns: ModelColumn[];
       allCalculatedFields: ModelColumn[];
       modelRelationships: RelationInfo[];
     },
@@ -431,6 +414,18 @@ export default class DataSourceSchemaDetector
     }>;
     calculatedFields: ModelColumn[];
   }> {
+    const columns: ModelColumn[] = affectedColumns.reduce((result, column) => {
+      const affectedColumn = modelColumns.find(
+        (modelColumn) =>
+          modelColumn.sourceColumnName === column.name &&
+          modelColumn.modelId === model.id,
+      );
+      if (affectedColumn) {
+        result.push(affectedColumn);
+      }
+      return result;
+    }, []);
+
     return columns.reduce(
       (result, column) => {
         // collect affected calculated fields if it's target column
