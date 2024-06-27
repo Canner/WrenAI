@@ -325,7 +325,7 @@ export default function SchemaChangeModal(props: Props) {
                 expandedRowRender: (record: ExpandedRowsProps['record']) => (
                   <ExpandedRows
                     record={record}
-                    tipMessage="Following table shows resources affected by this model and will be deleted when resolving."
+                    tipMessage="The following table shows resources affected by this model and will be deleted when resolving."
                   />
                 ),
               }}
@@ -361,7 +361,7 @@ export default function SchemaChangeModal(props: Props) {
                 expandedRowRender: (record: ExpandedRowsProps['record']) => (
                   <ExpandedRows
                     record={record}
-                    tipMessage="Following table shows resources affected by this column of the model and will be deleted when resolving."
+                    tipMessage="The following table shows resources affected by this column of the model and will be deleted when resolving."
                   />
                 ),
               }}
@@ -393,7 +393,7 @@ export default function SchemaChangeModal(props: Props) {
                 expandedRowRender: (record: ExpandedRowsProps['record']) => (
                   <ExpandedRows
                     record={record}
-                    tipMessage="Following table shows the resources utilized by this column of the model. Please review each resource. Please manually update the relevant resources accordingly, if any changes are required."
+                    tipMessage="The following table shows the resources utilized by this column of the model. Please review each resource and manually update the relevant ones if any changes are required."
                   />
                 ),
               }}
