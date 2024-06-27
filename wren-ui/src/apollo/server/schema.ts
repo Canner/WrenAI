@@ -697,7 +697,7 @@ export const typeDefs = gql`
     startSampleDataset(data: SampleDatasetInput!): JSON!
     saveTables(data: SaveTablesInput!): JSON!
     saveRelations(data: SaveRelationInput!): JSON!
-    deploy: JSON!
+    deploy(force: Boolean): JSON!
 
     # Modeling Page
     createModel(data: CreateModelInput!): JSON!
