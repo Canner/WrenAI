@@ -55,6 +55,8 @@ def load_env_vars() -> str:
         load_dotenv(".env.dev", override=True)
     else:
         load_dotenv(".env.prod", override=True)
+        load_dotenv(".env.ai", override=True)
+        load_dotenv("~/.wrenai/.env.ai", override=True)
 
     return "dev" if is_dev_env else "prod"
 
