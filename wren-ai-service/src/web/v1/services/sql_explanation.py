@@ -77,6 +77,9 @@ class SQLExplanationService:
                 response=sql_explanation_result,
             )
         except Exception as e:
+            logger.exception(
+                f"sql explanation pipeline - Failed to provide SQL explanation: {e}"
+            )
             self.sql_explanation_results[
                 sql_explanation_request.query_id
             ] = SQLExplanationResultResponse(

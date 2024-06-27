@@ -161,7 +161,7 @@ class SQLRegenerationByStepPostProcessor:
 
             return {"description": original_description, "steps": new_steps}
         except Exception as e:
-            logger.error(f"Error in SQLRegenerationByStepPostProcessor: {e}")
+            logger.exception(f"Error in SQLRegenerationByStepPostProcessor: {e}")
             return {"description": original_description, "steps": original_steps}
 
 
@@ -183,7 +183,7 @@ class DescriptionRegenerationPostProcessor:
                 }
             }
         except Exception as e:
-            logger.error(f"Error in DescriptionRegenerationPostProcessor: {e}")
+            logger.exception(f"Error in DescriptionRegenerationPostProcessor: {e}")
             return {"results": None}
 
 
