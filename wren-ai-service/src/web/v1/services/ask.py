@@ -144,7 +144,7 @@ class AskService:
                 prepare_semantics_status_request.id
             )
         ) is None:
-            logger.error(
+            logger.exception(
                 f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.id}"
             )
             return SemanticsPreparationStatusResponse(
@@ -184,7 +184,7 @@ class AskService:
                 )
 
                 if not query_understanding_result["post_process"]["is_valid_query"]:
-                    logger.error(
+                    logger.exception(
                         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
                     )
                     self._ask_results[query_id] = AskResultResponse(
@@ -207,7 +207,7 @@ class AskService:
                 documents = retrieval_result.get("retrieval", {}).get("documents", [])
 
                 if not documents:
-                    logger.error(
+                    logger.exception(
                         f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
                     )
                     self._ask_results[query_id] = AskResultResponse(
@@ -309,7 +309,9 @@ class AskService:
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
 
                 if not valid_generation_results and not historical_question_result:
-                    logger.error(f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}")
+                    logger.exception(
+                        f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
+                    )
                     self._ask_results[query_id] = AskResultResponse(
                         status="failed",
                         error=AskResultResponse.AskError(
@@ -366,7 +368,7 @@ class AskService:
         ask_result_request: AskResultRequest,
     ) -> AskResultResponse:
         if (result := self._ask_results.get(ask_result_request.query_id)) is None:
-            logger.error(
+            logger.exception(
                 f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
             )
             return AskResultResponse(

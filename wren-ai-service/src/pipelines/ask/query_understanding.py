@@ -53,7 +53,7 @@ class QueryUnderstandingPostProcessor:
                 "is_valid_query": False,
             }
         except Exception as e:
-            logger.error(f"Error in QueryUnderstandingPostProcessor: {e}")
+            logger.exception(f"Error in QueryUnderstandingPostProcessor: {e}")
 
             return {
                 "is_valid_query": True,
