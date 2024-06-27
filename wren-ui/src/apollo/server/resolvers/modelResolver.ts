@@ -307,6 +307,7 @@ export class ModelResolver {
     const model = await ctx.modelRepository.findOneBy({ id: args.where.id });
     const existingColumns = await ctx.modelColumnRepository.findAllBy({
       modelId: model.id,
+      isCalculated: false,
     });
     const { sourceTableName } = model;
     this.validateTableExist(sourceTableName, dataSourceTables);
