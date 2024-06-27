@@ -474,6 +474,7 @@ export class ProjectResolver {
       (column) => column.isCalculated,
     );
 
+    // TODO: the same logic with getAffectedResources
     /**
      * According to affected models and column data, we also need to find affected resources, including calculated fields and relationships.
      *
