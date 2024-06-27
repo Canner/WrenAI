@@ -20,6 +20,7 @@ import {
   DetailedChangeTable,
   DetailedAffectedCalculatedFields,
   DetailedAffectedRelationships,
+  NodeType,
   SchemaChange,
   SchemaChangeType,
 } from '@/apollo/client/graphql/__types__';
@@ -68,29 +69,18 @@ type Props = ModalAction<SchemaChange> & {
   };
 };
 
-enum ResourceTypes {
-  CALCULATED_FIELD = 'Calculated Field',
-  RELATIONSHIP = 'Relationship',
-}
-
 const nestedColumns = [
   {
     title: 'Affected Resource',
     dataIndex: 'resourceType',
     width: 200,
-    render: (resourceType: ResourceTypes) => {
-      if (resourceType === ResourceTypes.CALCULATED_FIELD) {
-        return (
-          <Tag className="ant-tag--geekblue">
-            {ResourceTypes.CALCULATED_FIELD}
-          </Tag>
-        );
+    render: (resourceType: NodeType) => {
+      if (resourceType === NodeType.CALCULATED_FIELD) {
+        return <Tag className="ant-tag--geekblue">Calculated Field</Tag>;
       }
 
-      if (resourceType === ResourceTypes.RELATIONSHIP) {
-        return (
-          <Tag className="ant-tag--citrus">{ResourceTypes.RELATIONSHIP}</Tag>
-        );
+      if (resourceType === NodeType.RELATION) {
+        return <Tag className="ant-tag--citrus">Relationship</Tag>;
       }
 
       return null;
@@ -212,14 +202,14 @@ export default function SchemaChangeModal(props: Props) {
             index: number,
           ) => ({
             ...calculatedField,
-            resourceType: ResourceTypes.CALCULATED_FIELD,
+            resourceType: NodeType.CALCULATED_FIELD,
             rowKey: `${tables.sourceTableName}-${calculatedField.referenceName}-${index}`,
           }),
         ),
         ...tables.relationships.map(
           (relationship: DetailedAffectedRelationships, index: number) => ({
             ...relationship,
-            resourceType: ResourceTypes.RELATIONSHIP,
+            resourceType: NodeType.RELATION,
             rowKey: `${tables.sourceTableName}-${relationship.referenceName}-${index}`,
           }),
         ),
