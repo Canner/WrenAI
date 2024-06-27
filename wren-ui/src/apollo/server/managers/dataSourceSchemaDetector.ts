@@ -474,7 +474,10 @@ export default class DataSourceSchemaDetector
           const affectedCalculatedFieldsByRelationshipId =
             allCalculatedFields.filter((calculatedField) => {
               const lineage = JSON.parse(calculatedField.lineage);
-              return lineage && lineage[lineage.length - 1] === relationship.id;
+
+              // pop the column ID from the lineage
+              lineage.pop();
+              return lineage && lineage.includes(relationship.id);
             });
 
           result.calculatedFields.push(

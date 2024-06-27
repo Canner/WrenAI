@@ -474,27 +474,25 @@ export class ProjectResolver {
       (column) => column.isCalculated,
     );
 
-    // Not only Mapping with affected models and columns data,
-    // But also finding out affected relationships and affected calculated fields into schema change
-    const mappingAffectedToSchemaChange = (
-      changes: DataSourceSchema[],
-      key: SchemaChangeType,
-    ) => {
+    /**
+     * According to affected models and column data, we also need to find affected resources, including calculated fields and relationships.
+     *
+     * Find all affected resources include:
+     *  - columns (called "affected column")
+     *  - relationships (called "affected relationship")
+     *  - calculated fields:
+     *    - calculated fields of a model
+     *    - calculated fields affected by relationships
+     *    - calculated fields affected by used columns
+     *
+     */
+    const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
       const affecteds = flatMap(changes, (change) => {
         const affectedModel = models.find(
           (model) => model.sourceTableName === change.name,
         );
 
         if (!affectedModel) return [];
-
-        // collect the model's calculated fields
-        const selfModelCalculatedFields =
-          key === SchemaChangeType.DELETED_TABLES
-            ? modelColumns.filter(
-                (column) =>
-                  column.modelId === affectedModel.id && column.isCalculated,
-              )
-            : [];
 
         // collect all columns and affected relationships and affected calculated fields affected by relationships
         const affectedMaterials = change.columns.reduce(
@@ -556,6 +554,9 @@ export class ProjectResolver {
                 const affectedCalculatedFieldsByRelationshipId =
                   allCalculatedFields.filter((calculatedField) => {
                     const lineage = JSON.parse(calculatedField.lineage);
+
+                    // pop the column ID from the lineage
+                    lineage.pop();
                     return lineage && lineage.includes(relationship.id);
                   });
 
@@ -576,7 +577,7 @@ export class ProjectResolver {
 
         // unique calculated fields by id since it can be duplicated
         const calculatedFields = uniqBy(
-          [...selfModelCalculatedFields, ...affectedMaterials.calculatedFields],
+          affectedMaterials.calculatedFields,
           'id',
         ).map((calculatedField) => ({
           displayName: calculatedField.displayName,
@@ -603,10 +604,7 @@ export class ProjectResolver {
       // return if resolved or no changes
       if (isResolved || !changes) return result;
 
-      const affectedChanges = mappingAffectedToSchemaChange(
-        changes,
-        key as SchemaChangeType,
-      );
+      const affectedChanges = mappingAffectedToSchemaChange(changes);
       return { ...result, [key]: affectedChanges };
     }, {});
 
