@@ -307,6 +307,7 @@ export class ModelResolver {
     const model = await ctx.modelRepository.findOneBy({ id: args.where.id });
     const existingColumns = await ctx.modelColumnRepository.findAllBy({
       modelId: model.id,
+      isCalculated: false,
     });
     const { sourceTableName } = model;
     this.validateTableExist(sourceTableName, dataSourceTables);
@@ -315,15 +316,20 @@ export class ModelResolver {
     const sourceTableColumns = dataSourceTables.find(
       (table) => table.name === sourceTableName,
     )?.columns;
-    const { toDeleteColumnIds, toCreateColumns } = findColumnsToUpdate(
-      fields,
-      existingColumns,
-    );
+    const { toDeleteColumnIds, toCreateColumns, toUpdateColumns } =
+      findColumnsToUpdate(fields, existingColumns, sourceTableColumns);
     await updateModelPrimaryKey(
       ctx.modelColumnRepository,
       model.id,
       primaryKey,
     );
+
+    // delete columns
+    if (toDeleteColumnIds.length) {
+      await ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+    }
+
+    // create columns
     if (toCreateColumns.length) {
       const columnValues = toCreateColumns.map((columnName) => {
         const sourceTableColumn = sourceTableColumns.find(
@@ -346,10 +352,15 @@ export class ModelResolver {
       });
       await ctx.modelColumnRepository.createMany(columnValues);
     }
-    if (toDeleteColumnIds.length) {
-      await ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
+
+    // update columns
+    if (toUpdateColumns.length) {
+      for (const { id, type } of toUpdateColumns) {
+        await ctx.modelColumnRepository.updateOne(id, { type });
+      }
     }
-    logger.info(`Model created: ${JSON.stringify(model)}`);
+
+    logger.info(`Model updated: ${JSON.stringify(model)}`);
 
     return model;
   }
@@ -361,13 +372,8 @@ export class ModelResolver {
     if (!model) {
       throw new Error('Model not found');
     }
-    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
-      model.id,
-    ]);
-    logger.debug('find columns');
-    const columnIds = modelColumns.map((c) => c.id);
-    await ctx.relationRepository.deleteRelationsByColumnIds(columnIds);
-    await ctx.modelColumnRepository.deleteMany(columnIds);
+
+    // related columns and relationships will be deleted in cascade
     await ctx.modelRepository.deleteOne(modelId);
     return true;
   }
