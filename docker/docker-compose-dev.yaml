@@ -51,6 +51,8 @@ services:
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
+    env_file:
+      - ${PROJECT_DIR}/.env.ai
     networks:
       - wren
     depends_on:

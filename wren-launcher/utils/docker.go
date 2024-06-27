@@ -32,10 +32,14 @@ const (
 	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
+func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
+	// rplace PROJECT_DIR
+	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
+	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
+	
 	// replace OPENAI_API_KEY
-	reg := regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
-	str := reg.ReplaceAllString(content, "OPENAI_API_KEY="+openaiApiKey)
+	reg = regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
+	str = reg.ReplaceAllString(content, "OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
 	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)
@@ -189,6 +193,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 	// replace the content with regex
 	envFileContent := replaceEnvFileContent(
 		string(envExampleFileContent),
+		projectDir,
 		openaiApiKey,
 		openaiGenerationModel,
 		hostPort,
