@@ -371,13 +371,8 @@ export class ModelResolver {
     if (!model) {
       throw new Error('Model not found');
     }
-    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
-      model.id,
-    ]);
-    logger.debug('find columns');
-    const columnIds = modelColumns.map((c) => c.id);
-    await ctx.relationRepository.deleteRelationsByColumnIds(columnIds);
-    await ctx.modelColumnRepository.deleteMany(columnIds);
+
+    // related columns and relationships will be deleted in cascade
     await ctx.modelRepository.deleteOne(modelId);
     return true;
   }
