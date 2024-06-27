@@ -467,7 +467,7 @@ export class ProjectResolver {
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
 
     const modelRelationships = await ctx.relationRepository.findRelationInfoBy({
-      columnIds: modelColumns.map((column) => column.id),
+      modelIds,
     });
 
     const allCalculatedFields = modelColumns.filter(
