@@ -1,5 +1,6 @@
 import { IModelColumnRepository, ModelColumn } from '@server/repositories';
 import { replaceAllowableSyntax } from './regex';
+import { CompactColumn } from '@server/services/metadataService';
 
 export function transformInvalidColumnName(columnName: string) {
   let referenceName = replaceAllowableSyntax(columnName);
@@ -19,9 +20,14 @@ export function replaceInvalidReferenceName(referenceName: string) {
 export function findColumnsToUpdate(
   columns: string[],
   existingColumns: ModelColumn[],
+  sourceTableColumns: CompactColumn[],
 ): {
   toDeleteColumnIds: number[];
   toCreateColumns: string[];
+  toUpdateColumns: Array<{
+    id: number;
+    type: string;
+  }>;
 } {
   const toDeleteColumnIds = existingColumns
     .map(({ id, sourceColumnName }) => {
@@ -35,9 +41,31 @@ export function findColumnsToUpdate(
   const toCreateColumns = columns.filter(
     (columnName) => !existColumnNames.includes(columnName),
   );
+
+  const toUpdateColumns = sourceTableColumns.reduce((acc, sourceColumn) => {
+    const existingColumn = existingColumns.find(
+      (col) => col.sourceColumnName === sourceColumn.name,
+    );
+    if (!existingColumn) return acc;
+
+    const columnName = columns.find((col) => col === sourceColumn.name);
+    if (!columnName) return acc;
+
+    if (sourceColumn.type === existingColumn.type) return acc;
+
+    return [
+      ...acc,
+      {
+        id: existingColumn.id,
+        type: sourceColumn.type || 'string',
+      },
+    ];
+  }, []);
+
   return {
     toDeleteColumnIds,
     toCreateColumns,
+    toUpdateColumns,
   };
 }
 

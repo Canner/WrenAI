@@ -51,7 +51,7 @@ export type SaveRelationsMutation = { __typename?: 'Mutation', saveRelations: an
 export type SchemaChangeQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type SchemaChangeQuery = { __typename?: 'Query', schemaChange: { __typename?: 'SchemaChange', lastSchemaChangeTime?: string | null, deletedTables?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }> }> | null, deletedColumns?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }> }> | null, modifiedColumns?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }> }> | null } };
+export type SchemaChangeQuery = { __typename?: 'Query', schemaChange: { __typename?: 'SchemaChange', lastSchemaChangeTime?: string | null, deletedTables?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }>, relationships: Array<{ __typename?: 'DetailedAffectedRelationships', displayName: string, referenceName: string }>, calculatedFields: Array<{ __typename?: 'DetailedAffectedCalculatedFields', displayName: string, referenceName: string, type: string }> }> | null, deletedColumns?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }>, relationships: Array<{ __typename?: 'DetailedAffectedRelationships', displayName: string, referenceName: string }>, calculatedFields: Array<{ __typename?: 'DetailedAffectedCalculatedFields', displayName: string, referenceName: string, type: string }> }> | null, modifiedColumns?: Array<{ __typename?: 'DetailedChangeTable', sourceTableName: string, displayName: string, columns: Array<{ __typename?: 'DetailedChangeColumn', sourceColumnName: string, displayName: string, type: string }>, relationships: Array<{ __typename?: 'DetailedAffectedRelationships', displayName: string, referenceName: string }>, calculatedFields: Array<{ __typename?: 'DetailedAffectedCalculatedFields', displayName: string, referenceName: string, type: string }> }> | null } };
 
 export type TriggerDataSourceDetectionMutationVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -324,6 +324,15 @@ export const SchemaChangeDocument = gql`
         displayName
         type
       }
+      relationships {
+        displayName
+        referenceName
+      }
+      calculatedFields {
+        displayName
+        referenceName
+        type
+      }
     }
     deletedColumns {
       sourceTableName
@@ -333,6 +342,15 @@ export const SchemaChangeDocument = gql`
         displayName
         type
       }
+      relationships {
+        displayName
+        referenceName
+      }
+      calculatedFields {
+        displayName
+        referenceName
+        type
+      }
     }
     modifiedColumns {
       sourceTableName
@@ -340,6 +358,15 @@ export const SchemaChangeDocument = gql`
       columns {
         sourceColumnName
         displayName
+        type
+      }
+      relationships {
+        displayName
+        referenceName
+      }
+      calculatedFields {
+        displayName
+        referenceName
         type
       }
     }

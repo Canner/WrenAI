@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Modal,
   Button,
@@ -16,6 +17,10 @@ import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import { ModalAction } from '@/hooks/useModalAction';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import {
+  DetailedChangeTable,
+  DetailedAffectedCalculatedFields,
+  DetailedAffectedRelationships,
+  NodeType,
   SchemaChange,
   SchemaChangeType,
 } from '@/apollo/client/graphql/__types__';
@@ -41,6 +46,18 @@ const StyledTable = styled(Table)`
   .ant-table {
     border: none;
     border-radius: 0;
+
+    .non-expandable {
+      .ant-table-row-expand-icon {
+        display: none;
+      }
+    }
+
+    .ant-table-expanded-row {
+      .ant-table-cell {
+        background-color: white;
+      }
+    }
   }
 `;
 
@@ -51,6 +68,34 @@ type Props = ModalAction<SchemaChange> & {
     isResolving?: boolean;
   };
 };
+
+const nestedColumns = [
+  {
+    title: 'Affected Resource',
+    dataIndex: 'resourceType',
+    width: 200,
+    render: (resourceType: NodeType) => {
+      if (resourceType === NodeType.CALCULATED_FIELD) {
+        return <Tag className="ant-tag--geekblue">Calculated Field</Tag>;
+      }
+
+      if (resourceType === NodeType.RELATION) {
+        return <Tag className="ant-tag--citrus">Relationship</Tag>;
+      }
+
+      return null;
+    },
+  },
+  {
+    title: 'Name',
+    dataIndex: 'displayName',
+  },
+];
+
+const checkIsExpandable = (record: DetailedChangeTable) =>
+  record.calculatedFields.length + record.relationships.length > 0
+    ? ''
+    : 'non-expandable';
 
 const PanelHeader = (props) => {
   const { title, count, onResolve, isResolving } = props;
@@ -95,10 +140,89 @@ const PanelHeader = (props) => {
   );
 };
 
+interface ExpandedRowsProps {
+  record: DetailedChangeTable & {
+    resources: Array<
+      DetailedAffectedCalculatedFields | DetailedAffectedRelationships
+    >;
+  };
+  tipMessage: string;
+}
+
+const ExpandedRows = ({ record, tipMessage }: ExpandedRowsProps) => {
+  if (record.resources.length === 0) return null;
+
+  return (
+    <div className="pl-12">
+      <Alert
+        showIcon
+        icon={<WarningOutlined className="orange-5" />}
+        className="gray-6 ml-2 bg-gray-1 pl-0"
+        style={{ border: 'none' }}
+        message={tipMessage}
+      />
+      <Table
+        columns={nestedColumns}
+        dataSource={record.resources || []}
+        pagination={{
+          hideOnSinglePage: true,
+          size: 'small',
+          pageSize: 10,
+        }}
+        rowKey="rowKey"
+        size="small"
+        className="adm-nested-table"
+      />
+    </div>
+  );
+};
+
 export default function SchemaChangeModal(props: Props) {
   const { visible, onClose, defaultValue: schemaChange, payload } = props;
-  const { deletedTables, deletedColumns, modifiedColumns } = schemaChange || {};
   const { onResolveSchemaChange, isResolving } = payload || {};
+
+  const { deletedTables, deletedColumns, modifiedColumns } = useMemo(() => {
+    const { deletedTables, deletedColumns, modifiedColumns } =
+      schemaChange || {};
+
+    if (!schemaChange)
+      return {
+        deletedTables,
+        deletedColumns,
+        modifiedColumns,
+      };
+
+    // transform data to render UI
+    const transformData = (tables: DetailedChangeTable) => ({
+      ...tables,
+      resources: [
+        ...tables.calculatedFields.map(
+          (
+            calculatedField: DetailedAffectedCalculatedFields,
+            index: number,
+          ) => ({
+            ...calculatedField,
+            resourceType: NodeType.CALCULATED_FIELD,
+            rowKey: `${tables.sourceTableName}-${calculatedField.referenceName}-${index}`,
+          }),
+        ),
+        ...tables.relationships.map(
+          (relationship: DetailedAffectedRelationships, index: number) => ({
+            ...relationship,
+            resourceType: NodeType.RELATION,
+            rowKey: `${tables.sourceTableName}-${relationship.referenceName}-${index}`,
+          }),
+        ),
+      ],
+      rowKey: tables.sourceTableName,
+    });
+
+    return {
+      deletedTables: deletedTables?.map(transformData),
+      deletedColumns: deletedColumns?.map(transformData),
+      modifiedColumns: modifiedColumns?.map(transformData),
+    };
+  }, [schemaChange]);
 
   const columnsOfDeleteTables = [
     { title: 'Affected model', width: 200, dataIndex: 'displayName' },
@@ -187,7 +311,7 @@ export default function SchemaChangeModal(props: Props) {
             key="deleteTables"
           >
             <StyledTable
-              rowKey={(record: any) => record.sourceTableName}
+              rowKey="rowKey"
               columns={columnsOfDeleteTables}
               dataSource={deletedTables}
               size="small"
@@ -195,6 +319,15 @@ export default function SchemaChangeModal(props: Props) {
                 hideOnSinglePage: true,
                 size: 'small',
                 pageSize: 10,
+              }}
+              rowClassName={checkIsExpandable}
+              expandable={{
+                expandedRowRender: (record: ExpandedRowsProps['record']) => (
+                  <ExpandedRows
+                    record={record}
+                    tipMessage="The following table shows resources affected by this model and will be deleted when resolving."
+                  />
+                ),
               }}
             />
           </Collapse.Panel>
@@ -214,7 +347,7 @@ export default function SchemaChangeModal(props: Props) {
             key="deleteColumns"
           >
             <StyledTable
-              rowKey={(record: any) => record.sourceTableName}
+              rowKey="rowKey"
               columns={columnsOfDeletedColumns}
               dataSource={deletedColumns}
               size="small"
@@ -222,6 +355,15 @@ export default function SchemaChangeModal(props: Props) {
                 hideOnSinglePage: true,
                 size: 'small',
                 pageSize: 10,
+              }}
+              rowClassName={checkIsExpandable}
+              expandable={{
+                expandedRowRender: (record: ExpandedRowsProps['record']) => (
+                  <ExpandedRows
+                    record={record}
+                    tipMessage="The following table shows resources affected by this column of the model and will be deleted when resolving."
+                  />
+                ),
               }}
             />
           </Collapse.Panel>
@@ -237,7 +379,7 @@ export default function SchemaChangeModal(props: Props) {
             key="modifiedColumns"
           >
             <StyledTable
-              rowKey={(record: any) => record.sourceTableName}
+              rowKey="rowKey"
               columns={columnsOfModifiedColumns}
               dataSource={modifiedColumns}
               size="small"
@@ -245,6 +387,15 @@ export default function SchemaChangeModal(props: Props) {
                 hideOnSinglePage: true,
                 size: 'small',
                 pageSize: 10,
+              }}
+              rowClassName={checkIsExpandable}
+              expandable={{
+                expandedRowRender: (record: ExpandedRowsProps['record']) => (
+                  <ExpandedRows
+                    record={record}
+                    tipMessage="The following table shows the resources utilized by this column of the model. Please review each resource and manually update the relevant ones if any changes are required."
+                  />
+                ),
               }}
             />
           </Collapse.Panel>

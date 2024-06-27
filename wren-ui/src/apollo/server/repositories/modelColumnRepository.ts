@@ -41,6 +41,10 @@ export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
     sourceColumnNames: string[],
     queryOptions?: IQueryOptions,
   ): Promise<number>;
+  deleteAllByColumnIds(
+    columnIds: number[],
+    queryOptions?: IQueryOptions,
+  ): Promise<void>;
 }
 
 export class ModelColumnRepository
@@ -113,5 +117,15 @@ export class ModelColumnRepository
       .whereIn('source_column_name', sourceColumnNames)
       .delete();
     return await builder;
+  }
+
+  public async deleteAllByColumnIds(
+    columnIds: number[],
+    queryOptions?: IQueryOptions,
+  ): Promise<void> {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    await executer<ModelColumn>(this.tableName)
+      .whereIn('id', columnIds)
+      .delete();
   }
 }

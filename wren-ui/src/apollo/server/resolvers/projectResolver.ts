@@ -22,7 +22,7 @@ import {
   getRelations,
   sampleDatasets,
 } from '@server/data';
-import { snakeCase, flatMap } from 'lodash';
+import { snakeCase, flatMap, uniqBy } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
@@ -440,33 +440,133 @@ export class ProjectResolver {
     const modelColumns =
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
 
-    // Mapping with affected models and columns data into schame change
+    const modelRelationships = await ctx.relationRepository.findRelationInfoBy({
+      modelIds,
+    });
+
+    const allCalculatedFields = modelColumns.filter(
+      (column) => column.isCalculated,
+    );
+
+    // TODO: the same logic with getAffectedResources
+    /**
+     * According to affected models and column data, we also need to find affected resources, including calculated fields and relationships.
+     *
+     * Find all affected resources include:
+     *  - columns (called "affected column")
+     *  - relationships (called "affected relationship")
+     *  - calculated fields:
+     *    - calculated fields which were affected by affected columns
+     *    - calculated fields which were affected by affected relationships
+     */
     const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
       const affecteds = flatMap(changes, (change) => {
         const affectedModel = models.find(
           (model) => model.sourceTableName === change.name,
         );
-        return affectedModel
-          ? {
-              sourceTableName: change.name,
-              displayName: affectedModel.displayName,
-              columns: flatMap(change.columns, (column) => {
-                const affectedColumn = modelColumns.find(
-                  (modelColumn) =>
-                    modelColumn.sourceColumnName === column.name &&
-                    modelColumn.modelId === affectedModel.id,
+
+        if (!affectedModel) return [];
+
+        // collect all columns and affected relationships and affected calculated fields affected by relationships
+        const affectedMaterials = change.columns.reduce(
+          (result, column) => {
+            const affectedColumn = modelColumns.find(
+              (modelColumn) =>
+                modelColumn.sourceColumnName === column.name &&
+                modelColumn.modelId === affectedModel.id,
+            );
+
+            // collect column
+            if (affectedColumn) {
+              result.columns.push({
+                sourceColumnName: column.name,
+                displayName: affectedColumn.displayName,
+                type: column.type,
+              });
+
+              // collect affected calculated fields if it's target column
+              const affectedCalculatedFieldsByColumnId =
+                allCalculatedFields.filter((calculatedField) => {
+                  const lineage = JSON.parse(calculatedField.lineage);
+                  return (
+                    lineage && lineage[lineage.length - 1] === affectedColumn.id
+                  );
+                });
+
+              result.calculatedFields.push(
+                ...affectedCalculatedFieldsByColumnId,
+              );
+
+              // collect affected relationships
+              const affectedRelationships = modelRelationships
+                .map((relationship) =>
+                  [relationship.fromColumnId, relationship.toColumnId].includes(
+                    affectedColumn.id,
+                  )
+                    ? relationship
+                    : null,
+                )
+                .filter((relationship) => !!relationship);
+
+              affectedRelationships.forEach((relationship) => {
+                const referenceName =
+                  affectedModel.referenceName === relationship.fromModelName
+                    ? relationship.toModelName
+                    : relationship.fromModelName;
+
+                const displayName = models.find(
+                  (model) => model.referenceName === referenceName,
+                )?.displayName;
+
+                result.relationships.push({
+                  displayName,
+                  referenceName,
+                });
+
+                // collect affected calculated fields if the relationship is in use
+                const affectedCalculatedFieldsByRelationshipId =
+                  allCalculatedFields.filter((calculatedField) => {
+                    const lineage = JSON.parse(calculatedField.lineage);
+
+                    // pop the column ID from the lineage
+                    lineage.pop();
+                    return lineage && lineage.includes(relationship.id);
+                  });
+
+                result.calculatedFields.push(
+                  ...affectedCalculatedFieldsByRelationshipId,
                 );
-                return affectedColumn
-                  ? {
-                      sourceColumnName: column.name,
-                      displayName: affectedColumn?.displayName,
-                      type: column.type,
-                    }
-                  : [];
-              }),
+              });
             }
-          : [];
+
+            return result;
+          },
+          {
+            columns: [],
+            relationships: [],
+            calculatedFields: [],
+          },
+        );
+
+        // unique calculated fields by id since it can be duplicated
+        const calculatedFields = uniqBy(
+          affectedMaterials.calculatedFields,
+          'id',
+        ).map((calculatedField) => ({
+          displayName: calculatedField.displayName,
+          referenceName: calculatedField.referenceName,
+          type: calculatedField.type,
+        }));
+
+        return {
+          sourceTableName: change.name,
+          displayName: affectedModel.displayName,
+          columns: affectedMaterials.columns,
+          calculatedFields,
+          relationships: affectedMaterials.relationships,
+        };
       });
+
       return affecteds.length ? affecteds : null;
     };
 
