@@ -64,7 +64,8 @@ services:
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
     env_file:
-      - ${PROJECT_DIR}/.env.ai
+      - path: ${PROJECT_DIR}/.env.ai
+        required: false
     networks:
       - wren
     depends_on:
