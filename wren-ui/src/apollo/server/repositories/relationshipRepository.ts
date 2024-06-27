@@ -56,10 +56,6 @@ export interface IRelationRepository extends IBasicRepository<Relation> {
   findExistedRelationBetweenModels(
     relation: RelationData,
   ): Promise<RelationInfo[]>;
-  deleteAllByRelationshipIds(
-    relationshipIds: number[],
-    queryOptions?: IQueryOptions,
-  ): Promise<void>;
 }
 
 export class RelationRepository
@@ -223,13 +219,5 @@ export class RelationRepository
       .select(`${this.tableName}.*`);
     const result = await query;
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
-  }
-
-  public async deleteAllByRelationshipIds(
-    relationshipIds: number[],
-    queryOptions?: IQueryOptions,
-  ) {
-    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    await executer(this.tableName).whereIn('id', relationshipIds).delete();
   }
 }

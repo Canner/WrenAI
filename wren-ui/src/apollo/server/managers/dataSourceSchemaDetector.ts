@@ -147,37 +147,21 @@ export default class DataSourceSchemaDetector
             },
           );
 
-          // delete columns and calculated fields
+          // delete calculated fields
           const affectedColumns = uniqBy(
-            [
-              ...selfModelColumnsWithCalculatedFields,
-              ...affectedMaterials.calculatedFields,
-            ],
+            affectedMaterials.calculatedFields,
             'id',
           );
 
           logger.debug(
-            `Start to remove columns and calculated fields. ${affectedColumns.map(
+            `Start to remove all affected calculated fields "${affectedColumns.map(
               (column) => `${column.displayName} (${column.referenceName})`,
-            )}.`,
+            )}".`,
           );
 
           const columnIds = affectedColumns.map((column) => column.id);
-          await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
-
-          // delete relationships
-          logger.debug(
-            `Start to remove relationships "${affectedMaterials.relationships.map(
-              (relationship) =>
-                `${relationship.displayName} (${relationship.referenceName})`,
-            )}" from model "${model.referenceName}".`,
-          );
-
-          const relationshipIds = affectedMaterials.relationships.map(
-            (relationship) => relationship.id,
-          );
-          return await this.ctx.relationRepository.deleteAllByRelationshipIds(
-            relationshipIds,
+          return await this.ctx.modelColumnRepository.deleteAllByColumnIds(
+            columnIds,
           );
         }),
       );
@@ -242,22 +226,6 @@ export default class DataSourceSchemaDetector
 
           const columnIds = affectedCalculatedFields.map((column) => column.id);
           await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
-
-          // delete relationships
-          logger.debug(
-            `Start to remove relationships "${affectedMaterials.relationships.map(
-              (relationship) =>
-                `${relationship.displayName} (${relationship.referenceName})`,
-            )}" from model "${model.referenceName}".`,
-          );
-
-          const relationshipIds = affectedMaterials.relationships.map(
-            (relationship) => relationship.id,
-          );
-
-          await this.ctx.relationRepository.deleteAllByRelationshipIds(
-            relationshipIds,
-          );
 
           // delete columns
           const affectedColumnNames = affectedColumns.map(
