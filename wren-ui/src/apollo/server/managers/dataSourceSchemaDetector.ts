@@ -137,16 +137,15 @@ export default class DataSourceSchemaDetector
           );
 
           // Get affected calculated fields and affected relationships
-          const affectedMaterials =
-            await this.getAffectedCalculatedFieldsAndRelationships(
-              model,
-              selfModelColumns,
-              {
-                models,
-                allCalculatedFields,
-                modelRelationships,
-              },
-            );
+          const affectedMaterials = await this.getAffectedResources(
+            model,
+            selfModelColumns,
+            {
+              models,
+              allCalculatedFields,
+              modelRelationships,
+            },
+          );
 
           // delete columns and calculated fields
           const affectedColumns = uniqBy(
@@ -219,16 +218,15 @@ export default class DataSourceSchemaDetector
             [],
           );
 
-          const affectedMaterials =
-            await this.getAffectedCalculatedFieldsAndRelationships(
-              model,
-              columns,
-              {
-                models,
-                allCalculatedFields,
-                modelRelationships,
-              },
-            );
+          const affectedMaterials = await this.getAffectedResources(
+            model,
+            columns,
+            {
+              models,
+              allCalculatedFields,
+              modelRelationships,
+            },
+          );
 
           // delete calculated fields
           const affectedCalculatedFields = uniqBy(
@@ -442,7 +440,7 @@ export default class DataSourceSchemaDetector
     logger.info(`Schema change "${schemaChangeTypes}" resolved successfully.`);
   }
 
-  private async getAffectedCalculatedFieldsAndRelationships(
+  private async getAffectedResources(
     model: Model,
     columns: ModelColumn[],
     {
