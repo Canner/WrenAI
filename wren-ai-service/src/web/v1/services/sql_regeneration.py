@@ -112,7 +112,7 @@ class SQLRegenerationService:
                 response=sql_regeneration_result,
             )
         except Exception as e:
-            logger.error(f"sql regeneration pipeline - OTHERS: {e}")
+            logger.exception(f"sql regeneration pipeline - OTHERS: {e}")
             self.sql_regeneration_results[
                 sql_regeneration_request.query_id
             ] = SQLRegenerationResultResponse(

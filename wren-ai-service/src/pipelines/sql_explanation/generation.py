@@ -218,7 +218,7 @@ class GenerationPostProcessor:
                     for sorting in sql_explanation_results["sortings"]
                 ]
         except Exception as e:
-            logger.error(f"Error in GenerationPostProcessor: {e}")
+            logger.exception(f"Error in GenerationPostProcessor: {e}")
 
         return {"results": results}
 
