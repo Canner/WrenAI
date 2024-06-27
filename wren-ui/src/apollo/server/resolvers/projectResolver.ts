@@ -470,8 +470,9 @@ export class ProjectResolver {
       columnIds: modelColumns.map((column) => column.id),
     });
 
-    const allCalculatedFields =
-      await ctx.modelColumnRepository.findAllCalculatedFields();
+    const allCalculatedFields = modelColumns.filter(
+      (column) => column.isCalculated,
+    );
 
     // Not only Mapping with affected models and columns data,
     // But also finding out affected relationships and affected calculated fields into schema change
@@ -640,7 +641,6 @@ export class ProjectResolver {
       ctx,
       projectId: project.id,
     });
-    await schemaDetector.detectSchemaChange();
     await schemaDetector.resolveSchemaChange(type);
     return true;
   }

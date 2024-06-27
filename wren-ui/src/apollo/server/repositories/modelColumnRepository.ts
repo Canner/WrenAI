@@ -41,7 +41,6 @@ export interface IModelColumnRepository extends IBasicRepository<ModelColumn> {
     sourceColumnNames: string[],
     queryOptions?: IQueryOptions,
   ): Promise<number>;
-  findAllCalculatedFields(queryOptions?: IQueryOptions): Promise<ModelColumn[]>;
   deleteAllByColumnIds(
     columnIds: number[],
     queryOptions?: IQueryOptions,
@@ -118,16 +117,6 @@ export class ModelColumnRepository
       .whereIn('source_column_name', sourceColumnNames)
       .delete();
     return await builder;
-  }
-
-  public async findAllCalculatedFields(
-    queryOptions?: IQueryOptions,
-  ): Promise<ModelColumn[]> {
-    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const result = await executer<ModelColumn>('model_column')
-      .where('is_calculated', true)
-      .select('*');
-    return result.map((r) => this.transformFromDBData(r));
   }
 
   public async deleteAllByColumnIds(

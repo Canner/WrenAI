@@ -105,17 +105,20 @@ export default class DataSourceSchemaDetector
       projectId: this.projectId,
     });
 
+    const modelColumns =
+      await this.ctx.modelColumnRepository.findColumnsByModelIds(
+        models.map((model) => model.id),
+      );
+
     const affectedModels = models.filter(
       (model) =>
         changes.findIndex((table) => table.name === model.sourceTableName) !==
         -1,
     );
-    const allCalculatedFields =
-      await this.ctx.modelColumnRepository.findAllCalculatedFields();
 
-    const modelIds = affectedModels.map((model) => model.id);
-    const modelColumns =
-      await this.ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+    const allCalculatedFields = modelColumns.filter(
+      (column) => column.isCalculated,
+    );
 
     const modelRelationships =
       await this.ctx.relationRepository.findRelationInfoBy({
