@@ -63,12 +63,13 @@ def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider, Engine]:
     logger.info("Initializing providers...")
     loader.import_mods()
 
-    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai"))
+    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai"))()
     document_store_provider = loader.get_provider(
         os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
-    )
-    engine = loader.get_provider(os.getenv("ENGINE", "wren-ui"))
-    return llm_provider(), document_store_provider(), engine()
+    )()
+    engine = loader.get_provider(os.getenv("ENGINE", "wren-ui"))()
+
+    return llm_provider, document_store_provider, engine
 
 
 def timer(func):

@@ -38,6 +38,13 @@ def init_globals():
 
     llm_provider, document_store_provider, engine = init_providers()
 
+    # Recreate the document store to ensure a clean slate
+    # TODO: for SaaS, we need to use a flag to prevent this collection_recreation
+    document_store_provider.get_store(recreate_index=True)
+    document_store_provider.get_store(
+        dataset_name="view_questions", recreate_index=True
+    )
+
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
             "generate_description": description.Generation(

@@ -193,7 +193,7 @@ class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
 
 @provider("qdrant")
 class QdrantProvider(DocumentStoreProvider):
-    def __init__(self, location: str = os.getenv("QDRANT_HOST")):
+    def __init__(self, location: str = os.getenv("QDRANT_HOST", "qdrant")):
         self._location = location
 
     def get_store(
@@ -203,7 +203,7 @@ class QdrantProvider(DocumentStoreProvider):
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
         )
-        or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "opeani")),
+        or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "openai")),
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):
@@ -212,7 +212,6 @@ class QdrantProvider(DocumentStoreProvider):
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,
-            # hnsw_config={"ef_construct": 200, "m": 32},  # https://qdrant.tech/documentation/concepts/indexing/#vector-index
         )
 
     def get_retriever(

@@ -92,7 +92,7 @@ def test_indexing_pipeline(
     assert document_store_provider.get_store().count_documents() == 3
     assert (
         document_store_provider.get_store(
-            dataset_name="view_questions"
+            dataset_name="view_questions",
         ).count_documents()
         == 1
     )
