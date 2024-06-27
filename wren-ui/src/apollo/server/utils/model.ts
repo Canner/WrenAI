@@ -1,6 +1,6 @@
 import { IModelColumnRepository, ModelColumn } from '@server/repositories';
 import { replaceAllowableSyntax } from './regex';
-import { CompactTable } from '@server/services/metadataService';
+import { CompactColumn } from '@server/services/metadataService';
 
 export function transformInvalidColumnName(columnName: string) {
   let referenceName = replaceAllowableSyntax(columnName);
@@ -20,7 +20,7 @@ export function replaceInvalidReferenceName(referenceName: string) {
 export function findColumnsToUpdate(
   columns: string[],
   existingColumns: ModelColumn[],
-  sourceTableColumns: CompactTable[],
+  sourceTableColumns: CompactColumn[],
 ): {
   toDeleteColumnIds: number[];
   toCreateColumns: string[];
