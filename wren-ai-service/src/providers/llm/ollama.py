@@ -19,7 +19,7 @@ from src.providers.loader import provider
 logger = logging.getLogger("wren-ai-service")
 
 OLLAMA_URL = "http://localhost:11434"
-GENERATION_MODEL_NAME = "llama3:8b"
+GENERATION_MODEL_NAME = "llama3:70b"
 GENERATION_MODEL_KWARGS = {
     "temperature": 0,
 }
