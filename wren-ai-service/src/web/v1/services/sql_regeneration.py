@@ -4,6 +4,8 @@ from typing import List, Literal, Optional
 from haystack import Pipeline
 from pydantic import BaseModel
 
+from src.utils import async_timer
+
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -78,7 +80,8 @@ class SQLRegenerationService:
         self._pipelines = pipelines
         self.sql_regeneration_results: dict[str, SQLRegenerationResultResponse] = {}
 
-    def sql_regeneration(
+    @async_timer
+    async def sql_regeneration(
         self,
         sql_regeneration_request: SQLRegenerationRequest,
     ):
@@ -93,7 +96,7 @@ class SQLRegenerationService:
                 status="generating",
             )
 
-            generation_result = self._pipelines["generation"].run(
+            generation_result = await self._pipelines["generation"].run(
                 description=sql_regeneration_request.description,
                 steps=sql_regeneration_request.steps,
             )

@@ -4,6 +4,8 @@ from typing import Dict, List, Literal, Optional
 from haystack import Pipeline
 from pydantic import BaseModel
 
+from src.utils import async_timer
+
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -45,7 +47,8 @@ class SQLExplanationService:
         self._pipelines = pipelines
         self.sql_explanation_results: dict[str, SQLExplanationResultResponse] = {}
 
-    def sql_explanation(self, sql_explanation_request: SQLExplanationRequest):
+    @async_timer
+    async def sql_explanation(self, sql_explanation_request: SQLExplanationRequest):
         try:
             query_id = sql_explanation_request.query_id
 
@@ -57,7 +60,7 @@ class SQLExplanationService:
                 status="generating",
             )
 
-            generation_result = self._pipelines["generation"].run(
+            generation_result = await self._pipelines["generation"].run(
                 question=sql_explanation_request.question,
                 sql=sql_explanation_request.sql,
                 sql_summary=sql_explanation_request.sql_summary,
