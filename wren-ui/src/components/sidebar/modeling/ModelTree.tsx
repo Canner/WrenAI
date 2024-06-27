@@ -24,6 +24,7 @@ import {
   useTriggerDataSourceDetectionMutation,
 } from '@/apollo/client/graphql/dataSource.generated';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
+import { LIST_MODELS } from '@/apollo/client/graphql/model';
 
 dayJs.extend(utc);
 dayJs.extend(relativeTime);
@@ -75,7 +76,7 @@ export default function ModelTree(props: Props) {
           schemaChangeModal.closeModal();
         }
       },
-      refetchQueries: [{ query: DIAGRAM }],
+      refetchQueries: [{ query: DIAGRAM }, { query: LIST_MODELS }],
     });
   const { data: schemaChangeData, refetch: refetchSchemaChange } =
     useSchemaChangeQuery({
