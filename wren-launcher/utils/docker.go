@@ -24,7 +24,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION    string = "0.5.0"
+	WREN_PRODUCT_VERSION    string = "0.6.0-rc.1"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 
@@ -36,7 +36,7 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	// rplace PROJECT_DIR
 	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
 	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
-	
+
 	// replace OPENAI_API_KEY
 	reg = regexp.MustCompile(`OPENAI_API_KEY=sk-(.*)`)
 	str = reg.ReplaceAllString(content, "OPENAI_API_KEY="+openaiApiKey)
