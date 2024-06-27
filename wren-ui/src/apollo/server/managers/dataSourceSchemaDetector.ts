@@ -129,14 +129,10 @@ export default class DataSourceSchemaDetector
     if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
       await Promise.all(
         affectedModels.map(async (model) => {
-          const affectedColumns = changes.find(
-            (table) => table.name === model.sourceTableName,
-          ).columns;
-
-          // Get affected calculated fields and affected relationships
+          // Get affected columns and calculated fields and affected relationships
           const affectedMaterials = await this.getAffectedResources(
             model,
-            affectedColumns,
+            changes,
             {
               models,
               modelColumns,
@@ -181,13 +177,10 @@ export default class DataSourceSchemaDetector
     if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
       await Promise.all(
         affectedModels.map(async (model) => {
-          const affectedColumns = changes.find(
-            (table) => table.name === model.sourceTableName,
-          ).columns;
-
+          // Get affected columns and calculated fields and affected relationships
           const affectedMaterials = await this.getAffectedResources(
             model,
-            affectedColumns,
+            changes,
             {
               models,
               modelColumns,
@@ -212,8 +205,8 @@ export default class DataSourceSchemaDetector
           await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
 
           // delete columns
-          const affectedColumnNames = affectedColumns.map(
-            (column) => column.name,
+          const affectedColumnNames = affectedMaterials.columns.map(
+            (column) => column.sourceColumnName,
           );
 
           logger.debug(
@@ -394,7 +387,7 @@ export default class DataSourceSchemaDetector
 
   private async getAffectedResources(
     model: Model,
-    affectedColumns: DataSourceSchema['columns'],
+    changes: DataSourceSchema[],
     {
       models,
       modelColumns,
@@ -407,6 +400,11 @@ export default class DataSourceSchemaDetector
       modelRelationships: RelationInfo[];
     },
   ): Promise<{
+    columns: Array<{
+      sourceColumnName: string;
+      displayName: string;
+      type: string;
+    }>;
     relationships: Array<{
       id: number;
       displayName: string;
@@ -414,25 +412,29 @@ export default class DataSourceSchemaDetector
     }>;
     calculatedFields: ModelColumn[];
   }> {
-    const columns: ModelColumn[] = affectedColumns.reduce((result, column) => {
-      const affectedColumn = modelColumns.find(
-        (modelColumn) =>
-          modelColumn.sourceColumnName === column.name &&
-          modelColumn.modelId === model.id,
-      );
-      if (affectedColumn) {
-        result.push(affectedColumn);
-      }
-      return result;
-    }, []);
+    const affectedColumns = changes.find(
+      (table) => table.name === model.sourceTableName,
+    ).columns;
 
-    return columns.reduce(
+    return affectedColumns.reduce(
       (result, column) => {
+        const affectedColumn = modelColumns.find(
+          (modelColumn) =>
+            modelColumn.sourceColumnName === column.name &&
+            modelColumn.modelId === model.id,
+        );
+
+        result.columns.push({
+          sourceColumnName: column.name,
+          displayName: affectedColumn.displayName,
+          type: column.type,
+        });
+
         // collect affected calculated fields if it's target column
         const affectedCalculatedFieldsByColumnId = allCalculatedFields.filter(
           (calculatedField) => {
             const lineage = JSON.parse(calculatedField.lineage);
-            return lineage && lineage[lineage.length - 1] === column.id;
+            return lineage && lineage[lineage.length - 1] === affectedColumn.id;
           },
         );
 
@@ -442,7 +444,7 @@ export default class DataSourceSchemaDetector
         const affectedRelationships = modelRelationships
           .map((relationship) =>
             [relationship.fromColumnId, relationship.toColumnId].includes(
-              column.id,
+              affectedColumn.id,
             )
               ? relationship
               : null,
@@ -482,10 +484,7 @@ export default class DataSourceSchemaDetector
 
         return result;
       },
-      {
-        relationships: [],
-        calculatedFields: [],
-      },
+      { columns: [], relationships: [], calculatedFields: [] },
     );
   }
 }
