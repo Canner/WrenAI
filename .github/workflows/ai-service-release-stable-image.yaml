@@ -59,11 +59,19 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push image
-        run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --tag ghcr.io/canner/wren-ai-service:${{ github.event.inputs.version }} \
-            --tag ghcr.io/canner/wren-ai-service:latest \
-            --file ./docker/Dockerfile \
-            --push .
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/canner/wren-ai-service
+          tags: |
+            type=raw,${{ github.event.inputs.version }}
+            type=raw,latest
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          context: ./wren-ai-service
+          file: ./wren-ai-service/docker/Dockerfile
