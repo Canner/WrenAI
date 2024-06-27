@@ -58,7 +58,6 @@ services:
       WREN_UI_ENDPOINT: http://wren-ui:${WREN_UI_PORT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GENERATION_MODEL: ${GENERATION_MODEL}
-      QDRANT_HOST: qdrant
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
       LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
       # sometimes the console won't show print messages,
