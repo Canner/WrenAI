@@ -481,10 +481,8 @@ export class ProjectResolver {
      *  - columns (called "affected column")
      *  - relationships (called "affected relationship")
      *  - calculated fields:
-     *    - calculated fields of a model
-     *    - calculated fields affected by relationships
-     *    - calculated fields affected by used columns
-     *
+     *    - calculated fields which were affected by affected columns
+     *    - calculated fields which were affected by affected relationships
      */
     const mappingAffectedToSchemaChange = (changes: DataSourceSchema[]) => {
       const affecteds = flatMap(changes, (change) => {
