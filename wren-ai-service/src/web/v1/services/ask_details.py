@@ -123,7 +123,7 @@ class AskDetailsService:
         if (
             result := self._ask_details_results.get(ask_details_result_request.query_id)
         ) is None:
-            logger.error(
+            logger.exception(
                 f"ask-details pipeline - OTHERS: {ask_details_result_request.query_id} is not found"
             )
             return AskDetailsResultResponse(
