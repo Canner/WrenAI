@@ -22,5 +22,10 @@ Path structure as following:
 1. copy `.env.example` to `.env.local` and modify the OpenAI API key.
 2. (optional) copy `.env.ai.example` to `.env.ai` and fill in necessary information if you would like to use custom LLM.
 3. (optional) if your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.example`.
-4. start all services: `docker-compose --env-file .env.local up -d`
-5. stop all services: `docker-compose --env-file .env.local down`
+
+If you would like to start with **custom LLM**, please jump to the step 6.
+4. start all services(with OpenAI): `docker-compose --env-file .env.local up -d`
+5. stop all services(with OpenAI): `docker-compose --env-file .env.local down`
+
+6. start all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env.local up -d`
+7. start all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env.local up -d`

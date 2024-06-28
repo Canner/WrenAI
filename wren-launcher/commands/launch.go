@@ -125,24 +125,6 @@ func isEnvFileValidForCustomLLM(projectDir string) error {
 	return nil
 }
 
-func renameEnvFileForCustomLLM(projectDir string) error {
-	// rename .env.ai file to .env.ai.old
-	envFilePath := path.Join(projectDir, ".env.ai")
-
-	if _, err := os.Stat(envFilePath); err == nil {
-		newEnvFilePath := path.Join(projectDir, ".env.ai.old")
-		renameErr := os.Rename(envFilePath, newEnvFilePath)
-		if renameErr != nil {
-			return renameErr
-		}
-	
-		return nil
-	}
-
-	return nil
-}
-
-
 func Launch() {
 	// recover from panic
 	defer func() {
@@ -168,11 +150,6 @@ func Launch() {
 	openaiApiKey := ""
 	openaiGenerationModel := ""
 	if llmProvider == "OpenAI" {
-		err = renameEnvFileForCustomLLM(projectDir)
-		if err != nil {
-			panic(err)
-		}
-
 		// ask for OpenAI API key
 		pterm.Print("\n")
 		openaiApiKey, _ = askForAPIKey()
