@@ -160,12 +160,12 @@ export class ModelResolver {
 
   public async deploy(
     _root: any,
-    _args: any,
+    args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
     const { id } = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, id);
+    return await ctx.deployService.deploy(manifest, id, args.force);
   }
 
   public async getMDL(_root: any, args: { hash: string }, ctx: IContext) {

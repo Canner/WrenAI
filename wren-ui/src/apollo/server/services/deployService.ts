@@ -29,7 +29,11 @@ export interface MDLSyncResponse {
 }
 
 export interface IDeployService {
-  deploy(manifest: Manifest, projectId: number): Promise<DeployResponse>;
+  deploy(
+    manifest: Manifest,
+    projectId: number,
+    force?: boolean,
+  ): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<Deploy>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest, projectId: number): string;
@@ -75,20 +79,21 @@ export class DeployService implements IDeployService {
     );
   }
 
-  public async deploy(manifest, projectId) {
+  public async deploy(manifest, projectId, force = false) {
     // generate hash of manifest
     const hash = this.createMDLHash(manifest, projectId);
     logger.debug(`Deploying model, hash: ${hash}`);
     logger.debug(JSON.stringify(manifest));
 
-    // check if the model current deployment
-    const lastDeploy =
-      await this.deployLogRepository.findLastProjectDeployLog(projectId);
-    if (lastDeploy && lastDeploy.hash === hash) {
-      logger.log(`Model has been deployed, hash: ${hash}`);
-      return { status: DeployStatusEnum.SUCCESS };
+    if (!force) {
+      // check if the model current deployment
+      const lastDeploy =
+        await this.deployLogRepository.findLastProjectDeployLog(projectId);
+      if (lastDeploy && lastDeploy.hash === hash) {
+        logger.log(`Model has been deployed, hash: ${hash}`);
+        return { status: DeployStatusEnum.SUCCESS };
+      }
     }
-
     const deployData = {
       manifest,
       hash,
