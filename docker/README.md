@@ -26,7 +26,7 @@ Path structure as following:
 ## How to start with custom LLM
 1. copy `.env.example` to `.env` and modify the OpenAI API key.
 2. copy `.env.ai.example` to `.env.ai` and fill in necessary information if you would like to use custom LLM.
-3. start all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env up -d`.
-4. stop all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env down`.
+3. start all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env --env-file .env.ai up -d`.
+4. stop all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env --env-file .env.ai down`.
 
 >Note: If your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.example`.
