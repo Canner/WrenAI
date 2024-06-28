@@ -24,9 +24,10 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION    string = "0.6.0-rc.1"
-	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
+	WREN_PRODUCT_VERSION        string = "0.6.0-rc.1"
+	DOCKER_COMPOSE_YAML_URL     string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
+	DOCKER_COMPOSE_LLM_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.llm.yaml"
+	DOCKER_COMPOSE_ENV_URL      string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 
 	// pg user
 	PG_USERNAME string = "wren-user"
@@ -166,6 +167,14 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		return err
 	}
 
+	// download docker-compose.llm.yaml file
+	composeLLMFile := path.Join(projectDir, "docker-compose.llm.yaml")
+	pterm.Info.Println("Downloading docker-compose.llm file to", composeLLMFile)
+	err = downloadFile(composeLLMFile, DOCKER_COMPOSE_LLM_YAML_URL)
+	if err != nil {
+		return err
+	}
+
 	pg_pwd, err := getPGPassword(WrenRC{projectDir})
 	if err != nil {
 		return err
@@ -227,10 +236,13 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 	composeFilePath := path.Join(projectDir, "docker-compose.yaml")
 	envFile := path.Join(projectDir, ".env")
 	envFiles := []string{envFile}
+	configPaths := []string{composeFilePath}
 
 	if llmProvider == "Custom" {
 		customEnvFile := path.Join(projectDir, ".env.ai")
+		llmComposeFile := path.Join(projectDir, "docker-compose.llm.yaml")
 		envFiles = append(envFiles, customEnvFile)
+		configPaths = append(configPaths, llmComposeFile)
 	}
 
 	// docker-compose up
@@ -256,7 +268,7 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 	// Create a default project options struct
 	projectOptions := cmdCompose.ProjectOptions{
 		ProjectName: projectName,
-		ConfigPaths: []string{composeFilePath},
+		ConfigPaths: configPaths,
 		WorkDir:     projectDir,
 		EnvFiles:    envFiles,
 	}
