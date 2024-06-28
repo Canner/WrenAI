@@ -2,3 +2,4 @@ services:
   wren-ai-service:
     env_file:
       - path: ${PROJECT_DIR}/.env.ai
+        required: true
