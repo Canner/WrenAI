@@ -44,6 +44,10 @@ def init_globals():
     document_store_provider.get_store(
         dataset_name="view_questions", recreate_index=True
     )
+    # we automatically deploy the mdl model here
+    # in case the model is also not deployed in wren-ui, the error wil be thrown(but it doesn't matter)
+    if engine.name == "wren-ui":
+        engine.force_deploy()
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
