@@ -150,54 +150,29 @@ export default class DataSourceSchemaDetector
       modelRelationships,
     });
 
-    // Handle resolve deleted tables
-    if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
-      await Promise.all(
-        affectedResources.map(async (resource) => {
-          logger.debug(
-            `Start to remove all affected calculated fields "${resource.calculatedFields.map(
-              (column) => `${column.displayName} (${column.referenceName})`,
-            )}".`,
-          );
+    /**
+     * Handle resolve scheme change for DELETED_TABLES / DELETED_COLUMNS
+     *  1. Remove all affected calculated fields
+     *  2. Remove all affected columns if DELETED_COLUMNS
+     *  3. Remove all affected tables if DELETED_TABLES
+     *
+     *  Considering that we have set up foreign keys, some data will be automatically deleted in cascade,
+     *  so there is no need to perform additional deletions. (E.g., relationships, model's column)
+     */
+    await Promise.all(
+      affectedResources.map(async (resource) => {
+        // both DELETED_TABLES and DELETED_COLUMNS need to remove all affected calculated fields
+        logger.debug(
+          `Start to remove all affected calculated fields "${resource.calculatedFields.map(
+            (column) => `${column.displayName} (${column.referenceName})`,
+          )}".`,
+        );
 
-          const columnIds = resource.calculatedFields.map(
-            (column) => column.id,
-          );
-          return await this.ctx.modelColumnRepository.deleteAllByColumnIds(
-            columnIds,
-          );
-        }),
-      );
+        const columnIds = resource.calculatedFields.map((column) => column.id);
+        await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
 
-      // delete models
-      const affectedTableNames = changes.map((table) => table.name);
-      logger.debug(
-        `Start to remove tables "${affectedTableNames}" from models.`,
-      );
-      await this.ctx.modelRepository.deleteAllBySourceTableNames(
-        affectedTableNames,
-      );
-      await this.updateResolveToSchemaChange(lastSchemaChange, [
-        schemaChangeType,
-      ]);
-    }
-
-    // Handle resolve deleted table columns
-    if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
-      await Promise.all(
-        affectedResources.map(async (resource) => {
-          logger.debug(
-            `Start to remove all affected calculated fields "${resource.calculatedFields.map(
-              (column) => `${column.displayName} (${column.referenceName})`,
-            )}".`,
-          );
-
-          const columnIds = resource.calculatedFields.map(
-            (column) => column.id,
-          );
-          await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
-
-          // delete columns
+        // remove columns if SchemaChangeType is DELETED_COLUMNS
+        if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
           const affectedColumnNames = resource.columns.map(
             (column) => column.sourceColumnName,
           );
@@ -206,16 +181,33 @@ export default class DataSourceSchemaDetector
             `Start to remove columns "${affectedColumnNames}" from model "${resource.referenceName}".`,
           );
 
-          return await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
+          await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
             resource.modelId,
             affectedColumnNames,
           );
-        }),
+        }
+        return;
+      }),
+    );
+
+    // remove tables if SchemaChangeType is DELETED_TABLES
+    if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
+      // delete models
+      const affectedTableNames = changes.map((table) => table.name);
+
+      logger.debug(
+        `Start to remove tables "${affectedTableNames}" from models.`,
       );
-      await this.updateResolveToSchemaChange(lastSchemaChange, [
-        schemaChangeType,
-      ]);
+
+      await this.ctx.modelRepository.deleteAllBySourceTableNames(
+        affectedTableNames,
+      );
     }
+
+    // update resolve flag
+    await this.updateResolveToSchemaChange(lastSchemaChange, [
+      schemaChangeType,
+    ]);
   }
 
   /**
