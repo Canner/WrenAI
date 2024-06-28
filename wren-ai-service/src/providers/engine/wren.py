@@ -15,7 +15,6 @@ logger = logging.getLogger("wren-ai-service")
 class WrenUI(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_UI_ENDPOINT")):
         self._endpoint = endpoint
-        self.name = "wren-ui"
 
     async def dry_run_sql(
         self,
@@ -58,7 +57,6 @@ class WrenUI(Engine):
 class WrenIbis(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_IBIS_ENDPOINT")):
         self._endpoint = endpoint
-        self.name = "wren-ibis"
 
     async def dry_run_sql(
         self,

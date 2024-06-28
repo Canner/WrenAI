@@ -25,7 +25,7 @@ setup_custom_logger(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-    await container.init_globals()
+    container.init_globals()
 
     yield
 
