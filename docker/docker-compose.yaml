@@ -63,7 +63,9 @@ services:
       PYTHONUNBUFFERED: 1
     env_file:
       - path: ${PROJECT_DIR}/.env.local
-        required: true
+        required: false
+      - path: ${PROJECT_DIR}/.env
+        required: false
     networks:
       - wren
     depends_on:
