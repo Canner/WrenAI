@@ -62,10 +62,7 @@ services:
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
     env_file:
-      - path: ${PROJECT_DIR}/.env.local
-        required: false
       - path: ${PROJECT_DIR}/.env
-        required: false
     networks:
       - wren
     depends_on:

@@ -19,14 +19,14 @@ Path structure as following:
 * Check out [Network drivers overview](https://docs.docker.com/network/drivers/) to learn more about `bridge` network driver.
 
 ## How to start with OpenAI
-1. copy `.env.example` to `.env.local` and modify the OpenAI API key.
-2. start all services: `docker-compose --env-file .env.local up -d`.
-3. stop all services: `docker-compose --env-file .env.local down`.
+1. copy `.env.example` to `.env` and modify the OpenAI API key.
+2. start all services: `docker-compose --env-file .env up -d`.
+3. stop all services: `docker-compose --env-file .env down`.
 
 ## How to start with custom LLM
-1. copy `.env.example` to `.env.local` and modify the OpenAI API key.
+1. copy `.env.example` to `.env` and modify the OpenAI API key.
 2. copy `.env.ai.example` to `.env.ai` and fill in necessary information if you would like to use custom LLM.
-3. start all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env.local up -d`.
-4. stop all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env.local down`.
+3. start all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env up -d`.
+4. stop all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env down`.
 
 >Note: If your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.example`.
