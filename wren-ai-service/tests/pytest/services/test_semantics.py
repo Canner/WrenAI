@@ -9,12 +9,13 @@ from src.web.v1.services.semantics import (
 
 @pytest.fixture
 def semantics_service():
-    llm_provider, document_store_provider, _ = init_providers()
+    llm_provider, embedder_provider, document_store_provider, _ = init_providers()
 
     return SemanticsService(
         pipelines={
             "generate_description": description.Generation(
                 llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
         }

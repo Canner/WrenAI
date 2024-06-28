@@ -6,7 +6,7 @@ from src.utils import init_providers
 
 
 def _mock_store(name: str = "default") -> DocumentStore:
-    _, document_store_provider, _ = init_providers()
+    _, _, document_store_provider, _ = init_providers()
     store = document_store_provider.get_store(
         embedding_model_dim=5,
         dataset_name=name,

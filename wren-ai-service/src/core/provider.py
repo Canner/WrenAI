@@ -8,6 +8,8 @@ class LLMProvider(metaclass=ABCMeta):
     def get_generator(self, *args, **kwargs):
         ...
 
+
+class EmbedderProvider(metaclass=ABCMeta):
     @abstractmethod
     def get_text_embedder(self, *args, **kwargs):
         ...

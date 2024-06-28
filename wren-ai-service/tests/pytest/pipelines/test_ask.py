@@ -4,7 +4,7 @@ import orjson
 import pytest
 
 from src.core.pipeline import async_validate
-from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.ask.followup_generation import FollowUpGeneration
 from src.pipelines.ask.generation import Generation
 from src.pipelines.ask.query_understanding import QueryUnderstanding
@@ -27,24 +27,31 @@ def mdl_str():
 
 @pytest.fixture
 def llm_provider():
-    llm_provider, _, _ = init_providers()
+    llm_provider, _, _, _ = init_providers()
 
     return llm_provider
 
 
 @pytest.fixture
+def embedder_provider():
+    _, embedder_provider, _, _ = init_providers()
+
+    return embedder_provider
+
+
+@pytest.fixture
 def document_store_provider():
-    _, document_store_provider, _ = init_providers()
+    _, _, document_store_provider, _ = init_providers()
 
     return document_store_provider
 
 
 def test_clear_documents(mdl_str: str):
-    llm_provider, document_store_provider, _ = init_providers()
+    _, embedder_provider, document_store_provider, _ = init_providers()
     store = document_store_provider.get_store()
 
     indexing_pipeline = Indexing(
-        llm_provider=llm_provider,
+        embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,
     )
 
@@ -79,11 +86,11 @@ def test_clear_documents(mdl_str: str):
 
 def test_indexing_pipeline(
     mdl_str: str,
-    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
 ):
     indexing_pipeline = Indexing(
-        llm_provider=llm_provider,
+        embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,
     )
 
@@ -99,7 +106,7 @@ def test_indexing_pipeline(
 
 
 def test_query_understanding_pipeline():
-    llm_provider, _, _ = init_providers()
+    llm_provider, _, _, _ = init_providers()
     pipeline = QueryUnderstanding(llm_provider=llm_provider)
 
     assert async_validate(lambda: pipeline.run("How many books are there?"))[
@@ -111,11 +118,11 @@ def test_query_understanding_pipeline():
 
 
 def test_retrieval_pipeline(
-    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
 ):
     retrieval_pipeline = Retrieval(
-        llm_provider=llm_provider,
+        embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,
     )
 
@@ -132,7 +139,7 @@ def test_retrieval_pipeline(
 
 
 def test_generation_pipeline():
-    llm_provider, _, engine = init_providers()
+    llm_provider, _, _, engine = init_providers()
     generation_pipeline = Generation(llm_provider=llm_provider, engine=engine)
     generation_result = async_validate(
         lambda: generation_pipeline.run(
@@ -159,7 +166,7 @@ def test_generation_pipeline():
 
 
 def test_followup_generation_pipeline():
-    llm_provider, _, engine = init_providers()
+    llm_provider, _, _, engine = init_providers()
     generation_pipeline = FollowUpGeneration(llm_provider=llm_provider, engine=engine)
     generation_result = async_validate(
         lambda: generation_pipeline.run(
@@ -185,7 +192,7 @@ def test_followup_generation_pipeline():
 
 
 def test_sql_correction_pipeline():
-    llm_provider, _, engine = init_providers()
+    llm_provider, _, _, engine = init_providers()
     sql_correction_pipeline = SQLCorrection(llm_provider=llm_provider, engine=engine)
 
     sql_correction_result = async_validate(

@@ -21,17 +21,6 @@ force_deploy:
 	done; \
 	echo "wren-ai-service is up and running" && \
 	poetry run python src/force_deploy.py
-
-build:
-	docker compose -f docker/docker-compose.yaml --env-file .env.prod build
-
-up:
-	make dev-up
-	docker compose -f docker/docker-compose.yaml --env-file .env.prod up -d
-
-down:
-	make dev-down
-	docker compose -f docker/docker-compose.yaml --env-file .env.prod down
 ## wren-ai-service related ##
 
 

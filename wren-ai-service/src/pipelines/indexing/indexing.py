@@ -15,7 +15,7 @@ from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline, async_validate
-from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.utils import async_timer, init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -376,7 +376,9 @@ def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
 
 class Indexing(BasicPipeline):
     def __init__(
-        self, llm_provider: LLMProvider, document_store_provider: DocumentStoreProvider
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
     ) -> None:
         ddl_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")
@@ -385,13 +387,13 @@ class Indexing(BasicPipeline):
         self.validator = MDLValidator()
 
         self.ddl_converter = DDLConverter()
-        self.ddl_embedder = llm_provider.get_document_embedder()
+        self.ddl_embedder = embedder_provider.get_document_embedder()
         self.ddl_writer = DocumentWriter(
             document_store=ddl_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
         self.view_converter = ViewConverter()
-        self.view_embedder = llm_provider.get_document_embedder()
+        self.view_embedder = embedder_provider.get_document_embedder()
         self.view_writer = DocumentWriter(
             document_store=view_store,
             policy=DuplicatePolicy.OVERWRITE,
@@ -447,10 +449,11 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
-    llm_provider, document_store_provider, _ = init_providers()
+    _, embedder_provider, document_store_provider, _ = init_providers()
 
     pipeline = Indexing(
-        llm_provider=llm_provider, document_store_provider=document_store_provider
+        embedder_provider=embedder_provider,
+        document_store_provider=document_store_provider,
     )
 
     input = '{"models": [], "views": [], "relationships": [], "metrics": []}'
