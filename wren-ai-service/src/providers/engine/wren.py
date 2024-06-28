@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 import orjson
-import requests
 
 from src.core.engine import Engine, add_quotes, remove_limit_statement
 from src.providers.loader import provider
@@ -42,17 +41,17 @@ class WrenUI(Engine):
                 return True, None
             return False, res.get("errors", [{}])[0].get("message", "Unknown error")
 
-    def force_deploy(self):
-        response = requests.post(
-            f"{self._endpoint}/api/graphql",
-            json={
-                "query": "mutation Deploy($force: Boolean) { deploy(force: $force) }",
-                "variables": {
-                    "force": True,
+    async def force_deploy(self):
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self._endpoint}/api/graphql",
+                json={
+                    "query": "mutation Deploy($force: Boolean) { deploy(force: $force) }",
+                    "variables": {"force": True},
                 },
-            },
-        )
-        logger.info(f"Forcing deployment: {response.json()}")
+            ) as response:
+                res = await response.json()
+                logger.info(f"Forcing deployment: {res}")
 
 
 @provider("wren-ibis")

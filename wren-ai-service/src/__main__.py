@@ -25,7 +25,11 @@ setup_custom_logger(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-    container.init_globals()
+    engine = container.init_globals()
+    # we automatically deploy the mdl model here
+    # in case the model is also not deployed in wren-ui, the error wil be thrown(but it doesn't matter)
+    if engine.name == "wren-ui":
+        await engine.force_deploy()
 
     yield
 
