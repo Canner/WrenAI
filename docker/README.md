@@ -29,4 +29,4 @@ Path structure as following:
 3. start all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env.local --env-file .env.ai up -d`.
 4. stop all services(with custom LLM): `docker-compose -f docker-compose.yaml -f docker-compose.llm.yaml --env-file .env.local --env-file .env.ai down`.
 
->Note: If your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.example`.
+>Note: If your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.local`.
