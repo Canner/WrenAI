@@ -33,7 +33,7 @@ ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
 
 
-def init_globals():
+async def init_globals():
     global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
 
     llm_provider, document_store_provider, engine = init_providers()
@@ -44,6 +44,10 @@ def init_globals():
     document_store_provider.get_store(
         dataset_name="view_questions", recreate_index=True
     )
+    # we automatically deploy the mdl model here
+    # in case the model is also not deployed in wren-ui, the error wil be thrown(but it doesn't matter)
+    if engine.name == "wren-ui":
+        await engine.force_deploy()
 
     SEMANTIC_SERVICE = SemanticsService(
         pipelines={
@@ -94,5 +98,3 @@ def init_globals():
             ),
         },
     )
-
-    return engine
