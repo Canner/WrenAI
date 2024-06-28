@@ -34,9 +34,7 @@ EMBEDDING_MODEL_DIMENSION = 3072
 class AsyncGenerator(OpenAIGenerator):
     def __init__(
         self,
-        api_key: Secret = os.getenv(
-            "OPENAI_API_KEY"
-        ),  # Secret.from_env_var("OPENAI_API_KEY"),
+        api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
         model: str = "gpt-3.5-turbo",
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
         api_base_url: Optional[str] = None,
@@ -122,9 +120,7 @@ class AsyncGenerator(OpenAIGenerator):
 class AsyncTextEmbedder(OpenAITextEmbedder):
     def __init__(
         self,
-        api_key: Secret = os.getenv(
-            "OPENAI_API_KEY"
-        ),  # Secret.from_env_var("OPENAI_API_KEY"),
+        api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
         model: str = "text-embedding-ada-002",
         dimensions: Optional[int] = None,
         api_base_url: Optional[str] = None,
@@ -182,9 +178,7 @@ class AsyncTextEmbedder(OpenAITextEmbedder):
 class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
     def __init__(
         self,
-        api_key: Secret = os.getenv(
-            "OPENAI_API_KEY"
-        ),  # Secret.from_env_var("OPENAI_API_KEY"),
+        api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
         model: str = "text-embedding-ada-002",
         dimensions: Optional[int] = None,
         api_base_url: Optional[str] = None,
@@ -280,9 +274,7 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
 class OpenAILLMProvider(LLMProvider):
     def __init__(
         self,
-        api_key: Secret = os.getenv(
-            "OPENAI_API_KEY"
-        ),  # Secret.from_env_var("OPENAI_API_KEY"),
+        api_key: Secret = Secret.from_env_var("OPENAI_API_KEY"),
         api_base: str = os.getenv("OPENAI_API_BASE") or OPENAI_API_BASE,
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL_NAME,
         embedding_model_dim: int = (
