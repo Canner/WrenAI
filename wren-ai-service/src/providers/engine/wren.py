@@ -40,18 +40,6 @@ class WrenUI(Engine):
                 return True, None
             return False, res.get("errors", [{}])[0].get("message", "Unknown error")
 
-    async def force_deploy(self):
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self._endpoint}/api/graphql",
-                json={
-                    "query": "mutation Deploy($force: Boolean) { deploy(force: $force) }",
-                    "variables": {"force": True},
-                },
-            ) as response:
-                res = await response.json()
-                logger.info(f"Forcing deployment: {res}")
-
 
 @provider("wren-ibis")
 class WrenIbis(Engine):
