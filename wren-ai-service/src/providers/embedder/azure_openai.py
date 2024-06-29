@@ -23,7 +23,7 @@ EMBEDDING_MODEL_DIMENSION = 1536
 
 
 @component
-class AsyncAzureTextEmbedder(AzureOpenAITextEmbedder):
+class AsyncTextEmbedder(AzureOpenAITextEmbedder):
     def __init__(
         self,
         api_key: Secret = Secret.from_env_var("EMBEDDER_AZURE_OPENAI_API_KEY"),
@@ -35,7 +35,7 @@ class AsyncAzureTextEmbedder(AzureOpenAITextEmbedder):
         prefix: str = "",
         suffix: str = "",
     ):
-        super(AsyncAzureTextEmbedder, self).__init__(
+        super(AsyncTextEmbedder, self).__init__(
             azure_endpoint=api_base_url,
             api_version=api_version,
             azure_deployment=model,
@@ -86,7 +86,7 @@ class AsyncAzureTextEmbedder(AzureOpenAITextEmbedder):
 
 
 @component
-class AsyncAzureDocumentEmbedder(AzureOpenAIDocumentEmbedder):
+class AsyncDocumentEmbedder(AzureOpenAIDocumentEmbedder):
     def __init__(
         self,
         api_key: Secret = Secret.from_env_var("EMBEDDER_AZURE_OPENAI_API_KEY"),
@@ -102,7 +102,7 @@ class AsyncAzureDocumentEmbedder(AzureOpenAIDocumentEmbedder):
         meta_fields_to_embed: Optional[List[str]] = None,
         embedding_separator: str = "\n",
     ):
-        super(AsyncAzureDocumentEmbedder, self).__init__(
+        super(AsyncDocumentEmbedder, self).__init__(
             azure_endpoint=api_base_url,
             api_version=api_version,
             azure_deployment=model,
@@ -208,7 +208,7 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         self._embedding_model_dim = embedding_model_dim
 
     def get_text_embedder(self):
-        return AsyncAzureTextEmbedder(
+        return AsyncTextEmbedder(
             api_key=self._embedding_api_key,
             model=self._embedding_model,
             dimensions=self._embedding_model_dim,
@@ -217,7 +217,7 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         )
 
     def get_document_embedder(self):
-        return AsyncAzureDocumentEmbedder(
+        return AsyncDocumentEmbedder(
             api_key=self._embedding_api_key,
             model=self._embedding_model,
             dimensions=self._embedding_model_dim,
