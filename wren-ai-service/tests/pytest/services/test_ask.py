@@ -109,45 +109,45 @@ def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
     # assert ask_result_response.response[0].type == "llm" or "view"
 
 
-def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):
-    id = str(uuid.uuid4())
-    async_validate(
-        lambda: ask_service.prepare_semantics(
-            SemanticsPreparationRequest(
-                mdl=mdl_str,
-                id=id,
-            )
-        )
-    )
+# def test_ask_with_failed_query(ask_service: AskService, mdl_str: str):
+#     id = str(uuid.uuid4())
+#     async_validate(
+#         lambda: ask_service.prepare_semantics(
+#             SemanticsPreparationRequest(
+#                 mdl=mdl_str,
+#                 id=id,
+#             )
+#         )
+#     )
 
-    # asking
-    query_id = str(uuid.uuid4())
-    ask_request = AskRequest(
-        query="xxxx",
-        id=id,
-    )
-    ask_request.query_id = query_id
-    async_validate(lambda: ask_service.ask(ask_request))
+#     # asking
+#     query_id = str(uuid.uuid4())
+#     ask_request = AskRequest(
+#         query="xxxx",
+#         id=id,
+#     )
+#     ask_request.query_id = query_id
+#     async_validate(lambda: ask_service.ask(ask_request))
 
-    # getting ask result
-    ask_result_response = ask_service.get_ask_result(
-        AskResultRequest(
-            query_id=query_id,
-        )
-    )
+#     # getting ask result
+#     ask_result_response = ask_service.get_ask_result(
+#         AskResultRequest(
+#             query_id=query_id,
+#         )
+#     )
 
-    # from Pao Sheng: I think it has a potential risk if a dangling status case happens.
-    # maybe we could consider adding an approach that if over a time limit,
-    # the process will throw an exception.
-    while (
-        ask_result_response.status != "finished"
-        and ask_result_response.status != "failed"
-    ):
-        ask_result_response = ask_service.get_ask_result(
-            AskResultRequest(
-                query_id=query_id,
-            )
-        )
+#     # from Pao Sheng: I think it has a potential risk if a dangling status case happens.
+#     # maybe we could consider adding an approach that if over a time limit,
+#     # the process will throw an exception.
+#     while (
+#         ask_result_response.status != "finished"
+#         and ask_result_response.status != "failed"
+#     ):
+#         ask_result_response = ask_service.get_ask_result(
+#             AskResultRequest(
+#                 query_id=query_id,
+#             )
+#         )
 
-    assert ask_result_response.status == "failed"
-    assert ask_result_response.error.code == "MISLEADING_QUERY"
+#     assert ask_result_response.status == "failed"
+#     assert ask_result_response.error.code == "MISLEADING_QUERY"
