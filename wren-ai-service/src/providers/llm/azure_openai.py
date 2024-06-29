@@ -26,7 +26,7 @@ GENERATION_MODEL_KWARGS = {
 
 
 @component
-class AsyncAzureGenerator(AzureOpenAIGenerator):
+class AsyncGenerator(AzureOpenAIGenerator):
     def __init__(
         self,
         api_key: Secret = Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
@@ -37,7 +37,7 @@ class AsyncAzureGenerator(AzureOpenAIGenerator):
         system_prompt: Optional[str] = None,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
-        super(AsyncAzureGenerator, self).__init__(
+        super(AsyncGenerator, self).__init__(
             azure_endpoint=api_base,
             api_version=api_version,
             azure_deployment=model,
@@ -132,7 +132,7 @@ class AzureOpenAILLMProvider(LLMProvider):
         model_kwargs: Optional[Dict[str, Any]] = GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
-        return AsyncAzureGenerator(
+        return AsyncGenerator(
             api_key=self._generation_api_key,
             model=self._generation_model,
             api_base=self._generation_api_base,
