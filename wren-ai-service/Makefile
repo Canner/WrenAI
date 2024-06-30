@@ -12,8 +12,7 @@ dev-down:
 
 ## wren-ai-service related ##
 start:
-	poetry run python -m src.__main__ & \
-	make force_deploy
+	poetry run python -m src.__main__
 
 force_deploy:
 	while ! nc -z localhost 5556; do \

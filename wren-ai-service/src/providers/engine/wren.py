@@ -71,3 +71,23 @@ class WrenIbis(Engine):
             res = await response.text()
 
             return False, res
+
+
+@provider("wren-engine")
+class WrenEngine(Engine):
+    def __init__(self, endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT")):
+        self._endpoint = endpoint
+
+    async def dry_run_sql(
+        self,
+        sql: str,
+        session: aiohttp.ClientSession,
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        async with session.get(
+            f"{self._endpoint}/v1/mdl/dry-run",
+            json={"sql": remove_limit_statement(add_quotes(sql)), "limit": 1},
+        ) as response:
+            if response.status == 200:
+                return True, None
+            res = await response.text()
+            return False, res
