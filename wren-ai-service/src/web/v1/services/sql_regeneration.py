@@ -102,7 +102,7 @@ class SQLRegenerationService:
             )
 
             sql_regeneration_result = generation_result[
-                "description_regeneration_post_processor"
+                "description_regeneration_post_process"
             ]["results"]
 
             logger.debug(f"sql regeneration results: {sql_regeneration_result}")

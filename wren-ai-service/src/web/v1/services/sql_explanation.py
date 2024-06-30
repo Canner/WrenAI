@@ -68,7 +68,7 @@ class SQLExplanationService:
                 full_sql=sql_explanation_request.full_sql,
             )
 
-            sql_explanation_result = generation_result["post_processor"]["results"]
+            sql_explanation_result = generation_result["post_process"]["results"]
 
             logger.debug(f"sql explanation results: {sql_explanation_result}")
 
