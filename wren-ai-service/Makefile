@@ -12,15 +12,7 @@ dev-down:
 
 ## wren-ai-service related ##
 start:
-	poetry run python -m src.__main__ & \
-	make force_deploy
-
-force_deploy:
-	while ! nc -z localhost 5556; do \
-		sleep 1; \
-	done; \
-	echo "wren-ai-service is up and running" && \
-	poetry run python src/force_deploy.py
+	poetry run python -m src.__main__
 
 build:
 	docker compose -f docker/docker-compose.yaml --env-file .env.prod build
