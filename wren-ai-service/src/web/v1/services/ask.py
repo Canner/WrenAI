@@ -177,25 +177,6 @@ class AskService:
                     status="understanding",
                 )
 
-                # query_understanding_result = await self._pipelines[
-                #     "query_understanding"
-                # ].run(
-                #     query=ask_request.query,
-                # )
-
-                # if not query_understanding_result["post_process"]["is_valid_query"]:
-                #     logger.exception(
-                #         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
-                #     )
-                #     self._ask_results[query_id] = AskResultResponse(
-                #         status="failed",
-                #         error=AskResultResponse.AskError(
-                #             code="MISLEADING_QUERY",
-                #             message="Misleading query, please ask a more specific question.",
-                #         ),
-                #     )
-                #     return
-
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
