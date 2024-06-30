@@ -14,10 +14,6 @@
     "rollback": "yarn knex migrate:rollback",
     "generate-gql": "yarn graphql-codegen --config codegen.yaml"
   },
-  "resolutions": {
-    "@types/react": "18.2.0",
-    "@types/react-dom": "18.2.0"
-  },
   "dependencies": {
     "@google-cloud/bigquery": "^6.0.3",
     "@google-cloud/storage": "^6.10.1",
