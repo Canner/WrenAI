@@ -2,7 +2,7 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 
 ## Getting Started
 
-Step 1. Make sure your node version is 16
+Step 1. Make sure your node version is 18
 ```bash
 node -v
 ```
