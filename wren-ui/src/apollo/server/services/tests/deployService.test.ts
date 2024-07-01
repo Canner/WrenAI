@@ -3,7 +3,7 @@ import { DeployStatusEnum } from '@server/repositories/deployLogRepository';
 
 describe('DeployService', () => {
   let mockWrenAIAdaptor;
-  let mockWrenEngineAdaptor;
+
   let mockDeployLogRepository;
   let deployService;
   let mockTelemetry;
@@ -11,7 +11,6 @@ describe('DeployService', () => {
   beforeEach(() => {
     mockTelemetry = { send_event: jest.fn() };
     mockWrenAIAdaptor = { deploy: jest.fn() };
-    mockWrenEngineAdaptor = { deploy: jest.fn() };
     mockDeployLogRepository = {
       findLastProjectDeployLog: jest.fn(),
       createOne: jest.fn(),
@@ -21,7 +20,6 @@ describe('DeployService', () => {
     deployService = new DeployService({
       telemetry: mockTelemetry,
       wrenAIAdaptor: mockWrenAIAdaptor,
-      wrenEngineAdaptor: mockWrenEngineAdaptor,
       deployLogRepository: mockDeployLogRepository,
     });
   });
@@ -32,7 +30,6 @@ describe('DeployService', () => {
 
     mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
     mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
-    mockWrenEngineAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
     mockDeployLogRepository.createOne.mockResolvedValue({ id: 123 });
 
     const response = await deployService.deploy(manifest, projectId);
@@ -44,7 +41,7 @@ describe('DeployService', () => {
     });
   });
 
-  it('should return failed status if either deployment fails', async () => {
+  it('should return failed status if ai-service deployment fails', async () => {
     const manifest = { key: 'value' };
     const projectId = 1;
 
@@ -53,7 +50,6 @@ describe('DeployService', () => {
       status: 'FAILED',
       error: 'AI error',
     });
-    mockWrenEngineAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
     mockDeployLogRepository.createOne.mockResolvedValue({ id: 123 });
 
     const response = await deployService.deploy(manifest, projectId);
@@ -74,7 +70,6 @@ describe('DeployService', () => {
 
     expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
-    expect(mockWrenEngineAdaptor.deploy).not.toHaveBeenCalled();
   });
 
   // Add more tests here to cover other scenarios and error handling

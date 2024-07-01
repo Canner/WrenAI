@@ -657,7 +657,7 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           },
           {
             name: 'BlkHome',
-            properties: { description: 'number of bloacks by the home team.' },
+            properties: { description: 'number of blocks by the home team.' },
           },
           {
             name: 'TovHome',
@@ -748,7 +748,7 @@ export const sampleDatasets: Record<string, SampleDataset> = {
           },
           {
             name: 'BlkAway',
-            properties: { description: 'number of bloacks by the away team.' },
+            properties: { description: 'number of blocks by the away team.' },
           },
           {
             name: 'TovAway',

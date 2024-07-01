@@ -316,8 +316,8 @@ export const typeDefs = gql`
 
   input PreviewViewDataInput {
     id: Int!
-    # It will return default 100 rows if not specified limit
-    # refer: PREVIEW_MAX_OUTPUT_ROW
+    # It will return default 500 rows if not specified limit
+    # refer: DEFAULT_PREVIEW_LIMIT
     limit: Int
   }
 

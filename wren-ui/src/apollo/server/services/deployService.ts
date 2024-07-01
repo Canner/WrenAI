@@ -3,10 +3,6 @@ import {
   WrenAIDeployStatusEnum,
 } from '../adaptors/wrenAIAdaptor';
 import {
-  IWrenEngineAdaptor,
-  WrenEngineDeployStatusEnum,
-} from '../adaptors/wrenEngineAdaptor';
-import {
   Deploy,
   DeployStatusEnum,
   IDeployLogRepository,
@@ -43,23 +39,19 @@ export interface IDeployService {
 
 export class DeployService implements IDeployService {
   private wrenAIAdaptor: IWrenAIAdaptor;
-  private wrenEngineAdaptor: IWrenEngineAdaptor;
   private deployLogRepository: IDeployLogRepository;
   private telemetry: Telemetry;
 
   constructor({
     wrenAIAdaptor,
-    wrenEngineAdaptor,
     deployLogRepository,
     telemetry,
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
-    wrenEngineAdaptor: IWrenEngineAdaptor;
     deployLogRepository: IDeployLogRepository;
     telemetry: Telemetry;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
-    this.wrenEngineAdaptor = wrenEngineAdaptor;
     this.deployLogRepository = deployLogRepository;
     this.telemetry = telemetry;
   }
@@ -102,24 +94,25 @@ export class DeployService implements IDeployService {
     } as Deploy;
     const deploy = await this.deployLogRepository.createOne(deployData);
 
-    // deploy to wren-engine & AI-service
-    const [engineRes, aiRes] = await Promise.all([
-      this.wrenEngineAdaptor.deploy({ manifest, hash }),
-      this.wrenAIAdaptor.deploy({ manifest, hash }),
-    ]);
+    // deploy to AI-service
+    const { status: aiStatus, error: aiError } =
+      await this.wrenAIAdaptor.deploy({
+        manifest,
+        hash,
+      });
 
-    // store deploy log
+    // update deploy status
     const status =
-      engineRes.status === WrenEngineDeployStatusEnum.SUCCESS &&
-      aiRes.status === WrenAIDeployStatusEnum.SUCCESS
+      aiStatus === WrenAIDeployStatusEnum.SUCCESS
         ? DeployStatusEnum.SUCCESS
         : DeployStatusEnum.FAILED;
-    const error = engineRes.error || aiRes.error;
-    await this.deployLogRepository.updateOne(deploy.id, { status, error });
-    if (status === DeployStatusEnum.SUCCESS) {
-      this.telemetry.send_event('deploy_model', { mdl: manifest });
-    }
-    return { status, error };
+    await this.deployLogRepository.updateOne(deploy.id, {
+      status,
+      error: aiError,
+    });
+    this.telemetry.send_event('deploy_model', { mdl: manifest });
+
+    return { status, error: aiError };
   }
 
   public createMDLHash(manifest: Manifest, projectId: number) {
