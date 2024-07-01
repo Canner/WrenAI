@@ -146,6 +146,13 @@ class OpenAILLMProvider(LLMProvider):
         or GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
+        if self._api_base == LLM_OPENAI_API_BASE:
+            logger.info(f"Creating OpenAI generator with model kwargs: {model_kwargs}")
+        else:
+            logger.info(
+                f"Creating OpenAI API-compatible generator with model kwargs: {model_kwargs}"
+            )
+
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,

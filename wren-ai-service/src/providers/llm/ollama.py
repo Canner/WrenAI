@@ -138,6 +138,7 @@ class OllamaLLMProvider(LLMProvider):
         or GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
+        logger.info(f"Creating Ollama generator with model kwargs: {model_kwargs}")
         return AsyncGenerator(
             model=self._generation_model,
             url=f"{self._url}/api/generate",
