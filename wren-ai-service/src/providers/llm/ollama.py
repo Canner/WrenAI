@@ -3,6 +3,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional
 
 import aiohttp
+import orjson
 from haystack import component
 from haystack.dataclasses import StreamingChunk
 from haystack_integrations.components.generators.ollama import OllamaGenerator
@@ -131,7 +132,10 @@ class OllamaLLMProvider(LLMProvider):
 
     def get_generator(
         self,
-        model_kwargs: Optional[Dict[str, Any]] = GENERATION_MODEL_KWARGS,
+        model_kwargs: Dict[str, Any] = orjson.loads(
+            os.getenv("GENERATION_MODEL_KWARGS", "{}")
+        )
+        or GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
         return AsyncGenerator(
