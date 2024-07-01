@@ -195,7 +195,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             """
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
-        logger.info(f"Initializing OpenAILLM provider with API base: {api_base}")
+        logger.info(f"Initializing OpenAIEmbedder provider with API base: {api_base}")
         # TODO: currently only OpenAI api key can be verified
         if api_base == EMBEDDER_OPENAI_API_BASE:
             _verify_api_key(api_key.resolve_value(), api_base)
