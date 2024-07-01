@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import backoff
 import openai
+import orjson
 from haystack import component
 from haystack.components.generators import AzureOpenAIGenerator
 from haystack.dataclasses import ChatMessage, StreamingChunk
@@ -129,7 +130,10 @@ class AzureOpenAILLMProvider(LLMProvider):
 
     def get_generator(
         self,
-        model_kwargs: Optional[Dict[str, Any]] = GENERATION_MODEL_KWARGS,
+        model_kwargs: Dict[str, Any] = orjson.loads(
+            os.getenv("GENERATION_MODEL_KWARGS", "{}")
+        )
+        or GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
         return AsyncGenerator(
