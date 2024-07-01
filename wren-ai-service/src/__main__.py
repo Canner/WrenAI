@@ -89,7 +89,6 @@ if __name__ == "__main__":
         host=server_host,
         port=server_port,
         reload=should_reload,
-        reload_dirs=["src"] if should_reload else None,
         workers=1,
         loop="uvloop",
         http="httptools",
