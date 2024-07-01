@@ -36,9 +36,39 @@ export enum SchemaChangeType {
   MODIFIED_COLUMNS = 'modifiedColumns',
 }
 
+interface AffectedResources {
+  sourceTableName: string;
+  referenceName: string;
+  displayName: string;
+  modelId: number;
+  columns: Array<{
+    sourceColumnName: string;
+    displayName: string;
+    type: string;
+  }>;
+  relationships: Array<{
+    id: number;
+    displayName: string;
+    referenceName: string;
+  }>;
+  calculatedFields: ModelColumn[];
+}
+
 export interface IDataSourceSchemaDetector {
   detectSchemaChange(): Promise<boolean>;
   resolveSchemaChange(type: string): Promise<void>;
+  getAffectedResources(
+    changes: DataSourceSchema[],
+    {
+      models,
+      modelColumns,
+      modelRelationships,
+    }: {
+      models: Model[];
+      modelColumns: ModelColumn[];
+      modelRelationships: RelationInfo[];
+    },
+  ): AffectedResources[];
 }
 
 export default class DataSourceSchemaDetector
@@ -105,131 +135,205 @@ export default class DataSourceSchemaDetector
       projectId: this.projectId,
     });
 
+    const modelIds = models.map((model) => model.id);
     const modelColumns =
-      await this.ctx.modelColumnRepository.findColumnsByModelIds(
-        models.map((model) => model.id),
+      await this.ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+
+    const modelRelationships =
+      await this.ctx.relationRepository.findRelationInfoBy({
+        modelIds,
+      });
+
+    const affectedResources = this.getAffectedResources(changes, {
+      models,
+      modelColumns,
+      modelRelationships,
+    });
+
+    /**
+     * Handle resolve scheme change for DELETED_TABLES / DELETED_COLUMNS
+     *  1. Remove all affected calculated fields
+     *  2. Remove all affected columns if DELETED_COLUMNS
+     *  3. Remove all affected tables if DELETED_TABLES
+     *
+     *  Considering that we have set up foreign keys, some data will be automatically deleted in cascade,
+     *  so there is no need to perform additional deletions. (E.g., relationships, model's column)
+     */
+    await Promise.all(
+      affectedResources.map(async (resource) => {
+        // both DELETED_TABLES and DELETED_COLUMNS need to remove all affected calculated fields
+        logger.debug(
+          `Start to remove all affected calculated fields "${resource.calculatedFields.map(
+            (column) => `${column.displayName} (${column.referenceName})`,
+          )}".`,
+        );
+
+        const columnIds = resource.calculatedFields.map((column) => column.id);
+        await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
+
+        // remove columns if SchemaChangeType is DELETED_COLUMNS
+        if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
+          const affectedColumnNames = resource.columns.map(
+            (column) => column.sourceColumnName,
+          );
+
+          logger.debug(
+            `Start to remove columns "${affectedColumnNames}" from model "${resource.referenceName}".`,
+          );
+
+          await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
+            resource.modelId,
+            affectedColumnNames,
+          );
+        }
+        return;
+      }),
+    );
+
+    // remove tables if SchemaChangeType is DELETED_TABLES
+    if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
+      // delete models
+      const affectedTableNames = changes.map((table) => table.name);
+
+      logger.debug(
+        `Start to remove tables "${affectedTableNames}" from models.`,
       );
 
+      await this.ctx.modelRepository.deleteAllBySourceTableNames(
+        affectedTableNames,
+      );
+    }
+
+    // update resolve flag
+    await this.updateResolveToSchemaChange(lastSchemaChange, [
+      schemaChangeType,
+    ]);
+  }
+
+  /**
+   * According to affected models and column data, we also need to find affected resources, including calculated fields and relationships.
+   *
+   * Find all affected resources include:
+   *  - columns (called "affected column")
+   *  - relationships (called "affected relationship")
+   *  - calculated fields:
+   *    - calculated fields which were affected by affected columns
+   *    - calculated fields which were affected by affected relationships
+   */
+  public getAffectedResources(
+    changes: DataSourceSchema[],
+    {
+      models,
+      modelColumns,
+      modelRelationships,
+    }: {
+      models: Model[];
+      modelColumns: ModelColumn[];
+      modelRelationships: RelationInfo[];
+    },
+  ) {
     const affectedModels = models.filter(
       (model) =>
         changes.findIndex((table) => table.name === model.sourceTableName) !==
         -1,
     );
 
-    const allCalculatedFields = modelColumns.filter(
-      (column) => column.isCalculated,
-    );
+    const affectedResources = affectedModels.map((model) => {
+      const affectedColumns = changes.find(
+        (table) => table.name === model.sourceTableName,
+      ).columns;
 
-    const modelRelationships =
-      await this.ctx.relationRepository.findRelationInfoBy({
-        columnIds: modelColumns.map((column) => column.id),
-      });
+      const allCalculatedFields = modelColumns.filter(
+        (column) => column.isCalculated,
+      );
 
-    // Handle resolve deleted tables
-    if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
-      await Promise.all(
-        affectedModels.map(async (model) => {
-          const affectedColumns = changes.find(
-            (table) => table.name === model.sourceTableName,
-          ).columns;
+      const affectedMaterials = affectedColumns.reduce(
+        (result, column) => {
+          const affectedColumn = modelColumns.find(
+            (modelColumn) =>
+              modelColumn.sourceColumnName === column.name &&
+              modelColumn.modelId === model.id,
+          );
 
-          // Get affected calculated fields and affected relationships
-          const affectedMaterials = await this.getAffectedResources(
-            model,
-            affectedColumns,
-            {
-              models,
-              modelColumns,
-              allCalculatedFields,
-              modelRelationships,
+          result.columns.push({
+            sourceColumnName: column.name,
+            displayName: affectedColumn.displayName,
+            type: column.type,
+          });
+
+          // collect affected calculated fields if it's target column
+          const affectedCalculatedFieldsByColumnId = allCalculatedFields.filter(
+            (calculatedField) => {
+              const lineage = JSON.parse(calculatedField.lineage);
+              return (
+                lineage && lineage[lineage.length - 1] === affectedColumn.id
+              );
             },
           );
 
-          // delete calculated fields
-          const affectedCalculatedFields = uniqBy(
-            affectedMaterials.calculatedFields,
-            'id',
-          );
+          result.calculatedFields.push(...affectedCalculatedFieldsByColumnId);
 
-          logger.debug(
-            `Start to remove all affected calculated fields "${affectedCalculatedFields.map(
-              (column) => `${column.displayName} (${column.referenceName})`,
-            )}".`,
-          );
+          // collect affected relationships
+          const affectedRelationships = modelRelationships
+            .map((relationship) =>
+              [relationship.fromColumnId, relationship.toColumnId].includes(
+                affectedColumn.id,
+              )
+                ? relationship
+                : null,
+            )
+            .filter((relationship) => !!relationship);
 
-          const columnIds = affectedCalculatedFields.map((column) => column.id);
-          return await this.ctx.modelColumnRepository.deleteAllByColumnIds(
-            columnIds,
-          );
-        }),
+          affectedRelationships.forEach((relationship) => {
+            const referenceName =
+              model.referenceName === relationship.fromModelName
+                ? relationship.toModelName
+                : relationship.fromModelName;
+
+            const displayName = models.find(
+              (model) => model.referenceName === referenceName,
+            )?.displayName;
+
+            result.relationships.push({
+              displayName,
+              id: relationship.id,
+              referenceName,
+            });
+
+            // collect affected calculated fields if the relationship is in use
+            const affectedCalculatedFieldsByRelationshipId =
+              allCalculatedFields.filter((calculatedField) => {
+                const lineage = JSON.parse(calculatedField.lineage);
+
+                // pop the column ID from the lineage
+                lineage.pop();
+                return lineage && lineage.includes(relationship.id);
+              });
+
+            result.calculatedFields.push(
+              ...affectedCalculatedFieldsByRelationshipId,
+            );
+          });
+
+          return result;
+        },
+        { columns: [], relationships: [], calculatedFields: [] },
       );
 
-      // delete models
-      const affectedTableNames = changes.map((table) => table.name);
-      logger.debug(
-        `Start to remove tables "${affectedTableNames}" from models.`,
-      );
-      await this.ctx.modelRepository.deleteAllBySourceTableNames(
-        affectedTableNames,
-      );
-      await this.updateResolveToSchemaChange(lastSchemaChange, [
-        schemaChangeType,
-      ]);
-    }
+      // unique calculated fields by id since it can be duplicated
+      const calculatedFields = uniqBy(affectedMaterials.calculatedFields, 'id');
 
-    // Handle resolve deleted table columns
-    if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
-      await Promise.all(
-        affectedModels.map(async (model) => {
-          const affectedColumns = changes.find(
-            (table) => table.name === model.sourceTableName,
-          ).columns;
+      return {
+        sourceTableName: model.sourceTableName,
+        displayName: model.displayName,
+        referenceName: model.referenceName,
+        modelId: model.id,
+        ...affectedMaterials,
+        calculatedFields,
+      };
+    });
 
-          const affectedMaterials = await this.getAffectedResources(
-            model,
-            affectedColumns,
-            {
-              models,
-              modelColumns,
-              allCalculatedFields,
-              modelRelationships,
-            },
-          );
-
-          // delete calculated fields
-          const affectedCalculatedFields = uniqBy(
-            affectedMaterials.calculatedFields,
-            'id',
-          );
-
-          logger.debug(
-            `Start to remove all affected calculated fields "${affectedCalculatedFields.map(
-              (column) => `${column.displayName} (${column.referenceName})`,
-            )}".`,
-          );
-
-          const columnIds = affectedCalculatedFields.map((column) => column.id);
-          await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
-
-          // delete columns
-          const affectedColumnNames = affectedColumns.map(
-            (column) => column.name,
-          );
-
-          logger.debug(
-            `Start to remove columns "${affectedColumnNames}" from model "${model.referenceName}".`,
-          );
-
-          return await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
-            model.id,
-            affectedColumnNames,
-          );
-        }),
-      );
-      await this.updateResolveToSchemaChange(lastSchemaChange, [
-        schemaChangeType,
-      ]);
-    }
+    return affectedResources;
   }
 
   private async getDiffSchema() {
@@ -390,102 +494,5 @@ export default class DataSourceSchemaDetector
       },
     });
     logger.info(`Schema change "${schemaChangeTypes}" resolved successfully.`);
-  }
-
-  private async getAffectedResources(
-    model: Model,
-    affectedColumns: DataSourceSchema['columns'],
-    {
-      models,
-      modelColumns,
-      allCalculatedFields,
-      modelRelationships,
-    }: {
-      models: Model[];
-      modelColumns: ModelColumn[];
-      allCalculatedFields: ModelColumn[];
-      modelRelationships: RelationInfo[];
-    },
-  ): Promise<{
-    relationships: Array<{
-      id: number;
-      displayName: string;
-      referenceName: string;
-    }>;
-    calculatedFields: ModelColumn[];
-  }> {
-    const columns: ModelColumn[] = affectedColumns.reduce((result, column) => {
-      const affectedColumn = modelColumns.find(
-        (modelColumn) =>
-          modelColumn.sourceColumnName === column.name &&
-          modelColumn.modelId === model.id,
-      );
-      if (affectedColumn) {
-        result.push(affectedColumn);
-      }
-      return result;
-    }, []);
-
-    return columns.reduce(
-      (result, column) => {
-        // collect affected calculated fields if it's target column
-        const affectedCalculatedFieldsByColumnId = allCalculatedFields.filter(
-          (calculatedField) => {
-            const lineage = JSON.parse(calculatedField.lineage);
-            return lineage && lineage[lineage.length - 1] === column.id;
-          },
-        );
-
-        result.calculatedFields.push(...affectedCalculatedFieldsByColumnId);
-
-        // collect affected relationships
-        const affectedRelationships = modelRelationships
-          .map((relationship) =>
-            [relationship.fromColumnId, relationship.toColumnId].includes(
-              column.id,
-            )
-              ? relationship
-              : null,
-          )
-          .filter((relationship) => !!relationship);
-
-        affectedRelationships.forEach((relationship) => {
-          const referenceName =
-            model.referenceName === relationship.fromModelName
-              ? relationship.toModelName
-              : relationship.fromModelName;
-
-          const displayName = models.find(
-            (model) => model.referenceName === referenceName,
-          )?.displayName;
-
-          result.relationships.push({
-            displayName,
-            id: relationship.id,
-            referenceName,
-          });
-
-          // collect affected calculated fields if the relationship is in use
-          const affectedCalculatedFieldsByRelationshipId =
-            allCalculatedFields.filter((calculatedField) => {
-              const lineage = JSON.parse(calculatedField.lineage);
-
-              // pop the column ID from the lineage
-              lineage.pop();
-              return lineage && lineage.includes(relationship.id);
-            });
-
-          result.calculatedFields.push(
-            ...affectedCalculatedFieldsByRelationshipId,
-          );
-        });
-
-        return result;
-      },
-      {
-        relationships: [],
-        calculatedFields: [],
-      },
-    );
   }
 }
