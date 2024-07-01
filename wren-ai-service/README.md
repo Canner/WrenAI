@@ -67,9 +67,9 @@ The following commands can quickly start the service for development:
   - wren-ui: port should be 3000
   - qdrant: ports should be 6333, 6334
 
-## Adding your preferred LLM or Document Store
+## Adding your preferred LLM, Embedder or Document Store
 
-Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM or Document Store.
+Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM, Embedder or Document Store.
 
 ## Related Issues or PRs
 
