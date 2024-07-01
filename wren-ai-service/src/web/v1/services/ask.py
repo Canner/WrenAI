@@ -94,7 +94,7 @@ class AskResultResponse(BaseModel):
     class AskError(BaseModel):
         code: Literal[
             "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
-        ]
+        ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
         message: str
 
     status: Literal[
