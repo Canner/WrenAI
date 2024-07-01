@@ -136,6 +136,9 @@ class AzureOpenAILLMProvider(LLMProvider):
         or GENERATION_MODEL_KWARGS,
         system_prompt: Optional[str] = None,
     ):
+        logger.info(
+            f"Creating Azure OpenAI generator with model kwargs: {model_kwargs}"
+        )
         return AsyncGenerator(
             api_key=self._generation_api_key,
             model=self._generation_model,
