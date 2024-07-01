@@ -547,8 +547,7 @@ export class ModelResolver {
 
     // create view
     const project = await ctx.projectService.getCurrentProject();
-    const deployment = await ctx.deployService.getLastDeployment(project.id);
-    const mdl = deployment.manifest;
+    const { manifest } = await ctx.deployService.getLastDeployment(project.id);
 
     // get sql statement of a response
     const response = await ctx.askingService.getResponse(responseId);
@@ -565,7 +564,7 @@ export class ModelResolver {
       project,
       limit: PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
-      mdl,
+      manifest,
     });
 
     if (isEmpty(columns)) {
@@ -636,7 +635,7 @@ export class ModelResolver {
       project,
       limit: PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
-      mdl: manifest,
+      manifest,
     })) as PreviewDataResponse;
 
     return data;
@@ -654,7 +653,7 @@ export class ModelResolver {
     const data = (await ctx.queryService.preview(view.statement, {
       project,
       limit: limit | PREVIEW_MAX_OUTPUT_ROW,
-      mdl: manifest,
+      manifest,
       modelingOnly: false,
     })) as PreviewDataResponse;
     return data;
@@ -669,13 +668,12 @@ export class ModelResolver {
     const project = projectId
       ? await ctx.projectService.getProjectById(projectId)
       : await ctx.projectService.getCurrentProject();
-    const deployment = await ctx.deployService.getLastDeployment(project.id);
-    const mdl = deployment.manifest;
+    const { manifest } = await ctx.deployService.getLastDeployment(project.id);
     const previewRes = await ctx.queryService.preview(sql, {
       project,
       limit: limit || PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
-      mdl,
+      manifest,
       dryRun,
     });
     return dryRun ? { dryRun: 'success' } : previewRes;

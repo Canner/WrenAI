@@ -33,10 +33,10 @@ export interface DescribeStatementResponse {
 export interface PreviewOptions {
   project: Project;
   modelingOnly?: boolean;
-  mdl: Manifest;
+  // if not given, will use the deployed manifest
+  manifest: Manifest;
   limit?: number;
   dryRun?: boolean;
-  // if not given, will use the deployed manifest
 }
 
 export interface SqlValidateOptions {
@@ -93,7 +93,7 @@ export class QueryService implements IQueryService {
     sql: string,
     options: PreviewOptions,
   ): Promise<PreviewDataResponse | boolean> {
-    const { project, mdl, limit, dryRun } = options;
+    const { project, manifest: mdl, limit, dryRun } = options;
     const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
       if (dryRun) {

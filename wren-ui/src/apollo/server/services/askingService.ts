@@ -473,7 +473,7 @@ export class AskingService implements IAskingService {
     const sql = format(constructCteSql(steps, stepIndex));
     const data = (await this.queryService.preview(sql, {
       project,
-      mdl,
+      manifest: mdl,
       limit,
     })) as PreviewDataResponse;
 
