@@ -108,7 +108,6 @@ const bootstrapServer = async () => {
   });
   const deployService = new DeployService({
     wrenAIAdaptor,
-    wrenEngineAdaptor,
     deployLogRepository,
     telemetry,
   });
