@@ -1,9 +1,17 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 const path = require('path');
-const withAntdLess = require('next-plugin-antd-less');
+const withLess = require('next-with-less');
+
+const resolveAlias = {
+  antd$: path.resolve(__dirname, 'node_modules/antd/lib'),
+  '@ant-design/icons$': path.resolve(
+    __dirname,
+    'node_modules/@ant-design/icons/lib',
+  ),
+};
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
+const nextConfig = withLess({
   output: 'standalone',
   staticPageGenerationTimeout: 1000,
   compiler: {
@@ -13,11 +21,16 @@ const nextConfig = {
       ssr: true,
     },
   },
-  ...withAntdLess({
-    // next-plugin-antd-less options
-    lessVarsFilePath: path.resolve(__dirname, 'src/styles/antd-variables.less'),
-    lessVarsFilePathAppendToEndOfContent: false,
-  }),
+  lessLoaderOptions: {
+    additionalData: `@import "@/styles/antd-variables.less";`,
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      ...resolveAlias,
+    };
+    return config;
+  },
   // routes redirect
   async redirects() {
     return [
@@ -28,6 +41,6 @@ const nextConfig = {
       },
     ];
   },
-};
+});
 
 module.exports = nextConfig;
