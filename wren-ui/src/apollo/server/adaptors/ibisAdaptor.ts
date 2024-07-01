@@ -6,7 +6,11 @@ import { Manifest } from '@server/mdl/type';
 import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
 import { toDockerHost } from '@server/utils';
-import { CompactTable, RecommendConstraint } from '@server/services';
+import {
+  CompactTable,
+  DEFAULT_PREVIEW_LIMIT,
+  RecommendConstraint,
+} from '@server/services';
 import { snakeCase } from 'lodash';
 import { WREN_AI_CONNECTION_INFO } from '../repositories';
 import { toIbisConnectionInfo } from '../dataSource';
@@ -88,10 +92,13 @@ export interface ValidationResponse {
   message: string | null;
 }
 
-export interface IbisQueryOptions {
+export interface IbisBaseOptions {
   dataSource: DataSourceName;
   connectionInfo: WREN_AI_CONNECTION_INFO;
   mdl: Manifest;
+}
+export interface IbisQueryOptions extends IbisBaseOptions {
+  limit?: number;
 }
 
 export interface IIbisAdaptor {
@@ -99,7 +106,7 @@ export interface IIbisAdaptor {
     query: string,
     options: IbisQueryOptions,
   ) => Promise<IbisQueryResponse>;
-  dryRun: (query: string, options: IbisQueryOptions) => Promise<boolean>;
+  dryRun: (query: string, options: IbisBaseOptions) => Promise<boolean>;
   getTables: (
     dataSource: DataSourceName,
     connectionInfo: WREN_AI_CONNECTION_INFO,
@@ -148,6 +155,11 @@ export class IbisAdaptor implements IIbisAdaptor {
       const res = await axios.post(
         `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query`,
         body,
+        {
+          params: {
+            limit: options.limit || DEFAULT_PREVIEW_LIMIT,
+          },
+        },
       );
       const response = res.data;
       return response;

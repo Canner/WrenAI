@@ -32,8 +32,6 @@ export enum SyncStatusEnum {
   UNSYNCRONIZED = 'UNSYNCRONIZED',
 }
 
-const PREVIEW_MAX_OUTPUT_ROW = 100;
-
 export class ModelResolver {
   constructor() {
     // model & model column
@@ -562,7 +560,7 @@ export class ModelResolver {
     // describe columns
     const { columns } = await ctx.queryService.describeStatement(statement, {
       project,
-      limit: PREVIEW_MAX_OUTPUT_ROW,
+      limit: 1,
       modelingOnly: false,
       manifest,
     });
@@ -633,7 +631,6 @@ export class ModelResolver {
 
     const data = (await ctx.queryService.preview(sql, {
       project,
-      limit: PREVIEW_MAX_OUTPUT_ROW,
       modelingOnly: false,
       manifest,
     })) as PreviewDataResponse;
@@ -652,7 +649,7 @@ export class ModelResolver {
 
     const data = (await ctx.queryService.preview(view.statement, {
       project,
-      limit: limit | PREVIEW_MAX_OUTPUT_ROW,
+      limit,
       manifest,
       modelingOnly: false,
     })) as PreviewDataResponse;
@@ -671,7 +668,7 @@ export class ModelResolver {
     const { manifest } = await ctx.deployService.getLastDeployment(project.id);
     const previewRes = await ctx.queryService.preview(sql, {
       project,
-      limit: limit || PREVIEW_MAX_OUTPUT_ROW,
+      limit: limit,
       modelingOnly: false,
       manifest,
       dryRun,

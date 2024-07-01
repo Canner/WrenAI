@@ -2,12 +2,10 @@ import axios, { AxiosResponse } from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
-import { CompactTable } from '../services';
+import { CompactTable, DEFAULT_PREVIEW_LIMIT } from '../services';
 
 const logger = getLogger('WrenEngineAdaptor');
 logger.level = 'debug';
-
-const DEFAULT_PREVIEW_LIMIT = 500;
 
 export interface WrenEngineDeployStatusResponse {
   systemStatus: string;
@@ -228,8 +226,8 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
 
   public async previewData(
     sql: string,
+    manifest: Manifest,
     limit: number = DEFAULT_PREVIEW_LIMIT,
-    manifest?: Manifest,
   ): Promise<EngineQueryResponse> {
     try {
       const url = new URL(this.previewUrlPath, this.wrenEngineBaseEndpoint);
