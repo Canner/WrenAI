@@ -69,11 +69,18 @@ export interface DryRunResponse {
 }
 
 export interface IWrenEngineAdaptor {
+  // duckdb data source related
   prepareDuckDB(options: DuckDBPrepareOptions): Promise<void>;
-  listTables(): Promise<CompactTable[]>;
-  putSessionProps(props: Record<string, any>): Promise<void>;
   queryDuckdb(sql: string): Promise<EngineQueryResponse>;
+  putSessionProps(props: Record<string, any>): Promise<void>;
+
+  // metadata related, used to fetch metadata of duckdb
+  listTables(): Promise<CompactTable[]>;
+
+  // config wren engine
   patchConfig(config: Record<string, any>): Promise<void>;
+
+  // query
   previewData(
     sql: string,
     mdl: Manifest,
