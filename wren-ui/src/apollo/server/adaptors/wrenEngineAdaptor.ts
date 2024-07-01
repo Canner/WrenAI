@@ -76,10 +76,9 @@ export interface IWrenEngineAdaptor {
   patchConfig(config: Record<string, any>): Promise<void>;
   previewData(
     sql: string,
+    mdl: Manifest,
     limit?: number,
-    mdl?: Manifest,
   ): Promise<EngineQueryResponse>;
-  describeStatement(sql: string): Promise<DescribeStatementResponse>;
   getNativeSQL(sql: string, options?: DryPlanOption): Promise<string>;
   validateColumnIsValid(
     manifest: Manifest,
@@ -245,19 +244,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data;
     } catch (err: any) {
       logger.debug(`Got error when previewing data: ${err.message}`);
-      throw err;
-    }
-  }
-
-  public async describeStatement(
-    sql: string,
-  ): Promise<DescribeStatementResponse> {
-    try {
-      // preview data with limit 1 to get column metadata
-      const res = await this.previewData(sql, 1);
-      return { columns: res.columns };
-    } catch (err: any) {
-      logger.debug(`Got error when describing statement: ${err.message}`);
       throw err;
     }
   }
