@@ -147,7 +147,5 @@ class OpenAILLMProvider(LLMProvider):
             api_base_url=self._api_base,
             model=self._generation_model,
             system_prompt=system_prompt,
-            generation_kwargs=(
-                model_kwargs if self._api_base == LLM_OPENAI_API_BASE else None
-            ),
+            generation_kwargs=model_kwargs,
         )
