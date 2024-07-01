@@ -93,7 +93,8 @@ def get_provider(name: str):
     return PROVIDERS[name]
 
 
-def get_default_embedding_model_dim(llm_provider: str):
+def get_default_embedding_model_dim(embedder_provider: str):
+    file_name = embedder_provider.split("_embedder")[0]
     return importlib.import_module(
-        f"src.providers.llm.{llm_provider}"
+        f"src.providers.embedder.{file_name}"
     ).EMBEDDING_MODEL_DIMENSION

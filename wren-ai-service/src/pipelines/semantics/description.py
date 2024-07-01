@@ -6,7 +6,7 @@ from haystack import Pipeline
 from haystack.components.builders import PromptBuilder
 
 from src.core.pipeline import BasicPipeline
-from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.utils import init_providers
 
 _TEMPLATE = """
@@ -54,11 +54,12 @@ class Generation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
     ):
         self._prompt_builder = PromptBuilder(template=_TEMPLATE)
         self._pipe = Pipeline()
-        self._pipe.add_component("text_embedder", llm_provider.get_text_embedder())
+        self._pipe.add_component("text_embedder", embedder_provider.get_text_embedder())
         self._pipe.add_component(
             "retriever",
             document_store_provider.get_retriever(document_store_provider.get_store()),
@@ -102,9 +103,10 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, document_store_provider, _ = init_providers()
+    llm_provider, embedder_provider, document_store_provider, _ = init_providers()
     pipe = Generation(
         llm_provider=llm_provider,
+        embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,
     )
 

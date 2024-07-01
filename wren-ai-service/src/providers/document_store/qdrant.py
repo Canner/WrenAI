@@ -203,7 +203,9 @@ class QdrantProvider(DocumentStoreProvider):
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
         )
-        or get_default_embedding_model_dim(os.getenv("LLM_PROVIDER", "openai")),
+        or get_default_embedding_model_dim(
+            os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
+        ),
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):

@@ -8,7 +8,7 @@ from typing import Tuple
 from dotenv import load_dotenv
 
 from src.core.engine import Engine
-from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.providers import loader
 
 logger = logging.getLogger("wren-ai-service")
@@ -53,23 +53,26 @@ def load_env_vars() -> str:
 
     if is_dev_env := os.getenv("ENV") and os.getenv("ENV").lower() == "dev":
         load_dotenv(".env.dev", override=True)
-    else:
-        load_dotenv(".env.prod", override=True)
 
     return "dev" if is_dev_env else "prod"
 
 
-def init_providers() -> Tuple[LLMProvider, DocumentStoreProvider, Engine]:
+def init_providers() -> (
+    Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]
+):
     logger.info("Initializing providers...")
     loader.import_mods()
 
-    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai"))()
+    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai_llm"))()
+    embedder_provider = loader.get_provider(
+        os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
+    )()
     document_store_provider = loader.get_provider(
         os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
     )()
-    engine = loader.get_provider(os.getenv("ENGINE", "wren-ui"))()
+    engine = loader.get_provider(os.getenv("ENGINE", "wren_ui"))()
 
-    return llm_provider, document_store_provider, engine
+    return llm_provider, embedder_provider, document_store_provider, engine
 
 
 def timer(func):

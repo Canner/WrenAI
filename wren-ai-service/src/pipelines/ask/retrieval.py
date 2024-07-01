@@ -7,7 +7,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 
 from src.core.pipeline import BasicPipeline, async_validate
-from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.utils import async_timer, init_providers
 
 logger = logging.getLogger("wren-ai-service")
@@ -31,10 +31,10 @@ async def retrieval(embedding: dict, retriever: Any) -> dict:
 class Retrieval(BasicPipeline):
     def __init__(
         self,
-        llm_provider: LLMProvider,
+        embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
     ):
-        self._embedder = llm_provider.get_text_embedder()
+        self._embedder = embedder_provider.get_text_embedder()
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store()
         )
@@ -81,9 +81,9 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, document_store_provider, _ = init_providers()
+    _, embedder_provider, document_store_provider, _ = init_providers()
     pipeline = Retrieval(
-        llm_provider=llm_provider,
+        embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,
     )
 
