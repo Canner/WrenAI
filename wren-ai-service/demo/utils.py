@@ -275,7 +275,7 @@ def show_asks_results():
             break
 
 
-def show_asks_details_results():
+def show_asks_details_results(query: str):
     st.markdown(
         f'### Details of Result {st.session_state['chosen_query_result']['index'] + 1}'
     )
@@ -286,7 +286,7 @@ def show_asks_details_results():
     sqls = []
     for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
         st.markdown(f"#### Step {i + 1}")
-        st.markdown(step["summary"])
+        st.markdown(f'Summary: {step["summary"]}')
 
         sql = ""
         if sqls_with_cte:
@@ -300,12 +300,21 @@ def show_asks_details_results():
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
-        st.button(
-            label="Preview Data",
-            key=i,
-            on_click=on_click_preview_data_button,
-            args=[i, sqls],
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button(
+                label="Preview Data",
+                key=f"preview_data_btn_{i}",
+                on_click=on_click_preview_data_button,
+                args=[i, sqls],
+            )
+        with col2:
+            st.button(
+                label="SQL Explanation",
+                key=f"sql_explanation_btn_{i}",
+                on_click=on_click_sql_explanation_button,
+                args=[i, query, sqls[i], sqls[-1], step["summary"]],
+            )
 
         if (
             st.session_state["preview_data_button_index"] is not None
@@ -321,11 +330,58 @@ def show_asks_details_results():
                     st.session_state["preview_sql"],
                 )
             )
+        if (
+            st.session_state["sql_explanation_button_index"] is not None
+            and st.session_state["sql_explanation_sql"] is not None
+            and i == st.session_state["sql_explanation_button_index"]
+        ):
+            st.markdown(
+                f'##### SQL Explanation of Step {st.session_state["sql_explanation_button_index"] + 1}'
+            )
+
+            sql_explanation_results = sql_explanation()
+
+            if sql_explanation_results:
+                st.json(sql_explanation_results)
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
+    st.session_state["sql_explanation_button_index"] = None
+
     st.session_state["preview_data_button_index"] = index
     st.session_state["preview_sql"] = full_sqls[index]
+
+
+def get_sql_analysis_results(sql: str):
+    response = requests.get(
+        f"{WREN_ENGINE_API_URL}/v1/analysis/sql",
+        json={
+            "sql": sql,
+        },
+    )
+
+    assert response.status_code == 200
+
+    return response.json()
+
+
+def on_click_sql_explanation_button(
+    index: int,
+    question: str,
+    sql: str,
+    full_sql: str,
+    sql_summary: str,
+):
+    st.session_state["preview_data_button_index"] = None
+
+    sql_analysis_results = get_sql_analysis_results(sql)
+
+    st.session_state["sql_explanation_button_index"] = index
+    st.session_state["sql_explanation_question"] = question
+    st.session_state["sql_explanation_sql"] = sql
+    st.session_state["sql_explanation_full_sql"] = full_sql
+    st.session_state["sql_explanation_sql_summary"] = sql_summary
+    st.session_state["sql_explanation_sql_analysis"] = sql_analysis_results
 
 
 # ai service api related
@@ -535,3 +591,40 @@ def ask_details():
             f'An error occurred while processing the query: {asks_details_status_response.json()['error']}',
             icon="🚨",
         )
+
+
+def sql_explanation():
+    sql_explanation_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-explanations",
+        json={
+            "question": st.session_state["sql_explanation_question"],
+            "sql": st.session_state["sql_explanation_sql"],
+            "sql_summary": st.session_state["sql_explanation_sql_summary"],
+            "sql_analysis_results": st.session_state["sql_explanation_sql_analysis"],
+            "full_sql": st.session_state["sql_explanation_full_sql"],
+        },
+    )
+
+    assert sql_explanation_response.status_code == 200
+    query_id = sql_explanation_response.json()["query_id"]
+    sql_explanation_status = None
+
+    while (
+        sql_explanation_status != "finished" and sql_explanation_status != "failed"
+    ) or not sql_explanation_status:
+        sql_explanation_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-explanations/{query_id}/result"
+        )
+        assert sql_explanation_status_response.status_code == 200
+        sql_explanation_status = sql_explanation_status_response.json()["status"]
+        st.toast(f"The query processing status: {sql_explanation_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if sql_explanation_status == "finished":
+        return sql_explanation_status_response.json()["response"]
+    elif sql_explanation_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {sql_explanation_status_response.json()['error']}',
+            icon="🚨",
+        )
+        return None

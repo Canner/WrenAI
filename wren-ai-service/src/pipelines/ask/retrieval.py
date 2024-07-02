@@ -6,7 +6,7 @@ from typing import Any
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.utils import async_timer, init_providers
 
@@ -77,6 +77,7 @@ class Retrieval(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.core.pipeline import async_validate
     from src.utils import load_env_vars
 
     load_env_vars()
