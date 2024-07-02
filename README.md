@@ -33,7 +33,7 @@
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
-## 🕶 Try It Live!
+## 🕶 Try Our Demo!
 
 [Play around with Wren AI yourself!](https://demo.getwren.ai/)
 
@@ -102,8 +102,11 @@ Wren AI consists of three core services:
 
 ![wrenai_works](./misc/how_wrenai_works.png)
 
-## 🤩 Learn More About Text-to-SQL
+## ❤️ Knowledge Sharing From Wren AI
 
+[Want to get our latest sharing? Follow us on Medium!](https://blog.getwren.ai/)
+
+- [How to use Meta Llama 3 to query MySQL database using Ollama and Wren AI](https://blog.getwren.ai/how-to-use-meta-llama-3-to-query-mysql-database-using-ollama-on-your-machine-2c087b204e41)
 - [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://blog.getwren.ai/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online-9ba5c121afc3)
 - [The new wave of Composable Data Systems and the Interface to LLM agents](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
 - [How do you use OpenAI GPT-4o to query your database?](https://medium.com/wrenai/how-do-you-use-openai-gpt-4o-to-query-your-database-f24be68b0b70)
