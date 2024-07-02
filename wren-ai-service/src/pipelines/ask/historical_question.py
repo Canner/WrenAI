@@ -9,7 +9,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document, component
 
 from src.core.pipeline import BasicPipeline, async_validate
-from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.utils import (
     async_timer,
     init_providers,
@@ -87,9 +87,11 @@ def formatted_output(
 
 class HistoricalQuestion(BasicPipeline):
     def __init__(
-        self, llm_provider: LLMProvider, store_provider: DocumentStoreProvider
+        self,
+        embedder_provider: EmbedderProvider,
+        store_provider: DocumentStoreProvider,
     ) -> None:
-        self._embedder = llm_provider.get_text_embedder()
+        self._embedder = embedder_provider.get_text_embedder()
         self._retriever = store_provider.get_retriever(
             document_store=store_provider.get_store(dataset_name="view_questions"),
         )
@@ -143,10 +145,10 @@ if __name__ == "__main__":
 
     load_env_vars()
 
-    llm_provider, document_store_provider, _ = init_providers()
+    _, embedder_provider, document_store_provider, _ = init_providers()
 
     pipeline = HistoricalQuestion(
-        llm_provider=llm_provider, store_provider=document_store_provider
+        embedder_provider=embedder_provider, store_provider=document_store_provider
     )
 
     pipeline.visualize("this is a query")

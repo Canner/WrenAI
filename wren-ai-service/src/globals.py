@@ -33,7 +33,7 @@ ASK_DETAILS_SERVICE = None
 def init_globals():
     global SEMANTIC_SERVICE, ASK_SERVICE, ASK_DETAILS_SERVICE
 
-    llm_provider, document_store_provider, engine = init_providers()
+    llm_provider, embedder_provider, document_store_provider, engine = init_providers()
 
     # Recreate the document store to ensure a clean slate
     # TODO: for SaaS, we need to use a flag to prevent this collection_recreation
@@ -46,6 +46,7 @@ def init_globals():
         pipelines={
             "generate_description": description.Generation(
                 llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
         },
@@ -54,15 +55,15 @@ def init_globals():
     ASK_SERVICE = AskService(
         pipelines={
             "indexing": indexing.Indexing(
-                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
             "retrieval": ask_retrieval.Retrieval(
-                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
             "historical_question": historical_question.HistoricalQuestion(
-                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 store_provider=document_store_provider,
             ),
             "generation": ask_generation.Generation(

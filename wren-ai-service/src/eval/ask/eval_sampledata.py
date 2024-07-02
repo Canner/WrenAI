@@ -15,9 +15,9 @@ import requests
 from tqdm import tqdm
 
 from src.pipelines.ask.generation import Generation
-from src.pipelines.ask.indexing import Indexing
 from src.pipelines.ask.retrieval import Retrieval
 from src.pipelines.ask.sql_correction import SQLCorrection
+from src.pipelines.indexing.indexing import Indexing
 from src.utils import init_providers, load_env_vars
 
 load_env_vars()
@@ -123,12 +123,12 @@ if __name__ == "__main__":
         Path("./outputs/ask/sampledata").mkdir(parents=True)
 
     # init ask pipeline
-    llm_provider, document_store_provider = init_providers()
+    llm_provider, embedder_provider, document_store_provider, _ = init_providers()
     document_store = document_store_provider.get_store(
         dataset_name=SAMPLE_DATASET_NAME,
         recreate_index=True,
     )
-    embedder = llm_provider.get_text_embedder()
+    embedder = embedder_provider.get_text_embedder()
     retriever = document_store_provider.get_retriever(
         document_store=document_store,
         top_k=10,
@@ -152,6 +152,7 @@ if __name__ == "__main__":
     mdl = get_mdl_from_wren_engine()
     indexing_pipeline = Indexing(
         llm_provider=llm_provider,
+        embedder_provider=embedder_provider,
         store_provider=document_store_provider,
     )
     indexing_pipeline.run(orjson.dumps(mdl).decode("utf-8"))

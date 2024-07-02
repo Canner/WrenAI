@@ -4,7 +4,7 @@ from src.utils import init_providers
 
 
 def test_generation_pipeline_producing_executable_sqls():
-    llm_provider, _, engine = init_providers()
+    llm_provider, _, _, engine = init_providers()
     generation_pipeline = Generation(
         llm_provider=llm_provider,
         engine=engine,
