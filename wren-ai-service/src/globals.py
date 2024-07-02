@@ -8,9 +8,6 @@ from src.pipelines.ask import (
     historical_question,
 )
 from src.pipelines.ask import (
-    query_understanding as ask_query_understanding,
-)
-from src.pipelines.ask import (
     retrieval as ask_retrieval,
 )
 from src.pipelines.ask import (
@@ -59,9 +56,6 @@ def init_globals():
             "indexing": indexing.Indexing(
                 llm_provider=llm_provider,
                 document_store_provider=document_store_provider,
-            ),
-            "query_understanding": ask_query_understanding.QueryUnderstanding(
-                llm_provider=llm_provider,
             ),
             "retrieval": ask_retrieval.Retrieval(
                 llm_provider=llm_provider,

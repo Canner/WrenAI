@@ -119,36 +119,6 @@ def test_asks_with_successful_query():
         #     assert r["summary"] is not None and r["summary"] != ""
 
 
-def test_asks_with_failed_query():
-    with TestClient(app) as client:
-        semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
-
-        response = client.post(
-            url="/v1/asks",
-            json={
-                "query": "xxxx",
-                "id": semantics_preparation_id,
-            },
-        )
-
-        assert response.status_code == 200
-        assert response.json()["query_id"] != ""
-
-        query_id = response.json()["query_id"]
-        GLOBAL_DATA["query_id"] = query_id
-
-        response = client.get(url=f"/v1/asks/{query_id}/result")
-        while (
-            response.json()["status"] != "finished"
-            and response.json()["status"] != "failed"
-        ):
-            response = client.get(url=f"/v1/asks/{query_id}/result")
-
-        assert response.status_code == 200
-        assert response.json()["status"] == "failed"
-        assert response.json()["error"]["code"] == "MISLEADING_QUERY"
-
-
 def test_stop_asks():
     with TestClient(app) as client:
         query_id = GLOBAL_DATA["query_id"]

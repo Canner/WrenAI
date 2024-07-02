@@ -94,7 +94,7 @@ class AskResultResponse(BaseModel):
     class AskError(BaseModel):
         code: Literal[
             "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
-        ]
+        ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
         message: str
 
     status: Literal[
@@ -176,25 +176,6 @@ class AskService:
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
                 )
-
-                query_understanding_result = await self._pipelines[
-                    "query_understanding"
-                ].run(
-                    query=ask_request.query,
-                )
-
-                if not query_understanding_result["post_process"]["is_valid_query"]:
-                    logger.exception(
-                        f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
-                    )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskResultResponse.AskError(
-                            code="MISLEADING_QUERY",
-                            message="Misleading query, please ask a more specific question.",
-                        ),
-                    )
-                    return
 
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(

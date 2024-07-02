@@ -7,7 +7,6 @@ from src.core.pipeline import async_validate
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.ask.followup_generation import FollowUpGeneration
 from src.pipelines.ask.generation import Generation
-from src.pipelines.ask.query_understanding import QueryUnderstanding
 from src.pipelines.ask.retrieval import Retrieval
 from src.pipelines.ask.sql_correction import SQLCorrection
 from src.pipelines.indexing.indexing import Indexing
@@ -96,18 +95,6 @@ def test_indexing_pipeline(
         ).count_documents()
         == 1
     )
-
-
-def test_query_understanding_pipeline():
-    llm_provider, _, _ = init_providers()
-    pipeline = QueryUnderstanding(llm_provider=llm_provider)
-
-    assert async_validate(lambda: pipeline.run("How many books are there?"))[
-        "post_process"
-    ]["is_valid_query"]
-    assert not async_validate(lambda: pipeline.run("fds dsio me"))["post_process"][
-        "is_valid_query"
-    ]
 
 
 def test_retrieval_pipeline(
