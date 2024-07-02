@@ -104,7 +104,7 @@ Wren AI consists of three core services:
 
 ## ❤️ Knowledge Sharing From Wren AI
 
-[Want to get our latest sharing? Follow us on Medium!](https://blog.getwren.ai/)
+Want to get our latest sharing? [Follow us on Medium!](https://blog.getwren.ai/)
 
 - [How to use Meta Llama 3 to query MySQL database using Ollama and Wren AI](https://blog.getwren.ai/how-to-use-meta-llama-3-to-query-mysql-database-using-ollama-on-your-machine-2c087b204e41)
 - [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://blog.getwren.ai/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online-9ba5c121afc3)
