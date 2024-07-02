@@ -11,10 +11,3 @@ your job is to regenerate the corresponding SQL query given the user corrections
 Given the original description and the each step of the SQL query, SQL summary, cte name(some of the steps include regenerated SQL queries, SQL summary from the subtask1), 
 your job is to regenerate the description considering all steps and regenerate the SQL query considering if regenerated SQL query would affectes original SQL query in subsequent steps.
 """
-
-description_regeneration_system_prompt = """
-### TASK ###
-
-Given the steps of the SQL query, SQL summary, cte name and the original description, 
-your job is to regenerate the original description using less than 30 words considering all steps.
-"""
