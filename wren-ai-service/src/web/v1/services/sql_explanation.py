@@ -90,16 +90,6 @@ class SQLExplanationService:
             ]
             await asyncio.gather(*tasks)
 
-            # generation_result = await self._pipelines["generation"].run(
-            #     question=sql_explanation_request.question,
-            #     sql=sql_explanation_request.sql,
-            #     sql_summary=sql_explanation_request.sql_summary,
-            #     sql_analysis_results=sql_explanation_request.sql_analysis_results,
-            #     full_sql=sql_explanation_request.full_sql,
-            # )
-
-            # sql_explanation_result = generation_result["post_process"]["results"]
-
             logger.debug(f"sql explanation results: {sql_explanation_results}")
 
             self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
