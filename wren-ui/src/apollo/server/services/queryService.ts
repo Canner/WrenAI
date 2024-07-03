@@ -5,8 +5,6 @@ import {
   SupportedDataSource,
   IIbisAdaptor,
   IbisQueryResponse,
-  IbisPostgresConnectionInfo,
-  IbisBigQueryConnectionInfo,
   ValidationRules,
 } from '../adaptors/ibisAdaptor';
 import { getLogger } from '@server/utils';
@@ -44,11 +42,6 @@ export interface SqlValidateOptions {
   project: Project;
   mdl: Manifest;
   modelingOnly?: boolean;
-}
-
-export interface ComposeConnectionInfoResult {
-  datasource: DataSourceName;
-  connectionInfo?: IbisPostgresConnectionInfo | IbisBigQueryConnectionInfo;
 }
 
 export interface ValidateResponse {
