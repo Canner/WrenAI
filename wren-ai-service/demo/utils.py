@@ -323,8 +323,10 @@ def show_asks_details_results(query: str):
     st.markdown(
         f'Description: {st.session_state['asks_details_result']["description"]}'
     )
+
     sqls_with_cte = []
     sqls = []
+    summaries = []
     for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
         st.markdown(f"#### Step {i + 1}")
         st.markdown(f'Summary: {step["summary"]}')
@@ -334,6 +336,7 @@ def show_asks_details_results(query: str):
             sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
         sql += step["sql"]
         sqls.append(sql)
+        summaries.append(step["summary"])
 
         st.code(
             body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
@@ -341,21 +344,12 @@ def show_asks_details_results(query: str):
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.button(
-                label="Preview Data",
-                key=f"preview_data_btn_{i}",
-                on_click=on_click_preview_data_button,
-                args=[i, sqls],
-            )
-        with col2:
-            st.button(
-                label="SQL Explanation",
-                key=f"sql_explanation_btn_{i}",
-                on_click=on_click_sql_explanation_button,
-                args=[i, query, sqls[i], sqls[-1], step["summary"]],
-            )
+        st.button(
+            label="Preview Data",
+            key=f"preview_data_btn_{i}",
+            on_click=on_click_preview_data_button,
+            args=[i, sqls],
+        )
 
         if (
             st.session_state["preview_data_button_index"] is not None
@@ -372,58 +366,59 @@ def show_asks_details_results(query: str):
                     st.session_state["dataset_type"],
                 )
             )
-        if (
-            st.session_state["sql_explanation_button_index"] is not None
-            and st.session_state["sql_explanation_sql"] is not None
-            and i == st.session_state["sql_explanation_button_index"]
-        ):
-            st.markdown(
-                f'##### SQL Explanation of Step {st.session_state["sql_explanation_button_index"] + 1}'
-            )
 
-            sql_explanation_results = sql_explanation()
+    st.button(
+        label="SQL Explanation",
+        key="sql_explanation_btn",
+        on_click=on_click_sql_explanation_button,
+        args=[query, sqls, summaries],
+    )
 
-            if sql_explanation_results:
-                st.json(sql_explanation_results)
+    if st.session_state["sql_explanation_sql"] is not None:
+        sql_explanation_results = sql_explanation()
+
+        if sql_explanation_results:
+            st.markdown("### SQL Explanation Results")
+            st.json(sql_explanation_results)
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
-    st.session_state["sql_explanation_button_index"] = None
-
     st.session_state["preview_data_button_index"] = index
     st.session_state["preview_sql"] = full_sqls[index]
 
 
-def get_sql_analysis_results(sql: str):
-    response = requests.get(
-        f"{WREN_ENGINE_API_URL}/v1/analysis/sql",
-        json={
-            "sql": sql,
-        },
-    )
+def get_sql_analysis_results(sqls: List[str]):
+    results = []
+    for sql in sqls:
+        response = requests.get(
+            f"{WREN_ENGINE_API_URL}/v1/analysis/sql",
+            json={
+                "sql": sql,
+            },
+        )
 
-    assert response.status_code == 200
+        assert response.status_code == 200
 
-    return response.json()
+        results.append(response.json())
+
+    return results
 
 
 def on_click_sql_explanation_button(
-    index: int,
     question: str,
-    sql: str,
-    full_sql: str,
-    sql_summary: str,
+    sqls: List[str],
+    summaries: List[str],
 ):
-    st.session_state["preview_data_button_index"] = None
+    st.session_state["sql_explanation_sql"] = True
+    sql_analysis_results = get_sql_analysis_results(sqls)
 
-    sql_analysis_results = get_sql_analysis_results(sql)
-
-    st.session_state["sql_explanation_button_index"] = index
     st.session_state["sql_explanation_question"] = question
-    st.session_state["sql_explanation_sql"] = sql
-    st.session_state["sql_explanation_full_sql"] = full_sql
-    st.session_state["sql_explanation_sql_summary"] = sql_summary
-    st.session_state["sql_explanation_sql_analysis"] = sql_analysis_results
+    st.session_state["sql_explanation_steps_with_analysis"] = [
+        {"sql": sql, "summary": summary, "sql_analysis_results": sql_analysis_results}
+        for sql, summary, sql_analysis_results in zip(
+            sqls, summaries, sql_analysis_results
+        )
+    ]
 
 
 # ai service api related
@@ -640,10 +635,9 @@ def sql_explanation():
         f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-explanations",
         json={
             "question": st.session_state["sql_explanation_question"],
-            "sql": st.session_state["sql_explanation_sql"],
-            "sql_summary": st.session_state["sql_explanation_sql_summary"],
-            "sql_analysis_results": st.session_state["sql_explanation_sql_analysis"],
-            "full_sql": st.session_state["sql_explanation_full_sql"],
+            "steps_with_analysis_results": st.session_state[
+                "sql_explanation_steps_with_analysis"
+            ],
         },
     )
 

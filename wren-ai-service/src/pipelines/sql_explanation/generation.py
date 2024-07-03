@@ -292,19 +292,18 @@ class Generation(BasicPipeline):
     async def run(
         self,
         question: str,
-        sql: str,
-        sql_analysis_results: List[Dict],
-        sql_summary: str,
+        step_with_analysis_results: Dict,
         full_sql: str,
     ):
         logger.info("SQL Explanation Generation pipeline is running...")
+
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "question": question,
-                "sql": sql,
-                "sql_analysis_results": sql_analysis_results,
-                "sql_summary": sql_summary,
+                "sql": step_with_analysis_results.sql,
+                "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
+                "sql_summary": step_with_analysis_results.summary,
                 "full_sql": full_sql,
                 "pre_processor": self.pre_processor,
                 "prompt_builder": self.prompt_builder,

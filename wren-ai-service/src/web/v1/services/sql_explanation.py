@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
 
@@ -11,12 +12,14 @@ logger = logging.getLogger("wren-ai-service")
 
 # POST /v1/sql-explanations
 class SQLExplanationRequest(BaseModel):
+    class StepWithAnalysisResult(BaseModel):
+        sql: str
+        summary: str
+        sql_analysis_results: List[Dict]
+
     _query_id: str | None = None
     question: str
-    sql: str
-    sql_summary: str
-    sql_analysis_results: List[Dict]
-    full_sql: str
+    steps_with_analysis_results: List[StepWithAnalysisResult]
 
     @property
     def query_id(self) -> str:
@@ -38,7 +41,7 @@ class SQLExplanationResultRequest(BaseModel):
 
 class SQLExplanationResultResponse(BaseModel):
     status: Literal["understanding", "generating", "finished", "failed"]
-    response: Optional[List[Dict]] = None
+    response: Optional[List[List[Dict]]] = None
     error: Optional[str] = None
 
 
@@ -60,21 +63,48 @@ class SQLExplanationService:
                 status="generating",
             )
 
-            generation_result = await self._pipelines["generation"].run(
-                question=sql_explanation_request.question,
-                sql=sql_explanation_request.sql,
-                sql_summary=sql_explanation_request.sql_summary,
-                sql_analysis_results=sql_explanation_request.sql_analysis_results,
-                full_sql=sql_explanation_request.full_sql,
-            )
+            sql_explanation_results = []
 
-            sql_explanation_result = generation_result["post_process"]["results"]
+            async def _task(
+                question: str,
+                step_with_analysis_results: SQLExplanationRequest.StepWithAnalysisResult,
+                full_sql: str,
+            ):
+                generation_result = await self._pipelines["generation"].run(
+                    question=question,
+                    step_with_analysis_results=step_with_analysis_results,
+                    full_sql=full_sql,
+                )
+                sql_explanation_results.append(
+                    generation_result["post_process"]["results"]
+                )
 
-            logger.debug(f"sql explanation results: {sql_explanation_result}")
+            full_sql = sql_explanation_request.steps_with_analysis_results[-1].sql
+            tasks = [
+                _task(
+                    sql_explanation_request.question,
+                    step_with_analysis_results,
+                    full_sql,
+                )
+                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+            ]
+            await asyncio.gather(*tasks)
+
+            # generation_result = await self._pipelines["generation"].run(
+            #     question=sql_explanation_request.question,
+            #     sql=sql_explanation_request.sql,
+            #     sql_summary=sql_explanation_request.sql_summary,
+            #     sql_analysis_results=sql_explanation_request.sql_analysis_results,
+            #     full_sql=sql_explanation_request.full_sql,
+            # )
+
+            # sql_explanation_result = generation_result["post_process"]["results"]
+
+            logger.debug(f"sql explanation results: {sql_explanation_results}")
 
             self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
                 status="finished",
-                response=sql_explanation_result,
+                response=sql_explanation_results,
             )
         except Exception as e:
             logger.exception(
