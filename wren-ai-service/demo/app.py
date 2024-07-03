@@ -47,18 +47,14 @@ if "preview_sql" not in st.session_state:
     st.session_state["preview_sql"] = None
 if "query_history" not in st.session_state:
     st.session_state["query_history"] = None
-if "sql_explanation_button_index" not in st.session_state:
-    st.session_state["sql_explanation_button_index"] = None
 if "sql_explanation_question" not in st.session_state:
     st.session_state["sql_explanation_question"] = None
-if "sql_explanation_sql" not in st.session_state:
-    st.session_state["sql_explanation_sql"] = None
-if "sql_explanation_full_sql" not in st.session_state:
-    st.session_state["sql_explanation_full_sql"] = None
-if "sql_explanation_sql_summary" not in st.session_state:
-    st.session_state["sql_explanation_sql_summary"] = None
-if "sql_explanation_sql_analysis" not in st.session_state:
-    st.session_state["sql_explanation_sql_analysis"] = None
+if "sql_explanation_steps_with_analysis" not in st.session_state:
+    st.session_state["sql_explanation_steps_with_analysis"] = None
+if "sql_analysis_results" not in st.session_state:
+    st.session_state["sql_analysis_results"] = None
+if "sql_explanation_results" not in st.session_state:
+    st.session_state["sql_explanation_results"] = None
 
 
 def onchange_demo_dataset():

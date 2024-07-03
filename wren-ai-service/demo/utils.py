@@ -374,12 +374,12 @@ def show_asks_details_results(query: str):
         args=[query, sqls, summaries],
     )
 
-    if st.session_state["sql_explanation_sql"] is not None:
-        sql_explanation_results = sql_explanation()
-
-        if sql_explanation_results:
-            st.markdown("### SQL Explanation Results")
-            st.json(sql_explanation_results)
+    if st.session_state["sql_analysis_results"]:
+        st.markdown("### SQL Analysis Results")
+        st.json(st.session_state["sql_analysis_results"])
+    if st.session_state["sql_explanation_results"]:
+        st.markdown("### SQL Explanation Results")
+        st.json(st.session_state["sql_explanation_results"])
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
@@ -390,6 +390,7 @@ def on_click_preview_data_button(index: int, full_sqls: List[str]):
 def get_sql_analysis_results(sqls: List[str]):
     results = []
     for sql in sqls:
+        print(f"SQL: {sql}")
         response = requests.get(
             f"{WREN_ENGINE_API_URL}/v1/analysis/sql",
             json={
@@ -409,16 +410,18 @@ def on_click_sql_explanation_button(
     sqls: List[str],
     summaries: List[str],
 ):
-    st.session_state["sql_explanation_sql"] = True
     sql_analysis_results = get_sql_analysis_results(sqls)
 
     st.session_state["sql_explanation_question"] = question
+    st.session_state["sql_analysis_results"] = sql_analysis_results
     st.session_state["sql_explanation_steps_with_analysis"] = [
         {"sql": sql, "summary": summary, "sql_analysis_results": sql_analysis_results}
         for sql, summary, sql_analysis_results in zip(
             sqls, summaries, sql_analysis_results
         )
     ]
+
+    st.session_state["sql_explanation_results"] = sql_explanation()
 
 
 # ai service api related

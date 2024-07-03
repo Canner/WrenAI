@@ -229,7 +229,7 @@ def preprocess(
     sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
 ) -> List[dict]:
     logger.debug(f"sql_analysis_results: {sql_analysis_results}")
-    return pre_processor.run(sql_analysis_results)["preprocessed_sql_analysis_results"]
+    return pre_processor.run(sql_analysis_results)
 
 
 @timer
@@ -243,13 +243,13 @@ def prompt(
 ) -> dict:
     logger.debug(f"question: {question}")
     logger.debug(f"sql: {sql}")
-    logger.debug(f"preprocessed_sql_analysis_results: {preprocess}")
+    logger.debug(f"preprocess: {preprocess}")
     logger.debug(f"sql_summary: {sql_summary}")
     logger.debug(f"full_sql: {full_sql}")
     return prompt_builder.run(
         question=question,
         sql=sql,
-        sql_analysis_results=preprocess,
+        sql_analysis_results=preprocess["preprocessed_sql_analysis_results"],
         sql_summary=sql_summary,
         full_sql=full_sql,
     )
