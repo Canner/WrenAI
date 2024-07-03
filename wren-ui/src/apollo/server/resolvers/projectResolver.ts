@@ -22,12 +22,11 @@ import {
   getRelations,
   sampleDatasets,
 } from '@server/data';
-import { snakeCase, flatMap, uniqBy } from 'lodash';
+import { snakeCase } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
 import DataSourceSchemaDetector, {
-  DataSourceSchema,
   SchemaChangeType,
 } from '@server/managers/dataSourceSchemaDetector';
 import { encryptConnectionInfo } from '../dataSource';
