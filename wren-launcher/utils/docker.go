@@ -39,15 +39,17 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
 
 	// replace LLM_OPENAI_API_KEY
+	// Might be overwritten by the .env.ai file
 	reg = regexp.MustCompile(`LLM_OPENAI_API_KEY=(.*)`)
 	str = reg.ReplaceAllString(str, "LLM_OPENAI_API_KEY="+openaiApiKey)
 
 	// replace EMBEDDER_OPENAI_API_KEY,
-	// Might be overwrite by the .env.ai file
+	// Might be overwritten by the .env.ai file
 	reg = regexp.MustCompile(`EMBEDDER_OPENAI_API_KEY=(.*)`)
 	str = reg.ReplaceAllString(str, "EMBEDDER_OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
+	// Might be overwritten by the .env.ai file
 	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)
 	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+openAIGenerationModel)
 
