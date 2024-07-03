@@ -630,7 +630,7 @@ export class ModelResolver {
     }
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const sql = `select * from ${model.referenceName}`;
+    const sql = `select * from "${model.referenceName}"`;
 
     const data = (await ctx.queryService.preview(sql, {
       project,
