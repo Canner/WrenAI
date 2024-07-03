@@ -36,22 +36,6 @@ export type IbisPostgresConnectionInfo =
   | UrlBasedConnectionInfo
   | HostBasedConnectionInfo;
 
-export interface IbisMySQLConnectionInfo {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-}
-
-export interface IbisSqlServerConnectionInfo {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-}
-
 export interface IbisBigQueryConnectionInfo {
   project_id: string;
   dataset_id: string;
@@ -59,10 +43,10 @@ export interface IbisBigQueryConnectionInfo {
 }
 
 export type IbisConnectionInfo =
+  | UrlBasedConnectionInfo
+  | HostBasedConnectionInfo
   | IbisPostgresConnectionInfo
-  | IbisMySQLConnectionInfo
-  | IbisBigQueryConnectionInfo
-  | IbisSqlServerConnectionInfo;
+  | IbisBigQueryConnectionInfo;
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
@@ -70,6 +54,7 @@ export enum SupportedDataSource {
   SNOWFLAKE = 'SNOWFLAKE',
   MYSQL = 'MYSQL',
   MSSQL = 'MSSQL',
+  CLICK_HOUSE = 'CLICK_HOUSE',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -78,6 +63,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.SNOWFLAKE]: 'snowflake',
   [SupportedDataSource.MYSQL]: 'mysql',
   [SupportedDataSource.MSSQL]: 'mssql',
+  [SupportedDataSource.CLICK_HOUSE]: 'clickhouse',
 };
 export interface TableResponse {
   tables: CompactTable[];

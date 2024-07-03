@@ -4,4 +4,5 @@ export enum DATA_SOURCES {
   PG_SQL = 'POSTGRES',
   MYSQL = 'MYSQL',
   MSSQL = 'MSSQL',
+  CLICK_HOUSE = 'CLICK_HOUSE',
 }

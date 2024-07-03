@@ -68,7 +68,7 @@ const defaultConfig = {
   wrenAIEndpoint: 'http://localhost:5555',
 
   // ibis server
-  ibisServerEndpoint: 'http://localhost:8000',
+  ibisServerEndpoint: 'http://127.0.0.1:8000',
 
   // encryption
   encryptionPassword: 'sementic',
