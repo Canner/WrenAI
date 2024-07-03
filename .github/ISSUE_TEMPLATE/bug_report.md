@@ -26,10 +26,10 @@ If applicable, add screenshots to help explain your problem.
 **Container Logs **
 You can execute the following command to get the logs of containers and provide them here:
 ```
-docker logs wrenai-wren-ui-1 >& wren-ui.log && \
-docker logs wrenai-wren-ai-service-1 >& wren-ai-service.log && \
-docker logs wrenai-wren-engine-1 >& wren-engine.log
-docker logs wrenai-ibis-server-1 >& wrenai-ibis-server-1.log
+docker logs wrenai-wren-ui-1 >& wrenai-wren-ui.log && \
+docker logs wrenai-wren-ai-service-1 >& wrenai-wren-ai-service.log && \
+docker logs wrenai-wren-engine-1 >& wrenai-wren-engine.log && \
+docker logs wrenai-ibis-server-1 >& wrenai-wren-ibis-server.log
 ```
 
 **Desktop (please complete the following information):**
