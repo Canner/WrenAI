@@ -23,20 +23,20 @@ from src.web.v1.services.ask import (
 
 @pytest.fixture
 def ask_service():
-    llm_provider, document_store_provider, engine = init_providers()
+    llm_provider, embedder_provider, document_store_provider, engine = init_providers()
 
     return AskService(
         {
             "indexing": indexing.Indexing(
-                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
             "retrieval": retrieval.Retrieval(
-                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
             "historical_question": historical_question.HistoricalQuestion(
-                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
                 store_provider=document_store_provider,
             ),
             "generation": generation.Generation(

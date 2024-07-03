@@ -11,7 +11,7 @@ from src.providers.loader import provider
 logger = logging.getLogger("wren-ai-service")
 
 
-@provider("wren-ui")
+@provider("wren_ui")
 class WrenUI(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_UI_ENDPOINT")):
         self._endpoint = endpoint
@@ -41,7 +41,7 @@ class WrenUI(Engine):
             return False, res.get("errors", [{}])[0].get("message", "Unknown error")
 
 
-@provider("wren-ibis")
+@provider("wren_ibis")
 class WrenIbis(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_IBIS_ENDPOINT")):
         self._endpoint = endpoint

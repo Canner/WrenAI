@@ -24,13 +24,6 @@ The following commands can quickly start the service for development:
     - go to `http://WREN_UI_HOST:WREN_UI_PORT`(default is http://localhost:3000) to interact interact from the UI
 - `make dev-down` to stop the needed containers
 
-## Production Environment Setup
-
-- copy `.env.prod.example` file to `.env.prod` and fill in the environment variables
-- `make build` to build the docker image
-- `make up` to run the wren-ai-service and other containers
-- `make down` to stop the docker container
-
 ## Pipeline Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
 
 - install `psql`
@@ -74,9 +67,9 @@ The following commands can quickly start the service for development:
   - wren-ui: port should be 3000
   - qdrant: ports should be 6333, 6334
 
-## Adding your preferred LLM or Document Store
+## Adding your preferred LLM, Embedder or Document Store
 
-Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM or Document Store.
+Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM, Embedder or Document Store.
 
 ## Related Issues or PRs
 

@@ -38,9 +38,13 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
 	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
 
-	// replace OPENAI_API_KEY
-	reg = regexp.MustCompile(`OPENAI_API_KEY=(.*)`)
-	str = reg.ReplaceAllString(str, "OPENAI_API_KEY="+openaiApiKey)
+	// replace LLM_OPENAI_API_KEY
+	reg = regexp.MustCompile(`LLM_OPENAI_API_KEY=(.*)`)
+	str = reg.ReplaceAllString(str, "LLM_OPENAI_API_KEY="+openaiApiKey)
+
+	// replace EMBEDDER_OPENAI_API_KEY
+	reg = regexp.MustCompile(`EMBEDDER_OPENAI_API_KEY=(.*)`)
+	str = reg.ReplaceAllString(str, "EMBEDDER_OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
 	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)

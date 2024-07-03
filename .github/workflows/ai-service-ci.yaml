@@ -49,9 +49,11 @@ jobs:
           make test
         env:
           ENV: dev
-          LLM_PROVIDER: openai
+          LLM_PROVIDER: openai_llm
+          EMBEDDER_PROVIDER: openai_embedder
           DOCUMENT_STORE_PROVIDER: qdrant
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          EMBEDDER_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GENERATION_MODEL: gpt-3.5-turbo
           WREN_ENGINE_ENDPOINT: http://localhost:8080
           WREN_UI_ENDPOINT: http://localhost:3000
