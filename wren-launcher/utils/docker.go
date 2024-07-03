@@ -39,14 +39,17 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
 
 	// replace LLM_OPENAI_API_KEY
+	// Might be overwritten by the .env.ai file
 	reg = regexp.MustCompile(`LLM_OPENAI_API_KEY=(.*)`)
 	str = reg.ReplaceAllString(str, "LLM_OPENAI_API_KEY="+openaiApiKey)
 
-	// replace EMBEDDER_OPENAI_API_KEY
+	// replace EMBEDDER_OPENAI_API_KEY,
+	// Might be overwritten by the .env.ai file
 	reg = regexp.MustCompile(`EMBEDDER_OPENAI_API_KEY=(.*)`)
 	str = reg.ReplaceAllString(str, "EMBEDDER_OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
+	// Might be overwritten by the .env.ai file
 	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)
 	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+openAIGenerationModel)
 
@@ -245,6 +248,8 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 	if llmProvider == "Custom" {
 		customEnvFile := path.Join(projectDir, ".env.ai")
 		llmComposeFile := path.Join(projectDir, "docker-compose.llm.yaml")
+		// Note: there are env variables with the same name in .env.ai and .env files
+		// Be aware of the order of the env files
 		envFiles = append(envFiles, customEnvFile)
 		configPaths = append(configPaths, llmComposeFile)
 	}
