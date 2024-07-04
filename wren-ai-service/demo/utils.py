@@ -344,6 +344,13 @@ def show_asks_details_results(query: str):
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
+        if st.session_state["sql_analysis_results"]:
+            st.markdown("#### SQL Analysis Results")
+            st.json(st.session_state["sql_analysis_results"][i])
+        if st.session_state["sql_explanation_results"]:
+            st.markdown("#### SQL Explanation Results")
+            st.json(st.session_state["sql_explanation_results"][i])
+
         st.button(
             label="Preview Data",
             key=f"preview_data_btn_{i}",
@@ -367,19 +374,21 @@ def show_asks_details_results(query: str):
                 )
             )
 
+    st.markdown("---")
     st.button(
         label="SQL Explanation",
         key="sql_explanation_btn",
         on_click=on_click_sql_explanation_button,
         args=[query, sqls, summaries],
+        use_container_width=True,
     )
 
-    if st.session_state["sql_analysis_results"]:
-        st.markdown("### SQL Analysis Results")
-        st.json(st.session_state["sql_analysis_results"])
-    if st.session_state["sql_explanation_results"]:
-        st.markdown("### SQL Explanation Results")
-        st.json(st.session_state["sql_explanation_results"])
+    # if st.session_state["sql_analysis_results"]:
+    #     st.markdown("### SQL Analysis Results")
+    #     st.json(st.session_state["sql_analysis_results"])
+    # if st.session_state["sql_explanation_results"]:
+    #     st.markdown("### SQL Explanation Results")
+    #     st.json(st.session_state["sql_explanation_results"])
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
@@ -626,6 +635,10 @@ def ask_details():
         st.session_state["asks_details_result"] = asks_details_status_response.json()[
             "response"
         ]
+        st.session_state["sql_explanation_question"] = None
+        st.session_state["sql_explanation_steps_with_analysis"] = None
+        st.session_state["sql_analysis_results"] = None
+        st.session_state["sql_explanation_results"] = None
     elif asks_details_status == "failed":
         st.error(
             f'An error occurred while processing the query: {asks_details_status_response.json()['error']}',
