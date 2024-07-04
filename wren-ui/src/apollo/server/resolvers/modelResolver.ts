@@ -145,7 +145,7 @@ export class ModelResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const currentHash = ctx.deployService.createMDLHash(manifest, id);
     const lastDeploy = await ctx.deployService.getLastDeployment(id);
-    const lastDeployHash = lastDeploy.hash;
+    const lastDeployHash = lastDeploy?.hash;
     const inProgressDeployment =
       await ctx.deployService.getInProgressDeployment(id);
     if (inProgressDeployment) {
