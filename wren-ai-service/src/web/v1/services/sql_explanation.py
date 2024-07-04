@@ -68,33 +68,29 @@ class SQLExplanationService:
             async def _task(
                 question: str,
                 step_with_analysis_results: SQLExplanationRequest.StepWithAnalysisResult,
-                full_sql: str,
             ):
-                generation_result = await self._pipelines["generation"].run(
+                return await self._pipelines["generation"].run(
                     question=question,
                     step_with_analysis_results=step_with_analysis_results,
-                    full_sql=full_sql,
-                )
-                sql_explanation_results.append(
-                    generation_result["post_process"]["results"]
                 )
 
-            full_sql = sql_explanation_request.steps_with_analysis_results[-1].sql
             tasks = [
                 _task(
                     sql_explanation_request.question,
                     step_with_analysis_results,
-                    full_sql,
                 )
                 for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
             ]
-            await asyncio.gather(*tasks)
+            generation_results = await asyncio.gather(*tasks)
 
             logger.debug(f"sql explanation results: {sql_explanation_results}")
 
             self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
                 status="finished",
-                response=sql_explanation_results,
+                response=[
+                    generation_result["post_process"]["results"]
+                    for generation_result in generation_results
+                ],
             )
         except Exception as e:
             logger.exception(

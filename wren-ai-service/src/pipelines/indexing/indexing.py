@@ -360,9 +360,6 @@ async def embed_ddl(
 @timer
 @observe(capture_input=False)
 def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
-    logger.debug(
-        f"input in write_ddl: {orjson.dumps(embed_ddl, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return ddl_writer.run(documents=embed_ddl["documents"])
 
 
@@ -391,9 +388,6 @@ async def embed_view(
 @timer
 @observe(capture_input=False)
 def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
-    logger.debug(
-        f"input in write_view: {orjson.dumps(embed_view, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return view_writer.run(documents=embed_view["documents"])
 
 
