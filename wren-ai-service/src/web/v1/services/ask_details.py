@@ -4,6 +4,7 @@ from typing import List, Literal, Optional
 from haystack import Pipeline
 from pydantic import BaseModel
 
+from src.core.engine import add_quotes
 from src.utils import async_timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -93,7 +94,7 @@ class AskDetailsService:
             if not ask_details_result["steps"]:
                 ask_details_result["steps"] = [
                     {
-                        "sql": ask_details_request.sql,
+                        "sql": add_quotes(ask_details_request.sql),
                         "summary": ask_details_request.summary,
                         "cte_name": "",
                     }

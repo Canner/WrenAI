@@ -70,7 +70,7 @@ def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService)
 def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
     # asking details
     query_id = str(uuid.uuid4())
-    sql = "SELECT * FROM xxx"
+    sql = 'SELECT * FROM "xxx"'
     summary = "This is a summary"
     ask_details_request = AskDetailsRequest(
         query="How many books are there?'",
