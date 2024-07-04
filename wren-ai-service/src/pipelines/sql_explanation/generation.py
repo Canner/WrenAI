@@ -3,6 +3,7 @@ import sys
 from typing import Any, Dict, List, Optional
 
 import orjson
+import pydantic
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
@@ -298,7 +299,7 @@ class Generation(BasicPipeline):
     async def run(
         self,
         question: str,
-        step_with_analysis_results: Dict,
+        step_with_analysis_results: pydantic.BaseModel,
         full_sql: str,
     ):
         logger.info("SQL Explanation Generation pipeline is running...")
