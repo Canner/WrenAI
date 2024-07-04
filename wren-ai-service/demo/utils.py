@@ -350,8 +350,17 @@ def show_asks_details_results(query: str):
         ):
             _col1, _col2 = st.columns(2)
             with _col1:
-                st.markdown("**SQL Analysis Results**")
-                st.json(st.session_state["sql_analysis_results"][i])
+                st.markdown("**SQL Analysis Results With Cte Removed**")
+                st.json(
+                    list(
+                        filter(
+                            lambda analysis_result: not analysis_result[
+                                "isSubqueryOrCte"
+                            ],
+                            st.session_state["sql_analysis_results"][i],
+                        )
+                    )
+                )
             with _col2:
                 st.markdown("**SQL Explanation Results**")
                 st.json(st.session_state["sql_explanation_results"][i])
