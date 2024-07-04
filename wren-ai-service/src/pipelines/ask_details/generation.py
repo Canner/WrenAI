@@ -130,14 +130,16 @@ def prompt(sql: str, prompt_builder: PromptBuilder) -> dict:
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {prompt}")
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
 @observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
-    logger.debug(f"generate: {generate}")
+    logger.debug(
+        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return await post_processor.run(generate.get("replies"))
 
 

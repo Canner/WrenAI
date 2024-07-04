@@ -228,7 +228,9 @@ class GenerationPostProcessor:
 def preprocess(
     sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
 ) -> List[dict]:
-    logger.debug(f"sql_analysis_results: {sql_analysis_results}")
+    logger.debug(
+        f"sql_analysis_results: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return pre_processor.run(sql_analysis_results)
 
 
@@ -243,7 +245,9 @@ def prompt(
 ) -> dict:
     logger.debug(f"question: {question}")
     logger.debug(f"sql: {sql}")
-    logger.debug(f"preprocess: {preprocess}")
+    logger.debug(
+        f"preprocess: {orjson.dumps(preprocess, option=orjson.OPT_INDENT_2).decode()}"
+    )
     logger.debug(f"sql_summary: {sql_summary}")
     logger.debug(f"full_sql: {full_sql}")
     return prompt_builder.run(
@@ -257,13 +261,15 @@ def prompt(
 
 @async_timer
 async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {prompt}")
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @timer
 def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
-    logger.debug(f"generate: {generate}")
+    logger.debug(
+        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return post_processor.run(generate.get("replies"))
 
 

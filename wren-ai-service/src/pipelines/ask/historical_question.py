@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document, component
@@ -66,14 +67,15 @@ async def embedding(query: str, embedder: Any) -> dict:
 @observe(capture_input=False)
 async def retrieval(embedding: dict, retriever: Any) -> dict:
     res = await retriever.run(query_embedding=embedding.get("embedding"))
-    documents = res.get("documents")
-    return dict(documents=documents)
+    return dict(documents=res.get("documents"))
 
 
 @timer
 @observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
-    logger.debug(f"retrieval: {retrieval}")
+    logger.debug(
+        f"retrieval: {orjson.dumps(retrieval, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return score_filter.run(documents=retrieval.get("documents"))
 
 
@@ -82,7 +84,9 @@ def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
 ) -> dict:
-    logger.debug(f"filtered_documents: {filtered_documents}")
+    logger.debug(
+        f"filtered_documents: {orjson.dumps(filtered_documents, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return output_formatter.run(documents=filtered_documents.get("documents"))
 
 

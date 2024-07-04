@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
@@ -100,8 +101,12 @@ def prompt(
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
-    logger.debug(f"documents: {documents}")
-    logger.debug(f"exclude: {exclude}")
+    logger.debug(
+        f"documents: {orjson.dumps(documents, option=orjson.OPT_INDENT_2).decode()}"
+    )
+    logger.debug(
+        f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return prompt_builder.run(
         query=query, documents=documents, exclude=exclude, alert=alert
     )
@@ -110,14 +115,16 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {prompt}")
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
 @observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
-    logger.debug(f"generate: {generate}")
+    logger.debug(
+        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return await post_processor.run(generate.get("replies"))
 
 

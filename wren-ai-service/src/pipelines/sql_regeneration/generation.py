@@ -105,7 +105,9 @@ def sql_regeneration_prompt(
     preprocess: Dict[str, Any],
     sql_regeneration_prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"preprocess: {preprocess}")
+    logger.debug(
+        f"preprocess: {orjson.dumps(preprocess, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return sql_regeneration_prompt_builder.run(results=preprocess["results"])
 
 
@@ -114,7 +116,9 @@ async def sql_regeneration_generate(
     sql_regeneration_prompt: dict,
     sql_regeneration_generator: Any,
 ) -> dict:
-    logger.debug(f"sql_regeneration_prompt: {sql_regeneration_prompt}")
+    logger.debug(
+        f"sql_regeneration_prompt: {orjson.dumps(sql_regeneration_prompt, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return await sql_regeneration_generator.run(
         prompt=sql_regeneration_prompt.get("prompt")
     )
@@ -125,7 +129,9 @@ def sql_regeneration_post_process(
     sql_regeneration_generate: dict,
     sql_regeneration_post_processor: SQLRegenerationPostProcessor,
 ) -> dict:
-    logger.debug(f"sql_regeneration_generate: {sql_regeneration_generate}")
+    logger.debug(
+        f"sql_regeneration_generate: {orjson.dumps(sql_regeneration_generate, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return sql_regeneration_post_processor.run(
         replies=sql_regeneration_generate.get("replies"),
     )

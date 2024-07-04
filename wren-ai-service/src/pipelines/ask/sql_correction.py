@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
@@ -66,8 +67,12 @@ def prompt(
     alert: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"documents: {documents}")
-    logger.debug(f"invalid_generation_results: {invalid_generation_results}")
+    logger.debug(
+        f"documents: {orjson.dumps(documents, option=orjson.OPT_INDENT_2).decode()}"
+    )
+    logger.debug(
+        f"invalid_generation_results: {orjson.dumps(invalid_generation_results, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return prompt_builder.run(
         documents=documents,
         invalid_generation_results=invalid_generation_results,
@@ -78,14 +83,16 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {prompt}")
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
 @observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
-    logger.debug(f"generate: {generate}")
+    logger.debug(
+        f"generate: {orjson.dumps(generate, options=orjson.OPT_INDENT_2).decode()}"
+    )
     return await post_processor.run(generate.get("replies"))
 
 
