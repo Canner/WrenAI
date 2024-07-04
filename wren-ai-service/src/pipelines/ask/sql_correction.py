@@ -91,7 +91,7 @@ async def generate(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(
-        f"generate: {orjson.dumps(generate, options=orjson.OPT_INDENT_2).decode()}"
+        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
     )
     return await post_processor.run(generate.get("replies"))
 
