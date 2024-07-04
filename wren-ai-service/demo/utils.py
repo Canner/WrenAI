@@ -344,12 +344,17 @@ def show_asks_details_results(query: str):
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
-        if st.session_state["sql_analysis_results"]:
-            st.markdown("**SQL Analysis Results**")
-            st.json(st.session_state["sql_analysis_results"][i])
-        if st.session_state["sql_explanation_results"]:
-            st.markdown("**SQL Explanation Results**")
-            st.json(st.session_state["sql_explanation_results"][i])
+        if (
+            st.session_state["sql_analysis_results"]
+            and st.session_state["sql_explanation_results"]
+        ):
+            _col1, _col2 = st.columns(2)
+            with _col1:
+                st.markdown("**SQL Analysis Results**")
+                st.json(st.session_state["sql_analysis_results"][i])
+            with _col2:
+                st.markdown("**SQL Explanation Results**")
+                st.json(st.session_state["sql_explanation_results"][i])
 
         st.button(
             label="Preview Data",
