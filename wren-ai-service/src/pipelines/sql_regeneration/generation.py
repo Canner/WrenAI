@@ -92,9 +92,7 @@ def preprocess(
     steps: List[SQLExplanationWithUserCorrections],
     sql_regeneration_preprocesser: SQLRegenerationRreprocesser,
 ) -> dict[str, Any]:
-    logger.debug(
-        f"steps: {orjson.dumps(steps.model_dump(mode='json'), option=orjson.OPT_INDENT_2).decode()}"
-    )
+    logger.debug(f"steps: {steps}")
     logger.debug(f"description: {description}")
     return sql_regeneration_preprocesser.run(
         description=description,
@@ -107,6 +105,7 @@ def sql_regeneration_prompt(
     preprocess: Dict[str, Any],
     sql_regeneration_prompt_builder: PromptBuilder,
 ) -> dict:
+    logger.debug(f"preprocess: {preprocess}")
     return sql_regeneration_prompt_builder.run(results=preprocess["results"])
 
 
