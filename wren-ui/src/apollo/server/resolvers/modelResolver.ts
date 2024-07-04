@@ -688,6 +688,7 @@ export class ModelResolver {
     if (sampleDataset) {
       throw new Error(`Doesn't support Native SQL`);
     }
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
 
     // get sql statement of a response
     const response = await ctx.askingService.getResponse(responseId);
@@ -699,7 +700,10 @@ export class ModelResolver {
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps));
 
-    return await ctx.wrenEngineAdaptor.getNativeSQL(sql);
+    return await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
+      manifest,
+      modelingOnly: false,
+    });
   }
 
   public async updateViewMetadata(
