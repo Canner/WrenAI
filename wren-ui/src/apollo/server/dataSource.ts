@@ -1,8 +1,8 @@
 import {
   IbisBigQueryConnectionInfo,
-  IbisMySQLConnectionInfo,
   IbisPostgresConnectionInfo,
-  IbisSqlServerConnectionInfo,
+  HostBasedConnectionInfo,
+  UrlBasedConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
   BIG_QUERY_CONNECTION_INFO,
@@ -11,6 +11,7 @@ import {
   POSTGRES_CONNECTION_INFO,
   MS_SQL_CONNECTION_INFO,
   WREN_AI_CONNECTION_INFO,
+  CLICK_HOUSE_CONNECTION_INFO,
 } from './repositories';
 import { DataSourceName } from './types';
 import { getConfig } from './config';
@@ -110,7 +111,7 @@ const dataSource = {
     },
   } as IDataSourceConnectionInfo<
     MYSQL_CONNECTION_INFO,
-    IbisMySQLConnectionInfo
+    HostBasedConnectionInfo
   >,
 
   // SQL Server
@@ -127,7 +128,28 @@ const dataSource = {
     },
   } as IDataSourceConnectionInfo<
     MS_SQL_CONNECTION_INFO,
-    IbisSqlServerConnectionInfo
+    HostBasedConnectionInfo
+  >,
+
+  // Click House
+  [DataSourceName.CLICK_HOUSE]: {
+    sensitiveProps: ['password'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.CLICK_HOUSE,
+        connectionInfo,
+      );
+      const { host, port, database, user, password, ssl } =
+        decryptedConnectionInfo as CLICK_HOUSE_CONNECTION_INFO;
+      let connectionUrl = `clickhouse://${user}:${password}@${host}:${port}/${database}?`;
+      if (ssl) {
+        connectionUrl += 'secure=1';
+      }
+      return { connectionUrl };
+    },
+  } as IDataSourceConnectionInfo<
+    CLICK_HOUSE_CONNECTION_INFO,
+    UrlBasedConnectionInfo
   >,
 
   // DuckDB

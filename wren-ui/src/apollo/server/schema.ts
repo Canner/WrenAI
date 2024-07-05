@@ -9,6 +9,7 @@ export const typeDefs = gql`
     POSTGRES
     MYSQL
     MSSQL
+    CLICK_HOUSE
   }
 
   enum ExpressionName {

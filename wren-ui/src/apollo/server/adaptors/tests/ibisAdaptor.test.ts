@@ -4,6 +4,7 @@ import { DataSourceName } from '../../types';
 import { Manifest } from '../../mdl/type';
 import {
   BIG_QUERY_CONNECTION_INFO,
+  CLICK_HOUSE_CONNECTION_INFO,
   MS_SQL_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
@@ -40,6 +41,15 @@ describe('IbisAdaptor', () => {
   const mockPostgresConnectionInfo: POSTGRES_CONNECTION_INFO = {
     host: 'localhost',
     port: 5432,
+    database: 'my-database',
+    user: 'my-user',
+    password: 'my-password',
+    ssl: true,
+  };
+
+  const mockClickHouseConnectionInfo: CLICK_HOUSE_CONNECTION_INFO = {
+    host: 'localhost',
+    port: 8443,
     database: 'my-database',
     user: 'my-user',
     password: 'my-password',
@@ -144,6 +154,29 @@ describe('IbisAdaptor', () => {
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v2/ibis/mysql/metadata/constraints`,
+      { connectionInfo: expectConnectionInfo },
+    );
+  });
+
+  it('should get click house constraints', async () => {
+    const mockResponse = { data: [] };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+    // mock decrypt method in Encryptor to return the same password
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockClickHouseConnectionInfo.password }),
+    );
+
+    const result = await ibisAdaptor.getConstraints(
+      DataSourceName.CLICK_HOUSE,
+      mockClickHouseConnectionInfo,
+    );
+    const expectConnectionInfo = Object.entries(
+      mockClickHouseConnectionInfo,
+    ).reduce((acc, [key, value]) => ((acc[snakeCase(key)] = value), acc), {});
+
+    expect(result).toEqual([]);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/ibis/clickhouse/metadata/constraints`,
       { connectionInfo: expectConnectionInfo },
     );
   });
