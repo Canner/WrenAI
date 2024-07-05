@@ -118,10 +118,10 @@ export interface IbisQueryResponse {
 }
 
 export class IbisAdaptor implements IIbisAdaptor {
-  private ibisServerEndpoint: string;
+  private ibisServerBaseUrl: string;
 
   constructor({ ibisServerEndpoint }: { ibisServerEndpoint: string }) {
-    this.ibisServerEndpoint = ibisServerEndpoint;
+    this.ibisServerBaseUrl = `${ibisServerEndpoint}/v2/connector`;
   }
 
   public async query(
@@ -139,7 +139,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Querying ibis with body: ${JSON.stringify(body, null, 2)}`);
     try {
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query`,
         body,
         {
           params: {
@@ -174,7 +174,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Dry run sql from ibis with body:`);
     try {
       await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
         body,
       );
       logger.debug(`Ibis server Dry run success`);
@@ -200,7 +200,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting tables from ibis`);
       const res: AxiosResponse<CompactTable[]> = await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/tables`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/tables`,
         body,
       );
       return res.data;
@@ -227,7 +227,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting constraint from ibis`);
       const res: AxiosResponse<RecommendConstraint[]> = await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
         body,
       );
       return res.data;
@@ -259,7 +259,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Run validation rule "${validationRule}" with ibis`);
       await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
         body,
       );
       return { valid: true, message: null };
