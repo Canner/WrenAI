@@ -269,14 +269,23 @@ class GenerationPostProcessor:
                         "selectItems" in preprocessed_sql_analysis_results
                         and "selectItems" in sql_explanation_results
                     ):
-                        sql_analysis_result_for_select_items = (
-                            preprocessed_sql_analysis_results["selectItems"][
-                                "withFunctionCallOrMathematicalOperation"
-                            ]
-                            + preprocessed_sql_analysis_results["selectItems"][
-                                "withoutFunctionCallOrMathematicalOperation"
-                            ]
-                        )
+                        sql_analysis_result_for_select_items = [
+                            {
+                                **select_item,
+                                "type": "withFunctionCallOrMathematicalOperation",
+                            }
+                            for select_item in preprocessed_sql_analysis_results[
+                                "selectItems"
+                            ]["withFunctionCallOrMathematicalOperation"]
+                        ] + [
+                            {
+                                **select_item,
+                                "type": "withoutFunctionCallOrMathematicalOperation",
+                            }
+                            for select_item in preprocessed_sql_analysis_results[
+                                "selectItems"
+                            ]["withoutFunctionCallOrMathematicalOperation"]
+                        ]
 
                         for (
                             select_item,
