@@ -4,6 +4,7 @@ export enum DataSourceName {
   POSTGRES = 'POSTGRES',
   MYSQL = 'MYSQL',
   MSSQL = 'MSSQL',
+  CLICK_HOUSE = 'CLICK_HOUSE',
 }
 
 export interface DataSource {

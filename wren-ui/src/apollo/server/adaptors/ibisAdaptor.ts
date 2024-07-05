@@ -36,22 +36,6 @@ export type IbisPostgresConnectionInfo =
   | UrlBasedConnectionInfo
   | HostBasedConnectionInfo;
 
-export interface IbisMySQLConnectionInfo {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-}
-
-export interface IbisSqlServerConnectionInfo {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-}
-
 export interface IbisBigQueryConnectionInfo {
   project_id: string;
   dataset_id: string;
@@ -59,10 +43,10 @@ export interface IbisBigQueryConnectionInfo {
 }
 
 export type IbisConnectionInfo =
+  | UrlBasedConnectionInfo
+  | HostBasedConnectionInfo
   | IbisPostgresConnectionInfo
-  | IbisMySQLConnectionInfo
-  | IbisBigQueryConnectionInfo
-  | IbisSqlServerConnectionInfo;
+  | IbisBigQueryConnectionInfo;
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
@@ -70,6 +54,7 @@ export enum SupportedDataSource {
   SNOWFLAKE = 'SNOWFLAKE',
   MYSQL = 'MYSQL',
   MSSQL = 'MSSQL',
+  CLICK_HOUSE = 'CLICK_HOUSE',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -78,6 +63,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.SNOWFLAKE]: 'snowflake',
   [SupportedDataSource.MYSQL]: 'mysql',
   [SupportedDataSource.MSSQL]: 'mssql',
+  [SupportedDataSource.CLICK_HOUSE]: 'clickhouse',
 };
 export interface TableResponse {
   tables: CompactTable[];
@@ -132,10 +118,10 @@ export interface IbisQueryResponse {
 }
 
 export class IbisAdaptor implements IIbisAdaptor {
-  private ibisServerEndpoint: string;
+  private ibisServerBaseUrl: string;
 
   constructor({ ibisServerEndpoint }: { ibisServerEndpoint: string }) {
-    this.ibisServerEndpoint = ibisServerEndpoint;
+    this.ibisServerBaseUrl = `${ibisServerEndpoint}/v2/connector`;
   }
 
   public async query(
@@ -153,7 +139,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Querying ibis with body: ${JSON.stringify(body, null, 2)}`);
     try {
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query`,
         body,
         {
           params: {
@@ -188,7 +174,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Dry run sql from ibis with body:`);
     try {
       await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
         body,
       );
       logger.debug(`Ibis server Dry run success`);
@@ -214,7 +200,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting tables from ibis`);
       const res: AxiosResponse<CompactTable[]> = await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/tables`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/tables`,
         body,
       );
       return res.data;
@@ -241,7 +227,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting constraint from ibis`);
       const res: AxiosResponse<RecommendConstraint[]> = await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
         body,
       );
       return res.data;
@@ -273,7 +259,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Run validation rule "${validationRule}" with ibis`);
       await axios.post(
-        `${this.ibisServerEndpoint}/v2/ibis/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
         body,
       );
       return { valid: true, message: null };

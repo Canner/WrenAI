@@ -135,6 +135,7 @@ export type DataSourceInput = {
 
 export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
+  CLICK_HOUSE = 'CLICK_HOUSE',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
@@ -495,6 +496,11 @@ export type MutationDeleteThreadArgs = {
 
 export type MutationDeleteViewArgs = {
   where: ViewWhereUniqueInput;
+};
+
+
+export type MutationDeployArgs = {
+  force?: InputMaybe<Scalars['Boolean']>;
 };
 
 

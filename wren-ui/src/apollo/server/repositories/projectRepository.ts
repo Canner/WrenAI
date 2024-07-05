@@ -40,6 +40,15 @@ export interface MS_SQL_CONNECTION_INFO {
   database: string;
 }
 
+export interface CLICK_HOUSE_CONNECTION_INFO {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  ssl: boolean;
+}
+
 export interface DUCKDB_CONNECTION_INFO {
   initSql: string;
   extensions: Array<string>;
@@ -51,7 +60,8 @@ export type WREN_AI_CONNECTION_INFO =
   | POSTGRES_CONNECTION_INFO
   | MYSQL_CONNECTION_INFO
   | DUCKDB_CONNECTION_INFO
-  | MS_SQL_CONNECTION_INFO;
+  | MS_SQL_CONNECTION_INFO
+  | CLICK_HOUSE_CONNECTION_INFO;
 
 export interface Project {
   id: number; // ID
