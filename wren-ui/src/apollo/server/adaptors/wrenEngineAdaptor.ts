@@ -2,36 +2,14 @@ import axios, { AxiosResponse } from 'axios';
 import { Manifest } from '../mdl/type';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
-import { CompactTable } from '../services';
+import { CompactTable, DEFAULT_PREVIEW_LIMIT } from '../services';
 
 const logger = getLogger('WrenEngineAdaptor');
 logger.level = 'debug';
 
-const DEFAULT_PREVIEW_LIMIT = 500;
-
-export enum WrenEngineDeployStatusEnum {
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-}
-
 export interface WrenEngineDeployStatusResponse {
   systemStatus: string;
   version: string;
-}
-
-export interface DeployResponse {
-  status: WrenEngineDeployStatusEnum;
-  error?: string;
-}
-
-interface DeployPayload {
-  manifest: Manifest;
-  version: string;
-}
-
-export interface deployData {
-  manifest: Manifest;
-  hash: string;
 }
 
 export interface ColumnMetadata {
@@ -89,18 +67,23 @@ export interface DryRunResponse {
 }
 
 export interface IWrenEngineAdaptor {
-  deploy(deployData: deployData): Promise<DeployResponse>;
+  // duckdb data source related
   prepareDuckDB(options: DuckDBPrepareOptions): Promise<void>;
-  listTables(): Promise<CompactTable[]>;
-  putSessionProps(props: Record<string, any>): Promise<void>;
   queryDuckdb(sql: string): Promise<EngineQueryResponse>;
+  putSessionProps(props: Record<string, any>): Promise<void>;
+
+  // metadata related, used to fetch metadata of duckdb
+  listTables(): Promise<CompactTable[]>;
+
+  // config wren engine
   patchConfig(config: Record<string, any>): Promise<void>;
+
+  // query
   previewData(
     sql: string,
+    mdl: Manifest,
     limit?: number,
-    mdl?: Manifest,
   ): Promise<EngineQueryResponse>;
-  describeStatement(sql: string): Promise<DescribeStatementResponse>;
   getNativeSQL(sql: string, options?: DryPlanOption): Promise<string>;
   validateColumnIsValid(
     manifest: Manifest,
@@ -182,33 +165,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     return this.formatToCompactTable(response);
   }
 
-  public async deploy(deployData: deployData): Promise<DeployResponse> {
-    const { manifest, hash } = deployData;
-    const deployPayload = { manifest, version: hash } as DeployPayload;
-
-    try {
-      // skip if the model has been deployed
-      const resp = await this.getDeployStatus();
-      if (resp.version === hash) {
-        return { status: WrenEngineDeployStatusEnum.SUCCESS };
-      }
-
-      // start deploy to wren engine
-      await axios.post(
-        `${this.wrenEngineBaseEndpoint}/v1/mdl/deploy`,
-        deployPayload,
-      );
-      logger.debug(`WrenEngine: Deploy wren engine success, hash: ${hash}`);
-      return { status: WrenEngineDeployStatusEnum.SUCCESS };
-    } catch (err: any) {
-      logger.debug(`Got error when deploying to wren engine: ${err.message}`);
-      return {
-        status: WrenEngineDeployStatusEnum.FAILED,
-        error: `WrenEngine Error, deployment hash:${hash}: ${err.message}`,
-      };
-    }
-  }
-
   public async putSessionProps(props: Record<string, any>) {
     const setSessionStatements = Object.entries(props)
       .map(([key, value]) => {
@@ -270,8 +226,8 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
 
   public async previewData(
     sql: string,
+    manifest: Manifest,
     limit: number = DEFAULT_PREVIEW_LIMIT,
-    manifest?: Manifest,
   ): Promise<EngineQueryResponse> {
     try {
       const url = new URL(this.previewUrlPath, this.wrenEngineBaseEndpoint);
@@ -293,19 +249,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data;
     } catch (err: any) {
       logger.debug(`Got error when previewing data: ${err.message}`);
-      throw err;
-    }
-  }
-
-  public async describeStatement(
-    sql: string,
-  ): Promise<DescribeStatementResponse> {
-    try {
-      // preview data with limit 1 to get column metadata
-      const res = await this.previewData(sql, 1);
-      return { columns: res.columns };
-    } catch (err: any) {
-      logger.debug(`Got error when describing statement: ${err.message}`);
       throw err;
     }
   }
