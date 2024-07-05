@@ -8,13 +8,14 @@ import {
   IbisPostgresConnectionInfo,
   IbisBigQueryConnectionInfo,
   ValidationRules,
-  IbisQueryOptions,
 } from '../adaptors/ibisAdaptor';
 import { getLogger } from '@server/utils';
 import { Project } from '../repositories';
 
 const logger = getLogger('QueryService');
 logger.level = 'debug';
+
+export const DEFAULT_PREVIEW_LIMIT = 500;
 
 export interface ColumnMetadata {
   name: string;
@@ -33,10 +34,10 @@ export interface DescribeStatementResponse {
 export interface PreviewOptions {
   project: Project;
   modelingOnly?: boolean;
-  mdl: Manifest;
+  // if not given, will use the deployed manifest
+  manifest: Manifest;
   limit?: number;
   dryRun?: boolean;
-  // if not given, will use the deployed manifest
 }
 
 export interface SqlValidateOptions {
@@ -93,42 +94,37 @@ export class QueryService implements IQueryService {
     sql: string,
     options: PreviewOptions,
   ): Promise<PreviewDataResponse | boolean> {
-    const { project, mdl, limit, dryRun } = options;
+    const { project, manifest: mdl, limit, dryRun } = options;
     const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
       if (dryRun) {
         logger.debug('Using wren engine to dry run');
         await this.wrenEngineAdaptor.dryRun(sql, {
           manifest: mdl,
-          limit: limit,
+          limit,
         });
         return true;
       } else {
         logger.debug('Using wren engine to preview');
-        const data = await this.wrenEngineAdaptor.previewData(sql, limit, mdl);
+        const data = await this.wrenEngineAdaptor.previewData(sql, mdl, limit);
         return data as PreviewDataResponse;
       }
     } else {
-      logger.debug('Use ibis adaptor to preview');
-      /**
-       * add alias to FROM clause to prevent ibis error
-       * ibis server does not have limit parameter, should handle it in sql
-       */
-      const rewrittenSql = limit
-        ? `SELECT tmp.* FROM (${sql}) tmp LIMIT ${limit}`
-        : sql;
-
       this.checkDataSourceIsSupported(dataSource);
-      const queryOptions = {
-        dataSource,
-        connectionInfo,
-        mdl,
-        dryRun,
-      } as IbisQueryOptions;
+      logger.debug('Use ibis adaptor to preview');
       if (dryRun) {
-        await this.ibisAdaptor.dryRun(rewrittenSql, queryOptions);
+        await this.ibisAdaptor.dryRun(sql, {
+          dataSource,
+          connectionInfo,
+          mdl,
+        });
       } else {
-        const data = await this.ibisAdaptor.query(rewrittenSql, queryOptions);
+        const data = await this.ibisAdaptor.query(sql, {
+          dataSource,
+          connectionInfo,
+          mdl,
+          limit,
+        });
         return this.transformDataType(data);
       }
     }
