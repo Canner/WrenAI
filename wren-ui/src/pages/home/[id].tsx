@@ -13,7 +13,7 @@ import {
 } from '@/apollo/client/graphql/home.generated';
 import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
 import useModalAction from '@/hooks/useModalAction';
-import PromptThread from '@/components/pages/home/promptThread';
+import Thread from '@/components/pages/home/thread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 
@@ -109,10 +109,7 @@ export default function HomeThread() {
 
   return (
     <SiderLayout loading={loading} sidebar={homeSidebar}>
-      <PromptThread
-        data={thread}
-        onOpenSaveAsViewModal={saveAsViewModal.openModal}
-      />
+      <Thread data={thread} onOpenSaveAsViewModal={saveAsViewModal.openModal} />
       <div className="py-12" />
       <Prompt
         data={askPrompt.data}
