@@ -14,7 +14,6 @@ interface Props {
 }
 
 const StyledThread = styled.div`
-
   h4.ant-typography {
     margin-top: 10px;
   }
@@ -45,7 +44,7 @@ const AnswerResultTemplate = ({
   const isLastThreadResponse = id === lastResponseId;
 
   return (
-    <div key={`${id}-${index}`}>
+    <div className="d-inline-block text-left" key={`${id}-${index}`}>
       {index > 0 && <Divider />}
       {error ? (
         <Alert
@@ -102,7 +101,7 @@ export default function Thread(props: Props) {
   }, [divRef, data]);
 
   return (
-    <StyledThread className="mt-12" ref={divRef}>
+    <StyledThread className="text-center px-4 mt-12" ref={divRef}>
       <AnswerResultIterator
         data={data?.responses || []}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
