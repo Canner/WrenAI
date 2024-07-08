@@ -187,6 +187,7 @@ export default function ReferenceSideFloat(props: Props) {
     setCollapse(!collapse);
   };
 
+  if (references.length === 0) return null;
   return (
     <StyledReferenceSideFloat className="border border-gray-4 rounded p-4">
       <div className="referenceSideFloat-title text-md text-medium bg-gray-1">
@@ -203,7 +204,7 @@ export default function ReferenceSideFloat(props: Props) {
             className="gray-6 -mb-2"
             onClick={handleCollapse}
           >
-            - Show all ({references.length - COLLAPSE_LIMIT})
+            - Show all ({references.length})
           </Button>
         </>
       )}
