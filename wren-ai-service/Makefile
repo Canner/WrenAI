@@ -12,7 +12,6 @@ dev-down:
 
 ## wren-ai-service related ##
 start:
-	cp .env.example .env
 	poetry run python -m src.__main__
 ## wren-ai-service related ##
 
