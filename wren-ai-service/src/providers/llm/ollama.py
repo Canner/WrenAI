@@ -127,15 +127,17 @@ class OllamaLLMProvider(LLMProvider):
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
     ):
         logger.info(f"Using Ollama LLM: {generation_model}")
+        logger.info(f"Using Ollama URL: {url}")
         self._url = url
         self._generation_model = generation_model
 
     def get_generator(
         self,
-        model_kwargs: Dict[str, Any] = orjson.loads(
-            os.getenv("GENERATION_MODEL_KWARGS", "{}")
-        )
-        or GENERATION_MODEL_KWARGS,
+        model_kwargs: Dict[str, Any] = (
+            orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
+            if os.getenv("GENERATION_MODEL_KWARGS")
+            else GENERATION_MODEL_KWARGS
+        ),
         system_prompt: Optional[str] = None,
     ):
         logger.info(f"Creating Ollama generator with model kwargs: {model_kwargs}")

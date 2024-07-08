@@ -9,7 +9,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 - Python 3.12.*, recommended to use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage the Python versions
 - install `poetry` with version 1.8.3: `curl -sSL https://install.python-poetry.org | python3 - --version 1.8.3`
 - execute `poetry install` to install the dependencies
-- copy `.env.example` file to `.env`, and `.env.dev.example` file to `.env.dev` and fill in the environment variables
+- copy `.env.dev.example` file to `.env.dev` and fill in the environment variables
 - [for development] execute `poetry run pre-commit install` to install the pre-commit hooks and `poetry run pre-commit run --all-files` to run the pre-commit checks at the first time to check if everything is set up correctly
 - [for development] to run the tests, execute `make test`
 

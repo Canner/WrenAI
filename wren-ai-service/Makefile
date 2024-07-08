@@ -42,9 +42,6 @@ prepare-wren-engine:
 	mkdir -p tools/dev/etc/mdl
 	echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" \\
 		> tools/dev/etc/mdl/sample.json
-
-psql:
-	docker exec -it wren-engine-1 bash launch-cli.sh
 ## wren-engine related ##
 
 

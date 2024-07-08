@@ -3,6 +3,7 @@ import functools
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Tuple
 
 from dotenv import load_dotenv
@@ -49,12 +50,11 @@ def setup_custom_logger(name, level=logging.INFO):
 
 
 def load_env_vars() -> str:
-    load_dotenv(override=True)
-
-    if is_dev_env := os.getenv("ENV") and os.getenv("ENV").lower() == "dev":
+    if Path(".env.dev").exists():
         load_dotenv(".env.dev", override=True)
+        return "dev"
 
-    return "dev" if is_dev_env else "prod"
+    return "prod"
 
 
 def init_providers() -> (

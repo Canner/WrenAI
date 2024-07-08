@@ -127,7 +127,7 @@ class OpenAILLMProvider(LLMProvider):
             """
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
-        logger.info(f"Initializing OpenAILLM provider with API base: {api_base}")
+        logger.info(f"Using OpenAILLM provider with API base: {api_base}")
         # TODO: currently only OpenAI api key can be verified
         if api_base == LLM_OPENAI_API_BASE:
             _verify_api_key(api_key.resolve_value(), api_base)
@@ -140,10 +140,11 @@ class OpenAILLMProvider(LLMProvider):
 
     def get_generator(
         self,
-        model_kwargs: Dict[str, Any] = orjson.loads(
-            os.getenv("GENERATION_MODEL_KWARGS", "{}")
-        )
-        or GENERATION_MODEL_KWARGS,
+        model_kwargs: Dict[str, Any] = (
+            orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
+            if os.getenv("GENERATION_MODEL_KWARGS")
+            else GENERATION_MODEL_KWARGS
+        ),
         system_prompt: Optional[str] = None,
     ):
         if self._api_base == LLM_OPENAI_API_BASE:
