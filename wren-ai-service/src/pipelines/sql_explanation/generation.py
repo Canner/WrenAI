@@ -41,8 +41,13 @@ def _compose_sql_expression_of_filter_type(filter_analysis: Dict) -> str:
     return ""
 
 
-def _compose_sql_expression_of_groupby_type(groupby_keys: List[List[str]]) -> List[str]:
-    return [f"{','.join(groupby_key)}" for groupby_key in groupby_keys]
+def _compose_sql_expression_of_groupby_type(
+    groupby_keys: List[List[dict]],
+) -> List[str]:
+    return [
+        ", ".join([expression["expression"] for expression in groupby_key])
+        for groupby_key in groupby_keys
+    ]
 
 
 def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
