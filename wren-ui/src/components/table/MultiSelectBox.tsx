@@ -60,7 +60,6 @@ export default function MultiSelectBox(props: Props) {
   }, [items, searchValue]);
 
   const onSelect = (rowKey: string) => {
-    console.log('row keys::', rowKey);
     setSelectedRowKeys((x) => {
       if (x.has(rowKey)) {
         x.delete(rowKey);
