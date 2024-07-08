@@ -17,7 +17,6 @@ services:
       - ${WREN_ENGINE_PORT}:${WREN_ENGINE_PORT}
     volumes:
       - ./etc:/usr/src/app/etc
-      - ${LAUNCH_CLI_PATH}:/usr/src/app/launch-cli.sh
     networks:
       - wren
 
