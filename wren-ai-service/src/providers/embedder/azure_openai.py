@@ -119,6 +119,7 @@ class AsyncDocumentEmbedder(AzureOpenAIDocumentEmbedder):
 
         self.client = AsyncAzureOpenAI(
             azure_endpoint=api_base_url,
+            azure_deployment=model,
             api_version=api_version,
             api_key=api_key.resolve_value(),
         )
@@ -200,6 +201,8 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         or EMBEDDING_MODEL_DIMENSION,
     ):
         logger.info(f"Using Azure OpenAI Embedding Model: {embedding_model}")
+        logger.info(f"Using Azure OpenAI Embedding API Base: {embed_api_base}")
+        logger.info(f"Using Azure OpenAI Embedding API Version: {embed_api_version}")
 
         self._embedding_api_base = embed_api_base
         self._embedding_api_key = embed_api_key

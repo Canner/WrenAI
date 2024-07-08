@@ -164,6 +164,8 @@ class OllamaEmbedderProvider(EmbedderProvider):
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
     ):
         logger.info(f"Using Ollama Embedding Model: {embedding_model}")
+        logger.info(f"Using Ollama URL: {url}")
+
         self._url = url
         self._embedding_model = embedding_model
 

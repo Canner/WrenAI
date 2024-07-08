@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,8 @@ from qdrant_client.http import models as rest
 
 from src.core.provider import DocumentStoreProvider
 from src.providers.loader import get_default_embedding_model_dim, provider
+
+logger = logging.getLogger("wren-ai-service")
 
 
 class AsyncQdrantDocumentStore(QdrantDocumentStore):
@@ -209,6 +212,10 @@ class QdrantProvider(DocumentStoreProvider):
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):
+        logger.info(
+            f"Using Qdrant Document Store with Embedding Model Dimension: {embedding_model_dim}"
+        )
+
         return AsyncQdrantDocumentStore(
             location=self._location,
             embedding_dim=embedding_model_dim,
