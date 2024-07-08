@@ -127,16 +127,17 @@ class OpenAILLMProvider(LLMProvider):
             """
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
-        logger.info(f"Using OpenAILLM provider with API base: {api_base}")
-        # TODO: currently only OpenAI api key can be verified
-        if api_base == LLM_OPENAI_API_BASE:
-            _verify_api_key(api_key.resolve_value(), api_base)
-            logger.info(f"Using OpenAI LLM: {generation_model}")
-        else:
-            logger.info(f"Using OpenAI API-compatible LLM: {generation_model}")
         self._api_key = api_key
-        self._api_base = api_base
+        self._api_base = api_base.rstrip("/") if api_base.endswith("/") else api_base
         self._generation_model = generation_model
+
+        logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
+        # TODO: currently only OpenAI api key can be verified
+        if self._api_base == LLM_OPENAI_API_BASE:
+            _verify_api_key(self._api_key.resolve_value(), self._api_base)
+            logger.info(f"Using OpenAI LLM: {self._generation_model}")
+        else:
+            logger.info(f"Using OpenAI API-compatible LLM: {self._generation_model}")
 
     def get_generator(
         self,

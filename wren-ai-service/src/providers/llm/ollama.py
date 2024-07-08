@@ -126,10 +126,11 @@ class OllamaLLMProvider(LLMProvider):
         url: str = os.getenv("LLM_OLLAMA_URL") or LLM_OLLAMA_URL,
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
     ):
-        logger.info(f"Using Ollama LLM: {generation_model}")
-        logger.info(f"Using Ollama URL: {url}")
-        self._url = url
+        self._url = url.rstrip("/") if url.endswith("/") else url
         self._generation_model = generation_model
+
+        logger.info(f"Using Ollama LLM: {self._generation_model}")
+        logger.info(f"Using Ollama URL: {self._url}")
 
     def get_generator(
         self,

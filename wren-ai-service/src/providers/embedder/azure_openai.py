@@ -200,6 +200,11 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         )
         or EMBEDDING_MODEL_DIMENSION,
     ):
+        embed_api_base = (
+            embed_api_base.rstrip("/")
+            if embed_api_base.endswith("/")
+            else embed_api_base
+        )
         logger.info(f"Using Azure OpenAI Embedding Model: {embedding_model}")
         logger.info(f"Using Azure OpenAI Embedding API Base: {embed_api_base}")
         logger.info(f"Using Azure OpenAI Embedding API Version: {embed_api_version}")

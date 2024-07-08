@@ -163,6 +163,7 @@ class OllamaEmbedderProvider(EmbedderProvider):
         url: str = os.getenv("EMBEDDER_OLLAMA_URL") or EMBEDDER_OLLAMA_URL,
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
     ):
+        url = url.rstrip("/") if url.endswith("/") else url
         logger.info(f"Using Ollama Embedding Model: {embedding_model}")
         logger.info(f"Using Ollama URL: {url}")
 

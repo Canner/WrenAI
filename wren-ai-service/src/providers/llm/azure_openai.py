@@ -122,14 +122,18 @@ class AzureOpenAILLMProvider(LLMProvider):
         chat_api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
     ):
-        logger.info(f"Using AzureOpenAI LLM: {generation_model}")
-        logger.info(f"Using AzureOpenAI LLM with API base: {chat_api_base}")
-        logger.info(f"Using AzureOpenAI LLM with API version: {chat_api_version}")
-
         self._generation_api_key = chat_api_key
-        self._generation_api_base = chat_api_base
+        self._generation_api_base = (
+            chat_api_base.rstrip("/") if chat_api_base.endswith("/") else chat_api_base
+        )
         self._generation_api_version = chat_api_version
         self._generation_model = generation_model
+
+        logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")
+        logger.info(f"Using AzureOpenAI LLM with API base: {self._generation_api_base}")
+        logger.info(
+            f"Using AzureOpenAI LLM with API version: {self._generation_api_version}"
+        )
 
     def get_generator(
         self,

@@ -195,19 +195,22 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             """
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
-        logger.info(f"Initializing OpenAIEmbedder provider with API base: {api_base}")
-        # TODO: currently only OpenAI api key can be verified
-        if api_base == EMBEDDER_OPENAI_API_BASE:
-            _verify_api_key(api_key.resolve_value(), api_base)
-            logger.info(f"Using OpenAI Embedding Model: {embedding_model}")
-        else:
-            logger.info(
-                f"Using OpenAI API-compatible Embedding Model: {embedding_model}"
-            )
         self._api_key = api_key
-        self._api_base = api_base
+        self._api_base = api_base.rstrip("/") if api_base.endswith("/") else api_base
         self._embedding_model = embedding_model
         self._embedding_model_dim = embedding_model_dim
+
+        logger.info(
+            f"Initializing OpenAIEmbedder provider with API base: {self._api_base}"
+        )
+        # TODO: currently only OpenAI api key can be verified
+        if self._api_base == EMBEDDER_OPENAI_API_BASE:
+            _verify_api_key(self._api_key.resolve_value(), self._api_base)
+            logger.info(f"Using OpenAI Embedding Model: {self._embedding_model}")
+        else:
+            logger.info(
+                f"Using OpenAI API-compatible Embedding Model: {self._embedding_model}"
+            )
 
     def get_text_embedder(self):
         return AsyncTextEmbedder(
