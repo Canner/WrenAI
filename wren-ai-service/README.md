@@ -6,7 +6,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 
 ## Environment Setup
 
-- Python 3.12.0, recommended to use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage the Python versions
+- Python 3.12.*, recommended to use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage the Python versions
 - install `poetry` with version 1.8.3: `curl -sSL https://install.python-poetry.org | python3 - --version 1.8.3`
 - execute `poetry install` to install the dependencies
 - copy `.env.dev.example` file to `.env.dev` and fill in the environment variables
