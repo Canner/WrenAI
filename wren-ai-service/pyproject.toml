@@ -7,7 +7,7 @@ license = "AGPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "==3.12.0"
+python = ">=3.12.*, <4.0"
 fastapi = "==0.109.2"
 uvicorn = {extras = ["standard"], version = "==0.30.1"}
 python-dotenv = "==1.0.1"
