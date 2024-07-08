@@ -50,6 +50,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
 
         self.client = AsyncAzureOpenAI(
             azure_endpoint=api_base,
+            azure_deployment=model,
             api_version=api_version,
             api_key=api_key.resolve_value(),
         )
