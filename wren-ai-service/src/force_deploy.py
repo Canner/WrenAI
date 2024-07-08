@@ -1,12 +1,12 @@
 import asyncio
 import os
+from pathlib import Path
 
 import aiohttp
 import backoff
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
-if is_dev_env := os.getenv("ENV") and os.getenv("ENV").lower() == "dev":
+if Path(".env.dev").exists():
     load_dotenv(".env.dev", override=True)
 
 
