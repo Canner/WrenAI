@@ -76,7 +76,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
         completion: Union[
             Stream[ChatCompletionChunk], ChatCompletion
         ] = await self.client.chat.completions.create(
-            model=self.model,
+            model=self.azure_deployment,
             messages=openai_formatted_messages,
             stream=self.streaming_callback is not None,
             **generation_kwargs,
