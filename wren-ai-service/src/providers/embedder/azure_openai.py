@@ -49,6 +49,7 @@ class AsyncTextEmbedder(AzureOpenAITextEmbedder):
 
         self.client = AsyncAzureOpenAI(
             azure_endpoint=api_base_url,
+            azure_deployment=model,
             api_version=api_version,
             api_key=api_key.resolve_value(),
         )
