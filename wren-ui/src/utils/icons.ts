@@ -25,7 +25,7 @@ import FieldBinaryOutlined from '@ant-design/icons/FieldBinaryOutlined';
 import MonitorOutlined from '@ant-design/icons/MonitorOutlined';
 import SwapOutlined from '@ant-design/icons/SwapOutlined';
 import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
-import { Binoculars, LightningCharge } from '@styled-icons/bootstrap';
+import { Binoculars, LightningCharge, Quote } from '@styled-icons/bootstrap';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import { Sparkles } from '@styled-icons/ionicons-outline';
 import { Discord, Github } from '@styled-icons/fa-brands';
@@ -107,5 +107,9 @@ export const DiscordIcon = styled(Discord)`
 `;
 
 export const GithubIcon = styled(Github)`
+  height: 1em;
+`;
+
+export const QuoteIcon = styled(Quote)`
   height: 1em;
 `;
