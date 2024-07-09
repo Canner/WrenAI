@@ -2,6 +2,7 @@ import logging
 from typing import List, Literal, Optional
 
 from haystack import Pipeline
+from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.engine import add_quotes
@@ -64,6 +65,7 @@ class AskDetailsService:
         self._ask_details_results = {}
 
     @async_timer
+    @observe(name="Ask Details(Breakdown SQL)")
     async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,

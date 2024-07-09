@@ -2,6 +2,7 @@ import logging
 from typing import List, Literal, Optional
 
 import sqlparse
+from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
@@ -114,6 +115,7 @@ class AskService:
         self._prepare_semantics_statuses = {}
 
     @async_timer
+    @observe(name="Prepare Semantics")
     async def prepare_semantics(
         self, prepare_semantics_request: SemanticsPreparationRequest
     ):
@@ -163,6 +165,7 @@ class AskService:
         return False
 
     @async_timer
+    @observe(name="Ask Question")
     async def ask(
         self,
         ask_request: AskRequest,
