@@ -14,6 +14,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from src.core.provider import LLMProvider
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -128,7 +129,7 @@ class OpenAILLMProvider(LLMProvider):
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
         self._api_key = api_key
-        self._api_base = api_base.rstrip("/") if api_base.endswith("/") else api_base
+        self._api_base = remove_trailing_slash(api_base)
         self._generation_model = generation_model
 
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")

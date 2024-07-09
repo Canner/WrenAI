@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from src.core.provider import EmbedderProvider
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -163,12 +164,11 @@ class OllamaEmbedderProvider(EmbedderProvider):
         url: str = os.getenv("EMBEDDER_OLLAMA_URL") or EMBEDDER_OLLAMA_URL,
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
     ):
-        url = url.rstrip("/") if url.endswith("/") else url
-        logger.info(f"Using Ollama Embedding Model: {embedding_model}")
-        logger.info(f"Using Ollama URL: {url}")
-
-        self._url = url
+        self._url = remove_trailing_slash(url)
         self._embedding_model = embedding_model
+
+        logger.info(f"Using Ollama Embedding Model: {self._embedding_model}")
+        logger.info(f"Using Ollama URL: {self._url}")
 
     def get_text_embedder(
         self,

@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from src.core.provider import EmbedderProvider
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -196,7 +197,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             OpenAI(api_key=api_key, base_url=api_base).models.list()
 
         self._api_key = api_key
-        self._api_base = api_base.rstrip("/") if api_base.endswith("/") else api_base
+        self._api_base = remove_trailing_slash(api_base)
         self._embedding_model = embedding_model
         self._embedding_model_dim = embedding_model_dim
 

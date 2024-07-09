@@ -14,6 +14,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from src.core.provider import LLMProvider
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -123,9 +124,7 @@ class AzureOpenAILLMProvider(LLMProvider):
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
     ):
         self._generation_api_key = chat_api_key
-        self._generation_api_base = (
-            chat_api_base.rstrip("/") if chat_api_base.endswith("/") else chat_api_base
-        )
+        self._generation_api_base = remove_trailing_slash(chat_api_base)
         self._generation_api_version = chat_api_version
         self._generation_model = generation_model
 
