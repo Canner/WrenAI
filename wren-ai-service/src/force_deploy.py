@@ -3,11 +3,10 @@ import os
 
 import aiohttp
 import backoff
-from dotenv import load_dotenv
 
-load_dotenv(override=True)
-if is_dev_env := os.getenv("ENV") and os.getenv("ENV").lower() == "dev":
-    load_dotenv(".env.dev", override=True)
+from src.utils import load_env_vars
+
+load_env_vars()
 
 
 @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_time=60, max_tries=3)
@@ -25,5 +24,5 @@ async def force_deploy():
             print(f"Forcing deployment: {res}")
 
 
-if os.getenv("ENGINE", "wren-ui") == "wren-ui":
+if os.getenv("ENGINE", "wren_ui") == "wren_ui":
     asyncio.run(force_deploy())

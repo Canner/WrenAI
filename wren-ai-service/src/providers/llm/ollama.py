@@ -10,6 +10,7 @@ from haystack_integrations.components.generators.ollama import OllamaGenerator
 
 from src.core.provider import LLMProvider
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -126,10 +127,11 @@ class OllamaLLMProvider(LLMProvider):
         url: str = os.getenv("LLM_OLLAMA_URL") or LLM_OLLAMA_URL,
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
     ):
-        logger.info(f"Using Ollama LLM: {generation_model}")
-        logger.info(f"Using Ollama URL: {url}")
-        self._url = url
+        self._url = remove_trailing_slash(url)
         self._generation_model = generation_model
+
+        logger.info(f"Using Ollama LLM: {self._generation_model}")
+        logger.info(f"Using Ollama URL: {self._url}")
 
     def get_generator(
         self,

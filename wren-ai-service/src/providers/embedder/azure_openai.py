@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from src.core.provider import EmbedderProvider
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -200,15 +201,19 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         )
         or EMBEDDING_MODEL_DIMENSION,
     ):
-        logger.info(f"Using Azure OpenAI Embedding Model: {embedding_model}")
-        logger.info(f"Using Azure OpenAI Embedding API Base: {embed_api_base}")
-        logger.info(f"Using Azure OpenAI Embedding API Version: {embed_api_version}")
-
-        self._embedding_api_base = embed_api_base
+        self._embedding_api_base = remove_trailing_slash(embed_api_base)
         self._embedding_api_key = embed_api_key
         self._embedding_api_version = embed_api_version
         self._embedding_model = embedding_model
         self._embedding_model_dim = embedding_model_dim
+
+        logger.info(f"Using Azure OpenAI Embedding Model: {self._embedding_model}")
+        logger.info(
+            f"Using Azure OpenAI Embedding API Base: {self._embedding_api_base}"
+        )
+        logger.info(
+            f"Using Azure OpenAI Embedding API Version: {self._embedding_api_version}"
+        )
 
     def get_text_embedder(self):
         return AsyncTextEmbedder(
