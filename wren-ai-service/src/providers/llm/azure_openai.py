@@ -14,6 +14,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from src.core.provider import LLMProvider
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -76,7 +77,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
         completion: Union[
             Stream[ChatCompletionChunk], ChatCompletion
         ] = await self.client.chat.completions.create(
-            model=self.model,
+            model=self.azure_deployment,
             messages=openai_formatted_messages,
             stream=self.streaming_callback is not None,
             **generation_kwargs,
@@ -122,14 +123,16 @@ class AzureOpenAILLMProvider(LLMProvider):
         chat_api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
     ):
-        logger.info(f"Using AzureOpenAI LLM: {generation_model}")
-        logger.info(f"Using AzureOpenAI LLM with API base: {chat_api_base}")
-        logger.info(f"Using AzureOpenAI LLM with API version: {chat_api_version}")
-
         self._generation_api_key = chat_api_key
-        self._generation_api_base = chat_api_base
+        self._generation_api_base = remove_trailing_slash(chat_api_base)
         self._generation_api_version = chat_api_version
         self._generation_model = generation_model
+
+        logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")
+        logger.info(f"Using AzureOpenAI LLM with API base: {self._generation_api_base}")
+        logger.info(
+            f"Using AzureOpenAI LLM with API version: {self._generation_api_version}"
+        )
 
     def get_generator(
         self,
