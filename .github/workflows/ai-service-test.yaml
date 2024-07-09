@@ -1,14 +1,16 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: AI Service CI
+name: AI Service Test
 
 on:
   push:
+    branches:
+      - main
     paths:
-      - 'wren-ai-service/**'
+      - "wren-ai-service/**"
   pull_request:
-    types: [ labeled ]
+    types: [synchronize, labeled]
 
 permissions:
   contents: read
@@ -23,8 +25,8 @@ defaults:
     working-directory: wren-ai-service
 
 jobs:
-  ci:
-    if: ${{ github.event.label.name == 'ci/ai-service' || github.event_name == 'push' }}
+  pytest:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ci/ai-service') || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,12 +34,12 @@ jobs:
       - name: Install Poetry
         uses: abatilo/actions-poetry@v3
         with:
-          poetry-version: '1.8.3'
+          poetry-version: "1.8.3"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version-file: ./wren-ai-service/pyproject.toml
-          cache: 'poetry'
+          cache: "poetry"
       - name: Install the project dependencies
         run: poetry install
       - name: Prepare testing environment and Run tests
