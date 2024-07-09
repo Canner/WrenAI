@@ -104,11 +104,15 @@ export default function MultiSelectBox(props: Props) {
             if (keys.length !== 1) {
               if (keys.length === 0) {
                 setSelectedRowKeys(new Set());
+                onChange && onChange([]);
                 return;
               }
-              setSelectedRowKeys(
-                new Set([...selectedRowKeys, ...(keys as string[])]),
-              );
+              const newSelectedRowKeys = [
+                ...selectedRowKeys,
+                ...(keys as string[]),
+              ];
+              setSelectedRowKeys(new Set(newSelectedRowKeys));
+              onChange && onChange(newSelectedRowKeys);
             }
           },
         }}
