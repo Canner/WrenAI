@@ -60,6 +60,7 @@
     "@typescript-eslint/parser": "6.18.0",
     "ace-builds": "^1.32.3",
     "antd": "4.20.4",
+    "clsx": "^2.1.1",
     "dayjs": "^1.11.11",
     "duckdb": "^0.10.1",
     "duckdb-async": "^0.10.0",

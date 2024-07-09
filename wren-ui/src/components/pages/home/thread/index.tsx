@@ -13,11 +13,7 @@ interface Props {
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
 }
 
-const StyledPromptThread = styled.div`
-  width: 768px;
-  margin-left: auto;
-  margin-right: auto;
-
+const StyledThread = styled.div`
   h4.ant-typography {
     margin-top: 10px;
   }
@@ -48,7 +44,7 @@ const AnswerResultTemplate = ({
   const isLastThreadResponse = id === lastResponseId;
 
   return (
-    <div key={`${id}-${index}`}>
+    <div className="d-inline-block text-left" key={`${id}-${index}`}>
       {index > 0 && <Divider />}
       {error ? (
         <Alert
@@ -78,7 +74,7 @@ const AnswerResultTemplate = ({
 
 const AnswerResultIterator = makeIterable(AnswerResultTemplate);
 
-export default function PromptThread(props: Props) {
+export default function Thread(props: Props) {
   const { data, onOpenSaveAsViewModal } = props;
   const divRef = useRef<HTMLDivElement>(null);
 
@@ -105,12 +101,12 @@ export default function PromptThread(props: Props) {
   }, [divRef, data]);
 
   return (
-    <StyledPromptThread className="mt-12" ref={divRef}>
+    <StyledThread className="text-center px-4 mt-12" ref={divRef}>
       <AnswerResultIterator
         data={data?.responses || []}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onTriggerScrollToBottom={triggerScrollToBottom}
       />
-    </StyledPromptThread>
+    </StyledThread>
   );
 }
