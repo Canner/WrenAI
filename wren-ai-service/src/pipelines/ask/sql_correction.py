@@ -7,6 +7,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import langfuse_context, observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -16,7 +17,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, init_langfuse, init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -58,6 +59,7 @@ Let's think step by step.
 
 ## Start of Pipeline
 @timer
+@observe(capture_input=False)
 def prompt(
     documents: List[Document],
     invalid_generation_results: List[Dict],
@@ -74,12 +76,14 @@ def prompt(
 
 
 @async_timer
+@observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
+@observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))
@@ -131,6 +135,7 @@ class SQLCorrection(BasicPipeline):
         )
 
     @async_timer
+    @observe(name="Ask SQL Correction")
     async def run(
         self,
         contexts: List[Document],
@@ -154,6 +159,7 @@ if __name__ == "__main__":
     from src.utils import load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
     llm_provider, _, _, engine = init_providers()
     pipeline = SQLCorrection(
@@ -163,3 +169,5 @@ if __name__ == "__main__":
 
     pipeline.visualize([], [])
     async_validate(lambda: pipeline.run([], []))
+
+    langfuse_context.flush()
