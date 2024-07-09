@@ -60,15 +60,14 @@ export default function MultiSelectBox(props: Props) {
   }, [items, searchValue]);
 
   const onSelect = (rowKey: string) => {
-    setSelectedRowKeys((x) => {
-      if (x.has(rowKey)) {
-        x.delete(rowKey);
-      } else {
-        x.add(rowKey);
-      }
-      return new Set(x);
-    });
-    onChange && onChange(Array.from(selectedRowKeys));
+    const newSelectedRowKey = new Set(selectedRowKeys);
+    if (newSelectedRowKey.has(rowKey)) {
+      newSelectedRowKey.delete(rowKey);
+    } else {
+      newSelectedRowKey.add(rowKey);
+    }
+    setSelectedRowKeys(newSelectedRowKey);
+    onChange && onChange(Array.from(newSelectedRowKey));
   };
 
   const onSearchChange = (event) => {
@@ -100,6 +99,18 @@ export default function MultiSelectBox(props: Props) {
           type: 'checkbox',
           selectedRowKeys: Array.from(selectedRowKeys),
           onSelect: (record) => onSelect(record['value']),
+          onChange(keys) {
+            // if more than 1 rows selected and there is only one possibility, if user selects all rows.
+            if (keys.length !== 1) {
+              if (keys.length === 0) {
+                setSelectedRowKeys(new Set());
+                return;
+              }
+              setSelectedRowKeys(
+                new Set([...selectedRowKeys, ...(keys as string[])]),
+              );
+            }
+          },
         }}
         rowKey={(record) => record.value}
         columns={columns}
