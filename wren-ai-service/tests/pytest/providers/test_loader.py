@@ -40,5 +40,5 @@ def test_get_provider():
     provider = loader.get_provider("wren_ibis")
     assert provider.__name__ == "WrenIbis"
 
-    provider = loader.get_provider("wren-engine")
+    provider = loader.get_provider("wren_engine")
     assert provider.__name__ == "WrenEngine"

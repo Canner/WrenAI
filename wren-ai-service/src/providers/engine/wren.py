@@ -73,7 +73,7 @@ class WrenIbis(Engine):
             return False, res
 
 
-@provider("wren-engine")
+@provider("wren_engine")
 class WrenEngine(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT")):
         self._endpoint = endpoint

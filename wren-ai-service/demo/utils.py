@@ -40,7 +40,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("ENGINE"):
-                    lines[i] = "ENGINE=wren-engine\n"
+                    lines[i] = "ENGINE=wren_engine\n"
                     break
         with open("../.env.dev", "w") as f:
             f.writelines(lines)
