@@ -117,3 +117,7 @@ def async_timer(func):
         return await process(func, *args, **kwargs)
 
     return wrapper_timer
+
+
+def remove_trailing_slash(endpoint: str) -> str:
+    return endpoint.rstrip("/") if endpoint.endswith("/") else endpoint
