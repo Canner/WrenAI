@@ -10,7 +10,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 
 from src.core.engine import (
     Engine,
@@ -24,7 +24,6 @@ from src.pipelines.ask_details.components.prompts import (
 )
 from src.utils import (
     async_timer,
-    init_langfuse,
     init_providers,
     timer,
 )
@@ -196,7 +195,9 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from src.utils import load_env_vars
+    from langfuse.decorators import langfuse_context, observe
+
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
     init_langfuse()

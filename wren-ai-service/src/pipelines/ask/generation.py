@@ -7,7 +7,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -19,7 +19,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import async_timer, init_langfuse, init_providers, timer
+from src.utils import async_timer, init_providers, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -190,7 +190,9 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from src.utils import load_env_vars
+    from langfuse.decorators import langfuse_context
+
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
     init_langfuse()

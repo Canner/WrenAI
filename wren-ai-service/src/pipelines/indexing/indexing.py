@@ -12,7 +12,7 @@ from hamilton.function_modifiers import extract_fields
 from haystack import Document, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline, async_validate
@@ -456,6 +456,8 @@ class Indexing(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from langfuse.decorators import langfuse_context
+
     from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()

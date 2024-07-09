@@ -7,13 +7,12 @@ from typing import Any, Dict, List, Optional
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document, component
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.utils import (
     async_timer,
-    init_langfuse,
     init_providers,
     timer,
 )
@@ -148,7 +147,9 @@ class HistoricalQuestion(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from src.utils import load_env_vars
+    from langfuse.decorators import langfuse_context
+
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
     init_langfuse()
