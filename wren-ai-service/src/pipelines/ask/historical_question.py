@@ -13,6 +13,7 @@ from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.utils import (
     async_timer,
+    init_langfuse,
     init_providers,
     timer,
 )

@@ -24,6 +24,7 @@ from src.pipelines.ask_details.components.prompts import (
 )
 from src.utils import (
     async_timer,
+    init_langfuse,
     init_providers,
     timer,
 )

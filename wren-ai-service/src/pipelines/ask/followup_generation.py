@@ -17,7 +17,7 @@ from src.pipelines.ask.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, init_langfuse, init_providers, timer
 from src.web.v1.services.ask import AskRequest
 
 logger = logging.getLogger("wren-ai-service")
