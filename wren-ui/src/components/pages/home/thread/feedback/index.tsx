@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState } from 'react';
-import ReferenceSideFloat from './ReferenceSideFloat';
+import ReferenceSideFloat from '@/components/pages/home/thread/feedback/ReferenceSideFloat';
 import { ReferenceTypes } from './utils';
 
 type ContextProps = {
@@ -94,7 +94,7 @@ export default function Feedback(props: Props) {
         <div className="flex-shrink-0 pl-5">
           <ReferenceSideFloat
             references={references}
-            saveCorrectionPrompt={saveCorrectionPrompt}
+            onSaveCorrectionPrompt={saveCorrectionPrompt}
           />
         </div>
       </div>
