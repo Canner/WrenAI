@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Tuple
 
 from dotenv import load_dotenv
+from langfuse.decorators import langfuse_context
 
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
@@ -121,3 +122,10 @@ def async_timer(func):
 
 def remove_trailing_slash(endpoint: str) -> str:
     return endpoint.rstrip("/") if endpoint.endswith("/") else endpoint
+
+
+def init_langfuse():
+    enabled = os.getenv("LANGFUSE_ENABLE", "false")
+    langfuse_context.configure(
+        enabled=False if enabled.lower() == "false" else True,
+    )

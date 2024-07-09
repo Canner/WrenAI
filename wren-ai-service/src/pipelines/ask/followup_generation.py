@@ -7,6 +7,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -130,6 +131,7 @@ Let's think step by step.
 
 ## Start of Pipeline
 @timer
+@observe(capture_input=False)
 def prompt(
     query: str,
     documents: List[Document],
@@ -146,12 +148,14 @@ def prompt(
 
 
 @async_timer
+@observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {prompt}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
+@observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
     logger.debug(f"generate: {generate}")
     return await post_processor.run(generate.get("replies"))
@@ -205,6 +209,7 @@ class FollowUpGeneration(BasicPipeline):
         )
 
     @async_timer
+    @observe(name="Ask Follow Up Generation")
     async def run(
         self,
         query: str,
@@ -227,9 +232,12 @@ class FollowUpGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from src.utils import load_env_vars
+    from langfuse.decorators import langfuse_context
+
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
     llm_provider, _, _, engine = init_providers()
     pipeline = FollowUpGeneration(llm_provider=llm_provider, engine=engine)
@@ -250,3 +258,5 @@ if __name__ == "__main__":
             ),
         )
     )
+
+    langfuse_context.flush()
