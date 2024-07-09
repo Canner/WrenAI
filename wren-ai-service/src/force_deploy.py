@@ -25,5 +25,5 @@ async def force_deploy():
             print(f"Forcing deployment: {res}")
 
 
-if os.getenv("ENGINE", "wren-ui") == "wren-ui":
+if os.getenv("ENGINE", "wren_ui") == "wren_ui":
     asyncio.run(force_deploy())
