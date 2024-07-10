@@ -94,6 +94,9 @@ export interface IWrenEngineAdaptor {
     sql: string,
     options: WrenEngineDryRunOption,
   ): Promise<DryRunResponse[]>;
+
+  // analysis
+  analysisSql(sql: string, mdl: Manifest): Promise<any>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -105,6 +108,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private dryPlanUrlPath = '/v1/mdl/dry-plan';
   private dryRunUrlPath = '/v1/mdl/dry-run';
   private validateUrlPath = '/v1/mdl/validate';
+  private analysisUrlPath = '/v1/analysis/sql';
 
   constructor({ wrenEngineEndpoint }: { wrenEngineEndpoint: string }) {
     this.wrenEngineBaseEndpoint = wrenEngineEndpoint;
@@ -315,16 +319,20 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     }
   }
 
-  private async getDeployStatus(): Promise<WrenEngineDeployStatusResponse> {
+  public async analysisSql(sql: string, mdl: Manifest) {
     try {
-      const res = await axios.get(
-        `${this.wrenEngineBaseEndpoint}/v1/mdl/status`,
+      const url = new URL(this.analysisUrlPath, this.wrenEngineBaseEndpoint);
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      const res = await axios.post(
+        url.href,
+        { sql, manifest: mdl },
+        { headers },
       );
-      return res.data as WrenEngineDeployStatusResponse;
+      return res.data;
     } catch (err: any) {
-      logger.debug(
-        `WrenEngine: Got error when getting deploy status: ${err.message}`,
-      );
+      logger.debug(`Got error when analyzing sql: ${err.message}`);
       throw err;
     }
   }
