@@ -59,7 +59,7 @@ class WrenIbis(Engine):
         },
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
-            f"{self._endpoint}/v2/ibis/{properties.get('source', '')}/query?dryRun=true",
+            f"{self._endpoint}/v2/connector/{properties.get('source', '')}/query?dryRun=true",
             json={
                 "sql": remove_limit_statement(add_quotes(sql)),
                 "manifestStr": properties.get("manifest", ""),
