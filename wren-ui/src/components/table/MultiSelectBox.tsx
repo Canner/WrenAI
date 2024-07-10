@@ -41,8 +41,8 @@ interface Props {
 
 export default function MultiSelectBox(props: Props) {
   const { columns, loading, items, onChange, value } = props;
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>(
-    value || [],
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(
+    new Set(value),
   );
   const [searchValue, setSearchValue] = useState<string>('');
   const formItemContext =
@@ -59,9 +59,15 @@ export default function MultiSelectBox(props: Props) {
       : items;
   }, [items, searchValue]);
 
-  const onSelect = (rowKeys: React.Key[]) => {
-    setSelectedRowKeys(rowKeys);
-    onChange && onChange(rowKeys as string[]);
+  const onSelect = (rowKey: string) => {
+    const newSelectedRowKey = new Set(selectedRowKeys);
+    if (newSelectedRowKey.has(rowKey)) {
+      newSelectedRowKey.delete(rowKey);
+    } else {
+      newSelectedRowKey.add(rowKey);
+    }
+    setSelectedRowKeys(newSelectedRowKey);
+    onChange && onChange(Array.from(newSelectedRowKey));
   };
 
   const onSearchChange = (event) => {
@@ -71,9 +77,9 @@ export default function MultiSelectBox(props: Props) {
   };
 
   const total =
-    selectedRowKeys.length === 0
+    selectedRowKeys.size === 0
       ? items.length
-      : `${selectedRowKeys.length}/${items.length}`;
+      : `${selectedRowKeys.size}/${items.length}`;
 
   return (
     <StyledBox
@@ -91,8 +97,24 @@ export default function MultiSelectBox(props: Props) {
       <Table
         rowSelection={{
           type: 'checkbox',
-          selectedRowKeys,
-          onChange: onSelect,
+          selectedRowKeys: Array.from(selectedRowKeys),
+          onSelect: (record) => onSelect(record['value']),
+          onChange(keys) {
+            // if more than 1 rows selected and there is only one possibility, if user selects all rows.
+            if (keys.length !== 1) {
+              if (keys.length === 0) {
+                setSelectedRowKeys(new Set());
+                onChange && onChange([]);
+                return;
+              }
+              const newSelectedRowKeys = [
+                ...selectedRowKeys,
+                ...(keys as string[]),
+              ];
+              setSelectedRowKeys(new Set(newSelectedRowKeys));
+              onChange && onChange(newSelectedRowKeys);
+            }
+          },
         }}
         rowKey={(record) => record.value}
         columns={columns}
