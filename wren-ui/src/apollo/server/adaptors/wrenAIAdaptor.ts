@@ -55,6 +55,15 @@ export interface AsyncQueryResponse {
   queryId: string;
 }
 
+export type ExplainResult = AIServiceResponse<any, ExplainPipelineStatus>;
+
+export enum ExplainPipelineStatus {
+  UNDERSTANDING = 'UNDERSTANDING',
+  GENERATING = 'GENERATING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+}
+
 export enum AskResultStatus {
   UNDERSTANDING = 'UNDERSTANDING',
   SEARCHING = 'SEARCHING',
@@ -71,7 +80,7 @@ export enum AskCandidateType {
   LLM = 'LLM',
 }
 
-export interface AskResponse<R, S> {
+export interface AIServiceResponse<R, S> {
   status: S;
   response: R | null;
   error: WrenAIError | null;
@@ -83,7 +92,7 @@ export interface AskDetailInput {
   summary: string;
 }
 
-export type AskDetailResult = AskResponse<
+export type AskDetailResult = AIServiceResponse<
   {
     description: string;
     steps: AskStep[];
@@ -91,7 +100,7 @@ export type AskDetailResult = AskResponse<
   AskResultStatus
 >;
 
-export type AskResult = AskResponse<
+export type AskResult = AIServiceResponse<
   Array<{
     type: AskCandidateType;
     sql: string;
@@ -101,7 +110,7 @@ export type AskResult = AskResponse<
   AskResultStatus
 >;
 
-const getAISerciceError = (error: any) => {
+const getAIServiceError = (error: any) => {
   const { data } = error.response || {};
   return data?.detail
     ? `${error.message}, detail: ${data.detail}`
@@ -129,6 +138,8 @@ export interface IWrenAIAdaptor {
    */
   generateAskDetail(input: AskDetailInput): Promise<AsyncQueryResponse>;
   getAskDetailResult(queryId: string): Promise<AskDetailResult>;
+  explain(question: string, analysisResults: any): Promise<AsyncQueryResponse>;
+  getExplainResult(queryId: string): Promise<ExplainResult>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -148,11 +159,11 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
         query: input.query,
         id: input.deployId,
-        history: this.transfromHistoryInput(input.history),
+        history: this.transformHistoryInput(input.history),
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
-      logger.debug(`Got error when asking wren AI: ${getAISerciceError(err)}`);
+      logger.debug(`Got error when asking wren AI: ${getAIServiceError(err)}`);
       throw err;
     }
   }
@@ -164,7 +175,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         status: 'stopped',
       });
     } catch (err: any) {
-      logger.debug(`Got error when canceling ask: ${getAISerciceError(err)}`);
+      logger.debug(`Got error when canceling ask: ${getAIServiceError(err)}`);
       throw err;
     }
   }
@@ -178,12 +189,50 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return this.transformAskResult(res.data);
     } catch (err: any) {
       logger.debug(
-        `Got error when getting ask result: ${getAISerciceError(err)}`,
+        `Got error when getting ask result: ${getAIServiceError(err)}`,
       );
       // throw err;
       throw Errors.create(Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR, {
         originalError: err,
       });
+    }
+  }
+
+  public async explain(
+    question: string,
+    analysisResults: any,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/sql-explanations`,
+        {
+          question,
+          steps_with_analysis_results: analysisResults,
+        },
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(`Got error when explaining: ${getAIServiceError(err)}`);
+      throw err;
+    }
+  }
+
+  public async getExplainResult(queryId: string): Promise<ExplainResult> {
+    // make GET request /v1/sql-explanations/:query_id/result to get the result
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/sql-explanations/${queryId}/result`,
+      );
+      return {
+        status: res.data.status as ExplainPipelineStatus,
+        response: res.data.response,
+        error: this.transformStatusAndError(res.data).error,
+      };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting explain result: ${getAIServiceError(err)}`,
+      );
+      throw err;
     }
   }
 
@@ -202,7 +251,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(
-        `Got error when generating ask detail: ${getAISerciceError(err)}`,
+        `Got error when generating ask detail: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -217,7 +266,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return this.transformAskDetailResult(res.data);
     } catch (err: any) {
       logger.debug(
-        `Got error when getting ask detail result: ${getAISerciceError(err)}`,
+        `Got error when getting ask detail result: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -309,7 +358,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }));
 
     return {
-      status,
+      status: status as AskResultStatus,
       error,
       response: candidates,
     };
@@ -326,7 +375,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }));
 
     return {
-      status,
+      status: status as AskResultStatus,
       error,
       response: {
         description: body?.response?.description,
@@ -336,7 +385,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformStatusAndError(body: any): {
-    status: AskResultStatus;
+    status: AskResultStatus | ExplainPipelineStatus;
     error?: {
       code: Errors.GeneralErrorCodes;
       message: string;
@@ -344,9 +393,11 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     } | null;
   } {
     // transform status to enum
-    const status = AskResultStatus[
-      body?.status?.toUpperCase()
-    ] as AskResultStatus;
+    const status =
+      (AskResultStatus[body?.status?.toUpperCase()] as AskResultStatus) ||
+      (ExplainPipelineStatus[
+        body.status
+      ]?.toUpperCase() as ExplainPipelineStatus);
 
     if (!status) {
       throw new Error(`Unknown ask status: ${body?.status}`);
@@ -380,7 +431,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     };
   }
 
-  private transfromHistoryInput(history: AskHistory) {
+  private transformHistoryInput(history: AskHistory) {
     if (!history) {
       return null;
     }
