@@ -12,7 +12,7 @@ done
 
 echo "wren-ai-service has started."
 
-python src/force_deploy.py
+python -m src.force_deploy
 
 # Bring wren-ai-service to the foreground
 wait

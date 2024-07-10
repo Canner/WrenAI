@@ -1,13 +1,12 @@
 import asyncio
 import os
-from pathlib import Path
 
 import aiohttp
 import backoff
-from dotenv import load_dotenv
 
-if Path(".env.dev").exists():
-    load_dotenv(".env.dev", override=True)
+from src.utils import load_env_vars
+
+load_env_vars()
 
 
 @backoff.on_exception(backoff.expo, aiohttp.ClientError, max_time=60, max_tries=3)
