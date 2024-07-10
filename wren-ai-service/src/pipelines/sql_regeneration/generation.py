@@ -24,7 +24,7 @@ logger = logging.getLogger("wren-ai-service")
 sql_regeneration_user_prompt_template = """
 inputs: {{ results }}
 
-Think step by step
+Let's think step by step.
 """
 
 

@@ -30,22 +30,33 @@ Let's think step by step.
 """
 
 
-def _compose_sql_expression_of_filter_type(filter_analysis: Dict) -> str:
+def _compose_sql_expression_of_filter_type(filter_analysis: Dict) -> Dict:
     if filter_analysis["type"] == "EXPR":
-        return filter_analysis["node"]
+        return {
+            "values": filter_analysis["node"],
+            "id": filter_analysis.get("id", ""),
+        }
     elif filter_analysis["type"] in ("AND", "OR"):
         left_expr = _compose_sql_expression_of_filter_type(filter_analysis["left"])
         right_expr = _compose_sql_expression_of_filter_type(filter_analysis["right"])
-        return f"{left_expr} {filter_analysis['type']} {right_expr}"
+        return {
+            "values": f"{left_expr} {filter_analysis['type']} {right_expr}",
+            "id": filter_analysis.get("id", ""),
+        }
 
-    return ""
+    return {"values": "", "id": ""}
 
 
 def _compose_sql_expression_of_groupby_type(
     groupby_keys: List[List[dict]],
 ) -> List[str]:
     return [
-        ", ".join([expression["expression"] for expression in groupby_key])
+        {
+            "values": ", ".join(
+                [expression["expression"] for expression in groupby_key]
+            ),
+            "id": "",
+        }
         for groupby_key in groupby_keys
     ]
 
@@ -67,13 +78,30 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
             return
 
         if relation["type"] == "TABLE" and top_level:
-            result.append(relation)
+            result.append(
+                {
+                    "values": {
+                        "type": relation["type"],
+                        "tableName": relation["tableName"],
+                    },
+                    "id": relation.get("id", ""),
+                }
+            )
         elif relation["type"].endswith("_JOIN"):
             result.append(
                 {
-                    "type": relation["type"],
-                    "criteria": relation["criteria"],
-                    "exprSources": relation["exprSources"],
+                    "values": {
+                        "type": relation["type"],
+                        "criteria": relation["criteria"],
+                        "exprSources": [
+                            {
+                                "expression": expr_source["expression"],
+                                "sourceDataset": expr_source["sourceDataset"],
+                            }
+                            for expr_source in relation["exprSources"]
+                        ],
+                    },
+                    "id": relation.get("id", ""),
                 }
             )
             _collect_relations(relation["left"], result, top_level=False)
@@ -96,13 +124,22 @@ def _compose_sql_expression_of_select_type(select_items: List[Dict]) -> Dict:
             or select_item["properties"]["includeMathematicalOperation"] == "true"
         ):
             result["withFunctionCallOrMathematicalOperation"].append(
-                {"alias": select_item["alias"], "expression": select_item["expression"]}
+                {
+                    "values": {
+                        "alias": select_item["alias"],
+                        "expression": select_item["expression"],
+                    },
+                    "id": select_item.get("id", ""),
+                }
             )
         else:
             result["withoutFunctionCallOrMathematicalOperation"].append(
                 {
-                    "alias": select_item["alias"],
-                    "expression": select_item["expression"],
+                    "values": {
+                        "alias": select_item["alias"],
+                        "expression": select_item["expression"],
+                    },
+                    "id": select_item.get("id", ""),
                 }
             )
 
@@ -110,7 +147,13 @@ def _compose_sql_expression_of_select_type(select_items: List[Dict]) -> Dict:
 
 
 def _compose_sql_expression_of_sortings_type(sortings: List[Dict]) -> List[str]:
-    return [f'{sorting["expression"]} {sorting["ordering"]}' for sorting in sortings]
+    return [
+        {
+            "values": f'{sorting["expression"]} {sorting["ordering"]}',
+            "id": sorting.get("id", ""),
+        }
+        for sorting in sortings
+    ]
 
 
 def _extract_to_str(data):
@@ -221,9 +264,12 @@ class GenerationPostProcessor:
                             {
                                 "type": "filter",
                                 "payload": {
+                                    "id": preprocessed_sql_analysis_results["filter"][
+                                        "id"
+                                    ],
                                     "expression": preprocessed_sql_analysis_results[
                                         "filter"
-                                    ],
+                                    ]["values"],
                                     "explanation": _extract_to_str(
                                         sql_explanation_results["filter"]
                                     ),
@@ -245,7 +291,8 @@ class GenerationPostProcessor:
                                 {
                                     "type": "groupByKeys",
                                     "payload": {
-                                        "expression": groupby_key,
+                                        "id": "",
+                                        "expression": groupby_key["values"],
                                         "explanation": _extract_to_str(sql_explanation),
                                     },
                                 }
@@ -265,7 +312,8 @@ class GenerationPostProcessor:
                                 {
                                     "type": "relation",
                                     "payload": {
-                                        **relation,
+                                        "id": relation["id"],
+                                        **relation["values"],
                                         "explanation": _extract_to_str(sql_explanation),
                                     },
                                 }
@@ -277,7 +325,7 @@ class GenerationPostProcessor:
                         sql_analysis_result_for_select_items = [
                             {
                                 **select_item,
-                                "type": "withFunctionCallOrMathematicalOperation",
+                                "isFunctionCallOrMathematicalOperation": True,
                             }
                             for select_item in preprocessed_sql_analysis_results[
                                 "selectItems"
@@ -285,7 +333,7 @@ class GenerationPostProcessor:
                         ] + [
                             {
                                 **select_item,
-                                "type": "withoutFunctionCallOrMathematicalOperation",
+                                "isFunctionCallOrMathematicalOperation": False,
                             }
                             for select_item in preprocessed_sql_analysis_results[
                                 "selectItems"
@@ -303,7 +351,8 @@ class GenerationPostProcessor:
                                 {
                                     "type": "selectItems",
                                     "payload": {
-                                        **select_item,
+                                        "id": select_item["id"],
+                                        **select_item["values"],
                                         "explanation": _extract_to_str(sql_explanation),
                                     },
                                 }
@@ -323,7 +372,8 @@ class GenerationPostProcessor:
                                 {
                                     "type": "sortings",
                                     "payload": {
-                                        "expression": sorting,
+                                        "id": sorting["id"],
+                                        "expression": sorting["values"],
                                         "explanation": _extract_to_str(sql_explanation),
                                     },
                                 }
@@ -331,10 +381,10 @@ class GenerationPostProcessor:
         except Exception as e:
             logger.exception(f"Error in GenerationPostProcessor: {e}")
 
-        print(
-            f"PREPROCESSED_SQL_ANALYSIS_RESULTS: {orjson.dumps(preprocessed_sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
-        )
-        print(f"RESULTS: {orjson.dumps(results, option=orjson.OPT_INDENT_2).decode()}")
+        # print(
+        #     f"PREPROCESSED_SQL_ANALYSIS_RESULTS: {orjson.dumps(preprocessed_sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
+        # )
+        # print(f"RESULTS: {orjson.dumps(results, option=orjson.OPT_INDENT_2).decode()}")
 
         return {"results": results}
 
@@ -371,7 +421,34 @@ def prompts(
     ]:
         for key, value in preprocessed_sql_analysis_result.items():
             if value:
-                preprocessed_sql_analysis_results_with_values.append({key: value})
+                if key != "selectItems":
+                    if isinstance(value, list):
+                        preprocessed_sql_analysis_results_with_values.append(
+                            {key: [v["values"] for v in value]}
+                        )
+                    else:
+                        preprocessed_sql_analysis_results_with_values.append(
+                            {key: value["values"]}
+                        )
+                else:
+                    preprocessed_sql_analysis_results_with_values.append(
+                        {
+                            key: {
+                                "withFunctionCallOrMathematicalOperation": [
+                                    v["values"]
+                                    for v in value[
+                                        "withFunctionCallOrMathematicalOperation"
+                                    ]
+                                ],
+                                "withoutFunctionCallOrMathematicalOperation": [
+                                    v["values"]
+                                    for v in value[
+                                        "withoutFunctionCallOrMathematicalOperation"
+                                    ]
+                                ],
+                            }
+                        }
+                    )
 
     logger.debug(
         f"preprocessed_sql_analysis_results_with_values: {orjson.dumps(preprocessed_sql_analysis_results_with_values, option=orjson.OPT_INDENT_2).decode()}"

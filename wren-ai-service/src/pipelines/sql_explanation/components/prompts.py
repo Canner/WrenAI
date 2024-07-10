@@ -22,9 +22,7 @@ The sql analysis will be one of the types: selectItems, relation, filter, groupB
       }
     ]
   }
-}
-
-{
+} | {
   "relation": [
     {
       "type": "INNER_JOIN" | "LEFT_JOIN" | "RIGHT_JOIN" | "FULL_JOIN" | "CROSS_JOIN" | "IMPLICIT_JOIN"
@@ -41,18 +39,11 @@ The sql analysis will be one of the types: selectItems, relation, filter, groupB
       "tableName": "<expression_string>"
     }
   ]
-}
-
-{
+} | {
   "filter": <expression_string>
-}
-
-
-{
+} | {
   "groupByKeys": [<expression_string>, ...]
-}
-
-{
+} | {
   "sortings": [<expression_string>, ...]
 }
 
