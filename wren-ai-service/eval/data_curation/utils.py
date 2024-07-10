@@ -41,7 +41,7 @@ async def is_sql_valid(sql: str) -> Tuple[bool, str]:
     sql = sql[:-1] if sql.endswith(";") else sql
     async with aiohttp.request(
         "POST",
-        f'{WREN_IBIS_ENDPOINT}/v2/ibis/{st.session_state['data_source']}/query?dryRun=true',
+        f'{WREN_IBIS_ENDPOINT}/v2/connector/{st.session_state['data_source']}/query?dryRun=true',
         json={
             "sql": add_quotes(sql),
             "manifestStr": base64.b64encode(
