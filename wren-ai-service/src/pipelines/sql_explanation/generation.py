@@ -52,12 +52,11 @@ def _compose_sql_expression_of_groupby_type(
 ) -> List[str]:
     return [
         {
-            "values": ", ".join(
-                [expression["expression"] for expression in groupby_key]
-            ),
-            "id": "",
+            "values": groupby_key["expression"],
+            "id": groupby_key.get("id", ""),
         }
-        for groupby_key in groupby_keys
+        for groupby_key_list in groupby_keys
+        for groupby_key in groupby_key_list
     ]
 
 
