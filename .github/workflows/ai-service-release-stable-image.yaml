@@ -25,6 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ steps.generate-token.outputs.token }}
+          fetch-depth: 0
       - name: Set up Git
         run: |
           git config --global user.name "wren-ai[bot]"
@@ -37,6 +38,32 @@ jobs:
         uses: abatilo/actions-poetry@v2
         with:
           poetry-version: 1.8.3
+      - name: Generate and Save Change Log
+        id: changelog
+        run: |
+          echo "Generating change log..."
+          PREVIOUS_VERSION=release/ai-service/$(poetry version -s)
+          echo "Previous version: $PREVIOUS_VERSION"
+          CHANGE_LOG=$(git log --pretty=format:"%s" $PREVIOUS_VERSION..HEAD | grep wren-ai-service)
+
+          # Separate the change log into categories
+          FEATURES=$(echo "$CHANGE_LOG" | grep "^feat" | sed 's/^/- /')
+          FIXES_AND_CHORES=$(echo "$CHANGE_LOG" | grep -E "^(fix|chore)" | sed 's/^/- /')
+
+          # Create the full change log
+          FULL_CHANGE_LOG="\nChangelog for the version\n"
+          if [ -n "$FEATURES" ]; then
+            FULL_CHANGE_LOG+="\nFeature and Enhancement\n$FEATURES"
+          fi
+          if [ -n "$FIXES_AND_CHORES" ]; then
+            FULL_CHANGE_LOG+="\n\nFixes and Chores\n$FIXES_AND_CHORES"
+          fi
+
+          {
+            echo "CHANGE_LOG<<EOF"
+            echo -e "$FULL_CHANGE_LOG"
+            echo EOF
+          } >> $GITHUB_ENV
       - name: Upgrade AI Service version
         run: |
           version=${{ github.event.inputs.version }}
@@ -44,7 +71,7 @@ jobs:
           git add pyproject.toml
           git commit -m "Upgrade AI Service version to $version"
           git push
-          git tag -a "release/ai-service/$version" -m "Release version $version"
+          git tag -a "release/ai-service/$version" -m "${{ env.CHANGE_LOG }}"
           git push origin "release/ai-service/$version"
   build-image:
     needs: upgrade-ai-service-version
