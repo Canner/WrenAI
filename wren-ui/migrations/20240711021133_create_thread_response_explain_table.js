@@ -3,7 +3,7 @@
  * @returns { Promise<void> }
  */
 exports.up = function (knex) {
-  knex.schema.createTable('thread_response_explain', (table) => {
+  return knex.schema.createTable('thread_response_explain', (table) => {
     table.increments('id').comment('ID');
     table
       .integer('thread_response_id')
@@ -28,5 +28,5 @@ exports.up = function (knex) {
  * @returns { Promise<void> }
  */
 exports.down = function (knex) {
-  knex.schema.dropTable('thread_response_explain');
+  return knex.schema.dropTable('thread_response_explain');
 };

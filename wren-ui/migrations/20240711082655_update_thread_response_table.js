@@ -3,7 +3,7 @@
  * @returns { Promise<void> }
  */
 exports.up = function (knex) {
-  knex.table('thread_response').alterTable((table) => {
+  return knex.schema.alterTable('thread_response', (table) => {
     table
       .jsonb('corrections')
       .nullable()
@@ -16,7 +16,7 @@ exports.up = function (knex) {
  * @returns { Promise<void> }
  */
 exports.down = function (knex) {
-  knex.table('thread_response').alterTable((table) => {
+  return knex.schema.alterTable('thread_response', (table) => {
     table.dropColumn('corrections');
   });
 };
