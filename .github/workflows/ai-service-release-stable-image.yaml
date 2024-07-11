@@ -44,6 +44,8 @@ jobs:
           git add pyproject.toml
           git commit -m "Upgrade AI Service version to $version"
           git push
+          git tag -a "release/ai-service/$version" -m "Release version $version"
+          git push origin "release/ai-service/$version"
   build-image:
     needs: upgrade-ai-service-version
     runs-on: ubuntu-latest
