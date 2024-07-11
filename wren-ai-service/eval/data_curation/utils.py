@@ -17,6 +17,7 @@ from openai import AsyncClient
 load_dotenv()
 
 WREN_IBIS_ENDPOINT = os.getenv("WREN_IBIS_ENDPOINT", "http://localhost:8000")
+WREN_ENGINE_ENDPOINT = os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")
 DATA_SOURCES = ["bigquery"]
 
 
@@ -212,86 +213,86 @@ def get_ddl_commands(mdl_json: dict) -> str:
     return "\n\n".join(ddl_commands)
 
 
-async def get_contexts_from_sqls(
-    llm_client: AsyncClient,
+async def get_sql_analysis(
+    sql: str,
+) -> List[dict]:
+    sql = sql[:-1] if sql.endswith(";") else sql
+    async with aiohttp.request(
+        "GET",
+        f"{WREN_ENGINE_ENDPOINT}/v1/analysis/sql",
+        json={
+            "sql": add_quotes(sql),
+            "manifest": st.session_state["mdl_json"],
+        },
+        timeout=aiohttp.ClientTimeout(total=60),
+    ) as response:
+        return await response.json()
+
+
+async def get_contexts_from_sqls_v2(
     sqls: list[str],
 ) -> list[str]:
-    messages = [
-        {
-            "role": "system",
-            "content": "",
-        },
-        {
-            "role": "user",
-            "content": f"""
-### TASK ###
-Given the sqls, provide the context for each sql.
+    def _compose_contexts_of_select_type(select_items: list[dict]):
+        return [
+            f'{expr_source['sourceDataset']}.{expr_source['expression']}'
+            for select_item in select_items
+            for expr_source in select_item["exprSources"]
+        ]
 
-### EXAMPLES ###
+    def _compose_contexts_of_filter_type(filter: dict):
+        contexts = []
+        if filter["type"] == "EXPR":
+            contexts += [
+                f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
+                for expr_source in filter["exprSources"]
+            ]
+        elif filter["type"] in ("AND", "OR"):
+            contexts += _compose_contexts_of_filter_type(filter["left"])
+            contexts += _compose_contexts_of_filter_type(filter["right"])
 
-EAMPLE1:
+        return contexts
 
-INPUT
-"SELECT SUM(p.Value) FROM payments p JOIN orders o ON p.OrderId = o.OrderId WHERE o.Status = 'Delivered';"
+    def _compose_contexts_of_groupby_type(groupby_keys: list[list[dict]]):
+        contexts = []
+        for groupby_key_list in groupby_keys:
+            contexts += [
+                f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
+                for groupby_key in groupby_key_list
+                for expr_source in groupby_key["exprSources"]
+            ]
+        return contexts
 
-OUTPUT
-["payments.Value", "orders.OrderId", "payments.OrderId", "orders.Status"]
+    def _compose_contexts_of_sorting_type(sortings: list[dict]):
+        return [
+            f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
+            for sorting in sortings
+            for expr_source in sorting["exprSources"]
+        ]
 
-EXAMPLE2:
+    def _get_contexts_from_sql_analysis_results(sql_analysis_results: list[dict]):
+        contexts = []
+        for result in sql_analysis_results:
+            if "selectItems" in result:
+                contexts += _compose_contexts_of_select_type(result["selectItems"])
+            if "filter" in result:
+                contexts += _compose_contexts_of_filter_type(result["filter"])
+            if "groupByKeys" in result:
+                contexts += _compose_contexts_of_groupby_type(result["groupByKeys"])
+            if "sortings" in result:
+                contexts += _compose_contexts_of_sorting_type(result["sortings"])
 
-INPUT
-"SELECT AVG(Score) FROM reviews;"
+        print(f"CONTEXTS: {sorted(set(contexts))}")
+        return sorted(set(contexts))
 
-OUTPUT
-["reviews.Score"
+    async with aiohttp.ClientSession():
+        tasks = []
+        for sql in sqls:
+            task = asyncio.ensure_future(get_sql_analysis(sql))
+            tasks.append(task)
 
-EXAMPLE3:
+        results = await asyncio.gather(*tasks)
 
-INPUT
-"SELECT * FROM customers;"
-
-OUTPUT
-["customers.*"]
-
-### Output Format ###
-{{
-    "results": [
-        <context_string1>,
-        <context_string2>,
-        ...
-    ]
-}}
-
-EXAMPLE4:
-
-INPUT
-"SELECT 1"
-
-OUTPUT
-[]
-
-### Input ###
-List of SQLs: {sqls}
-
-Generate the context for the corresponding SQL query according to the Output Format in JSON
-Think step by step
-""",
-        },
-    ]
-
-    try:
-        response = await llm_client.chat.completions.create(
-            model=os.getenv("OPENAI_GENERATION_MODEL", "gpt-3.5-turbo"),
-            messages=messages,
-            response_format={"type": "json_object"},
-            max_tokens=4096,
-            temperature=0,
-        )
-
-        return orjson.loads(response.choices[0].message.content)["results"]
-    except Exception as e:
-        st.error(f"Error generating question-sql-pairs with context: {e}")
-        return []
+        return [_get_contexts_from_sql_analysis_results(result) for result in results]
 
 
 async def get_question_sql_pairs(
@@ -344,7 +345,7 @@ Think step by step
         results = orjson.loads(response.choices[0].message.content)["results"]
         question_sql_pairs = await get_validated_question_sql_pairs(results)
         sqls = [question_sql_pair["sql"] for question_sql_pair in question_sql_pairs]
-        contexts = await get_contexts_from_sqls(llm_client, sqls)
+        contexts = await get_contexts_from_sqls_v2(sqls)
         return [
             {**quesiton_sql_pair, "context": context}
             for quesiton_sql_pair, context in zip(question_sql_pairs, contexts)
