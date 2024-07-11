@@ -46,6 +46,23 @@ jobs:
           git push
           git tag -a "release/ai-service/$version" -m "Release version $version"
           git push origin "release/ai-service/$version"
+      - name: Get current version with Poetry
+        id: get_version
+        run: echo "CURRENT_VERSION=release/ai-service/$(poetry version -s)" >> $GITHUB_ENV
+      - name: Generate and Save Change Log
+        id: changelog
+        run: |
+          echo "Generating change log..."
+          CURRENT_VERSION=${{ env.CURRENT_VERSION }}
+          PREVIOUS_VERSION=$(git tag --list | grep -B 1 $CURRENT_VERSION | head -n 1)
+          echo "Previous version: $PREVIOUS_VERSION"
+          echo "Current version: $CURRENT_VERSION"
+          CHANGE_LOG=$(git log $PREVIOUS_VERSION..$CURRENT_VERSION --pretty=format:"%s" | grep wren-ai-service)
+          echo "CHANGE_LOG=$CHANGE_LOG" >> $GITHUB_ENV
+      - name: Print Change Log
+        run: echo "$CHANGE_LOG"
+        env:
+          CHANGE_LOG: ${{ env.CHANGE_LOG }}
   build-image:
     needs: upgrade-ai-service-version
     runs-on: ubuntu-latest
