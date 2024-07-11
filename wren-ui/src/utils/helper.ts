@@ -19,11 +19,3 @@ export const parseJson = (data) => {
     return data;
   }
 };
-
-export const canParseJson = (data) => {
-  try {
-    return JSON.parse(data);
-  } catch (_e) {
-    return false;
-  }
-};

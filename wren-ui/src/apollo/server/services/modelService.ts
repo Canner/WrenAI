@@ -8,7 +8,12 @@ import {
   ModelColumn,
   Relation,
 } from '@server/repositories';
-import { getLogger } from '@server/utils';
+import {
+  getLogger,
+  parseJson,
+  replaceAllowableSyntax,
+  validateDisplayName,
+} from '@server/utils';
 import { RelationData, UpdateRelationData } from '@server/types';
 import { IProjectService } from './projectService';
 import {
@@ -21,14 +26,10 @@ import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import { ValidationRules } from '@server/adaptors/ibisAdaptor';
 import { isEmpty, capitalize } from 'lodash';
-import {
-  replaceAllowableSyntax,
-  validateDisplayName,
-} from '@server/utils/regex';
+import {} from '@server/utils/regex';
 import * as Errors from '@server/utils/error';
 import { DataSourceName } from '@server/types';
 import { IQueryService } from './queryService';
-import { canParseJson } from '@/utils/helper';
 
 const logger = getLogger('ModelService');
 logger.level = 'debug';
@@ -143,7 +144,7 @@ export class ModelService implements IModelService {
       } as CheckCalculatedFieldCanQueryData);
     logger.debug(`${logTitle} : checkCalculatedFieldCanQuery: ${canQuery}`);
     if (!canQuery) {
-      const parsedErrorMessage = canParseJson(errorMessage);
+      const parsedErrorMessage = parseJson(errorMessage);
       throw Errors.create(Errors.GeneralErrorCodes.INVALID_CALCULATED_FIELD, {
         customMessage: parsedErrorMessage?.message || errorMessage,
         originalError: parsedErrorMessage || null,
