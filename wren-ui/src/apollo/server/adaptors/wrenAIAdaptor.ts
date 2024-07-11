@@ -80,6 +80,20 @@ export enum AskCandidateType {
   LLM = 'LLM',
 }
 
+export enum ExplainType {
+  FILTER = 'filter',
+  SELECT_ITEMS = 'selectItems',
+  RELATION = 'relation',
+  GROUP_BY_KEYS = 'groupByKeys',
+  SORTINGS = 'sortings',
+}
+
+// UI currently only support nl_expression
+export enum ExpressionType {
+  SQL_EXPRESSION = 'sql_expression',
+  NL_EXPRESSION = 'nl_expression',
+}
+
 export interface AIServiceResponse<R, S> {
   status: S;
   response: R | null;
@@ -109,6 +123,25 @@ export type AskResult = AIServiceResponse<
   }>,
   AskResultStatus
 >;
+
+export interface CorrectionObject<T> {
+  type: T;
+  value: string;
+}
+
+export interface AskCorrection {
+  before: CorrectionObject<ExplainType>;
+  after: CorrectionObject<ExpressionType>;
+}
+
+export interface AskStepWithCorrections extends AskStep {
+  corrections: AskCorrection[];
+}
+
+export interface RegenerateAskDetailInput {
+  description: string;
+  steps: AskStepWithCorrections[];
+}
 
 const getAIServiceError = (error: any) => {
   const { data } = error.response || {};
@@ -140,6 +173,10 @@ export interface IWrenAIAdaptor {
   getAskDetailResult(queryId: string): Promise<AskDetailResult>;
   explain(question: string, analysisResults: any): Promise<AsyncQueryResponse>;
   getExplainResult(queryId: string): Promise<ExplainResult>;
+  regenerateAskDetail(
+    input: RegenerateAskDetailInput,
+  ): Promise<AsyncQueryResponse>;
+  getRegeneratedAskDetailResult(queryId: string): Promise<AskDetailResult>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -267,6 +304,36 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     } catch (err: any) {
       logger.debug(
         `Got error when getting ask detail result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async regenerateAskDetail(input: RegenerateAskDetailInput) {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/sql-regenerations`,
+        input,
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when regenerating ask detail: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getRegeneratedAskDetailResult(queryId: string) {
+    // make GET request /v1/sql-regenerations/:query_id/result to get the result
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/sql-regenerations/${queryId}/result`,
+      );
+      return this.transformAskDetailResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting regenerated ask detail result: ${getAIServiceError(err)}`,
       );
       throw err;
     }
