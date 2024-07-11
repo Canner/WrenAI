@@ -67,7 +67,7 @@ const ReviewTemplate = ({
       >
         <span className="gray-6 text-semi-bold flex-shrink-0 mr-1">
           <FileTextOutlined className="mr-1" />
-          Original:
+          Reference:
         </span>
         <Typography.Text className="gray-6" ellipsis={!isCollapse}>
           {title}
@@ -142,7 +142,7 @@ export default function ReviewDrawer(props: Props) {
   return (
     <Drawer
       visible={visible}
-      title={`Review changes (${changedReferences.length})`}
+      title={`Review feedbacks (${changedReferences.length})`}
       width={520}
       closable
       destroyOnClose

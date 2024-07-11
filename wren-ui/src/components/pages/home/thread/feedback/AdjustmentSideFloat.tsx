@@ -36,7 +36,7 @@ export default function AdjustmentSideFloat(props: Props) {
       className={clsx('border border-gray-4 rounded p-4', className)}
     >
       <div className="adjustmentSideFloat-title text-md text-medium bg-gray-1 citrus-6 -ml-2">
-        <FileTextOutlined /> Pending adjustments
+        <FileTextOutlined /> Pending feedbacks
       </div>
       <div className="d-flex mt-2">
         <Button
@@ -45,7 +45,7 @@ export default function AdjustmentSideFloat(props: Props) {
           size="small"
           onClick={onOpenReviewDrawer}
         >
-          Review changes ({changedReferences.length})
+          Review feedbacks ({changedReferences.length})
         </Button>
         <Popconfirm
           title="Are you sure?"

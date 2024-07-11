@@ -40,7 +40,6 @@ const ReferenceSummaryTemplate = ({
       </Tag>
       <Typography.Text className="gray-8" ellipsis>
         {title}
-        {isRevise && <span className="gray-6 ml-2">(revised)</span>}
       </Typography.Text>
     </div>
   );
@@ -103,7 +102,7 @@ const ReferenceTemplate = ({
           {title}
           <span className="gray-6 ml-2">
             {isRevise ? (
-              '(revised)'
+              '(feedback suggested)'
             ) : (
               <EditOutlined className="gray-6 " onClick={openEdit} />
             )}
@@ -115,7 +114,7 @@ const ReferenceTemplate = ({
               <Input
                 className="text-sm"
                 size="small"
-                placeholder="Add a prompt for adjustment..."
+                placeholder="Add a prompt for feedback..."
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onPressEnter={handleEdit}
