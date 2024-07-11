@@ -48,7 +48,7 @@ describe('IbisAdaptor', () => {
   };
 
   const mockClickHouseConnectionInfo: CLICK_HOUSE_CONNECTION_INFO = {
-    host: 'localhost',
+    host: 'my-host',
     port: 8443,
     database: 'my-database',
     user: 'my-user',
@@ -129,7 +129,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/ibis/mssql/metadata/constraints`,
+      `${ibisServerEndpoint}/v2/connector/mssql/metadata/constraints`,
       { connectionInfo: expectConnectionInfo },
     );
   });
@@ -153,10 +153,60 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/ibis/mysql/metadata/constraints`,
+      `${ibisServerEndpoint}/v2/connector/mysql/metadata/constraints`,
       { connectionInfo: expectConnectionInfo },
     );
   });
+
+  // check clickhouse connection info
+  it.each([
+    [
+      {
+        host: 'my-host',
+        port: 8443,
+        database: 'my-database',
+        user: 'my-user',
+        password: 'my-password',
+        ssl: true,
+      },
+      `clickhouse://my-user:my-password@my-host:8443/my-database?secure=1`,
+    ],
+    [
+      {
+        host: 'my-host',
+        port: 8443,
+        database: 'my-database',
+        user: 'my-user',
+        password: 'my-password',
+        ssl: false,
+      },
+      `clickhouse://my-user:my-password@my-host:8443/my-database?`,
+    ],
+  ])(
+    'should get correct clickhouse connection info',
+    async (connectionInfo, expectConnectionUrl) => {
+      const mockResponse = { data: [] };
+      mockedAxios.post.mockResolvedValue(mockResponse);
+      // mock decrypt method in Encryptor to return the same password
+      mockedEncryptor.prototype.decrypt.mockReturnValue(
+        JSON.stringify({ password: connectionInfo.password }),
+      );
+
+      const result = await ibisAdaptor.getConstraints(
+        DataSourceName.CLICK_HOUSE,
+        connectionInfo,
+      );
+      const expectConnectionInfo = {
+        connectionUrl: expectConnectionUrl,
+      };
+
+      expect(result).toEqual([]);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${ibisServerEndpoint}/v2/connector/clickhouse/metadata/constraints`,
+        { connectionInfo: expectConnectionInfo },
+      );
+    },
+  );
 
   it('should get click house constraints', async () => {
     const mockResponse = { data: [] };
@@ -170,13 +220,15 @@ describe('IbisAdaptor', () => {
       DataSourceName.CLICK_HOUSE,
       mockClickHouseConnectionInfo,
     );
-    const expectConnectionInfo = Object.entries(
-      mockClickHouseConnectionInfo,
-    ).reduce((acc, [key, value]) => ((acc[snakeCase(key)] = value), acc), {});
+    const { user, password, host, port, database, ssl } =
+      mockClickHouseConnectionInfo;
+    const expectConnectionInfo = {
+      connectionUrl: `clickhouse://${user}:${password}@${host}:${port}/${database}${ssl ? '?secure=1' : ''}`,
+    };
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/ibis/clickhouse/metadata/constraints`,
+      `${ibisServerEndpoint}/v2/connector/clickhouse/metadata/constraints`,
       { connectionInfo: expectConnectionInfo },
     );
   });
@@ -195,7 +247,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/ibis/postgres/metadata/constraints`,
+      `${ibisServerEndpoint}/v2/connector/postgres/metadata/constraints`,
       {
         connectionInfo: {
           connectionUrl: postgresConnectionUrl,
@@ -229,7 +281,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/ibis/bigquery/metadata/constraints`,
+      `${ibisServerEndpoint}/v2/connector/bigquery/metadata/constraints`,
       { connectionInfo: expectConnectionInfo },
     );
   });
@@ -254,7 +306,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual({ valid: true, message: null });
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/ibis/postgres/validate/column_is_valid`,
+      `${ibisServerEndpoint}/v2/connector/postgres/validate/column_is_valid`,
       {
         connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
@@ -286,7 +338,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual({ valid: false, message: 'Error' });
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/ibis/postgres/validate/column_is_valid`,
+      `${ibisServerEndpoint}/v2/connector/postgres/validate/column_is_valid`,
       {
         connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
