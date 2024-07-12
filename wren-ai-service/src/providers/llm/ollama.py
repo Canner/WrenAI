@@ -130,7 +130,7 @@ class OllamaLLMProvider(LLMProvider):
         self._url = remove_trailing_slash(url)
         self._generation_model = generation_model
 
-        pull_ollama_model(self._generation_model)
+        pull_ollama_model(self._url, self._generation_model)
 
         logger.info(f"Using Ollama LLM: {self._generation_model}")
         logger.info(f"Using Ollama URL: {self._url}")

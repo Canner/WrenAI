@@ -167,7 +167,7 @@ class OllamaEmbedderProvider(EmbedderProvider):
         self._url = remove_trailing_slash(url)
         self._embedding_model = embedding_model
 
-        pull_ollama_model(self._embedding_model)
+        pull_ollama_model(self._url, self._embedding_model)
 
         logger.info(f"Using Ollama Embedding Model: {self._embedding_model}")
         logger.info(f"Using Ollama URL: {self._url}")
