@@ -4,23 +4,16 @@ import {
   ThreadResponse,
 } from '../repositories/threadResponseRepository';
 import { Telemetry } from '../telemetry/telemetry';
-import { IBackgroundTracker } from './index';
+import { BackgroundTracker } from './index';
 import { getLogger } from '@server/utils/logger';
 
 const logger = getLogger('ThreadResponseBackgroundTracker');
 logger.level = 'debug';
 
-export class ThreadResponseBackgroundTracker
-  implements IBackgroundTracker<ThreadResponse>
-{
+export class ThreadResponseBackgroundTracker extends BackgroundTracker<ThreadResponse> {
   // tasks is a kv pair of task id and thread response
-  private tasks: Record<number, ThreadResponse> = {};
-  private intervalTime: number;
-  private runningJobs = new Set();
-  private telemetry: Telemetry;
-
   private wrenAIAdaptor: IWrenAIAdaptor;
-  private repository: IThreadResponseRepository;
+  private threadResponseRepository: IThreadResponseRepository;
 
   constructor({
     telemetry,
@@ -31,16 +24,12 @@ export class ThreadResponseBackgroundTracker
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
   }) {
+    super();
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
-    this.repository = threadResponseRepository;
-    this.intervalTime = 1000;
+    this.threadResponseRepository = threadResponseRepository;
     this.start();
   }
-  _tasks: Record<number, ThreadResponse>;
-  _intervalTime: number;
-  _runningJobs: Set<any>;
-  _telemetry: Telemetry;
 
   public start() {
     logger.info('Background tracker started');
@@ -72,7 +61,7 @@ export class ThreadResponseBackgroundTracker
 
           // update database
           logger.debug(`Job ${threadResponse.id} status changed, updating`);
-          await this.repository.updateOne(threadResponse.id, {
+          await this.threadResponseRepository.updateOne(threadResponse.id, {
             status: result.status,
             detail: result.response,
             error: result.error,

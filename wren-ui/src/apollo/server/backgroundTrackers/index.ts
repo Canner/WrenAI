@@ -1,13 +1,13 @@
 import { Telemetry } from '../telemetry/telemetry';
 
-export interface IBackgroundTracker<R> {
+export abstract class BackgroundTracker<R> {
   // _ indicates private
-  _tasks: Record<number, R>;
-  _intervalTime: number;
-  _runningJobs: Set<any>;
-  _telemetry: Telemetry;
+  protected tasks: Record<number, R> = {};
+  protected intervalTime: number = 1000;
+  protected runningJobs: Set<any> = new Set();
+  protected telemetry: Telemetry;
 
-  start(): void;
-  addTask(task: R): void;
-  getTasks(): Record<number, R>;
+  public abstract start(): void;
+  public abstract addTask(task: R): void;
+  public abstract getTasks(): Record<number, R>;
 }
