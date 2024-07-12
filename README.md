@@ -106,6 +106,9 @@ Wren AI consists of three core services:
 
 Want to get our latest sharing? [Follow us on Medium!](https://blog.getwren.ai/)
 
+- [Easily query your database using LLMs without writing SQL and then import the data into Microsoft Excel.](https://blog.getwren.ai/easily-query-your-database-using-llms-without-writing-sql-and-then-import-the-data-into-microsoft-871c9672c656)
+- [Can AI Solve Data Silos Challenge? New Challenges To The Multi-AI Agents Era.](https://blog.getwren.ai/can-ai-solve-data-silos-challenge-new-challenges-to-the-multi-ai-agents-era-cec7fabc7c20)
+- [Wren AI in Kubernetes: Text-to-SQL](https://blog.getwren.ai/wren-ai-in-kubernetes-text-to-sql-39b82bda3d34)
 - [How to use Meta Llama 3 to query MySQL database using Ollama and Wren AI](https://blog.getwren.ai/how-to-use-meta-llama-3-to-query-mysql-database-using-ollama-on-your-machine-2c087b204e41)
 - [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://blog.getwren.ai/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online-9ba5c121afc3)
 - [The new wave of Composable Data Systems and the Interface to LLM agents](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
