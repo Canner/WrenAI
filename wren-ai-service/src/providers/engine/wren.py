@@ -56,9 +56,9 @@ class WrenIbis(Engine):
             "manifest": os.getenv("WREN_IBIS_MANIFEST"),
             "connection_info": orjson.loads(
                 base64.b64decode(os.getenv("WREN_IBIS_CONNECTION_INFO"))
-                if os.getenv("WREN_IBIS_CONNECTION_INFO")
-                else {},
-            ),
+            )
+            if os.getenv("WREN_IBIS_CONNECTION_INFO")
+            else {},
         },
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
