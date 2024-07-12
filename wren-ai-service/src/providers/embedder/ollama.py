@@ -12,7 +12,7 @@ from haystack_integrations.components.embedders.ollama import (
 from tqdm import tqdm
 
 from src.core.provider import EmbedderProvider
-from src.providers.loader import provider
+from src.providers.loader import provider, pull_ollama_model
 from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
@@ -166,6 +166,8 @@ class OllamaEmbedderProvider(EmbedderProvider):
     ):
         self._url = remove_trailing_slash(url)
         self._embedding_model = embedding_model
+
+        pull_ollama_model(self._embedding_model)
 
         logger.info(f"Using Ollama Embedding Model: {self._embedding_model}")
         logger.info(f"Using Ollama URL: {self._url}")

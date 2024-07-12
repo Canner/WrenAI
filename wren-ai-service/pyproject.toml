@@ -24,6 +24,7 @@ sf-hamilton = {version = "==1.63.0", extras = ["visualization"]}
 aiohttp = "==3.9.5"
 ollama-haystack = "==0.0.6"
 langfuse = "==2.35.0"
+ollama = "==0.2.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "==8.2.0"
