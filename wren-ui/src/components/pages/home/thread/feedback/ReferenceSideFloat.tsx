@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
 import clsx from 'clsx';
+import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Tag, Typography, Button, Input } from 'antd';
 import { EditOutlined } from '@ant-design/icons';
@@ -9,7 +9,7 @@ import { ReferenceTypes, getReferenceIcon } from './utils';
 
 const StyledReferenceSideFloat = styled.div`
   position: relative;
-  width: 325px;
+  width: 330px;
 
   .referenceSideFloat-title {
     position: absolute;
@@ -20,15 +20,21 @@ const StyledReferenceSideFloat = styled.div`
 
 interface Props {
   references: any[];
-  saveCorrectionPrompt?: (id: string, value: string) => void;
+  onSaveCorrectionPrompt?: (id: string, value: string) => void;
 }
 
 const COLLAPSE_LIMIT = 3;
 
-const ReferenceSummaryTemplate = ({ title, type, referenceNum }) => {
+const ReferenceSummaryTemplate = ({
+  title,
+  type,
+  referenceNum,
+  correctionPrompt,
+}) => {
+  const isRevise = !!correctionPrompt;
   return (
     <div className="d-flex align-center my-1">
-      <Tag className="ant-tag__reference">
+      <Tag className={clsx('ant-tag__reference', { isRevise })}>
         <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
         {referenceNum}
       </Tag>
@@ -80,6 +86,7 @@ const ReferenceTemplate = ({
   const handleEdit = () => {
     saveCorrectionPrompt(id, value);
     setIsEdit(false);
+    setValue('');
   };
 
   return (
@@ -95,7 +102,7 @@ const ReferenceTemplate = ({
           {title}
           <span className="gray-6 ml-2">
             {isRevise ? (
-              '(revised)'
+              '(feedback suggested)'
             ) : (
               <EditOutlined className="gray-6 " onClick={openEdit} />
             )}
@@ -107,9 +114,10 @@ const ReferenceTemplate = ({
               <Input
                 className="text-sm"
                 size="small"
-                placeholder="Add a prompt for adjustment..."
+                placeholder="Add a prompt for feedback..."
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
+                onPressEnter={handleEdit}
               />
               <Button
                 className="text-sm"
@@ -132,7 +140,7 @@ const GroupReferenceIterator = makeIterable(GroupReferenceTemplate);
 const ReferenceIterator = makeIterable(ReferenceTemplate);
 
 const References = (props: Props) => {
-  const { references, saveCorrectionPrompt } = props;
+  const { references, onSaveCorrectionPrompt } = props;
 
   const fieldReferences = references.filter(
     (ref) => ref.type === ReferenceTypes.FIELD,
@@ -167,10 +175,15 @@ const References = (props: Props) => {
   ];
 
   return (
-    <GroupReferenceIterator
-      data={resources}
-      saveCorrectionPrompt={saveCorrectionPrompt}
-    />
+    <div
+      className="pr-4 -mr-2"
+      style={{ maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' }}
+    >
+      <GroupReferenceIterator
+        data={resources}
+        saveCorrectionPrompt={onSaveCorrectionPrompt}
+      />
+    </div>
   );
 };
 
@@ -190,7 +203,7 @@ export default function ReferenceSideFloat(props: Props) {
   if (references.length === 0) return null;
   return (
     <StyledReferenceSideFloat className="border border-gray-4 rounded p-4">
-      <div className="referenceSideFloat-title text-md text-medium bg-gray-1">
+      <div className="referenceSideFloat-title text-md text-medium bg-gray-1 -ml-2">
         <QuoteIcon /> References
       </div>
       {collapse ? (

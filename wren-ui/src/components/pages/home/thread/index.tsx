@@ -28,6 +28,10 @@ const StyledThread = styled.div`
   }
 `;
 
+const StyledContainer = styled.div`
+  max-width: 1030px;
+`;
+
 const AnswerResultTemplate = ({
   index,
   id,
@@ -44,7 +48,7 @@ const AnswerResultTemplate = ({
   const isLastThreadResponse = id === lastResponseId;
 
   return (
-    <div className="d-inline-block text-left" key={`${id}-${index}`}>
+    <StyledContainer className="mx-auto" key={`${id}-${index}`}>
       {index > 0 && <Divider />}
       {error ? (
         <Alert
@@ -68,7 +72,7 @@ const AnswerResultTemplate = ({
           isLastThreadResponse={isLastThreadResponse}
         />
       )}
-    </div>
+    </StyledContainer>
   );
 };
 
@@ -101,7 +105,7 @@ export default function Thread(props: Props) {
   }, [divRef, data]);
 
   return (
-    <StyledThread className="text-center px-4 mt-12" ref={divRef}>
+    <StyledThread className="px-4 mt-12" ref={divRef}>
       <AnswerResultIterator
         data={data?.responses || []}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}

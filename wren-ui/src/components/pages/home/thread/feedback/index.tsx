@@ -1,5 +1,8 @@
 import { createContext, useContext, useMemo, useState } from 'react';
-import ReferenceSideFloat from './ReferenceSideFloat';
+import ReferenceSideFloat from '@/components/pages/home/thread/feedback/ReferenceSideFloat';
+import FeedbackSideFloat from '@/components/pages/home/thread/feedback/FeedbackSideFloat';
+import ReviewDrawer from '@/components/pages/home/thread/feedback/ReviewDrawer';
+import useDrawerAction from '@/hooks/useDrawerAction';
 import { ReferenceTypes } from './utils';
 
 type ContextProps = {
@@ -69,9 +72,18 @@ export default function Feedback(props: Props) {
   const { headerSlot, bodySlot } = props;
 
   const [correctionPrompts, setCorrectionPrompts] = useState({});
+  const reviewDrawer = useDrawerAction();
 
   const saveCorrectionPrompt = (id: string, value: string) => {
     setCorrectionPrompts({ ...correctionPrompts, [id]: value });
+  };
+
+  const removeCorrectionPrompt = (id: string) => {
+    setCorrectionPrompts({ ...correctionPrompts, [id]: undefined });
+  };
+
+  const resetAllCorrectionPrompts = () => {
+    setCorrectionPrompts({});
   };
 
   const references = useMemo(() => {
@@ -88,16 +100,33 @@ export default function Feedback(props: Props) {
 
   return (
     <FeedbackContext.Provider value={contextValue}>
-      <div>{headerSlot}</div>
+      <div className="d-flex">
+        {headerSlot}
+        <div className="flex-shrink-0 pl-5">
+          <FeedbackSideFloat
+            className="mb-4"
+            references={references}
+            onOpenReviewDrawer={reviewDrawer.openDrawer}
+            onResetAllChanges={resetAllCorrectionPrompts}
+          />
+        </div>
+      </div>
       <div className="d-flex">
         {bodySlot}
         <div className="flex-shrink-0 pl-5">
           <ReferenceSideFloat
             references={references}
-            saveCorrectionPrompt={saveCorrectionPrompt}
+            onSaveCorrectionPrompt={saveCorrectionPrompt}
           />
         </div>
       </div>
+      <ReviewDrawer
+        {...reviewDrawer.state}
+        onClose={reviewDrawer.closeDrawer}
+        references={references}
+        onSaveCorrectionPrompt={saveCorrectionPrompt}
+        onRemoveCorrectionPrompt={removeCorrectionPrompt}
+      />
     </FeedbackContext.Provider>
   );
 }
