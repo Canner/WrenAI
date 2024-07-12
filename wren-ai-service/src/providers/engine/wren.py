@@ -95,9 +95,9 @@ class WrenEngine(Engine):
         async with session.get(
             f"{self._endpoint}/v1/mdl/dry-run",
             json={
-                "manifest": orjson.loads(
-                    base64.b64decode(properties.get("manifest", ""))
-                ),
+                "manifest": orjson.loads(base64.b64decode(properties.get("manifest")))
+                if properties.get("manifest")
+                else {},
                 "sql": remove_limit_statement(add_quotes(sql)),
             },
         ) as response:
