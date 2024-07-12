@@ -1,7 +1,6 @@
 import { Telemetry } from '../telemetry/telemetry';
 
 export abstract class BackgroundTracker<R> {
-  // _ indicates private
   protected tasks: Record<number, R> = {};
   protected intervalTime: number = 1000;
   protected runningJobs: Set<any> = new Set();
