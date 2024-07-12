@@ -18,6 +18,7 @@ import { format } from 'sql-formatter';
 import { Telemetry } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
+import { ThreadResponseBackgroundTracker } from '../backgroundTrackers/threadResponseBackgroundTracker';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -132,106 +133,6 @@ export const constructCteSql = (
   return sql;
 };
 
-/**
- * Background tracker to track the status of the asking detail task
- */
-class BackgroundTracker {
-  // tasks is a kv pair of task id and thread response
-  private tasks: Record<number, ThreadResponse> = {};
-  private intervalTime: number;
-  private wrenAIAdaptor: IWrenAIAdaptor;
-  private threadResponseRepository: IThreadResponseRepository;
-  private runningJobs = new Set();
-  private telemetry: Telemetry;
-
-  constructor({
-    telemetry,
-    wrenAIAdaptor,
-    threadResponseRepository,
-  }: {
-    telemetry: Telemetry;
-    wrenAIAdaptor: IWrenAIAdaptor;
-    threadResponseRepository: IThreadResponseRepository;
-  }) {
-    this.telemetry = telemetry;
-    this.wrenAIAdaptor = wrenAIAdaptor;
-    this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 1000;
-    this.start();
-  }
-
-  public start() {
-    logger.info('Background tracker started');
-    setInterval(() => {
-      const jobs = Object.values(this.tasks).map(
-        (threadResponse) => async () => {
-          // check if same job is running
-          if (this.runningJobs.has(threadResponse.id)) {
-            return;
-          }
-
-          // mark the job as running
-          this.runningJobs.add(threadResponse.id);
-
-          // get the latest result from AI service
-          const result = await this.wrenAIAdaptor.getAskDetailResult(
-            threadResponse.queryId,
-          );
-
-          // check if status change
-          if (threadResponse.status === result.status) {
-            // mark the job as finished
-            logger.debug(
-              `Job ${threadResponse.id} status not changed, finished`,
-            );
-            this.runningJobs.delete(threadResponse.id);
-            return;
-          }
-
-          // update database
-          logger.debug(`Job ${threadResponse.id} status changed, updating`);
-          await this.threadResponseRepository.updateOne(threadResponse.id, {
-            status: result.status,
-            detail: result.response,
-            error: result.error,
-          });
-
-          // remove the task from tracker if it is finalized
-          if (isFinalized(result.status)) {
-            this.telemetry.send_event('question_answered', {
-              question: threadResponse.question,
-              result,
-            });
-            logger.debug(`Job ${threadResponse.id} is finalized, removing`);
-            delete this.tasks[threadResponse.id];
-          }
-
-          // mark the job as finished
-          this.runningJobs.delete(threadResponse.id);
-        },
-      );
-
-      // run the jobs
-      Promise.allSettled(jobs.map((job) => job())).then((results) => {
-        // show reason of rejection
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            logger.error(`Job ${index} failed: ${result.reason}`);
-          }
-        });
-      });
-    }, this.intervalTime);
-  }
-
-  public addTask(threadResponse: ThreadResponse) {
-    this.tasks[threadResponse.id] = threadResponse;
-  }
-
-  public getTasks() {
-    return this.tasks;
-  }
-}
-
 export class AskingService implements IAskingService {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private deployService: IDeployService;
@@ -239,7 +140,7 @@ export class AskingService implements IAskingService {
   private viewRepository: IViewRepository;
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
-  private backgroundTracker: BackgroundTracker;
+  private backgroundTracker: ThreadResponseBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: Telemetry;
 
@@ -270,7 +171,7 @@ export class AskingService implements IAskingService {
     this.threadResponseRepository = threadResponseRepository;
     this.telemetry = telemetry;
     this.queryService = queryService;
-    this.backgroundTracker = new BackgroundTracker({
+    this.backgroundTracker = new ThreadResponseBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
@@ -281,14 +182,14 @@ export class AskingService implements IAskingService {
     // list thread responses from database
     // filter status not finalized and put them into background tracker
     const threadResponses = await this.threadResponseRepository.findAll();
-    const unfininshedThreadResponses = threadResponses.filter(
+    const unfinishedThreadResponses = threadResponses.filter(
       (threadResponse) =>
         !isFinalized(threadResponse.status as AskResultStatus),
     );
     logger.info(
-      `Initialization: adding unfininshed thread responses (total: ${unfininshedThreadResponses.length}) to background tracker`,
+      `Initialization: adding unfinished thread responses (total: ${unfinishedThreadResponses.length}) to background tracker`,
     );
-    for (const threadResponse of unfininshedThreadResponses) {
+    for (const threadResponse of unfinishedThreadResponses) {
       this.backgroundTracker.addTask(threadResponse);
     }
   }
