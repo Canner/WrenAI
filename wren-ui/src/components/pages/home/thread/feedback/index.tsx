@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import ReferenceSideFloat from '@/components/pages/home/thread/feedback/ReferenceSideFloat';
-import AdjustmentSideFloat from '@/components/pages/home/thread/feedback/AdjustmentSideFloat';
+import FeedbackSideFloat from '@/components/pages/home/thread/feedback/FeedbackSideFloat';
 import ReviewDrawer from '@/components/pages/home/thread/feedback/ReviewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { ReferenceTypes } from './utils';
@@ -103,7 +103,7 @@ export default function Feedback(props: Props) {
       <div className="d-flex">
         {headerSlot}
         <div className="flex-shrink-0 pl-5">
-          <AdjustmentSideFloat
+          <FeedbackSideFloat
             className="mb-4"
             references={references}
             onOpenReviewDrawer={reviewDrawer.openDrawer}

@@ -4,11 +4,11 @@ import styled from 'styled-components';
 import { Button, Popconfirm } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 
-const StyledAdjustmentSideFloat = styled.div`
+const StyledFeedbackSideFloat = styled.div`
   position: relative;
   width: 325px;
 
-  .adjustmentSideFloat-title {
+  .feedbackSideFloat-title {
     position: absolute;
     top: -14px;
     padding: 0 4px;
@@ -22,7 +22,7 @@ interface Props {
   onResetAllChanges: () => void;
 }
 
-export default function AdjustmentSideFloat(props: Props) {
+export default function FeedbackSideFloat(props: Props) {
   const { className, references, onOpenReviewDrawer, onResetAllChanges } =
     props;
 
@@ -32,10 +32,10 @@ export default function AdjustmentSideFloat(props: Props) {
 
   if (changedReferences.length === 0) return null;
   return (
-    <StyledAdjustmentSideFloat
+    <StyledFeedbackSideFloat
       className={clsx('border border-gray-4 rounded p-4', className)}
     >
-      <div className="adjustmentSideFloat-title text-md text-medium bg-gray-1 citrus-6 -ml-2">
+      <div className="feedbackSideFloat-title text-md text-medium bg-gray-1 citrus-6 -ml-2">
         <FileTextOutlined /> Pending feedbacks
       </div>
       <div className="d-flex mt-2">
@@ -58,6 +58,6 @@ export default function AdjustmentSideFloat(props: Props) {
           </Button>
         </Popconfirm>
       </div>
-    </StyledAdjustmentSideFloat>
+    </StyledFeedbackSideFloat>
   );
 }
