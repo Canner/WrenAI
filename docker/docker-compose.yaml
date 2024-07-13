@@ -114,6 +114,8 @@ services:
       NEXT_PUBLIC_TELEMETRY_ENABLED: ${TELEMETRY_ENABLED}
       # configs
       WREN_PRODUCT_VERSION: ${WREN_PRODUCT_VERSION}
+    extra_hosts:
+      - host.docker.internal:host-gateway
     ports:
       # HOST_PORT is the port you want to expose to the host machine
       - ${HOST_PORT}:3000
