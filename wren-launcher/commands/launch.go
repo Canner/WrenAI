@@ -210,10 +210,12 @@ func Launch() {
 		panic(err)
 	}
 
-	// wait for 10 seconds
 	pterm.Info.Println("Wren AI is starting, please wait for a moment...")
+	if llmProvider == "Custom" {
+		pterm.Info.Println("If you choose Ollama as LLM provider, please make sure you have started the Ollama service. Also, Wren AI will automatically pull your chosen models if you have not done so.")
+	}
 	url := fmt.Sprintf("http://localhost:%d", uiPort)
-	// wait until checking if CheckWrenAIStarted return without error
+	// wait until checking if CheckUIServiceStarted return without error
 	// if timeout 2 minutes, panic
 	timeoutTime := time.Now().Add(2 * time.Minute)
 	for {
@@ -230,6 +232,9 @@ func Launch() {
 		time.Sleep(5 * time.Second)
 	}
 
+	// wait until checking if CheckWrenAIStarted return without error
+	// if timeout 30 minutes, panic
+	timeoutTime = time.Now().Add(30 * time.Minute)
 	for {
 		if time.Now().After(timeoutTime) {
 			panic("Timeout")
