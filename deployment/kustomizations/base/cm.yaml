@@ -20,6 +20,7 @@ data:
 
   # OpenAI
   GENERATION_MODEL: "gpt-3.5-turbo"
+  OPENAI_API_BASE: "https://api.openai.com/v1"
 
   # Telemetry
   POSTHOG_HOST: "https://app.posthog.com"

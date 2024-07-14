@@ -16,14 +16,14 @@ namespace: wren
 helmCharts:
 
 ### Uncomment if you are planing to use postgresql
-#  - name: postgresql
-#    repo: https://charts.bitnami.com/bitnami
-#    version: 14.3.3
-#    releaseName: wren-postgresql
-#    valuesFile: helm-values_postgresql_14.yaml
-#    includeCRDs: true
-#    # the Same Namespace
-#    namespace: wren
+  - name: postgresql
+    repo: https://repo.vmware.com/bitnami-files
+    version: 15.5.5
+    releaseName: wren-postgresql
+    valuesFile: helm-values_postgresql_15.yaml
+    includeCRDs: true
+    # the Same Namespace
+    namespace: wren
 
   - name: qdrant
     repo: https://qdrant.github.io/qdrant-helm
