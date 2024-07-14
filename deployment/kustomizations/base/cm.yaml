@@ -31,11 +31,9 @@ data:
   WREN_AI_ENDPOINT: "http://wren-ai-service-svc:5555"
   #WREN_AI_ENDPOINT: "http://wren-ai-service-svc.ai-system.svc.cluster.local:5555"
 
-  # "sqlite", or "pg" for postgres as UI application database
+  # "pg" for postgres as UI application database
   WREN_UI_DB_TYPE: pg
 
-  ### if DB_TYPE = "sqlite" also make sure to uncomment the "wren-sqlite" in the SQLITE_FILE, volumeMounts & PVC sections of the deployment/kustomizations/base/deploy-wren-ui.yaml
-  #SQLITE_FILE: /app/data/db.sqlite3
   #For bootstrap
   WREN_ENGINE_DATA_PATH: "/app/data"
 
