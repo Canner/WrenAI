@@ -18,9 +18,14 @@ data:
   WREN_AI_SERVICE_VERSION: "0.7.3"
   WREN_UI_VERSION: "0.10.1"
 
-  # OpenAI
+  # LLM and Embedder Configurations
+  LLM_PROVIDER: "openai_llm"
+  LLM_OPENAI_API_BASE: "https://api.openai.com/v1"
   GENERATION_MODEL: "gpt-3.5-turbo"
-  OPENAI_API_BASE: "https://api.openai.com/v1"
+
+  EMBEDDER_PROVIDER: "openai_embedder"
+  EMBEDDER_OPENAI_API_BASE: "https://api.openai.com/v1"
+
 
   # Telemetry
   POSTHOG_HOST: "https://app.posthog.com"
