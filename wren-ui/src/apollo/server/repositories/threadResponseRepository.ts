@@ -28,6 +28,7 @@ export interface ThreadResponse {
   status: string; // Thread response status
   detail: ThreadResponseDetail; // Thread response detail
   error: object; // Thread response error
+  corrections: object; // Previous thread response corrections
 }
 
 export interface ThreadResponseWithThreadContext extends ThreadResponse {
@@ -114,7 +115,7 @@ export class ThreadResponseRepository
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
-      if (['error', 'detail'].includes(key)) {
+      if (['error', 'detail', 'corrections'].includes(key)) {
         // The value from Sqlite will be string type, while the value from PG is JSON object
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;

@@ -257,6 +257,34 @@ export class AskingResolver {
     return response;
   }
 
+  public async createRegeneratedThreadResponse(
+    _root: any,
+    args: {
+      threadId: number;
+      data: {
+        question?: string;
+        sql?: string;
+        summary?: string;
+        corrections?: {
+          type: string;
+          explanation: string;
+          correction: string;
+        }[];
+      };
+    },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const { threadId, data } = args;
+
+    const askingService = ctx.askingService;
+    const response = await askingService.createRegeneratedThreadResponse(
+      threadId,
+      data,
+    );
+    ctx.telemetry.send_event('feedback_to_regenerate_answer', {});
+    return response;
+  }
+
   public async getResponse(
     _root: any,
     args: { responseId: number },

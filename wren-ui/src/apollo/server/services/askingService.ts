@@ -63,6 +63,10 @@ export interface IAskingService {
     threadId: number,
     input: AskingDetailTaskInput,
   ): Promise<ThreadResponse>;
+  createRegeneratedThreadResponse(
+    threadId: number,
+    input: any,
+  ): Promise<ThreadResponse>;
   getResponsesWithThread(
     threadId: number,
   ): Promise<ThreadResponseWithThreadContext[]>;
@@ -336,6 +340,40 @@ export class AskingService implements IAskingService {
     });
 
     // 3. put the task into background tracker
+    this.backgroundTracker.addTask(threadResponse);
+
+    // return the task id
+    return threadResponse;
+  }
+
+  public async createRegeneratedThreadResponse(
+    threadId: number,
+    input: any,
+  ): Promise<ThreadResponse> {
+    const thread = await this.threadRepository.findOneBy({
+      id: threadId,
+    });
+
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    const response = await this.wrenAIAdaptor.regenerateAskDetail({
+      description: input.description,
+      steps: input.steps,
+    });
+
+    const threadResponse = await this.threadResponseRepository.createOne({
+      threadId: thread.id,
+      queryId: response.queryId,
+      question: input.question,
+      summary: input.summary,
+      status: AskResultStatus.UNDERSTANDING,
+      corrections: input.corrections,
+    });
+
+    // 3. put the task into background tracker
+    // TODO: change background tracker
     this.backgroundTracker.addTask(threadResponse);
 
     // return the task id
