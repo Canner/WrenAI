@@ -14,6 +14,7 @@ async def force_deploy():
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f"{os.getenv("WREN_UI_ENDPOINT", "http://wren-ui:3000")}/api/graphql",
+            ssl=False,
             json={
                 "query": "mutation Deploy($force: Boolean) { deploy(force: $force) }",
                 "variables": {"force": True},

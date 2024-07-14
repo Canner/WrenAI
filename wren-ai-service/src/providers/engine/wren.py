@@ -24,6 +24,7 @@ class WrenUI(Engine):
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
             f"{self._endpoint}/api/graphql",
+            ssl=False,
             json={
                 "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
                 "variables": {

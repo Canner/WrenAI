@@ -10,7 +10,6 @@ networks:
 services:
   bootstrap:
     image: ghcr.io/canner/wren-bootstrap:${WREN_BOOTSTRAP_VERSION}
-    pull_policy: always
     platform: ${PLATFORM}
     environment:
       DATA_PATH: /app/data
@@ -22,7 +21,6 @@ services:
 
   wren-engine:
     image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
-    pull_policy: always
     platform: ${PLATFORM}
     expose:
       - ${WREN_ENGINE_SQL_PORT}
@@ -37,8 +35,8 @@ services:
 
   wren-ai-service:
     image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
-    pull_policy: always
     platform: ${PLATFORM}
+    pull_policy: never
     ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
@@ -53,6 +51,7 @@ services:
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
+    command: [ "/app/entrypoint.sh" ]
     networks:
       - wren
     depends_on:
@@ -61,7 +60,6 @@ services:
 
   ibis-server:
     image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
-    pull_policy: always
     platform: ${PLATFORM}
     expose:
       - 8000
@@ -75,7 +73,6 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.7.4
-    pull_policy: always
     ports:
       - 6333:6333
       - 6334:6334
