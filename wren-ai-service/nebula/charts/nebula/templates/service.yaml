@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io: nebula
+    app.kubernetes.io/component: nebula-metad
+  name: nebula-metad
+spec:
+  publishNotReadyAddresses: false
+  clusterIP: None
+  ports:
+    - name: thrift
+      port: {{ .Values.port.metad.thriftPort }}
+    - name: http
+      port: {{ .Values.port.metad.httpPort }}
+    - name: http2
+      port: {{ .Values.port.metad.http2Port }}
+  selector:
+    app.kubernetes.io/component: nebula-metad
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io: nebula
+    app.kubernetes.io/component: nebula-storaged
+  name: nebula-storaged
+spec:
+  publishNotReadyAddresses: false
+  clusterIP: None
+  ports:
+    - name: thrift
+      port: {{ .Values.port.storaged.thriftPort }}
+    - name: http
+      port: {{ .Values.port.storaged.httpPort }}
+    - name: http2
+      port: {{ .Values.port.storaged.http2Port }}
+  selector:
+    app.kubernetes.io/component: nebula-storaged
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io: nebula
+    app.kubernetes.io/component: nebula-graphd
+  name: nebula-graphd
+spec:
+  publishNotReadyAddresses: false
+  type: NodePort
+  ports:
+    - name: thrift
+      port: {{ .Values.port.graphd.thriftPort }}
+    - name: http
+      port: {{ .Values.port.graphd.httpPort }}
+    - name: http2
+      port: {{ .Values.port.graphd.http2Port }}
+  selector:
+    app.kubernetes.io/component: nebula-graphd

@@ -54,3 +54,6 @@ test:
 load-test:
 	poetry run python -m tests.locust.locust_script
 ## test related ##
+
+nebula-poc:
+	poetry run python nebula_poc.py

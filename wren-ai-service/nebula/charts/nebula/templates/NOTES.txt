@@ -1,0 +1,5 @@
+Nebula Graph Cluster installed!
+
+1. Watch all containers come up.
+  $ kubectl get pods --namespace={{ .Release.Namespace }} -l app.kubernetes.io={{ template "nebula.fullname" . }} -w
+

@@ -1,0 +1,11 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: nebula-budget
+  labels:
+    app: nebula-budget
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component-type: stateful
+  maxUnavailable: {{ template "nebula.pdb.maxUnavailable" .}}

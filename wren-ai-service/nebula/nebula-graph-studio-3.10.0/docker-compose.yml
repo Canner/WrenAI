@@ -1,0 +1,13 @@
+version: '3.4'
+services:
+  web:
+    image: vesoft/nebula-graph-studio:v3.10.0
+    environment:
+      USER: root
+    ports:
+      - 7001:7001
+    networks:
+      - nebula-web
+
+networks:
+  nebula-web:
