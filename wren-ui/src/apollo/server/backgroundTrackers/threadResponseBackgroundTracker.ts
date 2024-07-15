@@ -139,7 +139,7 @@ export class ThreadResponseBackgroundTracker extends BackgroundTracker<ThreadRes
     return strategy;
   }
 
-  private isFinalized = (status: AskResultStatus) => {
+  public isFinalized = (status: AskResultStatus) => {
     return (
       status === AskResultStatus.FAILED ||
       status === AskResultStatus.FINISHED ||

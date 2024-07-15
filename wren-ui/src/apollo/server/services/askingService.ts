@@ -5,10 +5,12 @@ import {
   AskHistory,
   ExpressionType,
   ExplanationType,
+  ExplainPipelineStatus,
 } from '@server/adaptors/wrenAIAdaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
 import { IThreadRepository, Thread } from '../repositories/threadRepository';
+import { IThreadResponseExplainRepository } from '../repositories/threadResponseExplainRepository';
 import {
   IThreadResponseRepository,
   ThreadResponse,
@@ -21,6 +23,7 @@ import { Telemetry } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { ThreadResponseBackgroundTracker } from '../backgroundTrackers/threadResponseBackgroundTracker';
+import { ThreadResponseExplainBackgroundTracker } from '../backgroundTrackers/explainBackgroundTracker';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -95,17 +98,6 @@ export interface IAskingService {
 }
 
 /**
- * utility function to check if the status is finalized
- */
-const isFinalized = (status: AskResultStatus) => {
-  return (
-    status === AskResultStatus.FAILED ||
-    status === AskResultStatus.FINISHED ||
-    status === AskResultStatus.STOPPED
-  );
-};
-
-/**
  * Given a list of steps, construct the SQL statement with CTEs
  * If stepIndex is provided, only construct the SQL from top to that step
  * @param steps
@@ -161,6 +153,9 @@ export class AskingService implements IAskingService {
   private threadResponseRepository: IThreadResponseRepository;
   private backgroundTracker: ThreadResponseBackgroundTracker;
   private regeneratedBackgroundTracker: ThreadResponseBackgroundTracker;
+  private threadResponseExplainRepository: IThreadResponseExplainRepository;
+  private threadResponseBT: ThreadResponseBackgroundTracker;
+  private explainBT: ThreadResponseExplainBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: Telemetry;
 
@@ -172,6 +167,7 @@ export class AskingService implements IAskingService {
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    threadResponseExplainRepository,
     queryService,
   }: {
     telemetry: Telemetry;
@@ -181,6 +177,7 @@ export class AskingService implements IAskingService {
     viewRepository: IViewRepository;
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
+    threadResponseExplainRepository: IThreadResponseExplainRepository;
     queryService: IQueryService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
@@ -189,9 +186,10 @@ export class AskingService implements IAskingService {
     this.viewRepository = viewRepository;
     this.threadRepository = threadRepository;
     this.threadResponseRepository = threadResponseRepository;
+    this.threadResponseExplainRepository = threadResponseExplainRepository;
     this.telemetry = telemetry;
     this.queryService = queryService;
-    this.backgroundTracker = new ThreadResponseBackgroundTracker({
+    this.threadResponseBT = new ThreadResponseBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
@@ -202,26 +200,59 @@ export class AskingService implements IAskingService {
       threadResponseRepository,
       isRegenerated: true,
     });
+    this.explainBT = new ThreadResponseExplainBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      threadResponseExplainRepository,
+    });
   }
 
   public async initialize() {
-    // list thread responses from database
-    // filter status not finalized and put them into background tracker
-    const threadResponses = await this.threadResponseRepository.findAll();
-    const unfinishedThreadResponses = threadResponses.filter(
-      (threadResponse) =>
-        !isFinalized(threadResponse.status as AskResultStatus),
-    );
-    logger.info(
-      `Initialization: adding unfinished thread responses (total: ${unfinishedThreadResponses.length}) to background tracker`,
-    );
-    for (const threadResponse of unfinishedThreadResponses) {
-      if (threadResponse.corrections !== null) {
-        this.regeneratedBackgroundTracker.addTask(threadResponse);
-        continue;
+    const initializeThreadResponseBT = async () => {
+      // list thread responses from database
+      // filter status not finalized and put them into background tracker
+      const threadResponses = await this.threadResponseRepository.findAll();
+      const unfinishedThreadResponses = threadResponses.filter(
+        (threadResponse) =>
+          !this.threadResponseBT.isFinalized(
+            threadResponse.status as AskResultStatus,
+          ),
+      );
+      logger.info(
+        `Initialization: adding unfinished thread responses (total: ${unfinishedThreadResponses.length}) to background tracker`,
+      );
+      for (const threadResponse of unfinishedThreadResponses) {
+        if (threadResponse.corrections !== null) {
+          this.regeneratedBackgroundTracker.addTask(threadResponse);
+          continue;
+        }
+        this.backgroundTracker.addTask(threadResponse);
       }
-      this.backgroundTracker.addTask(threadResponse);
-    }
+    };
+
+    const initializeThreadResponseExplainBT = async () => {
+      // list thread responses from database
+      // filter status not finalized and put them into background tracker
+      const threadResponseExplains =
+        await this.threadResponseExplainRepository.findAll();
+      const unfinishedThreadResponseExplains = threadResponseExplains.filter(
+        (threadResponseExplain) =>
+          !this.explainBT.isFinalized(
+            threadResponseExplain.status as ExplainPipelineStatus,
+          ),
+      );
+      logger.info(
+        `Initialization: adding unfinished explain job (total: ${unfinishedThreadResponseExplains.length}) to background tracker`,
+      );
+      for (const threadResponseExplain of unfinishedThreadResponseExplains) {
+        this.explainBT.addTask(threadResponseExplain);
+      }
+    };
+
+    await Promise.all([
+      initializeThreadResponseBT(),
+      initializeThreadResponseExplainBT(),
+    ]);
   }
 
   /**
@@ -295,7 +326,7 @@ export class AskingService implements IAskingService {
     });
 
     // 3. put the task into background tracker
-    this.backgroundTracker.addTask(threadResponse);
+    this.threadResponseBT.addTask(threadResponse);
 
     // return the task id
     return thread;
@@ -366,7 +397,7 @@ export class AskingService implements IAskingService {
     });
 
     // 3. put the task into background tracker
-    this.backgroundTracker.addTask(threadResponse);
+    this.threadResponseBT.addTask(threadResponse);
 
     // return the task id
     return threadResponse;
