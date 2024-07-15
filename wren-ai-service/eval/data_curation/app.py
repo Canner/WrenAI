@@ -11,7 +11,7 @@ from openai import AsyncClient
 from streamlit_tags import st_tags
 from utils import (
     DATA_SOURCES,
-    get_contexts_from_sqls_v2,
+    get_contexts_from_sqls,
     get_eval_dataset_in_toml_string,
     get_llm_client,
     get_question_sql_pairs,
@@ -94,7 +94,7 @@ def on_change_sql(i: int, key: str):
 
     valid, error = asyncio.run(is_sql_valid(sql))
     if valid:
-        new_context = asyncio.run(get_contexts_from_sqls_v2([sql]))
+        new_context = asyncio.run(get_contexts_from_sqls([sql]))
     if i != -1:
         st.session_state["llm_question_sql_pairs"][i]["sql"] = sql
         st.session_state["llm_question_sql_pairs"][i]["is_valid"] = valid
