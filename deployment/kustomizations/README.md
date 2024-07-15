@@ -23,7 +23,7 @@ git clone https://github.com/Canner/WrenAI.git
 cd WrenAI
 
 # Inflate the manifest with kustomization
-kubectl kustomize deployment/kustomizations --enable-helm > deployment/kustomizations/wrenai.kustimized.yaml
+kubectl kustomize deployment/kustomizations --enable-helm > deployment/kustomizations/wrenai.kustomized.yaml
 
 # Create namespace
 kubectl create namespace wren
@@ -36,7 +36,7 @@ kubectl create namespace wren
 kubectl apply -f deployment/kustomizations/examples/secret-wren_example.yaml -n wren
 
 # Deploy the app:
-kubectl apply -f deployment/kustomizations/wrenai.kustimized.yaml
+kubectl apply -f deployment/kustomizations/wrenai.kustomized.yaml
 
 kubectl get pods -n wren
 ```
