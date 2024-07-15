@@ -281,11 +281,11 @@ async def get_contexts_from_sqls(
             if "sortings" in result:
                 contexts += _compose_contexts_of_sorting_type(result["sortings"])
 
-        print(
-            f'SQL ANALYSIS RESULTS: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode("utf-8")}'
-        )
-        print(f"CONTEXTS: {sorted(set(contexts))}")
-        print("\n\n")
+        # print(
+        #     f'SQL ANALYSIS RESULTS: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode("utf-8")}'
+        # )
+        # print(f"CONTEXTS: {sorted(set(contexts))}")
+        # print("\n\n")
 
         return sorted(set(contexts))
 
@@ -301,7 +301,11 @@ async def get_contexts_from_sqls(
 
 
 async def get_question_sql_pairs(
-    llm_client: AsyncClient, llm_model: str, mdl_json: dict, num_pairs: int = 10
+    llm_client: AsyncClient,
+    llm_model: str,
+    mdl_json: dict,
+    custom_instructions: str,
+    num_pairs: int = 10,
 ) -> list[dict]:
     messages = [
         {
@@ -328,6 +332,10 @@ Given the database DDL, generate {num_pairs} of the questions and corresponding 
         ...
     ]
 }}
+
+### Custom Instructions ###
+
+{custom_instructions}
 
 ### Input ###
 Data Model: {get_ddl_commands(mdl_json)}

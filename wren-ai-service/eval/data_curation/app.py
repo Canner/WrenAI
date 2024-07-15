@@ -23,16 +23,20 @@ st.set_page_config(layout="wide")
 st.title("WrenAI Data Curation App")
 
 
+LLM_OPTIONS = ["gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"]
+
 llm_client = get_openai_client()
 
 
 # session states
 if "llm_model" not in st.session_state:
-    st.session_state["llm_model"] = None
+    st.session_state["llm_model"] = LLM_OPTIONS[0]
 if "deployment_id" not in st.session_state:
     st.session_state["deployment_id"] = str(uuid.uuid4())
 if "mdl_json" not in st.session_state:
     st.session_state["mdl_json"] = None
+if "custom_instructions_for_llm" not in st.session_state:
+    st.session_state["custom_instructions_for_llm"] = ""
 if "llm_question_sql_pairs" not in st.session_state:
     st.session_state["llm_question_sql_pairs"] = []
 if "user_question_sql_pair" not in st.session_state:
@@ -54,11 +58,20 @@ def on_change_upload_eval_dataset():
     st.session_state["candidate_dataset"] = doc["eval_dataset"]
 
 
+def on_change_custom_instructions_for_llm():
+    st.session_state["custom_instructions_for_llm"] = st.session_state[
+        "custom_instructions_text_area"
+    ]
+
+
 def on_click_generate_question_sql_pairs(llm_client: AsyncClient):
     st.toast("Generating question-sql-pairs...")
     st.session_state["llm_question_sql_pairs"] = asyncio.run(
         get_question_sql_pairs(
-            llm_client, st.session_state["llm_model"], st.session_state["mdl_json"]
+            llm_client,
+            st.session_state["llm_model"],
+            st.session_state["mdl_json"],
+            st.session_state["custom_instructions_for_llm"],
         )
     )
 
@@ -178,7 +191,7 @@ st.file_uploader(
 
 st.selectbox(
     label="Select which LLM model you want to use",
-    options=["gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"],
+    options=LLM_OPTIONS,
     index=0,
     key="select_llm_model",
     on_change=on_change_llm_model,
@@ -229,6 +242,14 @@ if st.session_state["mdl_json"] is not None:
         )
 
         with tab_generated_by_llm:
+            st.text_area(
+                "Custom Instructions for generating question-sql-pairs (Optional)",
+                key="custom_instructions_text_area",
+                value=st.session_state["custom_instructions_for_llm"],
+                placeholder="You can specify the custom instructions on how LLM should generate question-sql-pairs here, for example: what type of questions you want to generate.",
+                on_change=on_change_custom_instructions_for_llm,
+            )
+
             st.button(
                 "Generate 10 question-sql-pairs",
                 key="generate_question_sql_pairs",
