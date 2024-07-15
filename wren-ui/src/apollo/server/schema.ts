@@ -491,6 +491,14 @@ export const typeDefs = gql`
     LLM # LLM type candidate is created by LLM
   }
 
+  enum ReferenceType {
+    FIELD
+    QUERY_FROM
+    FILTER
+    SORTING
+    GROUP_BY
+  }
+
   type ResultCandidate {
     type: ResultCandidateType!
     sql: String!
