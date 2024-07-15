@@ -33,6 +33,7 @@ import {
   DataSourceMetadataService,
   QueryService,
 } from '@/apollo/server/services';
+import { ThreadResponseExplainRepository } from '@/apollo/server/repositories/threadResponseExplainRepository';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -63,6 +64,9 @@ const bootstrapServer = async () => {
   const deployLogRepository = new DeployLogRepository(knex);
   const threadRepository = new ThreadRepository(knex);
   const threadResponseRepository = new ThreadResponseRepository(knex);
+  const threadResponseExplainRepository = new ThreadResponseExplainRepository(
+    knex,
+  );
   const viewRepository = new ViewRepository(knex);
   const schemaChangeRepository = new SchemaChangeRepository(knex);
 
@@ -120,6 +124,7 @@ const bootstrapServer = async () => {
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    threadResponseExplainRepository,
     queryService,
   });
 
