@@ -305,6 +305,7 @@ async def get_question_sql_pairs(
     llm_model: str,
     mdl_json: dict,
     custom_instructions: str,
+    data_source: str,
     num_pairs: int = 10,
 ) -> list[dict]:
     messages = [
@@ -359,9 +360,12 @@ Think step by step
         question_sql_pairs = await get_validated_question_sql_pairs(results)
         sqls = [question_sql_pair["sql"] for question_sql_pair in question_sql_pairs]
         contexts = await get_contexts_from_sqls(sqls)
+        sqls_data = await get_data_from_wren_engine(sqls, data_source)
         return [
-            {**quesiton_sql_pair, "context": context}
-            for quesiton_sql_pair, context in zip(question_sql_pairs, contexts)
+            {**quesiton_sql_pair, "context": context, "data": sql_data}
+            for quesiton_sql_pair, context, sql_data in zip(
+                question_sql_pairs, contexts, sqls_data
+            )
         ]
     except Exception as e:
         st.error(f"Error generating question-sql-pairs: {e}")
@@ -374,6 +378,39 @@ def prettify_sql(sql: str) -> str:
         reindent=True,
         keyword_case="upper",
     )
+
+
+async def get_data_from_wren_engine(sqls: List[str], data_source: str):
+    assert data_source in DATA_SOURCES, f"Invalid data source: {data_source}"
+
+    async def _get_data(sql: str, data_source: str):
+        async with aiohttp.request(
+            "POST",
+            f"{WREN_IBIS_ENDPOINT}/v2/connector/{data_source}/query",
+            json={
+                "sql": add_quotes(sql),
+                "manifestStr": base64.b64encode(
+                    orjson.dumps(st.session_state["mdl_json"])
+                ).decode(),
+                "connectionInfo": st.session_state["connection_info"],
+            },
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as response:
+            if response.status != 200:
+                return {"data": [], "columns": []}
+
+            data = await response.json()
+            column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+
+            return {"data": data["data"], "columns": column_names}
+
+    async with aiohttp.ClientSession():
+        tasks = []
+        for sql in sqls:
+            task = asyncio.ensure_future(_get_data(sql, data_source))
+            tasks.append(task)
+
+        return await asyncio.gather(*tasks)
 
 
 @st.cache_data

@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 
 import orjson
+import pandas as pd
 import streamlit as st
 import tomlkit
 from openai import AsyncClient
@@ -72,6 +73,7 @@ def on_click_generate_question_sql_pairs(llm_client: AsyncClient):
             st.session_state["llm_model"],
             st.session_state["mdl_json"],
             st.session_state["custom_instructions_for_llm"],
+            st.session_state["data_source"],
         )
     )
 
@@ -289,9 +291,14 @@ if st.session_state["mdl_json"] is not None:
                         on_change=on_change_sql,
                         args=(i, f"sql_{i}"),
                     )
-
                     if st.session_state["llm_question_sql_pairs"][i]["is_valid"]:
                         st.success("SQL is valid")
+                        st.dataframe(
+                            pd.DataFrame(
+                                question_sql_pair["data"]["data"],
+                                columns=question_sql_pair["data"]["columns"],
+                            )
+                        )
                     else:
                         st.error(
                             f"SQL is invalid: {st.session_state["llm_question_sql_pairs"][i]["error"]}"
