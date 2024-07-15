@@ -40,9 +40,13 @@ class SQLExplanationResultRequest(BaseModel):
 
 
 class SQLExplanationResultResponse(BaseModel):
+    class SQLExplanationResultError(BaseModel):
+        code: Literal["OTHERS"]
+        message: str
+
     status: Literal["understanding", "generating", "finished", "failed"]
     response: Optional[List[List[Dict]]] = None
-    error: Optional[str] = None
+    error: Optional[SQLExplanationResultError] = None
 
 
 class SQLExplanationService:
@@ -100,7 +104,10 @@ class SQLExplanationService:
                 sql_explanation_request.query_id
             ] = SQLExplanationResultResponse(
                 status="failed",
-                error=str(e),
+                error=SQLExplanationResultResponse.SQLExplanationResultError(
+                    code="OTHERS",
+                    message=str(e),
+                ),
             )
 
     def get_sql_explanation_result(
