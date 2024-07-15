@@ -40,6 +40,10 @@ psycopg2-binary = "==2.9.9"
 setuptools = "==70.0.0"
 locust = "==2.28.0"
 
+
+[tool.poetry.group.eval.dependencies]
+tomlkit = "==0.13.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
