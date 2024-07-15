@@ -4,7 +4,9 @@
 
 Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service) here to understand the concepts of Wren AI Service.
 
-## Environment Setup
+## Setup for Local Development
+
+### Environment Setup
 
 - Python 3.12.*, recommended to use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage the Python versions
 - install `poetry` with version 1.8.3: `curl -sSL https://install.python-poetry.org | python3 - --version 1.8.3`
@@ -13,7 +15,7 @@ Please read the [documentation](https://docs.getwren.ai/concept/wren_ai_service)
 - [for development] execute `poetry run pre-commit install` to install the pre-commit hooks and `poetry run pre-commit run --all-files` to run the pre-commit checks at the first time to check if everything is set up correctly
 - [for development] to run the tests, execute `make test`
 
-## Start the service for development
+### Start the service for development
 
 The following commands can quickly start the service for development:
 
@@ -24,7 +26,9 @@ The following commands can quickly start the service for development:
     - go to `http://WREN_UI_HOST:WREN_UI_PORT`(default is http://localhost:3000) to interact interact from the UI
 - `make dev-down` to stop the needed containers
 
-## Pipeline Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
+## Others
+
+### Pipeline Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
 
 - install `psql`
 - fill in environment variables: `.env.dev` in the src folder and `config.properties` in the src/eval/wren-engine/etc folder
@@ -54,7 +58,7 @@ The following commands can quickly start the service for development:
     - .html: test report in html format, showing tables and charts
     - .log: test log
 
-## Demo(Deprecated)
+### Demo
 
 - go to the `demo` folder and run `poetry install` to install the dependencies
 - in the `wren-ai-service` folder, open three terminals

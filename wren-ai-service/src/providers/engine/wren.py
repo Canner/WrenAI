@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 from typing import Any, Dict, Optional, Tuple
@@ -54,8 +55,10 @@ class WrenIbis(Engine):
             "source": os.getenv("WREN_IBIS_SOURCE"),
             "manifest": os.getenv("WREN_IBIS_MANIFEST"),
             "connection_info": orjson.loads(
-                os.getenv("WREN_IBIS_CONNECTION_INFO", "{}")
-            ),
+                base64.b64decode(os.getenv("WREN_IBIS_CONNECTION_INFO"))
+            )
+            if os.getenv("WREN_IBIS_CONNECTION_INFO")
+            else {},
         },
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
