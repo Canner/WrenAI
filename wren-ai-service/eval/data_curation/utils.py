@@ -21,7 +21,7 @@ WREN_ENGINE_ENDPOINT = os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080"
 DATA_SOURCES = ["bigquery"]
 
 
-def get_llm_client() -> AsyncClient:
+def get_openai_client() -> AsyncClient:
     return AsyncClient(
         api_key=os.getenv("OPENAI_API_KEY"),
     )
@@ -285,6 +285,8 @@ async def get_contexts_from_sqls(
             f'SQL ANALYSIS RESULTS: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode("utf-8")}'
         )
         print(f"CONTEXTS: {sorted(set(contexts))}")
+        print("\n\n")
+
         return sorted(set(contexts))
 
     async with aiohttp.ClientSession():
@@ -299,7 +301,7 @@ async def get_contexts_from_sqls(
 
 
 async def get_question_sql_pairs(
-    llm_client: AsyncClient, mdl_json: dict, num_pairs: int = 10
+    llm_client: AsyncClient, llm_model: str, mdl_json: dict, num_pairs: int = 10
 ) -> list[dict]:
     messages = [
         {
@@ -338,7 +340,7 @@ Think step by step
 
     try:
         response = await llm_client.chat.completions.create(
-            model=os.getenv("GENERATION_MODEL", "gpt-3.5-turbo"),
+            model=llm_model,
             messages=messages,
             response_format={"type": "json_object"},
             max_tokens=4096,

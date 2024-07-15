@@ -13,7 +13,7 @@ from utils import (
     DATA_SOURCES,
     get_contexts_from_sqls,
     get_eval_dataset_in_toml_string,
-    get_llm_client,
+    get_openai_client,
     get_question_sql_pairs,
     is_sql_valid,
     prettify_sql,
@@ -23,10 +23,12 @@ st.set_page_config(layout="wide")
 st.title("WrenAI Data Curation App")
 
 
-llm_client = get_llm_client()
+llm_client = get_openai_client()
 
 
 # session states
+if "llm_model" not in st.session_state:
+    st.session_state["llm_model"] = None
 if "deployment_id" not in st.session_state:
     st.session_state["deployment_id"] = str(uuid.uuid4())
 if "mdl_json" not in st.session_state:
@@ -55,7 +57,9 @@ def on_change_upload_eval_dataset():
 def on_click_generate_question_sql_pairs(llm_client: AsyncClient):
     st.toast("Generating question-sql-pairs...")
     st.session_state["llm_question_sql_pairs"] = asyncio.run(
-        get_question_sql_pairs(llm_client, st.session_state["mdl_json"])
+        get_question_sql_pairs(
+            llm_client, st.session_state["llm_model"], st.session_state["mdl_json"]
+        )
     )
 
 
@@ -87,6 +91,11 @@ def on_click_setup_uploaded_file():
         st.session_state["data_source"] = None
         st.session_state["mdl_json"] = None
         st.session_state["connection_info"] = None
+
+
+def on_change_llm_model():
+    st.toast(f"Switching LLM model to {st.session_state["select_llm_model"]}")
+    st.session_state["llm_model"] = st.session_state["select_llm_model"]
 
 
 def on_change_sql(i: int, key: str):
@@ -140,19 +149,6 @@ def on_click_add_candidate_dataset(i: int, categories: list):
         st.session_state["candidate_dataset"].append(dataset_to_add)
 
 
-def on_change_sql_context(i: int):
-    if i == -1:
-        st.session_state.get("user_question_sql_pair", {}).get("context", []).append(
-            st.session_state["user_context_input"]
-        )
-        st.session_state["user_context_input"] = ""
-    else:
-        st.session_state["llm_question_sql_pairs"][i]["context"].append(
-            st.session_state[f"context_input_{i}"]
-        )
-        st.session_state[f"context_input_{i}"] = ""
-
-
 def on_change_user_question():
     if not st.session_state["user_question_sql_pair"]:
         st.session_state["user_question_sql_pair"] = {
@@ -180,6 +176,13 @@ st.file_uploader(
     on_change=on_click_setup_uploaded_file,
 )
 
+st.selectbox(
+    label="Select which LLM model you want to use",
+    options=["gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"],
+    index=0,
+    key="select_llm_model",
+    on_change=on_change_llm_model,
+)
 
 tab_create_dataset, tab_modify_dataset = st.tabs(
     ["Create New Evaluation Dataset", "Modify Saved Evaluation Dataset"]
@@ -249,20 +252,13 @@ if st.session_state["mdl_json"] is not None:
                         value=[],
                         key=f"categories_{i}",
                     )
-                    st.text_input(
-                        f"Context {i}",
-                        placeholder="Enter the context of SQL manually with format <table_name>.<column_name>",
-                        key=f"context_input_{i}",
-                        on_change=on_change_sql_context,
-                        args=(i,),
-                    )
                     st.multiselect(
                         label=f"Context {i}",
                         options=question_sql_pair["context"],
                         default=question_sql_pair["context"],
                         key=f"context_{i}",
                         help="Contexts are automatically generated based on the SQL once you save the changes of the it(ctrl+enter or command+enter)",
-                        label_visibility="hidden",
+                        disabled=True,
                     )
                     st.text_area(
                         f"SQL {i}",
@@ -313,13 +309,6 @@ if st.session_state["mdl_json"] is not None:
                     value=[],
                     key="user_categories",
                 )
-                st.text_input(
-                    "Context",
-                    placeholder="Enter the context of SQL manually with format <table_name>.<column_name>",
-                    key="user_context_input",
-                    on_change=on_change_sql_context,
-                    args=(-1,),
-                )
                 st.multiselect(
                     label="Context",
                     options=st.session_state.get("user_question_sql_pair", {}).get(
@@ -330,7 +319,7 @@ if st.session_state["mdl_json"] is not None:
                     ),
                     key="user_context",
                     help="Contexts are automatically generated based on the SQL once you save the changes of the it(ctrl+enter or command+enter)",
-                    label_visibility="hidden",
+                    disabled=True,
                 )
                 st.text_area(
                     "SQL",
