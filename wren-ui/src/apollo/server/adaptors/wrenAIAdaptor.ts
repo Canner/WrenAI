@@ -131,18 +131,21 @@ export interface CorrectionObject<T> {
   value: string;
 }
 
-export interface AskCorrection {
+export interface AskCorrectionInput {
   before: CorrectionObject<ExplanationType>;
   after: CorrectionObject<ExpressionType>;
 }
 
-export interface AskStepWithCorrections extends AskStep {
-  corrections: AskCorrection[];
+export interface AskStepWithCorrectionsInput {
+  summary: string;
+  sql: string;
+  cte_name: string;
+  corrections: AskCorrectionInput[];
 }
 
 export interface RegenerateAskDetailInput {
   description: string;
-  steps: AskStepWithCorrections[];
+  steps: AskStepWithCorrectionsInput[];
 }
 
 const getAIServiceError = (error: any) => {

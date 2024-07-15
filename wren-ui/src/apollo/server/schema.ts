@@ -527,6 +527,19 @@ export const typeDefs = gql`
     viewId: Int
   }
 
+  input CreateThreadResponseCorrectionInput {
+    id: Int!
+    stepIndex: Int!
+    type: ReferenceType!
+    reference: String!
+    correction: String!
+  }
+
+  input CreateRegeneratedThreadResponseInput {
+    responseId: Int!
+    corrections: [CreateThreadResponseCorrectionInput!]!
+  }
+
   input ThreadUniqueWhereInput {
     id: Int!
   }
@@ -557,6 +570,12 @@ export const typeDefs = gql`
     steps: [DetailStep!]!
   }
 
+  type CorrectionDetail {
+    id: Int!
+    type: ReferenceType!
+    correction: String!
+  }
+
   type ThreadResponse {
     id: Int!
     question: String!
@@ -564,6 +583,7 @@ export const typeDefs = gql`
     status: AskingTaskStatus!
     detail: ThreadResponseDetail
     error: Error
+    corrections: [CorrectionDetail!]
   }
 
   # Thread only consists of basic information of a thread
@@ -764,6 +784,10 @@ export const typeDefs = gql`
     createThreadResponse(
       threadId: Int!
       data: CreateThreadResponseInput!
+    ): ThreadResponse!
+    createRegeneratedThreadResponse(
+      threadId: Int!
+      data: CreateRegeneratedThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
 

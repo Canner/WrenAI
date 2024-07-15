@@ -4,7 +4,14 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
+import {
+  camelCase,
+  snakeCase,
+  Dictionary,
+  isPlainObject,
+  mapKeys,
+  mapValues,
+} from 'lodash';
 import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
 
 export interface DetailStep {
@@ -19,6 +26,12 @@ export interface ThreadResponseDetail {
   steps: Array<DetailStep>;
 }
 
+export interface PrevCorrection {
+  id: number;
+  type: string;
+  correction: string;
+}
+
 export interface ThreadResponse {
   id: number; // ID
   threadId: number; // Reference to thread.id
@@ -28,7 +41,7 @@ export interface ThreadResponse {
   status: string; // Thread response status
   detail: ThreadResponseDetail; // Thread response detail
   error: object; // Thread response error
-  corrections: object; // Previous thread response corrections
+  corrections: PrevCorrection[]; // Previous thread response corrections
 }
 
 export interface ThreadResponseWithThreadContext extends ThreadResponse {
@@ -108,6 +121,24 @@ export class ThreadResponseRepository
       .returning('*');
     return this.transformFromDBData(result);
   }
+
+  protected override transformToDBData = (data: any) => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const formattedData = mapValues(data, (value, key) => {
+      if (['error', 'detail', 'corrections'].includes(key)) {
+        // The value from Sqlite will be string type, while the value from PG is JSON object
+        if (value) {
+          return typeof value === 'string' ? value : JSON.stringify(value);
+        } else {
+          return value;
+        }
+      }
+      return value;
+    }) as Dictionary<any>;
+    return mapKeys(formattedData, (_value, key) => snakeCase(key));
+  };
 
   protected override transformFromDBData = (data: any): ThreadResponse => {
     if (!isPlainObject(data)) {

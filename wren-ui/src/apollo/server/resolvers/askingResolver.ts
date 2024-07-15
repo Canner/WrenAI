@@ -54,6 +54,8 @@ export class AskingResolver {
     this.deleteThread = this.deleteThread.bind(this);
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
+    this.createRegeneratedThreadResponse =
+      this.createRegeneratedThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
   }
@@ -262,12 +264,12 @@ export class AskingResolver {
     args: {
       threadId: number;
       data: {
-        question?: string;
-        sql?: string;
-        summary?: string;
-        corrections?: {
+        responseId: number;
+        corrections: {
+          id: number;
           type: string;
-          explanation: string;
+          stepIndex: number;
+          reference: string;
           correction: string;
         }[];
       };
@@ -281,7 +283,7 @@ export class AskingResolver {
       threadId,
       data,
     );
-    ctx.telemetry.send_event('feedback_to_regenerate_answer', {});
+    ctx.telemetry.send_event('regenerate_asked_question', {});
     return response;
   }
 
