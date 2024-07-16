@@ -1,3 +1,6 @@
+import argparse
+from typing import Tuple
+
 from deepeval import evaluate
 from deepeval.test_case import LLMTestCase
 from langfuse import Langfuse
@@ -33,14 +36,15 @@ def score_metrics(test_case, result, langfuse_client) -> None:
         )
 
 
+def parse_args() -> Tuple[str]:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path", "-P", type=str, help="Path to eval the prediction")
+    args = parser.parse_args()
+    return f"outputs/predictions/{args.path}"
+
+
 if __name__ == "__main__":
-    # CLI input example will be replaced by the actual input
-    path = (
-        "outputs/predictions/prediction_eval_3de25021-abae-44a4-aa7d-876c4a3663c6.toml"
-    )
-
-    #
-
+    path = parse_args()
     utils.load_env_vars()
 
     predicted_file = parse(open(path).read())
