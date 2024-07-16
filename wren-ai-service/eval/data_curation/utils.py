@@ -24,6 +24,7 @@ DATA_SOURCES = ["bigquery"]
 def get_openai_client() -> AsyncClient:
     return AsyncClient(
         api_key=os.getenv("OPENAI_API_KEY"),
+        timeout=60,
     )
 
 
