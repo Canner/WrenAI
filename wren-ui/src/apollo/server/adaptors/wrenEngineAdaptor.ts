@@ -176,7 +176,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         this.sessionPropsUrlPath,
         this.wrenEngineBaseEndpoint,
       );
-      logger.debug(`Endpoint: ${url.href}`);
       const headers = {
         'Content-Type': 'text/plain; charset=utf-8',
       };
@@ -294,7 +293,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         manifest,
       };
       logger.debug(
-        `Dry run wren engine with body: ${JSON.stringify(body, null, 2)}`,
+        `Dry run wren engine with body: ${JSON.stringify(sql, null, 2)}`,
       );
       const url = new URL(this.dryRunUrlPath, this.wrenEngineBaseEndpoint);
       const res: AxiosResponse<DryRunResponse[]> = await axios({
@@ -332,7 +331,6 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   private async initDatabase(sql) {
     try {
       const url = new URL(this.initSqlUrlPath, this.wrenEngineBaseEndpoint);
-      logger.debug(`Endpoint: ${url.href}`);
       const headers = {
         'Content-Type': 'text/plain; charset=utf-8',
       };
