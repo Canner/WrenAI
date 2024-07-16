@@ -30,6 +30,11 @@ const COMMON_RESPONSE = gql`
         displayName
       }
     }
+    corrections {
+      id
+      type
+      correction
+    }
   }
 `;
 
@@ -139,10 +144,7 @@ export const CREATE_THREAD_RESPONSE = gql`
     createThreadResponse(threadId: $threadId, data: $data) {
       ...CommonResponse
       error {
-        code
-        shortMessage
-        message
-        stacktrace
+        ...CommonError
       }
     }
   }
@@ -178,5 +180,19 @@ export const PREVIEW_DATA = gql`
 export const GET_NATIVE_SQL = gql`
   query GetNativeSQL($responseId: Int!) {
     nativeSql(responseId: $responseId)
+  }
+`;
+
+export const CREATE_REGENERATED_THREAD_RESPONSE = gql`
+  mutation CreateRegeneratedThreadResponse(
+    $threadId: Int!
+    $data: CreateRegeneratedThreadResponseInput!
+  ) {
+    createRegeneratedThreadResponse(threadId: $threadId, data: $data) {
+      ...CommonResponse
+      error {
+        ...CommonError
+      }
+    }
   }
 `;
