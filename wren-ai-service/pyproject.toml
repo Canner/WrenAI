@@ -41,7 +41,8 @@ setuptools = "==70.0.0"
 locust = "==2.28.0"
 
 [tool.poetry.group.eval.dependencies]
-tomlkit = "==0.12.5"
+tomlkit = "==0.13.0"
+deepeval = "==0.21.65"
 streamlit-tags = "==1.2.8"
 
 [tool.poetry.group.demo.dependencies]
