@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Drawer,
@@ -17,10 +17,12 @@ import {
 } from '@ant-design/icons';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { makeIterable } from '@/utils/iteration';
-import { getReferenceIcon } from './utils';
+import { getReferenceIcon, Reference } from './utils';
+import { CreateRegeneratedThreadResponseInput } from '@/apollo/client/graphql/__types__';
 
 type Props = DrawerAction & {
-  references: any[];
+  references: Reference[];
+  threadResponseId: number;
   onSaveCorrectionPrompt?: (id: string, value: string) => void;
   onRemoveCorrectionPrompt?: (id: string) => void;
 };
@@ -37,7 +39,6 @@ const ReviewTemplate = ({
   id,
   title,
   type,
-  referenceNum,
   correctionPrompt,
   saveCorrectionPrompt,
   removeCorrectionPrompt,
@@ -77,7 +78,7 @@ const ReviewTemplate = ({
         <div className="lh-xs" style={{ paddingTop: 2 }}>
           <Tag className={clsx('ant-tag__reference', { isRevise })}>
             <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-            {referenceNum}
+            {id}
           </Tag>
         </div>
         <div className="flex-grow-1">
@@ -118,6 +119,7 @@ const ReviewIterator = makeIterable(ReviewTemplate);
 export default function ReviewDrawer(props: Props) {
   const {
     visible,
+    threadResponseId,
     references,
     onClose,
     onSubmit,
@@ -137,14 +139,21 @@ export default function ReviewDrawer(props: Props) {
     }
   }, [changedReferences]);
 
-  const submit = async () => {
+  const submit = useCallback(async () => {
     // TODO: call correction ask api
-    const data = {
-      responseId: 0,
-      corrections: [],
+    const data: CreateRegeneratedThreadResponseInput = {
+      responseId: threadResponseId,
+      corrections: changedReferences.map((reference) => ({
+        id: reference.id,
+        type: reference.type,
+        reference: reference.title,
+        stepIndex: reference.stepIndex,
+        correction: reference.correctionPrompt,
+      })),
     };
     onSubmit && onSubmit(data);
-  };
+  }, [changedReferences]);
+
   return (
     <Drawer
       visible={visible}

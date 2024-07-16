@@ -4,24 +4,24 @@ import {
   GroupOutlined,
 } from '@ant-design/icons';
 import { ColumnsIcon, ModelIcon } from '@/utils/icons';
+import { ReferenceType } from '@/apollo/client/graphql/__types__';
 
-// TODO: Replace after provided by the backend
-export enum ReferenceTypes {
-  FIELD = 'FIELD',
-  QUERY_FROM = 'QUERY_FROM',
-  FILTER = 'FILTER',
-  SORTING = 'SORTING',
-  GROUP_BY = 'GROUP_BY',
-}
+export type Reference = {
+  id: number;
+  title: string;
+  type: ReferenceType;
+  stepIndex: number;
+  correctionPrompt?: string;
+};
 
 export const getReferenceIcon = (type) => {
   return (
     {
-      [ReferenceTypes.FIELD]: <ColumnsIcon />,
-      [ReferenceTypes.QUERY_FROM]: <ModelIcon />,
-      [ReferenceTypes.FILTER]: <FilterOutlined />,
-      [ReferenceTypes.SORTING]: <SortAscendingOutlined />,
-      [ReferenceTypes.GROUP_BY]: <GroupOutlined />,
+      [ReferenceType.FIELD]: <ColumnsIcon />,
+      [ReferenceType.QUERY_FROM]: <ModelIcon />,
+      [ReferenceType.FILTER]: <FilterOutlined />,
+      [ReferenceType.SORTING]: <SortAscendingOutlined />,
+      [ReferenceType.GROUP_BY]: <GroupOutlined />,
     }[type] || null
   );
 };

@@ -5,7 +5,8 @@ import { Tag, Typography, Button, Input } from 'antd';
 import { EditOutlined } from '@ant-design/icons';
 import { QuoteIcon } from '@/utils/icons';
 import { makeIterable } from '@/utils/iteration';
-import { ReferenceTypes, getReferenceIcon } from './utils';
+import { Reference, getReferenceIcon } from './utils';
+import { ReferenceType } from '@/apollo/client/graphql/__types__';
 
 const StyledReferenceSideFloat = styled.div`
   position: relative;
@@ -19,24 +20,19 @@ const StyledReferenceSideFloat = styled.div`
 `;
 
 interface Props {
-  references: any[];
+  references: Reference[];
   onSaveCorrectionPrompt?: (id: string, value: string) => void;
 }
 
 const COLLAPSE_LIMIT = 3;
 
-const ReferenceSummaryTemplate = ({
-  title,
-  type,
-  referenceNum,
-  correctionPrompt,
-}) => {
+const ReferenceSummaryTemplate = ({ id, title, type, correctionPrompt }) => {
   const isRevise = !!correctionPrompt;
   return (
     <div className="d-flex align-center my-1">
       <Tag className={clsx('ant-tag__reference', { isRevise })}>
         <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-        {referenceNum}
+        {id}
       </Tag>
       <Typography.Text className="gray-8" ellipsis>
         {title}
@@ -71,7 +67,6 @@ const ReferenceTemplate = ({
   id,
   title,
   type,
-  referenceNum,
   correctionPrompt,
   saveCorrectionPrompt,
 }) => {
@@ -94,7 +89,7 @@ const ReferenceTemplate = ({
       <div className="lh-xs" style={{ paddingTop: 2 }}>
         <Tag className={clsx('ant-tag__reference', { isRevise })}>
           <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-          {referenceNum}
+          {id}
         </Tag>
       </div>
       <div className="flex-grow-1">
@@ -143,33 +138,33 @@ const References = (props: Props) => {
   const { references, onSaveCorrectionPrompt } = props;
 
   const fieldReferences = references.filter(
-    (ref) => ref.type === ReferenceTypes.FIELD,
+    (ref) => ref.type === ReferenceType.FIELD,
   );
   const queryFromReferences = references.filter(
-    (ref) => ref.type === ReferenceTypes.QUERY_FROM,
+    (ref) => ref.type === ReferenceType.QUERY_FROM,
   );
   const filterReferences = references.filter(
-    (ref) => ref.type === ReferenceTypes.FILTER,
+    (ref) => ref.type === ReferenceType.FILTER,
   );
   const sortingReferences = references.filter(
-    (ref) => ref.type === ReferenceTypes.SORTING,
+    (ref) => ref.type === ReferenceType.SORTING,
   );
   const groupByReferences = references.filter(
-    (ref) => ref.type === ReferenceTypes.GROUP_BY,
+    (ref) => ref.type === ReferenceType.GROUP_BY,
   );
 
   const resources = [
-    { name: 'Fields', type: ReferenceTypes.FIELD, data: fieldReferences },
+    { name: 'Fields', type: ReferenceType.FIELD, data: fieldReferences },
     {
       name: 'Query from',
-      type: ReferenceTypes.QUERY_FROM,
+      type: ReferenceType.QUERY_FROM,
       data: queryFromReferences,
     },
-    { name: 'Filter', type: ReferenceTypes.FILTER, data: filterReferences },
-    { name: 'Sorting', type: ReferenceTypes.SORTING, data: sortingReferences },
+    { name: 'Filter', type: ReferenceType.FILTER, data: filterReferences },
+    { name: 'Sorting', type: ReferenceType.SORTING, data: sortingReferences },
     {
       name: 'Group by',
-      type: ReferenceTypes.GROUP_BY,
+      type: ReferenceType.GROUP_BY,
       data: groupByReferences,
     },
   ];

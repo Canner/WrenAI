@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import styled from 'styled-components';
 import { Button, Popconfirm } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
+import { Reference } from './utils';
 
 const StyledFeedbackSideFloat = styled.div`
   position: relative;
@@ -17,7 +18,7 @@ const StyledFeedbackSideFloat = styled.div`
 
 interface Props {
   className?: string;
-  references: any[];
+  references: Reference[];
   onOpenReviewDrawer: () => void;
   onResetAllChanges: () => void;
 }
