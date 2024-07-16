@@ -1,8 +1,9 @@
+import argparse
 import asyncio
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import orjson
 from langfuse.decorators import langfuse_context, observe
@@ -111,11 +112,15 @@ def setup_pipes() -> Dict[str, Any]:
     }
 
 
-if __name__ == "__main__":
-    # CLI input example will be replaced by the actual input
-    path = "eval/dataset/eval_dataset_2024_07_10.toml"
+def parse_args() -> Tuple[str]:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path", "-P", type=str, help="Path to the eval dataset")
+    args = parser.parse_args()
+    return f"eval/dataset/{args.path}"
 
-    #
+
+if __name__ == "__main__":
+    path = parse_args()
 
     utils.load_env_vars()
     utils.init_langfuse()
