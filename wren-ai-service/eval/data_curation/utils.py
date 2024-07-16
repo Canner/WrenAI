@@ -19,12 +19,13 @@ load_dotenv()
 WREN_IBIS_ENDPOINT = os.getenv("WREN_IBIS_ENDPOINT", "http://localhost:8000")
 WREN_ENGINE_ENDPOINT = os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")
 DATA_SOURCES = ["bigquery"]
+TIMEOUT_SECONDS = 60
 
 
 def get_openai_client() -> AsyncClient:
     return AsyncClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        timeout=60,
+        timeout=TIMEOUT_SECONDS,
     )
 
 
@@ -51,7 +52,7 @@ async def is_sql_valid(sql: str) -> Tuple[bool, str]:
             ).decode(),
             "connectionInfo": st.session_state["connection_info"],
         },
-        timeout=aiohttp.ClientTimeout(total=60),
+        timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS),
     ) as response:
         if response.status == 204:
             return True, None
@@ -225,7 +226,7 @@ async def get_sql_analysis(
             "sql": add_quotes(sql),
             "manifest": st.session_state["mdl_json"],
         },
-        timeout=aiohttp.ClientTimeout(total=60),
+        timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS),
     ) as response:
         return await response.json()
 
@@ -395,7 +396,7 @@ async def get_data_from_wren_engine(sqls: List[str], data_source: str):
                 ).decode(),
                 "connectionInfo": st.session_state["connection_info"],
             },
-            timeout=aiohttp.ClientTimeout(total=60),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS),
         ) as response:
             if response.status != 200:
                 return {"data": [], "columns": []}
