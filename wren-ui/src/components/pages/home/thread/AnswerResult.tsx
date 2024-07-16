@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import { Col, Button, Row, Skeleton, Typography } from 'antd';
+import { Col, Button, Row, Skeleton, Typography, Divider, Tag } from 'antd';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
+import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
@@ -13,6 +14,8 @@ import {
   AskingTaskStatus,
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
+import { makeIterable } from '@/utils/iteration';
+import { getReferenceIcon } from '@/components/pages/home/thread/feedback/utils';
 
 const { Title, Text } = Typography;
 
@@ -56,6 +59,69 @@ interface Props {
   onSubmitReviewDrawer: (variables: any) => Promise<void>;
 }
 
+const CorrectionTemplate = ({ id, type, correction }) => {
+  return (
+    <div className="my-1 gray-7">
+      <Tag className="ant-tag__reference bg-gray-7 gray-1">
+        <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
+        {id}
+      </Tag>
+      {correction}
+    </div>
+  );
+};
+const CorrectionIterator = makeIterable(CorrectionTemplate);
+const RegenerateInformation = (props: ThreadResponse) => {
+  const { question, corrections } = props;
+  const [collapse, setCollapse] = useState(false);
+  const collapseText = collapse ? 'Hide' : 'Show';
+  return (
+    <div className="rounded bg-gray-3 gray-6 py-2 px-3 mb-2">
+      <div className="d-flex align-center gx-2">
+        <ShareAltOutlined />
+        <div className="flex-grow-1">Regenerated answer from</div>
+        <span
+          className="select-none cursor-pointer hover:underline"
+          onClick={() => setCollapse(!collapse)}
+        >
+          {collapseText} feedbacks
+        </span>
+      </div>
+      <Text className="gray-6 text-medium" ellipsis={!collapse}>
+        {question}
+      </Text>
+      {collapse && (
+        <div>
+          <Divider className="mt-3 mb-1" />
+          <div className="d-flex align-center gx-2">
+            <ShareAltOutlined />
+            <div>Feedbacks</div>
+          </div>
+          <CorrectionIterator data={corrections} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const QuestionInformation = (props) => {
+  const { question } = props;
+  const [ellipsis, setEllipsis] = useState(true);
+  return (
+    <StyledQuestion wrap={false} onClick={() => setEllipsis(!ellipsis)}>
+      <Col className="text-center" flex="96px">
+        <QuestionCircleOutlined className="mr-2 gray-6" />
+        <Text className="gray-6 text-base text-medium">Question:</Text>
+      </Col>
+      <Col flex="auto">
+        <Text className="gray-6" ellipsis={ellipsis}>
+          {question}
+        </Text>
+      </Col>
+    </StyledQuestion>
+  );
+};
+
 export default function AnswerResult(props: Props) {
   const {
     threadResponse,
@@ -65,7 +131,7 @@ export default function AnswerResult(props: Props) {
     onSubmitReviewDrawer,
   } = props;
 
-  const { id: responseId, question, summary, status } = threadResponse;
+  const { id: responseId, summary, status, corrections } = threadResponse;
   const {
     view,
     steps,
@@ -74,26 +140,19 @@ export default function AnswerResult(props: Props) {
   } = threadResponse?.detail || {};
 
   const isViewSaved = !!view;
+  const isRegenerated = !!corrections;
   const loading = status !== AskingTaskStatus.FINISHED;
 
-  const [ellipsis, setEllipsis] = useState(true);
+  const Information = isRegenerated
+    ? RegenerateInformation
+    : QuestionInformation;
 
   return (
     <Skeleton active loading={loading}>
       <FeedbackLayout
         headerSlot={
           <Wrapper>
-            <StyledQuestion wrap={false} onClick={() => setEllipsis(!ellipsis)}>
-              <Col className="text-center" flex="96px">
-                <QuestionCircleOutlined className="mr-2 gray-6" />
-                <Text className="gray-6 text-base text-medium">Question:</Text>
-              </Col>
-              <Col flex="auto">
-                <Text className="gray-6" ellipsis={ellipsis}>
-                  {question}
-                </Text>
-              </Col>
-            </StyledQuestion>
+            <Information {...threadResponse} />
             <Title className="mb-6 text-bold gray-10" level={3}>
               {summary}
             </Title>
