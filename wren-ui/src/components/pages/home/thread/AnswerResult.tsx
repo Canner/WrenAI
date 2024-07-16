@@ -9,6 +9,10 @@ import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import StepContent from '@/components/pages/home/thread/StepContent';
 import FeedbackLayout from '@/components/pages/home/thread/feedback';
+import {
+  AskingTaskStatus,
+  ThreadResponse,
+} from '@/apollo/client/graphql/__types__';
 
 const { Title, Text } = Typography;
 
@@ -45,41 +49,32 @@ const StyledQuestion = styled(Row)`
 `;
 
 interface Props {
-  loading: boolean;
-  question: string;
-  description: string;
-  answerResultSteps: Array<{
-    summary: string;
-    sql: string;
-  }>;
-  fullSql: string;
-  threadResponseId: number;
-  onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+  threadResponse: ThreadResponse;
   isLastThreadResponse: boolean;
+  onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onTriggerScrollToBottom: () => void;
-  summary: string;
-  view?: {
-    id: number;
-    displayName: string;
-  };
+  onSubmitReviewDrawer: (variables: any) => Promise<void>;
 }
 
 export default function AnswerResult(props: Props) {
   const {
-    loading,
-    question,
-    description,
-    answerResultSteps,
-    fullSql,
-    threadResponseId,
+    threadResponse,
     isLastThreadResponse,
     onOpenSaveAsViewModal,
     onTriggerScrollToBottom,
-    summary,
-    view,
+    onSubmitReviewDrawer,
   } = props;
 
+  const { id: responseId, question, summary, status } = threadResponse;
+  const {
+    view,
+    steps,
+    description,
+    sql: fullSql,
+  } = threadResponse?.detail || {};
+
   const isViewSaved = !!view;
+  const loading = status !== AskingTaskStatus.FINISHED;
 
   const [ellipsis, setEllipsis] = useState(true);
 
@@ -112,15 +107,15 @@ export default function AnswerResult(props: Props) {
                 Summary
               </Text>
               <div className="pl-7 pb-5">{description}</div>
-              {(answerResultSteps || []).map((step, index) => (
+              {(steps || []).map((step, index) => (
                 <StepContent
-                  isLastStep={index === answerResultSteps.length - 1}
+                  isLastStep={index === steps.length - 1}
                   key={`${step.summary}-${index}`}
                   sql={step.sql}
                   fullSql={fullSql}
                   stepIndex={index}
                   summary={step.summary}
-                  threadResponseId={threadResponseId}
+                  threadResponseId={responseId}
                   onTriggerScrollToBottom={onTriggerScrollToBottom}
                   isLastThreadResponse={isLastThreadResponse}
                 />
@@ -146,10 +141,7 @@ export default function AnswerResult(props: Props) {
                 size="small"
                 icon={<SaveOutlined />}
                 onClick={() =>
-                  onOpenSaveAsViewModal({
-                    sql: fullSql,
-                    responseId: threadResponseId,
-                  })
+                  onOpenSaveAsViewModal({ sql: fullSql, responseId })
                 }
               >
                 Save as View
@@ -157,6 +149,8 @@ export default function AnswerResult(props: Props) {
             )}
           </Wrapper>
         }
+        threadResponse={threadResponse}
+        onSubmitReviewDrawer={onSubmitReviewDrawer}
       />
     </Skeleton>
   );

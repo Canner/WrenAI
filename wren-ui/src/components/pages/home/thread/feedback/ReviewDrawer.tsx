@@ -120,6 +120,7 @@ export default function ReviewDrawer(props: Props) {
     visible,
     references,
     onClose,
+    onSubmit,
     onSaveCorrectionPrompt,
     onRemoveCorrectionPrompt,
   } = props;
@@ -138,6 +139,11 @@ export default function ReviewDrawer(props: Props) {
 
   const submit = async () => {
     // TODO: call correction ask api
+    const data = {
+      responseId: 0,
+      corrections: [],
+    };
+    onSubmit && onSubmit(data);
   };
   return (
     <Drawer

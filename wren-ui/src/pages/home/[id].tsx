@@ -7,6 +7,7 @@ import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import {
+  useCreateRegeneratedThreadResponseMutation,
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
@@ -16,6 +17,10 @@ import useModalAction from '@/hooks/useModalAction';
 import Thread from '@/components/pages/home/thread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
+import {
+  CreateRegeneratedThreadResponseInput,
+  CreateThreadResponseInput,
+} from '@/apollo/client/graphql/__types__';
 
 export default function HomeThread() {
   const router = useRouter();
@@ -39,18 +44,21 @@ export default function HomeThread() {
     skip: threadId === null,
     onError: () => router.push(Path.Home),
   });
+  const addThreadResponse = (nextResponse) => {
+    updateThreadQuery((prev) => {
+      return {
+        ...prev,
+        thread: {
+          ...prev.thread,
+          responses: [...prev.thread.responses, nextResponse],
+        },
+      };
+    });
+  };
   const [createThreadResponse] = useCreateThreadResponseMutation({
     onCompleted(next) {
       const nextResponse = next.createThreadResponse;
-      updateThreadQuery((prev) => {
-        return {
-          ...prev,
-          thread: {
-            ...prev.thread,
-            responses: [...prev.thread.responses, nextResponse],
-          },
-        };
-      });
+      addThreadResponse(nextResponse);
     },
   });
   const [fetchThreadResponse, threadResponseResult] =
@@ -67,6 +75,13 @@ export default function HomeThread() {
             ),
           },
         }));
+      },
+    });
+  const [createRegeneratedThreadResponse] =
+    useCreateRegeneratedThreadResponseMutation({
+      onCompleted(next) {
+        const nextResponse = next.createRegeneratedThreadResponse;
+        addThreadResponse(nextResponse);
       },
     });
 
@@ -94,7 +109,7 @@ export default function HomeThread() {
     if (isFinished) threadResponseResult.stopPolling();
   }, [isFinished]);
 
-  const onSelect = async (payload) => {
+  const onSelect = async (payload: CreateThreadResponseInput) => {
     try {
       const response = await createThreadResponse({
         variables: { threadId: thread.id, data: payload },
@@ -107,9 +122,30 @@ export default function HomeThread() {
     }
   };
 
+  const onSubmitReviewDrawer = async (
+    payload: CreateRegeneratedThreadResponseInput,
+  ) => {
+    try {
+      const response = await createRegeneratedThreadResponse({
+        variables: { threadId: thread.id, data: payload },
+      });
+      await fetchThreadResponse({
+        variables: {
+          responseId: response.data.createRegeneratedThreadResponse.id,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <SiderLayout loading={loading} sidebar={homeSidebar}>
-      <Thread data={thread} onOpenSaveAsViewModal={saveAsViewModal.openModal} />
+      <Thread
+        data={thread}
+        onOpenSaveAsViewModal={saveAsViewModal.openModal}
+        onSubmitReviewDrawer={onSubmitReviewDrawer}
+      />
       <div className="py-12" />
       <Prompt
         data={askPrompt.data}

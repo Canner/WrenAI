@@ -4,6 +4,7 @@ import FeedbackSideFloat from '@/components/pages/home/thread/feedback/FeedbackS
 import ReviewDrawer from '@/components/pages/home/thread/feedback/ReviewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { ReferenceTypes } from './utils';
+import { ThreadResponse } from '@/apollo/client/graphql/__types__';
 
 type ContextProps = {
   references: any[];
@@ -20,12 +21,15 @@ export const useFeedbackContext = () => {
 interface Props {
   headerSlot: React.ReactNode;
   bodySlot: React.ReactNode;
+  threadResponse: ThreadResponse;
+  onSubmitReviewDrawer: (variables: any) => Promise<void>;
 }
 
 const data = [
   {
     id: '1',
     type: ReferenceTypes.FIELD,
+    stepIndex: 0,
     title:
       "Selects the 'City' column from the 'customer_data' dataset to display the city name.",
     referenceNum: 1,
@@ -33,43 +37,49 @@ const data = [
   {
     id: '2',
     type: ReferenceTypes.FIELD,
+    stepIndex: 0,
     title: 'Reference 2',
     referenceNum: 2,
   },
   {
     id: '3',
     type: ReferenceTypes.QUERY_FROM,
+    stepIndex: 1,
     title: 'Reference 3',
     referenceNum: 3,
   },
   {
     id: '4',
     type: ReferenceTypes.QUERY_FROM,
+    stepIndex: 1,
     title: 'Reference 4',
     referenceNum: 4,
   },
   {
     id: '5',
     type: ReferenceTypes.FILTER,
+    stepIndex: 2,
     title: 'Reference 4',
     referenceNum: 4,
   },
   {
     id: '6',
     type: ReferenceTypes.SORTING,
+    stepIndex: 2,
     title: 'Reference 4',
     referenceNum: 4,
   },
   {
     id: '7',
     type: ReferenceTypes.GROUP_BY,
+    stepIndex: 2,
     title: 'Reference 4',
     referenceNum: 4,
   },
 ];
 
 export default function Feedback(props: Props) {
-  const { headerSlot, bodySlot } = props;
+  const { headerSlot, bodySlot, threadResponse, onSubmitReviewDrawer } = props;
 
   const [correctionPrompts, setCorrectionPrompts] = useState({});
   const reviewDrawer = useDrawerAction();
@@ -87,11 +97,19 @@ export default function Feedback(props: Props) {
   };
 
   const references = useMemo(() => {
-    return data.map((item) => ({
-      ...item,
-      correctionPrompt: correctionPrompts[item.id],
-    }));
-  }, [data, correctionPrompts]);
+    if (!threadResponse?.detail) return [];
+    return threadResponse.detail.steps.flatMap((_, index) => {
+      // TODO: change to real step reference's data
+      const references = data.filter((item) => item.stepIndex === index);
+      return references.map((reference) => ({
+        id: reference.id,
+        title: reference.title,
+        type: reference.type,
+        stepIndex: reference.stepIndex,
+        correctionPrompt: correctionPrompts[reference.id],
+      }));
+    });
+  }, [threadResponse?.detail, correctionPrompts]);
 
   const contextValue = {
     references,
@@ -124,6 +142,7 @@ export default function Feedback(props: Props) {
         {...reviewDrawer.state}
         onClose={reviewDrawer.closeDrawer}
         references={references}
+        onSubmit={onSubmitReviewDrawer}
         onSaveCorrectionPrompt={saveCorrectionPrompt}
         onRemoveCorrectionPrompt={removeCorrectionPrompt}
       />
