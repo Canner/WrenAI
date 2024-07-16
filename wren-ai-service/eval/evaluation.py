@@ -4,6 +4,7 @@ from typing import Tuple
 from deepeval import evaluate
 from deepeval.test_case import LLMTestCase
 from langfuse import Langfuse
+from langfuse.decorators import langfuse_context
 from tomlkit import parse
 
 from eval.metrics.example import ExampleMetric
@@ -57,3 +58,5 @@ if __name__ == "__main__":
         test_case = LLMTestCase(**formatter(prediction))
         result = evaluate([test_case], metrics)[0]
         score_metrics(test_case, result, langfuse_client)
+
+    langfuse_context.flush()

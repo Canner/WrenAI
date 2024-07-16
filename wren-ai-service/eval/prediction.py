@@ -133,3 +133,4 @@ if __name__ == "__main__":
     predictions = predict(meta, dataset["eval_dataset"], pipes)
 
     write_prediction(meta, predictions)
+    langfuse_context.flush()
