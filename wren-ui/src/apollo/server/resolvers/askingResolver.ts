@@ -190,6 +190,7 @@ export class AskingResolver {
           status: response.status,
           detail: response.detail,
           error: response.error,
+          corrections: response.corrections,
         });
 
         return acc;

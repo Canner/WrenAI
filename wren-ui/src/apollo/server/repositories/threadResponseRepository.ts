@@ -77,27 +77,9 @@ export class ThreadResponseRepository
       query.orderBy('created_at', 'desc').limit(limit);
     }
 
-    return (await query)
-      .map((res) => {
-        // turn object keys into camelCase
-        return mapKeys(res, (_, key) => camelCase(key));
-      })
-      .map((res) => {
-        // JSON.parse detail and error
-        const detail =
-          res.detail && typeof res.detail === 'string'
-            ? JSON.parse(res.detail)
-            : res.detail;
-        const error =
-          res.error && typeof res.error === 'string'
-            ? JSON.parse(res.error)
-            : res.error;
-        return {
-          ...res,
-          detail: detail || null,
-          error: error || null,
-        };
-      }) as ThreadResponseWithThreadContext[];
+    return (await query).map((res) =>
+      this.transformFromDBData(res),
+    ) as ThreadResponseWithThreadContext[];
   }
 
   public async updateOne(
