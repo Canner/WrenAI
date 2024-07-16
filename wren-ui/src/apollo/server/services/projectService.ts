@@ -102,7 +102,6 @@ export class ProjectService implements IProjectService {
       ),
     };
     logger.debug('Creating project...');
-    logger.debug({ projectValue });
     const project = await this.projectRepository.createOne(projectValue);
     return project;
   }
@@ -126,8 +125,8 @@ export class ProjectService implements IProjectService {
       logger.debug(`File ${filePath} already exists`);
       return filePath;
     }
-    logger.debug(`Writing credentials to file ${filePath}`);
     fs.writeFileSync(filePath, credentialString);
+    logger.debug(`Wrote credentials to file`);
     return filePath;
   }
 

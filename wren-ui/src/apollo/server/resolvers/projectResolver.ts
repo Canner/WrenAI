@@ -117,7 +117,6 @@ export class ProjectResolver {
 
     // create duckdb datasource
     const initSql = buildInitSql(name as SampleDatasetName);
-    logger.debug({ initSql });
     const duckdbDatasourceProperties = {
       initSql,
       extensions: [],
@@ -205,7 +204,7 @@ export class ProjectResolver {
       type,
       connectionInfo,
     } as ProjectData);
-    logger.debug(`Created project: ${JSON.stringify(project)}`);
+    logger.debug(`Project created `);
     // try to connect to the data source
     try {
       if (type === DataSourceName.DUCKDB) {
@@ -388,7 +387,6 @@ export class ProjectResolver {
       };
       relations.push(relation);
     }
-    logger.debug({ relations });
     // group by model
     return models.map(({ id, displayName, referenceName }) => ({
       id,
