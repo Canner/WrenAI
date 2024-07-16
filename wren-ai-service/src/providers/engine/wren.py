@@ -21,7 +21,6 @@ class WrenUI(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
-        properties: Dict[str, Any] = {},
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
             f"{self._endpoint}/api/graphql",
@@ -46,31 +45,49 @@ class WrenUI(Engine):
 class WrenIbis(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_IBIS_ENDPOINT")):
         self._endpoint = endpoint
+        self._source = os.getenv("WREN_IBIS_SOURCE")
+        self._manifest = os.getenv("WREN_IBIS_MANIFEST")
+        self._connection_info = (
+            orjson.loads(base64.b64decode(os.getenv("WREN_IBIS_CONNECTION_INFO")))
+            if os.getenv("WREN_IBIS_CONNECTION_INFO")
+            else {}
+        )
 
     async def dry_run_sql(
         self,
         sql: str,
         session: aiohttp.ClientSession,
-        properties: Dict[str, Any] = {
-            "source": os.getenv("WREN_IBIS_SOURCE"),
-            "manifest": os.getenv("WREN_IBIS_MANIFEST"),
-            "connection_info": orjson.loads(
-                base64.b64decode(os.getenv("WREN_IBIS_CONNECTION_INFO"))
-            )
-            if os.getenv("WREN_IBIS_CONNECTION_INFO")
-            else {},
-        },
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
-            f"{self._endpoint}/v2/connector/{properties.get('source', '')}/query?dryRun=true",
+            f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true",
             json={
                 "sql": remove_limit_statement(add_quotes(sql)),
-                "manifestStr": properties.get("manifest", ""),
-                "connectionInfo": properties.get("connection_info", {}),
+                "manifestStr": self._manifest,
+                "connectionInfo": self._connection_info,
             },
         ) as response:
             if response.status == 204:
                 return True, None
             res = await response.text()
 
+            return False, res
+
+
+@provider("wren-engine")
+class WrenEngine(Engine):
+    def __init__(self, endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT")):
+        self._endpoint = endpoint
+
+    async def dry_run_sql(
+        self,
+        sql: str,
+        session: aiohttp.ClientSession,
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        async with session.get(
+            f"{self._endpoint}/v1/mdl/dry-run",
+            json={"sql": remove_limit_statement(add_quotes(sql)), "limit": 1},
+        ) as response:
+            if response.status == 200:
+                return True, None
+            res = await response.text()
             return False, res
