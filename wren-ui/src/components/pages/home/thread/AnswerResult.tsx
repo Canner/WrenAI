@@ -21,6 +21,7 @@ const { Title, Text } = Typography;
 
 const Wrapper = styled.div`
   width: 680px;
+  flex-shrink: 0;
 `;
 
 const StyledAnswer = styled(Typography)`

@@ -127,7 +127,7 @@ export default function Feedback(props: Props) {
             className="mb-4"
             references={references}
             onOpenReviewDrawer={reviewDrawer.openDrawer}
-            onResetAllChanges={resetAllCorrectionPrompts}
+            onResetAllCorrectionPrompts={resetAllCorrectionPrompts}
           />
         </div>
       </div>
@@ -148,6 +148,7 @@ export default function Feedback(props: Props) {
         onSubmit={onSubmitReviewDrawer}
         onSaveCorrectionPrompt={saveCorrectionPrompt}
         onRemoveCorrectionPrompt={removeCorrectionPrompt}
+        onResetAllCorrectionPrompts={resetAllCorrectionPrompts}
       />
     </FeedbackContext.Provider>
   );

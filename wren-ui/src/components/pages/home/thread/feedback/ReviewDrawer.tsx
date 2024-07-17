@@ -23,8 +23,9 @@ import { CreateRegeneratedThreadResponseInput } from '@/apollo/client/graphql/__
 type Props = DrawerAction & {
   references: Reference[];
   threadResponseId: number;
-  onSaveCorrectionPrompt?: (id: string, value: string) => void;
-  onRemoveCorrectionPrompt?: (id: string) => void;
+  onSaveCorrectionPrompt: (id: string, value: string) => void;
+  onRemoveCorrectionPrompt: (id: string) => void;
+  onResetAllCorrectionPrompts: () => void;
 };
 
 const StyledOriginal = styled.div`
@@ -125,6 +126,7 @@ export default function ReviewDrawer(props: Props) {
     onSubmit,
     onSaveCorrectionPrompt,
     onRemoveCorrectionPrompt,
+    onResetAllCorrectionPrompts,
   } = props;
 
   const changedReferences = useMemo(() => {
@@ -140,18 +142,23 @@ export default function ReviewDrawer(props: Props) {
   }, [changedReferences]);
 
   const submit = useCallback(async () => {
-    // TODO: call correction ask api
-    const data: CreateRegeneratedThreadResponseInput = {
-      responseId: threadResponseId,
-      corrections: changedReferences.map((reference) => ({
-        id: reference.id,
-        type: reference.type,
-        reference: reference.title,
-        stepIndex: reference.stepIndex,
-        correction: reference.correctionPrompt,
-      })),
-    };
-    onSubmit && onSubmit(data);
+    try {
+      const data: CreateRegeneratedThreadResponseInput = {
+        responseId: threadResponseId,
+        corrections: changedReferences.map((reference) => ({
+          id: reference.id,
+          type: reference.type,
+          reference: reference.title,
+          stepIndex: reference.stepIndex,
+          correction: reference.correctionPrompt,
+        })),
+      };
+      await onSubmit(data);
+      onClose();
+      onResetAllCorrectionPrompts();
+    } catch (error) {
+      console.error(error);
+    }
   }, [changedReferences]);
 
   return (
