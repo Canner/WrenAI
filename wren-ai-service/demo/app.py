@@ -9,7 +9,6 @@ from utils import (
     ask_details,
     get_mdl_json,
     get_new_mdl_json,
-    prepare_duckdb,
     prepare_semantics,
     rerun_wren_engine,
     save_mdl_json_file,
@@ -147,11 +146,10 @@ if __name__ == "__main__":
                 )
                 # Semantics preparation
                 if deploy_ok:
-                    if st.session_state["dataset_type"] == "duckdb":
-                        prepare_duckdb(st.session_state["chosen_dataset"])
-
                     rerun_wren_engine(
-                        st.session_state["mdl_json"], st.session_state["dataset_type"]
+                        st.session_state["mdl_json"],
+                        st.session_state["dataset_type"],
+                        st.session_state["chosen_dataset"],
                     )
                     prepare_semantics(st.session_state["mdl_json"])
 

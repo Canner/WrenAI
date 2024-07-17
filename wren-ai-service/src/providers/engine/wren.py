@@ -88,10 +88,18 @@ class WrenEngine(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        properties: Dict[str, Any] = {
+            "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
+        },
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.get(
             f"{self._endpoint}/v1/mdl/dry-run",
-            json={"sql": remove_limit_statement(add_quotes(sql)), "limit": 1},
+            json={
+                "manifest": orjson.loads(
+                    base64.b64decode(properties.get("manifest", ""))
+                ),
+                "sql": remove_limit_statement(add_quotes(sql)),
+            },
         ) as response:
             if response.status == 200:
                 return True, None
