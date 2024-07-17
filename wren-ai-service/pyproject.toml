@@ -42,7 +42,7 @@ locust = "==2.28.0"
 
 [tool.poetry.group.eval.dependencies]
 tomlkit = "==0.13.0"
-deepeval = "==0.21.65"
+deepeval = "==0.21.66"
 streamlit-tags = "==1.2.8"
 
 [tool.poetry.group.demo.dependencies]
