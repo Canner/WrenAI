@@ -22,9 +22,7 @@ export interface SQLLocation {
 export interface ThreadResponseReference {
   id: number;
   type: ExplainType;
-  expression: any;
-  criteria: any;
-  summary: string;
+  sqlSnippet: string;
   sqlLocation: any;
 }
 export interface DetailStep {

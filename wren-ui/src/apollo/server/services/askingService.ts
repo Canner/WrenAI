@@ -93,6 +93,7 @@ export interface IAskingService {
   getResponsesWithThread(
     threadId: number,
   ): Promise<ThreadResponseWithThreadContext[]>;
+  getExplainDetailsByThread(threadId: number): Promise<ThreadResponseExplain[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   previewData(
     responseId: number,
@@ -218,6 +219,11 @@ export class AskingService implements IAskingService {
       threadResponseRepository,
       threadResponseExplainRepository,
     });
+  }
+  public async getExplainDetailsByThread(
+    threadId: number,
+  ): Promise<ThreadResponseExplain[]> {
+    return await this.threadResponseExplainRepository.findAllByThread(threadId);
   }
 
   public async initialize() {

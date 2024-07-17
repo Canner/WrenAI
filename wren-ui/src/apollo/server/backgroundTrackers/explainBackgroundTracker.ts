@@ -207,9 +207,10 @@ export class ThreadResponseExplainBackgroundTracker extends BackgroundTracker<Th
         return {
           id: id++,
           type: explanation.type,
-          expression: (explanation.payload as any).expression || null,
-          criteria: (explanation.payload as any).criteria || null,
-          tableName: analysis ? (analysis as any).tableName : null,
+          sqlSnippet:
+            (explanation.payload as any).expression ||
+            (explanation.payload as any).criteria ||
+            (analysis as any).tableName,
           summary: explanation.payload.explanation || null,
           sqlLocation: analysis ? analysis.nodeLocation : null,
         };

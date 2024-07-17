@@ -82,7 +82,9 @@ export interface ThreadResponseExplain {
 }
 
 export interface IThreadResponseExplainRepository
-  extends IBasicRepository<ThreadResponseExplain> {}
+  extends IBasicRepository<ThreadResponseExplain> {
+  findAllByThread(threadId: number): Promise<ThreadResponseExplain[]>;
+}
 
 export class ThreadResponseExplainRepository
   extends BaseRepository<ThreadResponseExplain>
@@ -90,6 +92,20 @@ export class ThreadResponseExplainRepository
 {
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'thread_response_explain' });
+  }
+  public async findAllByThread(
+    threadId: number,
+  ): Promise<ThreadResponseExplain[]> {
+    return this.knex(this.tableName)
+      .select('thread_response_explain.*')
+      .join(
+        'thread_response',
+        'thread_response.id',
+        'thread_response_explain.thread_response_id',
+      )
+      .where({ 'thread_response.thread_id': threadId })
+      .orderBy('id', 'asc')
+      .then((results) => results.map(this.transformFromDBData));
   }
 
   public async createOne(
