@@ -50,14 +50,14 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
         _prepare_duckdb(dataset)
 
         # replace the values of WREN_ENGINE_xxx to ../.env.dev
-        with open("../.env.dev", "r") as f:
+        with open(".env.dev", "r") as f:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("ENGINE"):
                     lines[i] = "ENGINE=wren_engine\n"
                 elif line.startswith("WREN_ENGINE_MANIFEST"):
                     lines[i] = f"WREN_ENGINE_MANIFEST={MANIFEST}\n"
-        with open("../.env.dev", "w") as f:
+        with open(".env.dev", "w") as f:
             f.writelines(lines)
     else:
         if dataset_type == "bigquery":
@@ -84,7 +84,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
             ).decode()
 
         # replace the values of WREN_IBIS_xxx to ../.env.dev
-        with open("../.env.dev", "r") as f:
+        with open(".env.dev", "r") as f:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("ENGINE"):
@@ -100,7 +100,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
                     lines[
                         i
                     ] = f"WREN_IBIS_CONNECTION_INFO={WREN_IBIS_CONNECTION_INFO}\n"
-        with open("../.env.dev", "w") as f:
+        with open(".env.dev", "w") as f:
             f.writelines(lines)
 
     # wait for wren-ai-service to restart
@@ -118,7 +118,7 @@ def save_mdl_json_file(file_name: str, mdl_json: Dict):
 def get_mdl_json(database_name: str):
     assert database_name in ["music", "nba", "ecommerce"]
 
-    with open(f"sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
+    with open(f"demo/sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
         mdl_json = json.load(f)
 
     return mdl_json
@@ -604,7 +604,7 @@ CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/de
 """,
     }
 
-    with open("../tools/dev/etc/duckdb-init.sql", "w") as f:
+    with open("./tools/dev/etc/duckdb-init.sql", "w") as f:
         f.write("")
 
     response = requests.put(
