@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -458,7 +458,7 @@ class Indexing(BasicPipeline):
 if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
-    from src.utils import init_langfuse, load_env_vars
+    from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
     init_langfuse()
