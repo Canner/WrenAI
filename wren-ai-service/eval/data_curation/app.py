@@ -118,9 +118,18 @@ def on_change_llm_model():
 def on_change_sql(i: int, key: str):
     sql = st.session_state[key]
 
-    valid, error = asyncio.run(is_sql_valid(sql))
+    valid, error = asyncio.run(
+        is_sql_valid(
+            sql,
+            st.session_state["data_source"],
+            st.session_state["mdl_json"],
+            st.session_state["connection_info"],
+        )
+    )
     if valid:
-        new_context = asyncio.run(get_contexts_from_sqls([sql]))
+        new_context = asyncio.run(
+            get_contexts_from_sqls([sql], st.session_state["mdl_json"])
+        )
     if i != -1:
         st.session_state["llm_question_sql_pairs"][i]["sql"] = sql
         st.session_state["llm_question_sql_pairs"][i]["is_valid"] = valid
