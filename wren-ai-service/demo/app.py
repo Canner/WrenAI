@@ -56,6 +56,8 @@ if "sql_explanation_results" not in st.session_state:
     st.session_state["sql_explanation_results"] = None
 if "sql_user_corrections_by_step" not in st.session_state:
     st.session_state["sql_user_corrections_by_step"] = []
+if "sql_regeneration_results" not in st.session_state:
+    st.session_state["sql_regeneration_results"] = None
 
 
 def onchange_demo_dataset():
