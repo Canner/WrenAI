@@ -194,8 +194,9 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context, observe
+    from langfuse.decorators import langfuse_context
 
+    from src.core.pipeline import async_validate
     from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()

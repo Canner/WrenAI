@@ -10,7 +10,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 
 from src.core.engine import Engine
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.ask.components.post_processors import GenerationPostProcessor
 from src.pipelines.ask.components.prompts import (
@@ -158,6 +158,7 @@ class SQLCorrection(BasicPipeline):
 if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
+    from src.core.pipeline import async_validate
     from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
