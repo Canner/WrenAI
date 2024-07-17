@@ -13,11 +13,25 @@ import {
   mapValues,
 } from 'lodash';
 import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
+import { ExplainType } from './threadResponseExplainRepository';
 
+export interface SQLLocation {
+  line: number;
+  column: number;
+}
+export interface ThreadResponseReference {
+  id: number;
+  type: ExplainType;
+  expression: any;
+  criteria: any;
+  summary: string;
+  sqlLocation: any;
+}
 export interface DetailStep {
   summary: string;
   sql: string;
   cteName: string;
+  references?: ThreadResponseReference[];
 }
 
 export interface ThreadResponseDetail {

@@ -5,7 +5,7 @@ import {
   IQueryOptions,
 } from './baseRepository';
 import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
-import { ExplainPipelineStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
+import { ExplainPipelineStatus } from '../adaptors/wrenAIAdaptor';
 
 export interface DetailStep {
   summary: string;
@@ -27,19 +27,19 @@ export interface ExprSource {
 }
 
 export interface FilterPayload {
-  id?: string;
+  id?: number;
   expression: string;
   explanation: string;
 }
 
 export interface GroupByPayload {
-  id?: string;
+  id?: number;
   expression: string;
   explanation: string;
 }
 
 export interface RelationPayload {
-  id?: string;
+  id?: number;
   type: string;
   criteria?: string;
   exprSources?: ExprSource[];
@@ -47,14 +47,14 @@ export interface RelationPayload {
   explanation?: string;
 }
 export interface SelectItemsPayload {
-  id?: string;
+  id?: number;
   alias: string;
   expression: string;
   isFunctionCallOrMathematicalOperation: boolean;
   explanation: string;
 }
 export interface SortingPayload {
-  id?: string;
+  id?: number;
   expression: string;
   explanation: string;
 }
@@ -76,8 +76,9 @@ export interface ThreadResponseExplain {
   threadResponseId: number; // Reference to thread_response.id
   queryId: string; // explain pipeline query ID
   status: ExplainPipelineStatus; // explain pipeline status
-  detail: ExplainDetail; // explain detail
+  detail: ExplainDetail[]; // explain detail
   error: object; // explain error
+  analysis: object; // analysis result
 }
 
 export interface IThreadResponseExplainRepository
@@ -91,13 +92,26 @@ export class ThreadResponseExplainRepository
     super({ knexPg, tableName: 'thread_response_explain' });
   }
 
+  public async createOne(
+    data: Partial<ThreadResponseExplain>,
+    queryOptions?: IQueryOptions,
+  ) {
+    const transformedData = {
+      ...data,
+      detail: data.detail ? JSON.stringify(data.detail) : null,
+      error: data.error ? JSON.stringify(data.error) : null,
+      analysis: data.analysis ? JSON.stringify(data.analysis) : null,
+    } as any;
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const [result] = await executer(this.tableName)
+      .insert(this.transformToDBData(transformedData))
+      .returning('*');
+    return this.transformFromDBData(result);
+  }
+
   public async updateOne(
     id: number,
-    data: Partial<{
-      status: ExplainPipelineStatus;
-      detail: ExplainDetail;
-      error: WrenAIError;
-    }>,
+    data: Partial<ThreadResponseExplain>,
     queryOptions?: IQueryOptions,
   ) {
     const transformedData = {
@@ -121,7 +135,7 @@ export class ThreadResponseExplainRepository
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
-      if (['error', 'detail'].includes(key)) {
+      if (['error', 'detail', 'analysis'].includes(key)) {
         // The value from Sqlite will be string type, while the value from PG is JSON object
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;

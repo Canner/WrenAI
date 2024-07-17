@@ -18,7 +18,7 @@ export function addAutoIncrementId(query: any, startId = 1): any {
 
     for (const key in newObj) {
       if (newObj.hasOwnProperty(key) && typeof newObj[key] === 'object') {
-        if (key === 'properties') {
+        if (key === 'properties' || key === 'nodeLocation') {
           continue;
         }
         newObj[key] = addId(newObj[key]);
@@ -28,4 +28,34 @@ export function addAutoIncrementId(query: any, startId = 1): any {
   };
   let id = startId;
   return addId(query);
+}
+
+export function findAnalysisById(analysis: any, id: number) {
+  if (
+    analysis &&
+    analysis.hasOwnProperty('id') &&
+    Number(analysis.id) === Number(id)
+  ) {
+    return analysis;
+  }
+
+  if (Array.isArray(analysis)) {
+    for (const ele of analysis) {
+      const result = findAnalysisById(ele, id);
+      if (result) {
+        return result;
+      }
+    }
+  }
+
+  for (const key in analysis) {
+    if (analysis.hasOwnProperty(key) && typeof analysis[key] == 'object') {
+      const result = findAnalysisById(analysis[key], id);
+      if (result) {
+        return result;
+      }
+    }
+  }
+
+  return null;
 }

@@ -119,6 +119,7 @@ const bootstrapServer = async () => {
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
+    ibisAdaptor,
     deployService,
     projectService,
     viewRepository,

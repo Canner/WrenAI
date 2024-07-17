@@ -17,6 +17,7 @@ exports.up = function (knex) {
     table.string('status').nullable();
     table.jsonb('detail').nullable();
     table.jsonb('error').nullable();
+    table.jsonb('analysis').nullable();
 
     // timestamps
     table.timestamps(true, true);

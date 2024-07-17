@@ -6,24 +6,29 @@ import {
   ExpressionType,
   ExplanationType,
   ExplainPipelineStatus,
+  StepAnalysisResult,
 } from '@server/adaptors/wrenAIAdaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
 import { IThreadRepository, Thread } from '../repositories/threadRepository';
-import { IThreadResponseExplainRepository } from '../repositories/threadResponseExplainRepository';
+import {
+  IThreadResponseExplainRepository,
+  ThreadResponseExplain,
+} from '../repositories/threadResponseExplainRepository';
 import {
   IThreadResponseRepository,
   ThreadResponse,
   ThreadResponseWithThreadContext,
 } from '../repositories/threadResponseRepository';
-import { getLogger } from '@server/utils';
 import { groupBy, isEmpty, isNil } from 'lodash';
+import { addAutoIncrementId, getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
 import { Telemetry } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { ThreadResponseBackgroundTracker } from '../backgroundTrackers/threadResponseBackgroundTracker';
 import { ThreadResponseExplainBackgroundTracker } from '../backgroundTrackers/explainBackgroundTracker';
+import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -95,6 +100,9 @@ export interface IAskingService {
     limit?: number,
   ): Promise<PreviewDataResponse>;
   deleteAllByProjectId(projectId: number): Promise<void>;
+  createThreadResponseExplain(
+    threadResponseId: number,
+  ): Promise<ThreadResponseExplain>;
 }
 
 /**
@@ -146,6 +154,7 @@ export const constructCteSql = (
 
 export class AskingService implements IAskingService {
   private wrenAIAdaptor: IWrenAIAdaptor;
+  private ibisAdaptor: IIbisAdaptor;
   private deployService: IDeployService;
   private projectService: IProjectService;
   private viewRepository: IViewRepository;
@@ -162,6 +171,7 @@ export class AskingService implements IAskingService {
   constructor({
     telemetry,
     wrenAIAdaptor,
+    ibisAdaptor,
     deployService,
     projectService,
     viewRepository,
@@ -172,6 +182,7 @@ export class AskingService implements IAskingService {
   }: {
     telemetry: Telemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
+    ibisAdaptor: IIbisAdaptor;
     deployService: IDeployService;
     projectService: IProjectService;
     viewRepository: IViewRepository;
@@ -181,6 +192,7 @@ export class AskingService implements IAskingService {
     queryService: IQueryService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
+    this.ibisAdaptor = ibisAdaptor;
     this.deployService = deployService;
     this.projectService = projectService;
     this.viewRepository = viewRepository;
@@ -203,6 +215,7 @@ export class AskingService implements IAskingService {
     this.explainBT = new ThreadResponseExplainBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
+      threadResponseRepository,
       threadResponseExplainRepository,
     });
   }
@@ -464,6 +477,46 @@ export class AskingService implements IAskingService {
     return threadResponse;
   }
 
+  public async createThreadResponseExplain(threadResponseId: number) {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+    if (!threadResponse || threadResponse.status != AskResultStatus.FINISHED) {
+      throw new Error(
+        `Can not create explain job for threadResponseId: ${threadResponseId} `,
+      );
+    }
+    logger.debug('Getting thread response analysis');
+    const analysisWithIds =
+      await this.getThreadResponseAnalysis(threadResponse);
+
+    // compose analysis result with step for explain
+    const question = threadResponse.question;
+    const stepAnalysisResult = Object.entries(threadResponse.detail.steps).map(
+      ([idx, step]) => {
+        return {
+          sql: step.sql,
+          summary: step.summary,
+          sql_analysis_results: analysisWithIds[idx],
+        } as StepAnalysisResult;
+      },
+    );
+
+    // create explain job
+    const { queryId } = await this.wrenAIAdaptor.explain(
+      question,
+      stepAnalysisResult,
+    );
+    // create explain record and add to background tracker
+    const explain = await this.threadResponseExplainRepository.createOne({
+      threadResponseId: threadResponseId,
+      queryId,
+      analysis: analysisWithIds,
+    });
+    this.explainBT.addTask(explain);
+    return explain;
+  }
+
   public async getResponsesWithThread(threadId: number) {
     return this.threadResponseRepository.getResponsesWithThread(threadId);
   }
@@ -567,5 +620,14 @@ export class AskingService implements IAskingService {
         viewId: view.id,
       },
     });
+  }
+
+  private async getThreadResponseAnalysis(threadResponse: ThreadResponse) {
+    const project = await this.projectService.getCurrentProject();
+    const deployment = await this.deployService.getLastDeployment(project.id);
+    const manifest = deployment.manifest;
+    const sqls = threadResponse.detail?.steps?.map((step) => step.sql);
+    const analysis = await this.ibisAdaptor.analysisSqls(manifest, sqls);
+    return addAutoIncrementId(analysis);
   }
 }

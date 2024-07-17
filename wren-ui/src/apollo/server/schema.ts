@@ -684,6 +684,10 @@ export const typeDefs = gql`
     type: SchemaChangeType!
   }
 
+  input CreateThreadResponseExplainWhereInput {
+    responseId: Int!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -790,6 +794,11 @@ export const typeDefs = gql`
       data: CreateRegeneratedThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+
+    # Explain
+    createThreadResponseExplain(
+      where: CreateThreadResponseExplainWhereInput!
+    ): JSON!
 
     # Settings
     resetCurrentProject: Boolean!
