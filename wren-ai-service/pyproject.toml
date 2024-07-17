@@ -45,7 +45,7 @@ tomlkit = "==0.12.5"
 streamlit-tags = "==1.2.8"
 
 [tool.poetry.group.demo.dependencies]
-requests = "==2.31.0"
+requests = "==2.32.2"
 
 [build-system]
 requires = ["poetry-core"]
