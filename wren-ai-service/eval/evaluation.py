@@ -1,4 +1,6 @@
 import argparse
+import sys
+from pathlib import Path
 from typing import Tuple
 
 from deepeval import evaluate
@@ -8,6 +10,8 @@ from langfuse.decorators import langfuse_context, observe
 from tomlkit import parse
 
 from eval.metrics.example import ExampleMetric
+
+sys.path.append(f"{Path().parent.resolve()}")
 from src import utils
 
 

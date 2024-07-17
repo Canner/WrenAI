@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ from langfuse.decorators import langfuse_context, observe
 from tomlkit import document, dumps, parse
 from tqdm import tqdm
 
+sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
