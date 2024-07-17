@@ -124,6 +124,25 @@ class DDLConverter:
 
         logger.debug(f"original mdl_json: {mdl}")
 
+        ddl_commands = self.get_ddl_commands(mdl)
+
+        return {
+            "documents": [
+                Document(
+                    id=str(i),
+                    meta={"id": str(i)},
+                    content=ddl_command,
+                )
+                for i, ddl_command in enumerate(
+                    tqdm(
+                        ddl_commands,
+                        desc="indexing ddl commands into the ddl store",
+                    )
+                )
+            ]
+        }
+
+    def get_ddl_commands(self, mdl: Dict[str, Any]) -> List[str]:
         semantics = {
             "models": [],
             "relationships": mdl["relationships"],
@@ -159,29 +178,13 @@ class DDLConverter:
                 }
             )
 
-        ddl_commands = (
+        return (
             self._convert_models_and_relationships(
                 semantics["models"], semantics["relationships"]
             )
             + self._convert_metrics(semantics["metrics"])
             + self._convert_views(semantics["views"])
         )
-
-        return {
-            "documents": [
-                Document(
-                    id=str(i),
-                    meta={"id": str(i)},
-                    content=ddl_command,
-                )
-                for i, ddl_command in enumerate(
-                    tqdm(
-                        ddl_commands,
-                        desc="indexing ddl commands into the ddl store",
-                    )
-                )
-            ]
-        }
 
     # TODO: refactor this method
     def _convert_models_and_relationships(

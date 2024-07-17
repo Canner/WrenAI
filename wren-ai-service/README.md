@@ -30,7 +30,6 @@ The following commands can quickly start the service for development:
 
 ### Pipeline Evaluation
 
-- go to the `eval` folder and run `poetry install` to install the dependencies
 - execute commands in the `wren-ai-service` folder
   - to run the evaluation dataset curation app: `make data_curation_app`
 

@@ -36,13 +36,13 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
 
     if dataset_type == "duckdb":
         # replace the values of ENGINE to wren-ui in ../.env.dev
-        with open("../.env.dev", "r") as f:
+        with open(".env.dev", "r") as f:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("ENGINE"):
                     lines[i] = "ENGINE=wren_engine\n"
                     break
-        with open("../.env.dev", "w") as f:
+        with open(".env.dev", "w") as f:
             f.writelines(lines)
 
         _update_wren_engine_configs(
@@ -58,7 +58,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
             },
         )
 
-        assert response.status_code == 202
+        assert response.status_code == 202, response.json()
 
         st.toast("Wren Engine is ready", icon="🎉")
     else:
@@ -88,7 +88,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
             ).decode()
 
         # replace the values of WREN_IBIS_xxx to ../.env.dev
-        with open("../.env.dev", "r") as f:
+        with open(".env.dev", "r") as f:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("ENGINE"):
@@ -101,7 +101,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
                     lines[
                         i
                     ] = f"WREN_IBIS_CONNECTION_INFO={WREN_IBIS_CONNECTION_INFO}\n"
-        with open("../.env.dev", "w") as f:
+        with open(".env.dev", "w") as f:
             f.writelines(lines)
 
     # wait for wren-ai-service to restart
@@ -119,7 +119,7 @@ def save_mdl_json_file(file_name: str, mdl_json: Dict):
 def get_mdl_json(database_name: str):
     assert database_name in ["music", "nba", "ecommerce"]
 
-    with open(f"sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
+    with open(f"demo/sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
         mdl_json = json.load(f)
 
     return mdl_json

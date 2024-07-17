@@ -30,10 +30,10 @@ eval:
 	make dev-down
 
 demo:
-	cd demo; poetry run streamlit run app.py
+	poetry run streamlit run demo/app.py
 
 data_curation_app:
-	cd eval; poetry run streamlit run data_curation/app.py
+	poetry run streamlit run eval/data_curation/app.py
 ## utilities related ##
 
 
