@@ -557,10 +557,30 @@ export const typeDefs = gql`
     limit: Int
   }
 
+  type ReferenceSQLLocation {
+    line: Int!
+    column: Int!
+  }
+
+  type DetailReference {
+    id: Int!
+    type: String!
+    sqlSnippet: String
+    summary: String!
+    sqlLocation: ReferenceSQLLocation
+  }
+
   type DetailStep {
     summary: String!
     sql: String!
     cteName: String
+    references: [DetailReference]
+  }
+
+  type ThreadResponseExplainInfo {
+    queryId: String
+    status: String
+    error: JSON
   }
 
   type ThreadResponseDetail {
@@ -584,6 +604,7 @@ export const typeDefs = gql`
     detail: ThreadResponseDetail
     error: Error
     corrections: [CorrectionDetail!]
+    explain: ThreadResponseExplainInfo!
   }
 
   # Thread only consists of basic information of a thread

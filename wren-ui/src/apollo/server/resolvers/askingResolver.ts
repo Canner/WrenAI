@@ -168,6 +168,7 @@ export class AskingResolver {
 
     const askingService = ctx.askingService;
     const responses = await askingService.getResponsesWithThread(threadId);
+    const explains = await askingService.getExplainDetailsByThread(threadId);
     // reduce responses to group by thread id
     const thread = reduce(
       responses,
@@ -178,7 +179,9 @@ export class AskingResolver {
           acc.summary = response.threadSummary;
           acc.responses = [];
         }
-
+        const explain = explains.find(
+          (e) => e.threadResponseId === response.id,
+        );
         acc.responses.push({
           id: response.id,
           question: response.question,
@@ -193,6 +196,11 @@ export class AskingResolver {
           detail: response.detail,
           error: response.error,
           corrections: response.corrections,
+          explain: {
+            queryId: explain?.queryId || null,
+            status: explain?.status || null,
+            detail: explain?.detail || null,
+          },
         });
 
         return acc;
