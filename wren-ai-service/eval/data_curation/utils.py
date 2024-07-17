@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import os
-import re
 from datetime import datetime
 from typing import Any, List, Tuple
 
@@ -22,37 +21,37 @@ DATA_SOURCES = ["bigquery"]
 TIMEOUT_SECONDS = 60
 
 
-def get_openai_client() -> AsyncClient:
+def get_openai_client(
+    api_key: str = os.getenv("OPENAI_API_KEY"), timeout: float = TIMEOUT_SECONDS
+) -> AsyncClient:
     return AsyncClient(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        timeout=TIMEOUT_SECONDS,
+        api_key=api_key,
+        timeout=timeout,
     )
-
-
-def remove_limit_statement(sql: str) -> str:
-    pattern = r"\s*LIMIT\s+\d+(\s*;?\s*--.*|\s*;?\s*)$"
-    modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
-
-    return modified_sql
 
 
 def add_quotes(sql: str) -> str:
     return sqlglot.transpile(sql, read="trino", identify=True)[0]
 
 
-async def is_sql_valid(sql: str) -> Tuple[bool, str]:
+async def is_sql_valid(
+    sql: str,
+    data_source: str,
+    mdl_json: dict,
+    connection_info: dict,
+    api_endpoint: str = WREN_IBIS_ENDPOINT,
+    timeout: float = TIMEOUT_SECONDS,
+) -> Tuple[bool, str]:
     sql = sql[:-1] if sql.endswith(";") else sql
     async with aiohttp.request(
         "POST",
-        f'{WREN_IBIS_ENDPOINT}/v2/connector/{st.session_state['data_source']}/query?dryRun=true',
+        f"{api_endpoint}/v2/connector/{data_source}/query?dryRun=true",
         json={
             "sql": add_quotes(sql),
-            "manifestStr": base64.b64encode(
-                orjson.dumps(st.session_state["mdl_json"])
-            ).decode(),
-            "connectionInfo": st.session_state["connection_info"],
+            "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
+            "connectionInfo": connection_info,
         },
-        timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS),
+        timeout=aiohttp.ClientTimeout(total=timeout),
     ) as response:
         if response.status == 204:
             return True, None
@@ -63,12 +62,22 @@ async def is_sql_valid(sql: str) -> Tuple[bool, str]:
 
 async def get_validated_question_sql_pairs(
     question_sql_pairs: list[dict],
+    data_source: str,
+    mdl_json: dict,
+    connection_info: dict,
 ) -> list[dict]:
     tasks = []
 
     async with aiohttp.ClientSession():
         for question_sql_pair in question_sql_pairs:
-            task = asyncio.ensure_future(is_sql_valid(question_sql_pair["sql"]))
+            task = asyncio.ensure_future(
+                is_sql_valid(
+                    question_sql_pair["sql"],
+                    data_source,
+                    mdl_json,
+                    connection_info,
+                )
+            )
             tasks.append(task)
 
         results = await asyncio.gather(*tasks)
@@ -217,22 +226,26 @@ def get_ddl_commands(mdl_json: dict) -> str:
 
 async def get_sql_analysis(
     sql: str,
+    mdl_json: dict,
+    api_endpoint: str = WREN_ENGINE_ENDPOINT,
+    timeout: float = TIMEOUT_SECONDS,
 ) -> List[dict]:
     sql = sql[:-1] if sql.endswith(";") else sql
     async with aiohttp.request(
         "GET",
-        f"{WREN_ENGINE_ENDPOINT}/v1/analysis/sql",
+        f"{api_endpoint}/v1/analysis/sql",
         json={
             "sql": add_quotes(sql),
-            "manifest": st.session_state["mdl_json"],
+            "manifest": mdl_json,
         },
-        timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS),
+        timeout=aiohttp.ClientTimeout(total=timeout),
     ) as response:
         return await response.json()
 
 
 async def get_contexts_from_sqls(
     sqls: list[str],
+    mdl_json: dict,
 ) -> list[str]:
     def _compose_contexts_of_select_type(select_items: list[dict]):
         return [
@@ -294,7 +307,7 @@ async def get_contexts_from_sqls(
     async with aiohttp.ClientSession():
         tasks = []
         for sql in sqls:
-            task = asyncio.ensure_future(get_sql_analysis(sql))
+            task = asyncio.ensure_future(get_sql_analysis(sql, mdl_json))
             tasks.append(task)
 
         results = await asyncio.gather(*tasks)
@@ -308,6 +321,7 @@ async def get_question_sql_pairs(
     mdl_json: dict,
     custom_instructions: str,
     data_source: str,
+    connection_info: dict,
     num_pairs: int = 10,
 ) -> list[dict]:
     messages = [
@@ -359,9 +373,14 @@ Think step by step
         )
 
         results = orjson.loads(response.choices[0].message.content)["results"]
-        question_sql_pairs = await get_validated_question_sql_pairs(results)
+        question_sql_pairs = await get_validated_question_sql_pairs(
+            results,
+            data_source=data_source,
+            mdl_json=mdl_json,
+            connection_info=connection_info,
+        )
         sqls = [question_sql_pair["sql"] for question_sql_pair in question_sql_pairs]
-        contexts = await get_contexts_from_sqls(sqls)
+        contexts = await get_contexts_from_sqls(sqls, mdl_json)
         sqls_data = await get_data_from_wren_engine(sqls, data_source)
         return [
             {**quesiton_sql_pair, "context": context, "data": sql_data}
@@ -382,13 +401,19 @@ def prettify_sql(sql: str) -> str:
     )
 
 
-async def get_data_from_wren_engine(sqls: List[str], data_source: str):
-    assert data_source in DATA_SOURCES, f"Invalid data source: {data_source}"
+async def get_data_from_wren_engine(
+    sqls: List[str],
+    data_source: str,
+    api_endpoint: str = WREN_IBIS_ENDPOINT,
+    data_sources: list[str] = DATA_SOURCES,
+    timeout: float = TIMEOUT_SECONDS,
+) -> List[dict]:
+    assert data_source in data_sources, f"Invalid data source: {data_source}"
 
     async def _get_data(sql: str, data_source: str):
         async with aiohttp.request(
             "POST",
-            f"{WREN_IBIS_ENDPOINT}/v2/connector/{data_source}/query",
+            f"{api_endpoint}/v2/connector/{data_source}/query",
             json={
                 "sql": add_quotes(sql),
                 "manifestStr": base64.b64encode(
@@ -396,7 +421,7 @@ async def get_data_from_wren_engine(sqls: List[str], data_source: str):
                 ).decode(),
                 "connectionInfo": st.session_state["connection_info"],
             },
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS),
+            timeout=aiohttp.ClientTimeout(total=timeout),
         ) as response:
             if response.status != 200:
                 return {"data": [], "columns": []}

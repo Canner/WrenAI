@@ -75,6 +75,7 @@ def on_click_generate_question_sql_pairs(llm_client: AsyncClient):
             st.session_state["mdl_json"],
             st.session_state["custom_instructions_for_llm"],
             st.session_state["data_source"],
+            st.session_state["connection_info"],
         )
     )
 
