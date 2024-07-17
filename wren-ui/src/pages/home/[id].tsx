@@ -135,7 +135,7 @@ export default function HomeThread() {
         },
       });
     } catch (error) {
-      console.error(error);
+      throw error;
     }
   };
 

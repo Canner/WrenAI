@@ -110,6 +110,15 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateRegeneratedThreadResponseErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create regenerated thread response.';
+    }
+  }
+}
+
 class CreateViewErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
@@ -257,6 +266,10 @@ errorHandlers.set('DeleteThread', new DeleteThreadErrorHandler());
 errorHandlers.set(
   'CreateThreadResponse',
   new CreateThreadResponseErrorHandler(),
+);
+errorHandlers.set(
+  'CreateRegeneratedThreadResponse',
+  new CreateRegeneratedThreadResponseErrorHandler(),
 );
 errorHandlers.set('CreateView', new CreateViewErrorHandler());
 errorHandlers.set('UpdateDataSource', new UpdateDataSourceErrorHandler());
