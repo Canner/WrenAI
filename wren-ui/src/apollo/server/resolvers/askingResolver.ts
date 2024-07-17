@@ -58,6 +58,8 @@ export class AskingResolver {
       this.createCorrectedThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
+    this.createThreadResponseExplain =
+      this.createThreadResponseExplain.bind(this);
   }
 
   public async getSuggestedQuestions(
@@ -315,6 +317,16 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const data = await askingService.previewData(responseId, stepIndex, limit);
     return data;
+  }
+
+  public async createThreadResponseExplain(
+    _root: any,
+    args: { where: { responseId: number } },
+    ctx: IContext,
+  ) {
+    return await ctx.askingService.createThreadResponseExplain(
+      args.where.responseId,
+    );
   }
 
   /**
