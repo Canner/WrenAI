@@ -164,8 +164,8 @@ export class AskingService implements IAskingService {
   private backgroundTracker: ThreadResponseBackgroundTracker;
   private regeneratedBackgroundTracker: ThreadResponseBackgroundTracker;
   private threadResponseExplainRepository: IThreadResponseExplainRepository;
-  private threadResponseBT: ThreadResponseBackgroundTracker;
-  private explainBT: ThreadResponseExplainBackgroundTracker;
+  private threadResponseBackgroundTracker: ThreadResponseBackgroundTracker;
+  private explainBackgroundTracker: ThreadResponseExplainBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: Telemetry;
 
@@ -202,7 +202,7 @@ export class AskingService implements IAskingService {
     this.threadResponseExplainRepository = threadResponseExplainRepository;
     this.telemetry = telemetry;
     this.queryService = queryService;
-    this.threadResponseBT = new ThreadResponseBackgroundTracker({
+    this.threadResponseBackgroundTracker = new ThreadResponseBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
@@ -213,7 +213,7 @@ export class AskingService implements IAskingService {
       threadResponseRepository,
       isRegenerated: true,
     });
-    this.explainBT = new ThreadResponseExplainBackgroundTracker({
+    this.explainBackgroundTracker = new ThreadResponseExplainBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
@@ -233,7 +233,7 @@ export class AskingService implements IAskingService {
       const threadResponses = await this.threadResponseRepository.findAll();
       const unfinishedThreadResponses = threadResponses.filter(
         (threadResponse) =>
-          !this.threadResponseBT.isFinalized(
+          !this.threadResponseBackgroundTracker.isFinalized(
             threadResponse.status as AskResultStatus,
           ),
       );
@@ -245,7 +245,7 @@ export class AskingService implements IAskingService {
           this.regeneratedBackgroundTracker.addTask(threadResponse);
           continue;
         }
-        this.backgroundTracker.addTask(threadResponse);
+        this.threadResponseBackgroundTracker.addTask(threadResponse);
       }
     };
 
@@ -256,7 +256,7 @@ export class AskingService implements IAskingService {
         await this.threadResponseExplainRepository.findAll();
       const unfinishedThreadResponseExplains = threadResponseExplains.filter(
         (threadResponseExplain) =>
-          !this.explainBT.isFinalized(
+          !this.explainBackgroundTracker.isFinalized(
             threadResponseExplain.status as ExplainPipelineStatus,
           ),
       );
@@ -264,7 +264,7 @@ export class AskingService implements IAskingService {
         `Initialization: adding unfinished explain job (total: ${unfinishedThreadResponseExplains.length}) to background tracker`,
       );
       for (const threadResponseExplain of unfinishedThreadResponseExplains) {
-        this.explainBT.addTask(threadResponseExplain);
+        this.explainBackgroundTracker.addTask(threadResponseExplain);
       }
     };
 
@@ -345,7 +345,7 @@ export class AskingService implements IAskingService {
     });
 
     // 3. put the task into background tracker
-    this.threadResponseBT.addTask(threadResponse);
+    this.threadResponseBackgroundTracker.addTask(threadResponse);
 
     // return the task id
     return thread;
@@ -416,7 +416,7 @@ export class AskingService implements IAskingService {
     });
 
     // 3. put the task into background tracker
-    this.threadResponseBT.addTask(threadResponse);
+    this.threadResponseBackgroundTracker.addTask(threadResponse);
 
     // return the task id
     return threadResponse;
@@ -515,7 +515,7 @@ export class AskingService implements IAskingService {
       queryId,
       analysis: analysisWithIds,
     });
-    this.explainBT.addTask(explain);
+    this.explainBackgroundTracker.addTask(explain);
     return explain;
   }
 
