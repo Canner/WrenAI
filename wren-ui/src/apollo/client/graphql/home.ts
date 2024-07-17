@@ -22,6 +22,16 @@ const COMMON_RESPONSE = gql`
         summary
         sql
         cteName
+        references {
+          referenceId
+          summary
+          type
+          sqlSnippet
+          sqlLocation {
+            column
+            line
+          }
+        }
       }
       view {
         id
@@ -29,6 +39,11 @@ const COMMON_RESPONSE = gql`
         statement
         displayName
       }
+    }
+    explain {
+      queryId
+      status
+      error
     }
     corrections {
       id
@@ -150,6 +165,14 @@ export const CREATE_THREAD_RESPONSE = gql`
   }
   ${COMMON_RESPONSE}
   ${COMMON_ERROR}
+`;
+
+export const CREATE_THREAD_RESPONSE_EXPLAIN = gql`
+  mutation CreateThreadResponseExplain(
+    $where: CreateThreadResponseExplainWhereInput!
+  ) {
+    createThreadResponseExplain(where: $where)
+  }
 `;
 
 export const UPDATE_THREAD = gql`
