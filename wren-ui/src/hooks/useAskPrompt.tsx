@@ -9,10 +9,10 @@ import {
   useCreateAskingTaskMutation,
 } from '@/apollo/client/graphql/home.generated';
 
-const getIsExplainFinished = (status: ExplainTaskStatus) =>
+export const getIsExplainFinished = (status: ExplainTaskStatus) =>
   [ExplainTaskStatus.FINISHED, ExplainTaskStatus.FAILED].includes(status);
 
-const getIsAskingFinished = (status: AskingTaskStatus) =>
+export const getIsAskingFinished = (status: AskingTaskStatus) =>
   [
     AskingTaskStatus.FINISHED,
     AskingTaskStatus.FAILED,

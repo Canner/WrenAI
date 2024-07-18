@@ -1,10 +1,12 @@
 import { createContext, useContext, useMemo, useState } from 'react';
+import { Skeleton } from 'antd';
 import ReferenceSideFloat from '@/components/pages/home/thread/feedback/ReferenceSideFloat';
 import FeedbackSideFloat from '@/components/pages/home/thread/feedback/FeedbackSideFloat';
 import ReviewDrawer from '@/components/pages/home/thread/feedback/ReviewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { ThreadResponse } from '@/apollo/client/graphql/__types__';
 import { Reference } from './utils';
+import { getIsExplainFinished } from '@/hooks/useAskPrompt';
 
 type ContextProps = {
   references: Reference[];
@@ -43,6 +45,13 @@ export default function Feedback(props: Props) {
     setCorrectionPrompts({});
   };
 
+  const loading = useMemo(
+    () => !getIsExplainFinished(threadResponse?.explain?.status),
+    [threadResponse?.explain?.status],
+  );
+  const error = useMemo(() => {
+    return threadResponse?.explain?.error || null;
+  }, [threadResponse?.explain?.error]);
   const references = useMemo(() => {
     if (!threadResponse?.detail) return [];
     return threadResponse.detail.steps.flatMap((step, index) => {
@@ -64,7 +73,7 @@ export default function Feedback(props: Props) {
     <FeedbackContext.Provider value={contextValue}>
       <div className="d-flex">
         {headerSlot}
-        <div className="flex-shrink-0 pl-5">
+        <div className="flex-shrink-0 flex-grow-1 pl-5" style={{ width: 330 }}>
           <FeedbackSideFloat
             className="mb-4"
             references={references}
@@ -75,11 +84,14 @@ export default function Feedback(props: Props) {
       </div>
       <div className="d-flex">
         {bodySlot}
-        <div className="flex-shrink-0 pl-5">
-          <ReferenceSideFloat
-            references={references}
-            onSaveCorrectionPrompt={saveCorrectionPrompt}
-          />
+        <div className="flex-shrink-0 flex-grow-1 pl-5" style={{ width: 330 }}>
+          <Skeleton active loading={loading}>
+            <ReferenceSideFloat
+              references={references}
+              error={error}
+              onSaveCorrectionPrompt={saveCorrectionPrompt}
+            />
+          </Skeleton>
         </div>
       </div>
       <ReviewDrawer

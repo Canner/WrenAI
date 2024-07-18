@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Alert, Divider } from 'antd';
+import { Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
 import { IterableComponent, makeIterable } from '@/utils/iteration';
@@ -49,27 +49,18 @@ const AnswerResultTemplate: React.FC<
 }) => {
   const lastResponseId = data[data.length - 1].id;
   const isLastThreadResponse = threadResponse.id === lastResponseId;
-  const { id, error } = threadResponse;
+  const { id } = threadResponse;
 
   return (
     <StyledContainer className="mx-auto" key={`${id}-${index}`}>
       {index > 0 && <Divider />}
-      {error ? (
-        <Alert
-          message={error.shortMessage}
-          description={error.message}
-          type="error"
-          showIcon
-        />
-      ) : (
-        <AnswerResult
-          threadResponse={threadResponse}
-          isLastThreadResponse={isLastThreadResponse}
-          onOpenSaveAsViewModal={onOpenSaveAsViewModal}
-          onTriggerScrollToBottom={onTriggerScrollToBottom}
-          onSubmitReviewDrawer={onSubmitReviewDrawer}
-        />
-      )}
+      <AnswerResult
+        threadResponse={threadResponse}
+        isLastThreadResponse={isLastThreadResponse}
+        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
+        onTriggerScrollToBottom={onTriggerScrollToBottom}
+        onSubmitReviewDrawer={onSubmitReviewDrawer}
+      />
     </StyledContainer>
   );
 };

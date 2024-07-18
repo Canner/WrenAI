@@ -121,11 +121,12 @@ export default function HomeThread() {
     if (isFinished) {
       threadResponseResult.stopPolling();
 
+      const isSuccessBreakdown = threadResponse?.error === null;
       const isExplainable =
         threadResponse?.explain &&
         threadResponse?.explain?.error === null &&
         threadResponse?.explain.queryId === null;
-      if (threadResponse?.id && isExplainable) {
+      if (isSuccessBreakdown && isExplainable) {
         createThreadResponseExplain({
           variables: { where: { responseId: threadResponse.id } },
         }).then(() => threadResponseResult.startPolling(1000));

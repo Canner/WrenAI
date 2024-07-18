@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Tag, Typography, Button, Input } from 'antd';
+import { Tag, Typography, Button, Input, Alert } from 'antd';
 import { EditOutlined } from '@ant-design/icons';
 import { QuoteIcon } from '@/utils/icons';
 import { makeIterable } from '@/utils/iteration';
@@ -10,7 +10,6 @@ import { ReferenceType } from '@/apollo/client/graphql/__types__';
 
 const StyledReferenceSideFloat = styled.div`
   position: relative;
-  width: 330px;
 
   .referenceSideFloat-title {
     position: absolute;
@@ -19,8 +18,15 @@ const StyledReferenceSideFloat = styled.div`
   }
 `;
 
+const StyledAlert = styled(Alert)`
+  .ant-alert-with-description .ant-alert-icon {
+    font-size: 12px;
+  }
+`;
+
 interface Props {
   references: Reference[];
+  error?: Record<string, string>;
   onSaveCorrectionPrompt?: (id: string, value: string) => void;
 }
 
@@ -183,7 +189,7 @@ const References = (props: Props) => {
 };
 
 export default function ReferenceSideFloat(props: Props) {
-  const { references } = props;
+  const { references, error } = props;
   const [collapse, setCollapse] = useState(false);
 
   const referencesSummary = useMemo(
@@ -195,7 +201,16 @@ export default function ReferenceSideFloat(props: Props) {
     setCollapse(!collapse);
   };
 
-  if (references.length === 0) return null;
+  if (error) {
+    return (
+      <StyledAlert
+        message={error.shortMessage}
+        description={error.message}
+        type="error"
+        showIcon
+      />
+    );
+  } else if (references.length === 0) return null;
   return (
     <StyledReferenceSideFloat className="border border-gray-4 rounded p-4">
       <div className="referenceSideFloat-title text-md text-medium bg-gray-1 -ml-2">

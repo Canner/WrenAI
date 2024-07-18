@@ -7,7 +7,6 @@ import { Reference } from './utils';
 
 const StyledFeedbackSideFloat = styled.div`
   position: relative;
-  width: 325px;
 
   .feedbackSideFloat-title {
     position: absolute;
