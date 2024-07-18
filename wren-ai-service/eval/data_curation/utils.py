@@ -121,7 +121,7 @@ async def get_sql_analysis(
 async def get_contexts_from_sqls(
     sqls: list[str],
     mdl_json: dict,
-) -> list[str]:
+) -> list[list[str]]:
     def _compose_contexts_of_select_type(select_items: list[dict]):
         return [
             f'{expr_source['sourceDataset']}.{expr_source['expression']}'
@@ -256,7 +256,9 @@ Think step by step
         )
         sqls = [question_sql_pair["sql"] for question_sql_pair in question_sql_pairs]
         contexts = await get_contexts_from_sqls(sqls, mdl_json)
-        sqls_data = await get_data_from_wren_engine(sqls, data_source)
+        sqls_data = await get_data_from_wren_engine_with_sqls(
+            sqls, data_source, mdl_json, connection_info
+        )
         return [
             {**quesiton_sql_pair, "context": context, "data": sql_data}
             for quesiton_sql_pair, context, sql_data in zip(
@@ -277,39 +279,55 @@ def prettify_sql(sql: str) -> str:
 
 
 async def get_data_from_wren_engine(
+    sql: str,
+    data_source: str,
+    mdl_json: dict,
+    connection_info: dict,
+    api_endpoint: str,
+    timeout: float,
+):
+    async with aiohttp.request(
+        "POST",
+        f"{api_endpoint}/v2/connector/{data_source}/query",
+        json={
+            "sql": add_quotes(sql),
+            "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
+            "connectionInfo": connection_info,
+        },
+        timeout=aiohttp.ClientTimeout(total=timeout),
+    ) as response:
+        if response.status != 200:
+            return {"data": [], "columns": []}
+
+        data = await response.json()
+        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+
+        return {"data": data["data"], "columns": column_names}
+
+
+async def get_data_from_wren_engine_with_sqls(
     sqls: List[str],
     data_source: str,
+    mdl_json: dict,
+    connection_info: dict,
     api_endpoint: str = WREN_IBIS_ENDPOINT,
-    data_sources: list[str] = DATA_SOURCES,
     timeout: float = TIMEOUT_SECONDS,
 ) -> List[dict]:
-    assert data_source in data_sources, f"Invalid data source: {data_source}"
-
-    async def _get_data(sql: str, data_source: str):
-        async with aiohttp.request(
-            "POST",
-            f"{api_endpoint}/v2/connector/{data_source}/query",
-            json={
-                "sql": add_quotes(sql),
-                "manifestStr": base64.b64encode(
-                    orjson.dumps(st.session_state["mdl_json"])
-                ).decode(),
-                "connectionInfo": st.session_state["connection_info"],
-            },
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as response:
-            if response.status != 200:
-                return {"data": [], "columns": []}
-
-            data = await response.json()
-            column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
-
-            return {"data": data["data"], "columns": column_names}
+    assert data_source in DATA_SOURCES, f"Invalid data source: {data_source}"
 
     async with aiohttp.ClientSession():
         tasks = []
         for sql in sqls:
-            task = asyncio.ensure_future(_get_data(sql, data_source))
+            task = asyncio.ensure_future(
+                get_data_from_wren_engine(
+                    sql,
+                    data_source,
+                    mdl_json,
+                    connection_info,
+                    api_endpoint,
+                    timeout,
+                )
+            )
             tasks.append(task)
 
         return await asyncio.gather(*tasks)
