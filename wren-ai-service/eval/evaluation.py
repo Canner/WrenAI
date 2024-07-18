@@ -9,10 +9,9 @@ from deepeval.test_case import LLMTestCase
 from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
+sys.path.append(f"{Path().parent.resolve()}")
 from eval.metrics.example import ExampleMetric
 from eval.utils import parse_toml
-
-sys.path.append(f"{Path().parent.resolve()}")
 from src import utils
 
 
