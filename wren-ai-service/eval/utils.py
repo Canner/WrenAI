@@ -1,9 +1,10 @@
 import base64
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 import orjson
 import sqlglot
+from tomlkit import parse
 
 
 def add_quotes(sql: str) -> str:
@@ -119,3 +120,8 @@ async def get_contexts_from_sql(
 
     contexts = await _get_sql_analysis(sql, mdl_json, api_endpoint, timeout)
     return _get_contexts_from_sql_analysis_results(contexts)
+
+
+def parse_toml(path: str) -> Dict[str, Any]:
+    with open(path) as file:
+        return parse(file.read())

@@ -8,8 +8,10 @@ from typing import Any, Dict, List, Tuple
 
 import orjson
 from langfuse.decorators import langfuse_context, observe
-from tomlkit import document, dumps, parse
+from tomlkit import document, dumps
 from tqdm import tqdm
+
+from eval.utils import parse_toml
 
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
@@ -135,7 +137,8 @@ if __name__ == "__main__":
 
     meta = generate_meta()
 
-    dataset = parse(open(path).read())
+    dataset = parse_toml(path)
+    pipes = setup_pipes(dataset["mdl"])
     deploy_model(dataset["mdl"], pipes["indexing"])
     predictions = predict(meta, dataset["eval_dataset"], pipes)
 

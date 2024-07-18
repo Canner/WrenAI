@@ -7,9 +7,9 @@ from deepeval import evaluate
 from deepeval.test_case import LLMTestCase
 from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
-from tomlkit import parse
 
 from eval.metrics.example import ExampleMetric
+from eval.utils import parse_toml
 
 sys.path.append(f"{Path().parent.resolve()}")
 from src import utils
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     path = parse_args()
     utils.load_env_vars()
 
-    predicted_file = parse(open(path).read())
+    predicted_file = parse_toml(path)
     meta = predicted_file["meta"]
     predictions = predicted_file["predictions"]
 
