@@ -28,7 +28,7 @@ Please review our [Code of Conduct](https://github.com/Canner/WrenAI/blob/main/C
 
 ### Wren UI Service
 
-Wren UI is the front-end service of WrenAI. It is built with Next.js and TypeScript. 
+Wren UI is the client service of WrenAI. It is built with Next.js and TypeScript. 
 To contribute to Wren UI, you can refer to the [WrenAI/wren-ui/README.md](https://github.com/Canner/WrenAI/blob/main/wren-ui/README.md) file for instructions on how to set up the development environment and run the development server.
 
 
