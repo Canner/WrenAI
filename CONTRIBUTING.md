@@ -33,8 +33,9 @@ To contribute to Wren UI, you can refer to the [WrenAI/wren-ui/README.md](https:
 
 
 ### Wren Engine Service
+Wren Engine is the backbone of the Wren AI project. The semantic engine for LLMs, bringing business context to AI agents.
 
-- basic intro & link to Engine readme
+To contribute, please refer to [Wren Engine Contributing Guide](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/CONTRIBUTING.md)
 
 ### Other Services
 
@@ -59,3 +60,6 @@ To create a new data source connector, please follow the guide outlined below.
 
 
 Check the quick [example](https://github.com/Canner/WrenAI/issues/492) for creating a data source connector.
+
+### Wren Engine
+Please see [How to Add a New Data Source](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/how-to-add-data-source.md) for more information.
