@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { groupBy } from 'lodash';
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Tag, Typography, Button, Input, Alert } from 'antd';
@@ -10,8 +11,12 @@ import {
 } from '@ant-design/icons';
 import { QuoteIcon } from '@/utils/icons';
 import { makeIterable } from '@/utils/iteration';
-import { Reference, getReferenceIcon } from './utils';
-import { ReferenceType } from '@/apollo/client/graphql/__types__';
+import {
+  REFERENCE_ORDERS,
+  Reference,
+  getReferenceIcon,
+  getReferenceName,
+} from './utils';
 import { ERROR_CODES } from '@/utils/errorHandler';
 
 const StyledReferenceSideFloat = styled.div`
@@ -53,13 +58,18 @@ interface Props {
 
 const COLLAPSE_LIMIT = 3;
 
-const ReferenceSummaryTemplate = ({ id, summary, type, correctionPrompt }) => {
+const ReferenceSummaryTemplate = ({
+  summary,
+  type,
+  referenceNum,
+  correctionPrompt,
+}) => {
   const isRevise = !!correctionPrompt;
   return (
     <div className="d-flex align-center my-1">
       <Tag className={clsx('ant-tag__reference', { isRevise })}>
         <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-        {id}
+        {referenceNum}
       </Tag>
       <Typography.Text className="gray-8" ellipsis>
         {summary}
@@ -91,9 +101,10 @@ const GroupReferenceTemplate = ({
 };
 
 const ReferenceTemplate = ({
-  id,
-  summary,
   type,
+  summary,
+  referenceId,
+  referenceNum,
   correctionPrompt,
   saveCorrectionPrompt,
 }) => {
@@ -106,7 +117,7 @@ const ReferenceTemplate = ({
   };
 
   const handleEdit = () => {
-    saveCorrectionPrompt(id, value);
+    saveCorrectionPrompt(referenceId, value);
     setIsEdit(false);
     setValue('');
   };
@@ -116,7 +127,7 @@ const ReferenceTemplate = ({
       <div className="lh-xs" style={{ paddingTop: 2 }}>
         <Tag className={clsx('ant-tag__reference', { isRevise })}>
           <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-          {id}
+          {referenceNum}
         </Tag>
       </div>
       <div className="flex-grow-1">
@@ -163,38 +174,12 @@ const ReferenceIterator = makeIterable(ReferenceTemplate);
 
 const References = (props: Props) => {
   const { references, onSaveCorrectionPrompt } = props;
-
-  const fieldReferences = references.filter(
-    (ref) => ref.type === ReferenceType.FIELD,
-  );
-  const queryFromReferences = references.filter(
-    (ref) => ref.type === ReferenceType.QUERY_FROM,
-  );
-  const filterReferences = references.filter(
-    (ref) => ref.type === ReferenceType.FILTER,
-  );
-  const sortingReferences = references.filter(
-    (ref) => ref.type === ReferenceType.SORTING,
-  );
-  const groupByReferences = references.filter(
-    (ref) => ref.type === ReferenceType.GROUP_BY,
-  );
-
-  const resources = [
-    { name: 'Fields', type: ReferenceType.FIELD, data: fieldReferences },
-    {
-      name: 'Query from',
-      type: ReferenceType.QUERY_FROM,
-      data: queryFromReferences,
-    },
-    { name: 'Filter', type: ReferenceType.FILTER, data: filterReferences },
-    { name: 'Sorting', type: ReferenceType.SORTING, data: sortingReferences },
-    {
-      name: 'Group by',
-      type: ReferenceType.GROUP_BY,
-      data: groupByReferences,
-    },
-  ];
+  const referencesByGroup = groupBy(references, 'type');
+  const resources = REFERENCE_ORDERS.map((type) => ({
+    type,
+    name: getReferenceName(type),
+    data: referencesByGroup[type] || [],
+  }));
 
   return (
     <div

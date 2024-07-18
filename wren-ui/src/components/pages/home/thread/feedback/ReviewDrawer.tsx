@@ -37,9 +37,10 @@ const StyledOriginal = styled.div`
 `;
 
 const ReviewTemplate = ({
-  id,
-  summary,
   type,
+  summary,
+  referenceId,
+  referenceNum,
   correctionPrompt,
   saveCorrectionPrompt,
   removeCorrectionPrompt,
@@ -53,11 +54,11 @@ const ReviewTemplate = ({
   };
 
   const openDelete = () => {
-    removeCorrectionPrompt(id);
+    removeCorrectionPrompt(referenceId);
   };
 
   const handleEdit = (event) => {
-    saveCorrectionPrompt(id, event.target.value);
+    saveCorrectionPrompt(referenceId, event.target.value);
     setIsEdit(false);
   };
 
@@ -79,7 +80,7 @@ const ReviewTemplate = ({
         <div className="lh-xs" style={{ paddingTop: 2 }}>
           <Tag className={clsx('ant-tag__reference', { isRevise })}>
             <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-            {id}
+            {referenceNum}
           </Tag>
         </div>
         <div className="flex-grow-1">

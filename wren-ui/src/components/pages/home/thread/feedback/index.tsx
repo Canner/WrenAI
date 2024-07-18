@@ -1,11 +1,12 @@
 import { createContext, useContext, useMemo, useState } from 'react';
+import { sortBy } from 'lodash';
 import { Skeleton } from 'antd';
 import ReferenceSideFloat from '@/components/pages/home/thread/feedback/ReferenceSideFloat';
 import FeedbackSideFloat from '@/components/pages/home/thread/feedback/FeedbackSideFloat';
 import ReviewDrawer from '@/components/pages/home/thread/feedback/ReviewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { ThreadResponse } from '@/apollo/client/graphql/__types__';
-import { Reference } from './utils';
+import { Reference, REFERENCE_ORDERS } from './utils';
 import { getIsExplainFinished } from '@/hooks/useAskPrompt';
 
 type ContextProps = {
@@ -65,15 +66,21 @@ export default function Feedback(props: Props) {
   }, [threadResponse?.explain?.error]);
   const references = useMemo(() => {
     if (!threadResponse?.detail) return [];
-    return threadResponse.detail.steps.flatMap((step, index) => {
+    const result = threadResponse.detail.steps.flatMap((step, index) => {
       if (step.references === null) return [];
       return step.references.map((reference) => ({
         ...reference,
-        id: reference.referenceId,
         stepIndex: index,
         correctionPrompt: correctionPrompts[reference.referenceId],
       }));
     });
+    // Generate reference number for each reference
+    return sortBy(result, (reference) =>
+      REFERENCE_ORDERS.indexOf(reference.type),
+    ).map((reference, index) => ({
+      referenceNum: index + 1,
+      ...reference,
+    }));
   }, [threadResponse?.detail, correctionPrompts]);
 
   const contextValue = {

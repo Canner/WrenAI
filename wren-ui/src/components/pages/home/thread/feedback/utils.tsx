@@ -11,7 +11,28 @@ import {
 
 export type Reference = DetailReference & {
   stepIndex: number;
+  referenceNum: number;
   correctionPrompt?: string;
+};
+
+export const REFERENCE_ORDERS = [
+  ReferenceType.FIELD,
+  ReferenceType.QUERY_FROM,
+  ReferenceType.FILTER,
+  ReferenceType.SORTING,
+  ReferenceType.GROUP_BY,
+];
+
+export const getReferenceName = (type: ReferenceType) => {
+  return (
+    {
+      [ReferenceType.FIELD]: 'Fields',
+      [ReferenceType.QUERY_FROM]: 'Query from',
+      [ReferenceType.FILTER]: 'Filter',
+      [ReferenceType.SORTING]: 'Sorting',
+      [ReferenceType.GROUP_BY]: 'Group by',
+    }[type] || null
+  );
 };
 
 export const getReferenceIcon = (type) => {
