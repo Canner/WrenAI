@@ -72,7 +72,7 @@ class SQLExplanationService:
 
             async def _task(
                 question: str,
-                step_with_analysis_results: SQLExplanationRequest.StepWithAnalysisResult,
+                step_with_analysis_results: StepWithAnalysisResult,
             ):
                 return await self._pipelines["generation"].run(
                     question=question,
