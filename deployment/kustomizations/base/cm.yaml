@@ -18,8 +18,14 @@ data:
   WREN_AI_SERVICE_VERSION: "0.7.3"
   WREN_UI_VERSION: "0.10.1"
 
-  # OpenAI
+  # LLM and Embedder Configurations
+  LLM_PROVIDER: "openai_llm"
+  LLM_OPENAI_API_BASE: "https://api.openai.com/v1"
   GENERATION_MODEL: "gpt-3.5-turbo"
+
+  EMBEDDER_PROVIDER: "openai_embedder"
+  EMBEDDER_OPENAI_API_BASE: "https://api.openai.com/v1"
+
 
   # Telemetry
   POSTHOG_HOST: "https://app.posthog.com"
@@ -30,11 +36,9 @@ data:
   WREN_AI_ENDPOINT: "http://wren-ai-service-svc:5555"
   #WREN_AI_ENDPOINT: "http://wren-ai-service-svc.ai-system.svc.cluster.local:5555"
 
-  # "sqlite", or "pg" for postgres as UI application database
+  # "pg" for postgres as UI application database
   WREN_UI_DB_TYPE: pg
 
-  ### if DB_TYPE = "sqlite" also make sure to uncomment the "wren-sqlite" in the SQLITE_FILE, volumeMounts & PVC sections of the deployment/kustomizations/base/deploy-wren-ui.yaml
-  #SQLITE_FILE: /app/data/db.sqlite3
   #For bootstrap
   WREN_ENGINE_DATA_PATH: "/app/data"
 
