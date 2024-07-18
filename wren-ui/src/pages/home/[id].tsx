@@ -15,7 +15,7 @@ import {
 } from '@/apollo/client/graphql/home.generated';
 import useAskPrompt, {
   getIsFinished,
-  checkExplainable,
+  checkExplainExisted,
 } from '@/hooks/useAskPrompt';
 import useModalAction from '@/hooks/useModalAction';
 import Thread from '@/components/pages/home/thread';
@@ -59,17 +59,13 @@ export default function HomeThread() {
       };
     });
   };
-  const [createThreadResponseExplain] =
-    useCreateThreadResponseExplainMutation();
+  const [createThreadResponseExplain] = useCreateThreadResponseExplainMutation({
+    onError: (error) => console.error(error),
+  });
   const [createThreadResponse] = useCreateThreadResponseMutation({
     onCompleted(next) {
       const nextResponse = next.createThreadResponse;
       addThreadResponse(nextResponse);
-
-      // Trigger explanation after create a new thread response
-      createThreadResponseExplain({
-        variables: { where: { responseId: nextResponse.id } },
-      });
     },
   });
   const [fetchThreadResponse, threadResponseResult] =
@@ -105,7 +101,7 @@ export default function HomeThread() {
     () =>
       getIsFinished(
         threadResponse?.status,
-        checkExplainable(threadResponse?.explain),
+        checkExplainExisted(threadResponse?.explain),
       ),
     [threadResponse],
   );
@@ -113,7 +109,7 @@ export default function HomeThread() {
   useEffect(() => {
     const unfinishedRespose = (thread?.responses || []).find(
       (response) =>
-        !getIsFinished(response.status, checkExplainable(response?.explain)),
+        !getIsFinished(response.status, checkExplainExisted(response?.explain)),
     );
 
     if (unfinishedRespose) {
@@ -122,8 +118,20 @@ export default function HomeThread() {
   }, [thread]);
 
   useEffect(() => {
-    if (isFinished) threadResponseResult.stopPolling();
-  }, [isFinished]);
+    if (isFinished) {
+      threadResponseResult.stopPolling();
+
+      const isExplainable =
+        threadResponse?.explain &&
+        threadResponse?.explain?.error === null &&
+        threadResponse?.explain.queryId === null;
+      if (threadResponse?.id && isExplainable) {
+        createThreadResponseExplain({
+          variables: { where: { responseId: threadResponse.id } },
+        }).then(() => threadResponseResult.startPolling(1000));
+      }
+    }
+  }, [isFinished, threadResponse]);
 
   const onSelect = async (payload: CreateThreadResponseInput) => {
     try {

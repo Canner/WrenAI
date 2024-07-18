@@ -19,7 +19,7 @@ const getIsAskingFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.STOPPED,
   ].includes(status);
 
-export const checkExplainable = (explain?: {
+export const checkExplainExisted = (explain?: {
   queryId?: string;
   status?: ExplainTaskStatus;
 }) => {

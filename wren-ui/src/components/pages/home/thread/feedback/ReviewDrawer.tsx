@@ -38,7 +38,7 @@ const StyledOriginal = styled.div`
 
 const ReviewTemplate = ({
   id,
-  title,
+  summary,
   type,
   correctionPrompt,
   saveCorrectionPrompt,
@@ -72,7 +72,7 @@ const ReviewTemplate = ({
           Reference:
         </span>
         <Typography.Text className="gray-6" ellipsis={!isCollapse}>
-          {title}
+          {summary}
         </Typography.Text>
       </StyledOriginal>
       <div className="d-flex mb-4">
