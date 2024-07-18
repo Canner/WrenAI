@@ -19,7 +19,7 @@ from src.utils import remove_trailing_slash
 logger = logging.getLogger("wren-ai-service")
 
 LLM_OPENAI_API_BASE = "https://api.openai.com/v1"
-GENERATION_MODEL = "gpt-3.5-turbo"
+GENERATION_MODEL = "gpt-4o-mini"
 GENERATION_MODEL_KWARGS = {
     "temperature": 0,
     "n": 1,
@@ -33,7 +33,7 @@ class AsyncGenerator(OpenAIGenerator):
     def __init__(
         self,
         api_key: Secret = Secret.from_env_var("LLM_OPENAI_API_KEY"),
-        model: str = "gpt-3.5-turbo",
+        model: str = "gpt-4o-mini",
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
         api_base_url: Optional[str] = None,
         organization: Optional[str] = None,
