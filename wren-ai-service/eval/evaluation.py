@@ -33,9 +33,14 @@ def formatter(prediction: dict) -> dict:
 
 def parse_args() -> Tuple[str]:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", "-P", type=str, help="Path to eval the prediction")
+    parser.add_argument(
+        "--file",
+        "-F",
+        type=str,
+        help="Eval the prediction result in the outputs/predictions directory",
+    )
     args = parser.parse_args()
-    return f"outputs/predictions/{args.path}"
+    return f"outputs/predictions/{args.file}"
 
 
 class Evaluator:

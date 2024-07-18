@@ -116,9 +116,14 @@ def setup_pipes() -> Dict[str, Any]:
 
 def parse_args() -> Tuple[str]:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", "-P", type=str, help="Path to the eval dataset")
+    parser.add_argument(
+        "--file",
+        "-F",
+        type=str,
+        help="Eval dataset file name in the eval/dataset folder",
+    )
     args = parser.parse_args()
-    return f"eval/dataset/{args.path}"
+    return f"eval/dataset/{args.file}"
 
 
 if __name__ == "__main__":

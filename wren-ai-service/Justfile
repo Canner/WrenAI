@@ -1,5 +1,5 @@
-predict path:
-    @python3 -u eval/prediction.py --path {{path}}
+predict file:
+    @python3 -u eval/prediction.py --file {{file}}
 
-eval path:
-    @python3 -u eval/evaluation.py --path {{path}}
+eval file:
+    @python3 -u eval/evaluation.py --file {{file}}
