@@ -33,15 +33,25 @@ Let's think step by step.
 """
 
 
-def _compose_sql_expression_of_filter_type(filter_analysis: Dict) -> Dict:
+def _compose_sql_expression_of_filter_type(
+    filter_analysis: Dict, top: bool = True
+) -> Dict:
     if filter_analysis["type"] == "EXPR":
-        return {
-            "values": filter_analysis["node"],
-            "id": filter_analysis.get("id", ""),
-        }
+        if top:
+            return {
+                "values": filter_analysis["node"],
+                "id": filter_analysis.get("id", ""),
+            }
+        else:
+            return filter_analysis["node"]
+
     elif filter_analysis["type"] in ("AND", "OR"):
-        left_expr = _compose_sql_expression_of_filter_type(filter_analysis["left"])
-        right_expr = _compose_sql_expression_of_filter_type(filter_analysis["right"])
+        left_expr = _compose_sql_expression_of_filter_type(
+            filter_analysis["left"], top=False
+        )
+        right_expr = _compose_sql_expression_of_filter_type(
+            filter_analysis["right"], top=False
+        )
         return {
             "values": f"{left_expr} {filter_analysis['type']} {right_expr}",
             "id": filter_analysis.get("id", ""),

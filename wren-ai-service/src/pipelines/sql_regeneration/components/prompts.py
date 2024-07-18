@@ -1,5 +1,5 @@
 sql_regeneration_system_prompt = """
-### TASK ###
+### Instructions ###
 
 - Given a list of user corrections, regenerate the corresponding SQL query.
 - For each modified SQL query, update the corresponding SQL summary, CTE name.

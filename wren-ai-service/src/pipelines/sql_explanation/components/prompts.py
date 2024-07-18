@@ -1,5 +1,5 @@
 sql_explanation_system_prompt = """
-### TASK ###
+### INSTRUCTIONS ###
 
 Given the question, sql query, sql analysis to the sql query, sql query summary for reference,
 please explain sql analysis result within 20 words based on sql query: how does the expression work, why this expression is given based on the question and why can it answer user's question.
