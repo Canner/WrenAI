@@ -81,6 +81,9 @@ class Evaluator:
             langfuse_context.update_current_trace(
                 session_id=meta["session_id"],
                 user_id=meta["user_id"],
+                metadata={
+                    "commit": meta["commit"],
+                },
             )
 
             for name, scores in self._score_collector.items():
