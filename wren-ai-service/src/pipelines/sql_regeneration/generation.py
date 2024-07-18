@@ -13,7 +13,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.sql_regeneration.components.prompts import (
     sql_regeneration_system_prompt,
 )
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, timer
 from src.web.v1.services.sql_regeneration import (
     SQLExplanationWithUserCorrections,
 )
@@ -178,7 +178,7 @@ class Generation(BasicPipeline):
 
 if __name__ == "__main__":
     from src.core.pipeline import async_validate
-    from src.utils import load_env_vars
+    from src.utils import init_providers, load_env_vars
 
     load_env_vars()
 

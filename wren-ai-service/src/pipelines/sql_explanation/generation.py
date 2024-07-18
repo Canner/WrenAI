@@ -15,7 +15,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.sql_explanation.components.prompts import (
     sql_explanation_system_prompt,
 )
-from src.utils import async_timer, init_providers, timer
+from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -380,11 +380,6 @@ class GenerationPostProcessor:
         except Exception as e:
             logger.exception(f"Error in GenerationPostProcessor: {e}")
 
-        # print(
-        #     f"PREPROCESSED_SQL_ANALYSIS_RESULTS: {orjson.dumps(preprocessed_sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
-        # )
-        # print(f"RESULTS: {orjson.dumps(results, option=orjson.OPT_INDENT_2).decode()}")
-
         return {"results": results}
 
 
@@ -542,7 +537,7 @@ class Generation(BasicPipeline):
 
 if __name__ == "__main__":
     from src.core.pipeline import async_validate
-    from src.utils import load_env_vars
+    from src.utils import init_providers, load_env_vars
 
     load_env_vars()
 
