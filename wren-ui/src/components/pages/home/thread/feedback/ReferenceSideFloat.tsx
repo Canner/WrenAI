@@ -2,11 +2,17 @@ import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Tag, Typography, Button, Input, Alert } from 'antd';
-import { EditOutlined } from '@ant-design/icons';
+import {
+  EditOutlined,
+  CloseCircleFilled,
+  ReloadOutlined,
+  InfoCircleFilled,
+} from '@ant-design/icons';
 import { QuoteIcon } from '@/utils/icons';
 import { makeIterable } from '@/utils/iteration';
 import { Reference, getReferenceIcon } from './utils';
 import { ReferenceType } from '@/apollo/client/graphql/__types__';
+import { ERROR_CODES } from '@/utils/errorHandler';
 
 const StyledReferenceSideFloat = styled.div`
   position: relative;
@@ -19,15 +25,30 @@ const StyledReferenceSideFloat = styled.div`
 `;
 
 const StyledAlert = styled(Alert)`
-  .ant-alert-with-description .ant-alert-icon {
+  padding: 8px 12px 12px;
+  .ant-alert-icon {
+    font-size: 14px;
+    margin-right: 8px;
+    margin-top: 4px;
+  }
+  .ant-alert-message {
+    font-size: 14px;
+    line-height: 14px;
+    margin-top: 4px;
+    margin-bottom: 8px;
+  }
+  .ant-alert-description {
     font-size: 12px;
+    line-height: 14px;
+    color: var(--gray-8);
   }
 `;
 
 interface Props {
   references: Reference[];
   error?: Record<string, string>;
-  onSaveCorrectionPrompt?: (id: string, value: string) => void;
+  onSaveCorrectionPrompt: (id: string, value: string) => void;
+  onTriggerExplanation: () => void;
 }
 
 const COLLAPSE_LIMIT = 3;
@@ -189,7 +210,7 @@ const References = (props: Props) => {
 };
 
 export default function ReferenceSideFloat(props: Props) {
-  const { references, error } = props;
+  const { references, error, onTriggerExplanation } = props;
   const [collapse, setCollapse] = useState(false);
 
   const referencesSummary = useMemo(
@@ -202,12 +223,33 @@ export default function ReferenceSideFloat(props: Props) {
   };
 
   if (error) {
+    // If the thread response was created before the release of the Feedback Loop Feature,
+    // the explanation will be migrated with an error code OLD_VERSION.
+    // In this case, users will need to manually trigger the explanation.
+    const isOldVersion = error.code === ERROR_CODES.OLD_VERSION;
+    const shortMessage = isOldVersion ? 'Show References' : error.shortMessage;
+    const icon = isOldVersion ? <InfoCircleFilled /> : <CloseCircleFilled />;
+    const type = isOldVersion ? 'info' : 'error';
+    const buttonText = isOldVersion ? 'Show' : 'Retry';
+
     return (
       <StyledAlert
-        message={error.shortMessage}
+        message={shortMessage}
         description={error.message}
-        type="error"
+        type={type}
         showIcon
+        icon={icon}
+        action={
+          <Button
+            className="text-sm"
+            size="small"
+            danger={!isOldVersion}
+            icon={<ReloadOutlined className="-mr-1" />}
+            onClick={onTriggerExplanation}
+          >
+            {buttonText}
+          </Button>
+        }
       />
     );
   } else if (references.length === 0) return null;

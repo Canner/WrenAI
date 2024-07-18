@@ -12,6 +12,7 @@ interface Props {
   data: DetailedThread;
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSubmitReviewDrawer: (variables: any) => Promise<void>;
+  onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
 }
 
 const StyledThread = styled.div`
@@ -38,11 +39,13 @@ const AnswerResultTemplate: React.FC<
     onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
     onTriggerScrollToBottom: () => void;
     onSubmitReviewDrawer: (variables: any) => Promise<void>;
+    onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
   }
 > = ({
   onOpenSaveAsViewModal,
   onTriggerScrollToBottom,
   onSubmitReviewDrawer,
+  onTriggerThreadResponseExplain,
   data,
   index,
   ...threadResponse
@@ -60,6 +63,7 @@ const AnswerResultTemplate: React.FC<
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onTriggerScrollToBottom={onTriggerScrollToBottom}
         onSubmitReviewDrawer={onSubmitReviewDrawer}
+        onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
       />
     </StyledContainer>
   );
@@ -68,7 +72,12 @@ const AnswerResultTemplate: React.FC<
 const AnswerResultIterator = makeIterable(AnswerResultTemplate);
 
 export default function Thread(props: Props) {
-  const { data, onOpenSaveAsViewModal, onSubmitReviewDrawer } = props;
+  const {
+    data,
+    onOpenSaveAsViewModal,
+    onSubmitReviewDrawer,
+    onTriggerThreadResponseExplain,
+  } = props;
   const divRef = useRef<HTMLDivElement>(null);
 
   const triggerScrollToBottom = () => {
@@ -100,6 +109,7 @@ export default function Thread(props: Props) {
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onTriggerScrollToBottom={triggerScrollToBottom}
         onSubmitReviewDrawer={onSubmitReviewDrawer}
+        onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
       />
     </StyledThread>
   );

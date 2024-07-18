@@ -23,6 +23,7 @@ import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 import {
   CreateRegeneratedThreadResponseInput,
+  CreateThreadResponseExplainWhereInput,
   CreateThreadResponseInput,
 } from '@/apollo/client/graphql/__types__';
 
@@ -164,12 +165,26 @@ export default function HomeThread() {
     }
   };
 
+  const onTriggerThreadResponseExplain = async (
+    payload: CreateThreadResponseExplainWhereInput,
+  ) => {
+    try {
+      await createThreadResponseExplain({
+        variables: { where: payload },
+      });
+      fetchThreadResponse({ variables: payload });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <SiderLayout loading={loading} sidebar={homeSidebar}>
       <Thread
         data={thread}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
         onSubmitReviewDrawer={onSubmitReviewDrawer}
+        onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
       />
       <div className="py-12" />
       <Prompt

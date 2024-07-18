@@ -66,6 +66,7 @@ interface Props {
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onTriggerScrollToBottom: () => void;
   onSubmitReviewDrawer: (variables: any) => Promise<void>;
+  onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
 }
 
 const CorrectionTemplate = ({ id, type, correction }) => {
@@ -138,6 +139,7 @@ export default function AnswerResult(props: Props) {
     onOpenSaveAsViewModal,
     onTriggerScrollToBottom,
     onSubmitReviewDrawer,
+    onTriggerThreadResponseExplain,
   } = props;
 
   const {
@@ -234,6 +236,7 @@ export default function AnswerResult(props: Props) {
             }
             threadResponse={threadResponse}
             onSubmitReviewDrawer={onSubmitReviewDrawer}
+            onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
           />
         </Skeleton>
       )}

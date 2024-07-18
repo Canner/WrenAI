@@ -7,6 +7,9 @@ import { message } from 'antd';
 export const ERROR_CODES = {
   INVALID_CALCULATED_FIELD: 'INVALID_CALCULATED_FIELD',
   CONNECTION_REFUSED: 'CONNECTION_REFUSED',
+
+  // From migrations/20240718090506_data_migrate_thread_response_explain.js
+  OLD_VERSION: 'OLD_VERSION',
 };
 
 /**

@@ -25,10 +25,17 @@ interface Props {
   bodySlot: React.ReactNode;
   threadResponse: ThreadResponse;
   onSubmitReviewDrawer: (variables: any) => Promise<void>;
+  onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
 }
 
 export default function Feedback(props: Props) {
-  const { headerSlot, bodySlot, threadResponse, onSubmitReviewDrawer } = props;
+  const {
+    headerSlot,
+    bodySlot,
+    threadResponse,
+    onSubmitReviewDrawer,
+    onTriggerThreadResponseExplain,
+  } = props;
 
   const [correctionPrompts, setCorrectionPrompts] = useState({});
   const reviewDrawer = useDrawerAction();
@@ -43,6 +50,10 @@ export default function Feedback(props: Props) {
 
   const resetAllCorrectionPrompts = () => {
     setCorrectionPrompts({});
+  };
+
+  const triggerExplanation = () => {
+    onTriggerThreadResponseExplain({ responseId: threadResponse.id });
   };
 
   const loading = useMemo(
@@ -90,6 +101,7 @@ export default function Feedback(props: Props) {
               references={references}
               error={error}
               onSaveCorrectionPrompt={saveCorrectionPrompt}
+              onTriggerExplanation={triggerExplanation}
             />
           </Skeleton>
         </div>
