@@ -563,7 +563,7 @@ export const typeDefs = gql`
   }
 
   type DetailReference {
-    id: Int!
+    referenceId: Int
     type: String!
     sqlSnippet: String
     summary: String!
@@ -604,7 +604,7 @@ export const typeDefs = gql`
     detail: ThreadResponseDetail
     error: Error
     corrections: [CorrectionDetail!]
-    explain: ThreadResponseExplainInfo!
+    explain: ThreadResponseExplainInfo
   }
 
   # Thread only consists of basic information of a thread

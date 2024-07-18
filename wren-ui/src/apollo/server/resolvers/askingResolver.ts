@@ -199,7 +199,7 @@ export class AskingResolver {
           explain: {
             queryId: explain?.queryId || null,
             status: explain?.status || null,
-            detail: explain?.detail || null,
+            error: explain?.error || null,
           },
         });
 
@@ -302,10 +302,21 @@ export class AskingResolver {
     _root: any,
     args: { responseId: number },
     ctx: IContext,
-  ): Promise<ThreadResponse> {
+  ): Promise<
+    ThreadResponse & {
+      explain: {
+        queryId: string | null;
+        status: string | null;
+        error: object | null;
+      };
+    }
+  > {
     const { responseId } = args;
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
+    const explain = await ctx.threadResponseExplainRepository.findOneBy({
+      threadResponseId: responseId,
+    });
 
     // we added summary in version 0.3.0.
     // if summary is not available, we use description and question instead.
@@ -313,6 +324,11 @@ export class AskingResolver {
       ...response,
       summary:
         response.summary || response.detail?.description || response.question,
+      explain: {
+        queryId: explain?.queryId || null,
+        status: explain?.status || null,
+        error: explain?.error || null,
+      },
     };
   }
 

@@ -8,6 +8,9 @@ export enum GeneralErrorCodes {
   NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
   NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
 
+  // Background tracker errors
+  MERGE_THREAD_RESPONSE_ERROR = 'MERGE_THREAD_RESPONSE_ERROR',
+
   // Exception error for AI service (e.g., network connection error)
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
 
@@ -45,6 +48,10 @@ export const errorMessages = {
   [GeneralErrorCodes.NO_RELEVANT_SQL]:
     'No relevant SQL found for the given query. Please check your query and try again.',
 
+  // Background tracker errors
+  [GeneralErrorCodes.MERGE_THREAD_RESPONSE_ERROR]:
+    'Error occurred while merging thread response',
+
   // Connector errors
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to data source',
   // duckdb
@@ -79,6 +86,8 @@ export const shortMessages = {
   [GeneralErrorCodes.MISLEADING_QUERY]: 'Misleading query',
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'No relevant data',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
+  [GeneralErrorCodes.MERGE_THREAD_RESPONSE_ERROR]:
+    'Merge thread response error',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
   [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Ibis server error',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
