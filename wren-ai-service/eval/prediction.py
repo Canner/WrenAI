@@ -13,7 +13,7 @@ import orjson
 from git import Repo
 from langfuse.decorators import langfuse_context, observe
 from tomlkit import document, dumps
-from tqdm import tqdm
+from tqdm.asyncio import tqdm_asyncio
 
 from eval.utils import parse_toml
 
@@ -99,8 +99,11 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
 
         predictions.append(prediction)
 
-    for query in tqdm(queries, desc="Generating Predictions"):
-        asyncio.run(wrapper(query))
+    async def task():
+        tasks = [wrapper(query) for query in queries]
+        await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
+
+    asyncio.run(task())
 
     return predictions
 
