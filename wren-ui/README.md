@@ -99,6 +99,11 @@ docker-compose -f docker-compose-dev.yaml --env-file .env.example down
 Step 4. Start wren-ui from source code
 refer to [Start wren-ui from source code](#Start-wren-ui-from-source-code) section to start wren-ui from source code.
 
+Step 5. (Optional) Develop other modules along with wren-ui
+As mentioned above, you can use docker-compose to start other modules. The same applies when developing other modules.
+From the perspective of wren-ui, if you want to develop other modules at the same time, you can stop the container then spin up the module from the source code.
+Refer to the README.md or CONTRIBUTION.md file the module for starting the module from the source code. 
+
 ## FAQ
 ### Can I have multiple project at the same time in Wren AI?
 We currently do not support multiple projects in Wren AI. You can only have one project at a time.
