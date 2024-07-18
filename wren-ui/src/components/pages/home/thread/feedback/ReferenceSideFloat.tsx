@@ -56,8 +56,6 @@ interface Props {
   onTriggerExplanation: () => void;
 }
 
-const COLLAPSE_LIMIT = 3;
-
 const ReferenceSummaryTemplate = ({
   summary,
   type,
@@ -199,7 +197,13 @@ export default function ReferenceSideFloat(props: Props) {
   const [collapse, setCollapse] = useState(false);
 
   const referencesSummary = useMemo(
-    () => references.slice(0, COLLAPSE_LIMIT),
+    () =>
+      references.reduce((result, reference) => {
+        if (!result[reference.stepIndex]) {
+          result[reference.stepIndex] = reference;
+        }
+        return result;
+      }, []),
     [collapse, references],
   );
 
