@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Tuple
 
 from deepeval import evaluate
+from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
 from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
@@ -57,7 +58,7 @@ class Evaluator:
 
         self._average_score(meta)
 
-    def _score_metrics(self, test_case, result) -> None:
+    def _score_metrics(self, test_case: LLMTestCase, result: TestResult) -> None:
         for metric in result.metrics_metadata:
             name = metric.metric
             score = metric.score
