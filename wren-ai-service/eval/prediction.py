@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Tuple
 
 import dotenv
 import orjson
+from git import Repo
 from langfuse.decorators import langfuse_context, observe
 from tomlkit import document, dumps
 from tqdm import tqdm
@@ -22,11 +23,13 @@ from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
 
-def generate_meta() -> Dict[str, Any]:
+def generate_meta(dataset_path: str) -> Dict[str, Any]:
     return {
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{uuid.uuid4()}",
         "date": datetime.now(),
+        "evaluation_dataset": dataset_path,
+        "commit": obtain_commit_hash(),
     }
 
 
@@ -44,6 +47,19 @@ def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
         file.write(dumps(doc))
 
 
+def obtain_commit_hash() -> str:
+    repo = Repo(search_parent_directories=True)
+
+    if repo.untracked_files:
+        raise Exception("There are untracked files in the repository.")
+
+    if repo.index.diff(None):
+        raise Exception("There are uncommitted changes in the repository.")
+
+    branch = repo.active_branch
+    return f"{repo.head.commit}@{branch.name}"
+
+
 def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
     predictions = []
 
@@ -59,10 +75,12 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             "context": query["context"],
         }
 
-        # todo: do we need version, release, and other metadata?
         langfuse_context.update_current_trace(
             session_id=meta["session_id"],
             user_id=meta["user_id"],
+            metadata={
+                "commit": meta["commit"],
+            },
         )
 
         result = await pipes["retrieval"].run(query=prediction["input"])
@@ -151,7 +169,7 @@ if __name__ == "__main__":
     utils.load_env_vars()
     utils.init_langfuse()
 
-    meta = generate_meta()
+    meta = generate_meta(dataset_path=path)
 
     dataset = parse_toml(path)
     pipes = setup_pipes(dataset["mdl"])
