@@ -8,17 +8,14 @@ exports.up = async function (knex) {
     return;
   }
   const explainData = threadResponses.map((threadResponse) => {
-    const error =
-      process.env.DB_TYPE === 'pg'
-        ? 'error'
-        : JSON.stringify({
-            code: 'OLD_VERSION',
-            message: 'created before version 0.8.0',
-          });
+    const error = {
+      code: 'OLD_VERSION',
+      message: 'created before version 0.8.0',
+    };
     return {
       thread_response_id: threadResponse.id,
       status: 'failed',
-      error,
+      error: process.env.DB_TYPE === 'pg' ? error : JSON.stringify(error),
     };
   });
 
