@@ -51,7 +51,7 @@ export interface CorrectionInput {
   correction: string;
 }
 
-export interface RegeneratedDetailTaskInput {
+export interface CorrectedDetailTaskInput {
   responseId: number;
   corrections: CorrectionInput[];
 }
@@ -78,9 +78,9 @@ export interface IAskingService {
     threadId: number,
     input: AskingDetailTaskInput,
   ): Promise<ThreadResponse>;
-  createRegeneratedThreadResponse(
+  createCorrectedThreadResponse(
     threadId: number,
-    input: RegeneratedDetailTaskInput,
+    input: CorrectedDetailTaskInput,
   ): Promise<ThreadResponse>;
   getResponsesWithThread(
     threadId: number,
@@ -372,9 +372,9 @@ export class AskingService implements IAskingService {
     return threadResponse;
   }
 
-  public async createRegeneratedThreadResponse(
+  public async createCorrectedThreadResponse(
     threadId: number,
-    input: RegeneratedDetailTaskInput,
+    input: CorrectedDetailTaskInput,
   ): Promise<ThreadResponse> {
     const thread = await this.threadRepository.findOneBy({
       id: threadId,

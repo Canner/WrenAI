@@ -183,12 +183,12 @@ export const GET_NATIVE_SQL = gql`
   }
 `;
 
-export const CREATE_REGENERATED_THREAD_RESPONSE = gql`
-  mutation CreateRegeneratedThreadResponse(
+export const CREATE_CORRECTED_THREAD_RESPONSE = gql`
+  mutation CreateCorrectedThreadResponse(
     $threadId: Int!
-    $data: CreateRegeneratedThreadResponseInput!
+    $data: CreateCorrectedThreadResponseInput!
   ) {
-    createRegeneratedThreadResponse(threadId: $threadId, data: $data) {
+    createCorrectedThreadResponse(threadId: $threadId, data: $data) {
       ...CommonResponse
       error {
         ...CommonError

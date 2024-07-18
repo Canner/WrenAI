@@ -7,7 +7,7 @@ import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import {
-  useCreateRegeneratedThreadResponseMutation,
+  useCreateCorrectedThreadResponseMutation,
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
@@ -18,7 +18,7 @@ import Thread from '@/components/pages/home/thread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 import {
-  CreateRegeneratedThreadResponseInput,
+  CreateCorrectedThreadResponseInput,
   CreateThreadResponseInput,
 } from '@/apollo/client/graphql/__types__';
 
@@ -78,9 +78,9 @@ export default function HomeThread() {
       },
     });
   const [createRegeneratedThreadResponse] =
-    useCreateRegeneratedThreadResponseMutation({
+    useCreateCorrectedThreadResponseMutation({
       onCompleted(next) {
-        const nextResponse = next.createRegeneratedThreadResponse;
+        const nextResponse = next.createCorrectedThreadResponse;
         addThreadResponse(nextResponse);
       },
     });
@@ -123,7 +123,7 @@ export default function HomeThread() {
   };
 
   const onSubmitReviewDrawer = async (
-    payload: CreateRegeneratedThreadResponseInput,
+    payload: CreateCorrectedThreadResponseInput,
   ) => {
     try {
       const response = await createRegeneratedThreadResponse({
@@ -131,7 +131,7 @@ export default function HomeThread() {
       });
       await fetchThreadResponse({
         variables: {
-          responseId: response.data.createRegeneratedThreadResponse.id,
+          responseId: response.data.createCorrectedThreadResponse.id,
         },
       });
     } catch (error) {

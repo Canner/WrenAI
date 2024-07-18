@@ -96,13 +96,13 @@ export type GetNativeSqlQueryVariables = Types.Exact<{
 
 export type GetNativeSqlQuery = { __typename?: 'Query', nativeSql: string };
 
-export type CreateRegeneratedThreadResponseMutationVariables = Types.Exact<{
+export type CreateCorrectedThreadResponseMutationVariables = Types.Exact<{
   threadId: Types.Scalars['Int'];
-  data: Types.CreateRegeneratedThreadResponseInput;
+  data: Types.CreateCorrectedThreadResponseInput;
 }>;
 
 
-export type CreateRegeneratedThreadResponseMutation = { __typename?: 'Mutation', createRegeneratedThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, correction: string }> | null } };
+export type CreateCorrectedThreadResponseMutation = { __typename?: 'Mutation', createCorrectedThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, correction: string }> | null } };
 
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
@@ -612,9 +612,9 @@ export function useGetNativeSqlLazyQuery(baseOptions?: Apollo.LazyQueryHookOptio
 export type GetNativeSqlQueryHookResult = ReturnType<typeof useGetNativeSqlQuery>;
 export type GetNativeSqlLazyQueryHookResult = ReturnType<typeof useGetNativeSqlLazyQuery>;
 export type GetNativeSqlQueryResult = Apollo.QueryResult<GetNativeSqlQuery, GetNativeSqlQueryVariables>;
-export const CreateRegeneratedThreadResponseDocument = gql`
-    mutation CreateRegeneratedThreadResponse($threadId: Int!, $data: CreateRegeneratedThreadResponseInput!) {
-  createRegeneratedThreadResponse(threadId: $threadId, data: $data) {
+export const CreateCorrectedThreadResponseDocument = gql`
+    mutation CreateCorrectedThreadResponse($threadId: Int!, $data: CreateCorrectedThreadResponseInput!) {
+  createCorrectedThreadResponse(threadId: $threadId, data: $data) {
     ...CommonResponse
     error {
       ...CommonError
@@ -623,30 +623,30 @@ export const CreateRegeneratedThreadResponseDocument = gql`
 }
     ${CommonResponseFragmentDoc}
 ${CommonErrorFragmentDoc}`;
-export type CreateRegeneratedThreadResponseMutationFn = Apollo.MutationFunction<CreateRegeneratedThreadResponseMutation, CreateRegeneratedThreadResponseMutationVariables>;
+export type CreateCorrectedThreadResponseMutationFn = Apollo.MutationFunction<CreateCorrectedThreadResponseMutation, CreateCorrectedThreadResponseMutationVariables>;
 
 /**
- * __useCreateRegeneratedThreadResponseMutation__
+ * __useCreateCorrectedThreadResponseMutation__
  *
- * To run a mutation, you first call `useCreateRegeneratedThreadResponseMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateRegeneratedThreadResponseMutation` returns a tuple that includes:
+ * To run a mutation, you first call `useCreateCorrectedThreadResponseMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateCorrectedThreadResponseMutation` returns a tuple that includes:
  * - A mutate function that you can call at any time to execute the mutation
  * - An object with fields that represent the current status of the mutation's execution
  *
  * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
  *
  * @example
- * const [createRegeneratedThreadResponseMutation, { data, loading, error }] = useCreateRegeneratedThreadResponseMutation({
+ * const [createCorrectedThreadResponseMutation, { data, loading, error }] = useCreateCorrectedThreadResponseMutation({
  *   variables: {
  *      threadId: // value for 'threadId'
  *      data: // value for 'data'
  *   },
  * });
  */
-export function useCreateRegeneratedThreadResponseMutation(baseOptions?: Apollo.MutationHookOptions<CreateRegeneratedThreadResponseMutation, CreateRegeneratedThreadResponseMutationVariables>) {
+export function useCreateCorrectedThreadResponseMutation(baseOptions?: Apollo.MutationHookOptions<CreateCorrectedThreadResponseMutation, CreateCorrectedThreadResponseMutationVariables>) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<CreateRegeneratedThreadResponseMutation, CreateRegeneratedThreadResponseMutationVariables>(CreateRegeneratedThreadResponseDocument, options);
+        return Apollo.useMutation<CreateCorrectedThreadResponseMutation, CreateCorrectedThreadResponseMutationVariables>(CreateCorrectedThreadResponseDocument, options);
       }
-export type CreateRegeneratedThreadResponseMutationHookResult = ReturnType<typeof useCreateRegeneratedThreadResponseMutation>;
-export type CreateRegeneratedThreadResponseMutationResult = Apollo.MutationResult<CreateRegeneratedThreadResponseMutation>;
-export type CreateRegeneratedThreadResponseMutationOptions = Apollo.BaseMutationOptions<CreateRegeneratedThreadResponseMutation, CreateRegeneratedThreadResponseMutationVariables>;
+export type CreateCorrectedThreadResponseMutationHookResult = ReturnType<typeof useCreateCorrectedThreadResponseMutation>;
+export type CreateCorrectedThreadResponseMutationResult = Apollo.MutationResult<CreateCorrectedThreadResponseMutation>;
+export type CreateCorrectedThreadResponseMutationOptions = Apollo.BaseMutationOptions<CreateCorrectedThreadResponseMutation, CreateCorrectedThreadResponseMutationVariables>;

@@ -85,15 +85,15 @@ export type CreateCalculatedFieldInput = {
   name: Scalars['String'];
 };
 
+export type CreateCorrectedThreadResponseInput = {
+  corrections: Array<CreateThreadResponseCorrectionInput>;
+  responseId: Scalars['Int'];
+};
+
 export type CreateModelInput = {
   fields: Array<Scalars['String']>;
   primaryKey?: InputMaybe<Scalars['String']>;
   sourceTableName: Scalars['String'];
-};
-
-export type CreateRegeneratedThreadResponseInput = {
-  corrections: Array<CreateThreadResponseCorrectionInput>;
-  responseId: Scalars['Int'];
 };
 
 export type CreateSimpleMetricInput = {
@@ -419,8 +419,8 @@ export type Mutation = {
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
+  createCorrectedThreadResponse: ThreadResponse;
   createModel: Scalars['JSON'];
-  createRegeneratedThreadResponse: ThreadResponse;
   createRelation: Scalars['JSON'];
   createThread: Thread;
   createThreadResponse: ThreadResponse;
@@ -469,14 +469,14 @@ export type MutationCreateCalculatedFieldArgs = {
 };
 
 
-export type MutationCreateModelArgs = {
-  data: CreateModelInput;
+export type MutationCreateCorrectedThreadResponseArgs = {
+  data: CreateCorrectedThreadResponseInput;
+  threadId: Scalars['Int'];
 };
 
 
-export type MutationCreateRegeneratedThreadResponseArgs = {
-  data: CreateRegeneratedThreadResponseInput;
-  threadId: Scalars['Int'];
+export type MutationCreateModelArgs = {
+  data: CreateModelInput;
 };
 
 

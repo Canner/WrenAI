@@ -18,7 +18,7 @@ import {
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { makeIterable } from '@/utils/iteration';
 import { getReferenceIcon, Reference } from './utils';
-import { CreateRegeneratedThreadResponseInput } from '@/apollo/client/graphql/__types__';
+import { CreateCorrectedThreadResponseInput } from '@/apollo/client/graphql/__types__';
 
 type Props = DrawerAction & {
   references: Reference[];
@@ -143,7 +143,7 @@ export default function ReviewDrawer(props: Props) {
 
   const submit = useCallback(async () => {
     try {
-      const data: CreateRegeneratedThreadResponseInput = {
+      const data: CreateCorrectedThreadResponseInput = {
         responseId: threadResponseId,
         corrections: changedReferences.map((reference) => ({
           id: reference.id,

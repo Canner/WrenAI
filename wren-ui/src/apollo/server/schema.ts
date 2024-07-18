@@ -535,7 +535,7 @@ export const typeDefs = gql`
     correction: String!
   }
 
-  input CreateRegeneratedThreadResponseInput {
+  input CreateCorrectedThreadResponseInput {
     responseId: Int!
     corrections: [CreateThreadResponseCorrectionInput!]!
   }
@@ -785,9 +785,9 @@ export const typeDefs = gql`
       threadId: Int!
       data: CreateThreadResponseInput!
     ): ThreadResponse!
-    createRegeneratedThreadResponse(
+    createCorrectedThreadResponse(
       threadId: Int!
-      data: CreateRegeneratedThreadResponseInput!
+      data: CreateCorrectedThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
 

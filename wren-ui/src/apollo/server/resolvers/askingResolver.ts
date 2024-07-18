@@ -54,8 +54,8 @@ export class AskingResolver {
     this.deleteThread = this.deleteThread.bind(this);
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
-    this.createRegeneratedThreadResponse =
-      this.createRegeneratedThreadResponse.bind(this);
+    this.createCorrectedThreadResponse =
+      this.createCorrectedThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
   }
@@ -260,7 +260,7 @@ export class AskingResolver {
     return response;
   }
 
-  public async createRegeneratedThreadResponse(
+  public async createCorrectedThreadResponse(
     _root: any,
     args: {
       threadId: number;
@@ -280,7 +280,7 @@ export class AskingResolver {
     const { threadId, data } = args;
 
     const askingService = ctx.askingService;
-    const response = await askingService.createRegeneratedThreadResponse(
+    const response = await askingService.createCorrectedThreadResponse(
       threadId,
       data,
     );

@@ -110,11 +110,11 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
   }
 }
 
-class CreateRegeneratedThreadResponseErrorHandler extends ErrorHandler {
+class CreateCorrectedThreadResponseErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to create regenerated thread response.';
+        return 'Failed to create corrected thread response.';
     }
   }
 }
@@ -268,8 +268,8 @@ errorHandlers.set(
   new CreateThreadResponseErrorHandler(),
 );
 errorHandlers.set(
-  'CreateRegeneratedThreadResponse',
-  new CreateRegeneratedThreadResponseErrorHandler(),
+  'CreateCorrectedThreadResponse',
+  new CreateCorrectedThreadResponseErrorHandler(),
 );
 errorHandlers.set('CreateView', new CreateViewErrorHandler());
 errorHandlers.set('UpdateDataSource', new UpdateDataSourceErrorHandler());
