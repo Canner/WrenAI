@@ -1,5 +1,6 @@
 import {
   ExplainPipelineStatus,
+  ExplanationType,
   IWrenAIAdaptor,
 } from '../adaptors/wrenAIAdaptor';
 import {
@@ -12,8 +13,8 @@ import {
   ThreadResponseDetail,
 } from '../repositories/threadResponseRepository';
 import { Telemetry } from '../telemetry/telemetry';
-import { findAnalysisById } from '../utils';
 import { GeneralErrorCodes } from '../utils/error';
+import { findAnalysisById, reverseEnum } from '../utils';
 import { BackgroundTracker } from './index';
 import { getLogger } from '@server/utils/logger';
 
@@ -197,6 +198,7 @@ export class ThreadResponseExplainBackgroundTracker extends BackgroundTracker<Th
     explanations: ExplainDetail[],
     analyses: object,
   ) {
+    const toReferenceType = reverseEnum(ExplanationType);
     // reorder reference id
     let id = 1;
     const steps = Object.entries(detail.steps).map(([stepId, step]) => {
@@ -212,12 +214,12 @@ export class ThreadResponseExplainBackgroundTracker extends BackgroundTracker<Th
         delete payload.id;
         return {
           referenceId: id++,
-          type: explanation.type,
+          type: toReferenceType[explanation.type],
           sqlSnippet:
             (explanation.payload as any).expression ||
             (explanation.payload as any).criteria ||
             (analysis as any).tableName,
-          summary: explanation.payload.explanation || null,
+          summary: explanation.payload.explanation || '',
           sqlLocation: analysis ? analysis.nodeLocation : null,
         };
       });

@@ -486,6 +486,13 @@ export const typeDefs = gql`
     STOPPED
   }
 
+  enum ExplainTaskStatus {
+    UNDERSTANDING
+    GENERATING
+    FINISHED
+    FAILED
+  }
+
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
@@ -564,7 +571,7 @@ export const typeDefs = gql`
 
   type DetailReference {
     referenceId: Int
-    type: String!
+    type: ReferenceType!
     sqlSnippet: String
     summary: String!
     sqlLocation: ReferenceSQLLocation
@@ -579,7 +586,7 @@ export const typeDefs = gql`
 
   type ThreadResponseExplainInfo {
     queryId: String
-    status: String
+    status: ExplainTaskStatus
     error: JSON
   }
 
