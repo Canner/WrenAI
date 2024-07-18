@@ -105,6 +105,8 @@ We currently do not support multiple projects in Wren AI. You can only have one 
 But there is a workaround for this. Since Wren Engine is stateless and we store your semantic model in the database(Sqlite or Postgres), 
 you can switch between projects by switching the database and make sure you deploying after server started.
 
+> Tip: Define the `DB_TYPE` and `SQLITE_FILE` or `PG_URL` variable to specify which database you intend to use.
+
 eg: 
 ```
 # start your first project using default database(sqlite by defulat)
@@ -143,3 +145,6 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+
+
+## Backend structure
