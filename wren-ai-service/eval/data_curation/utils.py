@@ -4,19 +4,19 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import aiohttp
 import orjson
-import sqlglot
 import sqlparse
 import streamlit as st
 import tomlkit
 from dotenv import load_dotenv
 from openai import AsyncClient
 
-# in order to import the DDLConverter class from the indexing module
+# add wren-ai-service to sys.path
 sys.path.append(f"{Path().parent.parent.resolve()}")
+from eval.utils import add_quotes, get_contexts_from_sql, get_data_from_wren_engine
 from src.pipelines.indexing.indexing import DDLConverter
 
 load_dotenv()
@@ -37,10 +37,6 @@ def get_openai_client(
     )
 
 
-def add_quotes(sql: str) -> str:
-    return sqlglot.transpile(sql, read="trino", identify=True)[0]
-
-
 async def is_sql_valid(
     sql: str,
     data_source: str,
@@ -49,7 +45,7 @@ async def is_sql_valid(
     api_endpoint: str = WREN_IBIS_ENDPOINT,
     timeout: float = TIMEOUT_SECONDS,
 ) -> Tuple[bool, str]:
-    sql = sql[:-1] if sql.endswith(";") else sql
+    sql = sql.rstrip(";") if sql.endswith(";") else sql
     async with aiohttp.request(
         "POST",
         f"{api_endpoint}/v2/connector/{data_source}/query?dryRun=true",
@@ -99,95 +95,28 @@ async def get_validated_question_sql_pairs(
         ]
 
 
-async def get_sql_analysis(
-    sql: str,
-    mdl_json: dict,
-    api_endpoint: str = WREN_ENGINE_ENDPOINT,
-    timeout: float = TIMEOUT_SECONDS,
-) -> List[dict]:
-    sql = sql[:-1] if sql.endswith(";") else sql
-    async with aiohttp.request(
-        "GET",
-        f"{api_endpoint}/v1/analysis/sql",
-        json={
-            "sql": add_quotes(sql),
-            "manifest": mdl_json,
-        },
-        timeout=aiohttp.ClientTimeout(total=timeout),
-    ) as response:
-        return await response.json()
-
-
 async def get_contexts_from_sqls(
     sqls: list[str],
     mdl_json: dict,
+    api_endpoint: str = WREN_ENGINE_ENDPOINT,
+    timeout: float = TIMEOUT_SECONDS,
 ) -> list[list[str]]:
-    def _compose_contexts_of_select_type(select_items: list[dict]):
-        return [
-            f'{expr_source['sourceDataset']}.{expr_source['expression']}'
-            for select_item in select_items
-            for expr_source in select_item["exprSources"]
-        ]
-
-    def _compose_contexts_of_filter_type(filter: dict):
-        contexts = []
-        if filter["type"] == "EXPR":
-            contexts += [
-                f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
-                for expr_source in filter["exprSources"]
-            ]
-        elif filter["type"] in ("AND", "OR"):
-            contexts += _compose_contexts_of_filter_type(filter["left"])
-            contexts += _compose_contexts_of_filter_type(filter["right"])
-
-        return contexts
-
-    def _compose_contexts_of_groupby_type(groupby_keys: list[list[dict]]):
-        contexts = []
-        for groupby_key_list in groupby_keys:
-            contexts += [
-                f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
-                for groupby_key in groupby_key_list
-                for expr_source in groupby_key["exprSources"]
-            ]
-        return contexts
-
-    def _compose_contexts_of_sorting_type(sortings: list[dict]):
-        return [
-            f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
-            for sorting in sortings
-            for expr_source in sorting["exprSources"]
-        ]
-
-    def _get_contexts_from_sql_analysis_results(sql_analysis_results: list[dict]):
-        contexts = []
-        for result in sql_analysis_results:
-            if "selectItems" in result:
-                contexts += _compose_contexts_of_select_type(result["selectItems"])
-            if "filter" in result:
-                contexts += _compose_contexts_of_filter_type(result["filter"])
-            if "groupByKeys" in result:
-                contexts += _compose_contexts_of_groupby_type(result["groupByKeys"])
-            if "sortings" in result:
-                contexts += _compose_contexts_of_sorting_type(result["sortings"])
-
-        # print(
-        #     f'SQL ANALYSIS RESULTS: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode("utf-8")}'
-        # )
-        # print(f"CONTEXTS: {sorted(set(contexts))}")
-        # print("\n\n")
-
-        return sorted(set(contexts))
-
     async with aiohttp.ClientSession():
         tasks = []
         for sql in sqls:
-            task = asyncio.ensure_future(get_sql_analysis(sql, mdl_json))
+            task = asyncio.ensure_future(
+                get_contexts_from_sql(
+                    sql,
+                    mdl_json,
+                    api_endpoint,
+                    timeout,
+                )
+            )
             tasks.append(task)
 
         results = await asyncio.gather(*tasks)
 
-        return [_get_contexts_from_sql_analysis_results(result) for result in results]
+        return results
 
 
 async def get_question_sql_pairs(
@@ -276,38 +205,6 @@ def prettify_sql(sql: str) -> str:
         reindent=True,
         keyword_case="upper",
     )
-
-
-async def get_data_from_wren_engine(
-    sql: str,
-    data_source: str,
-    mdl_json: dict,
-    connection_info: dict,
-    api_endpoint: str,
-    timeout: float,
-    limit: Optional[int] = None,
-):
-    url = f"{api_endpoint}/v2/connector/{data_source}/query"
-    if limit is not None:
-        url += f"?limit={limit}"
-
-    async with aiohttp.request(
-        "POST",
-        url,
-        json={
-            "sql": add_quotes(sql),
-            "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
-            "connectionInfo": connection_info,
-        },
-        timeout=aiohttp.ClientTimeout(total=timeout),
-    ) as response:
-        if response.status != 200:
-            return {"data": [], "columns": []}
-
-        data = await response.json()
-        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
-
-        return {"data": data["data"], "columns": column_names}
 
 
 async def get_data_from_wren_engine_with_sqls(
