@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import aiohttp
 import orjson
@@ -285,10 +285,15 @@ async def get_data_from_wren_engine(
     connection_info: dict,
     api_endpoint: str,
     timeout: float,
+    limit: Optional[int] = None,
 ):
+    url = f"{api_endpoint}/v2/connector/{data_source}/query"
+    if limit is not None:
+        url += f"?limit={limit}"
+
     async with aiohttp.request(
         "POST",
-        f"{api_endpoint}/v2/connector/{data_source}/query",
+        url,
         json={
             "sql": add_quotes(sql),
             "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
@@ -326,6 +331,7 @@ async def get_data_from_wren_engine_with_sqls(
                     connection_info,
                     api_endpoint,
                     timeout,
+                    limit=50,
                 )
             )
             tasks.append(task)
