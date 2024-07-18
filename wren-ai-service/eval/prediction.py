@@ -1,11 +1,14 @@
 import argparse
 import asyncio
+import base64
+import os
 import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+import dotenv
 import orjson
 from langfuse.decorators import langfuse_context, observe
 from tomlkit import document, dumps
@@ -91,13 +94,26 @@ def deploy_model(mdl, pipe) -> None:
     asyncio.run(wrapper())
 
 
-def setup_pipes() -> Dict[str, Any]:
+def setup_pipes(mdl: str) -> Dict[str, Any]:
     (
         llm_provider,
         embedder_provider,
         document_store_provider,
         engine,
-    ) = utils.init_providers()
+    ) = utils.init_providers(
+        engine_config={
+            "provider": "wren_ibis",
+            "config": {
+                "source": "bigquery",
+                "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
+                "connection_info": {
+                    "project_id": os.getenv("bigquery.project-id"),
+                    "dataset_id": os.getenv("bigquery.dataset-id"),
+                    "credentials": os.getenv("bigquery.credentials-key"),
+                },
+            },
+        }
+    )
 
     document_store_provider.get_store(recreate_index=True)
     return {
@@ -131,9 +147,9 @@ def parse_args() -> Tuple[str]:
 if __name__ == "__main__":
     path = parse_args()
 
+    dotenv.load_dotenv()
     utils.load_env_vars()
     utils.init_langfuse()
-    pipes = setup_pipes()
 
     meta = generate_meta()
 
