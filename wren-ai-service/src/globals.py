@@ -117,6 +117,7 @@ def init_globals():
         pipelines={
             "generation": sql_regeneration.Generation(
                 llm_provider=llm_provider,
+                engine=engine,
             )
         }
     )

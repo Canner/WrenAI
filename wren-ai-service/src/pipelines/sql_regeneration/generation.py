@@ -112,16 +112,16 @@ async def sql_regeneration_generate(
     )
 
 
-@timer
+@async_timer
 @observe(capture_input=False)
-def sql_regeneration_post_process(
+async def sql_regeneration_post_process(
     sql_regeneration_generate: dict,
     sql_regeneration_post_processor: GenerationPostProcessor,
 ) -> dict:
     logger.debug(
         f"sql_regeneration_generate: {orjson.dumps(sql_regeneration_generate, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return sql_regeneration_post_processor.run(
+    return await sql_regeneration_post_processor.run(
         replies=sql_regeneration_generate.get("replies"),
     )
 
