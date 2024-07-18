@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import base64
 import os
+import re
 import sys
 import uuid
 from datetime import datetime
@@ -92,12 +93,31 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
         )
 
         prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = [
-            {key: doc[key] for key in ("id", "content", "score")}
-            for doc in (doc.to_dict() for doc in documents)
-        ]
+        prediction["retrieval_context"] = extract_units(
+            [doc.to_dict() for doc in documents]
+        )
 
         predictions.append(prediction)
+
+    def extract_units(docs: list) -> list:
+        columns = []
+        for doc in docs:
+            columns.extend(parse_ddl(doc["content"]))
+        return columns
+
+    def parse_ddl(ddl: str) -> list:
+        # Regex to extract table name
+        table_name_match = re.search(r"CREATE TABLE (\w+)", ddl, re.IGNORECASE)
+        table_name = table_name_match.group(1) if table_name_match else None
+
+        # Regex to extract column names
+        columns = re.findall(r"-- \{[^}]*\}\n\s*(\w+)", ddl)
+
+        # Format columns with table name as prefix
+        if table_name:
+            columns = [f"{table_name}.{col}" for col in columns]
+
+        return columns
 
     async def task():
         tasks = [wrapper(query) for query in queries]
