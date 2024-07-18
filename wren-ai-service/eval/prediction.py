@@ -16,10 +16,9 @@ from langfuse.decorators import langfuse_context, observe
 from tomlkit import document, dumps
 from tqdm.asyncio import tqdm_asyncio
 
-from eval.utils import parse_toml
-
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
+from eval.utils import parse_toml
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
