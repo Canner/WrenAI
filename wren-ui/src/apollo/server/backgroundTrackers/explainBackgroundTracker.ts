@@ -13,6 +13,7 @@ import {
 } from '../repositories/threadResponseRepository';
 import { Telemetry } from '../telemetry/telemetry';
 import { findAnalysisById } from '../utils';
+import { GeneralErrorCodes } from '../utils/error';
 import { BackgroundTracker } from './index';
 import { getLogger } from '@server/utils/logger';
 
@@ -106,8 +107,13 @@ export class ThreadResponseExplainBackgroundTracker extends BackgroundTracker<Th
                 await this.threadResponseExplainRepository.updateOne(
                   threadResponseExplain.id,
                   {
-                    error:
-                      typeof error === 'object' ? JSON.stringify(error) : error,
+                    error: {
+                      code: GeneralErrorCodes.MERGE_THREAD_RESPONSE_ERROR,
+                      message:
+                        typeof error === 'object'
+                          ? JSON.stringify(error)
+                          : error,
+                    },
                   },
                 );
               }
@@ -205,7 +211,7 @@ export class ThreadResponseExplainBackgroundTracker extends BackgroundTracker<Th
         const payload = { ...explanation.payload };
         delete payload.id;
         return {
-          id: id++,
+          referenceId: id++,
           type: explanation.type,
           sqlSnippet:
             (explanation.payload as any).expression ||

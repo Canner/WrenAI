@@ -184,6 +184,7 @@ const bootstrapServer = async () => {
       viewRepository,
       deployRepository: deployLogRepository,
       schemaChangeRepository,
+      threadResponseExplainRepository,
     }),
   });
   await apolloServer.start();

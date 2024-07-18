@@ -18,6 +18,7 @@ import {
   IMDLService,
   IProjectService,
 } from '../services';
+import { IThreadResponseExplainRepository } from '../repositories/threadResponseExplainRepository';
 
 export interface IContext {
   config: IConfig;
@@ -44,4 +45,5 @@ export interface IContext {
   viewRepository: IViewRepository;
   deployRepository: IDeployLogRepository;
   schemaChangeRepository: ISchemaChangeRepository;
+  threadResponseExplainRepository: IThreadResponseExplainRepository;
 }
