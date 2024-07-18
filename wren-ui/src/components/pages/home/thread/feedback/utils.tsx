@@ -4,12 +4,12 @@ import {
   GroupOutlined,
 } from '@ant-design/icons';
 import { ColumnsIcon, ModelIcon } from '@/utils/icons';
-import { ReferenceType } from '@/apollo/client/graphql/__types__';
+import {
+  DetailReference,
+  ReferenceType,
+} from '@/apollo/client/graphql/__types__';
 
-export type Reference = {
-  id: number;
-  title: string;
-  type: ReferenceType;
+export type Reference = DetailReference & {
   stepIndex: number;
   correctionPrompt?: string;
 };

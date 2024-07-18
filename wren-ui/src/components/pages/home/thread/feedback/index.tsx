@@ -3,13 +3,11 @@ import ReferenceSideFloat from '@/components/pages/home/thread/feedback/Referenc
 import FeedbackSideFloat from '@/components/pages/home/thread/feedback/FeedbackSideFloat';
 import ReviewDrawer from '@/components/pages/home/thread/feedback/ReviewDrawer';
 import useDrawerAction from '@/hooks/useDrawerAction';
-import {
-  ReferenceType,
-  ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+import { ThreadResponse } from '@/apollo/client/graphql/__types__';
+import { Reference } from './utils';
 
 type ContextProps = {
-  references: any[];
+  references: Reference[];
 } | null;
 
 export const FeedbackContext = createContext<ContextProps>({
@@ -26,59 +24,6 @@ interface Props {
   threadResponse: ThreadResponse;
   onSubmitReviewDrawer: (variables: any) => Promise<void>;
 }
-
-const data = [
-  {
-    id: 1,
-    type: ReferenceType.FIELD,
-    stepIndex: 0,
-    title:
-      "Selects the 'City' column from the 'customer_data' dataset to display the city name.",
-    referenceNum: 1,
-  },
-  {
-    id: 2,
-    type: ReferenceType.FIELD,
-    stepIndex: 0,
-    title: 'Reference 2',
-    referenceNum: 2,
-  },
-  {
-    id: 3,
-    type: ReferenceType.QUERY_FROM,
-    stepIndex: 1,
-    title: 'Reference 3',
-    referenceNum: 3,
-  },
-  {
-    id: 4,
-    type: ReferenceType.QUERY_FROM,
-    stepIndex: 1,
-    title: 'Reference 4',
-    referenceNum: 4,
-  },
-  {
-    id: 5,
-    type: ReferenceType.FILTER,
-    stepIndex: 2,
-    title: 'Reference 4',
-    referenceNum: 4,
-  },
-  {
-    id: 6,
-    type: ReferenceType.SORTING,
-    stepIndex: 2,
-    title: 'Reference 4',
-    referenceNum: 4,
-  },
-  {
-    id: 7,
-    type: ReferenceType.GROUP_BY,
-    stepIndex: 2,
-    title: 'Reference 4',
-    referenceNum: 4,
-  },
-];
 
 export default function Feedback(props: Props) {
   const { headerSlot, bodySlot, threadResponse, onSubmitReviewDrawer } = props;
@@ -100,22 +45,19 @@ export default function Feedback(props: Props) {
 
   const references = useMemo(() => {
     if (!threadResponse?.detail) return [];
-    return threadResponse.detail.steps.flatMap((_, index) => {
-      // TODO: change to real step reference's data
-      const references = data.filter((item) => item.stepIndex === index);
-      return references.map((reference) => ({
-        id: reference.id,
-        title: reference.title,
-        type: reference.type,
-        stepIndex: reference.stepIndex,
-        correctionPrompt: correctionPrompts[reference.id],
+    return threadResponse.detail.steps.flatMap((step, index) => {
+      if (step.references === null) return [];
+      return step.references.map((reference) => ({
+        ...reference,
+        id: reference.referenceId,
+        stepIndex: index,
+        correctionPrompt: correctionPrompts[reference.referenceId],
       }));
     });
   }, [threadResponse?.detail, correctionPrompts]);
 
   const contextValue = {
     references,
-    saveCorrectionPrompt,
   };
 
   return (

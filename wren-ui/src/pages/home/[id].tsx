@@ -8,11 +8,15 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import {
   useCreateRegeneratedThreadResponseMutation,
+  useCreateThreadResponseExplainMutation,
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
-import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
+import useAskPrompt, {
+  getIsFinished,
+  checkExplainable,
+} from '@/hooks/useAskPrompt';
 import useModalAction from '@/hooks/useModalAction';
 import Thread from '@/components/pages/home/thread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
@@ -55,10 +59,17 @@ export default function HomeThread() {
       };
     });
   };
+  const [createThreadResponseExplain] =
+    useCreateThreadResponseExplainMutation();
   const [createThreadResponse] = useCreateThreadResponseMutation({
     onCompleted(next) {
       const nextResponse = next.createThreadResponse;
       addThreadResponse(nextResponse);
+
+      // Trigger explanation after create a new thread response
+      createThreadResponseExplain({
+        variables: { where: { responseId: nextResponse.id } },
+      });
     },
   });
   const [fetchThreadResponse, threadResponseResult] =
@@ -91,13 +102,18 @@ export default function HomeThread() {
     [threadResponseResult.data],
   );
   const isFinished = useMemo(
-    () => getIsFinished(threadResponse?.status),
+    () =>
+      getIsFinished(
+        threadResponse?.status,
+        checkExplainable(threadResponse?.explain),
+      ),
     [threadResponse],
   );
 
   useEffect(() => {
     const unfinishedRespose = (thread?.responses || []).find(
-      (response) => !getIsFinished(response.status),
+      (response) =>
+        !getIsFinished(response.status, checkExplainable(response?.explain)),
     );
 
     if (unfinishedRespose) {

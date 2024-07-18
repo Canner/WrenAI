@@ -26,7 +26,7 @@ interface Props {
 
 const COLLAPSE_LIMIT = 3;
 
-const ReferenceSummaryTemplate = ({ id, title, type, correctionPrompt }) => {
+const ReferenceSummaryTemplate = ({ id, summary, type, correctionPrompt }) => {
   const isRevise = !!correctionPrompt;
   return (
     <div className="d-flex align-center my-1">
@@ -35,7 +35,7 @@ const ReferenceSummaryTemplate = ({ id, title, type, correctionPrompt }) => {
         {id}
       </Tag>
       <Typography.Text className="gray-8" ellipsis>
-        {title}
+        {summary}
       </Typography.Text>
     </div>
   );
@@ -65,7 +65,7 @@ const GroupReferenceTemplate = ({
 
 const ReferenceTemplate = ({
   id,
-  title,
+  summary,
   type,
   correctionPrompt,
   saveCorrectionPrompt,
@@ -94,7 +94,7 @@ const ReferenceTemplate = ({
       </div>
       <div className="flex-grow-1">
         <Typography.Text className="gray-8">
-          {title}
+          {summary}
           <span className="gray-6 ml-2">
             {isRevise ? (
               '(feedback suggested)'

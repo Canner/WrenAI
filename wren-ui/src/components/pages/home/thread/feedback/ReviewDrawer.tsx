@@ -146,9 +146,9 @@ export default function ReviewDrawer(props: Props) {
       const data: CreateRegeneratedThreadResponseInput = {
         responseId: threadResponseId,
         corrections: changedReferences.map((reference) => ({
-          id: reference.id,
+          id: reference.referenceId,
           type: reference.type,
-          reference: reference.title,
+          reference: reference.summary,
           stepIndex: reference.stepIndex,
           correction: reference.correctionPrompt,
         })),
