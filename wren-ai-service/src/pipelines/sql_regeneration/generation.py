@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
@@ -7,9 +8,12 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import observe
 
+from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.ask_details.generation import GenerationPostProcessor
 from src.pipelines.sql_regeneration.components.prompts import (
     sql_regeneration_system_prompt,
 )
@@ -47,23 +51,6 @@ class SQLRegenerationRreprocesser:
 
 
 @component
-class SQLRegenerationPostProcessor:
-    @component.output_types(
-        description=str,
-        steps=List[str],
-    )
-    def run(
-        self,
-        replies: List[str],
-    ) -> Dict[str, Any]:
-        try:
-            return {"results": orjson.loads(replies[0])}
-        except Exception as e:
-            logger.exception(f"Error in SQLRegenerationPostProcessor: {e}")
-            return {"results": None}
-
-
-@component
 class DescriptionRegenerationPostProcessor:
     @component.output_types(
         results=Optional[Dict[str, Any]],
@@ -87,6 +74,7 @@ class DescriptionRegenerationPostProcessor:
 
 ## Start of Pipeline
 @timer
+@observe(capture_input=False)
 def preprocess(
     description: str,
     steps: List[SQLExplanationWithUserCorrections],
@@ -101,6 +89,7 @@ def preprocess(
 
 
 @timer
+@observe(capture_input=False)
 def sql_regeneration_prompt(
     preprocess: Dict[str, Any],
     sql_regeneration_prompt_builder: PromptBuilder,
@@ -110,6 +99,7 @@ def sql_regeneration_prompt(
 
 
 @async_timer
+@observe(as_type="generation", capture_input=False)
 async def sql_regeneration_generate(
     sql_regeneration_prompt: dict,
     sql_regeneration_generator: Any,
@@ -123,9 +113,10 @@ async def sql_regeneration_generate(
 
 
 @timer
+@observe(capture_input=False)
 def sql_regeneration_post_process(
     sql_regeneration_generate: dict,
-    sql_regeneration_post_processor: SQLRegenerationPostProcessor,
+    sql_regeneration_post_processor: GenerationPostProcessor,
 ) -> dict:
     logger.debug(
         f"sql_regeneration_generate: {orjson.dumps(sql_regeneration_generate, option=orjson.OPT_INDENT_2).decode()}"
@@ -142,6 +133,7 @@ class Generation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        engine: Engine,
     ):
         self.sql_regeneration_preprocesser = SQLRegenerationRreprocesser()
         self.sql_regeneration_prompt_builder = PromptBuilder(
@@ -150,13 +142,38 @@ class Generation(BasicPipeline):
         self.sql_regeneration_generator = llm_provider.get_generator(
             system_prompt=sql_regeneration_system_prompt
         )
-        self.sql_regeneration_post_processor = SQLRegenerationPostProcessor()
+        self.sql_regeneration_post_processor = GenerationPostProcessor(engine=engine)
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def visualize(
+        self,
+        description: str,
+        steps: List[SQLExplanationWithUserCorrections],
+    ) -> None:
+        destination = "outputs/pipelines/sql_regeneration"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["sql_regeneration_post_process"],
+            output_file_path=f"{destination}/generation.dot",
+            inputs={
+                "description": description,
+                "steps": steps,
+                "sql_regeneration_preprocesser": self.sql_regeneration_preprocesser,
+                "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
+                "sql_regeneration_generator": self.sql_regeneration_generator,
+                "sql_regeneration_post_processor": self.sql_regeneration_post_processor,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
     @async_timer
+    @observe(name="SQL-Regeneration Generation")
     async def run(
         self,
         description: str,
@@ -177,19 +194,21 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from langfuse.decorators import langfuse_context
+
     from src.core.pipeline import async_validate
-    from src.utils import init_providers, load_env_vars
+    from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
-    llm_provider, _ = init_providers()
+    llm_provider, _, _, engine = init_providers()
     pipeline = Generation(
         llm_provider=llm_provider,
+        engine=engine,
     )
 
-    async_validate(
-        lambda: pipeline.run(
-            "This is a description",
-            [],
-        )
-    )
+    pipeline.visualize("This is a description", [])
+    async_validate(lambda: pipeline.run("This is a description", []))
+
+    langfuse_context.flush()

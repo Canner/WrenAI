@@ -107,10 +107,19 @@ class SQLRegenerationService:
 
             logger.debug(f"sql regeneration results: {sql_regeneration_result}")
 
-            self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
-                status="finished",
-                response=sql_regeneration_result,
-            )
+            if not sql_regeneration_result["steps"]:
+                self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+                    status="failed",
+                    error=SQLRegenerationResultResponse.SQLRegenerationError(
+                        code="NO_RELEVANT_SQL",
+                        message="SQL is not executable",
+                    ),
+                )
+            else:
+                self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+                    status="finished",
+                    response=sql_regeneration_result,
+                )
         except Exception as e:
             logger.exception(f"sql regeneration pipeline - OTHERS: {e}")
             self.sql_regeneration_results[

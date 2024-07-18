@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
@@ -9,6 +10,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
+from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -16,6 +18,7 @@ from src.pipelines.sql_explanation.components.prompts import (
     sql_explanation_system_prompt,
 )
 from src.utils import async_timer, timer
+from src.web.v1.services.sql_explanation import StepWithAnalysisResult
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -385,6 +388,7 @@ class GenerationPostProcessor:
 
 ## Start of Pipeline
 @timer
+@observe(capture_input=False)
 def preprocess(
     sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
 ) -> dict:
@@ -395,6 +399,7 @@ def preprocess(
 
 
 @timer
+@observe(capture_input=False)
 def prompts(
     question: str,
     sql: str,
@@ -460,6 +465,7 @@ def prompts(
 
 
 @async_timer
+@observe(as_type="generation", capture_input=False)
 async def generates(prompts: List[dict], generator: Any) -> List[dict]:
     logger.debug(
         f"prompts: {orjson.dumps(prompts, option=orjson.OPT_INDENT_2).decode()}"
@@ -473,6 +479,7 @@ async def generates(prompts: List[dict], generator: Any) -> List[dict]:
 
 
 @timer
+@observe(capture_input=False)
 def post_process(
     generates: List[dict],
     preprocess: dict,
@@ -512,11 +519,38 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
-    async def run(
+    def visualize(
         self,
         question: str,
         step_with_analysis_results: pydantic.BaseModel,
+    ) -> None:
+        destination = "outputs/pipelines/sql_explanation"
+        if not Path(destination).exists():
+            Path(destination).mkdir(parents=True, exist_ok=True)
+
+        self._pipe.visualize_execution(
+            ["post_process"],
+            output_file_path=f"{destination}/generation.dot",
+            inputs={
+                "question": question,
+                "sql": step_with_analysis_results.sql,
+                "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
+                "sql_summary": step_with_analysis_results.summary,
+                "pre_processor": self.pre_processor,
+                "prompt_builder": self.prompt_builder,
+                "generator": self.generator,
+                "post_processor": self.post_processor,
+            },
+            show_legend=True,
+            orient="LR",
+        )
+
+    @async_timer
+    @observe(name="SQL Explanation Generation")
+    async def run(
+        self,
+        question: str,
+        step_with_analysis_results: StepWithAnalysisResult,
     ):
         logger.info("SQL Explanation Generation pipeline is running...")
 
@@ -536,22 +570,36 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from langfuse.decorators import langfuse_context
+
     from src.core.pipeline import async_validate
-    from src.utils import init_providers, load_env_vars
+    from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
+    init_langfuse()
 
-    llm_provider, _ = init_providers()
+    llm_provider, _, _, _ = init_providers()
     pipeline = Generation(
         llm_provider=llm_provider,
     )
 
+    pipeline.visualize(
+        "this is a test question",
+        StepWithAnalysisResult(
+            sql="xxx",
+            summary="xxx",
+            sql_analysis_results=[],
+        ),
+    )
     async_validate(
         lambda: pipeline.run(
             "this is a test question",
-            "this is a test sql",
-            [],
-            "this is a test sql summary",
-            "this is a test full sql",
+            StepWithAnalysisResult(
+                sql="xxx",
+                summary="xxx",
+                sql_analysis_results=[],
+            ),
         )
     )
+
+    langfuse_context.flush()

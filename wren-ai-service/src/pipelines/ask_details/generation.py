@@ -113,8 +113,8 @@ class GenerationPostProcessor:
         async with aiohttp.ClientSession() as session:
             status, error = await self._engine.dry_run_sql(sql, session)
 
-        if status:
-            logger.debug(f"SQL is not executable: {error}")
+        if not status:
+            logger.exception(f"SQL is not executable: {error}")
 
         return status
 

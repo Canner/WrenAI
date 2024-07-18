@@ -11,12 +11,13 @@ logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-explanations
-class SQLExplanationRequest(BaseModel):
-    class StepWithAnalysisResult(BaseModel):
-        sql: str
-        summary: str
-        sql_analysis_results: List[Dict]
+class StepWithAnalysisResult(BaseModel):
+    sql: str
+    summary: str
+    sql_analysis_results: List[Dict]
 
+
+class SQLExplanationRequest(BaseModel):
     _query_id: str | None = None
     question: str
     steps_with_analysis_results: List[StepWithAnalysisResult]
