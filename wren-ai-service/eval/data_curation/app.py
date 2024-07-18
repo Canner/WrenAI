@@ -13,7 +13,7 @@ from streamlit_tags import st_tags
 from utils import (
     DATA_SOURCES,
     get_contexts_from_sqls,
-    get_data_from_wren_engine,
+    get_data_from_wren_engine_with_sqls,
     get_eval_dataset_in_toml_string,
     get_openai_client,
     get_question_sql_pairs,
@@ -373,9 +373,11 @@ if st.session_state["mdl_json"] is not None:
                 ):
                     st.success("SQL is valid")
                     data = asyncio.run(
-                        get_data_from_wren_engine(
+                        get_data_from_wren_engine_with_sqls(
                             [st.session_state["user_question_sql_pair"]["sql"]],
                             st.session_state["data_source"],
+                            st.session_state["mdl_json"],
+                            st.session_state["connection_info"],
                         )
                     )[0]
                     st.dataframe(
