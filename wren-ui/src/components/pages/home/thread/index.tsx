@@ -1,16 +1,17 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Alert, Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
-import { makeIterable } from '@/utils/iteration';
+import { IterableComponent, makeIterable } from '@/utils/iteration';
 import {
-  AskingTaskStatus,
   DetailedThread,
+  ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 
 interface Props {
   data: DetailedThread;
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+  onSubmitReviewDrawer: (variables: any) => Promise<void>;
 }
 
 const StyledThread = styled.div`
@@ -32,20 +33,23 @@ const StyledContainer = styled.div`
   max-width: 1030px;
 `;
 
-const AnswerResultTemplate = ({
-  index,
-  id,
-  status,
-  question,
-  detail,
-  error,
+const AnswerResultTemplate: React.FC<
+  IterableComponent<ThreadResponse> & {
+    onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+    onTriggerScrollToBottom: () => void;
+    onSubmitReviewDrawer: (variables: any) => Promise<void>;
+  }
+> = ({
   onOpenSaveAsViewModal,
   onTriggerScrollToBottom,
+  onSubmitReviewDrawer,
   data,
-  summary,
+  index,
+  ...threadResponse
 }) => {
   const lastResponseId = data[data.length - 1].id;
-  const isLastThreadResponse = id === lastResponseId;
+  const isLastThreadResponse = threadResponse.id === lastResponseId;
+  const { id, error } = threadResponse;
 
   return (
     <StyledContainer className="mx-auto" key={`${id}-${index}`}>
@@ -59,17 +63,11 @@ const AnswerResultTemplate = ({
         />
       ) : (
         <AnswerResult
-          answerResultSteps={detail?.steps}
-          description={detail?.description}
-          loading={status !== AskingTaskStatus.FINISHED}
-          question={question}
-          summary={summary}
-          view={detail?.view}
-          fullSql={detail?.sql}
-          threadResponseId={id}
+          threadResponse={threadResponse}
+          isLastThreadResponse={isLastThreadResponse}
           onOpenSaveAsViewModal={onOpenSaveAsViewModal}
           onTriggerScrollToBottom={onTriggerScrollToBottom}
-          isLastThreadResponse={isLastThreadResponse}
+          onSubmitReviewDrawer={onSubmitReviewDrawer}
         />
       )}
     </StyledContainer>
@@ -79,7 +77,7 @@ const AnswerResultTemplate = ({
 const AnswerResultIterator = makeIterable(AnswerResultTemplate);
 
 export default function Thread(props: Props) {
-  const { data, onOpenSaveAsViewModal } = props;
+  const { data, onOpenSaveAsViewModal, onSubmitReviewDrawer } = props;
   const divRef = useRef<HTMLDivElement>(null);
 
   const triggerScrollToBottom = () => {
@@ -110,6 +108,7 @@ export default function Thread(props: Props) {
         data={data?.responses || []}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onTriggerScrollToBottom={triggerScrollToBottom}
+        onSubmitReviewDrawer={onSubmitReviewDrawer}
       />
     </StyledThread>
   );

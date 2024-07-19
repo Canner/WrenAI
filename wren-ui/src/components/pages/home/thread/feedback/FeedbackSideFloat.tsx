@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import styled from 'styled-components';
 import { Button, Popconfirm } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
+import { Reference } from './utils';
 
 const StyledFeedbackSideFloat = styled.div`
   position: relative;
@@ -17,14 +18,18 @@ const StyledFeedbackSideFloat = styled.div`
 
 interface Props {
   className?: string;
-  references: any[];
+  references: Reference[];
   onOpenReviewDrawer: () => void;
-  onResetAllChanges: () => void;
+  onResetAllCorrectionPrompts: () => void;
 }
 
 export default function FeedbackSideFloat(props: Props) {
-  const { className, references, onOpenReviewDrawer, onResetAllChanges } =
-    props;
+  const {
+    className,
+    references,
+    onOpenReviewDrawer,
+    onResetAllCorrectionPrompts,
+  } = props;
 
   const changedReferences = useMemo(() => {
     return (references || []).filter((item) => !!item.correctionPrompt);
@@ -51,7 +56,7 @@ export default function FeedbackSideFloat(props: Props) {
           title="Are you sure?"
           okText="Confirm"
           okButtonProps={{ danger: true }}
-          onConfirm={onResetAllChanges}
+          onConfirm={onResetAllCorrectionPrompts}
         >
           <Button className="text-sm gray-6 ml-2" type="text" size="small">
             Reset all

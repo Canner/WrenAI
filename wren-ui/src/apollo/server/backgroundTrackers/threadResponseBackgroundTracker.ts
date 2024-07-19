@@ -1,4 +1,8 @@
-import { AskResultStatus, IWrenAIAdaptor } from '../adaptors/wrenAIAdaptor';
+import {
+  AskDetailResult,
+  AskResultStatus,
+  IWrenAIAdaptor,
+} from '../adaptors/wrenAIAdaptor';
 import {
   IThreadResponseRepository,
   ThreadResponse,
@@ -14,25 +18,29 @@ export class ThreadResponseBackgroundTracker extends BackgroundTracker<ThreadRes
   // tasks is a kv pair of task id and thread response
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
+  private isRegenerated: boolean = false;
 
   constructor({
     telemetry,
     wrenAIAdaptor,
     threadResponseRepository,
+    isRegenerated,
   }: {
     telemetry: Telemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
+    isRegenerated?: boolean;
   }) {
     super();
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
+    this.isRegenerated = isRegenerated;
     this.start();
   }
 
   public start() {
-    logger.info('Background tracker started');
+    logger.info(`${this.strategy.name} background tracker started`);
     setInterval(() => {
       const jobs = Object.values(this.tasks).map(
         (threadResponse) => async () => {
@@ -45,7 +53,7 @@ export class ThreadResponseBackgroundTracker extends BackgroundTracker<ThreadRes
           this.runningJobs.add(threadResponse.id);
 
           // get the latest result from AI service
-          const result = await this.wrenAIAdaptor.getAskDetailResult(
+          const result = await this.strategy.getAskDetailResult(
             threadResponse.queryId,
           );
 
@@ -69,10 +77,7 @@ export class ThreadResponseBackgroundTracker extends BackgroundTracker<ThreadRes
 
           // remove the task from tracker if it is finalized
           if (this.isFinalized(result.status)) {
-            this.telemetry.send_event('question_answered', {
-              question: threadResponse.question,
-              result,
-            });
+            this.strategy.sendTelemetry(threadResponse, result);
             logger.debug(`Job ${threadResponse.id} is finalized, removing`);
             delete this.tasks[threadResponse.id];
           }
@@ -100,6 +105,38 @@ export class ThreadResponseBackgroundTracker extends BackgroundTracker<ThreadRes
 
   public getTasks() {
     return this.tasks;
+  }
+
+  private get strategy() {
+    // For thread response
+    const strategy = {
+      name: 'ThreadResponse',
+      getAskDetailResult: (queryId) =>
+        this.wrenAIAdaptor.getAskDetailResult(queryId),
+      sendTelemetry: (
+        threadResponse: ThreadResponse,
+        result: AskDetailResult,
+      ) => {
+        this.telemetry.send_event('question_answered', {
+          question: threadResponse.question,
+          result,
+        });
+      },
+    };
+    // For regenerated thread response
+    if (this.isRegenerated) {
+      strategy.name = 'RegeneratedThreadResponse';
+      strategy.getAskDetailResult = (queryId) =>
+        this.wrenAIAdaptor.getRegeneratedAskDetailResult(queryId);
+      strategy.sendTelemetry = (threadResponse, result) => {
+        this.telemetry.send_event('regenerated_question_answered', {
+          question: threadResponse.question,
+          corrections: threadResponse.corrections,
+          result,
+        });
+      };
+    }
+    return strategy;
   }
 
   private isFinalized = (status: AskResultStatus) => {

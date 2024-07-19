@@ -54,6 +54,8 @@ export class AskingResolver {
     this.deleteThread = this.deleteThread.bind(this);
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
+    this.createCorrectedThreadResponse =
+      this.createCorrectedThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
   }
@@ -188,6 +190,7 @@ export class AskingResolver {
           status: response.status,
           detail: response.detail,
           error: response.error,
+          corrections: response.corrections,
         });
 
         return acc;
@@ -254,6 +257,34 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const response = await askingService.createThreadResponse(threadId, data);
     ctx.telemetry.send_event('ask_followup_question', {});
+    return response;
+  }
+
+  public async createCorrectedThreadResponse(
+    _root: any,
+    args: {
+      threadId: number;
+      data: {
+        responseId: number;
+        corrections: {
+          id: number;
+          type: string;
+          stepIndex: number;
+          reference: string;
+          correction: string;
+        }[];
+      };
+    },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const { threadId, data } = args;
+
+    const askingService = ctx.askingService;
+    const response = await askingService.createCorrectedThreadResponse(
+      threadId,
+      data,
+    );
+    ctx.telemetry.send_event('regenerate_asked_question', {});
     return response;
   }
 

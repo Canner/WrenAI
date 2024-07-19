@@ -80,12 +80,14 @@ export enum AskCandidateType {
   LLM = 'LLM',
 }
 
-export enum ExplainType {
+// The enum key's name refer to schema.ts > ReferenceType
+// It helps mapping AI service enum values: selectItems, relation, filter, sortings, groupByKeys
+export enum ExplanationType {
+  FIELD = 'selectItems',
+  QUERY_FROM = 'relation',
   FILTER = 'filter',
-  SELECT_ITEMS = 'selectItems',
-  RELATION = 'relation',
-  GROUP_BY_KEYS = 'groupByKeys',
-  SORTINGS = 'sortings',
+  SORTING = 'sortings',
+  GROUP_BY = 'groupByKeys',
 }
 
 // UI currently only support nl_expression
@@ -129,18 +131,21 @@ export interface CorrectionObject<T> {
   value: string;
 }
 
-export interface AskCorrection {
-  before: CorrectionObject<ExplainType>;
+export interface AskCorrectionInput {
+  before: CorrectionObject<ExplanationType>;
   after: CorrectionObject<ExpressionType>;
 }
 
-export interface AskStepWithCorrections extends AskStep {
-  corrections: AskCorrection[];
+export interface AskStepWithCorrectionsInput {
+  summary: string;
+  sql: string;
+  cte_name: string;
+  corrections: AskCorrectionInput[];
 }
 
 export interface RegenerateAskDetailInput {
   description: string;
-  steps: AskStepWithCorrections[];
+  steps: AskStepWithCorrectionsInput[];
 }
 
 const getAIServiceError = (error: any) => {

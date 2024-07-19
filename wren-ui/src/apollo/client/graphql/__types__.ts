@@ -71,11 +71,23 @@ export type ConnectionInfo = {
   username?: Maybe<Scalars['String']>;
 };
 
+export type CorrectionDetail = {
+  __typename?: 'CorrectionDetail';
+  correction: Scalars['String'];
+  id: Scalars['Int'];
+  type: ReferenceType;
+};
+
 export type CreateCalculatedFieldInput = {
   expression: ExpressionName;
   lineage: Array<Scalars['Int']>;
   modelId: Scalars['Int'];
   name: Scalars['String'];
+};
+
+export type CreateCorrectedThreadResponseInput = {
+  corrections: Array<CreateThreadResponseCorrectionInput>;
+  responseId: Scalars['Int'];
 };
 
 export type CreateModelInput = {
@@ -102,6 +114,14 @@ export type CreateThreadInput = {
   sql?: InputMaybe<Scalars['String']>;
   summary?: InputMaybe<Scalars['String']>;
   viewId?: InputMaybe<Scalars['Int']>;
+};
+
+export type CreateThreadResponseCorrectionInput = {
+  correction: Scalars['String'];
+  id: Scalars['Int'];
+  reference: Scalars['String'];
+  stepIndex: Scalars['Int'];
+  type: ReferenceType;
 };
 
 export type CreateThreadResponseInput = {
@@ -399,6 +419,7 @@ export type Mutation = {
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
+  createCorrectedThreadResponse: ThreadResponse;
   createModel: Scalars['JSON'];
   createRelation: Scalars['JSON'];
   createThread: Thread;
@@ -445,6 +466,12 @@ export type MutationCreateAskingTaskArgs = {
 
 export type MutationCreateCalculatedFieldArgs = {
   data: CreateCalculatedFieldInput;
+};
+
+
+export type MutationCreateCorrectedThreadResponseArgs = {
+  data: CreateCorrectedThreadResponseInput;
+  threadId: Scalars['Int'];
 };
 
 
@@ -704,6 +731,14 @@ export type RecommendRelations = {
   relations: Array<Maybe<Relation>>;
 };
 
+export enum ReferenceType {
+  FIELD = 'FIELD',
+  FILTER = 'FILTER',
+  GROUP_BY = 'GROUP_BY',
+  QUERY_FROM = 'QUERY_FROM',
+  SORTING = 'SORTING'
+}
+
 export type Relation = {
   __typename?: 'Relation';
   fromColumnId: Scalars['Int'];
@@ -827,6 +862,7 @@ export type Thread = {
 
 export type ThreadResponse = {
   __typename?: 'ThreadResponse';
+  corrections?: Maybe<Array<CorrectionDetail>>;
   detail?: Maybe<ThreadResponseDetail>;
   error?: Maybe<Error>;
   id: Scalars['Int'];

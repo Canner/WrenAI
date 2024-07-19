@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Drawer,
@@ -17,12 +17,15 @@ import {
 } from '@ant-design/icons';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { makeIterable } from '@/utils/iteration';
-import { getReferenceIcon } from './utils';
+import { getReferenceIcon, Reference } from './utils';
+import { CreateCorrectedThreadResponseInput } from '@/apollo/client/graphql/__types__';
 
 type Props = DrawerAction & {
-  references: any[];
-  onSaveCorrectionPrompt?: (id: string, value: string) => void;
-  onRemoveCorrectionPrompt?: (id: string) => void;
+  references: Reference[];
+  threadResponseId: number;
+  onSaveCorrectionPrompt: (id: string, value: string) => void;
+  onRemoveCorrectionPrompt: (id: string) => void;
+  onResetAllCorrectionPrompts: () => void;
 };
 
 const StyledOriginal = styled.div`
@@ -37,7 +40,6 @@ const ReviewTemplate = ({
   id,
   title,
   type,
-  referenceNum,
   correctionPrompt,
   saveCorrectionPrompt,
   removeCorrectionPrompt,
@@ -77,7 +79,7 @@ const ReviewTemplate = ({
         <div className="lh-xs" style={{ paddingTop: 2 }}>
           <Tag className={clsx('ant-tag__reference', { isRevise })}>
             <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-            {referenceNum}
+            {id}
           </Tag>
         </div>
         <div className="flex-grow-1">
@@ -118,10 +120,13 @@ const ReviewIterator = makeIterable(ReviewTemplate);
 export default function ReviewDrawer(props: Props) {
   const {
     visible,
+    threadResponseId,
     references,
     onClose,
+    onSubmit,
     onSaveCorrectionPrompt,
     onRemoveCorrectionPrompt,
+    onResetAllCorrectionPrompts,
   } = props;
 
   const changedReferences = useMemo(() => {
@@ -136,9 +141,26 @@ export default function ReviewDrawer(props: Props) {
     }
   }, [changedReferences]);
 
-  const submit = async () => {
-    // TODO: call correction ask api
-  };
+  const submit = useCallback(async () => {
+    try {
+      const data: CreateCorrectedThreadResponseInput = {
+        responseId: threadResponseId,
+        corrections: changedReferences.map((reference) => ({
+          id: reference.id,
+          type: reference.type,
+          reference: reference.title,
+          stepIndex: reference.stepIndex,
+          correction: reference.correctionPrompt,
+        })),
+      };
+      await onSubmit(data);
+      onClose();
+      onResetAllCorrectionPrompts();
+    } catch (error) {
+      console.error(error);
+    }
+  }, [changedReferences]);
+
   return (
     <Drawer
       visible={visible}

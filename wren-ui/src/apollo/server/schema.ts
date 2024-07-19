@@ -491,6 +491,14 @@ export const typeDefs = gql`
     LLM # LLM type candidate is created by LLM
   }
 
+  enum ReferenceType {
+    FIELD
+    QUERY_FROM
+    FILTER
+    SORTING
+    GROUP_BY
+  }
+
   type ResultCandidate {
     type: ResultCandidateType!
     sql: String!
@@ -517,6 +525,19 @@ export const typeDefs = gql`
     sql: String
     summary: String
     viewId: Int
+  }
+
+  input CreateThreadResponseCorrectionInput {
+    id: Int!
+    stepIndex: Int!
+    type: ReferenceType!
+    reference: String!
+    correction: String!
+  }
+
+  input CreateCorrectedThreadResponseInput {
+    responseId: Int!
+    corrections: [CreateThreadResponseCorrectionInput!]!
   }
 
   input ThreadUniqueWhereInput {
@@ -549,6 +570,12 @@ export const typeDefs = gql`
     steps: [DetailStep!]!
   }
 
+  type CorrectionDetail {
+    id: Int!
+    type: ReferenceType!
+    correction: String!
+  }
+
   type ThreadResponse {
     id: Int!
     question: String!
@@ -556,6 +583,7 @@ export const typeDefs = gql`
     status: AskingTaskStatus!
     detail: ThreadResponseDetail
     error: Error
+    corrections: [CorrectionDetail!]
   }
 
   # Thread only consists of basic information of a thread
@@ -756,6 +784,10 @@ export const typeDefs = gql`
     createThreadResponse(
       threadId: Int!
       data: CreateThreadResponseInput!
+    ): ThreadResponse!
+    createCorrectedThreadResponse(
+      threadId: Int!
+      data: CreateCorrectedThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
 
