@@ -10,7 +10,8 @@ exports.up = async function (knex) {
   const explainData = threadResponses.map((threadResponse) => {
     const error = {
       code: 'OLD_VERSION',
-      message: 'created before version 0.8.0',
+      message:
+        'Question asked before v0.8.0. Click "Retry" to generate manually.',
     };
     return {
       thread_response_id: threadResponse.id,
