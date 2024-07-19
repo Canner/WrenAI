@@ -1,10 +1,12 @@
 from src.core.pipeline import async_validate
 from src.pipelines.ask_details.generation import Generation
-from src.utils import init_providers
+from src.utils import EngineConfig, init_providers
 
 
 def test_generation_pipeline_producing_executable_sqls():
-    llm_provider, _, _, engine = init_providers()
+    llm_provider, _, _, engine = init_providers(
+        EngineConfig(provider="wren_ui", config={})
+    )
     generation_pipeline = Generation(
         llm_provider=llm_provider,
         engine=engine,

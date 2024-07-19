@@ -108,10 +108,10 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
 
 
 def save_mdl_json_file(file_name: str, mdl_json: Dict):
-    if not Path("custom_dataset").exists():
-        Path("custom_dataset").mkdir()
+    if not Path("demo/custom_dataset").exists():
+        Path("demo/custom_dataset").mkdir()
 
-    with open(f"custom_dataset/{file_name}", "w", encoding="utf-8") as file:
+    with open(f"demo/custom_dataset/{file_name}", "w", encoding="utf-8") as file:
         json.dump(mdl_json, file, indent=2)
 
 
@@ -154,7 +154,7 @@ def get_data_from_wren_engine(sql: str, manifest: Dict):
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.json()
 
     data = response.json()
     column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]

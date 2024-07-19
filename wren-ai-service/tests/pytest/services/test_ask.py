@@ -12,7 +12,7 @@ from src.pipelines.ask import (
     sql_correction,
 )
 from src.pipelines.indexing import indexing
-from src.utils import init_providers
+from src.utils import EngineConfig, init_providers
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
@@ -23,7 +23,9 @@ from src.web.v1.services.ask import (
 
 @pytest.fixture
 def ask_service():
-    llm_provider, embedder_provider, document_store_provider, engine = init_providers()
+    llm_provider, embedder_provider, document_store_provider, engine = init_providers(
+        EngineConfig(provider="wren_ui", config={})
+    )
 
     return AskService(
         {

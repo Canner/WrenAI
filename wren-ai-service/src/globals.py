@@ -1,3 +1,5 @@
+import os
+
 from src.pipelines.ask import (
     followup_generation as ask_followup_generation,
 )
@@ -26,7 +28,7 @@ from src.pipelines.sql_explanation import (
 from src.pipelines.sql_regeneration import (
     generation as sql_regeneration,
 )
-from src.utils import init_providers
+from src.utils import EngineConfig, init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics import SemanticsService
@@ -48,7 +50,9 @@ def init_globals():
         SQL_EXPLANATION_SERVICE, \
         SQL_REGENERATION_SERVICE
 
-    llm_provider, embedder_provider, document_store_provider, engine = init_providers()
+    llm_provider, embedder_provider, document_store_provider, engine = init_providers(
+        engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"), config={})
+    )
 
     # Recreate the document store to ensure a clean slate
     # TODO: for SaaS, we need to use a flag to prevent this collection_recreation

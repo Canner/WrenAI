@@ -4,7 +4,7 @@ import pytest
 
 from src.core.pipeline import async_validate
 from src.pipelines.ask_details import generation
-from src.utils import init_providers
+from src.utils import EngineConfig, init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
     AskDetailsResultRequest,
@@ -14,7 +14,9 @@ from src.web.v1.services.ask_details import (
 
 @pytest.fixture
 def ask_details_service():
-    llm_provider, _, _, engine = init_providers()
+    llm_provider, _, _, engine = init_providers(
+        EngineConfig(provider="wren_ui", config={})
+    )
     return AskDetailsService(
         {
             "generation": generation.Generation(

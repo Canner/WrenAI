@@ -1,7 +1,7 @@
 import pytest
 
 from src.pipelines.semantics import description
-from src.utils import init_providers
+from src.utils import EngineConfig, init_providers
 from src.web.v1.services.semantics import (
     SemanticsService,
 )
@@ -9,7 +9,9 @@ from src.web.v1.services.semantics import (
 
 @pytest.fixture
 def semantics_service():
-    llm_provider, embedder_provider, document_store_provider, _ = init_providers()
+    llm_provider, embedder_provider, document_store_provider, _ = init_providers(
+        EngineConfig(provider="wren_ui", config={})
+    )
 
     return SemanticsService(
         pipelines={

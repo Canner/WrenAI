@@ -583,12 +583,12 @@ if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
     from src.core.pipeline import async_validate
-    from src.utils import init_langfuse, init_providers, load_env_vars
+    from src.utils import EngineConfig, init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
     init_langfuse()
 
-    llm_provider, _, _, _ = init_providers()
+    llm_provider, _, _, _ = init_providers(EngineConfig(provider="wren_ui", config={}))
     pipeline = Generation(
         llm_provider=llm_provider,
     )

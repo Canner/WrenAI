@@ -153,12 +153,14 @@ if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
     from src.core.pipeline import async_validate
-    from src.utils import init_langfuse, init_providers, load_env_vars
+    from src.utils import EngineConfig, init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
     init_langfuse()
 
-    _, embedder_provider, document_store_provider, _ = init_providers()
+    _, embedder_provider, document_store_provider, _ = init_providers(
+        engine_config=EngineConfig(provider="wren_ui", config={})
+    )
 
     pipeline = HistoricalQuestion(
         embedder_provider=embedder_provider, store_provider=document_store_provider

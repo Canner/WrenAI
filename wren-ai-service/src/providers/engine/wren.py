@@ -16,6 +16,7 @@ logger = logging.getLogger("wren-ai-service")
 class WrenUI(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_UI_ENDPOINT")):
         self._endpoint = endpoint
+        logger.info("Using Engine: wren_ui")
 
     async def dry_run_sql(
         self,
@@ -58,6 +59,7 @@ class WrenIbis(Engine):
         self._source = source
         self._manifest = manifest
         self._connection_info = connection_info
+        logger.info("Using Engine: wren_ibis")
 
     async def dry_run_sql(
         self,
@@ -83,6 +85,7 @@ class WrenIbis(Engine):
 class WrenEngine(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT")):
         self._endpoint = endpoint
+        logger.info("Using Engine: wren_engine")
 
     async def dry_run_sql(
         self,
