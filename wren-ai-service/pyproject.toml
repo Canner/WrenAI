@@ -46,6 +46,7 @@ tomlkit = "==0.13.0"
 deepeval = "==0.21.66"
 streamlit-tags = "==1.2.8"
 gitpython = "==3.1.43"
+pandas = "==2.2.2"
 
 [tool.poetry.group.demo.dependencies]
 requests = "==2.32.2"
