@@ -486,6 +486,13 @@ export const typeDefs = gql`
     STOPPED
   }
 
+  enum ExplainTaskStatus {
+    UNDERSTANDING
+    GENERATING
+    FINISHED
+    FAILED
+  }
+
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
@@ -529,6 +536,7 @@ export const typeDefs = gql`
 
   input CreateThreadResponseCorrectionInput {
     id: Int!
+    referenceNum: Int!
     stepIndex: Int!
     type: ReferenceType!
     reference: String!
@@ -557,10 +565,30 @@ export const typeDefs = gql`
     limit: Int
   }
 
+  type ReferenceSQLLocation {
+    line: Int!
+    column: Int!
+  }
+
+  type DetailReference {
+    referenceId: Int
+    type: ReferenceType!
+    sqlSnippet: String
+    summary: String!
+    sqlLocation: ReferenceSQLLocation
+  }
+
   type DetailStep {
     summary: String!
     sql: String!
     cteName: String
+    references: [DetailReference]
+  }
+
+  type ThreadResponseExplainInfo {
+    queryId: String
+    status: ExplainTaskStatus
+    error: JSON
   }
 
   type ThreadResponseDetail {
@@ -573,6 +601,7 @@ export const typeDefs = gql`
   type CorrectionDetail {
     id: Int!
     type: ReferenceType!
+    referenceNum: Int!
     correction: String!
   }
 
@@ -584,6 +613,7 @@ export const typeDefs = gql`
     detail: ThreadResponseDetail
     error: Error
     corrections: [CorrectionDetail!]
+    explain: ThreadResponseExplainInfo
   }
 
   # Thread only consists of basic information of a thread
@@ -682,6 +712,10 @@ export const typeDefs = gql`
 
   input ResolveSchemaChangeWhereInput {
     type: SchemaChangeType!
+  }
+
+  input CreateThreadResponseExplainWhereInput {
+    responseId: Int!
   }
 
   # Query and Mutation
@@ -790,6 +824,11 @@ export const typeDefs = gql`
       data: CreateCorrectedThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+
+    # Explain
+    createThreadResponseExplain(
+      where: CreateThreadResponseExplainWhereInput!
+    ): JSON!
 
     # Settings
     resetCurrentProject: Boolean!

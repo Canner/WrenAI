@@ -1,16 +1,26 @@
 import clsx from 'clsx';
+import { groupBy } from 'lodash';
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Tag, Typography, Button, Input } from 'antd';
-import { EditOutlined } from '@ant-design/icons';
+import { Tag, Typography, Button, Input, Alert } from 'antd';
+import {
+  EditOutlined,
+  CloseCircleFilled,
+  ReloadOutlined,
+  InfoCircleFilled,
+} from '@ant-design/icons';
 import { QuoteIcon } from '@/utils/icons';
 import { makeIterable } from '@/utils/iteration';
-import { Reference, getReferenceIcon } from './utils';
-import { ReferenceType } from '@/apollo/client/graphql/__types__';
+import {
+  REFERENCE_ORDERS,
+  Reference,
+  getReferenceIcon,
+  getReferenceName,
+} from './utils';
+import { ERROR_CODES } from '@/utils/errorHandler';
 
 const StyledReferenceSideFloat = styled.div`
   position: relative;
-  width: 330px;
 
   .referenceSideFloat-title {
     position: absolute;
@@ -19,23 +29,48 @@ const StyledReferenceSideFloat = styled.div`
   }
 `;
 
+const StyledAlert = styled(Alert)`
+  padding: 8px 12px 12px;
+  .ant-alert-icon {
+    font-size: 14px;
+    margin-right: 8px;
+    margin-top: 4px;
+  }
+  .ant-alert-message {
+    font-size: 14px;
+    line-height: 14px;
+    margin-top: 4px;
+    margin-bottom: 8px;
+  }
+  .ant-alert-description {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--gray-8);
+  }
+`;
+
 interface Props {
   references: Reference[];
-  onSaveCorrectionPrompt?: (id: string, value: string) => void;
+  error?: Record<string, string>;
+  onSaveCorrectionPrompt: (id: string, value: string) => void;
+  onTriggerExplanation: () => void;
 }
 
-const COLLAPSE_LIMIT = 3;
-
-const ReferenceSummaryTemplate = ({ id, title, type, correctionPrompt }) => {
+const ReferenceSummaryTemplate = ({
+  summary,
+  type,
+  referenceNum,
+  correctionPrompt,
+}) => {
   const isRevise = !!correctionPrompt;
   return (
     <div className="d-flex align-center my-1">
       <Tag className={clsx('ant-tag__reference', { isRevise })}>
         <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-        {id}
+        {referenceNum}
       </Tag>
       <Typography.Text className="gray-8" ellipsis>
-        {title}
+        {summary}
       </Typography.Text>
     </div>
   );
@@ -64,9 +99,10 @@ const GroupReferenceTemplate = ({
 };
 
 const ReferenceTemplate = ({
-  id,
-  title,
   type,
+  summary,
+  referenceId,
+  referenceNum,
   correctionPrompt,
   saveCorrectionPrompt,
 }) => {
@@ -79,7 +115,7 @@ const ReferenceTemplate = ({
   };
 
   const handleEdit = () => {
-    saveCorrectionPrompt(id, value);
+    saveCorrectionPrompt(referenceId, value);
     setIsEdit(false);
     setValue('');
   };
@@ -89,12 +125,12 @@ const ReferenceTemplate = ({
       <div className="lh-xs" style={{ paddingTop: 2 }}>
         <Tag className={clsx('ant-tag__reference', { isRevise })}>
           <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-          {id}
+          {referenceNum}
         </Tag>
       </div>
       <div className="flex-grow-1">
         <Typography.Text className="gray-8">
-          {title}
+          {summary}
           <span className="gray-6 ml-2">
             {isRevise ? (
               '(feedback suggested)'
@@ -136,38 +172,12 @@ const ReferenceIterator = makeIterable(ReferenceTemplate);
 
 const References = (props: Props) => {
   const { references, onSaveCorrectionPrompt } = props;
-
-  const fieldReferences = references.filter(
-    (ref) => ref.type === ReferenceType.FIELD,
-  );
-  const queryFromReferences = references.filter(
-    (ref) => ref.type === ReferenceType.QUERY_FROM,
-  );
-  const filterReferences = references.filter(
-    (ref) => ref.type === ReferenceType.FILTER,
-  );
-  const sortingReferences = references.filter(
-    (ref) => ref.type === ReferenceType.SORTING,
-  );
-  const groupByReferences = references.filter(
-    (ref) => ref.type === ReferenceType.GROUP_BY,
-  );
-
-  const resources = [
-    { name: 'Fields', type: ReferenceType.FIELD, data: fieldReferences },
-    {
-      name: 'Query from',
-      type: ReferenceType.QUERY_FROM,
-      data: queryFromReferences,
-    },
-    { name: 'Filter', type: ReferenceType.FILTER, data: filterReferences },
-    { name: 'Sorting', type: ReferenceType.SORTING, data: sortingReferences },
-    {
-      name: 'Group by',
-      type: ReferenceType.GROUP_BY,
-      data: groupByReferences,
-    },
-  ];
+  const referencesByGroup = groupBy(references, 'type');
+  const resources = REFERENCE_ORDERS.map((type) => ({
+    type,
+    name: getReferenceName(type),
+    data: referencesByGroup[type] || [],
+  }));
 
   return (
     <div
@@ -183,11 +193,17 @@ const References = (props: Props) => {
 };
 
 export default function ReferenceSideFloat(props: Props) {
-  const { references } = props;
+  const { references, error, onTriggerExplanation } = props;
   const [collapse, setCollapse] = useState(false);
 
   const referencesSummary = useMemo(
-    () => references.slice(0, COLLAPSE_LIMIT),
+    () =>
+      references.reduce((result, reference) => {
+        if (!result[reference.stepIndex]) {
+          result[reference.stepIndex] = reference;
+        }
+        return result;
+      }, []),
     [collapse, references],
   );
 
@@ -195,7 +211,34 @@ export default function ReferenceSideFloat(props: Props) {
     setCollapse(!collapse);
   };
 
-  if (references.length === 0) return null;
+  if (error) {
+    // If the thread response was created before the release of the Feedback Loop Feature,
+    // the explanation will be migrated with an error code OLD_VERSION.
+    // In this case, users will need to manually trigger the explanation.
+    const isOldVersion = error.code === ERROR_CODES.OLD_VERSION;
+    const icon = isOldVersion ? <InfoCircleFilled /> : <CloseCircleFilled />;
+    const type = isOldVersion ? 'info' : 'error';
+    return (
+      <StyledAlert
+        message={error.shortMessage}
+        description={error.message}
+        type={type}
+        showIcon
+        icon={icon}
+        action={
+          <Button
+            className="text-sm"
+            size="small"
+            danger={!isOldVersion}
+            icon={<ReloadOutlined className="-mr-1" />}
+            onClick={onTriggerExplanation}
+          >
+            Retry
+          </Button>
+        }
+      />
+    );
+  } else if (references.length === 0) return null;
   return (
     <StyledReferenceSideFloat className="border border-gray-4 rounded p-4">
       <div className="referenceSideFloat-title text-md text-medium bg-gray-1 -ml-2">

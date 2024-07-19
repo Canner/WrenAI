@@ -7,6 +7,9 @@ import { message } from 'antd';
 export const ERROR_CODES = {
   INVALID_CALCULATED_FIELD: 'INVALID_CALCULATED_FIELD',
   CONNECTION_REFUSED: 'CONNECTION_REFUSED',
+
+  // From migrations/20240718090506_data_migrate_thread_response_explain.js
+  OLD_VERSION: 'OLD_VERSION',
 };
 
 /**
@@ -115,6 +118,15 @@ class CreateCorrectedThreadResponseErrorHandler extends ErrorHandler {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create corrected thread response.';
+    }
+  }
+}
+
+class CreateThreadResponseExplainErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create thread response explain.';
     }
   }
 }
@@ -270,6 +282,10 @@ errorHandlers.set(
 errorHandlers.set(
   'CreateCorrectedThreadResponse',
   new CreateCorrectedThreadResponseErrorHandler(),
+);
+errorHandlers.set(
+  'CreateThreadResponseExplain',
+  new CreateThreadResponseExplainErrorHandler(),
 );
 errorHandlers.set('CreateView', new CreateViewErrorHandler());
 errorHandlers.set('UpdateDataSource', new UpdateDataSourceErrorHandler());

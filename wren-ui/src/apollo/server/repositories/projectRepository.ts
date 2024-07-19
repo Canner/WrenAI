@@ -1,5 +1,5 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import { BaseRepository, IBasicRepository, Order } from './baseRepository';
 import {
   camelCase,
   isPlainObject,
@@ -87,7 +87,7 @@ export class ProjectRepository
 
   public async getCurrentProject() {
     const projects = await this.findAll({
-      order: 'id',
+      orderBy: [{ column: 'id', order: Order.ASC }],
       limit: 1,
     });
     if (!projects.length) {

@@ -13,10 +13,11 @@ exports.up = function (knex) {
       .references('thread_response.id')
       .onDelete('CASCADE');
 
-    table.string('query_id').notNullable();
-    table.string('status').notNullable();
-    table.jsonb('detail').notNullable();
-    table.jsonb('error').notNullable();
+    table.string('query_id').nullable();
+    table.string('status').nullable();
+    table.jsonb('detail').nullable();
+    table.jsonb('error').nullable();
+    table.jsonb('analysis').nullable();
 
     // timestamps
     table.timestamps(true, true);

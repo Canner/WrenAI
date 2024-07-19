@@ -6,7 +6,8 @@ export abstract class BackgroundTracker<R> {
   protected runningJobs: Set<any> = new Set();
   protected telemetry: Telemetry;
 
-  public abstract start(): void;
+  protected abstract start(): void;
   public abstract addTask(task: R): void;
   public abstract getTasks(): Record<number, R>;
+  public abstract isFinalized(statue: any): boolean;
 }

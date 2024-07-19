@@ -14,6 +14,7 @@ import {
   SampleDatasetName,
   getSampleAskQuestions,
 } from '../data';
+import { Order } from '../repositories';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -58,6 +59,8 @@ export class AskingResolver {
       this.createCorrectedThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
+    this.createThreadResponseExplain =
+      this.createThreadResponseExplain.bind(this);
   }
 
   public async getSuggestedQuestions(
@@ -166,6 +169,7 @@ export class AskingResolver {
 
     const askingService = ctx.askingService;
     const responses = await askingService.getResponsesWithThread(threadId);
+    const explains = await askingService.getExplainDetailsByThread(threadId);
     // reduce responses to group by thread id
     const thread = reduce(
       responses,
@@ -176,7 +180,9 @@ export class AskingResolver {
           acc.summary = response.threadSummary;
           acc.responses = [];
         }
-
+        const explain = explains.find(
+          (e) => e.threadResponseId === response.id,
+        );
         acc.responses.push({
           id: response.id,
           question: response.question,
@@ -191,6 +197,11 @@ export class AskingResolver {
           detail: response.detail,
           error: response.error,
           corrections: response.corrections,
+          explain: {
+            queryId: explain?.queryId || null,
+            status: explain?.status || null,
+            error: explain?.error || null,
+          },
         });
 
         return acc;
@@ -269,6 +280,7 @@ export class AskingResolver {
         corrections: {
           id: number;
           type: string;
+          referenceNum: number;
           stepIndex: number;
           reference: string;
           correction: string;
@@ -292,10 +304,25 @@ export class AskingResolver {
     _root: any,
     args: { responseId: number },
     ctx: IContext,
-  ): Promise<ThreadResponse> {
+  ): Promise<
+    ThreadResponse & {
+      explain: {
+        queryId: string | null;
+        status: string | null;
+        error: object | null;
+      };
+    }
+  > {
     const { responseId } = args;
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
+    const explain = await ctx.threadResponseExplainRepository.findAllBy(
+      {
+        threadResponseId: responseId,
+      },
+      { orderBy: [{ column: 'created_at', order: Order.DESC }], limit: 1 },
+    );
+    const hasExplain = !!explain.length;
 
     // we added summary in version 0.3.0.
     // if summary is not available, we use description and question instead.
@@ -303,6 +330,11 @@ export class AskingResolver {
       ...response,
       summary:
         response.summary || response.detail?.description || response.question,
+      explain: {
+        queryId: hasExplain ? explain[0].queryId : null,
+        status: hasExplain ? explain[0].status : null,
+        error: hasExplain ? explain[0].error : null,
+      },
     };
   }
 
@@ -315,6 +347,16 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const data = await askingService.previewData(responseId, stepIndex, limit);
     return data;
+  }
+
+  public async createThreadResponseExplain(
+    _root: any,
+    args: { where: { responseId: number } },
+    ctx: IContext,
+  ) {
+    return await ctx.askingService.createThreadResponseExplain(
+      args.where.responseId,
+    );
   }
 
   /**

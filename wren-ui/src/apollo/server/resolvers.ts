@@ -81,6 +81,9 @@ const resolvers = {
     createCorrectedThreadResponse: askingResolver.createCorrectedThreadResponse,
     previewData: askingResolver.previewData,
 
+    // Explain
+    createThreadResponseExplain: askingResolver.createThreadResponseExplain,
+
     // Views
     createView: modelResolver.createView,
     deleteView: modelResolver.deleteView,

@@ -1,9 +1,17 @@
 import { Knex } from 'knex';
 import { camelCase, isPlainObject, mapKeys, snakeCase } from 'lodash';
 
+export enum Order {
+  ASC = 'asc',
+  DESC = 'desc',
+}
+export interface OrderBy {
+  column: string;
+  order: Order;
+}
 export interface IQueryOptions {
   tx?: Knex.Transaction;
-  order?: string;
+  orderBy?: OrderBy[];
   limit?: number;
 }
 
@@ -83,8 +91,8 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     const query = executer(this.tableName).where(
       this.transformToDBData(filter),
     );
-    if (queryOptions?.order) {
-      query.orderBy(queryOptions.order);
+    if (queryOptions?.orderBy?.length) {
+      query.orderBy(queryOptions.orderBy);
     }
     const result = await query;
     return result.map(this.transformFromDBData);
@@ -93,8 +101,8 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   public async findAll(queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const query = executer(this.tableName);
-    if (queryOptions?.order) {
-      query.orderBy(queryOptions.order);
+    if (queryOptions?.orderBy?.length) {
+      query.orderBy(queryOptions.orderBy);
     }
     if (queryOptions?.limit) {
       query.limit(queryOptions.limit);

@@ -5,7 +5,7 @@ import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
 export type CommonErrorFragment = { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null };
 
-export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, correction: string }> | null };
+export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null, references?: Array<{ __typename?: 'DetailReference', referenceId?: number | null, summary: string, type: Types.ReferenceType, sqlSnippet?: string | null, sqlLocation?: { __typename?: 'ReferenceSQLLocation', column: number, line: number } | null } | null> | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, explain?: { __typename?: 'ThreadResponseExplainInfo', queryId?: string | null, status?: Types.ExplainTaskStatus | null, error?: any | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, referenceNum: number, correction: string }> | null };
 
 export type SuggestedQuestionsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -29,14 +29,14 @@ export type ThreadQueryVariables = Types.Exact<{
 }>;
 
 
-export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, summary: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, correction: string }> | null }> } };
+export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, summary: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null, references?: Array<{ __typename?: 'DetailReference', referenceId?: number | null, summary: string, type: Types.ReferenceType, sqlSnippet?: string | null, sqlLocation?: { __typename?: 'ReferenceSQLLocation', column: number, line: number } | null } | null> | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, explain?: { __typename?: 'ThreadResponseExplainInfo', queryId?: string | null, status?: Types.ExplainTaskStatus | null, error?: any | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, referenceNum: number, correction: string }> | null }> } };
 
 export type ThreadResponseQueryVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
 }>;
 
 
-export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, correction: string }> | null } };
+export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null, references?: Array<{ __typename?: 'DetailReference', referenceId?: number | null, summary: string, type: Types.ReferenceType, sqlSnippet?: string | null, sqlLocation?: { __typename?: 'ReferenceSQLLocation', column: number, line: number } | null } | null> | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, explain?: { __typename?: 'ThreadResponseExplainInfo', queryId?: string | null, status?: Types.ExplainTaskStatus | null, error?: any | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, referenceNum: number, correction: string }> | null } };
 
 export type CreateAskingTaskMutationVariables = Types.Exact<{
   data: Types.AskingTaskInput;
@@ -65,7 +65,14 @@ export type CreateThreadResponseMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, correction: string }> | null } };
+export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null, references?: Array<{ __typename?: 'DetailReference', referenceId?: number | null, summary: string, type: Types.ReferenceType, sqlSnippet?: string | null, sqlLocation?: { __typename?: 'ReferenceSQLLocation', column: number, line: number } | null } | null> | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, explain?: { __typename?: 'ThreadResponseExplainInfo', queryId?: string | null, status?: Types.ExplainTaskStatus | null, error?: any | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, referenceNum: number, correction: string }> | null } };
+
+export type CreateThreadResponseExplainMutationVariables = Types.Exact<{
+  where: Types.CreateThreadResponseExplainWhereInput;
+}>;
+
+
+export type CreateThreadResponseExplainMutation = { __typename?: 'Mutation', createThreadResponseExplain: any };
 
 export type UpdateThreadMutationVariables = Types.Exact<{
   where: Types.ThreadUniqueWhereInput;
@@ -102,7 +109,7 @@ export type CreateCorrectedThreadResponseMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateCorrectedThreadResponseMutation = { __typename?: 'Mutation', createCorrectedThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, correction: string }> | null } };
+export type CreateCorrectedThreadResponseMutation = { __typename?: 'Mutation', createCorrectedThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null, references?: Array<{ __typename?: 'DetailReference', referenceId?: number | null, summary: string, type: Types.ReferenceType, sqlSnippet?: string | null, sqlLocation?: { __typename?: 'ReferenceSQLLocation', column: number, line: number } | null } | null> | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null, explain?: { __typename?: 'ThreadResponseExplainInfo', queryId?: string | null, status?: Types.ExplainTaskStatus | null, error?: any | null } | null, corrections?: Array<{ __typename?: 'CorrectionDetail', id: number, type: Types.ReferenceType, referenceNum: number, correction: string }> | null } };
 
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
@@ -125,6 +132,16 @@ export const CommonResponseFragmentDoc = gql`
       summary
       sql
       cteName
+      references {
+        referenceId
+        summary
+        type
+        sqlSnippet
+        sqlLocation {
+          column
+          line
+        }
+      }
     }
     view {
       id
@@ -133,9 +150,15 @@ export const CommonResponseFragmentDoc = gql`
       displayName
     }
   }
+  explain {
+    queryId
+    status
+    error
+  }
   corrections {
     id
     type
+    referenceNum
     correction
   }
 }
@@ -481,6 +504,37 @@ export function useCreateThreadResponseMutation(baseOptions?: Apollo.MutationHoo
 export type CreateThreadResponseMutationHookResult = ReturnType<typeof useCreateThreadResponseMutation>;
 export type CreateThreadResponseMutationResult = Apollo.MutationResult<CreateThreadResponseMutation>;
 export type CreateThreadResponseMutationOptions = Apollo.BaseMutationOptions<CreateThreadResponseMutation, CreateThreadResponseMutationVariables>;
+export const CreateThreadResponseExplainDocument = gql`
+    mutation CreateThreadResponseExplain($where: CreateThreadResponseExplainWhereInput!) {
+  createThreadResponseExplain(where: $where)
+}
+    `;
+export type CreateThreadResponseExplainMutationFn = Apollo.MutationFunction<CreateThreadResponseExplainMutation, CreateThreadResponseExplainMutationVariables>;
+
+/**
+ * __useCreateThreadResponseExplainMutation__
+ *
+ * To run a mutation, you first call `useCreateThreadResponseExplainMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateThreadResponseExplainMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createThreadResponseExplainMutation, { data, loading, error }] = useCreateThreadResponseExplainMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *   },
+ * });
+ */
+export function useCreateThreadResponseExplainMutation(baseOptions?: Apollo.MutationHookOptions<CreateThreadResponseExplainMutation, CreateThreadResponseExplainMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreateThreadResponseExplainMutation, CreateThreadResponseExplainMutationVariables>(CreateThreadResponseExplainDocument, options);
+      }
+export type CreateThreadResponseExplainMutationHookResult = ReturnType<typeof useCreateThreadResponseExplainMutation>;
+export type CreateThreadResponseExplainMutationResult = Apollo.MutationResult<CreateThreadResponseExplainMutation>;
+export type CreateThreadResponseExplainMutationOptions = Apollo.BaseMutationOptions<CreateThreadResponseExplainMutation, CreateThreadResponseExplainMutationVariables>;
 export const UpdateThreadDocument = gql`
     mutation UpdateThread($where: ThreadUniqueWhereInput!, $data: UpdateThreadInput!) {
   updateThread(where: $where, data: $data) {
