@@ -1,0 +1,118 @@
+date = "2024_07_10"
+
+[mdl]
+catalog = "wrenai"
+schema = "spider"
+relationships = []
+metrics = []
+cumulativeMetrics = []
+enumDefinitions = []
+views = []
+macros = []
+
+[[mdl.models]]
+name = "book"
+refSql = "select * from wrenai.spider.\"book_2-book\""
+primaryKey = ""
+
+[[mdl.models.columns]]
+name = "Book_ID"
+type = "INTEGER"
+notNull = false
+isCalculated = false
+expression = "Book_ID"
+
+[mdl.models.columns.properties]
+
+[[mdl.models.columns]]
+name = "Title"
+type = "VARCHAR"
+notNull = false
+isCalculated = false
+expression = "Title"
+
+[mdl.models.columns.properties]
+
+[[mdl.models.columns]]
+name = "Issues"
+type = "REAL"
+notNull = false
+isCalculated = false
+expression = "Issues"
+
+[mdl.models.columns.properties]
+
+[[mdl.models.columns]]
+name = "Writer"
+type = "VARCHAR"
+notNull = false
+isCalculated = false
+expression = "Writer"
+
+[mdl.models.columns.properties]
+
+[mdl.models.properties]
+
+[[mdl.models]]
+name = "publication"
+refSql = "select * from wrenai.spider.\"book_2-publication\""
+primaryKey = ""
+
+[[mdl.models.columns]]
+name = "Publication_ID"
+type = "INTEGER"
+notNull = false
+isCalculated = false
+expression = "Publication_ID"
+
+[mdl.models.columns.properties]
+
+[[mdl.models.columns]]
+name = "Book_ID"
+type = "INTEGER"
+notNull = false
+isCalculated = false
+expression = "Book_ID"
+
+[mdl.models.columns.properties]
+
+[[mdl.models.columns]]
+name = "Publisher"
+type = "VARCHAR"
+notNull = false
+isCalculated = false
+expression = "Publisher"
+
+[mdl.models.columns.properties]
+
+[[mdl.models.columns]]
+name = "Publication_Date"
+type = "VARCHAR"
+notNull = false
+isCalculated = false
+expression = "Publication_Date"
+
+[mdl.models.columns.properties]
+
+[[mdl.models.columns]]
+name = "Price"
+type = "REAL"
+notNull = false
+isCalculated = false
+expression = "Price"
+
+[mdl.models.columns.properties]
+
+[mdl.models.properties]
+
+[[eval_dataset]]
+categories = ["test"]
+question = "Retrieve all books with their titles and writers."
+context = ["book.Title", "book.Writer"]
+sql = "SELECT Title, Writer FROM book;"
+
+[[eval_dataset]]
+categories = ["test"]
+question = "Find the total number of issues for each book."
+context = ["book.Title", "book.Issues"]
+sql = "SELECT Title, SUM(Issues) AS Total_Issues FROM book GROUP BY Title;"

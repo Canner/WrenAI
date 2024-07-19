@@ -43,15 +43,21 @@ class WrenUI(Engine):
 
 @provider("wren_ibis")
 class WrenIbis(Engine):
-    def __init__(self, endpoint: str = os.getenv("WREN_IBIS_ENDPOINT")):
-        self._endpoint = endpoint
-        self._source = os.getenv("WREN_IBIS_SOURCE")
-        self._manifest = os.getenv("WREN_IBIS_MANIFEST")
-        self._connection_info = (
+    def __init__(
+        self,
+        endpoint: str = os.getenv("WREN_IBIS_ENDPOINT"),
+        source: str = os.getenv("WREN_IBIS_SOURCE"),
+        manifest: str = os.getenv("WREN_IBIS_MANIFEST"),
+        connection_info: dict = (
             orjson.loads(base64.b64decode(os.getenv("WREN_IBIS_CONNECTION_INFO")))
             if os.getenv("WREN_IBIS_CONNECTION_INFO")
             else {}
-        )
+        ),
+    ):
+        self._endpoint = endpoint
+        self._source = source
+        self._manifest = manifest
+        self._connection_info = connection_info
 
     async def dry_run_sql(
         self,
