@@ -96,15 +96,21 @@ export class ThreadResponseExplainRepository
   public async findAllByThread(
     threadId: number,
   ): Promise<ThreadResponseExplain[]> {
-    return this.knex(this.tableName)
-      .select('thread_response_explain.*')
+    return this.knex('thread_response as tr')
       .join(
-        'thread_response',
-        'thread_response.id',
-        'thread_response_explain.thread_response_id',
+        this.knex(this.tableName)
+          .distinctOn('thread_response_id')
+          .select('id', 'thread_response_id', 'detail', 'error', 'created_at')
+          .orderBy([
+            'thread_response_id',
+            { column: 'created_at', order: 'desc' },
+          ])
+          .as('tre'),
+        'tre.thread_response_id',
+        'tr.id',
       )
-      .where({ 'thread_response.thread_id': threadId })
-      .orderBy('id', 'asc')
+      .select('*')
+      .where('tr.thread_id', threadId)
       .then((results) => results.map(this.transformFromDBData));
   }
 

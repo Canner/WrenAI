@@ -14,6 +14,7 @@ import {
   SampleDatasetName,
   getSampleAskQuestions,
 } from '../data';
+import { Order } from '../repositories';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -314,9 +315,13 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
-    const explain = await ctx.threadResponseExplainRepository.findOneBy({
-      threadResponseId: responseId,
-    });
+    const explain = await ctx.threadResponseExplainRepository.findAllBy(
+      {
+        threadResponseId: responseId,
+      },
+      { orderBy: [{ column: 'created_at', order: Order.DESC }], limit: 1 },
+    );
+    const hasExplain = !!explain.length;
 
     // we added summary in version 0.3.0.
     // if summary is not available, we use description and question instead.
@@ -325,9 +330,9 @@ export class AskingResolver {
       summary:
         response.summary || response.detail?.description || response.question,
       explain: {
-        queryId: explain?.queryId || null,
-        status: explain?.status || null,
-        error: explain?.error || null,
+        queryId: hasExplain ? explain[0].queryId : null,
+        status: hasExplain ? explain[0].status : null,
+        error: hasExplain ? explain[0].error : null,
       },
     };
   }
