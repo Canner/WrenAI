@@ -168,7 +168,7 @@ class Generation(BasicPipeline):
             ["sql_regeneration_post_process"],
             inputs={
                 "description": description,
-                "steps": steps.dict(),
+                "steps": steps,
                 "sql_regeneration_preprocesser": self.sql_regeneration_preprocesser,
                 "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
                 "sql_regeneration_generator": self.sql_regeneration_generator,
