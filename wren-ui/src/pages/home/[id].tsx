@@ -172,7 +172,7 @@ export default function HomeThread() {
       await createThreadResponseExplain({
         variables: { where: payload },
       });
-      fetchThreadResponse({ variables: payload });
+      await fetchThreadResponse({ variables: payload });
     } catch (error) {
       console.error(error);
     }

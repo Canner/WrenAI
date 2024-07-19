@@ -32,7 +32,7 @@ export const getIsFinished = (
   explainStatus?: ExplainTaskStatus,
 ) => {
   const isAskingFinished = getIsAskingFinished(askingStatus);
-  if (explainStatus) {
+  if (explainStatus !== undefined) {
     const isExplainFinished = getIsExplainFinished(explainStatus);
     return isAskingFinished && isExplainFinished;
   }
