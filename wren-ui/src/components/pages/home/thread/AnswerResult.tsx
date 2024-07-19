@@ -69,12 +69,12 @@ interface Props {
   onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
 }
 
-const CorrectionTemplate = ({ id, type, correction }) => {
+const CorrectionTemplate = ({ referenceNum, type, correction }) => {
   return (
     <div className="my-1 gray-7">
       <Tag className="ant-tag__reference bg-gray-7 gray-1">
         <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-        {id}
+        {referenceNum}
       </Tag>
       {correction}
     </div>

@@ -150,6 +150,7 @@ export default function ReviewDrawer(props: Props) {
           id: reference.referenceId,
           type: reference.type,
           reference: reference.summary,
+          referenceNum: reference.referenceNum,
           stepIndex: reference.stepIndex,
           correction: reference.correctionPrompt,
         })),

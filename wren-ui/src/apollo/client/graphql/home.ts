@@ -48,6 +48,7 @@ const COMMON_RESPONSE = gql`
     corrections {
       id
       type
+      referenceNum
       correction
     }
   }

@@ -536,6 +536,7 @@ export const typeDefs = gql`
 
   input CreateThreadResponseCorrectionInput {
     id: Int!
+    referenceNum: Int!
     stepIndex: Int!
     type: ReferenceType!
     reference: String!
@@ -600,6 +601,7 @@ export const typeDefs = gql`
   type CorrectionDetail {
     id: Int!
     type: ReferenceType!
+    referenceNum: Int!
     correction: String!
   }
 

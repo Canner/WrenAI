@@ -279,6 +279,7 @@ export class AskingResolver {
         corrections: {
           id: number;
           type: string;
+          referenceNum: number;
           stepIndex: number;
           reference: string;
           correction: string;

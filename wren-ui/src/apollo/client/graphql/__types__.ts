@@ -75,6 +75,7 @@ export type CorrectionDetail = {
   __typename?: 'CorrectionDetail';
   correction: Scalars['String'];
   id: Scalars['Int'];
+  referenceNum: Scalars['Int'];
   type: ReferenceType;
 };
 
@@ -120,6 +121,7 @@ export type CreateThreadResponseCorrectionInput = {
   correction: Scalars['String'];
   id: Scalars['Int'];
   reference: Scalars['String'];
+  referenceNum: Scalars['Int'];
   stepIndex: Scalars['Int'];
   type: ReferenceType;
 };
