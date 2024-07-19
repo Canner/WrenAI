@@ -13,9 +13,9 @@ data:
   WREN_UI_ENDPOINT: http://wren-ui-svc:3000
 
   #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
-  WREN_PRODUCT_VERSION: "0.7.3"
+  WREN_PRODUCT_VERSION: "0.7.4"
   WREN_ENGINE_VERSION: "0.7.0"
-  WREN_AI_SERVICE_VERSION: "0.7.3"
+  WREN_AI_SERVICE_VERSION: "0.7.4"
   WREN_UI_VERSION: "0.10.1"
 
   # LLM and Embedder Configurations
