@@ -18,7 +18,7 @@ WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
 POLLING_INTERVAL = 0.5
 DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
-LLM_MODELS = ["gpt-3.5-turbo", "gpt-4o", "gpt-4-turbo"]
+LLM_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
 
 load_dotenv()
 
