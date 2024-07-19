@@ -6,7 +6,8 @@ import {
 } from './baseRepository';
 import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
 import { ExplainPipelineStatus } from '../adaptors/wrenAIAdaptor';
-
+import { getConfig } from '../config';
+const config = getConfig();
 export interface DetailStep {
   summary: string;
   sql: string;
@@ -96,20 +97,40 @@ export class ThreadResponseExplainRepository
   public async findAllByThread(
     threadId: number,
   ): Promise<ThreadResponseExplain[]> {
+    if (config.dbType === 'pg') {
+      return this.knex('thread_response as tr')
+        .join(
+          this.knex(this.tableName)
+            .distinctOn('thread_response_id')
+            .select('id', 'thread_response_id', 'detail', 'error', 'created_at')
+            .orderBy([
+              'thread_response_id',
+              { column: 'created_at', order: 'desc' },
+            ])
+            .as('tre'),
+          'tre.thread_response_id',
+          'tr.id',
+        )
+        .select('*')
+        .where('tr.thread_id', threadId)
+        .then((results) => results.map(this.transformFromDBData));
+    }
     return this.knex('thread_response as tr')
       .join(
         this.knex(this.tableName)
-          .distinctOn('thread_response_id')
-          .select('id', 'thread_response_id', 'detail', 'error', 'created_at')
-          .orderBy([
-            'thread_response_id',
-            { column: 'created_at', order: 'desc' },
-          ])
+          .select()
+          .whereIn(
+            ['thread_response_id', 'id'],
+            this.knex(this.tableName)
+              .select('thread_response_id')
+              .max('id')
+              .groupBy('thread_response_id'),
+          )
           .as('tre'),
-        'tre.thread_response_id',
         'tr.id',
+        'tre.thread_response_id',
       )
-      .select('*')
+      .select('tre.*')
       .where('tr.thread_id', threadId)
       .then((results) => results.map(this.transformFromDBData));
   }
