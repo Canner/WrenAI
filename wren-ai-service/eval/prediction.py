@@ -37,7 +37,7 @@ def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
     if Path(dir_path).exists() is False:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-    output_path = f"{dir_path}/prediction_{meta['session_id']}.toml"
+    output_path = f"{dir_path}/prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
 
     doc = document()
     doc.add("meta", meta)
