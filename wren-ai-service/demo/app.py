@@ -1,5 +1,4 @@
 import re
-import time
 import uuid
 
 import orjson
@@ -9,6 +8,7 @@ from utils import (
     LLM_MODELS,
     ask,
     ask_details,
+    get_default_llm_model,
     get_mdl_json,
     get_new_mdl_json,
     prepare_semantics,
@@ -17,13 +17,16 @@ from utils import (
     show_asks_details_results,
     show_asks_results,
     show_er_diagram,
+    update_llm,
 )
 
 st.set_page_config(layout="wide")
 st.title("Wren AI LLM Service Demo")
 
+llm_model = get_default_llm_model(LLM_MODELS)
+
 if "chosen_llm_model" not in st.session_state:
-    st.session_state["chosen_llm_model"] = LLM_MODELS[0]
+    st.session_state["chosen_llm_model"] = llm_model
 if "deployment_id" not in st.session_state:
     st.session_state["deployment_id"] = str(uuid.uuid4())
 if "chosen_dataset" not in st.session_state:
@@ -76,27 +79,13 @@ def onchange_llm_model():
     ):
         st.session_state["chosen_llm_model"] = st.session_state["llm_model_selectbox"]
 
-        with open(".env.dev", "r") as f:
-            lines = f.readlines()
-            for i, line in enumerate(lines):
-                if line.startswith("GENERATION_MODEL"):
-                    lines[
-                        i
-                    ] = f'GENERATION_MODEL={st.session_state["chosen_llm_model"]}\n'
-                    break
-        with open(".env.dev", "w") as f:
-            f.writelines(lines)
-
-        # wait for wren-ai-service to restart
-        time.sleep(5)
-
-        prepare_semantics(st.session_state["mdl_json"])
+        update_llm(st.session_state["chosen_llm_model"], st.session_state["mdl_json"])
 
 
 st.selectbox(
     "Select an OpenAI LLM model",
     LLM_MODELS,
-    index=0,
+    index=LLM_MODELS.index(llm_model),
     key="llm_model_selectbox",
     on_change=onchange_llm_model,
 )

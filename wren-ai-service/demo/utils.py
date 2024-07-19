@@ -875,3 +875,33 @@ def show_sql_regeneration_results_dialog(
                 language="sql",
             )
             sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
+
+
+@st.cache_data
+def update_llm(chosen_llm_model: str, mdl_json: dict):
+    with open(".env.dev", "r") as f:
+        lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.startswith("GENERATION_MODEL"):
+                lines[i] = f"GENERATION_MODEL={chosen_llm_model}\n"
+                break
+    with open(".env.dev", "w") as f:
+        f.writelines(lines)
+
+    # wait for wren-ai-service to restart
+    time.sleep(5)
+
+    prepare_semantics(mdl_json)
+
+
+def get_default_llm_model(llm_models: list[str]):
+    with open(".env.dev", "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            if line.startswith("GENERATION_MODEL"):
+                llm_model = line.split("=")[1].strip()
+                break
+
+    assert llm_model in llm_models
+
+    return llm_model
