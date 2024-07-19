@@ -44,7 +44,7 @@ const StyledAlert = styled(Alert)`
   }
   .ant-alert-description {
     font-size: 12px;
-    line-height: 14px;
+    line-height: 16px;
     color: var(--gray-8);
   }
 `;
@@ -216,14 +216,11 @@ export default function ReferenceSideFloat(props: Props) {
     // the explanation will be migrated with an error code OLD_VERSION.
     // In this case, users will need to manually trigger the explanation.
     const isOldVersion = error.code === ERROR_CODES.OLD_VERSION;
-    const shortMessage = isOldVersion ? 'Show References' : error.shortMessage;
     const icon = isOldVersion ? <InfoCircleFilled /> : <CloseCircleFilled />;
     const type = isOldVersion ? 'info' : 'error';
-    const buttonText = isOldVersion ? 'Show' : 'Retry';
-
     return (
       <StyledAlert
-        message={shortMessage}
+        message={error.shortMessage}
         description={error.message}
         type={type}
         showIcon
@@ -236,7 +233,7 @@ export default function ReferenceSideFloat(props: Props) {
             icon={<ReloadOutlined className="-mr-1" />}
             onClick={onTriggerExplanation}
           >
-            {buttonText}
+            Retry
           </Button>
         }
       />
