@@ -13,7 +13,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.ask_details.generation import GenerationPostProcessor
+from src.pipelines.common import GenerationPostProcessor
 from src.pipelines.sql_regeneration.components.prompts import (
     sql_regeneration_system_prompt,
 )
