@@ -88,3 +88,103 @@ class AccuracyMetric(BaseMetric):
             if type(result) not in [Keep, Move]:
                 return False
         return True
+
+
+class AnswerRelevancyMetric(BaseMetric):
+    def __init__(self):
+        self.threshold = 10
+        self.score = 0
+
+    def measure(self, test_case: LLMTestCase):
+        return asyncio.run(self.a_measure(test_case))
+
+    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
+        # todo
+        pass
+
+    def is_successful(self):
+        return self.success
+
+    @property
+    def __name__(self):
+        return "AnswerRelevancy(column-based)"
+
+
+class FaithfulnessMetric(BaseMetric):
+    def __init__(self):
+        self.threshold = 10
+        self.score = 0
+
+    def measure(self, test_case: LLMTestCase):
+        return asyncio.run(self.a_measure(test_case))
+
+    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
+        # todo
+        pass
+
+    def is_successful(self):
+        return self.success
+
+    @property
+    def __name__(self):
+        return "Faithfulness(column-based)"
+
+
+class ContextualRelevancyMetric(BaseMetric):
+    def __init__(self):
+        self.threshold = 10
+        self.score = 0
+
+    def measure(self, test_case: LLMTestCase):
+        return asyncio.run(self.a_measure(test_case))
+
+    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
+        # todo
+        pass
+
+    def is_successful(self):
+        return self.success
+
+    @property
+    def __name__(self):
+        return "ContextualRelevancy(column-based)"
+
+
+class ContextualRecallMetric(BaseMetric):
+    def __init__(self):
+        self.threshold = 10
+        self.score = 0
+
+    def measure(self, test_case: LLMTestCase):
+        return asyncio.run(self.a_measure(test_case))
+
+    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
+        # todo
+        pass
+
+    def is_successful(self):
+        return self.success
+
+    @property
+    def __name__(self):
+        return "ContextualRecall(column-based)"
+
+
+class ContextualPrecisionMetric(BaseMetric):
+    def __init__(self):
+        self.threshold = 10
+        self.score = 0
+
+    def measure(self, test_case: LLMTestCase):
+        return asyncio.run(self.a_measure(test_case))
+
+    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
+        # todo
+        pass
+
+    def is_successful(self):
+        return self.success
+
+    @property
+    def __name__(self):
+        return "ContextualPrecision(column-based)"
