@@ -7,12 +7,12 @@
     WREN_AI_SERVICE_PORT: "5555"
 
     #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
-    WREN_PRODUCT_VERSION: "0.7.1"
+    WREN_PRODUCT_VERSION: "0.7.4"
     #fix:
     WREN_ENGINE_VERSION: "0.7.0"
-    WREN_AI_SERVICE_VERSION: "0.7.2"
+    WREN_AI_SERVICE_VERSION: "0.7.4"
     #fix:
-    WREN_UI_VERSION: "0.10.0"
+    WREN_UI_VERSION: "0.10.1"
 
     # OpenAI
     GENERATION_MODEL: "gpt-3.5-turbo"
@@ -26,12 +26,10 @@
     #fix:
     WREN_AI_ENDPOINT: "http://wren-ai-service:5555"
 
-    # "sqlite", or "pg" for postgres as application database.
+    # "pg" for postgres as application database.
     #fix
     DB_TYPE: pg
 
-    ### if DB_TYPE = "sqlite" also make sure to uncomment the "wren-sqlite" in the volumeMounts & PVC sections of the deployment/kustomizations/base/deploy-wren-ui.yaml
-    #SQLITE_FILE: /app/data/db.sqlite3
     DATA_PATH: "/app/data"
 
     ### if DB_TYPE = "postgres" you must provide PG_URL string in the *Secret* manifest file (deployment/kustomizations/examples/secret-wren_example.yaml) to connect to postgres  

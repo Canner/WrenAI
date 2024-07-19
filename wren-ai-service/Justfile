@@ -1,0 +1,5 @@
+predict file:
+    @python3 -u eval/prediction.py --file {{file}}
+
+eval file:
+    @python3 -u eval/evaluation.py --file {{file}}

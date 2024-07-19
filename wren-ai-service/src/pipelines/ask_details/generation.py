@@ -24,7 +24,6 @@ from src.pipelines.ask_details.components.prompts import (
 )
 from src.utils import (
     async_timer,
-    init_providers,
     timer,
 )
 
@@ -73,6 +72,9 @@ class GenerationPostProcessor:
                 },
             }
 
+        # make sure the last step has an empty cte_name
+        steps[-1]["cte_name"] = ""
+
         for step in steps:
             step["sql"] = add_quotes(step["sql"])
 
@@ -87,9 +89,6 @@ class GenerationPostProcessor:
                     "steps": [],
                 },
             }
-
-        # make sure the last step has an empty cte_name
-        steps[-1]["cte_name"] = ""
 
         return {
             "results": {
@@ -197,7 +196,7 @@ class Generation(BasicPipeline):
 if __name__ == "__main__":
     from langfuse.decorators import langfuse_context, observe
 
-    from src.utils import init_langfuse, load_env_vars
+    from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
     init_langfuse()

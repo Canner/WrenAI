@@ -24,7 +24,7 @@ jobs:
           else
             tag_name=commit-$(git log -1 --pretty=%h)
           fi
-          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=$tag_name" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -35,12 +35,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push image
-        env:
-          TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
-        run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --tag ghcr.io/canner/wren-ai-service:$TAG_NAME \
-            --file ./docker/Dockerfile \
-            --push .
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/canner/wren-ai-service
+          tags: |
+            type=raw,${{ env.TAG_NAME }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          context: ./wren-ai-service
+          file: ./wren-ai-service/docker/Dockerfile

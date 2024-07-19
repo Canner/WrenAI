@@ -211,7 +211,6 @@ export class IbisAdaptor implements IIbisAdaptor {
       connectionInfo: ibisConnectionInfo,
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
     };
-    logger.debug(`Querying ibis with body: ${JSON.stringify(body, null, 2)}`);
     try {
       const res = await axios.post(
         `${this.ibisServerBaseUrl}/connector/${dataSourceUrlMap[dataSource]}/query`,
@@ -351,7 +350,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       Object.hasOwnProperty.call(connectionInfo, 'host')
     ) {
       connectionInfo.host = toDockerHost(connectionInfo.host);
-      logger.debug(`Rewritten host: ${connectionInfo.host}`);
+      logger.debug(`Host replaced with docker host`);
     }
     return connectionInfo;
   }

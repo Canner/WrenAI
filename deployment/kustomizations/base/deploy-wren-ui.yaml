@@ -12,12 +12,6 @@ spec:
       labels:
         app: wren-ui
     spec:
-      #if you are using sqlite, then volume is required, please uncomment next, SQLITE_FILE and the volumeMounts sections
-      #if you are using postgres, then volume is not required
-      #volumes:
-      #  - name: wren-sqlite
-      #    persistentVolumeClaim:
-      #      claimName: wren-sqlite-pvc
       containers:
 
         - name: wren-ui
@@ -28,12 +22,6 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: WREN_UI_DB_TYPE
-          # Uncomment if you are intending to use sqlite:
-          #  - name: SQLITE_FILE
-          #    valueFrom:
-          #      configMapKeyRef:
-          #        name: wren-config
-          #        key: SQLITE_FILE
             - name: WREN_ENGINE_ENDPOINT
               valueFrom:
                 configMapKeyRef:
@@ -129,8 +117,3 @@ spec:
                   key: IBIS_SERVER_ENDPOINT
           ports:
             - containerPort: 3000
-          #if you are using sqlite, then volume is required, please uncomment next and the persistentVolumeClaim sections
-          #if you are using postgres, then volume is not required
-          #volumeMounts:
-          #  - name: wren-sqlite
-          #    mountPath: /app/data

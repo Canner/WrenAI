@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -14,41 +15,11 @@ from dotenv import load_dotenv
 
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
+WREN_IBIS_API_URL = "http://localhost:8000"
 POLLING_INTERVAL = 0.5
 DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
 
 load_dotenv()
-
-
-def get_current_manifest():
-    response = requests.get(
-        f"{WREN_ENGINE_API_URL}/v1/mdl",
-    )
-
-    assert response.status_code == 200
-
-    manifest = response.json()
-
-    if manifest["schema"] == "test_schema" and manifest["catalog"] == "test_catalog":
-        return "None", [], []
-
-    return (
-        f"{manifest['catalog']}.{manifest['schema']}",
-        manifest["models"],
-        manifest["relationships"],
-    )
-
-
-def is_current_manifest_available():
-    response = requests.get(
-        f"{WREN_ENGINE_API_URL}/v1/mdl",
-    )
-
-    assert response.status_code == 200
-
-    manifest = response.json()
-
-    return manifest["catalog"] != "text_catalog" and manifest["schema"] != "test_schema"
 
 
 def _update_wren_engine_configs(configs: list[dict]):
@@ -63,50 +34,78 @@ def _update_wren_engine_configs(configs: list[dict]):
 def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
     assert dataset_type in DATA_SOURCES
 
-    if dataset_type == "bigquery":
-        BIGQUERY_CREDENTIALS = os.getenv("bigquery.credentials-key")
-        assert (
-            BIGQUERY_CREDENTIALS is not None
-        ), "bigquery.credentials-key is not set in .env"
+    if dataset_type == "duckdb":
+        # replace the values of ENGINE to wren-ui in ../.env.dev
+        with open(".env.dev", "r") as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines):
+                if line.startswith("ENGINE"):
+                    lines[i] = "ENGINE=wren_engine\n"
+                    break
+        with open(".env.dev", "w") as f:
+            f.writelines(lines)
 
-        _update_wren_engine_configs(
-            [
-                {"name": "wren.datasource.type", "value": "bigquery"},
-                {
-                    "name": "bigquery.project-id",
-                    "value": os.getenv("bigquery.project-id"),
-                },
-                {"name": "bigquery.location", "value": os.getenv("bigquery.location")},
-                {"name": "bigquery.credentials-key", "value": BIGQUERY_CREDENTIALS},
-            ]
-        )
-    elif dataset_type == "duckdb":
         _update_wren_engine_configs(
             [{"name": "wren.datasource.type", "value": "duckdb"}]
         )
-    elif dataset_type == "postgresql":
-        _update_wren_engine_configs(
-            [
-                {"name": "wren.datasource.type", "value": "postgres"},
-                {"name": "postgres.user", "value": os.getenv("postgres.user")},
-                {"name": "postgres.password", "value": os.getenv("postgres.password")},
-                {"name": "postgres.jdbc.url", "value": os.getenv("postgres.jdbc.url")},
-            ]
+        st.toast("Wren Engine is being re-run", icon="⏳")
+
+        response = requests.post(
+            f"{WREN_ENGINE_API_URL}/v1/mdl/deploy",
+            json={
+                "manifest": mdl_json,
+                "version": "latest",
+            },
         )
 
-    st.toast("Wren Engine is being re-run", icon="⏳")
+        assert response.status_code == 202, response.json()
 
-    response = requests.post(
-        f"{WREN_ENGINE_API_URL}/v1/mdl/deploy",
-        json={
-            "manifest": mdl_json,
-            "version": "latest",
-        },
-    )
+        st.toast("Wren Engine is ready", icon="🎉")
+    else:
+        WREN_IBIS_SOURCE = dataset_type
+        WREN_IBIS_MANIFEST = base64.b64encode(orjson.dumps(mdl_json)).decode()
+        if dataset_type == "bigquery":
+            WREN_IBIS_CONNECTION_INFO = base64.b64encode(
+                orjson.dumps(
+                    {
+                        "project_id": os.getenv("bigquery.project-id"),
+                        "dataset_id": os.getenv("bigquery.dataset-id"),
+                        "credentials": os.getenv("bigquery.credentials-key"),
+                    }
+                )
+            ).decode()
+        elif dataset_type == "postgres":
+            WREN_IBIS_CONNECTION_INFO = base64.b64encode(
+                orjson.dumps(
+                    {
+                        "host": os.getenv("postgres.host"),
+                        "port": int(os.getenv("postgres.port")),
+                        "database": os.getenv("postgres.database"),
+                        "user": os.getenv("postgres.user"),
+                        "password": os.getenv("postgres.password"),
+                    }
+                )
+            ).decode()
 
-    assert response.status_code == 202
+        # replace the values of WREN_IBIS_xxx to ../.env.dev
+        with open(".env.dev", "r") as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines):
+                if line.startswith("ENGINE"):
+                    lines[i] = "ENGINE=wren-ibis\n"
+                elif line.startswith("WREN_IBIS_SOURCE"):
+                    lines[i] = f"WREN_IBIS_SOURCE={WREN_IBIS_SOURCE}\n"
+                elif line.startswith("WREN_IBIS_MANIFEST"):
+                    lines[i] = f"WREN_IBIS_MANIFEST={WREN_IBIS_MANIFEST}\n"
+                elif line.startswith("WREN_IBIS_CONNECTION_INFO"):
+                    lines[
+                        i
+                    ] = f"WREN_IBIS_CONNECTION_INFO={WREN_IBIS_CONNECTION_INFO}\n"
+        with open(".env.dev", "w") as f:
+            f.writelines(lines)
 
-    st.toast("Wren Engine is ready", icon="🎉")
+    # wait for wren-ai-service to restart
+    time.sleep(5)
 
 
 def save_mdl_json_file(file_name: str, mdl_json: Dict):
@@ -120,7 +119,7 @@ def save_mdl_json_file(file_name: str, mdl_json: Dict):
 def get_mdl_json(database_name: str):
     assert database_name in ["music", "nba", "ecommerce"]
 
-    with open(f"sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
+    with open(f"demo/sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
         mdl_json = json.load(f)
 
     return mdl_json
@@ -146,20 +145,62 @@ def get_new_mdl_json(chosen_models: List[str]):
 
 
 @st.cache_data
-def get_data_from_wren_engine(sql: str):
-    response = requests.get(
-        f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
-        json={
-            "sql": sql,
-        },
-    )
+def get_data_from_wren_engine(sql: str, dataset_type: str):
+    assert dataset_type in DATA_SOURCES
 
-    assert response.status_code == 200
+    if dataset_type == "duckdb":
+        response = requests.get(
+            f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
+            json={
+                "sql": sql,
+            },
+        )
 
-    data = response.json()
-    column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]
+        if response.status_code != 200:
+            st.error(response.json())
+            st.stop()
 
-    return pd.DataFrame(data["data"], columns=column_names)
+        data = response.json()
+        column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]
+
+        return pd.DataFrame(data["data"], columns=column_names)
+    else:
+        connection_info = {
+            "bigquery": {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
+            },
+            "postgres": {
+                "host": os.getenv("postgres.host"),
+                "port": int(os.getenv("postgres.port"))
+                if os.getenv("postgres.port")
+                else 5432,
+                "database": os.getenv("postgres.database"),
+                "user": os.getenv("postgres.user"),
+                "password": os.getenv("postgres.password"),
+            },
+        }
+
+        response = requests.post(
+            f"{WREN_IBIS_API_URL}/v2/ibis/{dataset_type}/query",
+            json={
+                "sql": sql,
+                "manifestStr": base64.b64encode(
+                    orjson.dumps(st.session_state["mdl_json"])
+                ).decode(),
+                "connectionInfo": connection_info[dataset_type],
+            },
+        )
+
+        if response.status_code != 200:
+            st.error(response.json())
+            st.stop()
+
+        data = response.json()
+        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+
+        return pd.DataFrame(data["data"], columns=column_names)
 
 
 # ui related
@@ -319,6 +360,7 @@ def show_asks_details_results():
             st.dataframe(
                 get_data_from_wren_engine(
                     st.session_state["preview_sql"],
+                    st.session_state["dataset_type"],
                 )
             )
 
