@@ -14,7 +14,7 @@ exports.up = async function (knex) {
     };
     return {
       thread_response_id: threadResponse.id,
-      status: 'failed',
+      status: 'FAILED',
       error: process.env.DB_TYPE === 'pg' ? error : JSON.stringify(error),
     };
   });
