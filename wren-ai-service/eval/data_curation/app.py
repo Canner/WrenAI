@@ -25,7 +25,7 @@ st.set_page_config(layout="wide")
 st.title("WrenAI Data Curation App")
 
 
-LLM_OPTIONS = ["gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"]
+LLM_OPTIONS = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
 
 llm_client = get_openai_client()
 

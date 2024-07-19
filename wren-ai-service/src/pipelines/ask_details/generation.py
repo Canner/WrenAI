@@ -72,6 +72,9 @@ class GenerationPostProcessor:
                 },
             }
 
+        # make sure the last step has an empty cte_name
+        steps[-1]["cte_name"] = ""
+
         for step in steps:
             step["sql"] = add_quotes(step["sql"])
 
@@ -86,9 +89,6 @@ class GenerationPostProcessor:
                     "steps": [],
                 },
             }
-
-        # make sure the last step has an empty cte_name
-        steps[-1]["cte_name"] = ""
 
         return {
             "results": {

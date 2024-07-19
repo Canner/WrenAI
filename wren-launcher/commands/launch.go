@@ -100,7 +100,7 @@ func askForGenerationModel() (string, error) {
 
 	prompt := promptui.Select{
 		Label: "Select an OpenAI's generation model",
-		Items: []string{"gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"},
+		Items: []string{"gpt-4o-mini","gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"},
 	}
 
 	_, result, err := prompt.Run()

@@ -21,7 +21,7 @@ data:
   # LLM and Embedder Configurations
   LLM_PROVIDER: "openai_llm"
   LLM_OPENAI_API_BASE: "https://api.openai.com/v1"
-  GENERATION_MODEL: "gpt-3.5-turbo"
+  GENERATION_MODEL: "gpt-4o-mini"
 
   EMBEDDER_PROVIDER: "openai_embedder"
   EMBEDDER_OPENAI_API_BASE: "https://api.openai.com/v1"
