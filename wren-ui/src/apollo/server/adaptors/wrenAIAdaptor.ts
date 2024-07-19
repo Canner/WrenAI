@@ -274,10 +274,11 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.get(
         `${this.wrenAIBaseEndpoint}/v1/sql-explanations/${queryId}/result`,
       );
+      const { status, error } = this.transformStatusAndError(res.data);
       return {
-        status: res.data.status as ExplainPipelineStatus,
+        status: status as ExplainPipelineStatus,
         response: res.data.response,
-        error: this.transformStatusAndError(res.data).error,
+        error,
       };
     } catch (err: any) {
       logger.debug(

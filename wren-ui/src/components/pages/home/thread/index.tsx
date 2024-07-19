@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Alert, Divider } from 'antd';
+import { Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
 import { IterableComponent, makeIterable } from '@/utils/iteration';
@@ -12,6 +12,7 @@ interface Props {
   data: DetailedThread;
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSubmitReviewDrawer: (variables: any) => Promise<void>;
+  onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
 }
 
 const StyledThread = styled.div`
@@ -38,38 +39,32 @@ const AnswerResultTemplate: React.FC<
     onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
     onTriggerScrollToBottom: () => void;
     onSubmitReviewDrawer: (variables: any) => Promise<void>;
+    onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
   }
 > = ({
   onOpenSaveAsViewModal,
   onTriggerScrollToBottom,
   onSubmitReviewDrawer,
+  onTriggerThreadResponseExplain,
   data,
   index,
   ...threadResponse
 }) => {
   const lastResponseId = data[data.length - 1].id;
   const isLastThreadResponse = threadResponse.id === lastResponseId;
-  const { id, error } = threadResponse;
+  const { id } = threadResponse;
 
   return (
     <StyledContainer className="mx-auto" key={`${id}-${index}`}>
       {index > 0 && <Divider />}
-      {error ? (
-        <Alert
-          message={error.shortMessage}
-          description={error.message}
-          type="error"
-          showIcon
-        />
-      ) : (
-        <AnswerResult
-          threadResponse={threadResponse}
-          isLastThreadResponse={isLastThreadResponse}
-          onOpenSaveAsViewModal={onOpenSaveAsViewModal}
-          onTriggerScrollToBottom={onTriggerScrollToBottom}
-          onSubmitReviewDrawer={onSubmitReviewDrawer}
-        />
-      )}
+      <AnswerResult
+        threadResponse={threadResponse}
+        isLastThreadResponse={isLastThreadResponse}
+        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
+        onTriggerScrollToBottom={onTriggerScrollToBottom}
+        onSubmitReviewDrawer={onSubmitReviewDrawer}
+        onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
+      />
     </StyledContainer>
   );
 };
@@ -77,7 +72,12 @@ const AnswerResultTemplate: React.FC<
 const AnswerResultIterator = makeIterable(AnswerResultTemplate);
 
 export default function Thread(props: Props) {
-  const { data, onOpenSaveAsViewModal, onSubmitReviewDrawer } = props;
+  const {
+    data,
+    onOpenSaveAsViewModal,
+    onSubmitReviewDrawer,
+    onTriggerThreadResponseExplain,
+  } = props;
   const divRef = useRef<HTMLDivElement>(null);
 
   const triggerScrollToBottom = () => {
@@ -109,6 +109,7 @@ export default function Thread(props: Props) {
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onTriggerScrollToBottom={triggerScrollToBottom}
         onSubmitReviewDrawer={onSubmitReviewDrawer}
+        onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
       />
     </StyledThread>
   );

@@ -486,6 +486,13 @@ export const typeDefs = gql`
     STOPPED
   }
 
+  enum ExplainTaskStatus {
+    UNDERSTANDING
+    GENERATING
+    FINISHED
+    FAILED
+  }
+
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
@@ -529,6 +536,7 @@ export const typeDefs = gql`
 
   input CreateThreadResponseCorrectionInput {
     id: Int!
+    referenceNum: Int!
     stepIndex: Int!
     type: ReferenceType!
     reference: String!
@@ -564,7 +572,7 @@ export const typeDefs = gql`
 
   type DetailReference {
     referenceId: Int
-    type: String!
+    type: ReferenceType!
     sqlSnippet: String
     summary: String!
     sqlLocation: ReferenceSQLLocation
@@ -579,7 +587,7 @@ export const typeDefs = gql`
 
   type ThreadResponseExplainInfo {
     queryId: String
-    status: String
+    status: ExplainTaskStatus
     error: JSON
   }
 
@@ -593,6 +601,7 @@ export const typeDefs = gql`
   type CorrectionDetail {
     id: Int!
     type: ReferenceType!
+    referenceNum: Int!
     correction: String!
   }
 

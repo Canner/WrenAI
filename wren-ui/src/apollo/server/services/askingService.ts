@@ -54,6 +54,7 @@ export interface AskingDetailTaskInput {
 export interface CorrectionInput {
   id: number;
   type: string;
+  referenceNum: number;
   stepIndex: number;
   reference: string;
   correction: string;
@@ -468,6 +469,7 @@ export class AskingService implements IAskingService {
       corrections: input.corrections.map((item) => ({
         id: item.id,
         type: item.type,
+        referenceNum: item.referenceNum,
         correction: item.correction,
       })),
     });

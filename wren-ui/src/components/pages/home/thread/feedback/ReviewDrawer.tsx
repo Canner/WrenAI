@@ -37,9 +37,10 @@ const StyledOriginal = styled.div`
 `;
 
 const ReviewTemplate = ({
-  id,
-  title,
   type,
+  summary,
+  referenceId,
+  referenceNum,
   correctionPrompt,
   saveCorrectionPrompt,
   removeCorrectionPrompt,
@@ -53,11 +54,11 @@ const ReviewTemplate = ({
   };
 
   const openDelete = () => {
-    removeCorrectionPrompt(id);
+    removeCorrectionPrompt(referenceId);
   };
 
   const handleEdit = (event) => {
-    saveCorrectionPrompt(id, event.target.value);
+    saveCorrectionPrompt(referenceId, event.target.value);
     setIsEdit(false);
   };
 
@@ -72,14 +73,14 @@ const ReviewTemplate = ({
           Reference:
         </span>
         <Typography.Text className="gray-6" ellipsis={!isCollapse}>
-          {title}
+          {summary}
         </Typography.Text>
       </StyledOriginal>
       <div className="d-flex mb-4">
         <div className="lh-xs" style={{ paddingTop: 2 }}>
           <Tag className={clsx('ant-tag__reference', { isRevise })}>
             <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-            {id}
+            {referenceNum}
           </Tag>
         </div>
         <div className="flex-grow-1">
@@ -146,9 +147,10 @@ export default function ReviewDrawer(props: Props) {
       const data: CreateCorrectedThreadResponseInput = {
         responseId: threadResponseId,
         corrections: changedReferences.map((reference) => ({
-          id: reference.id,
+          id: reference.referenceId,
           type: reference.type,
-          reference: reference.title,
+          reference: reference.summary,
+          referenceNum: reference.referenceNum,
           stepIndex: reference.stepIndex,
           correction: reference.correctionPrompt,
         })),

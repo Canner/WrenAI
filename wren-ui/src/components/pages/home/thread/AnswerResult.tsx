@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import { Col, Button, Row, Skeleton, Typography, Divider, Tag } from 'antd';
+import {
+  Col,
+  Button,
+  Row,
+  Skeleton,
+  Typography,
+  Divider,
+  Tag,
+  Alert,
+} from 'antd';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
@@ -10,18 +19,17 @@ import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import StepContent from '@/components/pages/home/thread/StepContent';
 import FeedbackLayout from '@/components/pages/home/thread/feedback';
-import {
-  AskingTaskStatus,
-  ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+import { ThreadResponse } from '@/apollo/client/graphql/__types__';
 import { makeIterable } from '@/utils/iteration';
 import { getReferenceIcon } from '@/components/pages/home/thread/feedback/utils';
+import { getIsAskingFinished } from '@/hooks/useAskPrompt';
 
 const { Title, Text } = Typography;
 
 const Wrapper = styled.div`
-  width: 680px;
+  width: 100%;
   flex-shrink: 0;
+  flex-grow: 1;
 `;
 
 const StyledAnswer = styled(Typography)`
@@ -58,14 +66,15 @@ interface Props {
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onTriggerScrollToBottom: () => void;
   onSubmitReviewDrawer: (variables: any) => Promise<void>;
+  onTriggerThreadResponseExplain: (variables: any) => Promise<void>;
 }
 
-const CorrectionTemplate = ({ id, type, correction }) => {
+const CorrectionTemplate = ({ referenceNum, type, correction }) => {
   return (
     <div className="my-1 gray-7">
       <Tag className="ant-tag__reference bg-gray-7 gray-1">
         <span className="mr-1 lh-xs">{getReferenceIcon(type)}</span>
-        {id}
+        {referenceNum}
       </Tag>
       {correction}
     </div>
@@ -130,9 +139,16 @@ export default function AnswerResult(props: Props) {
     onOpenSaveAsViewModal,
     onTriggerScrollToBottom,
     onSubmitReviewDrawer,
+    onTriggerThreadResponseExplain,
   } = props;
 
-  const { id: responseId, summary, status, corrections } = threadResponse;
+  const {
+    id: responseId,
+    summary,
+    status,
+    corrections,
+    error,
+  } = threadResponse;
   const {
     view,
     steps,
@@ -142,76 +158,88 @@ export default function AnswerResult(props: Props) {
 
   const isViewSaved = !!view;
   const isRegenerated = !!corrections;
-  const loading = status !== AskingTaskStatus.FINISHED;
+  const loading = !getIsAskingFinished(status);
 
   const Information = isRegenerated
     ? RegenerateInformation
     : QuestionInformation;
 
   return (
-    <Skeleton active loading={loading}>
-      <FeedbackLayout
-        headerSlot={
-          <Wrapper>
-            <Information {...threadResponse} />
-            <Title className="mb-6 text-bold gray-10" level={3}>
-              {summary}
-            </Title>
-          </Wrapper>
-        }
-        bodySlot={
-          <Wrapper>
-            <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
-              <Text className="adm-answer-title px-2">
-                <CheckCircleFilled className="mr-2 green-6" />
-                Summary
-              </Text>
-              <div className="pl-7 pb-5">{description}</div>
-              {(steps || []).map((step, index) => (
-                <StepContent
-                  isLastStep={index === steps.length - 1}
-                  key={`${step.summary}-${index}`}
-                  sql={step.sql}
-                  fullSql={fullSql}
-                  stepIndex={index}
-                  summary={step.summary}
-                  threadResponseId={responseId}
-                  onTriggerScrollToBottom={onTriggerScrollToBottom}
-                  isLastThreadResponse={isLastThreadResponse}
-                />
-              ))}
-            </StyledAnswer>
-            {isViewSaved ? (
-              <div className="mt-2 gray-6 text-medium">
-                <FileDoneOutlined className="mr-2" />
-                Generated from saved view{' '}
-                <Link
-                  className="gray-7"
-                  href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {view.displayName}
-                </Link>
-              </div>
-            ) : (
-              <Button
-                className="mt-2 gray-6"
-                type="text"
-                size="small"
-                icon={<SaveOutlined />}
-                onClick={() =>
-                  onOpenSaveAsViewModal({ sql: fullSql, responseId })
-                }
-              >
-                Save as View
-              </Button>
-            )}
-          </Wrapper>
-        }
-        threadResponse={threadResponse}
-        onSubmitReviewDrawer={onSubmitReviewDrawer}
-      />
-    </Skeleton>
+    <div style={{ width: 680 }}>
+      {error ? (
+        <Alert
+          message={error.shortMessage}
+          description={error.message}
+          type="error"
+          showIcon
+        />
+      ) : (
+        <Skeleton active loading={loading}>
+          <FeedbackLayout
+            headerSlot={
+              <Wrapper>
+                <Information {...threadResponse} />
+                <Title className="mb-6 text-bold gray-10" level={3}>
+                  {summary}
+                </Title>
+              </Wrapper>
+            }
+            bodySlot={
+              <Wrapper>
+                <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
+                  <Text className="adm-answer-title px-2">
+                    <CheckCircleFilled className="mr-2 green-6" />
+                    Summary
+                  </Text>
+                  <div className="pl-7 pb-5">{description}</div>
+                  {(steps || []).map((step, index) => (
+                    <StepContent
+                      isLastStep={index === steps.length - 1}
+                      key={`${step.summary}-${index}`}
+                      sql={step.sql}
+                      fullSql={fullSql}
+                      stepIndex={index}
+                      summary={step.summary}
+                      threadResponseId={responseId}
+                      onTriggerScrollToBottom={onTriggerScrollToBottom}
+                      isLastThreadResponse={isLastThreadResponse}
+                    />
+                  ))}
+                </StyledAnswer>
+                {isViewSaved ? (
+                  <div className="mt-2 gray-6 text-medium">
+                    <FileDoneOutlined className="mr-2" />
+                    Generated from saved view{' '}
+                    <Link
+                      className="gray-7"
+                      href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      {view.displayName}
+                    </Link>
+                  </div>
+                ) : (
+                  <Button
+                    className="mt-2 gray-6"
+                    type="text"
+                    size="small"
+                    icon={<SaveOutlined />}
+                    onClick={() =>
+                      onOpenSaveAsViewModal({ sql: fullSql, responseId })
+                    }
+                  >
+                    Save as View
+                  </Button>
+                )}
+              </Wrapper>
+            }
+            threadResponse={threadResponse}
+            onSubmitReviewDrawer={onSubmitReviewDrawer}
+            onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
+          />
+        </Skeleton>
+      )}
+    </div>
   );
 }

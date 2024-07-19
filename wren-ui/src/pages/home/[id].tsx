@@ -8,17 +8,22 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import {
   useCreateCorrectedThreadResponseMutation,
+  useCreateThreadResponseExplainMutation,
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
-import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
+import useAskPrompt, {
+  getIsFinished,
+  checkExplainExisted,
+} from '@/hooks/useAskPrompt';
 import useModalAction from '@/hooks/useModalAction';
 import Thread from '@/components/pages/home/thread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 import {
   CreateCorrectedThreadResponseInput,
+  CreateThreadResponseExplainWhereInput,
   CreateThreadResponseInput,
 } from '@/apollo/client/graphql/__types__';
 
@@ -55,6 +60,9 @@ export default function HomeThread() {
       };
     });
   };
+  const [createThreadResponseExplain] = useCreateThreadResponseExplainMutation({
+    onError: (error) => console.error(error),
+  });
   const [createThreadResponse] = useCreateThreadResponseMutation({
     onCompleted(next) {
       const nextResponse = next.createThreadResponse;
@@ -91,13 +99,18 @@ export default function HomeThread() {
     [threadResponseResult.data],
   );
   const isFinished = useMemo(
-    () => getIsFinished(threadResponse?.status),
+    () =>
+      getIsFinished(
+        threadResponse?.status,
+        checkExplainExisted(threadResponse?.explain),
+      ),
     [threadResponse],
   );
 
   useEffect(() => {
     const unfinishedRespose = (thread?.responses || []).find(
-      (response) => !getIsFinished(response.status),
+      (response) =>
+        !getIsFinished(response.status, checkExplainExisted(response?.explain)),
     );
 
     if (unfinishedRespose) {
@@ -106,8 +119,21 @@ export default function HomeThread() {
   }, [thread]);
 
   useEffect(() => {
-    if (isFinished) threadResponseResult.stopPolling();
-  }, [isFinished]);
+    if (isFinished) {
+      threadResponseResult.stopPolling();
+
+      const isSuccessBreakdown = threadResponse?.error === null;
+      const isExplainable =
+        threadResponse?.explain &&
+        threadResponse?.explain?.error === null &&
+        threadResponse?.explain.queryId === null;
+      if (isSuccessBreakdown && isExplainable) {
+        createThreadResponseExplain({
+          variables: { where: { responseId: threadResponse.id } },
+        }).then(() => threadResponseResult.startPolling(1000));
+      }
+    }
+  }, [isFinished, threadResponse]);
 
   const onSelect = async (payload: CreateThreadResponseInput) => {
     try {
@@ -139,12 +165,26 @@ export default function HomeThread() {
     }
   };
 
+  const onTriggerThreadResponseExplain = async (
+    payload: CreateThreadResponseExplainWhereInput,
+  ) => {
+    try {
+      await createThreadResponseExplain({
+        variables: { where: payload },
+      });
+      fetchThreadResponse({ variables: payload });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <SiderLayout loading={loading} sidebar={homeSidebar}>
       <Thread
         data={thread}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
         onSubmitReviewDrawer={onSubmitReviewDrawer}
+        onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
       />
       <div className="py-12" />
       <Prompt
