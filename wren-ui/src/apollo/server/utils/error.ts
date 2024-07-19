@@ -10,6 +10,7 @@ export enum GeneralErrorCodes {
 
   // Background tracker errors
   MERGE_THREAD_RESPONSE_ERROR = 'MERGE_THREAD_RESPONSE_ERROR',
+  OLD_VERSION = 'OLD_VERSION',
 
   // Exception error for AI service (e.g., network connection error)
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
@@ -51,6 +52,8 @@ export const errorMessages = {
   // Background tracker errors
   [GeneralErrorCodes.MERGE_THREAD_RESPONSE_ERROR]:
     'Error occurred while merging thread response',
+  [GeneralErrorCodes.OLD_VERSION]:
+    'Question asked before v0.8.0. Click "Retry" to generate manually',
 
   // Connector errors
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to data source',
@@ -88,6 +91,7 @@ export const shortMessages = {
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
   [GeneralErrorCodes.MERGE_THREAD_RESPONSE_ERROR]:
     'Merge thread response error',
+  [GeneralErrorCodes.OLD_VERSION]: 'Unable to show references',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
   [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Ibis server error',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
