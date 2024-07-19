@@ -380,10 +380,6 @@ export class AskingService implements IAskingService {
       id: threadId,
     });
 
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
-
     const baseThreadResponse = await this.threadResponseRepository.findOneBy({
       id: input.responseId,
     });
