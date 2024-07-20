@@ -10,6 +10,9 @@ import PreviewData from '@/components/dataPreview/PreviewData';
 import { PreviewDataMutationResult } from '@/apollo/client/graphql/home.generated';
 import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
 import { NativeSQLResult } from '@/hooks/useNativeSQL';
+import SQLHighlight from '@/components/pages/home/thread/feedback/SQLHighlight';
+import { useFeedbackContext } from './feedback';
+import { useMemo } from 'react';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
@@ -36,6 +39,7 @@ export interface Props {
   onCloseCollapse: () => void;
   onCopyFullSQL?: () => void;
   sql: string;
+  stepIndex: number;
   previewDataResult: PreviewDataMutationResult;
   attributes: {
     stepNumber: number;
@@ -53,6 +57,7 @@ export default function CollapseContent(props: Props) {
     onCloseCollapse,
     onCopyFullSQL,
     sql,
+    stepIndex,
     previewDataResult,
     attributes,
     onChangeNativeSQL,
@@ -61,6 +66,10 @@ export default function CollapseContent(props: Props) {
 
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = Boolean(attributes.isLastStep) && hasNativeSQL;
+  const { references } = useFeedbackContext();
+  const currentStepReferences = useMemo(() => {
+    return (references || []).filter((item) => item.stepIndex === stepIndex);
+  }, [references]);
 
   const sqls =
     nativeSQLResult.nativeSQLMode && nativeSQLResult.loading === false
@@ -109,6 +118,9 @@ export default function CollapseContent(props: Props) {
             showLineNumbers
             maxHeight="300"
             loading={nativeSQLResult.loading}
+            highlightSlot={
+              <SQLHighlight sql={sqls} references={currentStepReferences} />
+            }
           />
         </StyledPre>
       )}

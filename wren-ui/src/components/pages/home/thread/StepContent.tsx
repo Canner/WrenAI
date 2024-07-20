@@ -108,6 +108,7 @@ export default function StepContent(props: Props) {
             CollapseContentProps,
             'attributes'
           >)}
+          stepIndex={stepIndex}
           key={`collapse-${stepNumber}`}
           attributes={{ stepNumber, isLastStep }}
         />

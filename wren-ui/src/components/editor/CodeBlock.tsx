@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Typography } from 'antd';
 import styled from 'styled-components';
 import '@/components/editor/AceEditor';
@@ -19,6 +19,7 @@ const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
       : `background: var(--gray-1); padding: 8px;`}
 
   .adm-code-wrap {
+    position: relative;
     ${(props) => (props.inline ? '' : 'overflow: auto;')}
     ${(props) => (props.maxHeight ? `max-height: ${props.maxHeight}px;` : ``)}
   }
@@ -28,7 +29,7 @@ const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
     &-number {
       user-select: none;
       display: inline-block;
-      min-width: 14px;
+      min-width: 17px;
       text-align: right;
       margin-right: 1em;
       color: var(--gray-6);
@@ -55,6 +56,7 @@ interface Props {
   loading?: boolean;
   maxHeight?: string;
   showLineNumbers?: boolean;
+  highlightSlot?: React.ReactNode;
 }
 
 const addThemeStyleManually = (cssText) => {
@@ -70,7 +72,15 @@ const addThemeStyleManually = (cssText) => {
 };
 
 export default function CodeBlock(props: Props) {
-  const { code, copyable, maxHeight, inline, loading, showLineNumbers } = props;
+  const {
+    code,
+    copyable,
+    maxHeight,
+    inline,
+    loading,
+    showLineNumbers,
+    highlightSlot,
+  } = props;
   const { ace } = window as any;
   const { Tokenizer } = ace.require('ace/tokenizer');
   const { SqlHighlightRules } = ace.require(`ace/mode/sql_highlight_rules`);
@@ -113,6 +123,7 @@ export default function CodeBlock(props: Props) {
         <div className="adm-code-wrap">
           {lines}
           {copyable && <CopyText copyable>{code}</CopyText>}
+          {highlightSlot}
         </div>
       </Loading>
     </Block>
