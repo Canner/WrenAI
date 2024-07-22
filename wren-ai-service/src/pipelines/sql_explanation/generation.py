@@ -294,7 +294,7 @@ class GenerationPostProcessor:
                                 {
                                     "type": "groupByKeys",
                                     "payload": {
-                                        "id": "",
+                                        "id": groupby_key["id"],
                                         "expression": groupby_key["values"],
                                         "explanation": _extract_to_str(sql_explanation),
                                     },
