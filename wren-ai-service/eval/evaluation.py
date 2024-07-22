@@ -13,7 +13,11 @@ from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
 sys.path.append(f"{Path().parent.resolve()}")
-from eval.metrics.column import AccuracyMetric, ContextualRecallMetric
+from eval.metrics.column import (
+    AccuracyMetric,
+    ContextualRecallMetric,
+    ContextualRelevancyMetric,
+)
 from eval.utils import parse_toml
 from src import utils
 
@@ -124,6 +128,7 @@ def metrics_initiator():
                 "timeout": 10,
             }
         ),
+        ContextualRelevancyMetric(),
     ]
 
 
