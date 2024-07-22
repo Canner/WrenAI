@@ -13,7 +13,7 @@ from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
 sys.path.append(f"{Path().parent.resolve()}")
-from eval.metrics.column import AccuracyMetric
+from eval.metrics.column import AccuracyMetric, ContextualRecallMetric
 from eval.utils import parse_toml
 from src import utils
 
@@ -101,6 +101,32 @@ class Evaluator:
         wrapper()
 
 
+def metrics_initiator():
+    return [
+        AccuracyMetric(
+            engine_config={
+                "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
+                "data_source": "bigquery",
+                "mdl_json": mdl,
+                "connection_info": {
+                    "project_id": os.getenv("bigquery.project-id"),
+                    "dataset_id": os.getenv("bigquery.dataset-id"),
+                    "credentials": os.getenv("bigquery.credentials-key"),
+                },
+                "timeout": 10,
+                "limit": 10,
+            }
+        ),
+        ContextualRecallMetric(
+            {
+                "mdl_json": mdl,
+                "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
+                "timeout": 10,
+            }
+        ),
+    ]
+
+
 if __name__ == "__main__":
     path = parse_args()
 
@@ -113,23 +139,9 @@ if __name__ == "__main__":
 
     dataset = parse_toml(meta["evaluation_dataset"])
     mdl = dataset["mdl"]
+    metrics = metrics_initiator()
 
-    evaluator = Evaluator(
-        [
-            AccuracyMetric(
-                engine_config={
-                    "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
-                    "source": "bigquery",
-                    "manifest": mdl,
-                    "connection_info": {
-                        "project_id": os.getenv("bigquery.project-id"),
-                        "dataset_id": os.getenv("bigquery.dataset-id"),
-                        "credentials": os.getenv("bigquery.credentials-key"),
-                    },
-                }
-            )
-        ]
-    )
+    evaluator = Evaluator(metrics)
     evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
