@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
@@ -25,6 +25,7 @@ import {
   CreateCorrectedThreadResponseInput,
   CreateThreadResponseExplainWhereInput,
   CreateThreadResponseInput,
+  ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 
 export default function HomeThread() {
@@ -107,21 +108,8 @@ export default function HomeThread() {
     [threadResponse],
   );
 
-  useEffect(() => {
-    const unfinishedRespose = (thread?.responses || []).find(
-      (response) =>
-        !getIsFinished(response.status, checkExplainExisted(response?.explain)),
-    );
-
-    if (unfinishedRespose) {
-      fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
-    }
-  }, [thread]);
-
-  useEffect(() => {
-    if (isFinished) {
-      threadResponseResult.stopPolling();
-
+  const startThreadResponseExplanation = useCallback(
+    (threadResponse: ThreadResponse) => {
       const isSuccessBreakdown = threadResponse?.error === null;
       const isExplainable =
         threadResponse?.explain &&
@@ -130,8 +118,41 @@ export default function HomeThread() {
       if (isSuccessBreakdown && isExplainable) {
         createThreadResponseExplain({
           variables: { where: { responseId: threadResponse.id } },
-        }).then(() => threadResponseResult.startPolling(1000));
+        }).then(() =>
+          fetchThreadResponse({ variables: { responseId: threadResponse.id } }),
+        );
       }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const unfinishedResposes = (thread?.responses || []).filter(
+      (response) =>
+        !getIsFinished(response.status, checkExplainExisted(response?.explain)),
+    );
+    if (!!unfinishedResposes.length) {
+      for (const response of unfinishedResposes) {
+        fetchThreadResponse({ variables: { responseId: response.id } });
+      }
+      // Explanation will be triggered by polling process
+      return;
+    }
+
+    // If all responses are finished, we need to check if there is any explanation that is not started
+    const unfinishedExplanations = (thread?.responses || []).filter(
+      (response) => response.explain?.queryId === null,
+    );
+    for (const response of unfinishedExplanations) {
+      startThreadResponseExplanation(response);
+    }
+  }, [thread]);
+
+  useEffect(() => {
+    if (isFinished) {
+      threadResponseResult.stopPolling();
+
+      startThreadResponseExplanation(threadResponse);
     }
   }, [isFinished, threadResponse]);
 
