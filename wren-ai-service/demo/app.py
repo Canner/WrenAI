@@ -30,7 +30,7 @@ if "chosen_llm_model" not in st.session_state:
 if "deployment_id" not in st.session_state:
     st.session_state["deployment_id"] = str(uuid.uuid4())
 if "chosen_dataset" not in st.session_state:
-    st.session_state["chosen_dataset"] = "music"
+    st.session_state["chosen_dataset"] = "ecommerce"
 if "dataset_type" not in st.session_state:
     st.session_state["dataset_type"] = "duckdb"
 if "chosen_models" not in st.session_state:
@@ -100,7 +100,10 @@ with st.sidebar:
     chosen_demo_dataset = st.selectbox(
         "Select a demo dataset",
         key="choose_demo_dataset",
-        options=["music", "nba", "ecommerce"],
+        options=[
+            "ecommerce",
+            "nba",
+        ],
         index=0,
         on_change=onchange_demo_dataset,
     )

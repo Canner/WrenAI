@@ -573,20 +573,11 @@ def generate_mdl_metadata(mdl_model_json: dict):
 
 
 def _prepare_duckdb(dataset_name: str):
-    assert dataset_name in ["music", "nba", "ecommerce"]
+    assert dataset_name in ["ecommerce", "nba"]
 
     DATASET_VERSION = "v0.3.0"
 
     init_sqls = {
-        "music": f"""
-CREATE TABLE album AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Album.csv',header=true);
-CREATE TABLE artist AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Artist.csv',header=true);
-CREATE TABLE customer AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Customer.csv',header=true);
-CREATE TABLE genre AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Genre.csv',header=true);
-CREATE TABLE invoice AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Invoice.csv',header=true);
-CREATE TABLE invoiceLine AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/InvoiceLine.csv',header=true);
-CREATE TABLE track AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Track.csv',header=true);
-""",
         "nba": f"""
 CREATE TABLE game AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/game.csv',header=true);
 CREATE TABLE line_score AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/line_score.csv',header=true);
