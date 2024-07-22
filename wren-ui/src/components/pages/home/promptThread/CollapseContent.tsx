@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
-import { Button, Switch, Typography } from 'antd';
+import { Button, Switch, Typography, Empty } from 'antd';
 import styled from 'styled-components';
 import CheckOutlined from '@ant-design/icons/CheckOutlined';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
@@ -114,7 +114,17 @@ export default function CollapseContent(props: Props) {
       )}
       {isPreviewData && (
         <div className="my-3">
-          <PreviewData {...previewDataResult} />
+          <PreviewData
+            {...previewDataResult}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Sorry, we couldn't find any records that match your search criteria."
+                />
+              ),
+            }}
+          />
         </div>
       )}
       {(isViewSQL || isPreviewData) && (
