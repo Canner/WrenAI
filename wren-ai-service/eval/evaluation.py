@@ -17,6 +17,7 @@ from eval.metrics.column import (
     AccuracyMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
+    FaithfulnessMetric,
 )
 from eval.utils import parse_toml
 from src import utils
@@ -105,7 +106,13 @@ class Evaluator:
         wrapper()
 
 
-def metrics_initiator():
+def metrics_initiator(mdl: dict) -> list:
+    engine_config = {
+        "mdl_json": mdl,
+        "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
+        "timeout": 10,
+    }
+
     return [
         AccuracyMetric(
             engine_config={
@@ -121,14 +128,9 @@ def metrics_initiator():
                 "limit": 10,
             }
         ),
-        ContextualRecallMetric(
-            {
-                "mdl_json": mdl,
-                "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
-                "timeout": 10,
-            }
-        ),
+        ContextualRecallMetric(engine_config),
         ContextualRelevancyMetric(),
+        FaithfulnessMetric(engine_config),
     ]
 
 
@@ -143,8 +145,7 @@ if __name__ == "__main__":
     predictions = predicted_file["predictions"]
 
     dataset = parse_toml(meta["evaluation_dataset"])
-    mdl = dataset["mdl"]
-    metrics = metrics_initiator()
+    metrics = metrics_initiator(dataset["mdl"])
 
     evaluator = Evaluator(metrics)
     evaluator.eval(meta, predictions)
