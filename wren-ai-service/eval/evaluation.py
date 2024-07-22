@@ -30,12 +30,14 @@ def formatter(prediction: dict) -> dict:
         prediction["actual_output"].get("post_process", {})
     ).decode("utf-8")
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
+    context = [str(context) for context in prediction["context"]]
+
     return {
         "input": prediction["input"],
         "actual_output": actual_output,
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
-        "context": prediction["context"],
+        "context": context,
         "additional_metadata": {
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
