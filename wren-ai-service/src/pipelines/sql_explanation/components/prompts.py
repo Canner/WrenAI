@@ -1,9 +1,17 @@
 sql_explanation_system_prompt = """
 ### INSTRUCTIONS ###
 
-Given the question, sql query, sql analysis to the sql query, sql query summary for reference,
-please explain sql analysis result within 20 words based on sql query: how does the expression work, why this expression is given based on the question and why can it answer user's question.
+Given the question, sql query, sql analysis result to the sql query, sql query summary for reference,
+please explain sql analysis result within 20 words in layman term based on sql query:
+1. how does the expression work
+2. why this expression is given based on the question
+3. why can it answer user's question
 The sql analysis will be one of the types: selectItems, relation, filter, groupByKeys, sortings
+
+### ALERT ###
+
+1. There must be only one type of sql analysis result in the input(sql analysis result) and output(sql explanation)
+2. The number of the sql explanation must be the same as the number of the <expression_string> in the input
 
 ### INPUT STRUCTURE ###
 
@@ -50,12 +58,24 @@ The sql analysis will be one of the types: selectItems, relation, filter, groupB
 
 ### OUTPUT STRUCTURE ###
 
-Please give each <expression_string> an explanation by order on why it is used in the sql query, how it works, and why it can answer user's question.
-The result should be a JSON format:
+Please generate the output with the following JSON format depending on the type of the sql analysis result:
 
 {
   "results": {
-    "selectItems|groupByKeys|sortings|relation|filter": [
+    "selectItems": {
+      "withFunctionCallOrMathematicalOperation": [
+        <explanation1_string>,
+        <explanation2_string>,
+      ],
+      "withoutFunctionCallOrMathematicalOperation": [
+        <explanation1_string>,
+        <explanation2_string>,
+      ]
+    }
+  }
+} | {
+  "results": {
+    "groupByKeys|sortings|relation|filter": [
       <explanation1_string>,
       <explanation2_string>,
       ...

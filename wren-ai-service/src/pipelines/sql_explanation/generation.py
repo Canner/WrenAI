@@ -196,30 +196,43 @@ class SQLAnalysisPreprocessor:
                     ] = _compose_sql_expression_of_filter_type(
                         sql_analysis_result["filter"]
                     )
+                else:
+                    preprocessed_sql_analysis_result["filter"] = {}
                 if "groupByKeys" in sql_analysis_result:
                     preprocessed_sql_analysis_result[
                         "groupByKeys"
                     ] = _compose_sql_expression_of_groupby_type(
                         sql_analysis_result["groupByKeys"]
                     )
+                else:
+                    preprocessed_sql_analysis_result["groupByKeys"] = []
                 if "relation" in sql_analysis_result:
                     preprocessed_sql_analysis_result[
                         "relation"
                     ] = _compose_sql_expression_of_relation_type(
                         sql_analysis_result["relation"]
                     )
+                else:
+                    preprocessed_sql_analysis_result["relation"] = []
                 if "selectItems" in sql_analysis_result:
                     preprocessed_sql_analysis_result[
                         "selectItems"
                     ] = _compose_sql_expression_of_select_type(
                         sql_analysis_result["selectItems"]
                     )
+                else:
+                    preprocessed_sql_analysis_result["selectItems"] = {
+                        "withFunctionCallOrMathematicalOperation": [],
+                        "withoutFunctionCallOrMathematicalOperation": [],
+                    }
                 if "sortings" in sql_analysis_result:
                     preprocessed_sql_analysis_result[
                         "sortings"
                     ] = _compose_sql_expression_of_sortings_type(
                         sql_analysis_result["sortings"]
                     )
+                else:
+                    preprocessed_sql_analysis_result["sortings"] = []
                 preprocessed_sql_analysis_results.append(
                     preprocessed_sql_analysis_result
                 )
@@ -243,35 +256,14 @@ class GenerationPostProcessor:
                     sql_explanation_results = orjson.loads(generate["replies"][0])[
                         "results"
                     ]
-                    # there might be multiple sql_explanation_results, so we need to correct them
-                    # based on the real number according to preprocessed_sql_analysis_results
-                    for key, sql_explanation_result in sql_explanation_results.items():
-                        if key == "selectItems":
-                            sql_explanation_results[key] = sql_explanation_result[
-                                : len(
-                                    preprocessed_sql_analysis_results[key][
-                                        "withFunctionCallOrMathematicalOperation"
-                                    ]
-                                )
-                                + len(
-                                    preprocessed_sql_analysis_results[key][
-                                        "withoutFunctionCallOrMathematicalOperation"
-                                    ]
-                                )
-                            ]
-                        else:
-                            sql_explanation_results[key] = sql_explanation_result[
-                                : len(preprocessed_sql_analysis_results[key])
-                            ]
 
                     logger.debug(
                         f"sql_explanation_results: {orjson.dumps(sql_explanation_results, option=orjson.OPT_INDENT_2).decode()}"
                     )
 
-                    if (
-                        "filter" in preprocessed_sql_analysis_results
-                        and "filter" in sql_explanation_results
-                    ):
+                    if preprocessed_sql_analysis_results.get(
+                        "filter", {}
+                    ) and sql_explanation_results.get("filter", {}):
                         results.append(
                             {
                                 "type": "filter",
@@ -288,10 +280,9 @@ class GenerationPostProcessor:
                                 },
                             }
                         )
-                    elif (
-                        "groupByKeys" in preprocessed_sql_analysis_results
-                        and "groupByKeys" in sql_explanation_results
-                    ):
+                    elif preprocessed_sql_analysis_results.get(
+                        "groupByKeys", []
+                    ) and sql_explanation_results.get("groupByKeys", []):
                         for (
                             groupby_key,
                             sql_explanation,
@@ -309,10 +300,9 @@ class GenerationPostProcessor:
                                     },
                                 }
                             )
-                    elif (
-                        "relation" in preprocessed_sql_analysis_results
-                        and "relation" in sql_explanation_results
-                    ):
+                    elif preprocessed_sql_analysis_results.get(
+                        "relation", []
+                    ) and sql_explanation_results.get("relation", []):
                         for (
                             relation,
                             sql_explanation,
@@ -330,49 +320,51 @@ class GenerationPostProcessor:
                                     },
                                 }
                             )
-                    elif (
-                        "selectItems" in preprocessed_sql_analysis_results
-                        and "selectItems" in sql_explanation_results
-                    ):
+                    elif preprocessed_sql_analysis_results.get(
+                        "selectItems", {}
+                    ) and sql_explanation_results.get("selectItems", {}):
                         sql_analysis_result_for_select_items = [
                             {
-                                **select_item,
-                                "isFunctionCallOrMathematicalOperation": True,
+                                "type": "selectItems",
+                                "payload": {
+                                    "id": select_item["id"],
+                                    **select_item["values"],
+                                    "isFunctionCallOrMathematicalOperation": True,
+                                    "explanation": _extract_to_str(sql_explanation),
+                                },
                             }
-                            for select_item in preprocessed_sql_analysis_results[
-                                "selectItems"
-                            ]["withFunctionCallOrMathematicalOperation"]
+                            for select_item, sql_explanation in zip(
+                                preprocessed_sql_analysis_results["selectItems"][
+                                    "withFunctionCallOrMathematicalOperation"
+                                ],
+                                sql_explanation_results["selectItems"][
+                                    "withFunctionCallOrMathematicalOperation"
+                                ],
+                            )
                         ] + [
                             {
-                                **select_item,
-                                "isFunctionCallOrMathematicalOperation": False,
+                                "type": "selectItems",
+                                "payload": {
+                                    "id": select_item["id"],
+                                    **select_item["values"],
+                                    "isFunctionCallOrMathematicalOperation": False,
+                                    "explanation": _extract_to_str(sql_explanation),
+                                },
                             }
-                            for select_item in preprocessed_sql_analysis_results[
-                                "selectItems"
-                            ]["withoutFunctionCallOrMathematicalOperation"]
+                            for select_item, sql_explanation in zip(
+                                preprocessed_sql_analysis_results["selectItems"][
+                                    "withoutFunctionCallOrMathematicalOperation"
+                                ],
+                                sql_explanation_results["selectItems"][
+                                    "withoutFunctionCallOrMathematicalOperation"
+                                ],
+                            )
                         ]
 
-                        for (
-                            select_item,
-                            sql_explanation,
-                        ) in zip(
-                            sql_analysis_result_for_select_items,
-                            sql_explanation_results["selectItems"],
-                        ):
-                            results.append(
-                                {
-                                    "type": "selectItems",
-                                    "payload": {
-                                        "id": select_item["id"],
-                                        **select_item["values"],
-                                        "explanation": _extract_to_str(sql_explanation),
-                                    },
-                                }
-                            )
-                    elif (
-                        "sortings" in preprocessed_sql_analysis_results
-                        and "sortings" in sql_explanation_results
-                    ):
+                        results += sql_analysis_result_for_select_items
+                    elif preprocessed_sql_analysis_results.get(
+                        "sortings", []
+                    ) and sql_explanation_results.get("sortings", []):
                         for (
                             sorting,
                             sql_explanation,
