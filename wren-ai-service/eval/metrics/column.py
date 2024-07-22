@@ -14,14 +14,7 @@ class AccuracyMetric(BaseMetric):
     def __init__(self, engine_config: dict):
         self.threshold = 10
         self.score = 0
-        self._engine_config = {
-            "data_source": engine_config["source"],
-            "mdl_json": engine_config["manifest"],
-            "connection_info": engine_config["connection_info"],
-            "api_endpoint": engine_config["api_endpoint"],
-            "timeout": 10,
-            "limit": 10,
-        }
+        self._engine_config = engine_config
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
