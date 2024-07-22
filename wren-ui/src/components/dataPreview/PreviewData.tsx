@@ -37,10 +37,11 @@ interface Props {
   };
   loading: boolean;
   error?: ApolloError;
+  locale?: { emptyText: React.ReactNode };
 }
 
 export default function PreviewData(props: Props) {
-  const { previewData, loading, error } = props;
+  const { previewData, loading, error, locale } = props;
 
   const columns = useMemo(
     () => previewData && getPreviewColumns(previewData.columns),
@@ -66,6 +67,7 @@ export default function PreviewData(props: Props) {
       columns={columns}
       data={previewData?.data || []}
       loading={loading}
+      locale={locale}
     />
   );
 }

@@ -11,6 +11,7 @@ interface Props {
   columns: TableColumn[];
   data: Array<any[]>;
   loading: boolean;
+  locale?: { emptyText: React.ReactNode };
 }
 
 const getValueByValueType = (value: any) =>
@@ -32,7 +33,7 @@ const convertResultData = (data: Array<any>, columns) => {
 };
 
 export default function PreviewDataContent(props: Props) {
-  const { columns = [], data = [], loading } = props;
+  const { columns = [], data = [], loading, locale } = props;
   const hasColumns = !!columns.length;
 
   const dynamicWidth = useMemo(() => {
@@ -64,6 +65,7 @@ export default function PreviewDataContent(props: Props) {
       size="small"
       scroll={{ y: 280, x: dynamicWidth }}
       loading={loading}
+      locale={locale}
     />
   );
 }
