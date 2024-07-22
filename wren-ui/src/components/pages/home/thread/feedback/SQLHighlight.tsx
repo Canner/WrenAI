@@ -83,11 +83,13 @@ const _printUnmatchedReferences = (
   referenceMatches,
 ) => {
   // For debugging purpose
+  const matchesReferences = referenceMatches.flat();
   const unmatchedReferences = references.filter(
-    (reference) => !referenceMatches.flat().includes(reference),
+    (reference) =>
+      !matchesReferences.find((r) => r.referenceNum === reference.referenceNum),
   );
   if (unmatchedReferences.length > 0)
-    console.warn('Unmatched references:', unmatchedReferences);
+    console.log('Unmatched references:', unmatchedReferences);
 };
 
 export default function SQLHighlight(props: Props) {
