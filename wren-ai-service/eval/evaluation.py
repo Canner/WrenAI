@@ -15,6 +15,7 @@ from langfuse.decorators import langfuse_context, observe
 sys.path.append(f"{Path().parent.resolve()}")
 from eval.metrics.column import (
     AccuracyMetric,
+    AnswerRelevancyMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
     FaithfulnessMetric,
@@ -128,9 +129,10 @@ def metrics_initiator(mdl: dict) -> list:
                 "limit": 10,
             }
         ),
+        AnswerRelevancyMetric(engine_config),
+        FaithfulnessMetric(engine_config),
         ContextualRecallMetric(engine_config),
         ContextualRelevancyMetric(),
-        FaithfulnessMetric(engine_config),
     ]
 
 

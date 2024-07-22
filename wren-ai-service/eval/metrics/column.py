@@ -84,16 +84,37 @@ class AccuracyMetric(BaseMetric):
 
 
 class AnswerRelevancyMetric(BaseMetric):
-    def __init__(self):
-        self.threshold = 10
+    def __init__(self, engine_config: dict):
+        self.threshold = 0
         self.score = 0
+        self._engine_config = engine_config
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        # todo
-        pass
+        actual_output = orjson.loads(test_case.actual_output)
+
+        if not actual_output["valid_generation_results"]:
+            self.success = False
+            return self.score
+
+        valid_results = actual_output["valid_generation_results"]
+
+        # todo: using the first one or just compare all and use the best one
+        actual_units = await get_contexts_from_sql(
+            sql=valid_results[0]["sql"], **self._engine_config
+        )
+
+        expected_units = await get_contexts_from_sql(
+            sql=test_case.expected_output, **self._engine_config
+        )
+
+        intersection = set(actual_units).intersection(set(expected_units))
+        self.score = len(intersection) / len(actual_units)
+
+        self.success = self.score >= self.threshold
+        return self.score
 
     def is_successful(self):
         return self.success
