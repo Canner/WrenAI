@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import clsx from 'clsx';
 import { Tag } from 'antd';
 import { groupBy } from 'lodash';
 import styled from 'styled-components';
 import { getReferenceIcon, Reference } from './utils';
+import { getTokenizer } from '@/components/editor/CodeBlock';
 
 const SQLWrapper = styled.div`
   position: absolute;
@@ -12,30 +13,48 @@ const SQLWrapper = styled.div`
   right: 0;
   z-index: 1;
   font-size: 14px;
+  color: var(--gray-9);
   margin: 0 3px;
-  color: transparent;
 
   .sqlHighlight__line {
+    background-color: white;
+  }
+
+  .sqlHighlight__block {
     position: relative;
+    &:hover,
+    &.isActive {
+      mark {
+        background-color: rgba(250, 219, 20, 0.3);
+      }
+    }
   }
 
   mark {
     cursor: pointer;
     position: relative;
-    color: transparent;
-    background-color: rgba(250, 219, 20, 0.2);
+    color: currentColor;
+    background-color: transparent;
+    border-bottom: 1px dashed var(--gray-5);
     padding: 2px 0;
   }
 
   .sqlHighlight__tags {
     user-select: none;
-    padding-left: 4px;
-    // position: absolute;
-    left: 100%;
-    top: -16px;
+    padding: 0 4px;
+
+    &:after {
+      content: '';
+      vertical-align: middle;
+    }
 
     .ant-tag {
-      margin-right: 4px;
+      cursor: pointer;
+      margin-right: 0;
+      vertical-align: middle;
+      + .ant-tag {
+        margin-left: 4px;
+      }
     }
   }
 `;
@@ -43,6 +62,8 @@ const SQLWrapper = styled.div`
 interface Props {
   sql: string;
   references: Reference[];
+  targetReference?: Reference;
+  onHighlightHover?: (reference: Reference) => void;
 }
 
 const optimizedSnippet = (snippet: string) => {
@@ -70,7 +91,25 @@ const _printUnmatchedReferences = (
 };
 
 export default function SQLHighlight(props: Props) {
-  const { sql, references } = props;
+  const { sql, references, targetReference, onHighlightHover } = props;
+  const $wrapper = useRef(null);
+
+  useEffect(() => {
+    if ($wrapper.current) {
+      const $element = $wrapper.current;
+      const $targets = $element.querySelectorAll(`.isActive`);
+      $targets.forEach((target) => {
+        target.classList.remove('isActive');
+      });
+      if (targetReference) {
+        const $target = $wrapper.current.querySelector(
+          `.reference-${targetReference.referenceNum}`,
+        );
+        if (!$target) return;
+        $target.classList.add('isActive');
+      }
+    }
+  }, [targetReference]);
 
   const sqlArray = useMemo(() => sql.split('\n'), [sql]);
   const referenceGroups = useMemo(() => {
@@ -88,8 +127,13 @@ export default function SQLHighlight(props: Props) {
     );
   }, [references]);
 
+  const hoverHighlight = (reference?: Reference) => {
+    onHighlightHover && onHighlightHover(reference);
+  };
+
   const highlights = [];
   const referenceMatches = [];
+  const tokenize = getTokenizer();
   Object.keys(referenceGroups).forEach((line) => {
     const lineIndex = Number(line) - 1;
     const lineReferences = referenceGroups[line];
@@ -99,6 +143,15 @@ export default function SQLHighlight(props: Props) {
 
     // Add to highlights if the part is matched
     highlights[lineIndex] = parts.map((part, index) => {
+      const tokens = tokenize(part);
+      const tokenizedPart = tokens.map((token, tokenIndex) => {
+        const classNames = token.type.split('.').map((name) => `ace_${name}`);
+        return (
+          <span key={tokenIndex} className={classNames.join(' ')}>
+            {token.value}
+          </span>
+        );
+      });
       if (regex.test(part)) {
         const matchedReferences = lineReferences.filter((reference) =>
           new RegExp(reference.sqlSnippet, 'i').test(part),
@@ -118,24 +171,43 @@ export default function SQLHighlight(props: Props) {
         });
         // Record the matched references
         referenceMatches.push(matchedReferences);
-
+        const reference = matchedReferences[0];
         return (
-          <span className="sqlHighlight__line" key={index}>
-            <mark>{part}</mark>
+          <span
+            className={clsx(
+              'sqlHighlight__block',
+              `reference-${reference.referenceNum}`,
+            )}
+            onMouseEnter={() => hoverHighlight(reference)}
+            onMouseLeave={() => hoverHighlight()}
+            key={index}
+          >
+            <mark>{tokenizedPart}</mark>
             {tags && <span className="sqlHighlight__tags">{tags}</span>}
           </span>
         );
       }
-      return <span key={index}>{part}</span>;
+      return <span key={index}>{tokenizedPart}</span>;
     });
   });
 
-  const content = sqlArray.map((line, index) => {
-    return <div key={index}>{highlights[index] || line}</div>;
+  const content = sqlArray.map((_, index) => {
+    if (highlights[index]) {
+      return (
+        <div className="sqlHighlight__line" key={index}>
+          {highlights[index]}
+        </div>
+      );
+    }
+    return (
+      <div key={index} style={{ background: 'transparent' }}>
+        &nbsp;
+      </div>
+    );
   });
 
   // For debugging purpose
   // _printUnmatchedReferences(references, referenceMatches);
 
-  return <SQLWrapper>{content}</SQLWrapper>;
+  return <SQLWrapper ref={$wrapper}>{content}</SQLWrapper>;
 }

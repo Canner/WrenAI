@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
 import { sortBy } from 'lodash';
 import { Skeleton } from 'antd';
 import ReferenceSideFloat from '@/components/pages/home/thread/feedback/ReferenceSideFloat';
@@ -11,10 +11,14 @@ import { getIsExplainFinished } from '@/hooks/useAskPrompt';
 
 type ContextProps = {
   references: Reference[];
+  sqlTargetReference?: Reference;
+  onHighlightToReferences: (target?: Reference) => void;
 } | null;
 
 export const FeedbackContext = createContext<ContextProps>({
   references: [],
+  sqlTargetReference: null,
+  onHighlightToReferences: () => {},
 });
 
 export const useFeedbackContext = () => {
@@ -38,6 +42,9 @@ export default function Feedback(props: Props) {
     onTriggerThreadResponseExplain,
   } = props;
 
+  const reviewSideFloat = useRef(null);
+  const [sqlTargetReference, setSqlTargetReference] =
+    useState<Reference | null>();
   const [correctionPrompts, setCorrectionPrompts] = useState({});
   const reviewDrawer = useDrawerAction();
 
@@ -55,6 +62,10 @@ export default function Feedback(props: Props) {
 
   const triggerExplanation = () => {
     onTriggerThreadResponseExplain({ responseId: threadResponse.id });
+  };
+
+  const hoverReference = (reference?: Reference) => {
+    setSqlTargetReference(reference);
   };
 
   const loading = useMemo(
@@ -85,6 +96,12 @@ export default function Feedback(props: Props) {
 
   const contextValue = {
     references,
+    sqlTargetReference,
+    onHighlightToReferences: (target) => {
+      if (reviewSideFloat.current) {
+        reviewSideFloat.current?.triggerHighlight(target);
+      }
+    },
   };
 
   return (
@@ -105,10 +122,12 @@ export default function Feedback(props: Props) {
         <div className="flex-shrink-0 flex-grow-1 pl-5" style={{ width: 330 }}>
           <Skeleton active loading={loading}>
             <ReferenceSideFloat
+              ref={reviewSideFloat}
               references={references}
               error={error}
               onSaveCorrectionPrompt={saveCorrectionPrompt}
               onTriggerExplanation={triggerExplanation}
+              onHoverReference={hoverReference}
             />
           </Skeleton>
         </div>

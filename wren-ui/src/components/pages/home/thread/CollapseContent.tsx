@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { Button, Switch, Typography } from 'antd';
@@ -12,7 +13,6 @@ import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
 import { NativeSQLResult } from '@/hooks/useNativeSQL';
 import SQLHighlight from '@/components/pages/home/thread/feedback/SQLHighlight';
 import { useFeedbackContext } from './feedback';
-import { useMemo } from 'react';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
@@ -66,7 +66,8 @@ export default function CollapseContent(props: Props) {
 
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = Boolean(attributes.isLastStep) && hasNativeSQL;
-  const { references } = useFeedbackContext();
+  const { references, sqlTargetReference, onHighlightToReferences } =
+    useFeedbackContext();
   const currentStepReferences = useMemo(() => {
     return (references || []).filter((item) => item.stepIndex === stepIndex);
   }, [references]);
@@ -75,6 +76,10 @@ export default function CollapseContent(props: Props) {
     nativeSQLResult.nativeSQLMode && nativeSQLResult.loading === false
       ? nativeSQLResult.data
       : sql;
+
+  const onHighlightHover = (reference) => {
+    onHighlightToReferences && onHighlightToReferences(reference);
+  };
 
   return (
     <>
@@ -119,7 +124,12 @@ export default function CollapseContent(props: Props) {
             maxHeight="300"
             loading={nativeSQLResult.loading}
             highlightSlot={
-              <SQLHighlight sql={sqls} references={currentStepReferences} />
+              <SQLHighlight
+                sql={sqls}
+                references={currentStepReferences}
+                targetReference={sqlTargetReference}
+                onHighlightHover={onHighlightHover}
+              />
             }
           />
         </StyledPre>

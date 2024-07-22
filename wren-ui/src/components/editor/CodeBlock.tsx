@@ -20,6 +20,7 @@ const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
 
   .adm-code-wrap {
     position: relative;
+    padding-bottom: 2px;
     ${(props) => (props.inline ? '' : 'overflow: auto;')}
     ${(props) => (props.maxHeight ? `max-height: ${props.maxHeight}px;` : ``)}
   }
@@ -71,6 +72,17 @@ const addThemeStyleManually = (cssText) => {
   }
 };
 
+export const getTokenizer = () => {
+  const { ace } = window as any;
+  const { Tokenizer } = ace.require('ace/tokenizer');
+  const { SqlHighlightRules } = ace.require(`ace/mode/sql_highlight_rules`);
+  const rules = new SqlHighlightRules();
+  const tokenizer = new Tokenizer(rules.getRules());
+  return (line) => {
+    return tokenizer.getLineTokens(line).tokens;
+  };
+};
+
 export default function CodeBlock(props: Props) {
   const {
     code,
@@ -81,19 +93,16 @@ export default function CodeBlock(props: Props) {
     showLineNumbers,
     highlightSlot,
   } = props;
-  const { ace } = window as any;
-  const { Tokenizer } = ace.require('ace/tokenizer');
-  const { SqlHighlightRules } = ace.require(`ace/mode/sql_highlight_rules`);
-  const rules = new SqlHighlightRules();
-  const tokenizer = new Tokenizer(rules.getRules());
 
   useEffect(() => {
+    const { ace } = window as any;
     const { cssText } = ace.require('ace/theme/tomorrow');
     addThemeStyleManually(cssText);
   }, []);
 
+  const tokenize = getTokenizer();
   const lines = (code || '').split('\n').map((line, index) => {
-    const tokens = tokenizer.getLineTokens(line).tokens;
+    const tokens = tokenize(line);
     const children = tokens.map((token, index) => {
       const classNames = token.type.split('.').map((name) => `ace_${name}`);
       return (
@@ -102,7 +111,6 @@ export default function CodeBlock(props: Props) {
         </span>
       );
     });
-
     return (
       <span className="adm-code-line ace_line" key={`${line}-${index}`}>
         {showLineNumbers && (
