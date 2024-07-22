@@ -14,7 +14,8 @@ yarn
 ```
 
 Step 3(Optional). Switching database
-Wren-ui use sqlite as our default database. To use Postgres as the database of wren-ui, you need to set the two environment variable below.
+
+Wren-ui uses SQLite as our default database. To use Postgres as the database of wren-ui, you need to set the two environment variable below.
 
 ```bash
 # windows
@@ -25,13 +26,13 @@ SET PG_URL=postgres://user:password@localhost:5432/dbname
 export DB_TYPE=pg
 export PG_URL=postgres://user:password@localhost:5432/dbname
 ```
--  PG_URL is the connection string of your postgres database.
+-  `PG_URL` is the connection string of your postgres database.
 
-To set back to sqlite, you can remove the two environment variables above.
+To switch back to using SQLite, you can reassign the `DB_TYPE` to `sqlite`.
 ```
 # windows
 SET DB_TYPE=sqlite
-SET SQLITE_FILE={your_sqlite_file_path}
+SET SQLITE_FILE={your_sqlite_file_path} # default is ./db.sqlite3
 
 # linux or mac
 export DB_TYPE=sqlite
@@ -47,7 +48,7 @@ npm run migrate
 ```
 
 
-Step 4. Run the development server:
+Step 5. Run the development server:
 
 ```bash
 # Execute this if you start wren-engine and ibis-server via docker
@@ -65,9 +66,6 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
 
 ## Development wren-ui module on local
 There are many modules in Wren AI, to develop wren-ui, you can start other modules(services) via docker-compose.
@@ -77,16 +75,19 @@ To start other modules via docker-compose, you can follow the steps below.
 Step 1. Prepare you .env file
 In the WrenAI/docker folder, you can find the .env.example file. You can copy this file to .env.local file.
 
-```
+```bash
 # assume current directory is wren-ui
 cd ../docker
 cp .env.example .env.local
 ```
 Step 2. Modify your .env.local file
-You need to change the value of the environment variables in the .env.local file like `LLM_OPENAI_API_KEY`, `EMBEDDER_OPENAI_API_KEY` and the service version(eg. `WREN_AI_SERVICE_VERSION`) before starting.
+You need to fill the `LLM_OPENAI_API_KEY`, `EMBEDDER_OPENAI_API_KEY` with your OPENAI api key before starting.
+
+You can also change the `WREN_ENGINE_VERSION`, `WREN_AI_SERVICE_VERSION`, `IBIS_SERVER_VERSION` to the version you want to use.
+
 
 Step 3. Start the services via docker-compose
-```
+```bash
 # current directory is WrenAI/docker
 docker-compose -f docker-compose-dev.yaml --env-file .env.example up
 
@@ -100,9 +101,59 @@ Step 4. Start wren-ui from source code
 refer to [Start wren-ui from source code](#Start-wren-ui-from-source-code) section to start wren-ui from source code.
 
 Step 5. (Optional) Develop other modules along with wren-ui
+
 As mentioned above, you can use docker-compose to start other modules. The same applies when developing other modules.
 From the perspective of wren-ui, if you want to develop other modules at the same time, you can stop the container then spin up the module from the source code.
-Refer to the README.md or CONTRIBUTION.md file the module for starting the module from the source code. 
+
+eg: If you want to develop ai-service module, you can stop the ai-service container then start the ai-service from the source code.
+```yaml
+# docker/docker-compose-dev.yaml
+wren-engine:
+    image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    expose:
+      - ${WREN_ENGINE_SQL_PORT}
+    ports:
+      - ${WREN_ENGINE_PORT}:${WREN_ENGINE_PORT}
+    volumes:
+      - data:/usr/src/app/etc
+    networks:
+      - wren
+    depends_on:
+      - bootstrap
+    ...
+# comment out the ai-service service
+wren-ai-service:
+    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    ports:
+      - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
+    environment:
+      WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
+      WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
+      LLM_OPENAI_API_KEY: ${LLM_OPENAI_API_KEY}
+      EMBEDDER_OPENAI_API_KEY: ${EMBEDDER_OPENAI_API_KEY}
+      LLM_AZURE_OPENAI_API_KEY: ${LLM_AZURE_OPENAI_API_KEY}
+      EMBEDDER_AZURE_OPENAI_API_KEY: ${EMBEDDER_AZURE_OPENAI_API_KEY}
+      ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
+      LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
+    networks:
+      - wren
+    depends_on:
+      - qdrant
+      - wren-engine
+
+ibis-server:
+    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    ...
+```
+Then refer to the README.md or CONTRIBUTION.md file the module for starting the module from the source code. 
+
+eg: refer to the [ai-service README](https://github.com/Canner/WrenAI-saas/blob/main/wren-ai-service/README.md#start-the-service-for-development) to start the ai-service from the source code.
+
+
 
 ## FAQ
 ### Can I have multiple project at the same time in Wren AI?
@@ -113,7 +164,7 @@ you can switch between projects by switching the database and make sure you depl
 > Tip: Define the `DB_TYPE` and `SQLITE_FILE` or `PG_URL` variable to specify which database you intend to use.
 
 eg: 
-```
+```bash
 # start your first project using default database(sqlite by defulat)
 yarn migrate
 yarn dev
@@ -144,12 +195,3 @@ To learn more about Next.js, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
-
-
-## Backend structure
