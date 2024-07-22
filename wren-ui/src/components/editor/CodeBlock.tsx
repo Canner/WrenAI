@@ -27,6 +27,7 @@ const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
 
   .adm-code-line {
     display: block;
+    height: 22px;
     &-number {
       user-select: none;
       display: inline-block;
@@ -130,8 +131,8 @@ export default function CodeBlock(props: Props) {
       <Loading spinning={loading}>
         <div className="adm-code-wrap">
           {lines}
-          {copyable && <CopyText copyable>{code}</CopyText>}
           {highlightSlot}
+          {copyable && <CopyText copyable>{code}</CopyText>}
         </div>
       </Loading>
     </Block>

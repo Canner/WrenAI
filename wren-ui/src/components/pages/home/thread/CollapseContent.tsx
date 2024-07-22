@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { Button, Switch, Typography } from 'antd';
@@ -66,6 +66,7 @@ export default function CollapseContent(props: Props) {
 
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = Boolean(attributes.isLastStep) && hasNativeSQL;
+  const [isNativeSQL, setIsNativeSQL] = useState(false);
   const { references, sqlTargetReference, onHighlightToReferences } =
     useFeedbackContext();
   const currentStepReferences = useMemo(() => {
@@ -76,6 +77,12 @@ export default function CollapseContent(props: Props) {
     nativeSQLResult.nativeSQLMode && nativeSQLResult.loading === false
       ? nativeSQLResult.data
       : sql;
+  const hasReferences = references && references.length > 0;
+
+  const onSwitchChange = (checked: boolean) => {
+    setIsNativeSQL(checked);
+    onChangeNativeSQL(checked);
+  };
 
   const onHighlightHover = (reference) => {
     onHighlightToReferences && onHighlightToReferences(reference);
@@ -109,7 +116,7 @@ export default function CollapseContent(props: Props) {
                   unCheckedChildren={<CloseOutlined />}
                   className="mr-2"
                   size="small"
-                  onChange={onChangeNativeSQL}
+                  onChange={onSwitchChange}
                   loading={nativeSQLResult.loading}
                 />
                 <Text className="gray-8 text-medium text-sm">
@@ -124,12 +131,15 @@ export default function CollapseContent(props: Props) {
             maxHeight="300"
             loading={nativeSQLResult.loading}
             highlightSlot={
-              <SQLHighlight
-                sql={sqls}
-                references={currentStepReferences}
-                targetReference={sqlTargetReference}
-                onHighlightHover={onHighlightHover}
-              />
+              hasReferences &&
+              !isNativeSQL && (
+                <SQLHighlight
+                  sql={sqls}
+                  references={currentStepReferences}
+                  targetReference={sqlTargetReference}
+                  onHighlightHover={onHighlightHover}
+                />
+              )
             }
           />
         </StyledPre>

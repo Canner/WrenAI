@@ -18,6 +18,7 @@ const SQLWrapper = styled.div`
 
   .sqlHighlight__line {
     background-color: white;
+    height: 22px;
   }
 
   .sqlHighlight__block {
@@ -132,7 +133,6 @@ export default function SQLHighlight(props: Props) {
   const hoverHighlight = (reference?: Reference) => {
     onHighlightHover && onHighlightHover(reference);
   };
-
   const highlights = [];
   const referenceMatches = [];
   const tokenize = getTokenizer();
@@ -193,7 +193,7 @@ export default function SQLHighlight(props: Props) {
     });
   });
 
-  const content = sqlArray.map((_, index) => {
+  const content = sqlArray.map((line, index) => {
     if (highlights[index]) {
       return (
         <div className="sqlHighlight__line" key={index}>
@@ -202,8 +202,8 @@ export default function SQLHighlight(props: Props) {
       );
     }
     return (
-      <div key={index} style={{ background: 'transparent' }}>
-        &nbsp;
+      <div key={index} style={{ color: 'transparent' }}>
+        {line}
       </div>
     );
   });
