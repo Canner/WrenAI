@@ -217,15 +217,33 @@ class ContextualRecallMetric(BaseMetric):
 
 class ContextualPrecisionMetric(BaseMetric):
     def __init__(self):
-        self.threshold = 10
+        self.threshold = 0
         self.score = 0
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        # todo
-        pass
+        context = test_case.context
+        retrieval_context = test_case.retrieval_context
+
+        intersection_count = len(set(context) & set(retrieval_context))
+
+        if intersection_count == 0:
+            self.success = False
+            return self.score
+
+        n = len(retrieval_context)
+        summation = 0
+        for k in range(1, n + 1):
+            intersection_up_to_k = len(set(context[:k]) & set(retrieval_context[:k]))
+            rk = intersection_up_to_k > 0
+            summation += (intersection_up_to_k / k) * rk
+
+        self.score = (1 / intersection_count) * summation
+
+        self.success = self.score >= self.threshold
+        return self.score
 
     def is_successful(self):
         return self.success

@@ -16,6 +16,7 @@ sys.path.append(f"{Path().parent.resolve()}")
 from eval.metrics.column import (
     AccuracyMetric,
     AnswerRelevancyMetric,
+    ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
     FaithfulnessMetric,
@@ -133,6 +134,7 @@ def metrics_initiator(mdl: dict) -> list:
         FaithfulnessMetric(engine_config),
         ContextualRecallMetric(engine_config),
         ContextualRelevancyMetric(),
+        ContextualPrecisionMetric(),
     ]
 
 
