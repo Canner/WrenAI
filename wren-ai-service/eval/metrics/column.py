@@ -110,7 +110,7 @@ class AnswerRelevancyMetric(BaseMetric):
             sql=test_case.expected_output, **self._engine_config
         )
 
-        intersection = set(actual_units).intersection(set(expected_units))
+        intersection = set(actual_units) & set(expected_units)
         self.score = len(intersection) / len(actual_units)
 
         self.success = self.score >= self.threshold
@@ -146,7 +146,7 @@ class FaithfulnessMetric(BaseMetric):
         actual_units = await get_contexts_from_sql(
             sql=valid_results[0]["sql"], **self._engine_config
         )
-        intersection = set(actual_units).intersection(set(test_case.retrieval_context))
+        intersection = set(actual_units) & set(test_case.retrieval_context)
         self.score = len(intersection) / len(actual_units)
 
         self.success = self.score >= self.threshold
@@ -169,9 +169,7 @@ class ContextualRelevancyMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        intersection = set(test_case.retrieval_context).intersection(
-            set(test_case.context)
-        )
+        intersection = set(test_case.retrieval_context) & set(test_case.context)
         self.score = len(intersection) / len(test_case.retrieval_context)
 
         self.success = self.score >= self.threshold
@@ -195,13 +193,11 @@ class ContextualRecallMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        ddl_units = test_case.retrieval_context
-
         expected_units = await get_contexts_from_sql(
             sql=test_case.expected_output, **self._engine_config
         )
 
-        intersection = set(ddl_units).intersection(set(expected_units))
+        intersection = set(test_case.retrieval_context) & set(expected_units)
         self.score = len(intersection) / len(expected_units)
 
         self.success = self.score >= self.threshold
@@ -227,7 +223,8 @@ class ContextualPrecisionMetric(BaseMetric):
         context = test_case.context
         retrieval_context = test_case.retrieval_context
 
-        intersection_count = len(set(context) & set(retrieval_context))
+        intersection = set(context) & set(retrieval_context)
+        intersection_count = len(intersection)
 
         if intersection_count == 0:
             self.success = False
