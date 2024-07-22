@@ -7,7 +7,7 @@ from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 from sqlglot.diff import Keep, Move
 
-from eval.utils import get_data_from_wren_engine
+from eval.utils import get_contexts_from_sql, get_data_from_wren_engine
 
 
 class AccuracyMetric(BaseMetric):
@@ -151,16 +151,26 @@ class ContextualRelevancyMetric(BaseMetric):
 
 
 class ContextualRecallMetric(BaseMetric):
-    def __init__(self):
-        self.threshold = 10
+    def __init__(self, engine_config: dict):
+        self.threshold = 0
         self.score = 0
+        self._engine_config = engine_config
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        # todo
-        pass
+        ddl_units = test_case.retrieval_context
+
+        expected_units = await get_contexts_from_sql(
+            sql=test_case.expected_output, **self._engine_config
+        )
+
+        intersection = set(ddl_units).intersection(set(expected_units))
+        self.score = len(intersection) / len(expected_units)
+
+        self.success = self.score >= self.threshold
+        return self.score
 
     def is_successful(self):
         return self.success
