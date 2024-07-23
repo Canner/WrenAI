@@ -1,10 +1,12 @@
+import pytest
+
 from src.core.engine import EngineConfig
-from src.core.pipeline import async_validate
 from src.pipelines.ask_details.generation import Generation
 from src.utils import init_providers
 
 
-def test_generation_pipeline_producing_executable_sqls():
+@pytest.mark.asyncio
+async def test_generation_pipeline_producing_executable_sqls():
     llm_provider, _, _, engine = init_providers(EngineConfig())
     generation_pipeline = Generation(
         llm_provider=llm_provider,
@@ -25,8 +27,6 @@ def test_generation_pipeline_producing_executable_sqls():
     ]
 
     for candidate_sql_query in candidate_sql_queries:
-        assert async_validate(
-            lambda: generation_pipeline.run(
-                candidate_sql_query,
-            )
+        assert await generation_pipeline.run(
+            candidate_sql_query,
         )

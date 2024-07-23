@@ -5,7 +5,6 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
-from src.core.pipeline import async_validate
 from src.pipelines.ask import (
     generation,
     historical_question,
@@ -60,14 +59,13 @@ def mdl_str():
         return orjson.dumps(json.load(f)).decode("utf-8")
 
 
-def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
+@pytest.mark.asyncio
+async def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
     id = str(uuid.uuid4())
-    async_validate(
-        lambda: ask_service.prepare_semantics(
-            SemanticsPreparationRequest(
-                mdl=mdl_str,
-                id=id,
-            )
+    await ask_service.prepare_semantics(
+        SemanticsPreparationRequest(
+            mdl=mdl_str,
+            id=id,
         )
     )
 
@@ -78,7 +76,7 @@ def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
         id=id,
     )
     ask_request.query_id = query_id
-    async_validate(lambda: ask_service.ask(ask_request))
+    await ask_service.ask(ask_request)
 
     # getting ask result
     ask_result_response = ask_service.get_ask_result(
