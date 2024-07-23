@@ -106,7 +106,7 @@ export default function StepContent(props: Props) {
         <CollapseContent
           {...(collapseContentProps as Omit<
             CollapseContentProps,
-            'attributes'
+            'attributes' | 'stepIndex'
           >)}
           stepIndex={stepIndex}
           key={`collapse-${stepNumber}`}
