@@ -7,6 +7,13 @@ This document describes the evaluation framework for the Wren AI service. The ev
 - Install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) to run the evaluation framework commands.
 - Set up the [Langfuse](https://cloud.langfuse.com) account and get the API key and secret. Fill in the `.env.dev` file with the key and secret.
 
+## Dataset Curation
+
+The dataset curation process is used to prepare the evaluation dataset for the Wren AI service on evaluation purpose. You can follow the steps below to start the curation app:
+
+- copy `.env.example` file to `.env` in the `eval/data_curation` folder and fill in the environment variables
+- execute the command under the `wren-ai-service` folder: `make data_curation_app`
+
 ## Prediction Process
 
 The prediction process is used to produce the results of the Wren AI service. It will create traces and a session on Langfuse to make the results available to the user. You can use the following command to predict the evaluation dataset under the `eval/dataset` directory:

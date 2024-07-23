@@ -30,11 +30,9 @@ The following commands can quickly start the service for development:
 
 ### Pipeline Evaluation
 
-- evaluation dataset curation
-  - copy `.env.example` file to `.env` in the `eval/data_curation` folder and fill in the environment variables
-  - execute the command under the `wren-ai-service` folder: `make data_curation_app`
+For a comprehensive understanding of how to evaluate the pipelines, please refer to the [evaluation framework](./eval/README.md). This document provides detailed guidelines on the evaluation process, including how to set up and run evaluations, interpret results, and utilize the evaluation metrics effectively. It is a valuable resource for ensuring that the evaluation is conducted accurately and that the results are meaningful.
 
-### Speed Evaluation(Deprecated, will introduce new way to evaluate the speed in the future)
+### Estimate the Speed of the Pipeline
 
 - to evaluate the speed of the pipeline, you can enable the timer
   - add environment variables `ENABLE_TIMER=1` in `.env.dev`
