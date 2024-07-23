@@ -10,6 +10,7 @@ from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRe
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from haystack_integrations.document_stores.qdrant.converters import (
     DENSE_VECTORS_NAME,
+    convert_id,
     convert_qdrant_point_to_haystack_document,
 )
 from haystack_integrations.document_stores.qdrant.filters import (
@@ -155,6 +156,22 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                     score = float(1 / (1 + np.exp(-score / 100)))
                 document.score = score
         return results
+
+    async def delete_documents(self, ids: List[str]):
+        ids = [convert_id(_id) for _id in ids]
+        try:
+            await self.async_client.delete(
+                collection_name=self.index,
+                points_selector=ids,
+                wait=self.wait_result_from_api,
+            )
+        except KeyError:
+            logger.warning(
+                "Called QdrantDocumentStore.delete_documents() on a non-existing ID",
+            )
+
+    async def count_documents(self) -> int:
+        return await self.async_client.count(collection_name=self.index)
 
 
 class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):

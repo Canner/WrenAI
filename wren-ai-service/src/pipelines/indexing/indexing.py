@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -35,14 +36,18 @@ class DocumentCleaner:
         self._stores = stores
 
     @component.output_types(mdl=str)
-    def run(self, mdl: str) -> str:
-        def _clear_documents(store: DocumentStore) -> None:
-            ids = [str(i) for i in range(store.count_documents())]
+    async def run(self, mdl: str) -> str:
+        async def _clear_documents(store: DocumentStore) -> None:
+            document_count = await store.count_documents()
+            print(f"Document count: {document_count}")
+            ids = [str(i) for i in range(document_count)]
             if ids:
-                store.delete_documents(ids)
+                await store.delete_documents(ids)
+            document_count = await store.count_documents()
+            print(f"Document count: {document_count}")
 
         logger.info("Ask Indexing pipeline is clearing old documents...")
-        [_clear_documents(store) for store in self._stores]
+        await asyncio.gather(*[_clear_documents(store) for store in self._stores])
         return {"mdl": mdl}
 
 
