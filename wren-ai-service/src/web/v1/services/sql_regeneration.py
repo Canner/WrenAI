@@ -16,7 +16,9 @@ class DecisionPoint(BaseModel):
 
 
 class CorrectionPoint(BaseModel):
-    type: Literal["sql_expression", "nl_expression"]
+    type: Literal[
+        "sql_expression", "nl_expression"
+    ]  # nl_expression is natural language expression
     value: str
 
 

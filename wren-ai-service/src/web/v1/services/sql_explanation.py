@@ -68,8 +68,6 @@ class SQLExplanationService:
                 status="generating",
             )
 
-            sql_explanation_results = []
-
             async def _task(
                 question: str,
                 step_with_analysis_results: StepWithAnalysisResult,
@@ -88,15 +86,26 @@ class SQLExplanationService:
             ]
             generation_results = await asyncio.gather(*tasks)
 
+            sql_explanation_results = [
+                generation_result["post_process"]["results"]
+                for generation_result in generation_results
+            ]
+
             logger.debug(f"sql explanation results: {sql_explanation_results}")
 
-            self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
-                status="finished",
-                response=[
-                    generation_result["post_process"]["results"]
-                    for generation_result in generation_results
-                ],
-            )
+            if sql_explanation_results:
+                self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                    status="finished",
+                    response=sql_explanation_results,
+                )
+            else:
+                self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                    status="failed",
+                    error=SQLExplanationResultResponse.SQLExplanationResultError(
+                        code="OTHERS",
+                        message="No SQL explanation is found",
+                    ),
+                )
         except Exception as e:
             logger.exception(
                 f"sql explanation pipeline - Failed to provide SQL explanation: {e}"

@@ -120,6 +120,7 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
             _collect_relations(relation["right"], result, top_level=False)
 
     results = []
+    print(f"relation: {relation}")
     _collect_relations(relation, results)
     return results
 

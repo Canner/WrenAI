@@ -1,7 +1,7 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import orjson
 from hamilton import base
@@ -48,28 +48,6 @@ class SQLRegenerationRreprocesser:
                 "steps": steps,
             }
         }
-
-
-@component
-class DescriptionRegenerationPostProcessor:
-    @component.output_types(
-        results=Optional[Dict[str, Any]],
-    )
-    def run(
-        self,
-        replies: List[str],
-        steps: List[str],
-    ) -> Dict[str, Any]:
-        try:
-            return {
-                "results": {
-                    "description": orjson.loads(replies[0]).get("description", ""),
-                    "steps": steps,
-                }
-            }
-        except Exception as e:
-            logger.exception(f"Error in DescriptionRegenerationPostProcessor: {e}")
-            return {"results": None}
 
 
 ## Start of Pipeline
