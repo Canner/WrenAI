@@ -3,6 +3,7 @@ import json
 import orjson
 import pytest
 
+from src.core.engine import EngineConfig
 from src.core.pipeline import async_validate
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.ask.followup_generation import FollowUpGeneration
@@ -10,7 +11,7 @@ from src.pipelines.ask.generation import Generation
 from src.pipelines.ask.retrieval import Retrieval
 from src.pipelines.ask.sql_correction import SQLCorrection
 from src.pipelines.indexing.indexing import Indexing
-from src.utils import EngineConfig, init_providers
+from src.utils import init_providers
 from src.web.v1.services.ask import AskRequest, SQLExplanation
 
 GLOBAL_DATA = {

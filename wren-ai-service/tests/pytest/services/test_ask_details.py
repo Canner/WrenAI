@@ -2,9 +2,10 @@ import uuid
 
 import pytest
 
+from src.core.engine import EngineConfig
 from src.core.pipeline import async_validate
 from src.pipelines.ask_details import generation
-from src.utils import EngineConfig, init_providers
+from src.utils import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
     AskDetailsResultRequest,

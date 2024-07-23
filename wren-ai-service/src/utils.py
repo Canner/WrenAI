@@ -8,9 +8,8 @@ from typing import Tuple
 
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
-from pydantic import BaseModel
 
-from src.core.engine import Engine
+from src.core.engine import Engine, EngineConfig
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.providers import loader
 
@@ -39,11 +38,6 @@ class CustomFormatter(logging.Formatter):
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
-
-
-class EngineConfig(BaseModel):
-    provider: str
-    config: dict
 
 
 def setup_custom_logger(name, level=logging.INFO):

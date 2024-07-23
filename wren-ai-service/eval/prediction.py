@@ -19,6 +19,7 @@ from tqdm.asyncio import tqdm_asyncio
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
 from eval.utils import parse_toml
+from src.core.engine import EngineConfig
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
@@ -141,7 +142,7 @@ def setup_pipes(mdl: str) -> Dict[str, Any]:
         document_store_provider,
         engine,
     ) = utils.init_providers(
-        engine_config=utils.EngineConfig(
+        engine_config=EngineConfig(
             provider="wren_ibis",
             config={
                 "source": "bigquery",

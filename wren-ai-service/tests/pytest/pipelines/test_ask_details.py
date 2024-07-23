@@ -1,6 +1,7 @@
+from src.core.engine import EngineConfig
 from src.core.pipeline import async_validate
 from src.pipelines.ask_details.generation import Generation
-from src.utils import EngineConfig, init_providers
+from src.utils import init_providers
 
 
 def test_generation_pipeline_producing_executable_sqls():

@@ -4,6 +4,7 @@ import uuid
 import orjson
 import pytest
 
+from src.core.engine import EngineConfig
 from src.core.pipeline import async_validate
 from src.pipelines.ask import (
     generation,
@@ -12,7 +13,7 @@ from src.pipelines.ask import (
     sql_correction,
 )
 from src.pipelines.indexing import indexing
-from src.utils import EngineConfig, init_providers
+from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,

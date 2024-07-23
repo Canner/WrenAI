@@ -1,7 +1,8 @@
 import pytest
 
+from src.core.engine import EngineConfig
 from src.pipelines.semantics import description
-from src.utils import EngineConfig, init_providers
+from src.utils import init_providers
 from src.web.v1.services.semantics import (
     SemanticsService,
 )

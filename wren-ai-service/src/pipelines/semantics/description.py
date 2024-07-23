@@ -99,7 +99,8 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from src.utils import EngineConfig, load_env_vars
+    from src.core.engine import EngineConfig
+    from src.utils import load_env_vars
 
     load_env_vars()
 

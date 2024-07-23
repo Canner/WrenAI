@@ -1,5 +1,6 @@
 import os
 
+from src.core.engine import EngineConfig
 from src.pipelines.ask import (
     followup_generation as ask_followup_generation,
 )
@@ -28,7 +29,7 @@ from src.pipelines.sql_explanation import (
 from src.pipelines.sql_regeneration import (
     generation as sql_regeneration,
 )
-from src.utils import EngineConfig, init_providers
+from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics import SemanticsService
