@@ -64,16 +64,52 @@ def obtain_commit_hash() -> str:
 def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
     predictions = []
 
-    @observe(name="Prediction Process")
-    async def wrapper(query: dict) -> None:
+    async def run(query: dict) -> None:
+        prediction = await wrapper(query)
+        valid_outputs = (
+            prediction["actual_output"]
+            .get("post_process", {})
+            .get("valid_generation_results", [])
+        )
+
+        predictions.append(prediction)
+        predictions.extend(
+            [flat(actual, prediction.copy()) for actual in valid_outputs]
+        )
+
+    @observe(capture_input=False)
+    def flat(actual: str, prediction: dict) -> dict:
+        langfuse_context.update_current_trace(
+            name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
+            session_id=meta["session_id"],
+            user_id=meta["user_id"],
+            metadata={
+                "commit": meta["commit"],
+                "source_trace_id": prediction["trace_id"],
+                "source_trace_url": prediction["trace_url"],
+            },
+        )
+
+        prediction["actual_output"] = actual
+        prediction["source_trace_id"] = prediction["trace_id"]
+        prediction["source_trace_url"] = prediction["trace_url"]
+        prediction["trace_id"] = langfuse_context.get_current_trace_id()
+        prediction["trace_url"] = langfuse_context.get_current_trace_url()
+        prediction["type"] = "shallow"
+
+        return prediction
+
+    @observe(name="Prediction Process", capture_input=False)
+    async def wrapper(query: dict) -> dict:
         prediction = {
             "trace_id": langfuse_context.get_current_trace_id(),
             "trace_url": langfuse_context.get_current_trace_url(),
             "input": query["question"],
-            "actual_output": [],
+            "actual_output": {},
             "expected_output": query["sql"],
             "retrieval_context": [],
             "context": query["context"],
+            "type": "execution",
         }
 
         langfuse_context.update_current_trace(
@@ -97,7 +133,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             [doc.to_dict() for doc in documents]
         )
 
-        predictions.append(prediction)
+        return prediction
 
     def extract_units(docs: list) -> list:
         columns = []
@@ -120,7 +156,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
         return columns
 
     async def task():
-        tasks = [wrapper(query) for query in queries]
+        tasks = [run(query) for query in queries]
         await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
 
     asyncio.run(task())
