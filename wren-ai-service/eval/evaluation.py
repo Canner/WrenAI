@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Tuple
 
 import dotenv
-import orjson
 from deepeval import evaluate
 from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
@@ -26,15 +25,12 @@ from src import utils
 
 
 def formatter(prediction: dict) -> dict:
-    actual_output = orjson.dumps(
-        prediction["actual_output"].get("post_process", {})
-    ).decode("utf-8")
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
     context = [str(context) for context in prediction["context"]]
 
     return {
         "input": prediction["input"],
-        "actual_output": actual_output,
+        "actual_output": prediction["actual_output"]["sql"],
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
         "context": context,
@@ -65,6 +61,9 @@ class Evaluator:
 
     def eval(self, meta: dict, predictions: list) -> None:
         for prediction in predictions:
+            if prediction.get("type") != "shallow":
+                continue
+
             test_case = LLMTestCase(**formatter(prediction))
             result = evaluate([test_case], self._metrics)[0]
             self._score_metrics(test_case, result)

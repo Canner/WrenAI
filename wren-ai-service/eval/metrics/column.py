@@ -1,6 +1,5 @@
 import asyncio
 
-import orjson
 import pandas as pd
 import sqlglot
 from deepeval.metrics import BaseMetric
@@ -47,20 +46,19 @@ class AccuracyMetric(BaseMetric):
         expected = test_case.expected_output
         expected_dataset = await self._retrieve_data(expected)
 
-        actual_output = orjson.loads(test_case.actual_output)
-        for actual in actual_output["valid_generation_results"]:
-            if self._semantic_check(expected, actual["sql"]):
-                self.success = True
-                self.score = 1
-                return self.score
+        actual_output = test_case.actual_output
+        if self._semantic_check(expected, actual_output):
+            self.success = True
+            self.score = 1
+            return self.score
 
-            actual_dataset = await self._retrieve_data(actual["sql"])
-            if expected_dataset.equals(actual_dataset) or self.is_subset(
-                expected_dataset, actual_dataset
-            ):
-                self.success = True
-                self.score = 1
-                return self.score
+        actual_dataset = await self._retrieve_data(actual_output)
+        if expected_dataset.equals(actual_dataset) or self.is_subset(
+            expected_dataset, actual_dataset
+        ):
+            self.success = True
+            self.score = 1
+            return self.score
 
         # if didn't pass any of the above checks
         self.success = False
@@ -93,17 +91,8 @@ class AnswerRelevancyMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        actual_output = orjson.loads(test_case.actual_output)
-
-        if not actual_output["valid_generation_results"]:
-            self.success = False
-            return self.score
-
-        valid_results = actual_output["valid_generation_results"]
-
-        # todo: using the first one or just compare all and use the best one
         actual_units = await get_contexts_from_sql(
-            sql=valid_results[0]["sql"], **self._engine_config
+            sql=test_case.actual_output, **self._engine_config
         )
 
         expected_units = await get_contexts_from_sql(
@@ -134,17 +123,8 @@ class FaithfulnessMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        actual_output = orjson.loads(test_case.actual_output)
-
-        if not actual_output["valid_generation_results"]:
-            self.success = False
-            return self.score
-
-        valid_results = actual_output["valid_generation_results"]
-
-        # todo: using the first one or just compare all and use the best one
         actual_units = await get_contexts_from_sql(
-            sql=valid_results[0]["sql"], **self._engine_config
+            sql=test_case.actual_output, **self._engine_config
         )
         intersection = set(actual_units) & set(test_case.retrieval_context)
         self.score = len(intersection) / len(actual_units)
