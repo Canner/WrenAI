@@ -42,11 +42,21 @@ export interface IbisBigQueryConnectionInfo {
   credentials: string; // base64 encoded
 }
 
+export interface IbisTrinoConnectionInfo {
+  host: string;
+  port: number;
+  catalog: string;
+  schema: string;
+  user: string;
+  password: string;
+}
+
 export type IbisConnectionInfo =
   | UrlBasedConnectionInfo
   | HostBasedConnectionInfo
   | IbisPostgresConnectionInfo
-  | IbisBigQueryConnectionInfo;
+  | IbisBigQueryConnectionInfo
+  | IbisTrinoConnectionInfo;
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
@@ -55,6 +65,7 @@ export enum SupportedDataSource {
   MYSQL = 'MYSQL',
   MSSQL = 'MSSQL',
   CLICK_HOUSE = 'CLICK_HOUSE',
+  TRINO = 'TRINO',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -64,6 +75,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.MYSQL]: 'mysql',
   [SupportedDataSource.MSSQL]: 'mssql',
   [SupportedDataSource.CLICK_HOUSE]: 'clickhouse',
+  [SupportedDataSource.TRINO]: 'trino',
 };
 export interface TableResponse {
   tables: CompactTable[];

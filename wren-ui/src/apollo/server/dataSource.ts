@@ -12,6 +12,7 @@ import {
   MS_SQL_CONNECTION_INFO,
   WREN_AI_CONNECTION_INFO,
   CLICK_HOUSE_CONNECTION_INFO,
+  TRINO_CONNECTION_INFO,
 } from './repositories';
 import { DataSourceName } from './types';
 import { getConfig } from './config';
@@ -151,6 +152,22 @@ const dataSource = {
     CLICK_HOUSE_CONNECTION_INFO,
     UrlBasedConnectionInfo
   >,
+  [DataSourceName.TRINO]: {
+    sensitiveProps: ['password'],
+    toIbisConnectionInfo(connectionInfo) {
+      const { catalog, host, password, port, schema, ssl, username } =
+        decryptConnectionInfo(
+          DataSourceName.TRINO,
+          connectionInfo,
+        ) as TRINO_CONNECTION_INFO;
+      console.log('connectionInfo', connectionInfo);
+      let connectionUrl = `jdbc:trino://${host}:${port}/${catalog}/${schema}?user=${username}&password=${password}`;
+      if (ssl) {
+        connectionUrl += '&SSL=true';
+      }
+      return { connectionUrl };
+    },
+  } as IDataSourceConnectionInfo<TRINO_CONNECTION_INFO, UrlBasedConnectionInfo>,
 
   // DuckDB
   [DataSourceName.DUCKDB]: {
