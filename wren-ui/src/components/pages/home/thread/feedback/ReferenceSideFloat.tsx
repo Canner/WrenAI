@@ -1,6 +1,13 @@
 import clsx from 'clsx';
 import { groupBy } from 'lodash';
-import { useMemo, useState } from 'react';
+import {
+  useMemo,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useEffect,
+} from 'react';
 import styled from 'styled-components';
 import { Tag, Typography, Button, Input, Alert } from 'antd';
 import {
@@ -21,6 +28,15 @@ import { ERROR_CODES } from '@/utils/errorHandler';
 
 const StyledReferenceSideFloat = styled.div`
   position: relative;
+
+  .referenceSideFloat__summary {
+    cursor: pointer;
+    padding: 2px 0;
+    &:hover,
+    &.isActive {
+      background-color: rgba(250, 219, 20, 0.3);
+    }
+  }
 
   .referenceSideFloat-title {
     position: absolute;
@@ -54,6 +70,7 @@ interface Props {
   error?: Record<string, string>;
   onSaveCorrectionPrompt: (id: string, value: string) => void;
   onTriggerExplanation: () => void;
+  onHoverReference?: (reference: Reference) => void;
 }
 
 const ReferenceSummaryTemplate = ({
@@ -82,6 +99,7 @@ const GroupReferenceTemplate = ({
   data,
   index,
   saveCorrectionPrompt,
+  hoverReference,
 }) => {
   if (!data.length) return null;
   return (
@@ -93,19 +111,19 @@ const GroupReferenceTemplate = ({
       <ReferenceIterator
         data={data}
         saveCorrectionPrompt={saveCorrectionPrompt}
+        hoverReference={hoverReference}
       />
     </div>
   );
 };
 
 const ReferenceTemplate = ({
-  type,
-  summary,
-  referenceId,
-  referenceNum,
-  correctionPrompt,
   saveCorrectionPrompt,
+  hoverReference,
+  ...reference
 }) => {
+  const { type, summary, referenceId, referenceNum, correctionPrompt } =
+    reference;
   const [isEdit, setIsEdit] = useState(false);
   const [value, setValue] = useState(correctionPrompt);
   const isRevise = !!correctionPrompt;
@@ -130,7 +148,16 @@ const ReferenceTemplate = ({
       </div>
       <div className="flex-grow-1">
         <Typography.Text className="gray-8">
-          {summary}
+          <span
+            className={clsx(
+              'referenceSideFloat__summary',
+              `reference-${referenceNum}`,
+            )}
+            onMouseEnter={() => hoverReference(reference)}
+            onMouseLeave={() => hoverReference()}
+          >
+            {summary}
+          </span>
           <span className="gray-6 ml-2">
             {isRevise ? (
               '(feedback suggested)'
@@ -170,8 +197,14 @@ const ReferenceSummaryIterator = makeIterable(ReferenceSummaryTemplate);
 const GroupReferenceIterator = makeIterable(GroupReferenceTemplate);
 const ReferenceIterator = makeIterable(ReferenceTemplate);
 
-const References = (props: Props) => {
-  const { references, onSaveCorrectionPrompt } = props;
+const References = (props: Props & { targetReference?: Reference }) => {
+  const {
+    references,
+    onSaveCorrectionPrompt,
+    targetReference,
+    onHoverReference,
+  } = props;
+  const $scroller = useRef(null);
   const referencesByGroup = groupBy(references, 'type');
   const resources = REFERENCE_ORDERS.map((type) => ({
     type,
@@ -179,22 +212,58 @@ const References = (props: Props) => {
     data: referencesByGroup[type] || [],
   }));
 
+  useEffect(() => {
+    if ($scroller.current) {
+      const $element = $scroller.current;
+      const $targets = $element.querySelectorAll(`.isActive`);
+      $targets.forEach((target) => {
+        target.classList.remove('isActive');
+      });
+
+      if (targetReference) {
+        const $target = $element.querySelector(
+          `.reference-${targetReference.referenceNum}`,
+        );
+        $target.classList.add('isActive');
+        $element.scrollTo({ top: $target.offsetTop - 100 });
+      }
+    }
+  }, [targetReference]);
+
+  const hoverReference = (reference?: Reference) => {
+    onHoverReference && onHoverReference(reference);
+  };
+
   return (
     <div
+      ref={$scroller}
       className="pr-4 -mr-2"
       style={{ maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' }}
     >
       <GroupReferenceIterator
         data={resources}
         saveCorrectionPrompt={onSaveCorrectionPrompt}
+        hoverReference={hoverReference}
       />
     </div>
   );
 };
 
-export default function ReferenceSideFloat(props: Props) {
-  const { references, error, onTriggerExplanation } = props;
+function ReferenceSideFloat(props: Props, ref) {
+  const { references, error, onTriggerExplanation, onHoverReference } = props;
   const [collapse, setCollapse] = useState(false);
+  const [targetReference, setTargetReference] = useState<Reference | null>(
+    null,
+  );
+
+  const triggerHighlight = (reference: Reference) => {
+    setCollapse(true);
+    setTargetReference(reference);
+  };
+
+  useImperativeHandle(ref, () => ({
+    triggerHighlight,
+  }));
 
   const referencesSummary = useMemo(
     () =>
@@ -245,7 +314,11 @@ export default function ReferenceSideFloat(props: Props) {
         <QuoteIcon /> References
       </div>
       {collapse ? (
-        <References {...props} />
+        <References
+          {...props}
+          targetReference={targetReference}
+          onHoverReference={onHoverReference}
+        />
       ) : (
         <>
           <ReferenceSummaryIterator data={referencesSummary} />
@@ -262,3 +335,5 @@ export default function ReferenceSideFloat(props: Props) {
     </StyledReferenceSideFloat>
   );
 }
+
+export default forwardRef(ReferenceSideFloat);

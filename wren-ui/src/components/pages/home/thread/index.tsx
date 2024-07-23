@@ -107,6 +107,7 @@ export default function Thread(props: Props) {
     <StyledThread className="px-4 mt-12" ref={divRef}>
       <AnswerResultIterator
         data={data?.responses || []}
+        keyIndex={(record) => record.id}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onTriggerScrollToBottom={triggerScrollToBottom}
         onSubmitReviewDrawer={onSubmitReviewDrawer}

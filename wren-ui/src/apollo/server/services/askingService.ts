@@ -630,7 +630,12 @@ export class AskingService implements IAskingService {
     const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
     const manifest = deployment.manifest;
-    const sqls = threadResponse.detail?.steps?.map((step) => step.sql);
+    const sqls = threadResponse.detail?.steps?.map((step, index) => {
+      const isLastStep = index === threadResponse.detail.steps.length - 1;
+      return isLastStep
+        ? format(constructCteSql(threadResponse.detail.steps))
+        : format(step.sql);
+    });
     const analysis = await this.ibisAdaptor.analysisSqls(manifest, sqls);
     return addAutoIncrementId(analysis);
   }

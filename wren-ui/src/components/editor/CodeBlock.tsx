@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Typography } from 'antd';
 import styled from 'styled-components';
 import '@/components/editor/AceEditor';
@@ -19,16 +19,19 @@ const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
       : `background: var(--gray-1); padding: 8px;`}
 
   .adm-code-wrap {
+    position: relative;
+    padding-bottom: 2px;
     ${(props) => (props.inline ? '' : 'overflow: auto;')}
     ${(props) => (props.maxHeight ? `max-height: ${props.maxHeight}px;` : ``)}
   }
 
   .adm-code-line {
     display: block;
+    height: 22px;
     &-number {
       user-select: none;
       display: inline-block;
-      min-width: 14px;
+      min-width: 17px;
       text-align: right;
       margin-right: 1em;
       color: var(--gray-6);
@@ -55,6 +58,7 @@ interface Props {
   loading?: boolean;
   maxHeight?: string;
   showLineNumbers?: boolean;
+  highlightSlot?: React.ReactNode;
 }
 
 const addThemeStyleManually = (cssText) => {
@@ -69,21 +73,37 @@ const addThemeStyleManually = (cssText) => {
   }
 };
 
-export default function CodeBlock(props: Props) {
-  const { code, copyable, maxHeight, inline, loading, showLineNumbers } = props;
+export const getTokenizer = () => {
   const { ace } = window as any;
   const { Tokenizer } = ace.require('ace/tokenizer');
   const { SqlHighlightRules } = ace.require(`ace/mode/sql_highlight_rules`);
   const rules = new SqlHighlightRules();
   const tokenizer = new Tokenizer(rules.getRules());
+  return (line) => {
+    return tokenizer.getLineTokens(line).tokens;
+  };
+};
+
+export default function CodeBlock(props: Props) {
+  const {
+    code,
+    copyable,
+    maxHeight,
+    inline,
+    loading,
+    showLineNumbers,
+    highlightSlot,
+  } = props;
 
   useEffect(() => {
+    const { ace } = window as any;
     const { cssText } = ace.require('ace/theme/tomorrow');
     addThemeStyleManually(cssText);
   }, []);
 
+  const tokenize = getTokenizer();
   const lines = (code || '').split('\n').map((line, index) => {
-    const tokens = tokenizer.getLineTokens(line).tokens;
+    const tokens = tokenize(line);
     const children = tokens.map((token, index) => {
       const classNames = token.type.split('.').map((name) => `ace_${name}`);
       return (
@@ -92,7 +112,6 @@ export default function CodeBlock(props: Props) {
         </span>
       );
     });
-
     return (
       <span className="adm-code-line ace_line" key={`${line}-${index}`}>
         {showLineNumbers && (
@@ -112,6 +131,7 @@ export default function CodeBlock(props: Props) {
       <Loading spinning={loading}>
         <div className="adm-code-wrap">
           {lines}
+          {highlightSlot}
           {copyable && <CopyText copyable>{code}</CopyText>}
         </div>
       </Loading>
