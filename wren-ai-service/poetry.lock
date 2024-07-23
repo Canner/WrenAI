@@ -4077,13 +4077,13 @@ testing = ["build[virtualenv] (>=1.0.3)", "filelock (>=3.4.0)", "importlib-metad
 
 [[package]]
 name = "sf-hamilton"
-version = "1.63.0"
+version = "1.69.0"
 description = "Hamilton, the micro-framework for creating dataframes."
 optional = false
 python-versions = "<4,>=3.6"
 files = [
-    {file = "sf_hamilton-1.63.0-py3-none-any.whl", hash = "sha256:cd31514549ae43809957f826175680990f53c1e112823e61d647b0672e553def"},
-    {file = "sf_hamilton-1.63.0.tar.gz", hash = "sha256:c9918bc183bd92f5c89da14625580183c9c5befa6cf718a1a41aeaf87af74b66"},
+    {file = "sf_hamilton-1.69.0-py3-none-any.whl", hash = "sha256:6f8243055a056f52d1b32159651c5df46a7aa659a3e1daa95fbe1705d7d305d9"},
+    {file = "sf_hamilton-1.69.0.tar.gz", hash = "sha256:e170805baa13091aa929b9f169e3d9a76a813f4a7511c478c50a6781b495cf36"},
 ]
 
 [package.dependencies]
@@ -4105,12 +4105,14 @@ dask-distributed = ["dask[distributed]"]
 datadog = ["ddtrace"]
 diskcache = ["diskcache"]
 experiments = ["fastapi", "fastui", "uvicorn"]
+lsp = ["sf-hamilton-lsp"]
 pandera = ["pandera"]
 pyspark = ["pandas (<2.0)", "pyspark[pandas-on-spark,sql]"]
 ray = ["pyarrow", "ray (>=2.0.0)"]
 sdk = ["sf-hamilton-sdk"]
 slack = ["slack-sdk"]
 tqdm = ["tqdm"]
+ui = ["sf-hamilton-ui"]
 vaex = ["pydantic (<2.0)", "vaex"]
 visualization = ["graphviz", "networkx"]
 
@@ -5279,4 +5281,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12.*, <4.0"
-content-hash = "28ecb5d6ca7d504bcb643199d5e08c6681916daea63b7729139808b29d7abdc4"
+content-hash = "81268bc64c1140c71085dd53f8f36443671bc244806e3b4214370681ff85f836"
