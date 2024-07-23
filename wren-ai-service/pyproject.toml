@@ -43,7 +43,7 @@ pytest-asyncio = "==0.23.8"
 
 [tool.poetry.group.eval.dependencies]
 tomlkit = "==0.13.0"
-deepeval = "==0.21.66"
+deepeval = "==0.21.68"
 streamlit-tags = "==1.2.8"
 gitpython = "==3.1.43"
 pandas = "==2.2.2"
