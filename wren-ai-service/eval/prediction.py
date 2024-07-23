@@ -47,6 +47,8 @@ def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
     with open(output_path, "w") as file:
         file.write(dumps(doc))
 
+    print(f"Prediction result is saved at {output_path}")
+
 
 def obtain_commit_hash() -> str:
     repo = Repo(search_parent_directories=True)
