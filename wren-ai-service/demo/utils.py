@@ -1,4 +1,5 @@
 import base64
+import copy
 import json
 import os
 import re
@@ -15,9 +16,9 @@ from dotenv import load_dotenv
 
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
-WREN_IBIS_API_URL = "http://localhost:8000"
 POLLING_INTERVAL = 0.5
 DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
+LLM_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
 
 load_dotenv()
 
@@ -31,39 +32,34 @@ def _update_wren_engine_configs(configs: list[dict]):
     assert response.status_code == 200
 
 
-def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
+def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
     assert dataset_type in DATA_SOURCES
 
+    SOURCE = dataset_type
+    MANIFEST = base64.b64encode(orjson.dumps(mdl_json)).decode()
     if dataset_type == "duckdb":
-        # replace the values of ENGINE to wren-ui in ../.env.dev
+        _update_wren_engine_configs(
+            [
+                {
+                    "name": "duckdb.connector.init-sql-path",
+                    "value": "/usr/src/app/etc/duckdb-init.sql",
+                },
+            ]
+        )
+
+        _prepare_duckdb(dataset)
+
+        # replace the values of WREN_ENGINE_xxx to ../.env.dev
         with open(".env.dev", "r") as f:
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("ENGINE"):
                     lines[i] = "ENGINE=wren_engine\n"
-                    break
+                elif line.startswith("WREN_ENGINE_MANIFEST"):
+                    lines[i] = f"WREN_ENGINE_MANIFEST={MANIFEST}\n"
         with open(".env.dev", "w") as f:
             f.writelines(lines)
-
-        _update_wren_engine_configs(
-            [{"name": "wren.datasource.type", "value": "duckdb"}]
-        )
-        st.toast("Wren Engine is being re-run", icon="⏳")
-
-        response = requests.post(
-            f"{WREN_ENGINE_API_URL}/v1/mdl/deploy",
-            json={
-                "manifest": mdl_json,
-                "version": "latest",
-            },
-        )
-
-        assert response.status_code == 202, response.json()
-
-        st.toast("Wren Engine is ready", icon="🎉")
     else:
-        WREN_IBIS_SOURCE = dataset_type
-        WREN_IBIS_MANIFEST = base64.b64encode(orjson.dumps(mdl_json)).decode()
         if dataset_type == "bigquery":
             WREN_IBIS_CONNECTION_INFO = base64.b64encode(
                 orjson.dumps(
@@ -92,12 +88,15 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
             lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.startswith("ENGINE"):
-                    lines[i] = "ENGINE=wren-ibis\n"
+                    lines[i] = "ENGINE=wren_ibis\n"
                 elif line.startswith("WREN_IBIS_SOURCE"):
-                    lines[i] = f"WREN_IBIS_SOURCE={WREN_IBIS_SOURCE}\n"
+                    lines[i] = f"WREN_IBIS_SOURCE={SOURCE}\n"
                 elif line.startswith("WREN_IBIS_MANIFEST"):
-                    lines[i] = f"WREN_IBIS_MANIFEST={WREN_IBIS_MANIFEST}\n"
-                elif line.startswith("WREN_IBIS_CONNECTION_INFO"):
+                    lines[i] = f"WREN_IBIS_MANIFEST={MANIFEST}\n"
+                elif (
+                    line.startswith("WREN_IBIS_CONNECTION_INFO")
+                    and dataset_type != "duckdb"
+                ):
                     lines[
                         i
                     ] = f"WREN_IBIS_CONNECTION_INFO={WREN_IBIS_CONNECTION_INFO}\n"
@@ -109,10 +108,10 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str):
 
 
 def save_mdl_json_file(file_name: str, mdl_json: Dict):
-    if not Path("custom_dataset").exists():
-        Path("custom_dataset").mkdir()
+    if not Path("demo/custom_dataset").exists():
+        Path("demo/custom_dataset").mkdir()
 
-    with open(f"custom_dataset/{file_name}", "w", encoding="utf-8") as file:
+    with open(f"demo/custom_dataset/{file_name}", "w", encoding="utf-8") as file:
         json.dump(mdl_json, file, indent=2)
 
 
@@ -145,62 +144,22 @@ def get_new_mdl_json(chosen_models: List[str]):
 
 
 @st.cache_data
-def get_data_from_wren_engine(sql: str, dataset_type: str):
-    assert dataset_type in DATA_SOURCES
+def get_data_from_wren_engine(sql: str, manifest: Dict):
+    response = requests.get(
+        f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
+        json={
+            "sql": sql,
+            "manifest": manifest,
+            "limit": 100,
+        },
+    )
 
-    if dataset_type == "duckdb":
-        response = requests.get(
-            f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
-            json={
-                "sql": sql,
-            },
-        )
+    assert response.status_code == 200, response.json()
 
-        if response.status_code != 200:
-            st.error(response.json())
-            st.stop()
+    data = response.json()
+    column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]
 
-        data = response.json()
-        column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]
-
-        return pd.DataFrame(data["data"], columns=column_names)
-    else:
-        connection_info = {
-            "bigquery": {
-                "project_id": os.getenv("bigquery.project-id"),
-                "dataset_id": os.getenv("bigquery.dataset-id"),
-                "credentials": os.getenv("bigquery.credentials-key"),
-            },
-            "postgres": {
-                "host": os.getenv("postgres.host"),
-                "port": int(os.getenv("postgres.port"))
-                if os.getenv("postgres.port")
-                else 5432,
-                "database": os.getenv("postgres.database"),
-                "user": os.getenv("postgres.user"),
-                "password": os.getenv("postgres.password"),
-            },
-        }
-
-        response = requests.post(
-            f"{WREN_IBIS_API_URL}/v2/ibis/{dataset_type}/query",
-            json={
-                "sql": sql,
-                "manifestStr": base64.b64encode(
-                    orjson.dumps(st.session_state["mdl_json"])
-                ).decode(),
-                "connectionInfo": connection_info[dataset_type],
-            },
-        )
-
-        if response.status_code != 200:
-            st.error(response.json())
-            st.stop()
-
-        data = response.json()
-        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
-
-        return pd.DataFrame(data["data"], columns=column_names)
+    return pd.DataFrame(data["data"], columns=column_names)
 
 
 # ui related
@@ -316,58 +275,268 @@ def show_asks_results():
             break
 
 
-def show_asks_details_results():
-    st.markdown(
-        f'### Details of Result {st.session_state['chosen_query_result']['index'] + 1}'
-    )
-    st.markdown(
-        f'Description: {st.session_state['asks_details_result']["description"]}'
-    )
-    sqls_with_cte = []
-    sqls = []
-    for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
-        st.markdown(f"#### Step {i + 1}")
-        st.markdown(step["summary"])
+def show_asks_details_results(query: str):
+    col1, col2 = st.columns([4, 2])
+    with col1:
+        with st.container(height=1000):
+            st.markdown(
+                f'### Details of Result {st.session_state['chosen_query_result']['index'] + 1}'
+            )
+            st.markdown(
+                f'Description: {st.session_state['asks_details_result']["description"]}'
+            )
 
-        sql = ""
-        if sqls_with_cte:
-            sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
-        sql += step["sql"]
-        sqls.append(sql)
+            sqls_with_cte = []
+            sqls = []
+            summaries = []
+            for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
+                st.markdown(f"#### Step {i + 1}")
+                st.markdown(f'Summary: {step["summary"]}')
 
-        st.code(
-            body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
-            language="sql",
+                sql = ""
+                if sqls_with_cte:
+                    sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
+                sql += step["sql"]
+                sqls.append(sql)
+                summaries.append(step["summary"])
+
+                st.code(
+                    body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
+                    language="sql",
+                )
+                sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
+
+                if (
+                    st.session_state["sql_analysis_results"]
+                    and st.session_state["sql_explanation_results"]
+                ):
+                    _col1, _col2 = st.columns(2)
+                    with _col1:
+                        st.markdown("**SQL Analysis Results With Cte Removed**")
+                        st.json(
+                            list(
+                                filter(
+                                    lambda analysis_result: not analysis_result[
+                                        "isSubqueryOrCte"
+                                    ],
+                                    st.session_state["sql_analysis_results"][i],
+                                )
+                            ),
+                            expanded=False,
+                        )
+                    with _col2:
+                        st.markdown("**SQL Explanation Results**")
+                        st.json(
+                            st.session_state["sql_explanation_results"][i],
+                            expanded=False,
+                        )
+
+                st.button(
+                    label="Preview Data",
+                    key=f"preview_data_btn_{i}",
+                    on_click=on_click_preview_data_button,
+                    args=[i, sqls],
+                )
+
+                if (
+                    st.session_state["preview_data_button_index"] is not None
+                    and st.session_state["preview_sql"] is not None
+                    and i == st.session_state["preview_data_button_index"]
+                ):
+                    st.markdown(
+                        f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
+                    )
+
+                    st.dataframe(
+                        get_data_from_wren_engine(
+                            st.session_state["preview_sql"],
+                            st.session_state["mdl_json"],
+                        )
+                    )
+
+        st.markdown("---")
+        st.button(
+            label="SQL Explanation",
+            key="sql_explanation_btn",
+            on_click=on_click_sql_explanation_button,
+            args=[query, sqls, summaries, st.session_state["mdl_json"]],
+            use_container_width=True,
         )
-        sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
+
+    with col2:
+        with st.container(height=600):
+            st.markdown("### SQL Generation Feedback")
+
+            for i, _ in enumerate(st.session_state["asks_details_result"]["steps"]):
+                st.markdown(f"#### Step {i + 1}")
+                if st.session_state["sql_explanation_results"]:
+                    for j, explanation_result in enumerate(
+                        st.session_state["sql_explanation_results"][i]
+                    ):
+                        st.json(explanation_result)
+                        st.text_input(
+                            "User Correction",
+                            key=f"user_correction_{i}_{j}",
+                            on_change=on_change_user_correction,
+                            args=[i, j, explanation_result],
+                        )
+
+        with st.container(height=400):
+            st.markdown("#### Adjustments")
+            st.json(st.session_state["sql_user_corrections_by_step"])
+
+        st.markdown("---")
 
         st.button(
-            label="Preview Data",
-            key=i,
-            on_click=on_click_preview_data_button,
-            args=[i, sqls],
+            label="SQL Regeneration",
+            key="sql_regeneration_btn",
+            on_click=on_click_sql_regeneration_button,
+            args=[
+                st.session_state["asks_details_result"],
+                st.session_state["sql_user_corrections_by_step"],
+            ],
+            use_container_width=True,
         )
-
-        if (
-            st.session_state["preview_data_button_index"] is not None
-            and st.session_state["preview_sql"] is not None
-            and i == st.session_state["preview_data_button_index"]
-        ):
-            st.markdown(
-                f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
-            )
-
-            st.dataframe(
-                get_data_from_wren_engine(
-                    st.session_state["preview_sql"],
-                    st.session_state["dataset_type"],
-                )
-            )
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
     st.session_state["preview_data_button_index"] = index
     st.session_state["preview_sql"] = full_sqls[index]
+
+
+def get_sql_analysis_results(sqls: List[str], manifest: Dict):
+    results = []
+    for sql in sqls:
+        response = requests.get(
+            f"{WREN_ENGINE_API_URL}/v1/analysis/sql",
+            json={
+                "sql": sql,
+                "manifest": manifest,
+            },
+        )
+
+        assert response.status_code == 200, response.json()
+
+        results.append(response.json())
+
+    return results
+
+
+def on_click_sql_explanation_button(
+    question: str,
+    sqls: List[str],
+    summaries: List[str],
+    manifest: Dict,
+):
+    sql_analysis_results = get_sql_analysis_results(sqls, manifest)
+
+    st.session_state["sql_explanation_question"] = question
+    st.session_state["sql_analysis_results"] = sql_analysis_results
+    st.session_state["sql_explanation_steps_with_analysis"] = [
+        {"sql": sql, "summary": summary, "sql_analysis_results": sql_analysis_results}
+        for sql, summary, sql_analysis_results in zip(
+            sqls, summaries, sql_analysis_results
+        )
+    ]
+
+    sql_explanation_results = sql_explanation()
+    st.session_state["sql_explanation_results"] = sql_explanation_results
+    if sql_explanation_results:
+        st.session_state["sql_user_corrections_by_step"] = [
+            [] for _ in range(len(sql_explanation_results))
+        ]
+
+
+def on_change_user_correction(
+    step_idx: int, explanation_index: int, explanation_result: dict
+):
+    def _get_decision_point(explanation_result: dict):
+        if explanation_result["type"] == "relation":
+            if explanation_result["payload"]["type"] == "TABLE":
+                return {
+                    "type": explanation_result["type"],
+                    "value": explanation_result["payload"]["tableName"],
+                }
+            elif explanation_result["payload"]["type"].endswith("_JOIN"):
+                return {
+                    "type": explanation_result["type"],
+                    "value": explanation_result["payload"]["criteria"],
+                }
+        elif explanation_result["type"] == "filter":
+            return {
+                "type": explanation_result["type"],
+                "value": explanation_result["payload"]["expression"],
+            }
+        elif explanation_result["type"] == "groupByKeys":
+            return {
+                "type": explanation_result["type"],
+                "value": explanation_result["payload"]["keys"],
+            }
+        elif explanation_result["type"] == "sortings":
+            return {
+                "type": explanation_result["type"],
+                "value": explanation_result["payload"]["expression"],
+            }
+        elif explanation_result["type"] == "selectItems":
+            return {
+                "type": explanation_result["type"],
+                "value": explanation_result["payload"]["expression"],
+            }
+
+    decision_point = _get_decision_point(explanation_result)
+
+    should_add_new_correction = True
+    for i, sql_user_correction in enumerate(
+        st.session_state["sql_user_corrections_by_step"][step_idx]
+    ):
+        if sql_user_correction["before"] == decision_point:
+            if st.session_state[f"user_correction_{step_idx}_{explanation_index}"]:
+                st.session_state["sql_user_corrections_by_step"][step_idx][i][
+                    "after"
+                ] = {
+                    "type": "nl_expression",
+                    "value": st.session_state[
+                        f"user_correction_{step_idx}_{explanation_index}"
+                    ],
+                }
+                should_add_new_correction = False
+                break
+            else:
+                st.session_state["sql_user_corrections_by_step"][step_idx].pop(i)
+                should_add_new_correction = False
+                break
+
+    if should_add_new_correction:
+        st.session_state["sql_user_corrections_by_step"][step_idx].append(
+            {
+                "before": decision_point,
+                "after": {
+                    "type": "nl_expression",
+                    "value": st.session_state[
+                        f"user_correction_{step_idx}_{explanation_index}"
+                    ],
+                },
+            }
+        )
+
+
+def on_click_sql_regeneration_button(
+    ask_details_results: dict,
+    sql_user_corrections_by_step: List[List[dict]],
+):
+    sql_regeneration_data = copy.deepcopy(ask_details_results)
+    for i, (_, sql_user_corrections) in enumerate(
+        zip(sql_regeneration_data["steps"], sql_user_corrections_by_step)
+    ):
+        if sql_user_corrections:
+            sql_regeneration_data["steps"][i]["corrections"] = sql_user_corrections
+        else:
+            sql_regeneration_data["steps"][i]["corrections"] = []
+
+    st.session_state["sql_regeneration_results"] = sql_regeneration(
+        sql_regeneration_data
+    )
+    show_sql_regeneration_results_dialog(sql_user_corrections_by_step)
 
 
 # ai service api related
@@ -405,21 +574,12 @@ def generate_mdl_metadata(mdl_model_json: dict):
     return mdl_model_json
 
 
-def prepare_duckdb(dataset_name: str):
-    assert dataset_name in ["music", "nba", "ecommerce"]
+def _prepare_duckdb(dataset_name: str):
+    assert dataset_name in ["ecommerce", "nba"]
 
     DATASET_VERSION = "v0.3.0"
 
     init_sqls = {
-        "music": f"""
-CREATE TABLE album AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Album.csv',header=true);
-CREATE TABLE artist AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Artist.csv',header=true);
-CREATE TABLE customer AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Customer.csv',header=true);
-CREATE TABLE genre AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Genre.csv',header=true);
-CREATE TABLE invoice AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Invoice.csv',header=true);
-CREATE TABLE invoiceLine AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/InvoiceLine.csv',header=true);
-CREATE TABLE track AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/Music/Track.csv',header=true);
-""",
         "nba": f"""
 CREATE TABLE game AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/game.csv',header=true);
 CREATE TABLE line_score AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/line_score.csv',header=true);
@@ -437,32 +597,15 @@ CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/de
 """,
     }
 
-    api_url = "http://localhost:3000/api/graphql"
+    with open("./tools/dev/etc/duckdb-init.sql", "w") as f:
+        f.write("")
 
-    user_data = {
-        "properties": {
-            "displayName": "my-duckdb",
-            "initSql": init_sqls[dataset_name],
-            "configurations": {"threads": 8},
-            "extensions": ["httpfs", "aws"],
-        },
-        "type": "DUCKDB",
-    }
+    response = requests.put(
+        f"{WREN_ENGINE_API_URL}/v1/data-source/duckdb/settings/init-sql",
+        data=init_sqls[dataset_name],
+    )
 
-    payload = {
-        "query": """
-        mutation SaveDataSource($data: DataSourceInput!) {
-            saveDataSource(data: $data) {
-                type
-                properties
-            }
-        }
-        """,
-        "variables": {"data": user_data},
-    }
-
-    response = requests.post(api_url, json=payload)
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
 
 
 def prepare_semantics(mdl_json: dict):
@@ -572,8 +715,186 @@ def ask_details():
         st.session_state["asks_details_result"] = asks_details_status_response.json()[
             "response"
         ]
+        st.session_state["sql_explanation_question"] = None
+        st.session_state["sql_explanation_steps_with_analysis"] = None
+        st.session_state["sql_analysis_results"] = None
+        st.session_state["sql_explanation_results"] = None
     elif asks_details_status == "failed":
         st.error(
             f'An error occurred while processing the query: {asks_details_status_response.json()['error']}',
             icon="🚨",
         )
+
+
+def sql_explanation():
+    sql_explanation_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-explanations",
+        json={
+            "question": st.session_state["sql_explanation_question"],
+            "steps_with_analysis_results": st.session_state[
+                "sql_explanation_steps_with_analysis"
+            ],
+        },
+    )
+
+    assert sql_explanation_response.status_code == 200
+    query_id = sql_explanation_response.json()["query_id"]
+    sql_explanation_status = None
+
+    while (
+        sql_explanation_status != "finished" and sql_explanation_status != "failed"
+    ) or not sql_explanation_status:
+        sql_explanation_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-explanations/{query_id}/result"
+        )
+        assert sql_explanation_status_response.status_code == 200
+        sql_explanation_status = sql_explanation_status_response.json()["status"]
+        st.toast(f"The query processing status: {sql_explanation_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if sql_explanation_status == "finished":
+        return sql_explanation_status_response.json()["response"]
+    elif sql_explanation_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {sql_explanation_status_response.json()['error']}',
+            icon="🚨",
+        )
+        return None
+
+
+def sql_regeneration(sql_regeneration_data: dict):
+    sql_regeneration_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-regenerations",
+        json=sql_regeneration_data,
+    )
+
+    assert sql_regeneration_response.status_code == 200
+    query_id = sql_regeneration_response.json()["query_id"]
+    sql_regeneration_status = None
+
+    while (
+        sql_regeneration_status != "finished" and sql_regeneration_status != "failed"
+    ) or not sql_regeneration_status:
+        sql_regeneration_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-regenerations/{query_id}/result"
+        )
+        assert sql_regeneration_status_response.status_code == 200
+        sql_regeneration_status = sql_regeneration_status_response.json()["status"]
+        st.toast(f"The query processing status: {sql_regeneration_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if sql_regeneration_status == "finished":
+        return sql_regeneration_status_response.json()["response"]
+    elif sql_regeneration_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {sql_regeneration_status_response.json()['error']}',
+            icon="🚨",
+        )
+        return None
+
+
+@st.experimental_dialog(
+    "Comparing SQL step-by-step breakdown before and after SQL Generation Feedback",
+    width="large",
+)
+def show_sql_regeneration_results_dialog(
+    sql_user_corrections_by_step: List[List[dict]],
+):
+    st.markdown("### Adjustments")
+    st.json(sql_user_corrections_by_step, expanded=True)
+
+    col1, col2 = st.columns(2)
+    original_sqls = []
+    with col1:
+        st.markdown("### Before SQL Generation Feedback")
+        st.markdown(
+            f'Description: {st.session_state['asks_details_result']["description"]}'
+        )
+
+        sqls_with_cte = []
+        for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
+            st.markdown(f"#### Step {i + 1}")
+            st.markdown(f'Summary: {step["summary"]}')
+
+            sql = ""
+            if sqls_with_cte:
+                sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
+            sql += step["sql"]
+            original_sqls.append(sql)
+
+            st.markdown("SQL")
+            st.code(
+                body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
+                language="sql",
+            )
+            sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
+    with col2:
+        st.markdown("### After SQL Generation Feedback")
+
+        if (
+            st.session_state["sql_regeneration_results"]["description"]
+            == st.session_state["asks_details_result"]["description"]
+        ):
+            st.markdown(
+                f'Description: {st.session_state['sql_regeneration_results']["description"]}'
+            )
+        else:
+            st.markdown(
+                f':red[Description:] {st.session_state['sql_regeneration_results']["description"]}'
+            )
+
+        sqls_with_cte = []
+        for i, step in enumerate(st.session_state["sql_regeneration_results"]["steps"]):
+            st.markdown(f"#### Step {i + 1}")
+            if (
+                step["summary"]
+                == st.session_state["asks_details_result"]["steps"][i]["summary"]
+            ):
+                st.markdown(f'Summary: {step["summary"]}')
+            else:
+                st.markdown(f':red[Summary:] {step["summary"]}')
+
+            sql = ""
+            if sqls_with_cte:
+                sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
+            sql += step["sql"]
+
+            if sql == original_sqls[i]:
+                st.markdown("SQL")
+            else:
+                st.markdown(":red[SQL:]")
+            st.code(
+                body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
+                language="sql",
+            )
+            sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
+
+
+@st.cache_data
+def update_llm(chosen_llm_model: str, mdl_json: dict):
+    with open(".env.dev", "r") as f:
+        lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.startswith("GENERATION_MODEL"):
+                lines[i] = f"GENERATION_MODEL={chosen_llm_model}\n"
+                break
+    with open(".env.dev", "w") as f:
+        f.writelines(lines)
+
+    # wait for wren-ai-service to restart
+    time.sleep(5)
+
+    prepare_semantics(mdl_json)
+
+
+def get_default_llm_model(llm_models: list[str]):
+    with open(".env.dev", "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            if line.startswith("GENERATION_MODEL"):
+                llm_model = line.split("=")[1].strip()
+                break
+
+    assert llm_model in llm_models
+
+    return llm_model

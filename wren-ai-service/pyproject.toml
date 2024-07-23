@@ -20,7 +20,7 @@ numpy = "==1.26.4"
 sqlparse = "==0.5.0"
 sqlglot = "==22.5.0"
 orjson = "==3.10.3"
-sf-hamilton = {version = "==1.63.0", extras = ["visualization"]}
+sf-hamilton = {version = "==1.69.0", extras = ["visualization"]}
 aiohttp = {extras = ["speedups"], version = "==3.9.5"}
 ollama-haystack = "==0.0.6"
 langfuse = "==2.35.0"

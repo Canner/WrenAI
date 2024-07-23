@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
@@ -10,7 +11,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 
 from src.core.engine import Engine
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.ask.components.post_processors import (
     GenerationPostProcessor,
@@ -100,8 +101,12 @@ def prompt(
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
-    logger.debug(f"documents: {documents}")
-    logger.debug(f"exclude: {exclude}")
+    logger.debug(
+        f"documents: {orjson.dumps(documents, option=orjson.OPT_INDENT_2).decode()}"
+    )
+    logger.debug(
+        f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return prompt_builder.run(
         query=query, documents=documents, exclude=exclude, alert=alert
     )
@@ -110,14 +115,16 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {prompt}")
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer
 @observe(capture_input=False)
 async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
-    logger.debug(f"generate: {generate}")
+    logger.debug(
+        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return await post_processor.run(generate.get("replies"))
 
 
@@ -192,12 +199,14 @@ class Generation(BasicPipeline):
 if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
+    from src.core.engine import EngineConfig
+    from src.core.pipeline import async_validate
     from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
     init_langfuse()
 
-    llm_provider, _, _, engine = init_providers()
+    llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
     pipeline = Generation(
         llm_provider=llm_provider,
         engine=engine,

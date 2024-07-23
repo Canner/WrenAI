@@ -16,6 +16,7 @@ logger = logging.getLogger("wren-ai-service")
 class WrenUI(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_UI_ENDPOINT")):
         self._endpoint = endpoint
+        logger.info("Using Engine: wren_ui")
 
     async def dry_run_sql(
         self,
@@ -58,6 +59,7 @@ class WrenIbis(Engine):
         self._source = source
         self._manifest = manifest
         self._connection_info = connection_info
+        logger.info("Using Engine: wren_ibis")
 
     async def dry_run_sql(
         self,
@@ -83,15 +85,24 @@ class WrenIbis(Engine):
 class WrenEngine(Engine):
     def __init__(self, endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT")):
         self._endpoint = endpoint
+        logger.info("Using Engine: wren_engine")
 
     async def dry_run_sql(
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        properties: Dict[str, Any] = {
+            "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
+        },
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.get(
             f"{self._endpoint}/v1/mdl/dry-run",
-            json={"sql": remove_limit_statement(add_quotes(sql)), "limit": 1},
+            json={
+                "manifest": orjson.loads(base64.b64decode(properties.get("manifest")))
+                if properties.get("manifest")
+                else {},
+                "sql": remove_limit_statement(add_quotes(sql)),
+            },
         ) as response:
             if response.status == 200:
                 return True, None

@@ -9,7 +9,7 @@ from typing import Tuple
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
-from src.core.engine import Engine
+from src.core.engine import Engine, EngineConfig
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.providers import loader
 
@@ -59,7 +59,7 @@ def load_env_vars() -> str:
 
 
 def init_providers(
-    engine_config: dict = {"provider": os.getenv("ENGINE", "wren_ui"), "config": {}},
+    engine_config: EngineConfig,
 ) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
     logger.info("Initializing providers...")
     loader.import_mods()
@@ -71,7 +71,7 @@ def init_providers(
     document_store_provider = loader.get_provider(
         os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
     )()
-    engine = loader.get_provider(engine_config["provider"])(**engine_config["config"])
+    engine = loader.get_provider(engine_config.provider)(**engine_config.config)
 
     return llm_provider, embedder_provider, document_store_provider, engine
 

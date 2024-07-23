@@ -15,7 +15,7 @@ from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from langfuse.decorators import observe
 from tqdm import tqdm
 
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.utils import async_timer, timer
 
@@ -329,7 +329,9 @@ def clean_document_store(mdl_str: str, cleaner: DocumentCleaner) -> Dict[str, An
 def validate_mdl(
     clean_document_store: Dict[str, Any], validator: MDLValidator
 ) -> Dict[str, Any]:
-    logger.debug(f"input in validate_mdl: {clean_document_store}")
+    logger.debug(
+        f"input in validate_mdl: {orjson.dumps(clean_document_store, option=orjson.OPT_INDENT_2).decode()}"
+    )
     mdl = clean_document_store.get("mdl")
     res = validator.run(mdl=mdl)
     return dict(mdl=res["mdl"])
@@ -338,7 +340,9 @@ def validate_mdl(
 @timer
 @observe(capture_input=False)
 def convert_to_ddl(mdl: Dict[str, Any], ddl_converter: DDLConverter) -> Dict[str, Any]:
-    logger.debug(f"input in convert_to_ddl: {mdl}")
+    logger.debug(
+        f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return ddl_converter.run(mdl=mdl)
 
 
@@ -347,14 +351,15 @@ def convert_to_ddl(mdl: Dict[str, Any], ddl_converter: DDLConverter) -> Dict[str
 async def embed_ddl(
     convert_to_ddl: Dict[str, Any], ddl_embedder: Any
 ) -> Dict[str, Any]:
-    logger.debug(f"input in embed_ddl: {convert_to_ddl}")
+    logger.debug(
+        f"input in embed_ddl: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return await ddl_embedder.run(documents=convert_to_ddl["documents"])
 
 
 @timer
 @observe(capture_input=False)
 def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
-    logger.debug(f"input in write_ddl: {embed_ddl}")
     return ddl_writer.run(documents=embed_ddl["documents"])
 
 
@@ -363,7 +368,9 @@ def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
 def convert_to_view(
     mdl: Dict[str, Any], view_converter: ViewConverter
 ) -> Dict[str, Any]:
-    logger.debug(f"input in convert_to_view: {mdl}")
+    logger.debug(
+        f"input in convert_to_view: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return view_converter.run(mdl=mdl)
 
 
@@ -372,14 +379,15 @@ def convert_to_view(
 async def embed_view(
     convert_to_view: Dict[str, Any], view_embedder: Any
 ) -> Dict[str, Any]:
-    logger.debug(f"input in embed_view: {convert_to_view}")
+    logger.debug(
+        f"input in embed_view: {orjson.dumps(convert_to_view, option=orjson.OPT_INDENT_2).decode()}"
+    )
     return await view_embedder.run(documents=convert_to_view["documents"])
 
 
 @timer
 @observe(capture_input=False)
 def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
-    logger.debug(f"input in write_view: {embed_view}")
     return view_writer.run(documents=embed_view["documents"])
 
 
@@ -461,12 +469,14 @@ class Indexing(BasicPipeline):
 if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
+    from src.core.engine import EngineConfig
+    from src.core.pipeline import async_validate
     from src.utils import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
     init_langfuse()
 
-    _, embedder_provider, document_store_provider, _ = init_providers()
+    _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
 
     pipeline = Indexing(
         embedder_provider=embedder_provider,

@@ -5,8 +5,14 @@ from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 import sqlglot
+from pydantic import BaseModel
 
 logger = logging.getLogger("wren-ai-service")
+
+
+class EngineConfig(BaseModel):
+    provider: str = "wren_ui"
+    config: dict = {}
 
 
 class Engine(metaclass=ABCMeta):

@@ -99,11 +99,14 @@ class Generation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from src.core.engine import EngineConfig
     from src.utils import load_env_vars
 
     load_env_vars()
 
-    llm_provider, embedder_provider, document_store_provider, _ = init_providers()
+    llm_provider, embedder_provider, document_store_provider, _ = init_providers(
+        EngineConfig()
+    )
     pipe = Generation(
         llm_provider=llm_provider,
         embedder_provider=embedder_provider,

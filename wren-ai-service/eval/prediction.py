@@ -19,6 +19,7 @@ from tqdm.asyncio import tqdm_asyncio
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
 from eval.utils import parse_toml
+from src.core.engine import EngineConfig
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
@@ -141,9 +142,9 @@ def setup_pipes(mdl: str) -> Dict[str, Any]:
         document_store_provider,
         engine,
     ) = utils.init_providers(
-        engine_config={
-            "provider": "wren_ibis",
-            "config": {
+        engine_config=EngineConfig(
+            provider="wren_ibis",
+            config={
                 "source": "bigquery",
                 "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
                 "connection_info": {
@@ -152,7 +153,7 @@ def setup_pipes(mdl: str) -> Dict[str, Any]:
                     "credentials": os.getenv("bigquery.credentials-key"),
                 },
             },
-        }
+        )
     )
 
     document_store_provider.get_store(recreate_index=True)

@@ -4,6 +4,7 @@ import uuid
 import orjson
 import pytest
 
+from src.core.engine import EngineConfig
 from src.core.pipeline import async_validate
 from src.pipelines.ask import (
     generation,
@@ -23,7 +24,9 @@ from src.web.v1.services.ask import (
 
 @pytest.fixture
 def ask_service():
-    llm_provider, embedder_provider, document_store_provider, engine = init_providers()
+    llm_provider, embedder_provider, document_store_provider, engine = init_providers(
+        EngineConfig()
+    )
 
     return AskService(
         {

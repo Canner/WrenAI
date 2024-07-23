@@ -1,12 +1,13 @@
 from haystack import Document
 from haystack.document_stores.types import DocumentStore
 
+from src.core.engine import EngineConfig
 from src.pipelines.indexing.indexing import DocumentCleaner
 from src.utils import init_providers
 
 
 def _mock_store(name: str = "default") -> DocumentStore:
-    _, _, document_store_provider, _ = init_providers()
+    _, _, document_store_provider, _ = init_providers(EngineConfig())
     store = document_store_provider.get_store(
         embedding_model_dim=5,
         dataset_name=name,

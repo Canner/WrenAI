@@ -27,8 +27,12 @@ class SemanticsPreparationStatusRequest(BaseModel):
 
 
 class SemanticsPreparationStatusResponse(BaseModel):
+    class SemanticsPreparationError(BaseModel):
+        code: Literal["OTHERS"]
+        message: str
+
     status: Literal["indexing", "finished", "failed"]
-    error: Optional[str] = None
+    error: Optional[SemanticsPreparationError] = None
 
 
 class SQLExplanation(BaseModel):
@@ -151,7 +155,10 @@ class AskService:
             )
             return SemanticsPreparationStatusResponse(
                 status="failed",
-                error=f"{prepare_semantics_status_request.id} is not found",
+                error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
+                    code="OTHERS",
+                    message="{prepare_semantics_status_request.id} is not found",
+                ),
             )
 
         return result
