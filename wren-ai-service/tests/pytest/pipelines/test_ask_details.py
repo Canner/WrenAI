@@ -5,9 +5,7 @@ from src.utils import init_providers
 
 
 def test_generation_pipeline_producing_executable_sqls():
-    llm_provider, _, _, engine = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    llm_provider, _, _, engine = init_providers(EngineConfig())
     generation_pipeline = Generation(
         llm_provider=llm_provider,
         engine=engine,

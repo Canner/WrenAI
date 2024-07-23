@@ -581,7 +581,7 @@ if __name__ == "__main__":
     load_env_vars()
     init_langfuse()
 
-    llm_provider, _, _, _ = init_providers(EngineConfig(provider="wren_ui", config={}))
+    llm_provider, _, _, _ = init_providers(EngineConfig())
     pipeline = Generation(
         llm_provider=llm_provider,
     )

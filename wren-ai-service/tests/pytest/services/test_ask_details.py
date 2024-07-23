@@ -15,9 +15,7 @@ from src.web.v1.services.ask_details import (
 
 @pytest.fixture
 def ask_details_service():
-    llm_provider, _, _, engine = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    llm_provider, _, _, engine = init_providers(EngineConfig())
     return AskDetailsService(
         {
             "generation": generation.Generation(

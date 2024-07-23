@@ -172,9 +172,7 @@ if __name__ == "__main__":
     load_env_vars()
     init_langfuse()
 
-    llm_provider, _, _, engine = init_providers(
-        engine_config=EngineConfig(provider="wren_ui", config={})
-    )
+    llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
     pipeline = SQLCorrection(
         llm_provider=llm_provider,
         engine=engine,

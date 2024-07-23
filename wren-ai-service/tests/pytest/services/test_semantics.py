@@ -11,7 +11,7 @@ from src.web.v1.services.semantics import (
 @pytest.fixture
 def semantics_service():
     llm_provider, embedder_provider, document_store_provider, _ = init_providers(
-        EngineConfig(provider="wren_ui", config={})
+        EngineConfig()
     )
 
     return SemanticsService(

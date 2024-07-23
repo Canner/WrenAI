@@ -11,8 +11,8 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class EngineConfig(BaseModel):
-    provider: str
-    config: dict
+    provider: str = "wren_ui"
+    config: dict = {}
 
 
 class Engine(metaclass=ABCMeta):

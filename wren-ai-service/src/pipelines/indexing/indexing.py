@@ -476,9 +476,7 @@ if __name__ == "__main__":
     load_env_vars()
     init_langfuse()
 
-    _, embedder_provider, document_store_provider, _ = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
 
     pipeline = Indexing(
         embedder_provider=embedder_provider,

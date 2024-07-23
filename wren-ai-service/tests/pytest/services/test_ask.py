@@ -25,7 +25,7 @@ from src.web.v1.services.ask import (
 @pytest.fixture
 def ask_service():
     llm_provider, embedder_provider, document_store_provider, engine = init_providers(
-        EngineConfig(provider="wren_ui", config={})
+        EngineConfig()
     )
 
     return AskService(

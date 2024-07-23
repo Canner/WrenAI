@@ -27,33 +27,27 @@ def mdl_str():
 
 @pytest.fixture
 def llm_provider():
-    llm_provider, _, _, _ = init_providers(EngineConfig(provider="wren_ui", config={}))
+    llm_provider, _, _, _ = init_providers(EngineConfig())
 
     return llm_provider
 
 
 @pytest.fixture
 def embedder_provider():
-    _, embedder_provider, _, _ = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    _, embedder_provider, _, _ = init_providers(EngineConfig())
 
     return embedder_provider
 
 
 @pytest.fixture
 def document_store_provider():
-    _, _, document_store_provider, _ = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    _, _, document_store_provider, _ = init_providers(EngineConfig())
 
     return document_store_provider
 
 
 def test_clear_documents(mdl_str: str):
-    _, embedder_provider, document_store_provider, _ = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
     store = document_store_provider.get_store()
 
     indexing_pipeline = Indexing(
@@ -133,9 +127,7 @@ def test_retrieval_pipeline(
 
 
 def test_generation_pipeline():
-    llm_provider, _, _, engine = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    llm_provider, _, _, engine = init_providers(EngineConfig())
     generation_pipeline = Generation(llm_provider=llm_provider, engine=engine)
     generation_result = async_validate(
         lambda: generation_pipeline.run(
@@ -162,9 +154,7 @@ def test_generation_pipeline():
 
 
 def test_followup_generation_pipeline():
-    llm_provider, _, _, engine = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    llm_provider, _, _, engine = init_providers(EngineConfig())
     generation_pipeline = FollowUpGeneration(llm_provider=llm_provider, engine=engine)
     generation_result = async_validate(
         lambda: generation_pipeline.run(
@@ -190,9 +180,7 @@ def test_followup_generation_pipeline():
 
 
 def test_sql_correction_pipeline():
-    llm_provider, _, _, engine = init_providers(
-        EngineConfig(provider="wren_ui", config={})
-    )
+    llm_provider, _, _, engine = init_providers(EngineConfig())
     sql_correction_pipeline = SQLCorrection(llm_provider=llm_provider, engine=engine)
 
     sql_correction_result = async_validate(

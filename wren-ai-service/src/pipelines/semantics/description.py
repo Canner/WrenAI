@@ -105,7 +105,7 @@ if __name__ == "__main__":
     load_env_vars()
 
     llm_provider, embedder_provider, document_store_provider, _ = init_providers(
-        EngineConfig(provider="wren_ui", config={})
+        EngineConfig()
     )
     pipe = Generation(
         llm_provider=llm_provider,

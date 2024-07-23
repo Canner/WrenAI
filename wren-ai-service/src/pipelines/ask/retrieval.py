@@ -91,7 +91,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     _, embedder_provider, document_store_provider, _ = init_providers(
-        engine_config=EngineConfig(provider="wren_ui", config={})
+        engine_config=EngineConfig()
     )
     pipeline = Retrieval(
         embedder_provider=embedder_provider,
