@@ -1,3 +1,5 @@
+import os
+
 from src.pipelines.ask import (
     followup_generation as ask_followup_generation,
 )
@@ -49,7 +51,7 @@ def init_globals():
         SQL_REGENERATION_SERVICE
 
     llm_provider, embedder_provider, document_store_provider, engine = init_providers(
-        engine_config=EngineConfig(provider="wren_ui", config={})
+        engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"), config={})
     )
 
     # Recreate the document store to ensure a clean slate

@@ -439,10 +439,12 @@ def on_click_sql_explanation_button(
         )
     ]
 
-    st.session_state["sql_explanation_results"] = sql_explanation()
-    st.session_state["sql_user_corrections_by_step"] = [
-        [] for _ in range(len(st.session_state["sql_explanation_results"]))
-    ]
+    sql_explanation_results = sql_explanation()
+    st.session_state["sql_explanation_results"] = sql_explanation_results
+    if sql_explanation_results:
+        st.session_state["sql_user_corrections_by_step"] = [
+            [] for _ in range(len(sql_explanation_results))
+        ]
 
 
 def on_change_user_correction(
