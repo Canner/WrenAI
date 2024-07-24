@@ -1,10 +1,8 @@
 import asyncio
 
 import pandas as pd
-import sqlglot
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
-from sqlglot.diff import Keep, Move
 
 from eval.utils import get_contexts_from_sql, get_data_from_wren_engine
 
@@ -43,16 +41,9 @@ class AccuracyMetric(BaseMetric):
         return df[sorted(df.columns)]
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        expected = test_case.expected_output
-        expected_dataset = await self._retrieve_data(expected)
+        expected_dataset = await self._retrieve_data(test_case.expected_output)
+        actual_dataset = await self._retrieve_data(test_case.actual_output)
 
-        actual_output = test_case.actual_output
-        if self._semantic_check(expected, actual_output):
-            self.success = True
-            self.score = 1
-            return self.score
-
-        actual_dataset = await self._retrieve_data(actual_output)
         if expected_dataset.equals(actual_dataset) or self.is_subset(
             expected_dataset, actual_dataset
         ):
@@ -70,15 +61,6 @@ class AccuracyMetric(BaseMetric):
     @property
     def __name__(self):
         return "Accuracy(column-based)"
-
-    def _semantic_check(self, expected: str, actual: str) -> bool:
-        for result in sqlglot.diff(
-            sqlglot.parse_one(expected, read=sqlglot.Dialects.TRINO),
-            sqlglot.parse_one(actual, read=sqlglot.Dialects.TRINO),
-        ):
-            if type(result) not in [Keep, Move]:
-                return False
-        return True
 
 
 class AnswerRelevancyMetric(BaseMetric):
