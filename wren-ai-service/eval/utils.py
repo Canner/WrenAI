@@ -125,3 +125,12 @@ async def get_contexts_from_sql(
 def parse_toml(path: str) -> Dict[str, Any]:
     with open(path) as file:
         return parse(file.read())
+
+
+def trace_metadata(meta: dict) -> dict:
+    return {
+        "commit": meta["commit"],
+        "dataset_id": meta["dataset_id"],
+        "embedding_model": meta["embedding_model"],
+        "generation_model": meta["generation_model"],
+    }

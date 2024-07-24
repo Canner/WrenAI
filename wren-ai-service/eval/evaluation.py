@@ -20,7 +20,7 @@ from eval.metrics.column import (
     ContextualRelevancyMetric,
     FaithfulnessMetric,
 )
-from eval.utils import parse_toml
+from eval.utils import parse_toml, trace_metadata
 from src import utils
 
 
@@ -93,12 +93,7 @@ class Evaluator:
         langfuse_context.update_current_trace(
             session_id=meta["session_id"],
             user_id=meta["user_id"],
-            metadata={
-                "commit": meta["commit"],
-                "dataset_id": meta["dataset_id"],
-                "embedding_model": meta["embedding_model"],
-                "generation_model": meta["generation_model"],
-            },
+            metadata=trace_metadata(meta),
         )
 
         summary = {

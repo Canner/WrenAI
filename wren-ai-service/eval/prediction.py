@@ -18,7 +18,7 @@ from tqdm.asyncio import tqdm_asyncio
 
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
-from eval.utils import parse_toml
+from eval.utils import parse_toml, trace_metadata
 from src.core.engine import EngineConfig
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
@@ -90,10 +90,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             session_id=meta["session_id"],
             user_id=meta["user_id"],
             metadata={
-                "commit": meta["commit"],
-                "dataset_id": meta["dataset_id"],
-                "embedding_model": meta["embedding_model"],
-                "generation_model": meta["generation_model"],
+                **trace_metadata(meta),
                 "source_trace_id": prediction["trace_id"],
                 "source_trace_url": prediction["trace_url"],
             },
@@ -124,12 +121,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
         langfuse_context.update_current_trace(
             session_id=meta["session_id"],
             user_id=meta["user_id"],
-            metadata={
-                "commit": meta["commit"],
-                "dataset_id": meta["dataset_id"],
-                "embedding_model": meta["embedding_model"],
-                "generation_model": meta["generation_model"],
-            },
+            metadata=trace_metadata(meta),
         )
 
         result = await pipes["retrieval"].run(query=prediction["input"])
