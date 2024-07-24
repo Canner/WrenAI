@@ -29,6 +29,7 @@ def generate_meta(path: str, dataset: dict) -> Dict[str, Any]:
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{uuid.uuid4()}",
         "date": datetime.now(),
+        "dataset_id": dataset["dataset_id"],
         "evaluation_dataset": path,
         "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
@@ -88,6 +89,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             user_id=meta["user_id"],
             metadata={
                 "commit": meta["commit"],
+                "dataset_id": meta["dataset_id"],
                 "source_trace_id": prediction["trace_id"],
                 "source_trace_url": prediction["trace_url"],
             },
@@ -120,6 +122,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             user_id=meta["user_id"],
             metadata={
                 "commit": meta["commit"],
+                "dataset_id": meta["dataset_id"],
             },
         )
 

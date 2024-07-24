@@ -2,6 +2,7 @@ import asyncio
 import base64
 import os
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -240,6 +241,7 @@ async def get_data_from_wren_engine_with_sqls(
 def get_eval_dataset_in_toml_string(mdl: dict, dataset: list) -> str:
     doc = tomlkit.document()
 
+    doc.add("dataset_id", uuid.uuid4())
     doc.add("date", datetime.today().strftime("%Y_%m_%d"))
     doc.add("mdl", mdl)
     doc.add("eval_dataset", dataset)

@@ -95,6 +95,7 @@ class Evaluator:
             user_id=meta["user_id"],
             metadata={
                 "commit": meta["commit"],
+                "dataset_id": meta["dataset_id"],
             },
         )
 
