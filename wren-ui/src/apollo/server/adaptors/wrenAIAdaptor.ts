@@ -76,6 +76,7 @@ export enum AskResultStatus {
 export interface StepAnalysisResult {
   sql: string;
   summary: string;
+  cte_name?: string;
   sql_analysis_results: any;
 }
 
@@ -254,6 +255,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     stepAnalysisResult: StepAnalysisResult[],
   ): Promise<AsyncQueryResponse> {
     try {
+      logger.info({
+        question,
+        steps_with_analysis_results: stepAnalysisResult,
+      });
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/sql-explanations`,
         {

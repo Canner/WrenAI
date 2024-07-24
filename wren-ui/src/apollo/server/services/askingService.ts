@@ -501,6 +501,7 @@ export class AskingService implements IAskingService {
         return {
           sql: step.sql,
           summary: step.summary,
+          cte_name: step.cteName,
           sql_analysis_results: analysisWithIds[idx],
         } as StepAnalysisResult;
       },
