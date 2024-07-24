@@ -6,6 +6,7 @@ This document describes the evaluation framework for the Wren AI service. The ev
 
 - Install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) to run the evaluation framework commands.
 - Set up the [Langfuse](https://cloud.langfuse.com) account and get the API key and secret. Fill in the `.env.dev` file with the key and secret.
+- Execute `make dev-up` to start the necessary development services.
 
 ## Dataset Curation
 
