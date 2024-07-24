@@ -3,7 +3,6 @@ import uuid
 import pytest
 
 from src.core.engine import EngineConfig
-from src.core.pipeline import async_validate
 from src.pipelines.ask_details import generation
 from src.utils import init_providers
 from src.web.v1.services.ask_details import (
@@ -27,7 +26,8 @@ def ask_details_service():
 
 
 # TODO: we may need to add one more test for the case that steps must be more than 1
-def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService):
+@pytest.mark.asyncio
+async def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService):
     # asking details
     query_id = str(uuid.uuid4())
     sql = "SELECT * FROM book"
@@ -37,7 +37,7 @@ def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService)
         summary="This is a summary",
     )
     ask_details_request.query_id = query_id
-    async_validate(lambda: ask_details_service.ask_details(ask_details_request))
+    await ask_details_service.ask_details(ask_details_request)
 
     # getting ask details result
     ask_details_result_response = ask_details_service.get_ask_details_result(
@@ -68,7 +68,8 @@ def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService)
         assert ask_details_result_response.response.steps[-1].cte_name == ""
 
 
-def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
+@pytest.mark.asyncio
+async def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
     # asking details
     query_id = str(uuid.uuid4())
     sql = 'SELECT * FROM "xxx"'
@@ -79,7 +80,7 @@ def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
         summary=summary,
     )
     ask_details_request.query_id = query_id
-    async_validate(lambda: ask_details_service.ask_details(ask_details_request))
+    await ask_details_service.ask_details(ask_details_request)
 
     # getting ask details result
     ask_details_result_response = ask_details_service.get_ask_details_result(
