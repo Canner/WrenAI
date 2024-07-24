@@ -32,6 +32,7 @@ export enum GeneralErrorCodes {
 
   // dry run error
   DRY_RUN_ERROR = 'DRY_RUN_ERROR',
+  DRY_PLAN_ERROR = 'DRY_PLAN_ERROR',
 }
 
 export const errorMessages = {
@@ -72,6 +73,7 @@ export const errorMessages = {
 
   // dry run error
   [GeneralErrorCodes.DRY_RUN_ERROR]: 'Dry run sql statement error',
+  [GeneralErrorCodes.DRY_PLAN_ERROR]: 'Dry plan error',
 };
 
 export const shortMessages = {
@@ -89,6 +91,7 @@ export const shortMessages = {
   [GeneralErrorCodes.INVALID_CALCULATED_FIELD]: 'Invalid calculated field',
   [GeneralErrorCodes.INVALID_VIEW_CREATION]: 'Invalid view creation',
   [GeneralErrorCodes.DRY_RUN_ERROR]: 'Dry run sql statement error',
+  [GeneralErrorCodes.DRY_PLAN_ERROR]: 'Dry plan error',
 };
 
 export const create = (

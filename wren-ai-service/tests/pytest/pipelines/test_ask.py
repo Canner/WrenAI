@@ -4,7 +4,6 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
-from src.core.pipeline import async_validate
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.ask.followup_generation import FollowUpGeneration
 from src.pipelines.ask.generation import Generation
@@ -46,7 +45,8 @@ def document_store_provider():
     return document_store_provider
 
 
-def test_clear_documents(mdl_str: str):
+@pytest.mark.asyncio
+async def test_clear_documents(mdl_str: str):
     _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
     store = document_store_provider.get_store()
 
@@ -55,13 +55,12 @@ def test_clear_documents(mdl_str: str):
         document_store_provider=document_store_provider,
     )
 
-    async_validate(lambda: indexing_pipeline.run(mdl_str))
+    await indexing_pipeline.run(mdl_str)
 
-    assert store.count_documents() == 3
+    assert await store.count_documents() == 3
 
-    async_validate(
-        lambda: indexing_pipeline.run(
-            """
+    await indexing_pipeline.run(
+        """
         {
             "models": [],
             "relationships": [],
@@ -78,13 +77,13 @@ def test_clear_documents(mdl_str: str):
             ]
         }
         """
-        )
     )
 
-    assert store.count_documents() == 1
+    assert await store.count_documents() == 1
 
 
-def test_indexing_pipeline(
+@pytest.mark.asyncio
+async def test_indexing_pipeline(
     mdl_str: str,
     embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
@@ -94,18 +93,19 @@ def test_indexing_pipeline(
         document_store_provider=document_store_provider,
     )
 
-    async_validate(lambda: indexing_pipeline.run(mdl_str))
+    await indexing_pipeline.run(mdl_str)
 
-    assert document_store_provider.get_store().count_documents() == 3
+    assert await document_store_provider.get_store().count_documents() == 3
     assert (
-        document_store_provider.get_store(
+        await document_store_provider.get_store(
             dataset_name="view_questions",
         ).count_documents()
         == 1
     )
 
 
-def test_retrieval_pipeline(
+@pytest.mark.asyncio
+async def test_retrieval_pipeline(
     embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
 ):
@@ -114,10 +114,8 @@ def test_retrieval_pipeline(
         document_store_provider=document_store_provider,
     )
 
-    retrieval_result = async_validate(
-        lambda: retrieval_pipeline.run(
-            "How many books are there?",
-        )
+    retrieval_result = await retrieval_pipeline.run(
+        "How many books are there?",
     )
 
     assert retrieval_result is not None
@@ -126,52 +124,48 @@ def test_retrieval_pipeline(
     GLOBAL_DATA["contexts"] = retrieval_result["retrieval"]["documents"]
 
 
-def test_generation_pipeline():
+@pytest.mark.asyncio
+async def test_generation_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
     generation_pipeline = Generation(llm_provider=llm_provider, engine=engine)
-    generation_result = async_validate(
-        lambda: generation_pipeline.run(
-            "How many authors are there?",
-            contexts=GLOBAL_DATA["contexts"],
-            exclude=[],
-        )
+    generation_result = await generation_pipeline.run(
+        "How many authors are there?",
+        contexts=GLOBAL_DATA["contexts"],
+        exclude=[],
     )
 
     # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
     assert generation_result["post_process"]["valid_generation_results"] is not None
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 
-    generation_result = async_validate(
-        lambda: generation_pipeline.run(
-            "How many authors are there?",
-            contexts=GLOBAL_DATA["contexts"],
-            exclude=[{"statement": "SELECT 1 FROM author"}],
-        )
+    generation_result = await generation_pipeline.run(
+        "How many authors are there?",
+        contexts=GLOBAL_DATA["contexts"],
+        exclude=[{"statement": "SELECT 1 FROM author"}],
     )
 
     assert generation_result["post_process"]["valid_generation_results"] is not None
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 
 
-def test_followup_generation_pipeline():
+@pytest.mark.asyncio
+async def test_followup_generation_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
     generation_pipeline = FollowUpGeneration(llm_provider=llm_provider, engine=engine)
-    generation_result = async_validate(
-        lambda: generation_pipeline.run(
-            "What are names of the books?",
-            contexts=GLOBAL_DATA["contexts"],
-            history=AskRequest.AskResponseDetails(
-                sql="SELECT COUNT(*) FROM book",
-                summary="Retrieve the number of books",
-                steps=[
-                    SQLExplanation(
-                        sql="SELECT COUNT(*) FROM book",
-                        summary="Retrieve the number of books",
-                        cte_name="",
-                    )
-                ],
-            ),
-        )
+    generation_result = await generation_pipeline.run(
+        "What are names of the books?",
+        contexts=GLOBAL_DATA["contexts"],
+        history=AskRequest.AskResponseDetails(
+            sql="SELECT COUNT(*) FROM book",
+            summary="Retrieve the number of books",
+            steps=[
+                SQLExplanation(
+                    sql="SELECT COUNT(*) FROM book",
+                    summary="Retrieve the number of books",
+                    cte_name="",
+                )
+            ],
+        ),
     )
 
     # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
@@ -179,21 +173,20 @@ def test_followup_generation_pipeline():
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 
 
-def test_sql_correction_pipeline():
+@pytest.mark.asyncio
+async def test_sql_correction_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
     sql_correction_pipeline = SQLCorrection(llm_provider=llm_provider, engine=engine)
 
-    sql_correction_result = async_validate(
-        lambda: sql_correction_pipeline.run(
-            contexts=GLOBAL_DATA["contexts"],
-            invalid_generation_results=[
-                {
-                    "sql": "Select count(*) from books",
-                    "summary": "Retrieve the number of books",
-                    "error": 'ERROR:  com.google.cloud.bigquery.BigQueryException: Table "books" must be qualified with a dataset (e.g. dataset.table).',
-                }
-            ],
-        )
+    sql_correction_result = await sql_correction_pipeline.run(
+        contexts=GLOBAL_DATA["contexts"],
+        invalid_generation_results=[
+            {
+                "sql": "Select count(*) from books",
+                "summary": "Retrieve the number of books",
+                "error": 'ERROR:  com.google.cloud.bigquery.BigQueryException: Table "books" must be qualified with a dataset (e.g. dataset.table).',
+            }
+        ],
     )
 
     assert isinstance(

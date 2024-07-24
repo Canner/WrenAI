@@ -98,6 +98,11 @@ export interface IbisBaseOptions {
 export interface IbisQueryOptions extends IbisBaseOptions {
   limit?: number;
 }
+export interface IbisDryPlanOptions {
+  dataSource: DataSourceName;
+  mdl: Manifest;
+  sql: string;
+}
 
 export interface IIbisAdaptor {
   query: (
@@ -114,6 +119,7 @@ export interface IIbisAdaptor {
     connectionInfo: WREN_AI_CONNECTION_INFO,
   ) => Promise<RecommendConstraint[]>;
 
+  getNativeSql: (options: IbisDryPlanOptions) => Promise<string>;
   validate: (
     dataSource: DataSourceName,
     rule: ValidationRules,
@@ -134,6 +140,26 @@ export class IbisAdaptor implements IIbisAdaptor {
 
   constructor({ ibisServerEndpoint }: { ibisServerEndpoint: string }) {
     this.ibisServerBaseUrl = `${ibisServerEndpoint}/v2/connector`;
+  }
+  public async getNativeSql(options: IbisDryPlanOptions): Promise<string> {
+    const { dataSource, mdl, sql } = options;
+    const body = {
+      sql,
+      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+    };
+    try {
+      const res = await axios.post(
+        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/dry-plan`,
+        body,
+      );
+      return res.data;
+    } catch (e) {
+      logger.debug(`Got error when dry plan with ibis: ${e.response.data}`);
+      throw Errors.create(Errors.GeneralErrorCodes.DRY_PLAN_ERROR, {
+        customMessage: e.response.data,
+        originalError: e,
+      });
+    }
   }
 
   public async query(

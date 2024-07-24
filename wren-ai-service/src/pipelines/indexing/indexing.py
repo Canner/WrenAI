@@ -1,9 +1,10 @@
+import asyncio
 import json
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import orjson
 from hamilton import base
@@ -35,14 +36,15 @@ class DocumentCleaner:
         self._stores = stores
 
     @component.output_types(mdl=str)
-    def run(self, mdl: str) -> str:
-        def _clear_documents(store: DocumentStore) -> None:
-            ids = [str(i) for i in range(store.count_documents())]
+    async def run(self, mdl: str) -> str:
+        async def _clear_documents(store: DocumentStore) -> None:
+            document_count = await store.count_documents()
+            ids = [str(i) for i in range(document_count)]
             if ids:
-                store.delete_documents(ids)
+                await store.delete_documents(ids)
 
         logger.info("Ask Indexing pipeline is clearing old documents...")
-        [_clear_documents(store) for store in self._stores]
+        await asyncio.gather(*[_clear_documents(store) for store in self._stores])
         return {"mdl": mdl}
 
 
@@ -315,12 +317,29 @@ class DDLConverter:
         return ddl_commands
 
 
+@component
+class AsyncDocumentWriter(DocumentWriter):
+    @component.output_types(documents_written=int)
+    async def run(
+        self, documents: List[Document], policy: Optional[DuplicatePolicy] = None
+    ):
+        if policy is None:
+            policy = self.policy
+
+        documents_written = await self.document_store.write_documents(
+            documents=documents, policy=policy
+        )
+        return {"documents_written": documents_written}
+
+
 ## Start of Pipeline
-@timer
+@async_timer
 @observe(capture_input=False, capture_output=False)
-def clean_document_store(mdl_str: str, cleaner: DocumentCleaner) -> Dict[str, Any]:
+async def clean_document_store(
+    mdl_str: str, cleaner: DocumentCleaner
+) -> Dict[str, Any]:
     logger.debug(f"input in clean_document_store: {mdl_str}")
-    return cleaner.run(mdl=mdl_str)
+    return await cleaner.run(mdl=mdl_str)
 
 
 @timer
@@ -357,10 +376,10 @@ async def embed_ddl(
     return await ddl_embedder.run(documents=convert_to_ddl["documents"])
 
 
-@timer
+@async_timer
 @observe(capture_input=False)
-def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
-    return ddl_writer.run(documents=embed_ddl["documents"])
+async def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
+    return await ddl_writer.run(documents=embed_ddl["documents"])
 
 
 @timer
@@ -385,10 +404,10 @@ async def embed_view(
     return await view_embedder.run(documents=convert_to_view["documents"])
 
 
-@timer
+@async_timer
 @observe(capture_input=False)
-def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
-    return view_writer.run(documents=embed_view["documents"])
+async def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
+    return await view_writer.run(documents=embed_view["documents"])
 
 
 ## End of Pipeline
@@ -408,13 +427,13 @@ class Indexing(BasicPipeline):
 
         self.ddl_converter = DDLConverter()
         self.ddl_embedder = embedder_provider.get_document_embedder()
-        self.ddl_writer = DocumentWriter(
+        self.ddl_writer = AsyncDocumentWriter(
             document_store=ddl_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
         self.view_converter = ViewConverter()
         self.view_embedder = embedder_provider.get_document_embedder()
-        self.view_writer = DocumentWriter(
+        self.view_writer = AsyncDocumentWriter(
             document_store=view_store,
             policy=DuplicatePolicy.OVERWRITE,
         )

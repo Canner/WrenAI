@@ -5,17 +5,24 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import qdrant_client
 from haystack import Document, component
+from haystack.document_stores.types import DuplicatePolicy
 from haystack.utils import Secret
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from haystack_integrations.document_stores.qdrant import (
+    QdrantDocumentStore,
+    document_store,
+)
 from haystack_integrations.document_stores.qdrant.converters import (
     DENSE_VECTORS_NAME,
+    convert_haystack_documents_to_qdrant_points,
+    convert_id,
     convert_qdrant_point_to_haystack_document,
 )
 from haystack_integrations.document_stores.qdrant.filters import (
     convert_filters_to_qdrant,
 )
 from qdrant_client.http import models as rest
+from tqdm import tqdm
 
 from src.core.provider import DocumentStoreProvider
 from src.providers.loader import get_default_embedding_model_dim, provider
@@ -155,6 +162,72 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                     score = float(1 / (1 + np.exp(-score / 100)))
                 document.score = score
         return results
+
+    async def delete_documents(self, ids: List[str]):
+        ids = [convert_id(_id) for _id in ids]
+        try:
+            await self.async_client.delete(
+                collection_name=self.index,
+                points_selector=ids,
+                wait=self.wait_result_from_api,
+            )
+        except KeyError:
+            logger.warning(
+                "Called QdrantDocumentStore.delete_documents() on a non-existing ID",
+            )
+
+    async def count_documents(self) -> int:
+        return (await self.async_client.count(collection_name=self.index)).count
+
+    async def write_documents(
+        self, documents: List[Document], policy: DuplicatePolicy = DuplicatePolicy.FAIL
+    ):
+        for doc in documents:
+            if not isinstance(doc, Document):
+                msg = f"DocumentStore.write_documents() expects a list of Documents but got an element of {type(doc)}."
+                raise ValueError(msg)
+
+        self._set_up_collection(
+            self.index,
+            self.embedding_dim,
+            False,
+            self.similarity,
+            self.use_sparse_embeddings,
+        )
+
+        if len(documents) == 0:
+            logger.warning(
+                "Calling QdrantDocumentStore.write_documents() with empty list"
+            )
+            return
+
+        document_objects = self._handle_duplicate_documents(
+            documents=documents,
+            index=self.index,
+            policy=policy,
+        )
+
+        batched_documents = document_store.get_batches_from_generator(
+            document_objects, self.write_batch_size
+        )
+        with tqdm(
+            total=len(document_objects), disable=not self.progress_bar
+        ) as progress_bar:
+            for document_batch in batched_documents:
+                batch = convert_haystack_documents_to_qdrant_points(
+                    document_batch,
+                    embedding_field=self.embedding_field,
+                    use_sparse_embeddings=self.use_sparse_embeddings,
+                )
+
+                await self.async_client.upsert(
+                    collection_name=self.index,
+                    points=batch,
+                    wait=self.wait_result_from_api,
+                )
+
+                progress_bar.update(self.write_batch_size)
+        return len(document_objects)
 
 
 class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
