@@ -1,6 +1,6 @@
 import { useState, useMemo, useContext } from 'react';
 import styled from 'styled-components';
-import { isString } from 'lodash';
+import { isString, difference } from 'lodash';
 import { Input, Table } from 'antd';
 import { ColumnsType } from 'antd/lib/table';
 import { SearchOutlined } from '@ant-design/icons';
@@ -100,19 +100,27 @@ export default function MultiSelectBox(props: Props) {
           selectedRowKeys: Array.from(selectedRowKeys),
           onSelect: (record) => onSelect(record['value']),
           onChange(keys) {
-            // if more than 1 rows selected and there is only one possibility, if user selects all rows.
-            if (keys.length !== 1) {
-              if (keys.length === 0) {
-                setSelectedRowKeys(new Set());
-                onChange && onChange([]);
-                return;
-              }
+            // deselect all
+            if (keys.length === 0) {
+              const tableKeys = dataSource.map((item) => item.value);
+              const newSelectedRowKeys = difference(
+                [...selectedRowKeys.values()],
+                tableKeys,
+              );
+              const newSelectedRowKeySet = new Set(newSelectedRowKeys);
+              setSelectedRowKeys(newSelectedRowKeySet);
+              onChange && onChange(Array.from(newSelectedRowKeySet));
+              return;
+            }
+            // select all
+            if (keys.length === dataSource.length) {
               const newSelectedRowKeys = [
                 ...selectedRowKeys,
                 ...(keys as string[]),
               ];
-              setSelectedRowKeys(new Set(newSelectedRowKeys));
-              onChange && onChange(newSelectedRowKeys);
+              const newSelectedRowKeysSet = new Set(newSelectedRowKeys);
+              setSelectedRowKeys(newSelectedRowKeysSet);
+              onChange && onChange(Array.from(newSelectedRowKeysSet));
             }
           },
         }}
