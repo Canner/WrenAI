@@ -16,7 +16,7 @@ The dataset curation process is used to prepare the evaluation dataset for the W
 
 ## Prediction Process
 
-The prediction process is used to produce the results of the Wren AI service. It will create traces and a session on Langfuse to make the results available to the user. You can use the following command to predict the evaluation dataset under the `eval/dataset` directory:
+The prediction process is used to produce the results of the evaluation data using the Wren AI service. It will create traces and a session on Langfuse to make the results available to the user. You can use the following command to predict the evaluation dataset under the `eval/dataset` directory:
 
 ```cli
 just predict <evaluation-dataset>
