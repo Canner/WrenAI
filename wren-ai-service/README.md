@@ -64,11 +64,6 @@ For a comprehensive understanding of how to evaluate the pipelines, please refer
   - wren-ui: port should be 3000
   - qdrant: ports should be 6333, 6334
 
-## Adding your preferred LLM, Embedder or Document Store
+## Contributing
 
-Please read the [documentation](https://docs.getwren.ai/installation/custom_llm) here to check out how you can add your preferred LLM, Embedder or Document Store.
-
-## Related Issues or PRs
-
-- [Issues](https://github.com/Canner/WrenAI/issues?q=is%3Aopen+is%3Aissue+label%3Amodule%2Fai-service)
-- [PRs](https://github.com/Canner/WrenAI/pulls?q=is%3Aopen+is%3Apr+label%3Amodule%2Fai-service)
+Thank you for investing your time in contributing to our project! Please [read this for more information](CONTRIBUTING.md)!
