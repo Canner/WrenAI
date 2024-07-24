@@ -88,25 +88,31 @@ class Evaluator:
 
             self._score_collector[name].append(score)
 
+    @observe(name="Summary Trace", capture_input=False, capture_output=False)
     def _average_score(self, meta: dict) -> None:
-        @observe(name="Average Score", capture_input=False, capture_output=False)
-        def wrapper():
-            langfuse_context.update_current_trace(
-                session_id=meta["session_id"],
-                user_id=meta["user_id"],
-                metadata={
-                    "commit": meta["commit"],
-                },
+        langfuse_context.update_current_trace(
+            session_id=meta["session_id"],
+            user_id=meta["user_id"],
+            metadata={
+                "commit": meta["commit"],
+            },
+        )
+
+        summary = {}
+
+        for name, scores in self._score_collector.items():
+            langfuse_context.score_current_trace(
+                name=name,
+                value=sum(scores) / len(scores),
+                comment=f"Average score for {name}",
             )
+            summary[name] = {
+                "batch_size": len(scores),
+            }
 
-            for name, scores in self._score_collector.items():
-                langfuse_context.score_current_trace(
-                    name=name,
-                    value=sum(scores) / len(scores),
-                    comment=f"Average score for {name}",
-                )
-
-        wrapper()
+        langfuse_context.update_current_observation(
+            output=summary,
+        )
 
 
 def metrics_initiator(mdl: dict) -> list:
