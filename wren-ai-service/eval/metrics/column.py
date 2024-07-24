@@ -38,7 +38,8 @@ class AccuracyMetric(BaseMetric):
     async def _retrieve_data(self, sql: str) -> pd.DataFrame:
         response = await get_data_from_wren_engine(sql=sql, **self._engine_config)
         df = pd.DataFrame(**response)
-        return df[sorted(df.columns)]
+        sorted_columns = sorted(df.columns)
+        return df[sorted_columns].sort_values(by=sorted_columns)
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
         expected_dataset = await self._retrieve_data(test_case.expected_output)
