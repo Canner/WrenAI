@@ -278,7 +278,10 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data;
     } catch (err: any) {
       logger.debug(`Got error when getting native SQL: ${err.message}`);
-      throw err;
+      Errors.create(Errors.GeneralErrorCodes.DRY_PLAN_ERROR, {
+        customMessage: err.message,
+        originalError: err,
+      });
     }
   }
 
