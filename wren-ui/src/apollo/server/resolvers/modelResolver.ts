@@ -7,7 +7,12 @@ import {
   UpdateViewMetadataInput,
   PreviewSQLData,
 } from '../models';
-import { IContext, RelationData, UpdateRelationData } from '../types';
+import {
+  DataSourceName,
+  IContext,
+  RelationData,
+  UpdateRelationData,
+} from '../types';
 import { getLogger, transformInvalidColumnName } from '@server/utils';
 import { DeployResponse } from '../services/deployService';
 import { constructCteSql } from '../services/askingService';
@@ -684,8 +689,8 @@ export class ModelResolver {
     const { responseId } = args;
 
     // If using a sample dataset, native SQL is not supported
-    const { sampleDataset } = await ctx.projectService.getCurrentProject();
-    if (sampleDataset) {
+    const project = await ctx.projectService.getCurrentProject();
+    if (project.sampleDataset) {
       throw new Error(`Doesn't support Native SQL`);
     }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
@@ -699,11 +704,20 @@ export class ModelResolver {
     // construct cte sql and format it
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps));
-
-    return await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
-      manifest,
-      modelingOnly: false,
-    });
+    if (project.type === DataSourceName.DUCKDB) {
+      logger.info(`Getting native sql from wren engine`);
+      return await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
+        manifest,
+        modelingOnly: false,
+      });
+    } else {
+      logger.info(`Getting native sql from ibis server`);
+      return await ctx.ibisServerAdaptor.getNativeSql({
+        dataSource: project.type,
+        sql,
+        mdl: manifest,
+      });
+    }
   }
 
   public async updateViewMetadata(
