@@ -24,7 +24,10 @@ Please review our [Code of Conduct](https://github.com/Canner/WrenAI/blob/main/C
 
 ### Wren AI Service
 
-- basic intro & link to AI service readme
+Wren AI Service is responsible for LLM-related tasks like converting natural language questions into SQL queries and providing step-by-step SQL breakdowns.
+
+To contribute to Wren AI Service, please refer to the [Wren AI Service Contributing Guide](https://github.com/Canner/WrenAI/blob/main/wren-ai-service/CONTRIBUTING.md)
+
 
 ### Wren UI Service
 
