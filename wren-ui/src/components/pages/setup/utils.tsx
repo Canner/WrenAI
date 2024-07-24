@@ -15,6 +15,7 @@ import SQLServerProperties from './dataSources/SQLServerProperties';
 import ClickHouseProperties from './dataSources/ClickHouseProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 import { ERROR_CODES } from '@/utils/errorHandler';
+import { TrinoProperties } from './dataSources/TrinoProperties';
 
 type SetupStep = {
   step: number;
@@ -95,6 +96,12 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/guide/connect/clickhouse',
     disabled: false,
   },
+  [DATA_SOURCES.TRINO]: {
+    label: 'Trino',
+    logo: '/images/dataSource/trino.svg',
+    guide: 'https://docs.getwren.ai/guide/connect/trino',
+    disabled: true,
+  },
 } as { [key: string]: ButtonOption };
 
 export const DATA_SOURCE_FORM = {
@@ -104,6 +111,7 @@ export const DATA_SOURCE_FORM = {
   [DATA_SOURCES.MYSQL]: { component: MySQLProperties },
   [DATA_SOURCES.MSSQL]: { component: SQLServerProperties },
   [DATA_SOURCES.CLICK_HOUSE]: { component: ClickHouseProperties },
+  [DATA_SOURCES.TRINO]: { component: TrinoProperties },
 };
 
 export const TEMPLATE_OPTIONS = {
@@ -151,6 +159,10 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
       [DATA_SOURCES.CLICK_HOUSE]: merge(
         DATA_SOURCE_OPTIONS[DATA_SOURCES.CLICK_HOUSE],
         DATA_SOURCE_FORM[DATA_SOURCES.CLICK_HOUSE],
+      ),
+      [DATA_SOURCES.TRINO]: merge(
+        DATA_SOURCE_OPTIONS[DATA_SOURCES.TRINO],
+        DATA_SOURCE_FORM[DATA_SOURCES.TRINO],
       ),
     }[dataSource] || defaultDataSource
   );
