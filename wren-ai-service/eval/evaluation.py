@@ -98,7 +98,9 @@ class Evaluator:
             },
         )
 
-        summary = {}
+        summary = {
+            "query_count": meta["query_count"],
+        }
 
         for name, scores in self._score_collector.items():
             langfuse_context.score_current_trace(

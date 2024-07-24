@@ -24,12 +24,13 @@ from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
 
-def generate_meta(dataset_path: str) -> Dict[str, Any]:
+def generate_meta(path: str, dataset: dict) -> Dict[str, Any]:
     return {
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{uuid.uuid4()}",
         "date": datetime.now(),
-        "evaluation_dataset": dataset_path,
+        "evaluation_dataset": path,
+        "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
     }
 
@@ -230,9 +231,9 @@ if __name__ == "__main__":
     utils.load_env_vars()
     utils.init_langfuse()
 
-    meta = generate_meta(dataset_path=path)
-
     dataset = parse_toml(path)
+    meta = generate_meta(path=path, dataset=dataset)
+
     pipes = setup_pipes(dataset["mdl"])
     deploy_model(dataset["mdl"], pipes["indexing"])
     predictions = predict(meta, dataset["eval_dataset"], pipes)
