@@ -96,6 +96,8 @@ class Evaluator:
             metadata={
                 "commit": meta["commit"],
                 "dataset_id": meta["dataset_id"],
+                "embedding_model": meta["embedding_model"],
+                "generation_model": meta["generation_model"],
             },
         )
 

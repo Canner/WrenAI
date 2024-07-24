@@ -33,6 +33,8 @@ def generate_meta(path: str, dataset: dict) -> Dict[str, Any]:
         "evaluation_dataset": path,
         "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
+        "embedding_model": os.getenv("EMBEDDING_MODEL"),
+        "generation_model": os.getenv("GENERATION_MODEL"),
     }
 
 
@@ -90,6 +92,8 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             metadata={
                 "commit": meta["commit"],
                 "dataset_id": meta["dataset_id"],
+                "embedding_model": meta["embedding_model"],
+                "generation_model": meta["generation_model"],
                 "source_trace_id": prediction["trace_id"],
                 "source_trace_url": prediction["trace_url"],
             },
@@ -123,6 +127,8 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             metadata={
                 "commit": meta["commit"],
                 "dataset_id": meta["dataset_id"],
+                "embedding_model": meta["embedding_model"],
+                "generation_model": meta["generation_model"],
             },
         )
 
