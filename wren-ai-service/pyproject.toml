@@ -51,6 +51,10 @@ pandas = "==2.2.2"
 [tool.poetry.group.demo.dependencies]
 requests = "==2.32.2"
 
+
+[tool.poetry.group.test.dependencies]
+aioresponses = "==0.7.6"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
