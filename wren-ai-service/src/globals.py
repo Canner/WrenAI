@@ -22,7 +22,6 @@ from src.pipelines.ask_details import (
 from src.pipelines.indexing import (
     indexing,
 )
-from src.pipelines.semantics import description
 from src.pipelines.sql_explanation import (
     generation as sql_explanation_generation,
 )
@@ -32,11 +31,11 @@ from src.pipelines.sql_regeneration import (
 from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
-from src.web.v1.services.semantics import SemanticsService
+from src.web.v1.services.indexing import IndexingService
 from src.web.v1.services.sql_explanation import SQLExplanationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
-SEMANTIC_SERVICE = None
+INDEXING_SERVICE = None
 ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
 SQL_EXPLANATION_SERVICE = None
@@ -45,7 +44,7 @@ SQL_REGENERATION_SERVICE = None
 
 def init_globals():
     global \
-        SEMANTIC_SERVICE, \
+        INDEXING_SERVICE, \
         ASK_SERVICE, \
         ASK_DETAILS_SERVICE, \
         SQL_EXPLANATION_SERVICE, \
@@ -62,10 +61,9 @@ def init_globals():
         dataset_name="view_questions", recreate_index=True
     )
 
-    SEMANTIC_SERVICE = SemanticsService(
+    INDEXING_SERVICE = IndexingService(
         pipelines={
-            "generate_description": description.Generation(
-                llm_provider=llm_provider,
+            "indexing": indexing.Indexing(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
@@ -74,10 +72,6 @@ def init_globals():
 
     ASK_SERVICE = AskService(
         pipelines={
-            "indexing": indexing.Indexing(
-                embedder_provider=embedder_provider,
-                document_store_provider=document_store_provider,
-            ),
             "retrieval": ask_retrieval.Retrieval(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,

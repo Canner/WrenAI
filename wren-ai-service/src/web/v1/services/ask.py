@@ -11,30 +11,6 @@ from src.utils import async_timer
 logger = logging.getLogger("wren-ai-service")
 
 
-# POST /v1/semantics-preparations
-class SemanticsPreparationRequest(BaseModel):
-    mdl: str
-    id: str
-
-
-class SemanticsPreparationResponse(BaseModel):
-    id: str
-
-
-# GET /v1/semantics-preparations/{task_id}/status
-class SemanticsPreparationStatusRequest(BaseModel):
-    id: str
-
-
-class SemanticsPreparationStatusResponse(BaseModel):
-    class SemanticsPreparationError(BaseModel):
-        code: Literal["OTHERS"]
-        message: str
-
-    status: Literal["indexing", "finished", "failed"]
-    error: Optional[SemanticsPreparationError] = None
-
-
 class SQLExplanation(BaseModel):
     sql: str
     summary: str
@@ -116,52 +92,6 @@ class AskService:
     ):
         self._pipelines = pipelines
         self._ask_results = {}
-        self._prepare_semantics_statuses = {}
-
-    @async_timer
-    @observe(name="Prepare Semantics")
-    async def prepare_semantics(
-        self, prepare_semantics_request: SemanticsPreparationRequest
-    ):
-        try:
-            logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
-
-            self._prepare_semantics_statuses[
-                prepare_semantics_request.id
-            ] = SemanticsPreparationStatusResponse(
-                status="finished",
-            )
-        except Exception as e:
-            logger.exception(f"ask pipeline - Failed to prepare semantics: {e}")
-
-            self._prepare_semantics_statuses[
-                prepare_semantics_request.id
-            ] = SemanticsPreparationStatusResponse(
-                status="failed",
-                error=f"Failed to prepare semantics: {e}",
-            )
-
-    def get_prepare_semantics_status(
-        self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
-    ) -> SemanticsPreparationStatusResponse:
-        if (
-            result := self._prepare_semantics_statuses.get(
-                prepare_semantics_status_request.id
-            )
-        ) is None:
-            logger.exception(
-                f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.id}"
-            )
-            return SemanticsPreparationStatusResponse(
-                status="failed",
-                error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
-                    code="OTHERS",
-                    message="{prepare_semantics_status_request.id} is not found",
-                ),
-            )
-
-        return result
 
     def _is_stopped(self, query_id: str):
         if (
