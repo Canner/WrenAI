@@ -43,7 +43,9 @@ jobs:
       - name: Install the project dependencies
         run: poetry install
       - name: Install Just
-        run: sudo apt install just
+        uses: extractions/setup-just@v2
+        with:
+          just-version: '1.31.0'
       - name: Prepare testing environment and Run tests
         run: |
           just test
