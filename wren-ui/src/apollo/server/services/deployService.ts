@@ -15,7 +15,6 @@ import {
   TelemetryEvent,
   WrenService,
 } from '../telemetry/telemetry';
-import { GraphQLError } from 'graphql';
 
 const logger = getLogger('DeployService');
 logger.level = 'debug';
@@ -129,7 +128,7 @@ export class DeployService implements IDeployService {
         );
       }
       return { status, error: aiError };
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       logger.error(`Error deploying model: ${err.message}`);
       this.telemetry.sendEvent(
         eventName,

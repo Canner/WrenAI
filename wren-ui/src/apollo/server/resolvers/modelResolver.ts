@@ -27,7 +27,6 @@ import {
   updateModelPrimaryKey,
 } from '../utils/model';
 import { CompactTable, PreviewDataResponse } from '@server/services';
-import { GraphQLError } from 'graphql';
 import { TelemetryEvent } from '../telemetry/telemetry';
 
 const logger = getLogger('ModelResolver');
@@ -90,7 +89,7 @@ export class ModelResolver {
       const relation = await ctx.modelService.createRelation(data);
       ctx.telemetry.sendEvent(eventName, { data });
       return relation;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { data: data, error: err },
@@ -111,7 +110,7 @@ export class ModelResolver {
       const relation = await ctx.modelService.updateRelation(data, where.id);
       ctx.telemetry.sendEvent(eventName, { data });
       return relation;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { data: data, error: err },
@@ -141,7 +140,7 @@ export class ModelResolver {
       const column = await ctx.modelService.createCalculatedField(_args.data);
       ctx.telemetry.sendEvent(eventName, { data: _args.data });
       return column;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { data: _args.data, error: err },
@@ -175,7 +174,7 @@ export class ModelResolver {
       );
       ctx.telemetry.sendEvent(eventName, { data });
       return column;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { data: data, error: err },
@@ -308,7 +307,7 @@ export class ModelResolver {
         data: args.data,
       });
       return model;
-    } catch (error: GraphQLError | any) {
+    } catch (error: any) {
       ctx.telemetry.sendEvent(
         TelemetryEvent.MODELING_CREATE_MODEL,
         { data: args.data, error },
@@ -387,7 +386,7 @@ export class ModelResolver {
         data: args.data,
       });
       return model;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         TelemetryEvent.MODELING_UPDATE_MODEL,
         { data: args.data, error: err },
@@ -517,7 +516,7 @@ export class ModelResolver {
 
       ctx.telemetry.sendEvent(eventName, { data });
       return true;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { data: data, error: err },
@@ -750,7 +749,7 @@ export class ModelResolver {
       ctx.telemetry.sendEvent(eventName, eventProperties);
 
       return { ...view, displayName };
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         {

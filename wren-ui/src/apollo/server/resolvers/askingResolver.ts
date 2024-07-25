@@ -15,7 +15,6 @@ import {
   getSampleAskQuestions,
 } from '../data';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
-import { GraphQLError } from 'graphql';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -176,7 +175,7 @@ export class AskingResolver {
       });
       ctx.telemetry.sendEvent(eventName, {});
       return thread;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { error: err },
@@ -247,7 +246,7 @@ export class AskingResolver {
         new_summary: newSummary,
       });
       return thread;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         {
@@ -302,7 +301,7 @@ export class AskingResolver {
       const response = await askingService.createThreadResponse(threadId, data);
       ctx.telemetry.sendEvent(eventName, { data });
       return response;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { data, error: err },

@@ -22,7 +22,6 @@ import {
 } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
-import { GraphQLError } from 'graphql';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -338,7 +337,7 @@ export class AskingService implements IAskingService {
     try {
       await this.wrenAIAdaptor.cancelAsk(taskId);
       this.telemetry.sendEvent(eventName, {});
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       this.telemetry.sendEvent(eventName, {}, err.extensions?.service, false);
       throw err;
     }
@@ -504,7 +503,7 @@ export class AskingService implements IAskingService {
       })) as PreviewDataResponse;
       this.telemetry.sendEvent(eventName, { sql });
       return data;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       this.telemetry.sendEvent(
         eventName,
         { sql, error: err },

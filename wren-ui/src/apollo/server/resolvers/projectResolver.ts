@@ -31,7 +31,6 @@ import DataSourceSchemaDetector, {
 } from '@server/managers/dataSourceSchemaDetector';
 import { encryptConnectionInfo } from '../dataSource';
 import { TelemetryEvent } from '../telemetry/telemetry';
-import { GraphQLError } from 'graphql';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -102,7 +101,7 @@ export class ProjectResolver {
         projectId: id,
         dataSourceType: project.type,
       });
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { dataSourceType: project.type, error: err },
@@ -181,7 +180,7 @@ export class ProjectResolver {
       // telemetry
       ctx.telemetry.sendEvent(eventName, eventProperties);
       return { name };
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { ...eventProperties, error: err },
@@ -366,7 +365,7 @@ export class ProjectResolver {
       // async deploy to wren-engine and ai service
       this.deploy(ctx);
       return { models: models, columns };
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { dataSourceType: project.type, error: err },
@@ -467,7 +466,7 @@ export class ProjectResolver {
         relationCount: savedRelations.length,
       });
       return savedRelations;
-    } catch (err: GraphQLError | any) {
+    } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { error: err },
@@ -547,7 +546,7 @@ export class ProjectResolver {
       const hasSchemaChange = await schemaDetector.detectSchemaChange();
       ctx.telemetry.sendEvent(eventName, { hasSchemaChange });
       return hasSchemaChange;
-    } catch (error: GraphQLError | any) {
+    } catch (error: any) {
       ctx.telemetry.sendEvent(
         eventName,
         { error },

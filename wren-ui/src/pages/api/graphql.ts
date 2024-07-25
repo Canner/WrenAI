@@ -33,7 +33,6 @@ import {
 import {
   PostHogTelemetry,
   TelemetryEvent,
-  WrenService,
 } from '@/apollo/server/telemetry/telemetry';
 import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
 import {
