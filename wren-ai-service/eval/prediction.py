@@ -24,7 +24,13 @@ from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
 
-def generate_meta(path: str, dataset: dict) -> Dict[str, Any]:
+def generate_meta(
+    path: str,
+    dataset: dict,
+    llm_provider,
+    embedder_provider,
+    **kwargs,
+) -> Dict[str, Any]:
     return {
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{uuid.uuid4()}",
@@ -33,8 +39,8 @@ def generate_meta(path: str, dataset: dict) -> Dict[str, Any]:
         "evaluation_dataset": path,
         "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
-        "embedding_model": os.getenv("EMBEDDING_MODEL"),
-        "generation_model": os.getenv("GENERATION_MODEL"),
+        "embedding_model": embedder_provider.get_model(),
+        "generation_model": llm_provider.get_model(),
     }
 
 
@@ -175,27 +181,32 @@ def deploy_model(mdl, pipe) -> None:
     asyncio.run(wrapper())
 
 
-def setup_pipes(mdl: str) -> Dict[str, Any]:
-    (
-        llm_provider,
-        embedder_provider,
-        document_store_provider,
-        engine,
-    ) = utils.init_providers(
-        engine_config=EngineConfig(
-            provider="wren_ibis",
-            config={
-                "source": "bigquery",
-                "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
-                "connection_info": {
-                    "project_id": os.getenv("bigquery.project-id"),
-                    "dataset_id": os.getenv("bigquery.dataset-id"),
-                    "credentials": os.getenv("bigquery.credentials-key"),
-                },
+def init_providers(mdl: dict) -> dict:
+    engine_config = EngineConfig(
+        provider="wren_ibis",
+        config={
+            "source": "bigquery",
+            "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
+            "connection_info": {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
             },
-        )
+        },
     )
 
+    providers = utils.init_providers(engine_config=engine_config)
+    return {
+        "llm_provider": providers[0],
+        "embedder_provider": providers[1],
+        "document_store_provider": providers[2],
+        "engine": providers[3],
+    }
+
+
+def setup_pipes(
+    llm_provider, embedder_provider, document_store_provider, engine
+) -> Dict[str, Any]:
     document_store_provider.get_store(recreate_index=True)
     return {
         "indexing": indexing.Indexing(
@@ -233,9 +244,11 @@ if __name__ == "__main__":
     utils.init_langfuse()
 
     dataset = parse_toml(path)
-    meta = generate_meta(path=path, dataset=dataset)
+    providers = init_providers(dataset["mdl"])
 
-    pipes = setup_pipes(dataset["mdl"])
+    meta = generate_meta(path=path, dataset=dataset, **providers)
+
+    pipes = setup_pipes(**providers)
     deploy_model(dataset["mdl"], pipes["indexing"])
     predictions = predict(meta, dataset["eval_dataset"], pipes)
 
