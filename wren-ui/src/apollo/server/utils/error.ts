@@ -1,4 +1,5 @@
 import { GraphQLError } from 'graphql';
+import { WrenService } from '../telemetry/telemetry';
 
 export enum GeneralErrorCodes {
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
@@ -99,9 +100,10 @@ export const create = (
   options?: {
     customMessage?: string;
     originalError?: Error;
+    service?: WrenService;
   },
 ): GraphQLError => {
-  const { customMessage, originalError } = options || {};
+  const { customMessage, originalError, service } = options || {};
   // Default to INTERNAL_SERVER_ERROR if no code is provided
   code = code || GeneralErrorCodes.INTERNAL_SERVER_ERROR;
 
@@ -118,6 +120,7 @@ export const create = (
       originalError,
       code,
       message,
+      service,
       shortMessage:
         shortMessages[code] ||
         shortMessages[GeneralErrorCodes.INTERNAL_SERVER_ERROR],

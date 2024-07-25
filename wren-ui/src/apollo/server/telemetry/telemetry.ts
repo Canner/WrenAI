@@ -19,7 +19,63 @@ const {
   posthogHost,
 } = config;
 
-export class Telemetry {
+export enum TelemetryEvent {
+  // onboarding
+  CONNECTION_START_SAMPLE_DATASET = 'connection_start_sample_dataset',
+  CONNECTION_SAVE_DATA_SOURCE = 'connection_save_data_source',
+  CONNECTION_SAVE_TABLES = 'connection_save_tables',
+  CONNECTION_SAVE_RELATION = 'connection_save_relation',
+
+  // modeling page
+  MODELING_DEPLOY_MDL = 'modeling_deploy_mdl',
+  MODELING_CREATE_MODEL = 'modeling_create_model',
+  MODELING_UPDATE_MODEL = 'modeling_update_model',
+  MODELING_CREATE_CF = 'modeling_create_cf',
+  MODELING_UPDATE_CF = 'modeling_update_cf',
+  MODELING_UPDATE_MODEL_METADATA = 'modeling_update_model_metadata',
+  MODELING_UPDATE_VIEW_METADATA = 'modeling_update_view_metadata',
+  MODELING_CREATE_RELATION = 'modeling_create_relation',
+  MODELING_UPDATE_RELATION = 'modeling_update_relation',
+  // schema change
+  MODELING_DETECT_SCHEMA_CHANGE = 'modeling_detect_schema_change',
+  MODELING_RESOLVE_SCHEMA_CHANGE = 'modeling_resolve_schema_change',
+
+  HOME_UPDATE_THREAD_SUMMARY = 'update_thread_summary',
+  // ask question
+  HOME_ASK_CANDIDATE = 'home_ask_candidate',
+  HOME_CREATE_THREAD = 'home_create_thread',
+  HOME_ANSWER_QUESTION = 'home_answer_question',
+  HOME_ASK_FOLLOWUP_QUESTION = 'home_ask_followup_question',
+  HOME_CANCEL_ASK = 'home_cancel_ask',
+
+  // event after ask
+  HOME_CREATE_VIEW = 'home_create_view',
+  HOME_PREVIEW_ANSWER = 'home_preview_answer',
+
+  // settings event
+  SETTING_RESET_PROJECT = 'setting_reset_project',
+
+  // Default error
+  GRAPHQL_ERROR = 'graphql_error',
+}
+
+export enum WrenService {
+  BE = 'BE',
+  AI = 'AI',
+  ENGINE = 'ENGINE',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export interface ITelemetry {
+  sendEvent: (
+    event: TelemetryEvent,
+    properties: Record<string, any>,
+    service?: WrenService | any,
+    actionSuccess?: boolean,
+  ) => void;
+}
+
+export class PostHogTelemetry {
   private readonly posthog: any;
   private readonly userId: string;
 
@@ -34,24 +90,31 @@ export class Telemetry {
       });
       this.posthog = client;
       this.userId = userUUID || uuidv4();
-      logger.info('Telemetry initialized');
+      logger.info(`Telemetry initialized: ${this.userId}`);
       return;
     }
     logger.info('Telemetry not enabled.');
   }
 
-  public async send_event(event: string, properties: Record<string, any> = {}) {
+  public async sendEvent(
+    event: TelemetryEvent,
+    properties: Record<string, any> = {},
+    service: WrenService | any = WrenService.UNKNOWN,
+    actionSuccess: boolean = true,
+  ) {
     if (!this.posthog) {
       return;
     }
+    const eventName = actionSuccess ? `${event}_success` : `${event}_failed`;
     try {
       const systemInfo = this.collectSystemInfo();
       this.posthog.capture({
         distinctId: this.userId,
-        event,
+        event: eventName,
         properties: {
           ...systemInfo,
           ...properties,
+          wren_service: service,
         },
       });
     } catch (e) {

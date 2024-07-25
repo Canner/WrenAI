@@ -15,9 +15,14 @@ import {
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
 import { format } from 'sql-formatter';
-import { Telemetry } from '../telemetry/telemetry';
+import {
+  PostHogTelemetry,
+  TelemetryEvent,
+  WrenService,
+} from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
+import { GraphQLError } from 'graphql';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -142,14 +147,14 @@ class BackgroundTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
   private runningJobs = new Set();
-  private telemetry: Telemetry;
+  private telemetry: PostHogTelemetry;
 
   constructor({
     telemetry,
     wrenAIAdaptor,
     threadResponseRepository,
   }: {
-    telemetry: Telemetry;
+    telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
   }) {
@@ -198,10 +203,23 @@ class BackgroundTracker {
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
-            this.telemetry.send_event('question_answered', {
+            const eventProperties = {
               question: threadResponse.question,
-              result,
-            });
+              error: result.error,
+            };
+            if (result.status === AskResultStatus.FINISHED) {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_ANSWER_QUESTION,
+                eventProperties,
+              );
+            } else {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_ANSWER_QUESTION,
+                eventProperties,
+                WrenService.AI,
+                false,
+              );
+            }
             logger.debug(`Job ${threadResponse.id} is finalized, removing`);
             delete this.tasks[threadResponse.id];
           }
@@ -241,7 +259,7 @@ export class AskingService implements IAskingService {
   private threadResponseRepository: IThreadResponseRepository;
   private backgroundTracker: BackgroundTracker;
   private queryService: IQueryService;
-  private telemetry: Telemetry;
+  private telemetry: PostHogTelemetry;
 
   constructor({
     telemetry,
@@ -253,7 +271,7 @@ export class AskingService implements IAskingService {
     threadResponseRepository,
     queryService,
   }: {
-    telemetry: Telemetry;
+    telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     deployService: IDeployService;
     projectService: IProjectService;
@@ -316,8 +334,14 @@ export class AskingService implements IAskingService {
   }
 
   public async cancelAskingTask(taskId: string): Promise<void> {
-    this.telemetry.send_event('question_cancelled', {});
-    await this.wrenAIAdaptor.cancelAsk(taskId);
+    const eventName = TelemetryEvent.HOME_CANCEL_ASK;
+    try {
+      await this.wrenAIAdaptor.cancelAsk(taskId);
+      this.telemetry.sendEvent(eventName, {});
+    } catch (err: GraphQLError | any) {
+      this.telemetry.sendEvent(eventName, {}, err.extensions?.service, false);
+      throw err;
+    }
   }
 
   public async getAskingTask(taskId: string): Promise<AskResult> {
@@ -471,14 +495,24 @@ export class AskingService implements IAskingService {
     const mdl = deployment.manifest;
     const steps = response.detail.steps;
     const sql = format(constructCteSql(steps, stepIndex));
-    const data = (await this.queryService.preview(sql, {
-      project,
-      manifest: mdl,
-      limit,
-    })) as PreviewDataResponse;
-
-    this.telemetry.send_event('preview_data', { sql });
-    return data;
+    const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
+    try {
+      const data = (await this.queryService.preview(sql, {
+        project,
+        manifest: mdl,
+        limit,
+      })) as PreviewDataResponse;
+      this.telemetry.sendEvent(eventName, { sql });
+      return data;
+    } catch (err: GraphQLError | any) {
+      this.telemetry.sendEvent(
+        eventName,
+        { sql, error: err },
+        err.extensions?.service,
+        false,
+      );
+      throw err;
+    }
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {

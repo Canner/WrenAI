@@ -26,8 +26,15 @@ import { AskingService } from '@/apollo/server/services/askingService';
 import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
 import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
 import { SchemaChangeRepository } from '@/apollo/server/repositories/schemaChangeRepository';
-import { defaultApolloErrorHandler } from '@/apollo/server/utils/error';
-import { Telemetry } from '@/apollo/server/telemetry/telemetry';
+import {
+  defaultApolloErrorHandler,
+  GeneralErrorCodes,
+} from '@/apollo/server/utils/error';
+import {
+  PostHogTelemetry,
+  TelemetryEvent,
+  WrenService,
+} from '@/apollo/server/telemetry/telemetry';
 import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
 import {
   DataSourceMetadataService,
@@ -47,7 +54,7 @@ export const config: PageConfig = {
 };
 
 const bootstrapServer = async () => {
-  const telemetry = new Telemetry();
+  const telemetry = new PostHogTelemetry();
 
   const knex = bootstrapKnex({
     dbType: serverConfig.dbType,
@@ -130,6 +137,11 @@ const bootstrapServer = async () => {
     typeDefs,
     resolvers,
     formatError: (error: GraphQLError) => {
+      // stop print error stacktrace of dry run error
+      if (error.extensions?.code === GeneralErrorCodes.DRY_RUN_ERROR) {
+        return defaultApolloErrorHandler(error);
+      }
+
       // print error stacktrace of graphql error
       const stacktrace = error.extensions?.exception?.stacktrace;
       if (stacktrace) {
@@ -145,12 +157,17 @@ const bootstrapServer = async () => {
       }
 
       // telemetry: capture internal server error
-      if (!error.extensions?.code) {
-        telemetry.send_event('graphql_error', {
-          originalErrorStack: originalError?.stack,
-          originalErrorMessage: originalError.message,
-          errorMessage: error.message,
-        });
+      if (error.extensions?.code === GeneralErrorCodes.INTERNAL_SERVER_ERROR) {
+        telemetry.sendEvent(
+          TelemetryEvent.GRAPHQL_ERROR,
+          {
+            originalErrorStack: originalError?.stack,
+            originalErrorMessage: originalError.message,
+            errorMessage: error.message,
+          },
+          error.extensions?.service,
+          false,
+        );
       }
       return defaultApolloErrorHandler(error);
     },

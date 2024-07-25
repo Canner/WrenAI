@@ -9,7 +9,7 @@ describe('DeployService', () => {
   let mockTelemetry;
 
   beforeEach(() => {
-    mockTelemetry = { send_event: jest.fn() };
+    mockTelemetry = { sendEvent: jest.fn() };
     mockWrenAIAdaptor = { deploy: jest.fn() };
     mockDeployLogRepository = {
       findLastProjectDeployLog: jest.fn(),
