@@ -14,7 +14,6 @@ from haystack_integrations.document_stores.qdrant import (
 )
 from haystack_integrations.document_stores.qdrant.converters import (
     DENSE_VECTORS_NAME,
-    convert_haystack_documents_to_qdrant_points,
     convert_id,
     convert_qdrant_point_to_haystack_document,
 )
@@ -28,6 +27,43 @@ from src.core.provider import DocumentStoreProvider
 from src.providers.loader import get_default_embedding_model_dim, provider
 
 logger = logging.getLogger("wren-ai-service")
+
+
+def convert_haystack_documents_to_qdrant_points(
+    documents: List[Document],
+    *,
+    embedding_field: str,
+    use_sparse_embeddings: bool,
+) -> List[rest.PointStruct]:
+    DENSE_VECTORS_NAME = "text-dense"
+    SPARSE_VECTORS_NAME = "text-sparse"
+
+    points = []
+    for document in documents:
+        payload = document.to_dict(flatten=True)
+        if use_sparse_embeddings:
+            vector = {}
+
+            dense_vector = payload.pop(embedding_field, None)
+            if dense_vector is not None:
+                vector[DENSE_VECTORS_NAME] = dense_vector
+
+            sparse_vector = payload.pop("sparse_embedding", None)
+            if sparse_vector is not None:
+                sparse_vector_instance = rest.SparseVector(**sparse_vector)
+                vector[SPARSE_VECTORS_NAME] = sparse_vector_instance
+
+        else:
+            vector = payload.pop(embedding_field) or {}
+        _id = convert_id(payload.get("id"))
+
+        point = rest.PointStruct(
+            payload=payload,
+            vector=vector,
+            id=_id,
+        )
+        points.append(point)
+    return points
 
 
 class AsyncQdrantDocumentStore(QdrantDocumentStore):
@@ -111,7 +147,6 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             payload_fields_to_index=payload_fields_to_index,
         )
 
-        metadata = metadata or {}
         self.async_client = qdrant_client.AsyncQdrantClient(
             location=location,
             url=url,
@@ -124,7 +159,13 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             timeout=timeout,
             host=host,
             path=path,
-            metadata=metadata,
+            metadata=metadata or {},
+        )
+
+        # to improve the indexing performance
+        # see https://qdrant.tech/documentation/guides/multiple-partitions/?q=mul#calibrate-performance
+        self.client.create_payload_index(
+            collection_name=index, field_name="user_id", field_schema="keyword"
         )
 
     async def _query_by_embedding(
@@ -181,8 +222,14 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                 "Called QdrantDocumentStore.delete_documents() on a non-existing ID",
             )
 
-    async def count_documents(self) -> int:
-        return (await self.async_client.count(collection_name=self.index)).count
+    async def count_documents(self, filters: Optional[Dict[str, Any]] = None) -> int:
+        qdrant_filters = convert_filters_to_qdrant(filters)
+
+        return (
+            await self.async_client.count(
+                collection_name=self.index, count_filter=qdrant_filters
+            )
+        ).count
 
     async def write_documents(
         self, documents: List[Document], policy: DuplicatePolicy = DuplicatePolicy.FAIL
@@ -303,6 +350,12 @@ class QdrantProvider(DocumentStoreProvider):
                 binary=rest.BinaryQuantizationConfig(
                     always_ram=True,
                 )
+            ),
+            # to improve the indexing performance, we disable building global index for the whole collection
+            # see https://qdrant.tech/documentation/guides/multiple-partitions/?q=mul#calibrate-performance
+            hnsw_config=rest.HnswConfigDiff(
+                payload_m=16,
+                m=0,
             ),
         )
 
