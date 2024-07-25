@@ -20,7 +20,7 @@ from eval.metrics.column import (
     ContextualRelevancyMetric,
     FaithfulnessMetric,
 )
-from eval.utils import parse_toml, trace_metadata
+from eval.utils import engine_config, parse_toml, trace_metadata
 from src import utils
 
 
@@ -116,12 +116,7 @@ class Evaluator:
 
 
 def metrics_initiator(mdl: dict) -> list:
-    engine_config = {
-        "mdl_json": mdl,
-        "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
-        "timeout": 10,
-    }
-
+    config = engine_config(mdl)
     return [
         AccuracyMetric(
             engine_config={
@@ -137,9 +132,9 @@ def metrics_initiator(mdl: dict) -> list:
                 "limit": 10,
             }
         ),
-        AnswerRelevancyMetric(engine_config),
-        FaithfulnessMetric(engine_config),
-        ContextualRecallMetric(engine_config),
+        AnswerRelevancyMetric(config),
+        FaithfulnessMetric(config),
+        ContextualRecallMetric(config),
         ContextualRelevancyMetric(),
         ContextualPrecisionMetric(),
     ]

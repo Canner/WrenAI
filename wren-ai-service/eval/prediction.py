@@ -19,6 +19,7 @@ from tqdm.asyncio import tqdm_asyncio
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
 from eval.utils import (
+    engine_config,
     get_contexts_from_sql,
     parse_toml,
     trace_metadata,
@@ -92,12 +93,6 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
 
     @observe(capture_input=False)
     async def flat(actual: str, prediction: dict, meta: dict, mdl: dict) -> dict:
-        engine_config = {
-            "mdl_json": mdl,
-            "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
-            "timeout": 10,
-        }
-
         langfuse_context.update_current_trace(
             name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
             session_id=meta["session_id"],
@@ -111,7 +106,7 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
 
         prediction["actual_output"] = actual
         prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **engine_config
+            sql=actual["sql"], **engine_config(mdl)
         )
         prediction["source_trace_id"] = prediction["trace_id"]
         prediction["source_trace_url"] = prediction["trace_url"]
