@@ -74,23 +74,20 @@ def obtain_commit_hash() -> str:
 
 
 def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
-    predictions = []
-
-    async def run(query: dict) -> None:
-        prediction = await wrapper(query)
+    async def run(query: dict, meta: dict) -> list:
+        prediction = await wrapper(query, meta)
         valid_outputs = (
             prediction["actual_output"]
             .get("post_process", {})
             .get("valid_generation_results", [])
         )
 
-        predictions.append(prediction)
-        predictions.extend(
-            [flat(actual, prediction.copy()) for actual in valid_outputs]
-        )
+        return [prediction] + [
+            flat(actual, prediction.copy(), meta) for actual in valid_outputs
+        ]
 
     @observe(capture_input=False)
-    def flat(actual: str, prediction: dict) -> dict:
+    def flat(actual: str, prediction: dict, meta: dict) -> dict:
         langfuse_context.update_current_trace(
             name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
             session_id=meta["session_id"],
@@ -112,7 +109,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
         return prediction
 
     @observe(name="Prediction Process", capture_input=False)
-    async def wrapper(query: dict) -> dict:
+    async def wrapper(query: dict, meta: dict) -> dict:
         prediction = {
             "trace_id": langfuse_context.get_current_trace_id(),
             "trace_url": langfuse_context.get_current_trace_url(),
@@ -166,12 +163,11 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
         return columns
 
     async def task():
-        tasks = [run(query) for query in queries]
-        await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
+        tasks = [run(query, meta) for query in queries]
+        results = await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
+        return [prediction for predictions in results for prediction in predictions]
 
-    asyncio.run(task())
-
-    return predictions
+    return asyncio.run(task())
 
 
 def deploy_model(mdl, pipe) -> None:
