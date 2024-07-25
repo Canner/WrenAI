@@ -25,6 +25,7 @@ from eval.utils import (
     trace_metadata,
 )
 from src.core.engine import EngineConfig
+from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
@@ -32,8 +33,8 @@ from src.pipelines.indexing import indexing
 def generate_meta(
     path: str,
     dataset: dict,
-    llm_provider,
-    embedder_provider,
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
     **kwargs,
 ) -> Dict[str, Any]:
     return {
