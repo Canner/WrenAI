@@ -18,7 +18,11 @@ from tqdm.asyncio import tqdm_asyncio
 
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
-from eval.utils import parse_toml, trace_metadata
+from eval.utils import (
+    get_contexts_from_sql,
+    parse_toml,
+    trace_metadata,
+)
 from src.core.engine import EngineConfig
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
@@ -73,8 +77,8 @@ def obtain_commit_hash() -> str:
     return f"{repo.head.commit}@{branch.name}"
 
 
-def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
-    async def run(query: dict, meta: dict) -> list:
+def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str, Any]]:
+    async def run(query: dict, meta: dict, mdl: dict) -> list:
         prediction = await wrapper(query, meta)
         valid_outputs = (
             prediction["actual_output"]
@@ -83,11 +87,17 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
         )
 
         return [prediction] + [
-            flat(actual, prediction.copy(), meta) for actual in valid_outputs
+            await flat(actual, prediction.copy(), meta, mdl) for actual in valid_outputs
         ]
 
     @observe(capture_input=False)
-    def flat(actual: str, prediction: dict, meta: dict) -> dict:
+    async def flat(actual: str, prediction: dict, meta: dict, mdl: dict) -> dict:
+        engine_config = {
+            "mdl_json": mdl,
+            "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
+            "timeout": 10,
+        }
+
         langfuse_context.update_current_trace(
             name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
             session_id=meta["session_id"],
@@ -100,6 +110,9 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
         )
 
         prediction["actual_output"] = actual
+        prediction["actual_output_units"] = await get_contexts_from_sql(
+            sql=actual["sql"], **engine_config
+        )
         prediction["source_trace_id"] = prediction["trace_id"]
         prediction["source_trace_url"] = prediction["trace_url"]
         prediction["trace_id"] = langfuse_context.get_current_trace_id()
@@ -162,12 +175,12 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
 
         return columns
 
-    async def task():
-        tasks = [run(query, meta) for query in queries]
+    async def task(mdl: dict):
+        tasks = [run(query, meta, mdl) for query in queries]
         results = await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
         return [prediction for predictions in results for prediction in predictions]
 
-    return asyncio.run(task())
+    return asyncio.run(task(mdl))
 
 
 def deploy_model(mdl, pipe) -> None:
@@ -246,7 +259,7 @@ if __name__ == "__main__":
 
     pipes = setup_pipes(**providers)
     deploy_model(dataset["mdl"], pipes["indexing"])
-    predictions = predict(meta, dataset["eval_dataset"], pipes)
+    predictions = predict(meta, dataset["eval_dataset"], pipes, dataset["mdl"])
 
     write_prediction(meta, predictions)
     langfuse_context.flush()
