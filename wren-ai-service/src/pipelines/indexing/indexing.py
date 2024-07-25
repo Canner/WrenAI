@@ -36,7 +36,7 @@ class DocumentCleaner:
         self._stores = stores
 
     @component.output_types(mdl=str)
-    async def run(self, mdl: str, user_id: str) -> str:
+    async def run(self, mdl: str, user_id: str = "") -> str:
         async def _clear_documents(store: DocumentStore, user_id: str) -> None:
             filters = (
                 {
@@ -99,7 +99,7 @@ class ViewConverter:
     """
 
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], user_id: str) -> None:
+    def run(self, mdl: Dict[str, Any], user_id: str = "") -> None:
         def _format(view: Dict[str, Any]) -> List[str]:
             properties = view.get("properties", {})
             return str(
@@ -133,7 +133,7 @@ class ViewConverter:
 @component
 class DDLConverter:
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], user_id: str):
+    def run(self, mdl: Dict[str, Any], user_id: str = ""):
         logger.info("Ask Indexing pipeline is writing new documents...")
 
         logger.debug(f"original mdl_json: {mdl}")
