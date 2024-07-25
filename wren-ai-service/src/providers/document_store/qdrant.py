@@ -143,6 +143,11 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                 name=DENSE_VECTORS_NAME if self.use_sparse_embeddings else "",
                 vector=query_embedding,
             ),
+            search_params=rest.SearchParams(
+                quantization=rest.QuantizationSearchParams(
+                    rescore=True,
+                ),
+            ),
             query_filter=qdrant_filters,
             limit=top_k,
             with_vectors=return_embedding,
@@ -294,6 +299,11 @@ class QdrantProvider(DocumentStoreProvider):
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,
+            quantization_config=rest.BinaryQuantization(
+                binary=rest.BinaryQuantizationConfig(
+                    always_ram=True,
+                )
+            ),
         )
 
     def get_retriever(
