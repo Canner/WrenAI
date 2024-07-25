@@ -4,7 +4,7 @@ Thank you for investing your time in contributing to our project! This document 
 
 ## New contributor guide
 
-- To get an overview of the project, please read the [concepts](README.md#concepts).
+- To get an overview of the project, please read the [concepts](https://docs.getwren.ai/concept/wren_ai_service).
 - To set up the project for local development, please read [Environment Setup](README.md#environment-setup) and [Start the service for development](README.md#start-the-service-for-development)
 
 ## Getting started
@@ -28,6 +28,10 @@ When you've finished with the changes, create a pull request, also known as a PR
   Once you submit your PR, a Canner team member will review your proposal. We may ask questions or request additional information.
 - We may ask for changes to be made before a PR can be merged, either using [suggested changes](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/incorporating-feedback-in-your-pull-request) or pull request comments. You can apply suggested changes directly through the UI. You can make any other changes in your fork, then commit them to your branch.
 - As you update your PR and apply changes, mark each conversation as [resolved](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/commenting-on-a-pull-request#resolving-conversations).
+- Be sure to add one of the prefixes to the PR title, so that our CI could automatically capture the changelog of this PR.
+  - `feat(wren-ai-service)`: for new features
+  - `chore(wren-ai-service)`: for maintenance work
+  - `fix(wren-ai-service)`: for bug fixes
 - If you run into any merge issues, checkout this [git tutorial](https://github.com/skills/resolve-merge-conflicts) to help you resolve merge conflicts and other issues.
 
 ### Your PR is merged!
