@@ -42,9 +42,11 @@ jobs:
           cache: "poetry"
       - name: Install the project dependencies
         run: poetry install
+      - name: Install Just
+        run: apt install just
       - name: Prepare testing environment and Run tests
         run: |
-          make test
+          just test
         env:
           ENV: dev
           LLM_PROVIDER: openai_llm
