@@ -17,6 +17,7 @@ import { GeneralErrorCodes } from '../utils/error';
 import { findAnalysisById, reverseEnum } from '../utils';
 import { BackgroundTracker } from './index';
 import { getLogger } from '@server/utils/logger';
+import { RelationType } from '../adaptors/ibisAdaptor';
 
 const logger = getLogger('ExplainBackgroundTracker');
 logger.level = 'debug';
@@ -211,6 +212,9 @@ export class ThreadResponseExplainBackgroundTracker extends BackgroundTracker<Th
         );
         // remove previous id
         const payload = { ...explanation.payload };
+        const sqlLocation = Object.values(RelationType).includes(analysis?.type)
+          ? analysis.criteria?.nodeLocation
+          : analysis?.nodeLocation;
         delete payload.id;
         return {
           referenceId: id++,
@@ -220,7 +224,7 @@ export class ThreadResponseExplainBackgroundTracker extends BackgroundTracker<Th
             (explanation.payload as any).criteria ||
             (analysis as any).tableName,
           summary: explanation.payload.explanation || '',
-          sqlLocation: analysis ? analysis.nodeLocation : null,
+          sqlLocation,
         };
       });
 
