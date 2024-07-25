@@ -1,7 +1,7 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
@@ -62,7 +62,7 @@ class Retrieval(BasicPipeline):
     def visualize(
         self,
         query: str,
-        user_id: str = "",
+        user_id: Optional[str] = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
         if not Path(destination).exists():
@@ -73,7 +73,7 @@ class Retrieval(BasicPipeline):
             output_file_path=f"{destination}/retrieval.dot",
             inputs={
                 "query": query,
-                "user_id": user_id,
+                "user_id": user_id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
             },
@@ -83,13 +83,13 @@ class Retrieval(BasicPipeline):
 
     @async_timer
     @observe(name="Ask Retrieval")
-    async def run(self, query: str, user_id: str = ""):
+    async def run(self, query: str, user_id: Optional[str] = None):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["retrieval"],
             inputs={
                 "query": query,
-                "user_id": user_id,
+                "user_id": user_id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
             },

@@ -456,7 +456,7 @@ class Indexing(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, mdl_str: str, user_id: str = "") -> None:
+    def visualize(self, mdl_str: str, user_id: Optional[str] = None) -> None:
         destination = "outputs/pipelines/indexing"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -466,7 +466,7 @@ class Indexing(BasicPipeline):
             output_file_path=f"{destination}/indexing.dot",
             inputs={
                 "mdl_str": mdl_str,
-                "user_id": user_id,
+                "user_id": user_id or "",
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
@@ -482,13 +482,13 @@ class Indexing(BasicPipeline):
 
     @async_timer
     @observe(name="Ask Indexing")
-    async def run(self, mdl_str: str, user_id: str = "") -> Dict[str, Any]:
+    async def run(self, mdl_str: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         logger.info("Ask Indexing pipeline is running...")
         return await self._pipe.execute(
             ["write_ddl", "write_view"],
             inputs={
                 "mdl_str": mdl_str,
-                "user_id": user_id,
+                "user_id": user_id or "",
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
