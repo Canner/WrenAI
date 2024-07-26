@@ -24,6 +24,7 @@ Scan through our [existing issues](https://github.com/Canner/WrenAI/issues?q=is%
 When you've finished with the changes, create a pull request, also known as a PR.
 - Fill the description so that we can review your PR.
 - Don't forget to [link PR to issue](https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue) if you are solving one.
+- Add the `module/ai-service` label to your PR.
 - Enable the checkbox to [allow maintainer edits](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/allowing-changes-to-a-pull-request-branch-created-from-a-fork) so the branch can be updated for a merge.
   Once you submit your PR, a Canner team member will review your proposal. We may ask questions or request additional information.
 - We may ask for changes to be made before a PR can be merged, either using [suggested changes](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/incorporating-feedback-in-your-pull-request) or pull request comments. You can apply suggested changes directly through the UI. You can make any other changes in your fork, then commit them to your branch.
