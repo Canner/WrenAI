@@ -106,9 +106,8 @@ services:
       EXPERIMENTAL_ENGINE_RUST_VERSION: ${EXPERIMENTAL_ENGINE_RUST_VERSION}
       # configs
       WREN_PRODUCT_VERSION: ${WREN_PRODUCT_VERSION}
-    ports:
-      # HOST_PORT is the port you want to expose to the host machine
-      - ${HOST_PORT}:3000
+    expose:
+      - 3000
     volumes:
       - data:/app/data
     networks:
@@ -116,3 +115,14 @@ services:
     depends_on:
       - wren-ai-service
       - wren-engine
+
+  nginx:
+    image: nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - 4000:80
+    networks:
+      - wren
+    depends_on:
+      - wren-ui
