@@ -58,15 +58,20 @@ class Evaluator:
         self._score_collector = {}
         self._langfuse = Langfuse()
         self._metrics = metrics
+        self._failed_count = 0
 
     def eval(self, meta: dict, predictions: list) -> None:
         for prediction in predictions:
             if prediction.get("type") != "shallow":
                 continue
 
-            test_case = LLMTestCase(**formatter(prediction))
-            result = evaluate([test_case], self._metrics)[0]
-            self._score_metrics(test_case, result)
+            try:
+                test_case = LLMTestCase(**formatter(prediction))
+                result = evaluate([test_case], self._metrics)[0]
+                self._score_metrics(test_case, result)
+            except Exception as e:
+                self._failed_count += 1
+                print(f"Error: {e}")
 
         self._average_score(meta)
 
@@ -98,6 +103,7 @@ class Evaluator:
 
         summary = {
             "query_count": meta["query_count"],
+            "failed_count": self._failed_count,
         }
 
         for name, scores in self._score_collector.items():
