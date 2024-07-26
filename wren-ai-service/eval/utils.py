@@ -1,4 +1,5 @@
 import base64
+import os
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -125,3 +126,20 @@ async def get_contexts_from_sql(
 def parse_toml(path: str) -> Dict[str, Any]:
     with open(path) as file:
         return parse(file.read())
+
+
+def trace_metadata(meta: dict) -> dict:
+    return {
+        "commit": meta["commit"],
+        "dataset_id": meta["dataset_id"],
+        "embedding_model": meta["embedding_model"],
+        "generation_model": meta["generation_model"],
+    }
+
+
+def engine_config(mdl: dict) -> dict:
+    return {
+        "mdl_json": mdl,
+        "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
+        "timeout": 10,
+    }

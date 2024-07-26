@@ -18,19 +18,35 @@ from tqdm.asyncio import tqdm_asyncio
 
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
-from eval.utils import parse_toml
+from eval.utils import (
+    engine_config,
+    get_contexts_from_sql,
+    parse_toml,
+    trace_metadata,
+)
 from src.core.engine import EngineConfig
+from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
 
-def generate_meta(dataset_path: str) -> Dict[str, Any]:
+def generate_meta(
+    path: str,
+    dataset: dict,
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
+    **kwargs,
+) -> Dict[str, Any]:
     return {
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{uuid.uuid4()}",
         "date": datetime.now(),
-        "evaluation_dataset": dataset_path,
+        "dataset_id": dataset["dataset_id"],
+        "evaluation_dataset": path,
+        "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
+        "embedding_model": embedder_provider.get_model(),
+        "generation_model": llm_provider.get_model(),
     }
 
 
@@ -47,6 +63,8 @@ def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
     with open(output_path, "w") as file:
         file.write(dumps(doc))
 
+    print(f"Prediction result is saved at {output_path}")
+
 
 def obtain_commit_hash() -> str:
     repo = Repo(search_parent_directories=True)
@@ -61,27 +79,61 @@ def obtain_commit_hash() -> str:
     return f"{repo.head.commit}@{branch.name}"
 
 
-def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
-    predictions = []
+def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str, Any]]:
+    async def run(query: dict, meta: dict, mdl: dict) -> list:
+        prediction = await wrapper(query, meta)
+        valid_outputs = (
+            prediction["actual_output"]
+            .get("post_process", {})
+            .get("valid_generation_results", [])
+        )
 
-    @observe(name="Prediction Process")
-    async def wrapper(query: dict) -> None:
+        return [prediction] + [
+            await flat(actual, prediction.copy(), meta, mdl) for actual in valid_outputs
+        ]
+
+    @observe(capture_input=False)
+    async def flat(actual: str, prediction: dict, meta: dict, mdl: dict) -> dict:
+        langfuse_context.update_current_trace(
+            name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
+            session_id=meta["session_id"],
+            user_id=meta["user_id"],
+            metadata={
+                **trace_metadata(meta),
+                "source_trace_id": prediction["trace_id"],
+                "source_trace_url": prediction["trace_url"],
+            },
+        )
+
+        prediction["actual_output"] = actual
+        prediction["actual_output_units"] = await get_contexts_from_sql(
+            sql=actual["sql"], **engine_config(mdl)
+        )
+        prediction["source_trace_id"] = prediction["trace_id"]
+        prediction["source_trace_url"] = prediction["trace_url"]
+        prediction["trace_id"] = langfuse_context.get_current_trace_id()
+        prediction["trace_url"] = langfuse_context.get_current_trace_url()
+        prediction["type"] = "shallow"
+
+        return prediction
+
+    @observe(name="Prediction Process", capture_input=False)
+    async def wrapper(query: dict, meta: dict) -> dict:
         prediction = {
             "trace_id": langfuse_context.get_current_trace_id(),
             "trace_url": langfuse_context.get_current_trace_url(),
             "input": query["question"],
-            "actual_output": [],
+            "actual_output": {},
             "expected_output": query["sql"],
             "retrieval_context": [],
             "context": query["context"],
+            "type": "execution",
         }
 
         langfuse_context.update_current_trace(
             session_id=meta["session_id"],
             user_id=meta["user_id"],
-            metadata={
-                "commit": meta["commit"],
-            },
+            metadata=trace_metadata(meta),
         )
 
         result = await pipes["retrieval"].run(query=prediction["input"])
@@ -97,7 +149,7 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
             [doc.to_dict() for doc in documents]
         )
 
-        predictions.append(prediction)
+        return prediction
 
     def extract_units(docs: list) -> list:
         columns = []
@@ -119,13 +171,12 @@ def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
 
         return columns
 
-    async def task():
-        tasks = [wrapper(query) for query in queries]
-        await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
+    async def task(mdl: dict):
+        tasks = [run(query, meta, mdl) for query in queries]
+        results = await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
+        return [prediction for predictions in results for prediction in predictions]
 
-    asyncio.run(task())
-
-    return predictions
+    return asyncio.run(task(mdl))
 
 
 def deploy_model(mdl, pipe) -> None:
@@ -135,27 +186,32 @@ def deploy_model(mdl, pipe) -> None:
     asyncio.run(wrapper())
 
 
-def setup_pipes(mdl: str) -> Dict[str, Any]:
-    (
-        llm_provider,
-        embedder_provider,
-        document_store_provider,
-        engine,
-    ) = utils.init_providers(
-        engine_config=EngineConfig(
-            provider="wren_ibis",
-            config={
-                "source": "bigquery",
-                "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
-                "connection_info": {
-                    "project_id": os.getenv("bigquery.project-id"),
-                    "dataset_id": os.getenv("bigquery.dataset-id"),
-                    "credentials": os.getenv("bigquery.credentials-key"),
-                },
+def init_providers(mdl: dict) -> dict:
+    engine_config = EngineConfig(
+        provider="wren_ibis",
+        config={
+            "source": "bigquery",
+            "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
+            "connection_info": {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
             },
-        )
+        },
     )
 
+    providers = utils.init_providers(engine_config=engine_config)
+    return {
+        "llm_provider": providers[0],
+        "embedder_provider": providers[1],
+        "document_store_provider": providers[2],
+        "engine": providers[3],
+    }
+
+
+def setup_pipes(
+    llm_provider, embedder_provider, document_store_provider, engine
+) -> Dict[str, Any]:
     document_store_provider.get_store(recreate_index=True)
     return {
         "indexing": indexing.Indexing(
@@ -192,12 +248,14 @@ if __name__ == "__main__":
     utils.load_env_vars()
     utils.init_langfuse()
 
-    meta = generate_meta(dataset_path=path)
-
     dataset = parse_toml(path)
-    pipes = setup_pipes(dataset["mdl"])
+    providers = init_providers(dataset["mdl"])
+
+    meta = generate_meta(path=path, dataset=dataset, **providers)
+
+    pipes = setup_pipes(**providers)
     deploy_model(dataset["mdl"], pipes["indexing"])
-    predictions = predict(meta, dataset["eval_dataset"], pipes)
+    predictions = predict(meta, dataset["eval_dataset"], pipes, dataset["mdl"])
 
     write_prediction(meta, predictions)
     langfuse_context.flush()

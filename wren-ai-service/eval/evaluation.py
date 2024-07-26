@@ -1,8 +1,10 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Tuple
 
+import dotenv
 from deepeval import evaluate
 from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
@@ -10,20 +12,28 @@ from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
 sys.path.append(f"{Path().parent.resolve()}")
-from eval.metrics.example import ExampleMetric
-from eval.utils import parse_toml
+from eval.metrics.column import (
+    AccuracyMetric,
+    AnswerRelevancyMetric,
+    ContextualPrecisionMetric,
+    ContextualRecallMetric,
+    ContextualRelevancyMetric,
+    FaithfulnessMetric,
+)
+from eval.utils import engine_config, parse_toml, trace_metadata
 from src import utils
 
 
 def formatter(prediction: dict) -> dict:
-    actual_output = str(prediction["actual_output"].get("post_process", {}))
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
+    context = [str(context) for context in prediction["context"]]
+
     return {
         "input": prediction["input"],
-        "actual_output": actual_output,
+        "actual_output": prediction["actual_output"]["sql"],
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
-        "context": prediction["context"],
+        "context": context,
         "additional_metadata": {
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
@@ -51,6 +61,9 @@ class Evaluator:
 
     def eval(self, meta: dict, predictions: list) -> None:
         for prediction in predictions:
+            if prediction.get("type") != "shallow":
+                continue
+
             test_case = LLMTestCase(**formatter(prediction))
             result = evaluate([test_case], self._metrics)[0]
             self._score_metrics(test_case, result)
@@ -75,36 +88,72 @@ class Evaluator:
 
             self._score_collector[name].append(score)
 
+    @observe(name="Summary Trace", capture_input=False, capture_output=False)
     def _average_score(self, meta: dict) -> None:
-        @observe(name="Average Score", capture_input=False, capture_output=False)
-        def wrapper():
-            langfuse_context.update_current_trace(
-                session_id=meta["session_id"],
-                user_id=meta["user_id"],
-                metadata={
-                    "commit": meta["commit"],
-                },
+        langfuse_context.update_current_trace(
+            session_id=meta["session_id"],
+            user_id=meta["user_id"],
+            metadata=trace_metadata(meta),
+        )
+
+        summary = {
+            "query_count": meta["query_count"],
+        }
+
+        for name, scores in self._score_collector.items():
+            langfuse_context.score_current_trace(
+                name=name,
+                value=sum(scores) / len(scores),
+                comment=f"Average score for {name}",
             )
+            summary[name] = {
+                "batch_size": len(scores),
+            }
 
-            for name, scores in self._score_collector.items():
-                langfuse_context.score_current_trace(
-                    name=name,
-                    value=sum(scores) / len(scores),
-                    comment=f"Average score for {name}",
-                )
+        langfuse_context.update_current_observation(
+            output=summary,
+        )
 
-        wrapper()
+
+def metrics_initiator(mdl: dict) -> list:
+    config = engine_config(mdl)
+    return [
+        AccuracyMetric(
+            engine_config={
+                "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
+                "data_source": "bigquery",
+                "mdl_json": mdl,
+                "connection_info": {
+                    "project_id": os.getenv("bigquery.project-id"),
+                    "dataset_id": os.getenv("bigquery.dataset-id"),
+                    "credentials": os.getenv("bigquery.credentials-key"),
+                },
+                "timeout": 10,
+                "limit": 10,
+            }
+        ),
+        AnswerRelevancyMetric(config),
+        FaithfulnessMetric(config),
+        ContextualRecallMetric(config),
+        ContextualRelevancyMetric(),
+        ContextualPrecisionMetric(),
+    ]
 
 
 if __name__ == "__main__":
     path = parse_args()
+
+    dotenv.load_dotenv()
     utils.load_env_vars()
 
     predicted_file = parse_toml(path)
     meta = predicted_file["meta"]
     predictions = predicted_file["predictions"]
 
-    evaluator = Evaluator([ExampleMetric()])
+    dataset = parse_toml(meta["evaluation_dataset"])
+    metrics = metrics_initiator(dataset["mdl"])
+
+    evaluator = Evaluator(metrics)
     evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
