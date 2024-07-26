@@ -100,7 +100,7 @@ func askForGenerationModel() (string, error) {
 
 	prompt := promptui.Select{
 		Label: "Select an OpenAI's generation model",
-		Items: []string{"gpt-4o-mini","gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"},
+		Items: []string{"gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"},
 	}
 
 	_, result, err := prompt.Run()
@@ -147,12 +147,19 @@ func Launch() {
 	// ask for LLM provider
 	pterm.Print("\n")
 	llmProvider, err := askForLLMProvider()
-	openaiApiKey := ""
+
+	openaiApiKey := config.GetOpenaiAPIKey()
 	openaiGenerationModel := ""
 	if llmProvider == "OpenAI" {
-		// ask for OpenAI API key
-		pterm.Print("\n")
-		openaiApiKey, _ = askForAPIKey()
+
+		// if openaiApiKey is not provided, ask for it
+		if openaiApiKey == "" {
+			// ask for OpenAI API key
+			pterm.Print("\n")
+			openaiApiKey, _ = askForAPIKey()
+		} else {
+			pterm.Info.Println("OpenAI API key is provided")
+		}
 
 		// ask for OpenAI generation model
 		pterm.Print("\n")
