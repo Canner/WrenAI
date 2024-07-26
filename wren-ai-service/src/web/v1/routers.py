@@ -77,8 +77,6 @@ async def ask(
         status="understanding",
     )
 
-    print(f"user_id: {ask_request.id}")
-
     background_tasks.add_task(
         container.ASK_SERVICE.ask,
         ask_request,
