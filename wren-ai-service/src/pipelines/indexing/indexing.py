@@ -36,16 +36,16 @@ class DocumentCleaner:
         self._stores = stores
 
     @component.output_types(mdl=str)
-    async def run(self, mdl: str, user_id: str = "") -> str:
-        async def _clear_documents(store: DocumentStore, user_id: str) -> None:
+    async def run(self, mdl: str, id: str = "") -> str:
+        async def _clear_documents(store: DocumentStore, id: str) -> None:
             filters = (
                 {
                     "operator": "AND",
                     "conditions": [
-                        {"field": "user_id", "operator": "==", "value": user_id},
+                        {"field": "id", "operator": "==", "value": id},
                     ],
                 }
-                if user_id
+                if id
                 else None
             )
             document_count = await store.count_documents(filters=filters)
@@ -54,9 +54,7 @@ class DocumentCleaner:
                 await store.delete_documents(ids)
 
         logger.info("Ask Indexing pipeline is clearing old documents...")
-        await asyncio.gather(
-            *[_clear_documents(store, user_id) for store in self._stores]
-        )
+        await asyncio.gather(*[_clear_documents(store, id) for store in self._stores])
         return {"mdl": mdl}
 
 
@@ -99,7 +97,7 @@ class ViewConverter:
     """
 
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], user_id: str = "") -> None:
+    def run(self, mdl: Dict[str, Any], id: str = "") -> None:
         def _format(view: Dict[str, Any]) -> List[str]:
             properties = view.get("properties", {})
             return str(
@@ -117,7 +115,7 @@ class ViewConverter:
             "documents": [
                 Document(
                     id=str(i),
-                    meta={"user_id": user_id} if user_id else {},
+                    meta={"id": id} if id else {},
                     content=converted_view,
                 )
                 for i, converted_view in enumerate(
@@ -133,7 +131,7 @@ class ViewConverter:
 @component
 class DDLConverter:
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], user_id: str = ""):
+    def run(self, mdl: Dict[str, Any], id: str = ""):
         logger.info("Ask Indexing pipeline is writing new documents...")
 
         logger.debug(f"original mdl_json: {mdl}")
@@ -144,7 +142,7 @@ class DDLConverter:
             "documents": [
                 Document(
                     id=str(i),
-                    meta={"user_id": user_id} if user_id else {},
+                    meta={"id": id} if id else {},
                     content=ddl_command,
                 )
                 for i, ddl_command in enumerate(
@@ -348,10 +346,10 @@ class AsyncDocumentWriter(DocumentWriter):
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def clean_document_store(
-    mdl_str: str, user_id: str, cleaner: DocumentCleaner
+    mdl_str: str, id: str, cleaner: DocumentCleaner
 ) -> Dict[str, Any]:
     logger.debug(f"input in clean_document_store: {mdl_str}")
-    return await cleaner.run(mdl=mdl_str, user_id=user_id)
+    return await cleaner.run(mdl=mdl_str, id=id)
 
 
 @timer
@@ -371,12 +369,12 @@ def validate_mdl(
 @timer
 @observe(capture_input=False)
 def convert_to_ddl(
-    mdl: Dict[str, Any], user_id: str, ddl_converter: DDLConverter
+    mdl: Dict[str, Any], id: str, ddl_converter: DDLConverter
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return ddl_converter.run(mdl=mdl, user_id=user_id)
+    return ddl_converter.run(mdl=mdl, id=id)
 
 
 @async_timer
@@ -399,12 +397,12 @@ async def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> No
 @timer
 @observe(capture_input=False)
 def convert_to_view(
-    mdl: Dict[str, Any], user_id: str, view_converter: ViewConverter
+    mdl: Dict[str, Any], id: str, view_converter: ViewConverter
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in convert_to_view: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return view_converter.run(mdl=mdl, user_id=user_id)
+    return view_converter.run(mdl=mdl, id=id)
 
 
 @async_timer
@@ -456,7 +454,7 @@ class Indexing(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, mdl_str: str, user_id: Optional[str] = None) -> None:
+    def visualize(self, mdl_str: str, id: Optional[str] = None) -> None:
         destination = "outputs/pipelines/indexing"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -466,7 +464,7 @@ class Indexing(BasicPipeline):
             output_file_path=f"{destination}/indexing.dot",
             inputs={
                 "mdl_str": mdl_str,
-                "user_id": user_id or "",
+                "id": id or "",
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
@@ -482,13 +480,13 @@ class Indexing(BasicPipeline):
 
     @async_timer
     @observe(name="Ask Indexing")
-    async def run(self, mdl_str: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    async def run(self, mdl_str: str, id: Optional[str] = None) -> Dict[str, Any]:
         logger.info("Ask Indexing pipeline is running...")
         return await self._pipe.execute(
             ["write_ddl", "write_view"],
             inputs={
                 "mdl_str": mdl_str,
-                "user_id": user_id or "",
+                "id": id or "",
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,

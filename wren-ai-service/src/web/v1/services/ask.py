@@ -130,7 +130,7 @@ class AskService:
 
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=ask_request.query,
-                    user_id=ask_request.id,
+                    id=ask_request.id,
                 )
                 documents = retrieval_result.get("retrieval", {}).get("documents", [])
 

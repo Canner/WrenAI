@@ -24,15 +24,15 @@ async def embedding(query: str, embedder: Any) -> dict:
 
 @async_timer
 @observe(capture_input=False)
-async def retrieval(embedding: dict, user_id: str, retriever: Any) -> dict:
+async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
     filters = (
         {
             "operator": "AND",
             "conditions": [
-                {"field": "user_id", "operator": "==", "value": user_id},
+                {"field": "id", "operator": "==", "value": id},
             ],
         }
-        if user_id
+        if id
         else None
     )
 
@@ -62,7 +62,7 @@ class Retrieval(BasicPipeline):
     def visualize(
         self,
         query: str,
-        user_id: Optional[str] = None,
+        id: Optional[str] = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
         if not Path(destination).exists():
@@ -73,7 +73,7 @@ class Retrieval(BasicPipeline):
             output_file_path=f"{destination}/retrieval.dot",
             inputs={
                 "query": query,
-                "user_id": user_id or "",
+                "id": id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
             },
@@ -83,13 +83,13 @@ class Retrieval(BasicPipeline):
 
     @async_timer
     @observe(name="Ask Retrieval")
-    async def run(self, query: str, user_id: Optional[str] = None):
+    async def run(self, query: str, id: Optional[str] = None):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["retrieval"],
             inputs={
                 "query": query,
-                "user_id": user_id or "",
+                "id": id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
             },
