@@ -19,3 +19,4 @@ jobs:
         uses: kontrolplane/pull-request-title-validator@v1.2.0
         with:
           types: "fix,feat,chore"
+          socpes: "wren-ai-service"
