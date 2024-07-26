@@ -160,7 +160,7 @@ const dataSource = {
           DataSourceName.TRINO,
           connectionInfo,
         ) as TRINO_CONNECTION_INFO;
-      let connectionUrl = `jdbc:trino://${host}:${port}/${catalog}/${schema}?user=${username}&password=${password}`;
+      let connectionUrl = `trino://${username}${password ? `:${password}` : ''}@${host}:${port}/${catalog}/${schema}`;
       if (ssl) {
         connectionUrl += '&SSL=true';
       }
