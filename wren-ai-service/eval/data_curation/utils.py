@@ -117,7 +117,7 @@ async def get_contexts_from_sqls(
 
         results = await asyncio.gather(*tasks)
 
-        return results
+        return results[0]
 
 
 async def get_question_sql_pairs(
@@ -241,7 +241,7 @@ async def get_data_from_wren_engine_with_sqls(
 def get_eval_dataset_in_toml_string(mdl: dict, dataset: list) -> str:
     doc = tomlkit.document()
 
-    doc.add("dataset_id", uuid.uuid4())
+    doc.add("dataset_id", str(uuid.uuid4()))
     doc.add("date", datetime.today().strftime("%Y_%m_%d"))
     doc.add("mdl", mdl)
     doc.add("eval_dataset", dataset)
