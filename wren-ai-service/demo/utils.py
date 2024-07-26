@@ -10,17 +10,40 @@ from typing import Dict, List, Optional
 import orjson
 import pandas as pd
 import requests
+import sqlglot
 import sqlparse
 import streamlit as st
 from dotenv import load_dotenv
 
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
 WREN_ENGINE_API_URL = "http://localhost:8080"
+WREN_IBIS_API_URL = "http://localhost:8000"
 POLLING_INTERVAL = 0.5
 DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
 LLM_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
 
 load_dotenv()
+
+
+def add_quotes(sql: str) -> str:
+    return sqlglot.transpile(sql, read="trino", identify=True)[0]
+
+
+def get_connection_info(data_source: str):
+    if data_source == "bigquery":
+        return {
+            "project_id": os.getenv("bigquery.project-id"),
+            "dataset_id": os.getenv("bigquery.dataset-id"),
+            "credentials": os.getenv("bigquery.credentials-key"),
+        }
+    elif data_source == "postgres":
+        return {
+            "host": os.getenv("postgres.host"),
+            "port": int(os.getenv("postgres.port")),
+            "database": os.getenv("postgres.database"),
+            "user": os.getenv("postgres.user"),
+            "password": os.getenv("postgres.password"),
+        }
 
 
 def _update_wren_engine_configs(configs: list[dict]):
@@ -60,28 +83,9 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
         with open(".env.dev", "w") as f:
             f.writelines(lines)
     else:
-        if dataset_type == "bigquery":
-            WREN_IBIS_CONNECTION_INFO = base64.b64encode(
-                orjson.dumps(
-                    {
-                        "project_id": os.getenv("bigquery.project-id"),
-                        "dataset_id": os.getenv("bigquery.dataset-id"),
-                        "credentials": os.getenv("bigquery.credentials-key"),
-                    }
-                )
-            ).decode()
-        elif dataset_type == "postgres":
-            WREN_IBIS_CONNECTION_INFO = base64.b64encode(
-                orjson.dumps(
-                    {
-                        "host": os.getenv("postgres.host"),
-                        "port": int(os.getenv("postgres.port")),
-                        "database": os.getenv("postgres.database"),
-                        "user": os.getenv("postgres.user"),
-                        "password": os.getenv("postgres.password"),
-                    }
-                )
-            ).decode()
+        WREN_IBIS_CONNECTION_INFO = base64.b64encode(
+            orjson.dumps(get_connection_info(dataset_type))
+        ).decode()
 
         # replace the values of WREN_IBIS_xxx to ../.env.dev
         with open(".env.dev", "r") as f:
@@ -125,41 +129,44 @@ def get_mdl_json(database_name: str):
 
 
 @st.cache_data
-def get_new_mdl_json(chosen_models: List[str]):
-    new_mdl_json = st.session_state["mdl_json"]
+def get_data_from_wren_engine(
+    sql: str,
+    dataset_type: str,
+    manifest: dict,
+):
+    if dataset_type == "duckdb":
+        response = requests.get(
+            f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
+            json={
+                "sql": add_quotes(sql),
+                "manifest": manifest,
+                "limit": 100,
+            },
+        )
 
-    for chosen_model in chosen_models:
-        mdl_model_json = list(
-            filter(
-                lambda model: model["name"] == chosen_model,
-                st.session_state["mdl_json"]["models"],
-            )
-        )[0]
-        new_mdl_model_json = generate_mdl_metadata(mdl_model_json)
-        new_mdl_json["models"][
-            new_mdl_json["models"].index(mdl_model_json)
-        ] = new_mdl_model_json
+        assert response.status_code == 200, response.json()
 
-    return new_mdl_json
+        data = response.json()
+        column_names = [f'{i}_{col['name']}' for i, col in enumerate(data["columns"])]
 
+        return pd.DataFrame(data["data"], columns=column_names)
+    else:
+        response = requests.post(
+            f"{WREN_IBIS_API_URL}/v2/connector/{dataset_type}/query?limit=100",
+            json={
+                "sql": add_quotes(sql),
+                "manifestStr": base64.b64encode(orjson.dumps(manifest)).decode(),
+                "connectionInfo": get_connection_info(dataset_type),
+                "limit": 100,
+            },
+        )
 
-@st.cache_data
-def get_data_from_wren_engine(sql: str, manifest: Dict):
-    response = requests.get(
-        f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
-        json={
-            "sql": sql,
-            "manifest": manifest,
-            "limit": 100,
-        },
-    )
+        assert response.status_code == 200, response.json()
 
-    assert response.status_code == 200, response.json()
+        data = response.json()
+        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
 
-    data = response.json()
-    column_names = [f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])]
-
-    return pd.DataFrame(data["data"], columns=column_names)
+        return pd.DataFrame(data["data"], columns=column_names)
 
 
 # ui related
@@ -350,6 +357,7 @@ def show_asks_details_results(query: str):
                     st.dataframe(
                         get_data_from_wren_engine(
                             st.session_state["preview_sql"],
+                            st.session_state["dataset_type"],
                             st.session_state["mdl_json"],
                         )
                     )

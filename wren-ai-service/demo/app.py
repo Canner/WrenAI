@@ -10,7 +10,6 @@ from utils import (
     ask_details,
     get_default_llm_model,
     get_mdl_json,
-    get_new_mdl_json,
     prepare_semantics,
     rerun_wren_engine,
     save_mdl_json_file,
@@ -139,23 +138,6 @@ with st.sidebar:
     st.markdown("---")
 
     if st.session_state["mdl_json"]:
-        chosen_models = st.multiselect(
-            "Select data models for AI to generate MDL metadata",
-            [model["name"] for model in st.session_state["mdl_json"]["models"]],
-        )
-        if chosen_models and st.session_state["chosen_models"] != chosen_models:
-            st.session_state["chosen_models"] = chosen_models
-            st.session_state["mdl_json"] = get_mdl_json(
-                st.session_state["chosen_dataset"]
-            )
-
-        ai_generate_metadata_ok = st.button(
-            "AI Generate MDL Metadata",
-            disabled=not chosen_models,
-        )
-        if ai_generate_metadata_ok:
-            st.session_state["mdl_json"] = get_new_mdl_json(chosen_models=chosen_models)
-
         # Display the model using the selected database
         st.markdown("MDL Model")
         st.json(
