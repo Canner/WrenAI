@@ -12,6 +12,8 @@ from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
 sys.path.append(f"{Path().parent.resolve()}")
+import traceback
+
 from eval.metrics.column import (
     AccuracyMetric,
     AnswerRelevancyMetric,
@@ -69,9 +71,9 @@ class Evaluator:
                 test_case = LLMTestCase(**formatter(prediction))
                 result = evaluate([test_case], self._metrics)[0]
                 self._score_metrics(test_case, result)
-            except Exception as e:
+            except Exception:
                 self._failed_count += 1
-                print(f"Error: {e}")
+                traceback.print_exc()
 
         self._average_score(meta)
 
