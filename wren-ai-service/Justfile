@@ -1,5 +1,4 @@
-up:
-	just prepare-wren-engine
+up: prepare-wren-engine
 	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
 
 down:
@@ -20,10 +19,8 @@ eval file:
 demo:
 	poetry run streamlit run demo/app.py
 
-test:
-	just up
+test: up && down
 	poetry run pytest -s $(args)
-	just down
 
 load-test:
 	poetry run python -m tests.locust.locust_script

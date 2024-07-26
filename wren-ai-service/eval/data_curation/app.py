@@ -129,7 +129,7 @@ def on_change_sql(i: int, key: str):
     if valid:
         new_context = asyncio.run(
             get_contexts_from_sqls([sql], st.session_state["mdl_json"])
-        )
+        )[0]
     if i != -1:
         st.session_state["llm_question_sql_pairs"][i]["sql"] = sql
         st.session_state["llm_question_sql_pairs"][i]["is_valid"] = valid

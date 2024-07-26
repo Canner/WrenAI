@@ -117,7 +117,7 @@ async def get_contexts_from_sqls(
 
         results = await asyncio.gather(*tasks)
 
-        return results[0]
+        return results
 
 
 async def get_question_sql_pairs(
