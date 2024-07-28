@@ -254,7 +254,7 @@ def parse_args() -> Tuple[str]:
 if __name__ == "__main__":
     args = parse_args()
     path = f"eval/dataset/{args.file}"
-    eval_type = args.type
+    eval_type = args.eval_type
 
     dotenv.load_dotenv()
     utils.load_env_vars()
