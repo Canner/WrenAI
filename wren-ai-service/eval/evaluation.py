@@ -32,7 +32,7 @@ def formatter(prediction: dict) -> dict:
 
     return {
         "input": prediction["input"],
-        "actual_output": prediction["actual_output"]["sql"],
+        "actual_output": prediction.get("actual_output", {}).get("sql", ""),
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
         "context": context,
