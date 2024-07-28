@@ -81,9 +81,11 @@ def obtain_commit_hash() -> str:
     return f"{repo.head.commit}@{branch.name}"
 
 
-def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str, Any]]:
-    async def run(query: dict, meta: dict, mdl: dict) -> list:
-        prediction = await wrapper(query, meta)
+def predict(
+    meta: dict, queries: list, pipes: dict, mdl: dict, eval_type: str
+) -> List[Dict[str, Any]]:
+    async def run(query: dict, meta: dict, mdl: dict, eval_type: str) -> list:
+        prediction = await wrapper(query, meta, eval_type)
         valid_outputs = (
             prediction["actual_output"]
             .get("post_process", {})
@@ -95,7 +97,7 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
         ]
 
     @observe(capture_input=False)
-    async def flat(actual: str, prediction: dict, meta: dict, mdl: dict) -> dict:
+    async def flat(actual: dict, prediction: dict, meta: dict, mdl: dict) -> dict:
         langfuse_context.update_current_trace(
             name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
             session_id=meta["session_id"],
@@ -107,10 +109,11 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
             },
         )
 
-        prediction["actual_output"] = actual
-        prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **engine_config(mdl)
-        )
+        if actual:
+            prediction["actual_output"] = actual
+            prediction["actual_output_units"] = await get_contexts_from_sql(
+                sql=actual["sql"], **engine_config(mdl)
+            )
         prediction["source_trace_id"] = prediction["trace_id"]
         prediction["source_trace_url"] = prediction["trace_url"]
         prediction["trace_id"] = langfuse_context.get_current_trace_id()
@@ -120,7 +123,7 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
         return prediction
 
     @observe(name="Prediction Process", capture_input=False)
-    async def wrapper(query: dict, meta: dict) -> dict:
+    async def wrapper(query: dict, meta: dict, eval_type: str) -> dict:
         prediction = {
             "trace_id": langfuse_context.get_current_trace_id(),
             "trace_url": langfuse_context.get_current_trace_url(),
@@ -129,7 +132,7 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
             "expected_output": query["sql"],
             "retrieval_context": [],
             "context": query["context"],
-            "type": "execution",
+            "type": eval_type,
         }
 
         langfuse_context.update_current_trace(
@@ -138,18 +141,37 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
             metadata=trace_metadata(meta),
         )
 
-        result = await pipes["retrieval"].run(query=prediction["input"])
-        documents = result.get("retrieval", {}).get("documents", [])
-        actual_output = await pipes["generation"].run(
-            query=prediction["input"],
-            contexts=documents,
-            exclude=[],
-        )
+        if eval_type == "all":
+            result = await pipes["retrieval"].run(query=prediction["input"])
+            documents = result.get("retrieval", {}).get("documents", [])
 
-        prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
+            prediction["retrieval_context"] = extract_units(
+                [doc.to_dict() for doc in documents]
+            )
+
+            actual_output = await pipes["generation"].run(
+                query=prediction["input"],
+                contexts=documents,
+                exclude=[],
+            )
+            prediction["actual_output"] = actual_output
+        elif eval_type == "generation":
+            prediction["retrieval_context"] = prediction["context"]
+            documents = get_documents_from_context(prediction["context"])
+
+            actual_output = await pipes["generation"].run(
+                query=prediction["input"],
+                contexts=documents,
+                exclude=[],
+            )
+            prediction["actual_output"] = actual_output
+        elif eval_type == "retrieval":
+            result = await pipes["retrieval"].run(query=prediction["input"])
+            documents = result.get("retrieval", {}).get("documents", [])
+
+            prediction["retrieval_context"] = extract_units(
+                [doc.to_dict() for doc in documents]
+            )
 
         return prediction
 
@@ -158,6 +180,9 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
         for doc in docs:
             columns.extend(parse_ddl(doc["content"]))
         return columns
+
+    def get_documents_from_context(context: list) -> list:
+        return []
 
     def parse_ddl(ddl: str) -> list:
         # Regex to extract table name
@@ -173,12 +198,12 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
 
         return columns
 
-    async def task(mdl: dict):
-        tasks = [run(query, meta, mdl) for query in queries]
+    async def task(mdl: dict, meta: dict, queries: list, eval_type: str) -> list:
+        tasks = [run(query, meta, mdl, eval_type) for query in queries]
         results = await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
         return [prediction for predictions in results for prediction in predictions]
 
-    return asyncio.run(task(mdl))
+    return asyncio.run(task(mdl, meta, queries, eval_type))
 
 
 def deploy_model(mdl, pipe) -> None:
@@ -244,7 +269,7 @@ def parse_args() -> Tuple[str]:
         "--eval_type",
         "-E",
         type=str,
-        choices=["retrieval", "generation", "end-to-end"],
+        choices=["retrieval", "generation", "all"],
         required=True,
         help="Evaluation type",
     )
@@ -267,7 +292,9 @@ if __name__ == "__main__":
 
     pipes = setup_pipes(**providers)
     deploy_model(dataset["mdl"], pipes["indexing"])
-    predictions = predict(meta, dataset["eval_dataset"], pipes, dataset["mdl"])
+    predictions = predict(
+        meta, dataset["eval_dataset"], pipes, dataset["mdl"], eval_type
+    )
 
     write_prediction(meta, predictions)
     langfuse_context.flush()

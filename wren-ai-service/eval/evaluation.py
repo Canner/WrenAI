@@ -123,9 +123,16 @@ class Evaluator:
         )
 
 
-def metrics_initiator(mdl: dict) -> list:
+def metrics_initiator(mdl: dict, eval_type: str) -> list:
     config = engine_config(mdl)
-    return [
+
+    retrieval_metrics = [
+        ContextualRecallMetric(config),
+        ContextualRelevancyMetric(),
+        ContextualPrecisionMetric(),
+    ]
+
+    generation_metrics = [
         AccuracyMetric(
             engine_config={
                 "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
@@ -142,10 +149,14 @@ def metrics_initiator(mdl: dict) -> list:
         ),
         AnswerRelevancyMetric(config),
         FaithfulnessMetric(config),
-        ContextualRecallMetric(config),
-        ContextualRelevancyMetric(),
-        ContextualPrecisionMetric(),
     ]
+
+    if eval_type == "retrieval":
+        return retrieval_metrics
+    elif eval_type == "generation":
+        return generation_metrics
+    else:
+        return retrieval_metrics + generation_metrics
 
 
 if __name__ == "__main__":
@@ -159,7 +170,7 @@ if __name__ == "__main__":
     predictions = predicted_file["predictions"]
 
     dataset = parse_toml(meta["evaluation_dataset"])
-    metrics = metrics_initiator(dataset["mdl"])
+    metrics = metrics_initiator(dataset["mdl"], meta["evaluation_type"])
 
     evaluator = Evaluator(metrics)
     evaluator.eval(meta, predictions)
