@@ -10,8 +10,8 @@ start:
 curate_eval_data:
 	poetry run streamlit run eval/data_curation/app.py
 
-predict file:
-    @python3 -u eval/prediction.py --file {{file}}
+predict file eval_type:
+    @python3 -u eval/prediction.py --file {{file}} --eval_type {{eval_type}}
 
 eval file:
     @python3 -u eval/evaluation.py --file {{file}}

@@ -241,8 +241,8 @@ def parse_args() -> Tuple[str]:
         help="Eval dataset file name in the eval/dataset folder",
     )
     parser.add_argument(
-        "--type",
-        "-T",
+        "--eval_type",
+        "-E",
         type=str,
         choices=["retrieval", "generation", "end-to-end"],
         required=True,
