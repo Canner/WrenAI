@@ -33,6 +33,7 @@ from src.pipelines.indexing import indexing
 def generate_meta(
     path: str,
     dataset: dict,
+    eval_type: str,
     llm_provider: LLMProvider,
     embedder_provider: EmbedderProvider,
     **kwargs,
@@ -43,6 +44,7 @@ def generate_meta(
         "date": datetime.now(),
         "dataset_id": dataset["dataset_id"],
         "evaluation_dataset": path,
+        "evaluation_type": eval_type,
         "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
         "embedding_model": embedder_provider.get_model(),
@@ -237,12 +239,20 @@ def parse_args() -> Tuple[str]:
         type=str,
         help="Eval dataset file name in the eval/dataset folder",
     )
-    args = parser.parse_args()
-    return f"eval/dataset/{args.file}"
+    parser.add_argument(
+        "--type",
+        "-T",
+        type=str,
+        choices=["retrieval", "generation", "end-to-end"],
+        help="Evaluation type",
+    )
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    path = parse_args()
+    args = parse_args()
+    path = f"eval/dataset/{args.file}"
+    eval_type = args.type
 
     dotenv.load_dotenv()
     utils.load_env_vars()
@@ -251,7 +261,7 @@ if __name__ == "__main__":
     dataset = parse_toml(path)
     providers = init_providers(dataset["mdl"])
 
-    meta = generate_meta(path=path, dataset=dataset, **providers)
+    meta = generate_meta(path=path, dataset=dataset, eval_type=eval_type, **providers)
 
     pipes = setup_pipes(**providers)
     deploy_model(dataset["mdl"], pipes["indexing"])
