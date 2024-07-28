@@ -246,7 +246,6 @@ def parse_args() -> Tuple[str]:
         type=str,
         choices=["retrieval", "generation", "end-to-end"],
         required=True,
-        default="end-to-end",
         help="Evaluation type",
     )
     return parser.parse_args()
