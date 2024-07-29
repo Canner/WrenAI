@@ -205,7 +205,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       logger.debug(`Ibis server Dry run success`);
       return true;
     } catch (err) {
-      logger.debug(`Got error when dry running ibis: ${err.response.data}`);
+      logger.info(`Got error when dry running ibis`);
       throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
         customMessage: err.response.data,
         originalError: err,
