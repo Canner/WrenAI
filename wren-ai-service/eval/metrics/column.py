@@ -17,12 +17,13 @@ class AccuracyMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     def is_subset(self, expected: pd.DataFrame, actual: pd.DataFrame) -> bool:
-        is_column_subset = set(actual.columns).issubset(set(expected.columns))
-
-        if not is_column_subset:
+        if not set(actual.columns).issubset(set(expected.columns)):
             return False
 
         common_columns = actual.columns
+        if common_columns.empty:
+            return False
+
         expected_sorted = expected[sorted(common_columns)]
         actual_sorted = actual[sorted(common_columns)]
 
