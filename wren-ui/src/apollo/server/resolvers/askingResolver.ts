@@ -178,7 +178,7 @@ export class AskingResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { error: err },
+        { error: err.message },
         err.extensions?.service,
         false,
       );
@@ -304,7 +304,7 @@ export class AskingResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { data, error: err },
+        { data, error: err.message },
         err.extensions?.service,
         false,
       );

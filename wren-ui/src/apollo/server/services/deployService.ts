@@ -118,7 +118,7 @@ export class DeployService implements IDeployService {
 
       // telemetry
       if (status === DeployStatusEnum.SUCCESS) {
-        this.telemetry.sendEvent(eventName, { mdl: manifest });
+        this.telemetry.sendEvent(eventName);
       } else {
         this.telemetry.sendEvent(
           eventName,
@@ -132,7 +132,7 @@ export class DeployService implements IDeployService {
       logger.error(`Error deploying model: ${err.message}`);
       this.telemetry.sendEvent(
         eventName,
-        { mdl: manifest, error: err },
+        { mdl: manifest, error: err.message },
         err.extensions?.service,
         false,
       );

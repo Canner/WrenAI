@@ -104,7 +104,7 @@ export class ProjectResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { dataSourceType: project.type, error: err },
+        { dataSourceType: project.type, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -183,7 +183,7 @@ export class ProjectResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { ...eventProperties, error: err },
+        { ...eventProperties, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -266,7 +266,7 @@ export class ProjectResolver {
       await ctx.projectRepository.deleteOne(project.id);
       ctx.telemetry.sendEvent(
         eventName,
-        { eventProperties, error: err },
+        { eventProperties, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -368,7 +368,7 @@ export class ProjectResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { dataSourceType: project.type, error: err },
+        { dataSourceType: project.type, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -469,7 +469,7 @@ export class ProjectResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { error: err },
+        { error: err.message },
         err.extensions?.service,
         false,
       );

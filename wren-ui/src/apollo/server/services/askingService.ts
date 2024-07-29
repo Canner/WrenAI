@@ -506,7 +506,7 @@ export class AskingService implements IAskingService {
     } catch (err: any) {
       this.telemetry.sendEvent(
         eventName,
-        { sql, error: err },
+        { sql, error: err.message },
         err.extensions?.service,
         false,
       );

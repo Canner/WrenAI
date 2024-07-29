@@ -92,7 +92,7 @@ export class ModelResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { data: data, error: err },
+        { data: data, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -113,7 +113,7 @@ export class ModelResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { data: data, error: err },
+        { data: data, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -143,7 +143,7 @@ export class ModelResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { data: _args.data, error: err },
+        { data: _args.data, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -177,7 +177,7 @@ export class ModelResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { data: data, error: err },
+        { data: data, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -389,7 +389,7 @@ export class ModelResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         TelemetryEvent.MODELING_UPDATE_MODEL,
-        { data: args.data, error: err },
+        { data: args.data, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -519,7 +519,7 @@ export class ModelResolver {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { data: data, error: err },
+        { data: data, error: err.message },
         err.extensions?.service,
         false,
       );
