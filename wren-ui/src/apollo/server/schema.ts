@@ -486,9 +486,24 @@ export const typeDefs = gql`
     STOPPED
   }
 
+  enum ExplainTaskStatus {
+    UNDERSTANDING
+    GENERATING
+    FINISHED
+    FAILED
+  }
+
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
+  }
+
+  enum ReferenceType {
+    FIELD
+    QUERY_FROM
+    FILTER
+    SORTING
+    GROUP_BY
   }
 
   type ResultCandidate {
@@ -519,6 +534,20 @@ export const typeDefs = gql`
     viewId: Int
   }
 
+  input CreateThreadResponseCorrectionInput {
+    id: Int!
+    referenceNum: Int!
+    stepIndex: Int!
+    type: ReferenceType!
+    reference: String!
+    correction: String!
+  }
+
+  input CreateCorrectedThreadResponseInput {
+    responseId: Int!
+    corrections: [CreateThreadResponseCorrectionInput!]!
+  }
+
   input ThreadUniqueWhereInput {
     id: Int!
   }
@@ -536,10 +565,30 @@ export const typeDefs = gql`
     limit: Int
   }
 
+  type ReferenceSQLLocation {
+    line: Int!
+    column: Int!
+  }
+
+  type DetailReference {
+    referenceId: Int
+    type: ReferenceType!
+    sqlSnippet: String
+    summary: String!
+    sqlLocation: ReferenceSQLLocation
+  }
+
   type DetailStep {
     summary: String!
     sql: String!
     cteName: String
+    references: [DetailReference]
+  }
+
+  type ThreadResponseExplainInfo {
+    queryId: String
+    status: ExplainTaskStatus
+    error: JSON
   }
 
   type ThreadResponseDetail {
@@ -549,6 +598,13 @@ export const typeDefs = gql`
     steps: [DetailStep!]!
   }
 
+  type CorrectionDetail {
+    id: Int!
+    type: ReferenceType!
+    referenceNum: Int!
+    correction: String!
+  }
+
   type ThreadResponse {
     id: Int!
     question: String!
@@ -556,6 +612,8 @@ export const typeDefs = gql`
     status: AskingTaskStatus!
     detail: ThreadResponseDetail
     error: Error
+    corrections: [CorrectionDetail!]
+    explain: ThreadResponseExplainInfo
   }
 
   # Thread only consists of basic information of a thread
@@ -654,6 +712,10 @@ export const typeDefs = gql`
 
   input ResolveSchemaChangeWhereInput {
     type: SchemaChangeType!
+  }
+
+  input CreateThreadResponseExplainWhereInput {
+    responseId: Int!
   }
 
   # Query and Mutation
@@ -757,7 +819,16 @@ export const typeDefs = gql`
       threadId: Int!
       data: CreateThreadResponseInput!
     ): ThreadResponse!
+    createCorrectedThreadResponse(
+      threadId: Int!
+      data: CreateCorrectedThreadResponseInput!
+    ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+
+    # Explain
+    createThreadResponseExplain(
+      where: CreateThreadResponseExplainWhereInput!
+    ): JSON!
 
     # Settings
     resetCurrentProject: Boolean!

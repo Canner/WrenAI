@@ -71,11 +71,24 @@ export type ConnectionInfo = {
   username?: Maybe<Scalars['String']>;
 };
 
+export type CorrectionDetail = {
+  __typename?: 'CorrectionDetail';
+  correction: Scalars['String'];
+  id: Scalars['Int'];
+  referenceNum: Scalars['Int'];
+  type: ReferenceType;
+};
+
 export type CreateCalculatedFieldInput = {
   expression: ExpressionName;
   lineage: Array<Scalars['Int']>;
   modelId: Scalars['Int'];
   name: Scalars['String'];
+};
+
+export type CreateCorrectedThreadResponseInput = {
+  corrections: Array<CreateThreadResponseCorrectionInput>;
+  responseId: Scalars['Int'];
 };
 
 export type CreateModelInput = {
@@ -102,6 +115,19 @@ export type CreateThreadInput = {
   sql?: InputMaybe<Scalars['String']>;
   summary?: InputMaybe<Scalars['String']>;
   viewId?: InputMaybe<Scalars['Int']>;
+};
+
+export type CreateThreadResponseCorrectionInput = {
+  correction: Scalars['String'];
+  id: Scalars['Int'];
+  reference: Scalars['String'];
+  referenceNum: Scalars['Int'];
+  stepIndex: Scalars['Int'];
+  type: ReferenceType;
+};
+
+export type CreateThreadResponseExplainWhereInput = {
+  responseId: Scalars['Int'];
 };
 
 export type CreateThreadResponseInput = {
@@ -142,9 +168,19 @@ export enum DataSourceName {
   POSTGRES = 'POSTGRES'
 }
 
+export type DetailReference = {
+  __typename?: 'DetailReference';
+  referenceId?: Maybe<Scalars['Int']>;
+  sqlLocation?: Maybe<ReferenceSqlLocation>;
+  sqlSnippet?: Maybe<Scalars['String']>;
+  summary: Scalars['String'];
+  type: ReferenceType;
+};
+
 export type DetailStep = {
   __typename?: 'DetailStep';
   cteName?: Maybe<Scalars['String']>;
+  references?: Maybe<Array<Maybe<DetailReference>>>;
   sql: Scalars['String'];
   summary: Scalars['String'];
 };
@@ -324,6 +360,13 @@ export type Error = {
   stacktrace?: Maybe<Array<Maybe<Scalars['String']>>>;
 };
 
+export enum ExplainTaskStatus {
+  FAILED = 'FAILED',
+  FINISHED = 'FINISHED',
+  GENERATING = 'GENERATING',
+  UNDERSTANDING = 'UNDERSTANDING'
+}
+
 export enum ExpressionName {
   ABS = 'ABS',
   AVG = 'AVG',
@@ -399,10 +442,12 @@ export type Mutation = {
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
+  createCorrectedThreadResponse: ThreadResponse;
   createModel: Scalars['JSON'];
   createRelation: Scalars['JSON'];
   createThread: Thread;
   createThreadResponse: ThreadResponse;
+  createThreadResponseExplain: Scalars['JSON'];
   createView: ViewInfo;
   deleteCalculatedField: Scalars['Boolean'];
   deleteModel: Scalars['Boolean'];
@@ -448,6 +493,12 @@ export type MutationCreateCalculatedFieldArgs = {
 };
 
 
+export type MutationCreateCorrectedThreadResponseArgs = {
+  data: CreateCorrectedThreadResponseInput;
+  threadId: Scalars['Int'];
+};
+
+
 export type MutationCreateModelArgs = {
   data: CreateModelInput;
 };
@@ -466,6 +517,11 @@ export type MutationCreateThreadArgs = {
 export type MutationCreateThreadResponseArgs = {
   data: CreateThreadResponseInput;
   threadId: Scalars['Int'];
+};
+
+
+export type MutationCreateThreadResponseExplainArgs = {
+  where: CreateThreadResponseExplainWhereInput;
 };
 
 
@@ -704,6 +760,20 @@ export type RecommendRelations = {
   relations: Array<Maybe<Relation>>;
 };
 
+export type ReferenceSqlLocation = {
+  __typename?: 'ReferenceSQLLocation';
+  column: Scalars['Int'];
+  line: Scalars['Int'];
+};
+
+export enum ReferenceType {
+  FIELD = 'FIELD',
+  FILTER = 'FILTER',
+  GROUP_BY = 'GROUP_BY',
+  QUERY_FROM = 'QUERY_FROM',
+  SORTING = 'SORTING'
+}
+
 export type Relation = {
   __typename?: 'Relation';
   fromColumnId: Scalars['Int'];
@@ -827,8 +897,10 @@ export type Thread = {
 
 export type ThreadResponse = {
   __typename?: 'ThreadResponse';
+  corrections?: Maybe<Array<CorrectionDetail>>;
   detail?: Maybe<ThreadResponseDetail>;
   error?: Maybe<Error>;
+  explain?: Maybe<ThreadResponseExplainInfo>;
   id: Scalars['Int'];
   question: Scalars['String'];
   status: AskingTaskStatus;
@@ -841,6 +913,13 @@ export type ThreadResponseDetail = {
   sql?: Maybe<Scalars['String']>;
   steps: Array<DetailStep>;
   view?: Maybe<ViewInfo>;
+};
+
+export type ThreadResponseExplainInfo = {
+  __typename?: 'ThreadResponseExplainInfo';
+  error?: Maybe<Scalars['JSON']>;
+  queryId?: Maybe<Scalars['String']>;
+  status?: Maybe<ExplainTaskStatus>;
 };
 
 export type ThreadUniqueWhereInput = {

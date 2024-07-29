@@ -1,17 +1,43 @@
 import { useEffect, useMemo } from 'react';
-import { AskingTaskStatus } from '@/apollo/client/graphql/__types__';
+import {
+  AskingTaskStatus,
+  ExplainTaskStatus,
+} from '@/apollo/client/graphql/__types__';
 import {
   useAskingTaskLazyQuery,
   useCancelAskingTaskMutation,
   useCreateAskingTaskMutation,
 } from '@/apollo/client/graphql/home.generated';
 
-export const getIsFinished = (status: AskingTaskStatus) =>
+export const getIsExplainFinished = (status: ExplainTaskStatus) =>
+  [ExplainTaskStatus.FINISHED, ExplainTaskStatus.FAILED].includes(status);
+
+export const getIsAskingFinished = (status: AskingTaskStatus) =>
   [
     AskingTaskStatus.FINISHED,
     AskingTaskStatus.FAILED,
     AskingTaskStatus.STOPPED,
   ].includes(status);
+
+export const checkExplainExisted = (explain?: {
+  queryId?: string;
+  status?: ExplainTaskStatus;
+}) => {
+  // if the queryId is not empty, it means the question is explainable
+  return !!explain?.queryId ? explain.status : undefined;
+};
+
+export const getIsFinished = (
+  askingStatus: AskingTaskStatus,
+  explainStatus?: ExplainTaskStatus,
+) => {
+  const isAskingFinished = getIsAskingFinished(askingStatus);
+  if (explainStatus !== undefined) {
+    const isExplainFinished = getIsExplainFinished(explainStatus);
+    return isAskingFinished && isExplainFinished;
+  }
+  return isAskingFinished;
+};
 
 export default function useAskPrompt(threadId?: number) {
   const [createAskingTask, createAskingTaskResult] =

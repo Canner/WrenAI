@@ -92,6 +92,65 @@ export interface IbisDryPlanOptions {
   sql: string;
 }
 
+export interface IbisQueryResponse {
+  columns: string[];
+  data: any[];
+  dtypes: Record<string, string>;
+}
+
+export interface SelectItemAnalysis {
+  alias: string;
+  expression: string;
+  properties: Record<string, any>;
+}
+
+export enum RelationType {
+  TABLE = 'TABLE',
+  SUBQUERY = 'SUBQUERY',
+  INNER_JOIN = 'INNER_JOIN',
+  LEFT_JOIN = 'LEFT_JOIN',
+  RIGHT_JOIN = 'RIGHT_JOIN',
+  FULL_JOIN = 'FULL_JOIN',
+  CROSS_JOIN = 'CROSS_JOIN',
+  IMPLICIT_JOIN = 'IMPLICIT_JOIN',
+}
+
+export interface RelationAnalysis {
+  type: RelationType;
+  alias?: string;
+  tableName?: string;
+  left?: RelationAnalysis;
+  right?: RelationAnalysis;
+  criteria?: string;
+  // exist when type = subquery
+  body?: RelationAnalysis[];
+  properties?: Record<string, any>;
+}
+
+export enum FilterType {
+  EXPR = 'EXPR',
+  // Logical expression
+  AND = 'AND',
+  OR = 'OR',
+}
+export interface FilterAnalysis {
+  type: FilterType;
+  node?: string;
+  left?: FilterAnalysis;
+  right?: FilterAnalysis;
+}
+export interface SortAnalysis {
+  expression: string;
+  ordering: 'ASCENDING' | 'DESCENDING';
+}
+export interface QueryAnalysis {
+  selectItems?: SelectItemAnalysis[];
+  relation?: RelationAnalysis;
+  filter?: FilterAnalysis;
+  groupByKeys?: string[][];
+  sortings?: SortAnalysis;
+}
+
 export interface IIbisAdaptor {
   query: (
     query: string,
@@ -115,19 +174,35 @@ export interface IIbisAdaptor {
     mdl: Manifest,
     parameters: Record<string, any>,
   ) => Promise<ValidationResponse>;
-}
 
-export interface IbisQueryResponse {
-  columns: string[];
-  data: any[];
-  dtypes: Record<string, string>;
+  analysisSqls: (mdl: Manifest, sqls: string[]) => Promise<QueryAnalysis[][]>;
 }
 
 export class IbisAdaptor implements IIbisAdaptor {
   private ibisServerBaseUrl: string;
 
   constructor({ ibisServerEndpoint }: { ibisServerEndpoint: string }) {
-    this.ibisServerBaseUrl = `${ibisServerEndpoint}/v2/connector`;
+    this.ibisServerBaseUrl = `${ibisServerEndpoint}/v2`;
+  }
+  public async analysisSqls(mdl: Manifest, sqls: string[]) {
+    try {
+      const manifestStr = Buffer.from(JSON.stringify(mdl)).toString('base64');
+      const res: AxiosResponse<QueryAnalysis[][]> = await axios({
+        method: 'get',
+        url: `${this.ibisServerBaseUrl}/analysis/sqls`,
+        data: {
+          manifestStr,
+          sqls,
+        },
+      });
+      return res.data;
+    } catch (err) {
+      logger.debug(`Got error when analysis sqls: ${err.response.data}`);
+      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
+        customMessage: err.response.data,
+        originalError: err,
+      });
+    }
   }
   public async getNativeSql(options: IbisDryPlanOptions): Promise<string> {
     const { dataSource, mdl, sql } = options;
@@ -164,7 +239,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     try {
       const res = await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query`,
+        `${this.ibisServerBaseUrl}/connector/${dataSourceUrlMap[dataSource]}/query`,
         body,
         {
           params: {
@@ -199,7 +274,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Dry run sql from ibis with body:`);
     try {
       await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
+        `${this.ibisServerBaseUrl}/connector/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
         body,
       );
       logger.debug(`Ibis server Dry run success`);
@@ -225,7 +300,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting tables from ibis`);
       const res: AxiosResponse<CompactTable[]> = await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/tables`,
+        `${this.ibisServerBaseUrl}/connector/${dataSourceUrlMap[dataSource]}/metadata/tables`,
         body,
       );
       return res.data;
@@ -252,7 +327,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting constraint from ibis`);
       const res: AxiosResponse<RecommendConstraint[]> = await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
+        `${this.ibisServerBaseUrl}/connector/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
         body,
       );
       return res.data;
@@ -284,7 +359,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Run validation rule "${validationRule}" with ibis`);
       await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
+        `${this.ibisServerBaseUrl}/connector/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
         body,
       );
       return { valid: true, message: null };

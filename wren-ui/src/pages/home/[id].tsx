@@ -1,21 +1,32 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import {
+  useCreateCorrectedThreadResponseMutation,
+  useCreateThreadResponseExplainMutation,
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
-import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
+import useAskPrompt, {
+  getIsFinished,
+  checkExplainExisted,
+} from '@/hooks/useAskPrompt';
 import useModalAction from '@/hooks/useModalAction';
-import PromptThread from '@/components/pages/home/promptThread';
+import Thread from '@/components/pages/home/thread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
+import {
+  CreateCorrectedThreadResponseInput,
+  CreateThreadResponseExplainWhereInput,
+  CreateThreadResponseInput,
+  ThreadResponse,
+} from '@/apollo/client/graphql/__types__';
 
 export default function HomeThread() {
   const router = useRouter();
@@ -39,18 +50,24 @@ export default function HomeThread() {
     skip: threadId === null,
     onError: () => router.push(Path.Home),
   });
+  const addThreadResponse = (nextResponse) => {
+    updateThreadQuery((prev) => {
+      return {
+        ...prev,
+        thread: {
+          ...prev.thread,
+          responses: [...prev.thread.responses, nextResponse],
+        },
+      };
+    });
+  };
+  const [createThreadResponseExplain] = useCreateThreadResponseExplainMutation({
+    onError: (error) => console.error(error),
+  });
   const [createThreadResponse] = useCreateThreadResponseMutation({
     onCompleted(next) {
       const nextResponse = next.createThreadResponse;
-      updateThreadQuery((prev) => {
-        return {
-          ...prev,
-          thread: {
-            ...prev.thread,
-            responses: [...prev.thread.responses, nextResponse],
-          },
-        };
-      });
+      addThreadResponse(nextResponse);
     },
   });
   const [fetchThreadResponse, threadResponseResult] =
@@ -69,6 +86,13 @@ export default function HomeThread() {
         }));
       },
     });
+  const [createRegeneratedThreadResponse] =
+    useCreateCorrectedThreadResponseMutation({
+      onCompleted(next) {
+        const nextResponse = next.createCorrectedThreadResponse;
+        addThreadResponse(nextResponse);
+      },
+    });
 
   const thread = useMemo(() => data?.thread || null, [data]);
   const threadResponse = useMemo(
@@ -76,25 +100,63 @@ export default function HomeThread() {
     [threadResponseResult.data],
   );
   const isFinished = useMemo(
-    () => getIsFinished(threadResponse?.status),
+    () =>
+      getIsFinished(
+        threadResponse?.status,
+        checkExplainExisted(threadResponse?.explain),
+      ),
     [threadResponse],
   );
 
-  useEffect(() => {
-    const unfinishedRespose = (thread?.responses || []).find(
-      (response) => !getIsFinished(response.status),
-    );
+  const startThreadResponseExplanation = useCallback(
+    (threadResponse: ThreadResponse) => {
+      const isSuccessBreakdown = threadResponse?.error === null;
+      const isExplainable =
+        threadResponse?.explain &&
+        threadResponse?.explain?.error === null &&
+        threadResponse?.explain.queryId === null;
+      if (isSuccessBreakdown && isExplainable) {
+        createThreadResponseExplain({
+          variables: { where: { responseId: threadResponse.id } },
+        }).then(() =>
+          fetchThreadResponse({ variables: { responseId: threadResponse.id } }),
+        );
+      }
+    },
+    [],
+  );
 
-    if (unfinishedRespose) {
-      fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
+  useEffect(() => {
+    const unfinishedResposes = (thread?.responses || []).filter(
+      (response) =>
+        !getIsFinished(response.status, checkExplainExisted(response?.explain)),
+    );
+    if (!!unfinishedResposes.length) {
+      for (const response of unfinishedResposes) {
+        fetchThreadResponse({ variables: { responseId: response.id } });
+      }
+      // Explanation will be triggered by polling process
+      return;
+    }
+
+    // If all responses are finished, we need to check if there is any explanation that is not started
+    const unfinishedExplanations = (thread?.responses || []).filter(
+      (response) => response.explain?.queryId === null,
+    );
+    for (const response of unfinishedExplanations) {
+      startThreadResponseExplanation(response);
     }
   }, [thread]);
 
   useEffect(() => {
-    if (isFinished) threadResponseResult.stopPolling();
-  }, [isFinished]);
+    if (isFinished) {
+      threadResponseResult.stopPolling();
 
-  const onSelect = async (payload) => {
+      startThreadResponseExplanation(threadResponse);
+    }
+  }, [isFinished, threadResponse]);
+
+  const onSelect = async (payload: CreateThreadResponseInput) => {
     try {
       const response = await createThreadResponse({
         variables: { threadId: thread.id, data: payload },
@@ -107,11 +169,43 @@ export default function HomeThread() {
     }
   };
 
+  const onSubmitReviewDrawer = async (
+    payload: CreateCorrectedThreadResponseInput,
+  ) => {
+    try {
+      const response = await createRegeneratedThreadResponse({
+        variables: { threadId: thread.id, data: payload },
+      });
+      await fetchThreadResponse({
+        variables: {
+          responseId: response.data.createCorrectedThreadResponse.id,
+        },
+      });
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const onTriggerThreadResponseExplain = async (
+    payload: CreateThreadResponseExplainWhereInput,
+  ) => {
+    try {
+      await createThreadResponseExplain({
+        variables: { where: payload },
+      });
+      await fetchThreadResponse({ variables: payload });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <SiderLayout loading={loading} sidebar={homeSidebar}>
-      <PromptThread
+      <Thread
         data={thread}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
+        onSubmitReviewDrawer={onSubmitReviewDrawer}
+        onTriggerThreadResponseExplain={onTriggerThreadResponseExplain}
       />
       <div className="py-12" />
       <Prompt

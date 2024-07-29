@@ -22,6 +22,16 @@ const COMMON_RESPONSE = gql`
         summary
         sql
         cteName
+        references {
+          referenceId
+          summary
+          type
+          sqlSnippet
+          sqlLocation {
+            column
+            line
+          }
+        }
       }
       view {
         id
@@ -29,6 +39,17 @@ const COMMON_RESPONSE = gql`
         statement
         displayName
       }
+    }
+    explain {
+      queryId
+      status
+      error
+    }
+    corrections {
+      id
+      type
+      referenceNum
+      correction
     }
   }
 `;
@@ -139,15 +160,20 @@ export const CREATE_THREAD_RESPONSE = gql`
     createThreadResponse(threadId: $threadId, data: $data) {
       ...CommonResponse
       error {
-        code
-        shortMessage
-        message
-        stacktrace
+        ...CommonError
       }
     }
   }
   ${COMMON_RESPONSE}
   ${COMMON_ERROR}
+`;
+
+export const CREATE_THREAD_RESPONSE_EXPLAIN = gql`
+  mutation CreateThreadResponseExplain(
+    $where: CreateThreadResponseExplainWhereInput!
+  ) {
+    createThreadResponseExplain(where: $where)
+  }
 `;
 
 export const UPDATE_THREAD = gql`
@@ -178,5 +204,19 @@ export const PREVIEW_DATA = gql`
 export const GET_NATIVE_SQL = gql`
   query GetNativeSQL($responseId: Int!) {
     nativeSql(responseId: $responseId)
+  }
+`;
+
+export const CREATE_CORRECTED_THREAD_RESPONSE = gql`
+  mutation CreateCorrectedThreadResponse(
+    $threadId: Int!
+    $data: CreateCorrectedThreadResponseInput!
+  ) {
+    createCorrectedThreadResponse(threadId: $threadId, data: $data) {
+      ...CommonResponse
+      error {
+        ...CommonError
+      }
+    }
   }
 `;

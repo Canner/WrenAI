@@ -3,21 +3,32 @@ import {
   IWrenAIAdaptor,
   AskResultStatus,
   AskHistory,
+  ExpressionType,
+  ExplanationType,
+  ExplainPipelineStatus,
+  StepAnalysisResult,
 } from '@server/adaptors/wrenAIAdaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
 import { IThreadRepository, Thread } from '../repositories/threadRepository';
 import {
+  IThreadResponseExplainRepository,
+  ThreadResponseExplain,
+} from '../repositories/threadResponseExplainRepository';
+import {
   IThreadResponseRepository,
   ThreadResponse,
   ThreadResponseWithThreadContext,
 } from '../repositories/threadResponseRepository';
-import { getLogger } from '@server/utils';
-import { isEmpty, isNil } from 'lodash';
+import { groupBy, isEmpty, isNil } from 'lodash';
+import { addAutoIncrementId, getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
 import { Telemetry } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
+import { ThreadResponseBackgroundTracker } from '../backgroundTrackers/threadResponseBackgroundTracker';
+import { ThreadResponseExplainBackgroundTracker } from '../backgroundTrackers/explainBackgroundTracker';
+import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -38,6 +49,20 @@ export interface AskingDetailTaskInput {
   sql?: string;
   summary?: string;
   viewId?: number;
+}
+
+export interface CorrectionInput {
+  id: number;
+  type: string;
+  referenceNum: number;
+  stepIndex: number;
+  reference: string;
+  correction: string;
+}
+
+export interface CorrectedDetailTaskInput {
+  responseId: number;
+  corrections: CorrectionInput[];
 }
 
 export interface IAskingService {
@@ -62,9 +87,14 @@ export interface IAskingService {
     threadId: number,
     input: AskingDetailTaskInput,
   ): Promise<ThreadResponse>;
+  createCorrectedThreadResponse(
+    threadId: number,
+    input: CorrectedDetailTaskInput,
+  ): Promise<ThreadResponse>;
   getResponsesWithThread(
     threadId: number,
   ): Promise<ThreadResponseWithThreadContext[]>;
+  getExplainDetailsByThread(threadId: number): Promise<ThreadResponseExplain[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   previewData(
     responseId: number,
@@ -72,18 +102,10 @@ export interface IAskingService {
     limit?: number,
   ): Promise<PreviewDataResponse>;
   deleteAllByProjectId(projectId: number): Promise<void>;
+  createThreadResponseExplain(
+    threadResponseId: number,
+  ): Promise<ThreadResponseExplain>;
 }
-
-/**
- * utility function to check if the status is finalized
- */
-const isFinalized = (status: AskResultStatus) => {
-  return (
-    status === AskResultStatus.FAILED ||
-    status === AskResultStatus.FINISHED ||
-    status === AskResultStatus.STOPPED
-  );
-};
 
 /**
  * Given a list of steps, construct the SQL statement with CTEs
@@ -132,165 +154,125 @@ export const constructCteSql = (
   return sql;
 };
 
-/**
- * Background tracker to track the status of the asking detail task
- */
-class BackgroundTracker {
-  // tasks is a kv pair of task id and thread response
-  private tasks: Record<number, ThreadResponse> = {};
-  private intervalTime: number;
-  private wrenAIAdaptor: IWrenAIAdaptor;
-  private threadResponseRepository: IThreadResponseRepository;
-  private runningJobs = new Set();
-  private telemetry: Telemetry;
-
-  constructor({
-    telemetry,
-    wrenAIAdaptor,
-    threadResponseRepository,
-  }: {
-    telemetry: Telemetry;
-    wrenAIAdaptor: IWrenAIAdaptor;
-    threadResponseRepository: IThreadResponseRepository;
-  }) {
-    this.telemetry = telemetry;
-    this.wrenAIAdaptor = wrenAIAdaptor;
-    this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 1000;
-    this.start();
-  }
-
-  public start() {
-    logger.info('Background tracker started');
-    setInterval(() => {
-      const jobs = Object.values(this.tasks).map(
-        (threadResponse) => async () => {
-          // check if same job is running
-          if (this.runningJobs.has(threadResponse.id)) {
-            return;
-          }
-
-          // mark the job as running
-          this.runningJobs.add(threadResponse.id);
-
-          // get the latest result from AI service
-          const result = await this.wrenAIAdaptor.getAskDetailResult(
-            threadResponse.queryId,
-          );
-
-          // check if status change
-          if (threadResponse.status === result.status) {
-            // mark the job as finished
-            logger.debug(
-              `Job ${threadResponse.id} status not changed, finished`,
-            );
-            this.runningJobs.delete(threadResponse.id);
-            return;
-          }
-
-          // update database
-          logger.debug(`Job ${threadResponse.id} status changed, updating`);
-          await this.threadResponseRepository.updateOne(threadResponse.id, {
-            status: result.status,
-            detail: result.response,
-            error: result.error,
-          });
-
-          // remove the task from tracker if it is finalized
-          if (isFinalized(result.status)) {
-            this.telemetry.send_event('question_answered', {
-              question: threadResponse.question,
-              result,
-            });
-            logger.debug(`Job ${threadResponse.id} is finalized, removing`);
-            delete this.tasks[threadResponse.id];
-          }
-
-          // mark the job as finished
-          this.runningJobs.delete(threadResponse.id);
-        },
-      );
-
-      // run the jobs
-      Promise.allSettled(jobs.map((job) => job())).then((results) => {
-        // show reason of rejection
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            logger.error(`Job ${index} failed: ${result.reason}`);
-          }
-        });
-      });
-    }, this.intervalTime);
-  }
-
-  public addTask(threadResponse: ThreadResponse) {
-    this.tasks[threadResponse.id] = threadResponse;
-  }
-
-  public getTasks() {
-    return this.tasks;
-  }
-}
-
 export class AskingService implements IAskingService {
   private wrenAIAdaptor: IWrenAIAdaptor;
+  private ibisAdaptor: IIbisAdaptor;
   private deployService: IDeployService;
   private projectService: IProjectService;
   private viewRepository: IViewRepository;
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
-  private backgroundTracker: BackgroundTracker;
+  private backgroundTracker: ThreadResponseBackgroundTracker;
+  private regeneratedBackgroundTracker: ThreadResponseBackgroundTracker;
+  private threadResponseExplainRepository: IThreadResponseExplainRepository;
+  private threadResponseBackgroundTracker: ThreadResponseBackgroundTracker;
+  private explainBackgroundTracker: ThreadResponseExplainBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: Telemetry;
 
   constructor({
     telemetry,
     wrenAIAdaptor,
+    ibisAdaptor,
     deployService,
     projectService,
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    threadResponseExplainRepository,
     queryService,
   }: {
     telemetry: Telemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
+    ibisAdaptor: IIbisAdaptor;
     deployService: IDeployService;
     projectService: IProjectService;
     viewRepository: IViewRepository;
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
+    threadResponseExplainRepository: IThreadResponseExplainRepository;
     queryService: IQueryService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
+    this.ibisAdaptor = ibisAdaptor;
     this.deployService = deployService;
     this.projectService = projectService;
     this.viewRepository = viewRepository;
     this.threadRepository = threadRepository;
     this.threadResponseRepository = threadResponseRepository;
+    this.threadResponseExplainRepository = threadResponseExplainRepository;
     this.telemetry = telemetry;
     this.queryService = queryService;
-    this.backgroundTracker = new BackgroundTracker({
+    this.threadResponseBackgroundTracker = new ThreadResponseBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
     });
+    this.regeneratedBackgroundTracker = new ThreadResponseBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      threadResponseRepository,
+      isRegenerated: true,
+    });
+    this.explainBackgroundTracker = new ThreadResponseExplainBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      threadResponseRepository,
+      threadResponseExplainRepository,
+    });
+  }
+  public async getExplainDetailsByThread(
+    threadId: number,
+  ): Promise<ThreadResponseExplain[]> {
+    return await this.threadResponseExplainRepository.findAllByThread(threadId);
   }
 
   public async initialize() {
-    // list thread responses from database
-    // filter status not finalized and put them into background tracker
-    const threadResponses = await this.threadResponseRepository.findAll();
-    const unfininshedThreadResponses = threadResponses.filter(
-      (threadResponse) =>
-        !isFinalized(threadResponse.status as AskResultStatus),
-    );
-    logger.info(
-      `Initialization: adding unfininshed thread responses (total: ${unfininshedThreadResponses.length}) to background tracker`,
-    );
-    for (const threadResponse of unfininshedThreadResponses) {
-      this.backgroundTracker.addTask(threadResponse);
-    }
+    const initializeThreadResponseBT = async () => {
+      // list thread responses from database
+      // filter status not finalized and put them into background tracker
+      const threadResponses = await this.threadResponseRepository.findAll();
+      const unfinishedThreadResponses = threadResponses.filter(
+        (threadResponse) =>
+          !this.threadResponseBackgroundTracker.isFinalized(
+            threadResponse.status as AskResultStatus,
+          ),
+      );
+      logger.info(
+        `Initialization: adding unfinished thread responses (total: ${unfinishedThreadResponses.length}) to background tracker`,
+      );
+      for (const threadResponse of unfinishedThreadResponses) {
+        if (threadResponse.corrections !== null) {
+          this.regeneratedBackgroundTracker.addTask(threadResponse);
+          continue;
+        }
+        this.threadResponseBackgroundTracker.addTask(threadResponse);
+      }
+    };
+
+    const initializeThreadResponseExplainBT = async () => {
+      // list thread responses from database
+      // filter status not finalized and put them into background tracker
+      const threadResponseExplains =
+        await this.threadResponseExplainRepository.findAll();
+      const unfinishedThreadResponseExplains = threadResponseExplains.filter(
+        (threadResponseExplain) =>
+          !this.explainBackgroundTracker.isFinalized(
+            threadResponseExplain.status as ExplainPipelineStatus,
+          ),
+      );
+      logger.info(
+        `Initialization: adding unfinished explain job (total: ${unfinishedThreadResponseExplains.length}) to background tracker`,
+      );
+      for (const threadResponseExplain of unfinishedThreadResponseExplains) {
+        this.explainBackgroundTracker.addTask(threadResponseExplain);
+      }
+    };
+
+    await Promise.all([
+      initializeThreadResponseBT(),
+      initializeThreadResponseExplainBT(),
+    ]);
   }
 
   /**
@@ -364,7 +346,7 @@ export class AskingService implements IAskingService {
     });
 
     // 3. put the task into background tracker
-    this.backgroundTracker.addTask(threadResponse);
+    this.threadResponseBackgroundTracker.addTask(threadResponse);
 
     // return the task id
     return thread;
@@ -435,10 +417,109 @@ export class AskingService implements IAskingService {
     });
 
     // 3. put the task into background tracker
-    this.backgroundTracker.addTask(threadResponse);
+    this.threadResponseBackgroundTracker.addTask(threadResponse);
 
     // return the task id
     return threadResponse;
+  }
+
+  public async createCorrectedThreadResponse(
+    threadId: number,
+    input: CorrectedDetailTaskInput,
+  ): Promise<ThreadResponse> {
+    const thread = await this.threadRepository.findOneBy({
+      id: threadId,
+    });
+
+    const baseThreadResponse = await this.threadResponseRepository.findOneBy({
+      id: input.responseId,
+    });
+
+    if (!baseThreadResponse) {
+      throw new Error(`Thread response ${input.responseId} not found`);
+    }
+
+    const correctionsMap = groupBy(input.corrections, 'stepIndex');
+    const response = await this.wrenAIAdaptor.regenerateAskDetail({
+      description: baseThreadResponse.detail.description,
+      steps: baseThreadResponse.detail.steps.map((step, index) => ({
+        sql: step.sql,
+        summary: step.summary,
+        cte_name: step.cteName,
+        corrections: (correctionsMap[index] || []).map((item) => ({
+          before: {
+            type: ExplanationType[item.type],
+            value: item.reference,
+          },
+          after: {
+            // Only NL_EXPRESSION is supported for now
+            type: ExpressionType.NL_EXPRESSION,
+            value: item.correction,
+          },
+        })),
+      })),
+    });
+
+    const threadResponse = await this.threadResponseRepository.createOne({
+      threadId: thread.id,
+      queryId: response.queryId,
+      question: baseThreadResponse.question,
+      summary: baseThreadResponse.summary,
+      status: AskResultStatus.UNDERSTANDING,
+      corrections: input.corrections.map((item) => ({
+        id: item.id,
+        type: item.type,
+        referenceNum: item.referenceNum,
+        correction: item.correction,
+      })),
+    });
+
+    // 3. put the task into background tracker
+    this.regeneratedBackgroundTracker.addTask(threadResponse);
+
+    // return the task id
+    return threadResponse;
+  }
+
+  public async createThreadResponseExplain(threadResponseId: number) {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+    if (!threadResponse || threadResponse.status != AskResultStatus.FINISHED) {
+      throw new Error(
+        `Can not create explain job for threadResponseId: ${threadResponseId} `,
+      );
+    }
+    logger.debug('Getting thread response analysis');
+    const analysisWithIds =
+      await this.getThreadResponseAnalysis(threadResponse);
+
+    // compose analysis result with step for explain
+    const question = threadResponse.question;
+    const stepAnalysisResult = Object.entries(threadResponse.detail.steps).map(
+      ([idx, step]) => {
+        return {
+          sql: step.sql,
+          summary: step.summary,
+          cte_name: step.cteName,
+          sql_analysis_results: analysisWithIds[idx],
+        } as StepAnalysisResult;
+      },
+    );
+
+    // create explain job
+    const { queryId } = await this.wrenAIAdaptor.explain(
+      question,
+      stepAnalysisResult,
+    );
+    // create explain record and add to background tracker
+    const explain = await this.threadResponseExplainRepository.createOne({
+      threadResponseId: threadResponseId,
+      queryId,
+      analysis: analysisWithIds,
+    });
+    this.explainBackgroundTracker.addTask(explain);
+    return explain;
   }
 
   public async getResponsesWithThread(threadId: number) {
@@ -544,5 +625,19 @@ export class AskingService implements IAskingService {
         viewId: view.id,
       },
     });
+  }
+
+  private async getThreadResponseAnalysis(threadResponse: ThreadResponse) {
+    const project = await this.projectService.getCurrentProject();
+    const deployment = await this.deployService.getLastDeployment(project.id);
+    const manifest = deployment.manifest;
+    const sqls = threadResponse.detail?.steps?.map((step, index) => {
+      const isLastStep = index === threadResponse.detail.steps.length - 1;
+      return isLastStep
+        ? format(constructCteSql(threadResponse.detail.steps))
+        : format(step.sql);
+    });
+    const analysis = await this.ibisAdaptor.analysisSqls(manifest, sqls);
+    return addAutoIncrementId(analysis);
   }
 }

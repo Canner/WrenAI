@@ -4,7 +4,7 @@ import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { BinocularsIcon } from '@/utils/icons';
 import CollapseContent, {
   Props as CollapseContentProps,
-} from '@/components/pages/home/promptThread/CollapseContent';
+} from '@/components/pages/home/thread/CollapseContent';
 import useAnswerStepContent from '@/hooks/useAnswerStepContent';
 import { nextTick } from '@/utils/time';
 
@@ -106,8 +106,9 @@ export default function StepContent(props: Props) {
         <CollapseContent
           {...(collapseContentProps as Omit<
             CollapseContentProps,
-            'attributes'
+            'attributes' | 'stepIndex'
           >)}
+          stepIndex={stepIndex}
           key={`collapse-${stepNumber}`}
           attributes={{ stepNumber, isLastStep }}
         />
