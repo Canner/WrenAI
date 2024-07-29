@@ -42,7 +42,6 @@ For a comprehensive understanding of how to evaluate the pipelines, please refer
 - to run the load test
   - setup `DATASET_NAME` in `.env.dev`
   - adjust test config if needed
-    - adjust test config in pyproject.toml `tool.locust` section
     - adjust user count in `tests/locust/config_users.json`
   - in wren-ai-service folder, run `just up` to start the docker containers
   - in wren-ai-service folder, run `just start` to start the ai service
