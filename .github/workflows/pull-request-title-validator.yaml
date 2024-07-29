@@ -18,4 +18,4 @@ jobs:
         uses: kontrolplane/pull-request-title-validator@v1.3.0
         with:
           types: "fix,feat,chore"
-          scopes: "wren-ai-service"
+          scopes: "wren-ai-service,wren-ui"
