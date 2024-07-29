@@ -146,56 +146,25 @@ func Launch() {
 
 	// ask for LLM provider
 	pterm.Print("\n")
-	llmProvider := config.GetLLMProvider()
-	if llmProvider == "" {
-		result, err := askForLLMProvider()
-		if err != nil {
-			panic(err)
-		}
-		llmProvider = result
-	} else {
-		validProvider := map[string]bool{
-			"openai": true,
-			"custom": true,
-		}
-		if !validProvider[llmProvider] {
-			pterm.Error.Println("Invalid LLM provider", llmProvider, "valid values are: openai, custom")
-			return
-		}
+	llmProvider, shouldReturn := getLLMProvider()
+	if shouldReturn {
+		return
 	}
-
-	openaiApiKey := config.GetOpenaiAPIKey()
-	openaiGenerationModel := config.GetOpenaiGenerationModel()
+	openaiApiKey := ""
+	openaiGenerationModel := ""
 	if strings.ToLower(llmProvider) == "openai" {
 		// if openaiApiKey is not provided, ask for it
-		if openaiApiKey == "" {
-			// ask for OpenAI API key
-			pterm.Print("\n")
-			openaiApiKey, _ = askForAPIKey()
-		} else {
-			if !strings.HasPrefix(openaiApiKey, "sk-") {
-				pterm.Error.Println("Invalid API key, API key should start with 'sk-'")
-				return
-			}
-			pterm.Info.Println("OpenAI API key is provided")
+		// ask for OpenAI API key
+		openaiApiKey, shouldReturn = getOpenaiApiKey()
+		if shouldReturn {
+			return
 		}
 
 		// ask for OpenAI generation model
 		pterm.Print("\n")
-		if openaiGenerationModel == "" {
-			openaiGenerationModel, _ = askForGenerationModel()
-		} else {
-			pterm.Info.Println("OpenAI generation model is provided")
-			validModels := map[string]bool{
-				"gpt-4o-mini":   true,
-				"gpt-4o":        true,
-				"gpt-4-turbo":   true,
-				"gpt-3.5-turbo": true,
-			}
-			if !validModels[openaiGenerationModel] {
-				pterm.Error.Println("Invalid generation model", openaiGenerationModel)
-				return
-			}
+		openaiGenerationModel, shouldReturn = getOpenaiGenerationModel()
+		if shouldReturn {
+			return
 		}
 	} else {
 		// check if .env.ai file exists
@@ -295,4 +264,70 @@ func Launch() {
 
 	pterm.Info.Println("You can now safely close this terminal window")
 	fmt.Scanf("h")
+}
+
+func getOpenaiGenerationModel() (string, bool) {
+	// get openai generation model from initialize arguments
+	openaiGenerationModel := config.GetOpenaiGenerationModel()
+	if openaiGenerationModel == "" {
+		// not provided in args, ask user to provide openai generation model
+		openaiGenerationModel, _ = askForGenerationModel()
+	} else {
+		// validate if input args is a valid generation model
+		pterm.Info.Println("OpenAI generation model is provided")
+		validModels := map[string]bool{
+			"gpt-4o-mini":   true,
+			"gpt-4o":        true,
+			"gpt-4-turbo":   true,
+			"gpt-3.5-turbo": true,
+		}
+		if !validModels[openaiGenerationModel] {
+			pterm.Error.Println("Invalid generation model", openaiGenerationModel)
+			return "", true
+		}
+	}
+	return openaiGenerationModel, false
+}
+
+func getOpenaiApiKey() (string, bool) {
+	// get openai api key from initialize arguments
+	openaiApiKey := config.GetOpenaiAPIKey()
+
+	if openaiApiKey == "" {
+		// not provided in args, ask user to provide openai api key
+		pterm.Print("\n")
+		openaiApiKey, _ = askForAPIKey()
+	} else {
+		// validate if input args is a valid API key
+		if !strings.HasPrefix(openaiApiKey, "sk-") {
+			pterm.Error.Println("Invalid API key, API key should start with 'sk-'")
+			return "", true
+		}
+		pterm.Info.Println("OpenAI API key is provided")
+	}
+	return openaiApiKey, false
+}
+
+func getLLMProvider() (string, bool) {
+	// get llm provider from initialize arguments
+	llmProvider := config.GetLLMProvider()
+	if llmProvider == "" {
+		// not provided in args, ask user to provide llm provider
+		result, err := askForLLMProvider()
+		if err != nil {
+			panic(err)
+		}
+		llmProvider = result
+	} else {
+		// validate if input args is a valid LLM provider
+		validProvider := map[string]bool{
+			"openai": true,
+			"custom": true,
+		}
+		if !validProvider[llmProvider] {
+			pterm.Error.Println("Invalid LLM provider", llmProvider, "valid values are: openai, custom")
+			return "", true
+		}
+	}
+	return llmProvider, false
 }
