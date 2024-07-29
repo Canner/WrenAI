@@ -132,7 +132,7 @@ def predict(
             "expected_output": query["sql"],
             "retrieval_context": [],
             "context": query["context"],
-            "type": eval_type,
+            "type": "execution",
         }
 
         langfuse_context.update_current_trace(
