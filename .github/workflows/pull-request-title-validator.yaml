@@ -2,10 +2,9 @@ name: Pull Request Title Validator
 
 on:
   pull_request:
-    types:
-      - opened
-      - edited
-      - synchronize
+    paths:
+      - "wren-ai-service/**"
+    types: [opened, edited, synchronize]
 
 permissions:
   pull-requests: read
@@ -16,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: validate pull request title
-        uses: kontrolplane/pull-request-title-validator@v1.2.0
+        uses: kontrolplane/pull-request-title-validator@v1.3.0
         with:
           types: "fix,feat,chore"
           socpes: "wren-ai-service"
