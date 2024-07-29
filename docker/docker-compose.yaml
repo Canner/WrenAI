@@ -14,8 +14,6 @@ services:
     platform: ${PLATFORM}
     environment:
       DATA_PATH: /app/data
-      PG_USERNAME: ${PG_USERNAME}
-      PG_PASSWORD: ${PG_PASSWORD}
     volumes:
       - data:/app/data
     command: /bin/sh /app/init.sh
@@ -97,8 +95,6 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
       EMBEDDING_MODEL_DIMENSION: ${EMBEDDING_MODEL_DIMENSION}
       GENERATION_MODEL: ${GENERATION_MODEL}
-      PG_USERNAME: ${PG_USERNAME}
-      PG_PASSWORD: ${PG_PASSWORD}
       # telemetry
       WREN_ENGINE_PORT: ${WREN_ENGINE_PORT}
       WREN_AI_SERVICE_VERSION: ${WREN_AI_SERVICE_VERSION}

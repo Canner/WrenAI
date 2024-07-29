@@ -28,10 +28,6 @@ export interface IConfig {
   encryptionPassword: string;
   encryptionSalt: string;
 
-  // username and password
-  pgUsername?: string;
-  pgPassword?: string;
-
   // telemetry
   telemetryEnabled?: boolean;
   posthogApiKey?: string;
@@ -110,10 +106,6 @@ const config = {
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,
   encryptionSalt: process.env.ENCRYPTION_SALT,
-
-  // username and password
-  pgUsername: process.env.PG_USERNAME,
-  pgPassword: process.env.PG_PASSWORD,
 
   // telemetry
   telemetryEnabled:
