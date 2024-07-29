@@ -100,7 +100,7 @@ export const DATA_SOURCE_OPTIONS = {
     label: 'Trino',
     logo: '/images/dataSource/trino.svg',
     guide: 'https://docs.getwren.ai/guide/connect/trino',
-    disabled: true,
+    disabled: false,
   },
 } as { [key: string]: ButtonOption };
 
