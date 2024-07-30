@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Tuple
 
+import toml
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
@@ -177,12 +178,9 @@ def trace_metadata(func):
         langfuse_context.update_current_trace(
             user_id=metadata.get("project_id"),
             session_id=metadata.get("thread_id"),
-            release="",  # ai service version
+            release=SERVICE_VERSION,
             metadata={
-                "generation_model": "",
-                "generation_model_args": {},
-                "embedding_model": "",
-                "embedding_model_dim": {},
+                **MODELS_METADATA,
                 "mdl_deployment_id": metadata.get("deploy_id"),
             },
         )
@@ -190,3 +188,30 @@ def trace_metadata(func):
         return await func(*args, **kwargs)
 
     return wrapper
+
+
+MODELS_METADATA = {}
+SERVICE_VERSION = None
+
+
+def service_metadata(
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
+    *_,
+):
+    global MODELS_METADATA, SERVICE_VERSION
+
+    MODELS_METADATA = {
+        "generation_model": llm_provider.get_model(),
+        "generation_model_kwargs": llm_provider.get_model_kwargs(),
+        "embedding_model": embedder_provider.get_model(),
+        "embedding_model_dim": embedder_provider.get_dimensions(),
+    }
+
+    def get_version_from_pyproject() -> str:
+        with open("pyproject.toml", "r") as f:
+            pyproject = toml.load(f)
+            return pyproject["tool"]["poetry"]["version"]
+
+    SERVICE_VERSION = get_version_from_pyproject()
+    logger.info(f"Service version: {SERVICE_VERSION}")
