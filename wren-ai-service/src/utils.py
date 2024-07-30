@@ -158,17 +158,32 @@ def trace_metadata(func):
         Callable: the decorated function
     """
 
+    def extract(*args) -> dict:
+        request = args[1]  # fix the position of the request object
+        metadata = {}
+
+        if hasattr(request, "project_id"):
+            metadata["project_id"] = request.project_id
+        if hasattr(request, "thread_id"):
+            metadata["thread_id"] = request.thread_id
+        if hasattr(request, "deploy_id"):
+            metadata["deploy_id"] = request.deploy_id
+
+        return metadata
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
+        metadata = extract(*args)
         langfuse_context.update_current_trace(
-            user_id="developer",  # user id to project id
-            session_id="thread-id",  # session id to thread id
+            user_id=metadata.get("project_id"),
+            session_id=metadata.get("thread_id"),
             release="",  # ai service version
             metadata={
                 "generation_model": "",
                 "generation_model_args": {},
                 "embedding_model": "",
                 "embedding_model_dim": {},
+                "mdl_deployment_id": metadata.get("deploy_id"),
             },
         )
 

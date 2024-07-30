@@ -2,7 +2,7 @@ import logging
 from typing import Literal, Optional
 
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
@@ -13,7 +13,7 @@ logger = logging.getLogger("wren-ai-service")
 # POST /v1/semantics-preparations
 class SemanticsPreparationRequest(BaseModel):
     mdl: str
-    deploy_id: str  # deployment id
+    deploy_id: str = Field(alias="id")
     project_id: Optional[str] = None
 
 
