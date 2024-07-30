@@ -3,6 +3,7 @@ import base64
 import os
 import sys
 import uuid
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -120,6 +121,118 @@ async def get_contexts_from_sqls(
         return results
 
 
+def get_documents_given_contexts(
+    contexts_list: list[list[str]], mdl_json: dict
+) -> list[list[dict]]:
+    def _build_partial_mdl_json(
+        contexts_list: list[list[str]], mdl_json: dict
+    ) -> list[dict]:
+        mdj_json_model_lookup_table = {
+            model["name"]: {
+                **model,
+                "column_lookup": {
+                    column["name"]: column
+                    for column in model["columns"]
+                    if "relationship" not in column
+                },
+                "relationship_lookup": {
+                    column["relationship"]: column
+                    for column in model["columns"]
+                    if "relationship" in column
+                },
+            }
+            for model in mdl_json["models"]
+        }
+
+        new_mdl_jsons = []
+        for contexts in contexts_list:
+            model_candidates = {}
+            relationship_candidates = []
+            for context in contexts:
+                table_name, column_name = context.split(".")
+                model = mdj_json_model_lookup_table.get(table_name)
+                if model:
+                    if table_name not in model_candidates:
+                        model_candidates[table_name] = {
+                            "name": model["name"],
+                            "properties": model["properties"],
+                            "tableReference": model["tableReference"],
+                            "primaryKey": model["primaryKey"],
+                            "columns": [],
+                        }
+
+                    # add column info
+                    column = mdj_json_model_lookup_table[table_name]["column_lookup"][
+                        column_name
+                    ]
+                    model_candidates[table_name]["columns"].append(column)
+
+            contexts_in_set = set(contexts)
+            for relationship in mdl_json["relationships"]:
+                relationship_name = relationship["name"]
+                condition_str = "".join(
+                    relationship["condition"].split()
+                )  # remove all whitespaces
+                conditions = condition_str.split("=")
+                if (
+                    conditions[0] in contexts_in_set
+                    and conditions[1] in contexts_in_set
+                ):
+                    table_name_first_condition = conditions[0].split(".")[0]
+                    table_name_second_condition = conditions[1].split(".")[0]
+                    # add relationship column info
+                    if (
+                        relationship_column := mdj_json_model_lookup_table.get(
+                            table_name_first_condition, {}
+                        )
+                        .get("relationship_lookup", {})
+                        .get(relationship_name, {})
+                    ):
+                        model_candidates[table_name_first_condition]["columns"].append(
+                            relationship_column
+                        )
+                    elif (
+                        relationship_column := mdj_json_model_lookup_table.get(
+                            table_name_second_condition, {}
+                        )
+                        .get("relationship_lookup", {})
+                        .get(relationship_name, {})
+                    ):
+                        model_candidates[table_name_second_condition]["columns"].append(
+                            relationship_column
+                        )
+
+                    # add relationship info
+                    relationship_candidates.append(relationship)
+
+            new_mdl_jsons.append(
+                {
+                    "models": list(model_candidates.values()),
+                    "relationships": relationship_candidates,
+                    "views": [],
+                    "metrics": [],
+                }
+            )
+
+        return new_mdl_jsons
+
+    new_mdl_jsons = _build_partial_mdl_json(contexts_list, deepcopy(mdl_json))
+
+    return [
+        [
+            {
+                "id": str(i),
+                "meta": {"id": str(i)},
+                "content": ddl_command,
+            }
+            for i, ddl_command in enumerate(
+                ddl_converter.get_ddl_commands(new_mdl_json)
+            )
+        ]
+        for new_mdl_json in new_mdl_jsons
+    ]
+
+
 async def get_question_sql_pairs(
     llm_client: AsyncClient,
     llm_model: str,
@@ -186,13 +299,19 @@ Think step by step
         )
         sqls = [question_sql_pair["sql"] for question_sql_pair in question_sql_pairs]
         contexts = await get_contexts_from_sqls(sqls, mdl_json)
+        documents = get_documents_given_contexts(contexts, mdl_json)
         sqls_data = await get_data_from_wren_engine_with_sqls(
             sqls, data_source, mdl_json, connection_info
         )
         return [
-            {**quesiton_sql_pair, "context": context, "data": sql_data}
-            for quesiton_sql_pair, context, sql_data in zip(
-                question_sql_pairs, contexts, sqls_data
+            {
+                **quesiton_sql_pair,
+                "context": context,
+                "data": sql_data,
+                "document": document,
+            }
+            for quesiton_sql_pair, context, sql_data, document in zip(
+                question_sql_pairs, contexts, sqls_data, documents
             )
         ]
     except Exception as e:
