@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.engine import add_quotes
-from src.utils import async_timer
+from src.utils import async_timer, trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -66,6 +66,7 @@ class AskDetailsService:
 
     @async_timer
     @observe(name="Ask Details(Breakdown SQL)")
+    @trace_metadata
     async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,

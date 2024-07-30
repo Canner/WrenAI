@@ -137,3 +137,35 @@ def init_langfuse():
 
     logger.info(f"LANGFUSE_ENABLE: {enabled}")
     logger.info(f"LANGFUSE_HOST: {host}")
+
+
+def trace_metadata(func):
+    """
+    This decorator is used to add metadata to the current Langfuse trace.
+    It should be applied after creating a trace. Here’s an example of how to use it:
+
+    ```python
+    @observe(name="Mock")
+    @trace_metadata
+    async def mock():
+        return "Mock"
+    ```
+
+    Args:
+        func (Callable): the function to decorate
+
+    Returns:
+        Any: the result of the decorated function
+    """
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        ## todo: check what kind of metadata we need to add
+        langfuse_context.update_current_trace(
+            user_id="developer",  # user id to project id
+            session_id="thread-id",  # session id to thread id
+        )
+
+        return await func(*args, **kwargs)
+
+    return wrapper
