@@ -160,10 +160,16 @@ def trace_metadata(func):
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        ## todo: check what kind of metadata we need to add
         langfuse_context.update_current_trace(
             user_id="developer",  # user id to project id
             session_id="thread-id",  # session id to thread id
+            release="",  # ai service version
+            metadata={
+                "generation_model": "",
+                "generation_model_args": {},
+                "embedding_model": "",
+                "embedding_model_dim": {},
+            },
         )
 
         return await func(*args, **kwargs)
