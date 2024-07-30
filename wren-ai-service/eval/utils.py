@@ -53,7 +53,7 @@ async def get_contexts_from_sql(
     def _get_contexts_from_sql_analysis_results(sql_analysis_results: list[dict]):
         def _compose_contexts_of_select_type(select_items: list[dict]):
             return [
-                f'{expr_source['sourceDataset']}.{expr_source['expression']}'
+                f'{expr_source['sourceDataset']}.{expr_source['sourceColumn']}'
                 for select_item in select_items
                 for expr_source in select_item["exprSources"]
             ]
@@ -62,7 +62,7 @@ async def get_contexts_from_sql(
             contexts = []
             if filter["type"] == "EXPR":
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
+                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
                     for expr_source in filter["exprSources"]
                 ]
             elif filter["type"] in ("AND", "OR"):
@@ -75,7 +75,7 @@ async def get_contexts_from_sql(
             contexts = []
             for groupby_key_list in groupby_keys:
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
+                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
                     for groupby_key in groupby_key_list
                     for expr_source in groupby_key["exprSources"]
                 ]
@@ -83,10 +83,23 @@ async def get_contexts_from_sql(
 
         def _compose_contexts_of_sorting_type(sortings: list[dict]):
             return [
-                f'{expr_source["sourceDataset"]}.{expr_source["expression"]}'
+                f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
                 for sorting in sortings
                 for expr_source in sorting["exprSources"]
             ]
+
+        def _compose_contexts_of_relation_type(relation: dict):
+            contexts = []
+            if relation["type"] != "TABLE":
+                contexts += [
+                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                    for expr_source in relation["exprSources"]
+                ]
+
+                contexts += _compose_contexts_of_relation_type(relation["left"])
+                contexts += _compose_contexts_of_relation_type(relation["right"])
+
+            return contexts
 
         contexts = []
         for result in sql_analysis_results:
@@ -98,6 +111,8 @@ async def get_contexts_from_sql(
                 contexts += _compose_contexts_of_groupby_type(result["groupByKeys"])
             if "sortings" in result:
                 contexts += _compose_contexts_of_sorting_type(result["sortings"])
+            if "relation" in result:
+                contexts += _compose_contexts_of_relation_type(result["relation"])
 
         return sorted(set(contexts))
 
@@ -119,8 +134,9 @@ async def get_contexts_from_sql(
         ) as response:
             return await response.json()
 
-    contexts = await _get_sql_analysis(sql, mdl_json, api_endpoint, timeout)
-    return _get_contexts_from_sql_analysis_results(contexts)
+    sql_analysis_results = await _get_sql_analysis(sql, mdl_json, api_endpoint, timeout)
+    contexts = _get_contexts_from_sql_analysis_results(sql_analysis_results)
+    return contexts
 
 
 def parse_toml(path: str) -> Dict[str, Any]:
