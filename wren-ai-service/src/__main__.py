@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
+from langfuse.decorators import langfuse_context
 
 import src.globals as container
 from src.utils import init_langfuse, load_env_vars, setup_custom_logger
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # shutdown events
+    langfuse_context.flush()
 
 
 app = FastAPI(lifespan=lifespan, redoc_url=None, default_response_class=ORJSONResponse)
