@@ -26,7 +26,11 @@ class AskRequest(BaseModel):
 
     _query_id: str | None = None
     query: str
-    id: str  # for identifying which collection to access from vectordb, the same hash string for identifying which mdl model deployment from backend
+    # for identifying which collection to access from vectordb,
+    # the same hash string for identifying which mdl model deployment from backend
+    deploy_id: str
+    thread_id: Optional[str] = None
+    project_id: Optional[str] = None
     history: Optional[AskResponseDetails] = None
 
     @property

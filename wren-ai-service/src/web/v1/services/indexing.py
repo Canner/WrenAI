@@ -13,7 +13,8 @@ logger = logging.getLogger("wren-ai-service")
 # POST /v1/semantics-preparations
 class SemanticsPreparationRequest(BaseModel):
     mdl: str
-    id: str
+    deploy_id: str  # deployment id
+    project_id: Optional[str] = None
 
 
 class SemanticsPreparationResponse(BaseModel):
@@ -53,7 +54,7 @@ class IndexingService:
             await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
             self._prepare_semantics_statuses[
-                prepare_semantics_request.id
+                prepare_semantics_request.deploy_id
             ] = SemanticsPreparationStatusResponse(
                 status="finished",
             )
@@ -61,7 +62,7 @@ class IndexingService:
             logger.exception(f"ask pipeline - Failed to prepare semantics: {e}")
 
             self._prepare_semantics_statuses[
-                prepare_semantics_request.id
+                prepare_semantics_request.deploy_id
             ] = SemanticsPreparationStatusResponse(
                 status="failed",
                 error=f"Failed to prepare semantics: {e}",

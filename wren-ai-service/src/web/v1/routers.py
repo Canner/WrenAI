@@ -45,7 +45,7 @@ async def prepare_semantics(
     background_tasks: BackgroundTasks,
 ) -> SemanticsPreparationResponse:
     container.INDEXING_SERVICE._prepare_semantics_statuses[
-        prepare_semantics_request.id
+        prepare_semantics_request.deploy_id
     ] = SemanticsPreparationStatusResponse(
         status="indexing",
     )
@@ -54,7 +54,7 @@ async def prepare_semantics(
         container.INDEXING_SERVICE.prepare_semantics,
         prepare_semantics_request,
     )
-    return SemanticsPreparationResponse(id=prepare_semantics_request.id)
+    return SemanticsPreparationResponse(id=prepare_semantics_request.deploy_id)
 
 
 @router.get("/semantics-preparations/{task_id}/status")
