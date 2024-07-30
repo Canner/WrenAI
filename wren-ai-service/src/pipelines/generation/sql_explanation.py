@@ -197,11 +197,12 @@ def _compose_sql_expression_of_relation_type(
                 {
                     "values": {
                         "type": relation["type"],
-                        "criteria": relation["criteria"],
+                        "criteria": relation["criteria"]["expression"],
                         "exprSources": [
                             {
                                 "expression": expr_source["expression"],
                                 "sourceDataset": expr_source["sourceDataset"],
+                                "sourceColumn": expr_source["sourceColumn"],
                             }
                             for expr_source in relation["exprSources"]
                         ],
@@ -443,12 +444,12 @@ class SQLExplanationGenerationPostProcessor:
                                 },
                             }
                             for select_item, sql_explanation in zip(
-                                preprocessed_sql_analysis_results["selectItems"][
-                                    "withFunctionCallOrMathematicalOperation"
-                                ],
-                                sql_explanation_results["selectItems"][
-                                    "withFunctionCallOrMathematicalOperation"
-                                ],
+                                preprocessed_sql_analysis_results.get(
+                                    "selectItems", {}
+                                ).get("withFunctionCallOrMathematicalOperation", []),
+                                sql_explanation_results.get("selectItems", {}).get(
+                                    "withFunctionCallOrMathematicalOperation", []
+                                ),
                             )
                         ] + [
                             {
@@ -461,12 +462,12 @@ class SQLExplanationGenerationPostProcessor:
                                 },
                             }
                             for select_item, sql_explanation in zip(
-                                preprocessed_sql_analysis_results["selectItems"][
-                                    "withoutFunctionCallOrMathematicalOperation"
-                                ],
-                                sql_explanation_results["selectItems"][
-                                    "withoutFunctionCallOrMathematicalOperation"
-                                ],
+                                preprocessed_sql_analysis_results.get(
+                                    "selectItems", {}
+                                ).get("withoutFunctionCallOrMathematicalOperation", []),
+                                sql_explanation_results.get("selectItems", {}).get(
+                                    "withoutFunctionCallOrMathematicalOperation", []
+                                ),
                             )
                         ]
 
