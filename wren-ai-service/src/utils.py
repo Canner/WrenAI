@@ -155,7 +155,7 @@ def trace_metadata(func):
         func (Callable): the function to decorate
 
     Returns:
-        Any: the result of the decorated function
+        Callable: the decorated function
     """
 
     @functools.wraps(func)
