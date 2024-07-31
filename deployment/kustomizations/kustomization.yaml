@@ -37,7 +37,7 @@ helmCharts:
 
 images:
   - name: ghcr.io/canner/wren-bootstrap
-    newTag: 0.1.4 # WREN_BOOTSTRAP_VERSION
+    newTag: 0.1.5 # WREN_BOOTSTRAP_VERSION
   - name: ghcr.io/canner/wren-engine
     newTag: 0.7.0 # WREN_ENGINE_VERSION
   - name: ghcr.io/canner/wren-ui
