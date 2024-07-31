@@ -88,11 +88,14 @@ class SQLExplanationService:
             async def _task(
                 question: str,
                 cte_names: List[str],
+                selected_data_sources: List[List[dict]],
                 step_with_analysis_results: StepWithAnalysisResults,
+                i: int,
             ):
                 return await self._pipelines["sql_explanation"].run(
                     question=question,
                     cte_names=cte_names,
+                    selected_data_sources=selected_data_sources[:i],
                     step_with_analysis_results=step_with_analysis_results,
                 )
 
@@ -100,13 +103,26 @@ class SQLExplanationService:
                 step_with_analysis_results.cte_name
                 for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
             ]
+            selected_data_sources = [
+                [
+                    select_item["exprSources"][0]
+                    for analysis_result in step_with_analysis_results.sql_analysis_results
+                    for select_item in analysis_result.get("selectItems", [])
+                    if select_item.get("exprSources", [])
+                ]
+                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+            ]
             tasks = [
                 _task(
                     sql_explanation_request.question,
                     cte_names,
+                    selected_data_sources,
                     step_with_analysis_results,
+                    i,
                 )
-                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+                for i, step_with_analysis_results in enumerate(
+                    sql_explanation_request.steps_with_analysis_results
+                )
             ]
             generation_results = await asyncio.gather(*tasks)
 
