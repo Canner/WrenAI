@@ -2,7 +2,7 @@ import logging
 from typing import Literal, Optional
 
 from langfuse.decorators import observe
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
@@ -13,7 +13,9 @@ logger = logging.getLogger("wren-ai-service")
 # POST /v1/semantics-preparations
 class SemanticsPreparationRequest(BaseModel):
     mdl: str
-    deploy_id: str = Field(alias="id")
+    # don't recommend to use id as a field name, but it's used in the API spec
+    # so we need to support as a choice, and will remove it in the future
+    deploy_id: str = Field(validation_alias=AliasChoices("deploy_id", "id"))
     project_id: Optional[str] = None
 
 

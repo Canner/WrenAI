@@ -3,7 +3,7 @@ from typing import List, Literal, Optional
 
 import sqlparse
 from langfuse.decorators import observe
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
@@ -28,7 +28,9 @@ class AskRequest(BaseModel):
     query: str
     # for identifying which collection to access from vectordb,
     # the same hash string for identifying which mdl model deployment from backend
-    deploy_id: Optional[str] = Field(alias="id")
+    # don't recommend to use id as a field name, but it's used in the API spec
+    # so we need to support as a choice, and will remove it in the future
+    deploy_id: Optional[str] = Field(validation_alias=AliasChoices("deploy_id", "id"))
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
     history: Optional[AskResponseDetails] = None
