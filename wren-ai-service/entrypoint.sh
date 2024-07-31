@@ -6,7 +6,7 @@ uvicorn src.__main__:app --host 0.0.0.0 --port $WREN_AI_SERVICE_PORT --loop uvlo
 
 # Wait for wren-ui to be responsive
 echo "Waiting for wren-ui to start..."
-while nc -z -w 5 host.docker.internal $WREN_UI_PORT; do   
+while ! nc -z -w 5 host.docker.internal $WREN_UI_PORT; do   
     sleep 1  # wait for 1 second before check again
 done
 
