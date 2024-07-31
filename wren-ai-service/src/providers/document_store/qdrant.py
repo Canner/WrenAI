@@ -114,7 +114,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             grpc_port=grpc_port,
             prefer_grpc=prefer_grpc,
             https=https,
-            api_key=api_key.resolve_value() if api_key else None,
+            api_key=api_key,
             prefix=prefix,
             timeout=timeout,
             host=host,
@@ -321,8 +321,15 @@ class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
 
 @provider("qdrant")
 class QdrantProvider(DocumentStoreProvider):
-    def __init__(self, location: str = os.getenv("QDRANT_HOST", "qdrant")):
+    def __init__(
+        self,
+        location: str = os.getenv("QDRANT_HOST", "qdrant"),
+        api_key: Optional[Secret] = Secret.from_env_var("QDRANT_API_KEY")
+        if os.getenv("QDRANT_API_KEY")
+        else None,
+    ):
         self._location = location
+        self._api_key = api_key
 
     def get_store(
         self,
@@ -343,6 +350,7 @@ class QdrantProvider(DocumentStoreProvider):
 
         return AsyncQdrantDocumentStore(
             location=self._location,
+            api_key=self._api_key,
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,
