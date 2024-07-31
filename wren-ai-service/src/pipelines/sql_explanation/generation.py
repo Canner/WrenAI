@@ -135,36 +135,57 @@ def _compose_sql_expression_of_relation_type(
     return results
 
 
-def _compose_sql_expression_of_select_type(select_items: List[Dict]) -> Dict:
+def _compose_sql_expression_of_select_type(
+    select_items: List[Dict], selected_data_sources: List[List[Dict]]
+) -> Dict:
+    def _is_select_item_existed_in_selected_data_sources(
+        select_item, selected_data_sources
+    ):
+        for selected_data_source in selected_data_sources:
+            for data_source in selected_data_source:
+                if (
+                    "exprSources" in select_item
+                    and select_item["exprSources"]
+                    and select_item["exprSources"][0]["sourceDataset"]
+                    == data_source["sourceDataset"]
+                    and select_item["exprSources"][0]["sourceColumn"]
+                    == data_source["sourceColumn"]
+                ):
+                    return True
+        return False
+
     result = {
         "withFunctionCallOrMathematicalOperation": [],
         "withoutFunctionCallOrMathematicalOperation": [],
     }
 
     for select_item in select_items:
-        if (
-            select_item["properties"]["includeFunctionCall"] == "true"
-            or select_item["properties"]["includeMathematicalOperation"] == "true"
+        if not _is_select_item_existed_in_selected_data_sources(
+            select_item, selected_data_sources
         ):
-            result["withFunctionCallOrMathematicalOperation"].append(
-                {
-                    "values": {
-                        "alias": select_item["alias"],
-                        "expression": select_item["expression"],
-                    },
-                    "id": select_item.get("id", ""),
-                }
-            )
-        else:
-            result["withoutFunctionCallOrMathematicalOperation"].append(
-                {
-                    "values": {
-                        "alias": select_item["alias"],
-                        "expression": select_item["expression"],
-                    },
-                    "id": select_item.get("id", ""),
-                }
-            )
+            if (
+                select_item["properties"]["includeFunctionCall"] == "true"
+                or select_item["properties"]["includeMathematicalOperation"] == "true"
+            ):
+                result["withFunctionCallOrMathematicalOperation"].append(
+                    {
+                        "values": {
+                            "alias": select_item["alias"],
+                            "expression": select_item["expression"],
+                        },
+                        "id": select_item.get("id", ""),
+                    }
+                )
+            else:
+                result["withoutFunctionCallOrMathematicalOperation"].append(
+                    {
+                        "values": {
+                            "alias": select_item["alias"],
+                            "expression": select_item["expression"],
+                        },
+                        "id": select_item.get("id", ""),
+                    }
+                )
 
     return result
 
@@ -210,6 +231,7 @@ class SQLAnalysisPreprocessor:
     def run(
         self,
         cte_names: List[str],
+        selected_data_sources: List[List[Dict]],
         sql_analysis_results: List[Dict],
     ) -> Dict[str, List[Dict]]:
         preprocessed_sql_analysis_results = []
@@ -245,7 +267,7 @@ class SQLAnalysisPreprocessor:
                     preprocessed_sql_analysis_result[
                         "selectItems"
                     ] = _compose_sql_expression_of_select_type(
-                        sql_analysis_result["selectItems"]
+                        sql_analysis_result["selectItems"], selected_data_sources
                     )
                 else:
                     preprocessed_sql_analysis_result["selectItems"] = {
@@ -419,6 +441,7 @@ class GenerationPostProcessor:
 @timer
 @observe(capture_input=False)
 def preprocess(
+    selected_data_sources: List[List[dict]],
     sql_analysis_results: List[dict],
     cte_names: List[str],
     pre_processor: SQLAnalysisPreprocessor,
@@ -426,7 +449,7 @@ def preprocess(
     logger.debug(
         f"sql_analysis_results: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return pre_processor.run(cte_names, sql_analysis_results)
+    return pre_processor.run(cte_names, selected_data_sources, sql_analysis_results)
 
 
 @timer
@@ -561,6 +584,7 @@ class Generation(BasicPipeline):
         self,
         question: str,
         cte_names: List[str],
+        selected_data_sources: List[List[dict]],
         step_with_analysis_results: StepWithAnalysisResults,
     ) -> None:
         destination = "outputs/pipelines/sql_explanation"
@@ -573,6 +597,7 @@ class Generation(BasicPipeline):
             inputs={
                 "question": question,
                 "cte_names": cte_names,
+                "selected_data_sources": selected_data_sources,
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
@@ -591,6 +616,7 @@ class Generation(BasicPipeline):
         self,
         question: str,
         cte_names: List[str],
+        selected_data_sources: List[List[dict]],
         step_with_analysis_results: StepWithAnalysisResults,
     ):
         logger.info("SQL Explanation Generation pipeline is running...")
@@ -600,6 +626,7 @@ class Generation(BasicPipeline):
             inputs={
                 "question": question,
                 "cte_names": cte_names,
+                "selected_data_sources": selected_data_sources,
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
