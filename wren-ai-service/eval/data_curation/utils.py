@@ -3,7 +3,6 @@ import base64
 import os
 import sys
 import uuid
-from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -216,7 +215,7 @@ def get_documents_given_contexts(
 
         return new_mdl_jsons
 
-    new_mdl_jsons = _build_partial_mdl_json(contexts_list, deepcopy(mdl_json))
+    new_mdl_jsons = _build_partial_mdl_json(contexts_list, mdl_json)
 
     return [
         [
