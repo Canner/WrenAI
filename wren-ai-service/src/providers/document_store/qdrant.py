@@ -187,6 +187,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             search_params=rest.SearchParams(
                 quantization=rest.QuantizationSearchParams(
                     rescore=True,
+                    oversampling=3.0,
                 ),
             ),
             query_filter=qdrant_filters,
@@ -354,6 +355,7 @@ class QdrantProvider(DocumentStoreProvider):
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,
+            on_disk=True,
             quantization_config=rest.BinaryQuantization(
                 binary=rest.BinaryQuantizationConfig(
                     always_ram=True,
