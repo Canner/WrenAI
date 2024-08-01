@@ -184,11 +184,15 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                 name=DENSE_VECTORS_NAME if self.use_sparse_embeddings else "",
                 vector=query_embedding,
             ),
-            search_params=rest.SearchParams(
-                quantization=rest.QuantizationSearchParams(
-                    rescore=True,
-                    oversampling=3.0,
-                ),
+            search_params=(
+                rest.SearchParams(
+                    quantization=rest.QuantizationSearchParams(
+                        rescore=True,
+                        oversampling=3.0,
+                    ),
+                )
+                if len(query_embedding) >= 1024
+                else None
             ),
             query_filter=qdrant_filters,
             limit=top_k,
@@ -356,10 +360,14 @@ class QdrantProvider(DocumentStoreProvider):
             index=dataset_name or "Document",
             recreate_index=recreate_index,
             on_disk=True,
-            quantization_config=rest.BinaryQuantization(
-                binary=rest.BinaryQuantizationConfig(
-                    always_ram=True,
+            quantization_config=(
+                rest.BinaryQuantization(
+                    binary=rest.BinaryQuantizationConfig(
+                        always_ram=True,
+                    )
                 )
+                if embedding_model_dim >= 1024
+                else None
             ),
             # to improve the indexing performance, we disable building global index for the whole collection
             # see https://qdrant.tech/documentation/guides/multiple-partitions/?q=mul#calibrate-performance
