@@ -93,6 +93,7 @@ class AskDetailsService:
 
             generation_result = await self._pipelines["generation"].run(
                 sql=ask_details_request.sql,
+                project_id=ask_details_request.project_id,
             )
 
             ask_details_result = generation_result["post_process"]["results"]

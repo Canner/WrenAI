@@ -27,10 +27,10 @@ class AskRequest(BaseModel):
     _query_id: str | None = None
     query: str
     # for identifying which collection to access from vectordb
-    # don't recommend to use id as a field name, but it's used in the API spec
+    project_id: Optional[str] = None
+    # don't recommend to use id as a field name, but it's used in the older version of API spec
     # so we need to support as a choice, and will remove it in the future
-    project_id: Optional[str] = Field(validation_alias=AliasChoices("project_id", "id"))
-    mdl_hash: Optional[str] = None
+    mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
     history: Optional[AskResponseDetails] = None
 
@@ -171,6 +171,7 @@ class AskService:
                         query=ask_request.query,
                         contexts=documents,
                         history=ask_request.history,
+                        project_id=ask_request.project_id,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -179,6 +180,7 @@ class AskService:
                         query=ask_request.query,
                         contexts=documents,
                         exclude=historical_question_result,
+                        project_id=ask_request.project_id,
                     )
 
                 valid_generation_results = []
@@ -207,6 +209,7 @@ class AskService:
                         invalid_generation_results=text_to_sql_generation_results[
                             "post_process"
                         ]["invalid_generation_results"],
+                        project_id=ask_request.project_id,
                     )
                     valid_generation_results += sql_correction_results["post_process"][
                         "valid_generation_results"

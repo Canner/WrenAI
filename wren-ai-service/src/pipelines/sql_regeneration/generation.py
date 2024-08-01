@@ -95,12 +95,14 @@ async def sql_regeneration_generate(
 async def sql_regeneration_post_process(
     sql_regeneration_generate: dict,
     sql_regeneration_post_processor: GenerationPostProcessor,
+    project_id: str | None = None,
 ) -> dict:
     logger.debug(
         f"sql_regeneration_generate: {orjson.dumps(sql_regeneration_generate, option=orjson.OPT_INDENT_2).decode()}"
     )
     return await sql_regeneration_post_processor.run(
         replies=sql_regeneration_generate.get("replies"),
+        project_id=project_id,
     )
 
 
@@ -156,6 +158,7 @@ class Generation(BasicPipeline):
         self,
         description: str,
         steps: List[SQLExplanationWithUserCorrections],
+        project_id: str | None = None,
     ):
         logger.info("SQL Regeneration Generation pipeline is running...")
         return await self._pipe.execute(
@@ -167,6 +170,7 @@ class Generation(BasicPipeline):
                 "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
                 "sql_regeneration_generator": self.sql_regeneration_generator,
                 "sql_regeneration_post_processor": self.sql_regeneration_post_processor,
+                "project_id": project_id,
             },
         )
 

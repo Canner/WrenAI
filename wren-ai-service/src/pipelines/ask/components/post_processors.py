@@ -24,7 +24,11 @@ class GenerationPostProcessor:
         valid_generation_results=List[Optional[Dict[str, Any]]],
         invalid_generation_results=List[Optional[Dict[str, Any]]],
     )
-    async def run(self, replies: List[str]):
+    async def run(
+        self,
+        replies: List[str],
+        project_id: str | None = None,
+    ) -> dict:
         try:
             cleaned_generation_result = orjson.loads(
                 clean_generation_result(replies[0])
@@ -37,7 +41,7 @@ class GenerationPostProcessor:
                 valid_generation_results,
                 invalid_generation_results,
             ) = await self._classify_invalid_generation_results(
-                cleaned_generation_result
+                cleaned_generation_result, project_id=project_id
             )
 
             return {
@@ -53,8 +57,7 @@ class GenerationPostProcessor:
             }
 
     async def _classify_invalid_generation_results(
-        self,
-        generation_results: List[Dict[str, str]],
+        self, generation_results: List[Dict[str, str]], project_id: str | None = None
     ) -> List[Optional[Dict[str, str]]]:
         valid_generation_results = []
         invalid_generation_results = []
@@ -62,7 +65,9 @@ class GenerationPostProcessor:
         async def _task(result: Dict[str, str]):
             quoted_sql = add_quotes(result["sql"])
 
-            status, error = await self._engine.dry_run_sql(quoted_sql, session)
+            status, error = await self._engine.dry_run_sql(
+                quoted_sql, session, project_id=project_id
+            )
 
             if status:
                 valid_generation_results.append(
