@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "wren-ai-service/**"
+      - ".github/workflows/pull-request-title-validator.yaml"
+      - ".github/workflows/ai-service-*.yaml"
     types: [opened, edited, synchronize]
 
 permissions:
