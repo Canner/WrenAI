@@ -269,17 +269,6 @@ files = [
 ]
 
 [[package]]
-name = "boilerpy3"
-version = "1.0.7"
-description = "Python port of Boilerpipe, for HTML boilerplate removal and text extraction"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "boilerpy3-1.0.7-py3-none-any.whl", hash = "sha256:fbfba91745606965400204d26852283ddf90235ab30afe9904de20051556a523"},
-    {file = "boilerpy3-1.0.7.tar.gz", hash = "sha256:a9fede212f80a36dbc7d4f93e35d8636911cb6b37085a3230557d16ad0f076c8"},
-]
-
-[[package]]
 name = "brotli"
 version = "1.1.0"
 description = "Python bindings for the Brotli compression library"
@@ -1554,46 +1543,45 @@ hyperframe = ">=6.0,<7"
 
 [[package]]
 name = "haystack-ai"
-version = "2.1.2"
+version = "2.3.1"
 description = "LLM framework to build customizable, production-ready LLM applications. Connect components (models, vector DBs, file converters) to pipelines or agents that can interact with your data."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "haystack_ai-2.1.2-py3-none-any.whl", hash = "sha256:353db1a4fbc3558b122533211dc918acf80c7f8649e6c0d74129955b26f72f93"},
-    {file = "haystack_ai-2.1.2.tar.gz", hash = "sha256:0d67b924c60c34df37fc491453e715e60b577e5298b3161453251621b22d1619"},
+    {file = "haystack_ai-2.3.1-py3-none-any.whl", hash = "sha256:578414a2e2bf28d9fb94f743ca6b1a3e70e18dbfca091e3658eaaefaab8c46e5"},
+    {file = "haystack_ai-2.3.1.tar.gz", hash = "sha256:058f61afc7671d4c336ee25dd5ffcc80acffa09ba9c4283a939e971d49b99785"},
 ]
 
 [package.dependencies]
-boilerpy3 = "*"
-haystack-bm25 = "*"
+haystack-experimental = "*"
 jinja2 = "*"
 lazy-imports = "*"
 more-itertools = "*"
 networkx = "*"
-numpy = "*"
+numpy = "<2"
 openai = ">=1.1.0"
 pandas = "*"
 posthog = "*"
 python-dateutil = "*"
 pyyaml = "*"
 requests = "*"
-tenacity = "*"
+tenacity = "!=8.4.0"
 tqdm = "*"
 typing-extensions = ">=4.7"
 
 [[package]]
-name = "haystack-bm25"
-version = "1.0.2"
-description = "Various BM25 algorithms for document ranking"
+name = "haystack-experimental"
+version = "0.1.1"
+description = "Experimental components and features for the Haystack LLM framework."
 optional = false
-python-versions = "*"
+python-versions = ">=3.8"
 files = [
-    {file = "haystack_bm25-1.0.2-py2.py3-none-any.whl", hash = "sha256:64c159a87133351cd73715297fda73b9f88bdcfdaaad668e020d3c6b5582827a"},
-    {file = "haystack_bm25-1.0.2.tar.gz", hash = "sha256:57741c85203739d05e14de1a2c7657a675000a22dc7bd25f009eb9e0875ace2a"},
+    {file = "haystack_experimental-0.1.1-py3-none-any.whl", hash = "sha256:c11fa89c0754dafd3ec25220c02e459d784acda7a9c047e3297e1b11f35ebb06"},
+    {file = "haystack_experimental-0.1.1.tar.gz", hash = "sha256:64cc58d54b9cf9a2957616e4cb44a10c12e36ab640ebe0c38e7cc70300cb6726"},
 ]
 
 [package.dependencies]
-numpy = "*"
+haystack-ai = "*"
 
 [[package]]
 name = "hpack"
@@ -1936,13 +1924,13 @@ tenacity = ">=8.1.0,<8.4.0 || >8.4.0,<9.0.0"
 
 [[package]]
 name = "langchain-core"
-version = "0.2.25"
+version = "0.2.26"
 description = "Building applications with LLMs through composability"
 optional = false
 python-versions = "<4.0,>=3.8.1"
 files = [
-    {file = "langchain_core-0.2.25-py3-none-any.whl", hash = "sha256:03d61b2a7f4b5f98df248c1b1f0ccd95c9d5ef2269e174133724365cd2a7ee1e"},
-    {file = "langchain_core-0.2.25.tar.gz", hash = "sha256:e64106a7d0e37e4d35b767f79e6c62b56e825f08f9e8cc4368bcea9955257a7e"},
+    {file = "langchain_core-0.2.26-py3-none-any.whl", hash = "sha256:ab7bc58d8037349d06ad8c3eee2ea776e26af7f57cce330eecbed5b98e1c4d56"},
+    {file = "langchain_core-0.2.26.tar.gz", hash = "sha256:20c7792eb6c256dc50892d41f07f7fd8e12e5868dbb059fa316a278977bdf4f6"},
 ]
 
 [package.dependencies]
@@ -1955,6 +1943,7 @@ pydantic = [
 ]
 PyYAML = ">=5.3"
 tenacity = ">=8.1.0,<8.4.0 || >8.4.0,<9.0.0"
+typing-extensions = ">=4.7"
 
 [[package]]
 name = "langchain-openai"
@@ -2012,13 +2001,13 @@ openai = ["openai (>=0.27.8)"]
 
 [[package]]
 name = "langsmith"
-version = "0.1.94"
+version = "0.1.95"
 description = "Client library to connect to the LangSmith LLM Tracing and Evaluation Platform."
 optional = false
 python-versions = "<4.0,>=3.8.1"
 files = [
-    {file = "langsmith-0.1.94-py3-none-any.whl", hash = "sha256:0d01212086d58699f75814117b026784218042f7859877ce08a248a98d84aa8d"},
-    {file = "langsmith-0.1.94.tar.gz", hash = "sha256:e44afcdc9eee6f238f6a87a02bba83111bd5fad376d881ae299834e06d39d712"},
+    {file = "langsmith-0.1.95-py3-none-any.whl", hash = "sha256:7f490af411597f87af7893b0a42519c442d6ca2517483344c4f55ccdc3136dde"},
+    {file = "langsmith-0.1.95.tar.gz", hash = "sha256:2dc987a640939c0eccb41b7acc31216a7c9b38e1deb62079d1ecaed0897eea67"},
 ]
 
 [package.dependencies]
@@ -4066,13 +4055,13 @@ files = [
 
 [[package]]
 name = "sentry-sdk"
-version = "2.11.0"
+version = "2.12.0"
 description = "Python client for Sentry (https://sentry.io)"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "sentry_sdk-2.11.0-py2.py3-none-any.whl", hash = "sha256:d964710e2dbe015d9dc4ff0ad16225d68c3b36936b742a6fe0504565b760a3b7"},
-    {file = "sentry_sdk-2.11.0.tar.gz", hash = "sha256:4ca16e9f5c7c6bc2fb2d5c956219f4926b148e511fffdbbde711dc94f1e0468f"},
+    {file = "sentry_sdk-2.12.0-py2.py3-none-any.whl", hash = "sha256:7a8d5163d2ba5c5f4464628c6b68f85e86972f7c636acc78aed45c61b98b7a5e"},
+    {file = "sentry_sdk-2.12.0.tar.gz", hash = "sha256:8763840497b817d44c49b3fe3f5f7388d083f2337ffedf008b2cdb63b5c86dc6"},
 ]
 
 [package.dependencies]
@@ -4102,7 +4091,7 @@ langchain = ["langchain (>=0.0.210)"]
 loguru = ["loguru (>=0.5)"]
 openai = ["openai (>=1.0.0)", "tiktoken (>=0.3.0)"]
 opentelemetry = ["opentelemetry-distro (>=0.35b0)"]
-opentelemetry-experimental = ["opentelemetry-instrumentation-aio-pika (==0.46b0)", "opentelemetry-instrumentation-aiohttp-client (==0.46b0)", "opentelemetry-instrumentation-aiopg (==0.46b0)", "opentelemetry-instrumentation-asgi (==0.46b0)", "opentelemetry-instrumentation-asyncio (==0.46b0)", "opentelemetry-instrumentation-asyncpg (==0.46b0)", "opentelemetry-instrumentation-aws-lambda (==0.46b0)", "opentelemetry-instrumentation-boto (==0.46b0)", "opentelemetry-instrumentation-boto3sqs (==0.46b0)", "opentelemetry-instrumentation-botocore (==0.46b0)", "opentelemetry-instrumentation-cassandra (==0.46b0)", "opentelemetry-instrumentation-celery (==0.46b0)", "opentelemetry-instrumentation-confluent-kafka (==0.46b0)", "opentelemetry-instrumentation-dbapi (==0.46b0)", "opentelemetry-instrumentation-django (==0.46b0)", "opentelemetry-instrumentation-elasticsearch (==0.46b0)", "opentelemetry-instrumentation-falcon (==0.46b0)", "opentelemetry-instrumentation-fastapi (==0.46b0)", "opentelemetry-instrumentation-flask (==0.46b0)", "opentelemetry-instrumentation-grpc (==0.46b0)", "opentelemetry-instrumentation-httpx (==0.46b0)", "opentelemetry-instrumentation-jinja2 (==0.46b0)", "opentelemetry-instrumentation-kafka-python (==0.46b0)", "opentelemetry-instrumentation-logging (==0.46b0)", "opentelemetry-instrumentation-mysql (==0.46b0)", "opentelemetry-instrumentation-mysqlclient (==0.46b0)", "opentelemetry-instrumentation-pika (==0.46b0)", "opentelemetry-instrumentation-psycopg (==0.46b0)", "opentelemetry-instrumentation-psycopg2 (==0.46b0)", "opentelemetry-instrumentation-pymemcache (==0.46b0)", "opentelemetry-instrumentation-pymongo (==0.46b0)", "opentelemetry-instrumentation-pymysql (==0.46b0)", "opentelemetry-instrumentation-pyramid (==0.46b0)", "opentelemetry-instrumentation-redis (==0.46b0)", "opentelemetry-instrumentation-remoulade (==0.46b0)", "opentelemetry-instrumentation-requests (==0.46b0)", "opentelemetry-instrumentation-sklearn (==0.46b0)", "opentelemetry-instrumentation-sqlalchemy (==0.46b0)", "opentelemetry-instrumentation-sqlite3 (==0.46b0)", "opentelemetry-instrumentation-starlette (==0.46b0)", "opentelemetry-instrumentation-system-metrics (==0.46b0)", "opentelemetry-instrumentation-threading (==0.46b0)", "opentelemetry-instrumentation-tornado (==0.46b0)", "opentelemetry-instrumentation-tortoiseorm (==0.46b0)", "opentelemetry-instrumentation-urllib (==0.46b0)", "opentelemetry-instrumentation-urllib3 (==0.46b0)", "opentelemetry-instrumentation-wsgi (==0.46b0)"]
+opentelemetry-experimental = ["opentelemetry-distro"]
 pure-eval = ["asttokens", "executing", "pure-eval"]
 pymongo = ["pymongo (>=3.1)"]
 pyspark = ["pyspark (>=2.4.4)"]
@@ -5335,4 +5324,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12.*, <4.0"
-content-hash = "0ebb135292945f882da42f96a8c81d04020bd0389c66d016515efeca4c639bfe"
+content-hash = "5baea9bfd55f2ca6a2367b88983ca172331f2e1d03a9720a7c0c3e74ad061d29"
