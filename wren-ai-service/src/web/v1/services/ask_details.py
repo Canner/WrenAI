@@ -23,7 +23,7 @@ class AskDetailsRequest(BaseModel):
     query: str
     sql: str
     summary: str
-    deploy_id: Optional[str] = None
+    mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
 

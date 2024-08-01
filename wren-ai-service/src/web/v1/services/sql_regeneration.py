@@ -38,6 +38,9 @@ class SQLRegenerationRequest(BaseModel):
     _query_id: str | None = None
     description: str
     steps: List[SQLExplanationWithUserCorrections]
+    mdl_hash: Optional[str] = None
+    thread_id: Optional[str] = None
+    project_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:

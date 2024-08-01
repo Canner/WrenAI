@@ -167,8 +167,8 @@ def trace_metadata(func):
             metadata["project_id"] = request.project_id
         if hasattr(request, "thread_id"):
             metadata["thread_id"] = request.thread_id
-        if hasattr(request, "deploy_id"):
-            metadata["deploy_id"] = request.deploy_id
+        if hasattr(request, "mdl_hash"):
+            metadata["mdl_hash"] = request.mdl_hash
 
         return metadata
 
@@ -181,7 +181,7 @@ def trace_metadata(func):
             release=SERVICE_VERSION,
             metadata={
                 **MODELS_METADATA,
-                "mdl_deployment_id": metadata.get("deploy_id"),
+                "mdl_hash": metadata.get("mdl_hash"),
             },
         )
 

@@ -80,7 +80,7 @@ async def test_ask_with_successful_query(
     await indexing_service.prepare_semantics(
         SemanticsPreparationRequest(
             mdl=mdl_str,
-            deploy_id=id,
+            mdl_hash=id,
         )
     )
 
@@ -88,7 +88,7 @@ async def test_ask_with_successful_query(
     query_id = str(uuid.uuid4())
     ask_request = AskRequest(
         query="How many books are there?",
-        deploy_id=id,
+        project_id=id,
     )
     ask_request.query_id = query_id
     await ask_service.ask(ask_request)

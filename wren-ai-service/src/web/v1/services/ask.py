@@ -26,13 +26,12 @@ class AskRequest(BaseModel):
 
     _query_id: str | None = None
     query: str
-    # for identifying which collection to access from vectordb,
-    # the same hash string for identifying which mdl model deployment from backend
+    # for identifying which collection to access from vectordb
     # don't recommend to use id as a field name, but it's used in the API spec
     # so we need to support as a choice, and will remove it in the future
-    deploy_id: Optional[str] = Field(validation_alias=AliasChoices("deploy_id", "id"))
+    project_id: Optional[str] = Field(validation_alias=AliasChoices("project_id", "id"))
+    mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
-    project_id: Optional[str] = None
     history: Optional[AskResponseDetails] = None
 
     @property

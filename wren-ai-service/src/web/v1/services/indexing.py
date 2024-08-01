@@ -15,17 +15,21 @@ class SemanticsPreparationRequest(BaseModel):
     mdl: str
     # don't recommend to use id as a field name, but it's used in the API spec
     # so we need to support as a choice, and will remove it in the future
-    deploy_id: str = Field(validation_alias=AliasChoices("deploy_id", "id"))
+    mdl_hash: str = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     project_id: Optional[str] = None
 
 
 class SemanticsPreparationResponse(BaseModel):
-    id: str
+    # don't recommend to use id as a field name, but it's used in the API spec
+    # so we need to support as a choice, and will remove it in the future
+    mdl_hash: str = Field(serialization_alias="id")
 
 
-# GET /v1/semantics-preparations/{task_id}/status
+# GET /v1/semantics-preparations/{mdl_hash}/status
 class SemanticsPreparationStatusRequest(BaseModel):
-    id: str
+    # don't recommend to use id as a field name, but it's used in the API spec
+    # so we need to support as a choice, and will remove it in the future
+    mdl_hash: str = Field(validation_alias=AliasChoices("mdl_hash", "id"))
 
 
 class SemanticsPreparationStatusResponse(BaseModel):
@@ -56,7 +60,7 @@ class IndexingService:
             await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
 
             self._prepare_semantics_statuses[
-                prepare_semantics_request.deploy_id
+                prepare_semantics_request.mdl_hash
             ] = SemanticsPreparationStatusResponse(
                 status="finished",
             )
@@ -64,7 +68,7 @@ class IndexingService:
             logger.exception(f"ask pipeline - Failed to prepare semantics: {e}")
 
             self._prepare_semantics_statuses[
-                prepare_semantics_request.deploy_id
+                prepare_semantics_request.mdl_hash
             ] = SemanticsPreparationStatusResponse(
                 status="failed",
                 error=f"Failed to prepare semantics: {e}",
@@ -75,11 +79,11 @@ class IndexingService:
     ) -> SemanticsPreparationStatusResponse:
         if (
             result := self._prepare_semantics_statuses.get(
-                prepare_semantics_status_request.id
+                prepare_semantics_status_request.mdl_hash
             )
         ) is None:
             logger.exception(
-                f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.id}"
+                f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.mdl_hash}"
             )
             return SemanticsPreparationStatusResponse(
                 status="failed",
