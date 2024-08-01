@@ -54,6 +54,7 @@ requests = "==2.32.2"
 
 [tool.poetry.group.test.dependencies]
 aioresponses = "==0.7.6"
+pytest-mock = "==3.14.0"
 
 [build-system]
 requires = ["poetry-core"]

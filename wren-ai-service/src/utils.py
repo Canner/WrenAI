@@ -198,6 +198,7 @@ def service_metadata(
     llm_provider: LLMProvider,
     embedder_provider: EmbedderProvider,
     *_,
+    pyproject_path: str = "pyproject.toml",
 ):
     global MODELS_METADATA, SERVICE_VERSION
 
@@ -209,7 +210,7 @@ def service_metadata(
     }
 
     def get_version_from_pyproject() -> str:
-        with open("pyproject.toml", "r") as f:
+        with open(pyproject_path, "r") as f:
             pyproject = toml.load(f)
             return pyproject["tool"]["poetry"]["version"]
 
