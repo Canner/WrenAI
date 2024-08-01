@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from pytest_mock import MockFixture
@@ -43,3 +44,24 @@ def test_service_metadata(mocker: MockFixture):
     }
 
     assert utils.SERVICE_VERSION == "0.8.0-mock"
+
+
+def test_trace_metadata(mocker: MockFixture):
+    metadata = mocker.patch("src.utils.MODELS_METADATA", {"mdl_hash": None})
+    version = mocker.patch("src.utils.SERVICE_VERSION", "0.8.0-mock")
+    function = mocker.patch(
+        "src.utils.langfuse_context.update_current_trace", return_value=None
+    )
+
+    @utils.trace_metadata
+    async def my_function(a: str, b: str):
+        return "Hello, World!"
+
+    asyncio.run(my_function("Hello", "World!"))
+
+    function.assert_called_once_with(
+        user_id=None,
+        session_id=None,
+        release=version,
+        metadata=metadata,
+    )
