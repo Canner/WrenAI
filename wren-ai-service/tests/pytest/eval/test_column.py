@@ -52,8 +52,8 @@ def _success_analysis_sql(m, engine_config, repeat=1):
                     "selectItems": [
                         {
                             "exprSources": [
-                                {"sourceDataset": "t", "expression": "foo"},
-                                {"sourceDataset": "t", "expression": "boo"},
+                                {"sourceDataset": "t", "sourceColumn": "foo"},
+                                {"sourceDataset": "t", "sourceColumn": "boo"},
                             ]
                         }
                     ]
