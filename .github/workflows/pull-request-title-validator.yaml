@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: validate pull request title
-        uses: kontrolplane/pull-request-title-validator@v1.3.0
+        uses: kontrolplane/pull-request-title-validator@v1.3.1
         with:
           types: "fix,feat,chore"
-          scopes: "wren-ai-service,wren-ui"
+          scopes: "wren-ai-service"
