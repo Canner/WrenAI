@@ -295,6 +295,7 @@ def show_asks_details_results(query: str):
 
             sqls_with_cte = []
             sqls = []
+            cte_names = []
             summaries = []
             for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
                 st.markdown(f"#### Step {i + 1}")
@@ -305,6 +306,7 @@ def show_asks_details_results(query: str):
                     sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
                 sql += step["sql"]
                 sqls.append(sql)
+                cte_names.append(step["cte_name"])
                 summaries.append(step["summary"])
 
                 st.code(
@@ -367,7 +369,7 @@ def show_asks_details_results(query: str):
             label="SQL Explanation",
             key="sql_explanation_btn",
             on_click=on_click_sql_explanation_button,
-            args=[query, sqls, summaries, st.session_state["mdl_json"]],
+            args=[query, sqls, cte_names, summaries, st.session_state["mdl_json"]],
             use_container_width=True,
         )
 
@@ -433,6 +435,7 @@ def get_sql_analysis_results(sqls: List[str], manifest: Dict):
 def on_click_sql_explanation_button(
     question: str,
     sqls: List[str],
+    cte_names: List[str],
     summaries: List[str],
     manifest: Dict,
 ):
@@ -441,9 +444,14 @@ def on_click_sql_explanation_button(
     st.session_state["sql_explanation_question"] = question
     st.session_state["sql_analysis_results"] = sql_analysis_results
     st.session_state["sql_explanation_steps_with_analysis"] = [
-        {"sql": sql, "summary": summary, "sql_analysis_results": sql_analysis_results}
-        for sql, summary, sql_analysis_results in zip(
-            sqls, summaries, sql_analysis_results
+        {
+            "sql": sql,
+            "summary": summary,
+            "cte_name": cte_name,
+            "sql_analysis_results": sql_analysis_results,
+        }
+        for sql, summary, cte_name, sql_analysis_results in zip(
+            sqls, summaries, cte_names, sql_analysis_results
         )
     ]
 
