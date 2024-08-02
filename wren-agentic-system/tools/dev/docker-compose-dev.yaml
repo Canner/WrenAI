@@ -1,0 +1,81 @@
+version: "3.8"
+
+volumes:
+  data:
+
+networks:
+  wren:
+    driver: bridge
+
+services:
+  engine:
+    image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    ports:
+      - ${WREN_ENGINE_SQL_PORT}:${WREN_ENGINE_SQL_PORT}
+      - ${WREN_ENGINE_PORT}:${WREN_ENGINE_PORT}
+    volumes:
+      - ./etc:/usr/src/app/etc
+    networks:
+      - wren
+
+  ibis:
+    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    ports:
+      - ${IBIS_SERVER_PORT}:${IBIS_SERVER_PORT}
+    environment:
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT}
+      LOG_LEVEL: DEBUG
+    networks:
+      - wren
+
+  qdrant:
+    image: qdrant/qdrant:v1.10.1
+    pull_policy: always
+    ports:
+      - 6333:6333
+      - 6334:6334
+    networks:
+      - wren
+
+  ui:
+    image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    environment:
+      DB_TYPE: sqlite
+      # /app is the working directory in the container
+      SQLITE_FILE: /app/data/db.sqlite3
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT}
+      WREN_AGENTIC_SYSTEM_ENDPOINT: http://host.docker.internal:${WREN_AGENTIC_SYSTEM_PORT}
+      IBIS_SERVER_ENDPOINT: http://ibis:${IBIS_SERVER_PORT}
+      GENERATION_MODEL: ${GENERATION_MODEL}
+      # telemetry
+      WREN_ENGINE_PORT: ${WREN_ENGINE_PORT}
+      WREN_AGENTIC_SYSTEM_VERSION: ${WREN_AGENTIC_SYSTEM_VERSION}
+      WREN_UI_VERSION: ${WREN_UI_VERSION}
+      WREN_ENGINE_VERSION: ${WREN_ENGINE_VERSION}
+      USER_UUID: ${USER_UUID}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY}
+      POSTHOG_HOST: ${POSTHOG_HOST}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED}
+      # client side
+      NEXT_PUBLIC_USER_UUID: ${USER_UUID}
+      NEXT_PUBLIC_POSTHOG_API_KEY: ${POSTHOG_API_KEY}
+      NEXT_PUBLIC_POSTHOG_HOST: ${POSTHOG_HOST}
+      NEXT_PUBLIC_TELEMETRY_ENABLED: ${TELEMETRY_ENABLED}
+      # configs
+      WREN_PRODUCT_VERSION: ${WREN_PRODUCT_VERSION}
+
+    ports:
+      - ${WREN_UI_PORT}:3000
+    volumes:
+      - ./etc:/app/data
+    networks:
+      - wren
+    depends_on:
+      - engine
+      - ibis

@@ -11,7 +11,7 @@ const config = getConfig();
 const {
   userUUID,
   telemetryEnabled,
-  wrenAIVersion,
+  wrenAgenticSystemVersion,
   generationModel,
   wrenEngineVersion,
   wrenUIVersion,
@@ -127,7 +127,7 @@ export class PostHogTelemetry {
       // collect services version
       'wren-ui-version': wrenUIVersion || null,
       'wren-engine-version': wrenEngineVersion || null,
-      'wren-ai-service-version': wrenAIVersion || null,
+      'wren-agentic-system-version': wrenAgenticSystemVersion || null,
 
       // collect AI model info
       'generation-model': generationModel || null,

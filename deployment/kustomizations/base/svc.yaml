@@ -42,15 +42,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: wren-ai-service-svc
+  name: wren-agentic-system-svc
 spec:
   selector:
-    app: wren-ai-service
+    app: wren-agentic-system
   ports:
     - protocol: TCP
       port: 5555
       targetPort: 5555
-      name: wren-ai-service
+      name: wren-agentic-system
 ---
 apiVersion: v1
 kind: Service

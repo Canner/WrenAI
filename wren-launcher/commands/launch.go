@@ -221,7 +221,7 @@ func Launch() {
 
 	pterm.Info.Println("Wren AI is starting, please wait for a moment...")
 	if llmProvider == "Custom" {
-		pterm.Info.Println("If you choose Ollama as LLM provider, please make sure you have started the Ollama service first. Also, Wren AI will automatically pull your chosen models if you have not done so. You can check the progress by executing `docker logs -f wrenai-wren-ai-service-1` in the terminal.")
+		pterm.Info.Println("If you choose Ollama as LLM provider, please make sure you have started the Ollama service first. Also, Wren AI will automatically pull your chosen models if you have not done so. You can check the progress by executing `docker logs -f wrenai-wren-agentic-system-1` in the terminal.")
 	}
 	url := fmt.Sprintf("http://localhost:%d", uiPort)
 	// wait until checking if CheckUIServiceStarted return without error

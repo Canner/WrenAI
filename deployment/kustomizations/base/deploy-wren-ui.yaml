@@ -27,11 +27,11 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: WREN_ENGINE_ENDPOINT
-            - name: WREN_AI_ENDPOINT
+            - name: WREN_AGENTIC_SYSTEM_ENDPOINT
               valueFrom:
                 configMapKeyRef:
                   name: wren-config
-                  key: WREN_AI_ENDPOINT
+                  key: WREN_AGENTIC_SYSTEM_ENDPOINT
             - name: GENERATION_MODEL
               valueFrom:
                 configMapKeyRef:
@@ -48,11 +48,11 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: WREN_ENGINE_PORT
-            - name: WREN_AI_SERVICE_VERSION
+            - name: WREN_AGENTIC_SYSTEM_VERSION
               valueFrom:
                 configMapKeyRef:
                   name: wren-config
-                  key: WREN_AI_SERVICE_VERSION
+                  key: WREN_AGENTIC_SYSTEM_VERSION
             - name: WREN_UI_VERSION
               valueFrom:
                 configMapKeyRef:

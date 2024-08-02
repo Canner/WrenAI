@@ -42,8 +42,8 @@ images:
     newTag: 0.7.0 # WREN_ENGINE_VERSION
   - name: ghcr.io/canner/wren-ui
     newTag: 0.10.0 # WREN_UI_VERSION
-  - name: ghcr.io/canner/wren-ai-service
-    newTag: 0.7.2 # WREN_AI_SERVICE_VERSION
+  - name: ghcr.io/canner/wren-agentic-system
+    newTag: 0.7.2 # WREN_AGENTIC_SYSTEM_VERSION
   - name: ghcr.io/canner/wren-engine-ibis
     newTag: 0.7.0 # IBIS_SERVER_VERSION
 
@@ -51,7 +51,7 @@ resources:
   - base/cm.yaml
   - base/deploy-wren-ui.yaml
   - base/deploy-wren-engine.yaml
-  - base/deploy-wren-ai-service.yaml
+  - base/deploy-wren-agentic-system.yaml
   - base/pvc.yaml
   - base/svc.yaml
 ### Modify these examples first and uncomment them:

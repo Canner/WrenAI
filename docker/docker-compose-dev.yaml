@@ -33,14 +33,14 @@ services:
     depends_on:
       - bootstrap
 
-  wren-ai-service:
-    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+  wren-agentic-system:
+    image: ghcr.io/canner/wren-agentic-system:${WREN_AGENTIC_SYSTEM_VERSION}
     pull_policy: always
     platform: ${PLATFORM}
     ports:
-      - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
+      - ${AI_SERVICE_FORWARD_PORT}:${WREN_AGENTIC_SYSTEM_PORT}
     environment:
-      WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
+      WREN_AGENTIC_SYSTEM_PORT: ${WREN_AGENTIC_SYSTEM_PORT}
       WREN_UI_PORT: ${WREN_UI_PORT}
       WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
       LLM_OPENAI_API_KEY: ${LLM_OPENAI_API_KEY}
