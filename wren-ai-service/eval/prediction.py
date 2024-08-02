@@ -158,16 +158,41 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
         return columns
 
     def parse_ddl(ddl: str) -> list:
+        """
+        Parses a DDL statement and returns a list of column definitions in the format table_name.column_name, excluding foreign keys.
+
+        Args:
+            ddl (str): The DDL statement to parse.
+
+        Returns:
+            list: A list of column definitions in the format table_name.column_name.
+        """
         # Regex to extract table name
         table_name_match = re.search(r"CREATE TABLE (\w+)", ddl, re.IGNORECASE)
         table_name = table_name_match.group(1) if table_name_match else None
 
-        # Regex to extract column names
-        columns = re.findall(r"-- \{[^}]*\}\n\s*(\w+)", ddl)
+        # Split the DDL into lines
+        lines = ddl.splitlines()
+        # Define a regex pattern to match foreign key constraints and comments
+        foreign_key_pattern = re.compile(r"^\s*FOREIGN KEY", re.IGNORECASE)
+        comment_pattern = re.compile(r"^\s*--|/\*|\*/")
 
-        # Format columns with table name as prefix
+        # Filter out lines that define foreign keys or are comments
+        columns = [
+            line.strip()
+            for line in lines
+            if not foreign_key_pattern.match(line)
+            and not comment_pattern.match(line)
+            and line.strip()
+        ]
+
+        # Extract column names and format with table name as prefix
         if table_name:
-            columns = [f"{table_name}.{col}" for col in columns]
+            columns = [
+                f"{table_name}.{line.split()[0]}"
+                for line in columns
+                if line and line.split()[0] != "CREATE" and line.split()[0] != ");"
+            ]
 
         return columns
 
