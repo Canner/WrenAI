@@ -100,7 +100,7 @@ class Evaluator:
         langfuse_context.update_current_trace(
             session_id=meta["session_id"],
             user_id=meta["user_id"],
-            metadata=trace_metadata(meta),
+            metadata=trace_metadata(meta, type="summary"),
         )
 
         summary = {

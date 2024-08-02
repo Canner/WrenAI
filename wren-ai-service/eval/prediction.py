@@ -94,17 +94,6 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
 
     @observe(capture_input=False)
     async def flat(actual: str, prediction: dict, meta: dict, mdl: dict) -> dict:
-        langfuse_context.update_current_trace(
-            name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
-            session_id=meta["session_id"],
-            user_id=meta["user_id"],
-            metadata={
-                **trace_metadata(meta),
-                "source_trace_id": prediction["trace_id"],
-                "source_trace_url": prediction["trace_url"],
-            },
-        )
-
         prediction["actual_output"] = actual
         prediction["actual_output_units"] = await get_contexts_from_sql(
             sql=actual["sql"], **engine_config(mdl)
@@ -114,6 +103,17 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
         prediction["trace_id"] = langfuse_context.get_current_trace_id()
         prediction["trace_url"] = langfuse_context.get_current_trace_url()
         prediction["type"] = "shallow"
+
+        langfuse_context.update_current_trace(
+            name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
+            session_id=meta["session_id"],
+            user_id=meta["user_id"],
+            metadata={
+                **trace_metadata(meta, type=prediction["type"]),
+                "source_trace_id": prediction["source_trace_id"],
+                "source_trace_url": prediction["source_trace_url"],
+            },
+        )
 
         return prediction
 
@@ -133,7 +133,7 @@ def predict(meta: dict, queries: list, pipes: dict, mdl: dict) -> List[Dict[str,
         langfuse_context.update_current_trace(
             session_id=meta["session_id"],
             user_id=meta["user_id"],
-            metadata=trace_metadata(meta),
+            metadata=trace_metadata(meta, type=prediction["type"]),
         )
 
         result = await pipes["retrieval"].run(query=prediction["input"])
