@@ -481,9 +481,9 @@ class Indexing(BasicPipeline):
         )
 
     @async_timer
-    @observe(name="Ask Indexing")
+    @observe(name="Document Indexing")
     async def run(self, mdl_str: str, id: Optional[str] = None) -> Dict[str, Any]:
-        logger.info("Ask Indexing pipeline is running...")
+        logger.info("Document Indexing pipeline is running...")
         return await self._pipe.execute(
             ["write_ddl", "write_view"],
             inputs={
