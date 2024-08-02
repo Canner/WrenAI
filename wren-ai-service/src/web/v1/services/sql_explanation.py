@@ -21,6 +21,9 @@ class SQLExplanationRequest(BaseModel):
     _query_id: str | None = None
     question: str
     steps_with_analysis_results: List[StepWithAnalysisResult]
+    mdl_hash: Optional[str] = None
+    thread_id: Optional[str] = None
+    project_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:

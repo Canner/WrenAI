@@ -121,11 +121,15 @@ async def generate(prompt: dict, generator: Any) -> dict:
 
 @async_timer
 @observe(capture_input=False)
-async def post_process(generate: dict, post_processor: GenerationPostProcessor) -> dict:
+async def post_process(
+    generate: dict,
+    post_processor: GenerationPostProcessor,
+    project_id: str | None = None,
+) -> dict:
     logger.debug(
         f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await post_processor.run(generate.get("replies"))
+    return await post_processor.run(generate.get("replies"), project_id=project_id)
 
 
 ## End of Pipeline
@@ -180,6 +184,7 @@ class Generation(BasicPipeline):
         query: str,
         contexts: List[Document],
         exclude: List[Dict],
+        project_id: str | None = None,
     ):
         logger.info("Ask Generation pipeline is running...")
         return await self._pipe.execute(
@@ -192,6 +197,7 @@ class Generation(BasicPipeline):
                 "generator": self.generator,
                 "prompt_builder": self.prompt_builder,
                 "post_processor": self.post_processor,
+                "project_id": project_id,
             },
         )
 

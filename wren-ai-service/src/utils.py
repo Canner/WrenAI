@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Tuple
 
+import toml
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
@@ -137,3 +138,81 @@ def init_langfuse():
 
     logger.info(f"LANGFUSE_ENABLE: {enabled}")
     logger.info(f"LANGFUSE_HOST: {host}")
+
+
+def trace_metadata(func):
+    """
+    This decorator is used to add metadata to the current Langfuse trace.
+    It should be applied after creating a trace. Here’s an example of how to use it:
+
+    ```python
+    @observe(name="Mock")
+    @trace_metadata
+    async def mock():
+        return "Mock"
+    ```
+
+    Args:
+        func (Callable): the function to decorate
+
+    Returns:
+        Callable: the decorated function
+    """
+
+    def extract(*args) -> dict:
+        request = args[1]  # fix the position of the request object
+        metadata = {}
+
+        if hasattr(request, "project_id"):
+            metadata["project_id"] = request.project_id
+        if hasattr(request, "thread_id"):
+            metadata["thread_id"] = request.thread_id
+        if hasattr(request, "mdl_hash"):
+            metadata["mdl_hash"] = request.mdl_hash
+
+        return metadata
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        metadata = extract(*args)
+        langfuse_context.update_current_trace(
+            user_id=metadata.get("project_id"),
+            session_id=metadata.get("thread_id"),
+            release=SERVICE_VERSION,
+            metadata={
+                **MODELS_METADATA,
+                "mdl_hash": metadata.get("mdl_hash"),
+            },
+        )
+
+        return await func(*args, **kwargs)
+
+    return wrapper
+
+
+MODELS_METADATA = {}
+SERVICE_VERSION = None
+
+
+def service_metadata(
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
+    *_,
+    pyproject_path: str = "pyproject.toml",
+):
+    global MODELS_METADATA, SERVICE_VERSION
+
+    MODELS_METADATA = {
+        "generation_model": llm_provider.get_model(),
+        "generation_model_kwargs": llm_provider.get_model_kwargs(),
+        "embedding_model": embedder_provider.get_model(),
+        "embedding_model_dim": embedder_provider.get_dimensions(),
+    }
+
+    def get_version_from_pyproject() -> str:
+        with open(pyproject_path, "r") as f:
+            pyproject = toml.load(f)
+            return pyproject["tool"]["poetry"]["version"]
+
+    SERVICE_VERSION = get_version_from_pyproject()
+    logger.info(f"Service version: {SERVICE_VERSION}")
