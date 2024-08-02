@@ -105,8 +105,12 @@ class Evaluator:
 
         summary = {
             "query_count": meta["query_count"],
-            "failed_count": self._failed_count,
+            "expected_batch_size": meta["query_count"]
+            * 3,  # for each query, we have 3 predictions
+            "actual_batch_size": meta["actual_batch_size"],
+            "valid_eval_count": meta["actual_batch_size"] - self._failed_count,
         }
+        langfuse_context.update_current_observation(output=summary)
 
         for name, scores in self._score_collector.items():
             langfuse_context.score_current_trace(
@@ -114,13 +118,6 @@ class Evaluator:
                 value=sum(scores) / len(scores),
                 comment=f"Average score for {name}",
             )
-            summary[name] = {
-                "batch_size": len(scores),
-            }
-
-        langfuse_context.update_current_observation(
-            output=summary,
-        )
 
 
 def metrics_initiator(mdl: dict) -> list:

@@ -256,6 +256,7 @@ if __name__ == "__main__":
     pipes = setup_pipes(**providers)
     deploy_model(dataset["mdl"], pipes["indexing"])
     predictions = predict(meta, dataset["eval_dataset"], pipes, dataset["mdl"])
+    meta["actual_batch_size"] = len(predictions) - meta["query_count"]
 
     write_prediction(meta, predictions)
     langfuse_context.flush()
