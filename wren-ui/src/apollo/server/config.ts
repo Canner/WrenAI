@@ -17,7 +17,7 @@ export interface IConfig {
   // wren engine
   wrenEngineEndpoint: string;
 
-  // wren AI
+  // wren agentic system
   wrenAgenticSystemEndpoint: string;
   generationModel?: string;
 
@@ -96,7 +96,7 @@ const config = {
   // wren engine
   wrenEngineEndpoint: process.env.WREN_ENGINE_ENDPOINT,
 
-  // wren AI
+  // wren agentic system
   wrenAgenticSystemEndpoint: process.env.WREN_AGENTIC_SYSTEM_ENDPOINT,
   generationModel: process.env.GENERATION_MODEL,
 
