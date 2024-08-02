@@ -67,6 +67,7 @@ class WrenIbis(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        project_id: str | None = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
             f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true",
@@ -96,6 +97,7 @@ class WrenEngine(Engine):
         properties: Dict[str, Any] = {
             "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
         },
+        project_id: str | None = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.get(
             f"{self._endpoint}/v1/mdl/dry-run",
