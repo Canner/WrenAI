@@ -1,0 +1,23 @@
+name: Pull Request Title Validator
+
+on:
+  pull_request:
+    paths:
+      - "wren-ai-service/**"
+      - ".github/workflows/pull-request-title-validator.yaml"
+      - ".github/workflows/ai-service-*.yaml"
+    types: [opened, edited, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validator:
+    name: validate-pull-request-title
+    runs-on: ubuntu-latest
+    steps:
+      - name: validate pull request title
+        uses: kontrolplane/pull-request-title-validator@v1.3.1
+        with:
+          types: "fix,feat,chore"
+          scopes: "wren-ai-service"
