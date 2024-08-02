@@ -1,3 +1,5 @@
+from src.core.engine import Engine
+from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.ask import (
     followup_generation as ask_followup_generation,
 )
@@ -38,7 +40,12 @@ SQL_EXPLANATION_SERVICE = None
 SQL_REGENERATION_SERVICE = None
 
 
-def init_globals(llm_provider, embedder_provider, document_store_provider, engine):
+def init_globals(
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
+    document_store_provider: DocumentStoreProvider,
+    engine: Engine,
+):
     global \
         INDEXING_SERVICE, \
         ASK_SERVICE, \
