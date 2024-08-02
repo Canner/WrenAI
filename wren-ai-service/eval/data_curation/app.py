@@ -14,6 +14,7 @@ from utils import (
     DATA_SOURCES,
     get_contexts_from_sqls,
     get_data_from_wren_engine_with_sqls,
+    get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
     get_openai_client,
     get_question_sql_pairs,
@@ -54,6 +55,7 @@ if "connection_info" not in st.session_state:
 # widget callbacks
 def on_change_upload_eval_dataset():
     doc = tomlkit.parse(st.session_state.uploaded_eval_file.getvalue().decode("utf-8"))
+
     assert (
         doc["mdl"] == st.session_state["mdl_json"]
     ), "The model in the uploaded dataset is different from the deployed model"
@@ -130,18 +132,23 @@ def on_change_sql(i: int, key: str):
         new_context = asyncio.run(
             get_contexts_from_sqls([sql], st.session_state["mdl_json"])
         )[0]
+        document = get_documents_given_contexts(
+            [new_context], st.session_state["mdl_json"]
+        )
     if i != -1:
         st.session_state["llm_question_sql_pairs"][i]["sql"] = sql
         st.session_state["llm_question_sql_pairs"][i]["is_valid"] = valid
         st.session_state["llm_question_sql_pairs"][i]["error"] = error
         if valid:
             st.session_state["llm_question_sql_pairs"][i]["context"] = new_context
+            st.session_state["llm_question_sql_pairs"][i]["document"] = document
     else:
         st.session_state["user_question_sql_pair"]["sql"] = sql
         st.session_state["user_question_sql_pair"]["is_valid"] = valid
         st.session_state["user_question_sql_pair"]["error"] = error
         if valid:
             st.session_state["user_question_sql_pair"]["context"] = new_context
+            st.session_state["user_question_sql_pair"]["document"] = document
 
 
 def on_click_add_candidate_dataset(i: int, categories: list):
@@ -151,6 +158,7 @@ def on_click_add_candidate_dataset(i: int, categories: list):
             "question": st.session_state["llm_question_sql_pairs"][i]["question"],
             "context": st.session_state["llm_question_sql_pairs"][i]["context"],
             "sql": st.session_state["llm_question_sql_pairs"][i]["sql"],
+            "document": st.session_state["llm_question_sql_pairs"][i]["document"],
         }
     else:
         dataset_to_add = {
@@ -158,6 +166,7 @@ def on_click_add_candidate_dataset(i: int, categories: list):
             "question": st.session_state["user_question_sql_pair"]["question"],
             "context": st.session_state["user_question_sql_pair"]["context"],
             "sql": st.session_state["user_question_sql_pair"]["sql"],
+            "document": st.session_state["user_question_sql_pair"]["document"],
         }
 
         # reset input for user question sql pair
@@ -180,6 +189,7 @@ def on_change_user_question():
         st.session_state["user_question_sql_pair"] = {
             "question": st.session_state["user_question"],
             "context": [],
+            "document": [],
             "sql": "",
             "is_valid": False,
             "error": "",

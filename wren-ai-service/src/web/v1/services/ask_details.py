@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.engine import add_quotes
-from src.utils import async_timer
+from src.utils import async_timer, trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -23,6 +23,9 @@ class AskDetailsRequest(BaseModel):
     query: str
     sql: str
     summary: str
+    mdl_hash: Optional[str] = None
+    thread_id: Optional[str] = None
+    project_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:
@@ -66,6 +69,7 @@ class AskDetailsService:
 
     @async_timer
     @observe(name="Ask Details(Breakdown SQL)")
+    @trace_metadata
     async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,
@@ -89,6 +93,7 @@ class AskDetailsService:
 
             generation_result = await self._pipelines["generation"].run(
                 sql=ask_details_request.sql,
+                project_id=ask_details_request.project_id,
             )
 
             ask_details_result = generation_result["post_process"]["results"]

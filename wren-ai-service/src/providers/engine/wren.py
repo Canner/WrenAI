@@ -22,6 +22,7 @@ class WrenUI(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        project_id: str | None = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
             f"{self._endpoint}/api/graphql",
@@ -32,6 +33,7 @@ class WrenUI(Engine):
                         "dryRun": True,
                         "limit": 1,
                         "sql": remove_limit_statement(add_quotes(sql)),
+                        "projectId": project_id,
                     }
                 },
             },

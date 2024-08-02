@@ -122,11 +122,17 @@ class AzureOpenAILLMProvider(LLMProvider):
         chat_api_base: str = os.getenv("LLM_AZURE_OPENAI_API_BASE"),
         chat_api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
+        model_kwargs: Dict[str, Any] = (
+            orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
+            if os.getenv("GENERATION_MODEL_KWARGS")
+            else GENERATION_MODEL_KWARGS
+        ),
     ):
         self._generation_api_key = chat_api_key
         self._generation_api_base = remove_trailing_slash(chat_api_base)
         self._generation_api_version = chat_api_version
         self._generation_model = generation_model
+        self._model_kwargs = model_kwargs
 
         logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")
         logger.info(f"Using AzureOpenAI LLM with API base: {self._generation_api_base}")
@@ -136,15 +142,10 @@ class AzureOpenAILLMProvider(LLMProvider):
 
     def get_generator(
         self,
-        model_kwargs: Dict[str, Any] = (
-            orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
-            if os.getenv("GENERATION_MODEL_KWARGS")
-            else GENERATION_MODEL_KWARGS
-        ),
         system_prompt: Optional[str] = None,
     ):
         logger.info(
-            f"Creating Azure OpenAI generator with model kwargs: {model_kwargs}"
+            f"Creating Azure OpenAI generator with model kwargs: {self._model_kwargs}"
         )
         return AsyncGenerator(
             api_key=self._generation_api_key,
@@ -152,5 +153,5 @@ class AzureOpenAILLMProvider(LLMProvider):
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,
-            generation_kwargs=model_kwargs,
+            generation_kwargs=self._model_kwargs,
         )

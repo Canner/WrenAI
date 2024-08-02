@@ -38,6 +38,9 @@ class SQLRegenerationRequest(BaseModel):
     _query_id: str | None = None
     description: str
     steps: List[SQLExplanationWithUserCorrections]
+    mdl_hash: Optional[str] = None
+    thread_id: Optional[str] = None
+    project_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:
@@ -101,6 +104,7 @@ class SQLRegenerationService:
             generation_result = await self._pipelines["generation"].run(
                 description=sql_regeneration_request.description,
                 steps=sql_regeneration_request.steps,
+                project_id=sql_regeneration_request.project_id,
             )
 
             sql_regeneration_result = generation_result[

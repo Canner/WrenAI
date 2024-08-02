@@ -3,10 +3,10 @@ from typing import List, Literal, Optional
 
 import sqlparse
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer
+from src.utils import async_timer, trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -26,7 +26,12 @@ class AskRequest(BaseModel):
 
     _query_id: str | None = None
     query: str
-    id: str  # for identifying which collection to access from vectordb, the same hash string for identifying which mdl model deployment from backend
+    # for identifying which collection to access from vectordb
+    project_id: Optional[str] = None
+    # don't recommend to use id as a field name, but it's used in the older version of API spec
+    # so we need to support as a choice, and will remove it in the future
+    mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
+    thread_id: Optional[str] = None
     history: Optional[AskResponseDetails] = None
 
     @property
@@ -103,6 +108,7 @@ class AskService:
 
     @async_timer
     @observe(name="Ask Question")
+    @trace_metadata
     async def ask(
         self,
         ask_request: AskRequest,
@@ -165,6 +171,7 @@ class AskService:
                         query=ask_request.query,
                         contexts=documents,
                         history=ask_request.history,
+                        project_id=ask_request.project_id,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -173,6 +180,7 @@ class AskService:
                         query=ask_request.query,
                         contexts=documents,
                         exclude=historical_question_result,
+                        project_id=ask_request.project_id,
                     )
 
                 valid_generation_results = []
@@ -201,6 +209,7 @@ class AskService:
                         invalid_generation_results=text_to_sql_generation_results[
                             "post_process"
                         ]["invalid_generation_results"],
+                        project_id=ask_request.project_id,
                     )
                     valid_generation_results += sql_correction_results["post_process"][
                         "valid_generation_results"
