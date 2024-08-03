@@ -199,7 +199,9 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         self._api_key = api_key
         self._api_base = remove_trailing_slash(api_base)
         self._embedding_model = embedding_model
-        self._embedding_model_dim = embedding_model_dim
+        self._embedding_model_dim = (
+            embedding_model_dim if embedding_model_dim >= 0 else None
+        )
 
         logger.info(
             f"Initializing OpenAIEmbedder provider with API base: {self._api_base}"
