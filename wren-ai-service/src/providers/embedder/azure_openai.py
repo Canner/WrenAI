@@ -206,9 +206,7 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         self._embedding_api_key = embed_api_key
         self._embedding_api_version = embed_api_version
         self._embedding_model = embedding_model
-        self._embedding_model_dim = (
-            embedding_model_dim if embedding_model_dim >= 0 else None
-        )
+        self._embedding_model_dim = embedding_model_dim
 
         logger.info(f"Using Azure OpenAI Embedding Model: {self._embedding_model}")
         logger.info(
@@ -222,7 +220,6 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         return AsyncTextEmbedder(
             api_key=self._embedding_api_key,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
             api_base_url=self._embedding_api_base,
             api_version=self._embedding_api_version,
         )
@@ -231,7 +228,6 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         return AsyncDocumentEmbedder(
             api_key=self._embedding_api_key,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
             api_base_url=self._embedding_api_base,
             api_version=self._embedding_api_version,
         )

@@ -199,9 +199,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         self._api_key = api_key
         self._api_base = remove_trailing_slash(api_base)
         self._embedding_model = embedding_model
-        self._embedding_model_dim = (
-            embedding_model_dim if embedding_model_dim >= 0 else None
-        )
+        self._embedding_model_dim = embedding_model_dim
 
         logger.info(
             f"Initializing OpenAIEmbedder provider with API base: {self._api_base}"
@@ -220,7 +218,6 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
         )
 
     def get_document_embedder(self):
@@ -228,5 +225,4 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
         )
