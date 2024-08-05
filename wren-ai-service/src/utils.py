@@ -174,18 +174,27 @@ def trace_metadata(func):
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
+        results = await func(*args, **kwargs)
+
+        langfuse_metadata = {
+            **MODELS_METADATA,
+        }
+
+        if results and isinstance(results, dict):
+            additional_metadata = results.get("metadata", {})
+            for key, value in additional_metadata.items():
+                langfuse_metadata[key] = value
+
         metadata = extract(*args)
+        langfuse_metadata["mdl_hash"] = metadata.get("mdl_hash")
         langfuse_context.update_current_trace(
             user_id=metadata.get("project_id"),
             session_id=metadata.get("thread_id"),
             release=SERVICE_VERSION,
-            metadata={
-                **MODELS_METADATA,
-                "mdl_hash": metadata.get("mdl_hash"),
-            },
+            metadata=langfuse_metadata,
         )
 
-        return await func(*args, **kwargs)
+        return results
 
     return wrapper
 

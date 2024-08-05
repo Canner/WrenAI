@@ -74,6 +74,13 @@ class AskDetailsService:
         self,
         ask_details_request: AskDetailsRequest,
     ):
+        results = {
+            "ask_details_result": {},
+            "metadata": {
+                "error_type": "",
+            },
+        }
+
         try:
             # ask details status can be understanding, searching, generating, finished, stopped
             # we will need to handle business logic for each status
@@ -106,6 +113,7 @@ class AskDetailsService:
                         "cte_name": "",
                     }
                 ]
+                results["metadata"]["error_type"] = "SQL_BREAKDOWN_FAILED"
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="finished",
@@ -113,6 +121,10 @@ class AskDetailsService:
                     **ask_details_result
                 ),
             )
+
+            results["ask_details_result"] = ask_details_result
+
+            return results
         except Exception as e:
             logger.exception(f"ask-details pipeline - OTHERS: {e}")
 
@@ -123,6 +135,9 @@ class AskDetailsService:
                     message=str(e),
                 ),
             )
+
+            results["metadata"]["error_type"] = "OTHERS"
+            return results
 
     def get_ask_details_result(
         self,

@@ -113,6 +113,13 @@ class AskService:
         self,
         ask_request: AskRequest,
     ):
+        results = {
+            "ask_result": {},
+            "metadata": {
+                "error_type": "",
+            },
+        }
+
         try:
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
@@ -145,7 +152,8 @@ class AskService:
                             message="No relevant data",
                         ),
                     )
-                    return
+                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                    return results
 
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
@@ -250,9 +258,10 @@ class AskService:
                             message="No relevant SQL",
                         ),
                     )
-                    return
+                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    return results
 
-                results = [
+                api_results = [
                     AskResultResponse.AskResult(
                         **{
                             "sql": result.get("statement"),
@@ -273,8 +282,11 @@ class AskService:
 
                 self._ask_results[query_id] = AskResultResponse(
                     status="finished",
-                    response=results,
+                    response=api_results,
                 )
+
+                results["ask_result"] = api_results
+                return results
         except Exception as e:
             logger.exception(f"ask pipeline - OTHERS: {e}")
 
@@ -285,6 +297,9 @@ class AskService:
                     message=str(e),
                 ),
             )
+
+            results["metadata"]["error_type"] = "OTHERS"
+            return results
 
     def stop_ask(
         self,
