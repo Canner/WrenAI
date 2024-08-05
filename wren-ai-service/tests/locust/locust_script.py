@@ -9,7 +9,7 @@ load_env_vars()
 filename = f"locust_report_{time.strftime("%Y%m%d_%H%M%S")}"
 
 if not Path("./outputs/locust").exists():
-    Path("./outputs/locust").mkdir()
+    Path("./outputs/locust").mkdir(parents=True, exist_ok=True)
 
 os.system(
     f"""

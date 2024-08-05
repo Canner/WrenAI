@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: docker.io/qdrant/qdrant
   pullPolicy: IfNotPresent
-  tag: "v1.7.4"
+  tag: "v1.10.1"
   useUnprivilegedImage: false
 
 imagePullSecrets: []
