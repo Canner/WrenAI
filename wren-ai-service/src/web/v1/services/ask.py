@@ -228,17 +228,17 @@ class AskService:
                         f'sql_correction_results: {sql_correction_results["post_process"]}'
                     )
 
-                    for results in sql_correction_results["post_process"][
-                        "invalid_generation_results"
-                    ]:
+                    for invalid_generation_result in sql_correction_results[
+                        "post_process"
+                    ]["invalid_generation_results"]:
                         logger.debug(
                             f"{sqlparse.format(
-                                results['sql'],
+                                invalid_generation_result['sql'],
                                 reindent=True,
                                 keyword_case='upper')
                             }"
                         )
-                        logger.debug(results["error"])
+                        logger.debug(invalid_generation_result["error"])
                         logger.debug("\n\n")
 
                 # remove duplicates of valid_generation_results, which consists of a sql and a summary
