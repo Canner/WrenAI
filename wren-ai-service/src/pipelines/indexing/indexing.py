@@ -36,8 +36,10 @@ class DocumentCleaner:
         self._stores = stores
 
     @component.output_types(mdl=str)
-    async def run(self, mdl: str, id: str = "") -> str:
-        async def _clear_documents(store: DocumentStore, id: str) -> None:
+    async def run(self, mdl: str, id: Optional[str] = None) -> str:
+        async def _clear_documents(
+            store: DocumentStore, id: Optional[str] = None
+        ) -> None:
             filters = (
                 {
                     "operator": "AND",
@@ -97,7 +99,7 @@ class ViewConverter:
     """
 
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], id: str = "") -> None:
+    def run(self, mdl: Dict[str, Any], id: Optional[str] = None) -> None:
         def _format(view: Dict[str, Any]) -> List[str]:
             properties = view.get("properties", {})
             return str(
@@ -131,7 +133,7 @@ class ViewConverter:
 @component
 class DDLConverter:
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], id: str = ""):
+    def run(self, mdl: Dict[str, Any], id: Optional[str] = None):
         logger.info("Ask Indexing pipeline is writing new documents...")
 
         logger.debug(f"original mdl_json: {mdl}")
@@ -346,7 +348,7 @@ class AsyncDocumentWriter(DocumentWriter):
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def clean_document_store(
-    mdl_str: str, id: str, cleaner: DocumentCleaner
+    mdl_str: str, cleaner: DocumentCleaner, id: Optional[str] = None
 ) -> Dict[str, Any]:
     logger.debug(f"input in clean_document_store: {mdl_str}")
     return await cleaner.run(mdl=mdl_str, id=id)
@@ -369,7 +371,7 @@ def validate_mdl(
 @timer
 @observe(capture_input=False)
 def convert_to_ddl(
-    mdl: Dict[str, Any], id: str, ddl_converter: DDLConverter
+    mdl: Dict[str, Any], ddl_converter: DDLConverter, id: Optional[str] = None
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
@@ -397,7 +399,7 @@ async def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> No
 @timer
 @observe(capture_input=False)
 def convert_to_view(
-    mdl: Dict[str, Any], id: str, view_converter: ViewConverter
+    mdl: Dict[str, Any], view_converter: ViewConverter, id: Optional[str] = None
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in convert_to_view: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
@@ -486,7 +488,7 @@ class Indexing(BasicPipeline):
             ["write_ddl", "write_view"],
             inputs={
                 "mdl_str": mdl_str,
-                "id": id or "",
+                "id": id,
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,

@@ -191,7 +191,8 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                         oversampling=3.0,
                     ),
                 )
-                if len(query_embedding) >= 1024
+                if len(query_embedding)
+                >= 1024  # reference: https://qdrant.tech/articles/binary-quantization/#when-should-you-not-use-bq
                 else None
             ),
             query_filter=qdrant_filters,
