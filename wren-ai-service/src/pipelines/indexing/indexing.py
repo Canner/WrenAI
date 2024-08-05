@@ -466,7 +466,7 @@ class Indexing(BasicPipeline):
             output_file_path=f"{destination}/indexing.dot",
             inputs={
                 "mdl_str": mdl_str,
-                "id": id or "",
+                "id": id,
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
