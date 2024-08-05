@@ -57,7 +57,10 @@ class IndexingService:
     ):
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
+            await self._pipelines["indexing"].run(
+                mdl_str=prepare_semantics_request.mdl,
+                id=prepare_semantics_request.project_id,
+            )
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.mdl_hash

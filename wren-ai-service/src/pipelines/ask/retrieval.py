@@ -1,7 +1,7 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
@@ -24,8 +24,21 @@ async def embedding(query: str, embedder: Any) -> dict:
 
 @async_timer
 @observe(capture_input=False)
-async def retrieval(embedding: dict, retriever: Any) -> dict:
-    return await retriever.run(query_embedding=embedding.get("embedding"))
+async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+    filters = (
+        {
+            "operator": "AND",
+            "conditions": [
+                {"field": "id", "operator": "==", "value": id},
+            ],
+        }
+        if id
+        else None
+    )
+
+    return await retriever.run(
+        query_embedding=embedding.get("embedding"), filters=filters
+    )
 
 
 ## End of Pipeline
@@ -49,6 +62,7 @@ class Retrieval(BasicPipeline):
     def visualize(
         self,
         query: str,
+        id: Optional[str] = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
         if not Path(destination).exists():
@@ -59,6 +73,7 @@ class Retrieval(BasicPipeline):
             output_file_path=f"{destination}/retrieval.dot",
             inputs={
                 "query": query,
+                "id": id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
             },
@@ -68,12 +83,13 @@ class Retrieval(BasicPipeline):
 
     @async_timer
     @observe(name="Ask Retrieval")
-    async def run(self, query: str):
+    async def run(self, query: str, id: Optional[str] = None):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["retrieval"],
             inputs={
                 "query": query,
+                "id": id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
             },
