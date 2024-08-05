@@ -163,9 +163,16 @@ class OllamaEmbedderProvider(EmbedderProvider):
         self,
         url: str = os.getenv("EMBEDDER_OLLAMA_URL") or EMBEDDER_OLLAMA_URL,
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
+        embedding_model_dim: int = (
+            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
+            if os.getenv("EMBEDDING_MODEL_DIMENSION")
+            else 0
+        )
+        or EMBEDDING_MODEL_DIMENSION,
     ):
         self._url = remove_trailing_slash(url)
         self._embedding_model = embedding_model
+        self._embedding_model_dim = embedding_model_dim
 
         pull_ollama_model(self._url, self._embedding_model)
 

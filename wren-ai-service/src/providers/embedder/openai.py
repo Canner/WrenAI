@@ -218,7 +218,6 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
         )
 
     def get_document_embedder(self):
@@ -226,5 +225,4 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
         )
