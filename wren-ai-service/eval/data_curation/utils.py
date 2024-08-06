@@ -218,17 +218,13 @@ def get_documents_given_contexts(
     new_mdl_jsons = _build_partial_mdl_json(contexts_list, mdl_json)
 
     return [
-        [
-            {
-                "id": str(i),
-                "meta": {"id": str(i)},
-                "content": ddl_command,
-            }
-            for i, ddl_command in enumerate(
-                ddl_converter.get_ddl_commands(new_mdl_json)
-            )
-        ]
+        {
+            "id": str(i),
+            "meta": {"id": str(i)},
+            "content": ddl_command,
+        }
         for new_mdl_json in new_mdl_jsons
+        for i, ddl_command in enumerate(ddl_converter.get_ddl_commands(new_mdl_json))
     ]
 
 

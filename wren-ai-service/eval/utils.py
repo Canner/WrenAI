@@ -159,6 +159,7 @@ def trace_metadata(
         "embedding_model": meta["embedding_model"],
         "generation_model": meta["generation_model"],
         "type": type,
+        "pipeline": meta["pipeline"],
     }
 
 
