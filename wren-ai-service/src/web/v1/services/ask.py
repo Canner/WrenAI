@@ -130,6 +130,7 @@ class AskService:
 
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=ask_request.query,
+                    id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("retrieval", {}).get("documents", [])
 

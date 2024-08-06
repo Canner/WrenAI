@@ -220,7 +220,6 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         return AsyncTextEmbedder(
             api_key=self._embedding_api_key,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
             api_base_url=self._embedding_api_base,
             api_version=self._embedding_api_version,
         )
@@ -229,7 +228,6 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         return AsyncDocumentEmbedder(
             api_key=self._embedding_api_key,
             model=self._embedding_model,
-            dimensions=self._embedding_model_dim,
             api_base_url=self._embedding_api_base,
             api_version=self._embedding_api_version,
         )

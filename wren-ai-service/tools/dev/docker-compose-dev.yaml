@@ -33,7 +33,7 @@ services:
       - wren
 
   qdrant:
-    image: qdrant/qdrant:v1.7.4
+    image: qdrant/qdrant:v1.10.1
     pull_policy: always
     ports:
       - 6333:6333
