@@ -1,27 +1,27 @@
-# wren-ai-service
-wren-ai-service/.env.*
-!wren-ai-service/.env.*.example
-!wren-ai-service/src/eval/wren-engine/.env
-wren-ai-service/src/eval/wren-engine/**/config.properties
-wren-ai-service/src/eval/wren-engine/etc/mdl/*
-wren-ai-service/src/eval/wren-engine/etc/duckdb
-wren-ai-service/src/eval/wren-engine/etc/archived
-wren-ai-service/src/eval/data
-wren-ai-service/**/outputs/
-wren-ai-service/**/spider/
-!wren-ai-service/tests/data
-!wren-ai-service/src/eval/data/book_2*.json
-!wren-ai-service/src/eval/data/baseball_1*.json
-!wren-ai-service/src/eval/data/college_3*.json
-!wren-ai-service/src/eval/data/college_3_optimal_ddl.json
-wren-ai-service/assertion.log
-wren-ai-service/redis.*
-wren-ai-service/demo/spider
-wren-ai-service/demo/poetry.lock
-wren-ai-service/demo/custom_dataset
-wren-ai-service/demo/.env
-wren-ai-service/tools/dev/etc/**
-wren-ai-service/.deepeval-cache.json
+# wren-agentic-system
+wren-agentic-system/.env.*
+!wren-agentic-system/.env.*.example
+!wren-agentic-system/src/eval/wren-engine/.env
+wren-agentic-system/src/eval/wren-engine/**/config.properties
+wren-agentic-system/src/eval/wren-engine/etc/mdl/*
+wren-agentic-system/src/eval/wren-engine/etc/duckdb
+wren-agentic-system/src/eval/wren-engine/etc/archived
+wren-agentic-system/src/eval/data
+wren-agentic-system/**/outputs/
+wren-agentic-system/**/spider/
+!wren-agentic-system/tests/data
+!wren-agentic-system/src/eval/data/book_2*.json
+!wren-agentic-system/src/eval/data/baseball_1*.json
+!wren-agentic-system/src/eval/data/college_3*.json
+!wren-agentic-system/src/eval/data/college_3_optimal_ddl.json
+wren-agentic-system/assertion.log
+wren-agentic-system/redis.*
+wren-agentic-system/demo/spider
+wren-agentic-system/demo/poetry.lock
+wren-agentic-system/demo/custom_dataset
+wren-agentic-system/demo/.env
+wren-agentic-system/tools/dev/etc/**
+wren-agentic-system/.deepeval-cache.json
 
 # python
 .python-version

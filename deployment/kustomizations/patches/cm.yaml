@@ -4,13 +4,13 @@
     # Wren Engine Service Port
     WREN_ENGINE_PORT: "8080"
     # Wren AI Service Port
-    WREN_AI_SERVICE_PORT: "5555"
+    WREN_AGENTIC_SYSTEM_PORT: "5555"
 
     #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
     WREN_PRODUCT_VERSION: "0.7.5"
     #fix:
     WREN_ENGINE_VERSION: "0.9.0"
-    WREN_AI_SERVICE_VERSION: "0.8.0"
+    WREN_AGENTIC_SYSTEM_VERSION: "0.8.0"
     #fix:
     WREN_UI_VERSION: "0.9.2"
 
@@ -24,7 +24,7 @@
     # service endpoints of AI service & engine service
     WREN_ENGINE_ENDPOINT: "http://wren-engine-svc:8080"
     #fix:
-    WREN_AI_ENDPOINT: "http://wren-ai-service:5555"
+    WREN_AGENTIC_SYSTEM_ENDPOINT: "http://wren-agentic-system:5555"
 
     # "pg" for postgres as application database.
     #fix

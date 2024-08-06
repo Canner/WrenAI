@@ -17,8 +17,8 @@ export interface IConfig {
   // wren engine
   wrenEngineEndpoint: string;
 
-  // wren AI
-  wrenAIEndpoint: string;
+  // wren agentic system
+  wrenAgenticSystemEndpoint: string;
   generationModel?: string;
 
   // ibis server
@@ -37,7 +37,7 @@ export interface IConfig {
   // versions
   wrenUIVersion?: string;
   wrenEngineVersion?: string;
-  wrenAIVersion?: string;
+  wrenAgenticSystemVersion?: string;
   wrenProductVersion?: string;
 }
 
@@ -60,8 +60,8 @@ const defaultConfig = {
   // wren engine
   wrenEngineEndpoint: 'http://localhost:8080',
 
-  // wren AI
-  wrenAIEndpoint: 'http://localhost:5555',
+  // wren agentic system
+  wrenAgenticSystemEndpoint: 'http://localhost:5555',
 
   // ibis server
   ibisServerEndpoint: 'http://127.0.0.1:8000',
@@ -96,8 +96,8 @@ const config = {
   // wren engine
   wrenEngineEndpoint: process.env.WREN_ENGINE_ENDPOINT,
 
-  // wren AI
-  wrenAIEndpoint: process.env.WREN_AI_ENDPOINT,
+  // wren agentic system
+  wrenAgenticSystemEndpoint: process.env.WREN_AGENTIC_SYSTEM_ENDPOINT,
   generationModel: process.env.GENERATION_MODEL,
 
   // ibis server
@@ -118,7 +118,7 @@ const config = {
   // versions
   wrenUIVersion: process.env.WREN_UI_VERSION,
   wrenEngineVersion: process.env.WREN_ENGINE_VERSION,
-  wrenAIVersion: process.env.WREN_AI_SERVICE_VERSION,
+  wrenAgenticSystemVersion: process.env.WREN_AGENTIC_SYSTEM_VERSION,
   wrenProductVersion: process.env.WREN_PRODUCT_VERSION,
 };
 

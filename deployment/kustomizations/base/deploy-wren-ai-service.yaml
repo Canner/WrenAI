@@ -1,26 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wren-ai-service-deployment
+  name: wren-agentic-system-deployment
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: wren-ai-service
+      app: wren-agentic-system
   template:
     metadata:
       labels:
-        app: wren-ai-service
+        app: wren-agentic-system
     spec:
       containers:
-        - name: wren-ai-service
-          image: ghcr.io/canner/wren-ai-service:0.3.7
+        - name: wren-agentic-system
+          image: ghcr.io/canner/wren-agentic-system:0.3.7
           env:
-          - name: WREN_AI_SERVICE_PORT
+          - name: WREN_AGENTIC_SYSTEM_PORT
             valueFrom:
               configMapKeyRef:
                 name: wren-config
-                key: WREN_AI_SERVICE_PORT
+                key: WREN_AGENTIC_SYSTEM_PORT
           - name: LLM_PROVIDER
             valueFrom:
               configMapKeyRef:
@@ -85,7 +85,7 @@ spec:
             valueFrom:
               configMapKeyRef:
                 name: wren-config
-                key: WREN_AI_SERVICE_ENABLE_TIMER
+                key: WREN_AGENTIC_SYSTEM_ENABLE_TIMER
           - name: PYTHONUNBUFFERED
             value: "1"
           ports:
