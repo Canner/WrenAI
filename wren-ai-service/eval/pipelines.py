@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 import sys
 from abc import abstractmethod
@@ -12,6 +13,14 @@ from tqdm.asyncio import tqdm_asyncio
 
 sys.path.append(f"{Path().parent.resolve()}")
 
+from eval.metrics.column import (
+    AccuracyMetric,
+    AnswerRelevancyMetric,
+    ContextualPrecisionMetric,
+    ContextualRecallMetric,
+    ContextualRelevancyMetric,
+    FaithfulnessMetric,
+)
 from eval.utils import (
     engine_config,
     get_contexts_from_sql,
@@ -178,6 +187,14 @@ class RetrievalPipeline(Eval):
 
         return [prediction, await self.flat(prediction.copy())]
 
+    @staticmethod
+    def mertics(config: dict):
+        return [
+            ContextualRecallMetric(config),
+            ContextualRelevancyMetric(),
+            ContextualPrecisionMetric(),
+        ]
+
 
 class GenerationPipeline(Eval):
     def __init__(
@@ -229,6 +246,13 @@ class GenerationPipeline(Eval):
         return [prediction] + [
             await self.flat(prediction.copy(), actual=actual)
             for actual in valid_outputs
+        ]
+
+    @staticmethod
+    def mertics(config: dict, ibis_engine_config: dict):
+        return [
+            AccuracyMetric(ibis_engine_config),
+            AnswerRelevancyMetric(config),
         ]
 
 
@@ -297,6 +321,17 @@ class AskPipeline(Eval):
             for actual in valid_outputs
         ]
 
+    @staticmethod
+    def mertics(config: dict, ibis_engine_config: dict):
+        return [
+            AccuracyMetric(ibis_engine_config),
+            AnswerRelevancyMetric(config),
+            FaithfulnessMetric(config),
+            ContextualRecallMetric(config),
+            ContextualRelevancyMetric(),
+            ContextualPrecisionMetric(),
+        ]
+
 
 def init(
     name: Literal["retrieval", "generation", "ask"],
@@ -314,3 +349,27 @@ def init(
             return AskPipeline(**args)
         case _:
             raise ValueError(f"Invalid pipeline name: {name}")
+
+
+def metrics_initiator(pipeline: str, mdl: dict) -> list:
+    config = engine_config(mdl)
+    ibis_engine_config = {
+        "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
+        "data_source": "bigquery",
+        "mdl_json": mdl,
+        "connection_info": {
+            "project_id": os.getenv("bigquery.project-id"),
+            "dataset_id": os.getenv("bigquery.dataset-id"),
+            "credentials": os.getenv("bigquery.credentials-key"),
+        },
+        "timeout": 10,
+        "limit": 10,
+    }
+
+    match pipeline:
+        case "retrieval":
+            return RetrievalPipeline.mertics(config)
+        case "generation":
+            return GenerationPipeline.mertics(config, ibis_engine_config)
+        case "ask":
+            return AskPipeline.mertics(config, ibis_engine_config)
