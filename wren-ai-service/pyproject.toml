@@ -27,6 +27,7 @@ ollama-haystack = "==0.0.6"
 langfuse = "==2.35.0"
 ollama = "==0.2.1"
 toml = "==0.10.2"
+pip-system-certs = "==4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "==8.2.0"
