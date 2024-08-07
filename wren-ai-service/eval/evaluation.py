@@ -97,8 +97,7 @@ class Evaluator:
 
         summary = {
             "query_count": meta["query_count"],
-            "expected_batch_size": meta["query_count"]
-            * 3,  # for each query, we have 3 predictions
+            "expected_batch_size": meta["expected_batch_size"],
             "actual_batch_size": meta["actual_batch_size"],
             "valid_eval_count": meta["actual_batch_size"] - self._failed_count,
         }

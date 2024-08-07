@@ -86,8 +86,13 @@ def extract_units(docs: list) -> list:
 
 
 class Eval:
-    def __init__(self, meta: dict, **_):
+    def __init__(self, meta: dict, candidate_size: int = 1, **_):
         self._meta = meta
+        self._candidate_size = candidate_size
+
+    @property
+    def candidate_size(self):
+        return self._candidate_size
 
     def predict(self, queries: list) -> List[Dict[str, Any]]:
         async def wrapper():
@@ -205,7 +210,7 @@ class GenerationPipeline(Eval):
         engine: Engine,
         **kwargs,
     ):
-        super().__init__(meta)
+        super().__init__(meta, 3)
         self._mdl = mdl
         self._generation = generation.Generation(
             llm_provider=llm_provider,
@@ -273,7 +278,7 @@ class AskPipeline(Eval):
             document_store_provider=document_store_provider,
         )
         deploy_model(mdl, _indexing)
-        super().__init__(meta)
+        super().__init__(meta, 3)
 
         self._mdl = mdl
         self._retrieval = retrieval.Retrieval(

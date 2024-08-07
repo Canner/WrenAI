@@ -130,6 +130,7 @@ if __name__ == "__main__":
     pipe = pipelines.init(pipe, meta, mdl=dataset["mdl"], providers=providers)
 
     predictions = pipe.predict(dataset["eval_dataset"])
+    meta["expected_batch_size"] = meta["query_count"] * pipe.candidate_size
     meta["actual_batch_size"] = len(predictions) - meta["query_count"]
 
     write_prediction(meta, predictions)
