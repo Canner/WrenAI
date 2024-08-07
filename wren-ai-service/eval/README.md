@@ -23,6 +23,14 @@ The prediction process is used to produce the results of the evaluation data usi
 just predict <evaluation-dataset>
 ```
 
+Also, sub-pipeline predictions are supported by specifying the pipeline name:
+
+```cli
+just predict <evaluation-dataset> <pipeline-name>
+```
+
+Currently, we support the following pipelines: 'ask', 'generation', and 'retrieval'. If no pipeline name is specified, the default is the 'ask' pipeline.
+
 ## Evaluation Process
 
 The evaluation process is used to assess the prediction results of the Wren AI service. It compares the prediction results with the ground truth and calculates the evaluation metrics. This process will also add a trace in the same session on Langfuse to make the evaluation results available to the user. You can use the following command to evaluate the prediction results under the `outputs/predictions` directory:
@@ -33,7 +41,7 @@ just eval <prediction-result>
 
 The evaluation results will be presented on Langfuse as follows:
 
-![](../docs/shallow_trace_example.png)
+![shallow_trace_example](../docs/shallow_trace_example.png)
 
 ## Terms
 
