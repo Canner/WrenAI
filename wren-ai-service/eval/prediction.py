@@ -109,6 +109,7 @@ def parse_args() -> Tuple[str]:
         "--pipeline",
         "-P",
         type=str,
+        choices=["ask", "generation", "retrieval"],
         help="Specify the pipeline that you want to evaluate",
     )
     args = parser.parse_args()
