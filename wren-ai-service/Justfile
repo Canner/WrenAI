@@ -10,11 +10,11 @@ start:
 curate_eval_data:
 	poetry run streamlit run eval/data_curation/app.py
 
-predict file:
-    @python3 -u eval/prediction.py --file {{file}}
+predict dataset pipeline='ask':
+    @poetry run python -u eval/prediction.py --file {{dataset}} --pipeline {{pipeline}}
 
-eval file:
-    @python3 -u eval/evaluation.py --file {{file}}
+eval prediction_result:
+    @poetry run python -u eval/evaluation.py --file {{prediction_result}}
 
 demo:
 	poetry run streamlit run demo/app.py

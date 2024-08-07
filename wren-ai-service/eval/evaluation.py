@@ -1,5 +1,4 @@
 import argparse
-import os
 import sys
 from pathlib import Path
 from typing import Tuple
@@ -14,15 +13,8 @@ from langfuse.decorators import langfuse_context, observe
 sys.path.append(f"{Path().parent.resolve()}")
 import traceback
 
-from eval.metrics.column import (
-    AccuracyMetric,
-    AnswerRelevancyMetric,
-    ContextualPrecisionMetric,
-    ContextualRecallMetric,
-    ContextualRelevancyMetric,
-    FaithfulnessMetric,
-)
-from eval.utils import engine_config, parse_toml, trace_metadata
+import eval.pipelines as pipelines
+from eval.utils import parse_toml, trace_metadata
 from src import utils
 
 
@@ -32,7 +24,7 @@ def formatter(prediction: dict) -> dict:
 
     return {
         "input": prediction["input"],
-        "actual_output": prediction["actual_output"]["sql"],
+        "actual_output": prediction.get("actual_output", {}).get("sql", ""),
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
         "context": context,
@@ -100,13 +92,16 @@ class Evaluator:
         langfuse_context.update_current_trace(
             session_id=meta["session_id"],
             user_id=meta["user_id"],
-            metadata=trace_metadata(meta),
+            metadata=trace_metadata(meta, type="summary"),
         )
 
         summary = {
             "query_count": meta["query_count"],
-            "failed_count": self._failed_count,
+            "expected_batch_size": meta["expected_batch_size"],
+            "actual_batch_size": meta["actual_batch_size"],
+            "valid_eval_count": meta["actual_batch_size"] - self._failed_count,
         }
+        langfuse_context.update_current_observation(output=summary)
 
         for name, scores in self._score_collector.items():
             langfuse_context.score_current_trace(
@@ -114,38 +109,6 @@ class Evaluator:
                 value=sum(scores) / len(scores),
                 comment=f"Average score for {name}",
             )
-            summary[name] = {
-                "batch_size": len(scores),
-            }
-
-        langfuse_context.update_current_observation(
-            output=summary,
-        )
-
-
-def metrics_initiator(mdl: dict) -> list:
-    config = engine_config(mdl)
-    return [
-        AccuracyMetric(
-            engine_config={
-                "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
-                "data_source": "bigquery",
-                "mdl_json": mdl,
-                "connection_info": {
-                    "project_id": os.getenv("bigquery.project-id"),
-                    "dataset_id": os.getenv("bigquery.dataset-id"),
-                    "credentials": os.getenv("bigquery.credentials-key"),
-                },
-                "timeout": 10,
-                "limit": 10,
-            }
-        ),
-        AnswerRelevancyMetric(config),
-        FaithfulnessMetric(config),
-        ContextualRecallMetric(config),
-        ContextualRelevancyMetric(),
-        ContextualPrecisionMetric(),
-    ]
 
 
 if __name__ == "__main__":
@@ -159,7 +122,7 @@ if __name__ == "__main__":
     predictions = predicted_file["predictions"]
 
     dataset = parse_toml(meta["evaluation_dataset"])
-    metrics = metrics_initiator(dataset["mdl"])
+    metrics = pipelines.metrics_initiator(meta["pipeline"], dataset["mdl"])
 
     evaluator = Evaluator(metrics)
     evaluator.eval(meta, predictions)

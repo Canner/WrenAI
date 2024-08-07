@@ -1,6 +1,6 @@
 import base64
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, get_args
 
 import aiohttp
 import orjson
@@ -144,12 +144,22 @@ def parse_toml(path: str) -> Dict[str, Any]:
         return parse(file.read())
 
 
-def trace_metadata(meta: dict) -> dict:
+TRACE_TYPES = Literal["execution", "shallow", "summary"]
+
+
+def trace_metadata(
+    meta: dict,
+    type: TRACE_TYPES,
+) -> dict:
+    if type not in get_args(TRACE_TYPES):
+        raise ValueError("Invalid type")
     return {
         "commit": meta["commit"],
         "dataset_id": meta["dataset_id"],
         "embedding_model": meta["embedding_model"],
         "generation_model": meta["generation_model"],
+        "type": type,
+        "pipeline": meta["pipeline"],
     }
 
 
