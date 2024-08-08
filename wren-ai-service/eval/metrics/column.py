@@ -198,7 +198,7 @@ class ContextualPrecisionMetric(BaseMetric):
         summation = 0
         for k in range(1, n + 1):
             intersection_up_to_k = len(set(context[:k]) & set(retrieval_context[:k]))
-            rk = intersection_up_to_k > 0
+            rk = len(set(context[:k]) & set(retrieval_context[k - 1 : k])) > 0
             summation += (intersection_up_to_k / k) * rk
 
         self.score = (1 / intersection_count) * summation
