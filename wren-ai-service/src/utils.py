@@ -130,7 +130,7 @@ def init_langfuse():
     host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
     langfuse_context.configure(
-        enabled=False if enabled.lower() == "false" else True,
+        enabled=(True if enabled.lower() == "true" else False),
         public_key=os.getenv("LANGFUSE_PUBLIC_KEY", ""),
         secret_key=os.getenv("LANGFUSE_SECRET_KEY", ""),
         host=host,
@@ -174,18 +174,28 @@ def trace_metadata(func):
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
+        results = await func(*args, **kwargs)
+
+        addition = {}
+        if results and isinstance(results, dict):
+            additional_metadata = results.get("metadata", {})
+            for key, value in additional_metadata.items():
+                addition[key] = value
+
         metadata = extract(*args)
+        langfuse_metadata = {
+            **MODELS_METADATA,
+            **addition,
+            "mdl_hash": metadata.get("mdl_hash"),
+        }
         langfuse_context.update_current_trace(
             user_id=metadata.get("project_id"),
             session_id=metadata.get("thread_id"),
             release=SERVICE_VERSION,
-            metadata={
-                **MODELS_METADATA,
-                "mdl_hash": metadata.get("mdl_hash"),
-            },
+            metadata=langfuse_metadata,
         )
 
-        return await func(*args, **kwargs)
+        return results
 
     return wrapper
 
