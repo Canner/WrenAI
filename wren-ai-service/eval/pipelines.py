@@ -258,6 +258,7 @@ class GenerationPipeline(Eval):
         return [
             AccuracyMetric(ibis_engine_config),
             AnswerRelevancyMetric(config),
+            FaithfulnessMetric(config),
         ]
 
 
