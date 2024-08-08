@@ -71,7 +71,7 @@ class WrenIbis(Engine):
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
-            f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true",
+            f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true&limit=1",
             json={
                 "sql": remove_limit_statement(add_quotes(sql)),
                 "manifestStr": self._manifest,
@@ -107,6 +107,7 @@ class WrenEngine(Engine):
                 if properties.get("manifest")
                 else {},
                 "sql": remove_limit_statement(add_quotes(sql)),
+                "limit": 1,
             },
         ) as response:
             if response.status == 200:
