@@ -130,7 +130,7 @@ def init_langfuse():
     host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
     langfuse_context.configure(
-        enabled=(False if enabled.lower() == "false" or not enabled else True),
+        enabled=(True if enabled.lower() == "true" else False),
         public_key=os.getenv("LANGFUSE_PUBLIC_KEY", ""),
         secret_key=os.getenv("LANGFUSE_SECRET_KEY", ""),
         host=host,
