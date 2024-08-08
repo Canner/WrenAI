@@ -89,18 +89,27 @@ class Eval:
     def __init__(self, meta: dict, candidate_size: int = 1, **_):
         self._meta = meta
         self._candidate_size = candidate_size
+        self._batch_size = int(meta["batch_size"])
+        self._batch_interval = int(meta["batch_interval"])
 
     @property
     def candidate_size(self):
         return self._candidate_size
 
     def predict(self, queries: list) -> List[Dict[str, Any]]:
-        async def wrapper():
-            tasks = [self(query) for query in queries]
+        def split(batch_size: int) -> list[list]:
+            return [
+                queries[i : i + batch_size] for i in range(0, len(queries), batch_size)
+            ]
+
+        async def wrapper(batch: list):
+            tasks = [self(query) for query in batch]
             results = await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
+            await asyncio.sleep(self._batch_interval)
             return [prediction for predictions in results for prediction in predictions]
 
-        return asyncio.run(wrapper())
+        batches = [asyncio.run(wrapper(batch)) for batch in split(self._batch_size)]
+        return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
     def _process(self, prediction: dict, **_) -> dict:
