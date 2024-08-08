@@ -15,6 +15,7 @@ sys.path.append(f"{Path().parent.resolve()}")
 
 from eval.metrics.column import (
     AccuracyMetric,
+    AccuracyMultiCandidateMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
@@ -202,12 +203,14 @@ class RetrievalPipeline(Eval):
         return [prediction, await self.flat(prediction.copy())]
 
     @staticmethod
-    def mertics(config: dict):
-        return [
-            ContextualRecallMetric(config),
-            ContextualRelevancyMetric(),
-            ContextualPrecisionMetric(),
-        ]
+    def mertics(config: dict) -> dict:
+        return {
+            "metrics": [
+                ContextualRecallMetric(config),
+                ContextualRelevancyMetric(),
+                ContextualPrecisionMetric(),
+            ]
+        }
 
 
 class GenerationPipeline(Eval):
@@ -263,12 +266,15 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict):
-        return [
-            AccuracyMetric(ibis_engine_config),
-            AnswerRelevancyMetric(config),
-            FaithfulnessMetric(config),
-        ]
+    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+        return {
+            "metrics": [
+                AccuracyMetric(ibis_engine_config),
+                AnswerRelevancyMetric(config),
+                FaithfulnessMetric(config),
+            ],
+            "post_metrics": [AccuracyMultiCandidateMetric()],
+        }
 
 
 class AskPipeline(Eval):
@@ -337,15 +343,18 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict):
-        return [
-            AccuracyMetric(ibis_engine_config),
-            AnswerRelevancyMetric(config),
-            FaithfulnessMetric(config),
-            ContextualRecallMetric(config),
-            ContextualRelevancyMetric(),
-            ContextualPrecisionMetric(),
-        ]
+    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+        return {
+            "metrics": [
+                AccuracyMetric(ibis_engine_config),
+                AnswerRelevancyMetric(config),
+                FaithfulnessMetric(config),
+                ContextualRecallMetric(config),
+                ContextualRelevancyMetric(),
+                ContextualPrecisionMetric(),
+            ],
+            "post_metrics": [AccuracyMultiCandidateMetric()],
+        }
 
 
 def init(
@@ -366,7 +375,7 @@ def init(
             raise ValueError(f"Invalid pipeline name: {name}")
 
 
-def metrics_initiator(pipeline: str, mdl: dict) -> list:
+def metrics_initiator(pipeline: str, mdl: dict) -> dict:
     config = engine_config(mdl)
     ibis_engine_config = {
         "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),

@@ -1,6 +1,7 @@
 import asyncio
 
 import pandas as pd
+from deepeval.evaluate import TestResult
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
@@ -63,6 +64,36 @@ class AccuracyMetric(BaseMetric):
     @property
     def __name__(self):
         return "Accuracy(column-based)"
+
+
+class AccuracyMultiCandidateMetric(BaseMetric):
+    def __init__(self):
+        self.threshold = 0
+        self.score = 0
+        self._questions = {}
+
+    def collect(self, test_case: LLMTestCase, result: TestResult):
+        for metric in result.metrics_metadata:
+            if metric.metric != "Accuracy(column-based)":
+                continue
+
+            self._questions[test_case.input] = (
+                self._questions.get(test_case.input, False) or metric.score > 0
+            )
+
+    def measure(self):
+        if not self._questions:
+            return 0
+        self.score = sum(self._questions.values()) / len(self._questions)
+        self.success = self.score >= self.threshold
+        return self.score
+
+    def is_successful(self):
+        return self.success
+
+    @property
+    def __name__(self):
+        return "Accuracy(question-based)"
 
 
 class AnswerRelevancyMetric(BaseMetric):
