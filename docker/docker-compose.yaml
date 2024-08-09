@@ -62,13 +62,14 @@ services:
       GENERATION_MODEL: ${GENERATION_MODEL}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
       LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
+      ENV: ${AI_SERVICE_ENV}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
     networks:
       - wren
     depends_on:
-      - wren-engine
+      - wren-ui
       - qdrant
 
   qdrant:

@@ -16,15 +16,16 @@ while ! nc -z localhost $WREN_AI_SERVICE_PORT; do
     sleep 1  # wait for 1 second before check again
 done
 
-# Wait for wren-ui to be responsive
-echo "Waiting for wren-ui to start..."
-while ! nc -z -w 5 wren-ui $WREN_UI_PORT && ! nc -z -w 5 host.docker.internal $WREN_UI_PORT; do   
-    sleep 1  # wait for 1 second before check again
-done
-
 echo "wren-ai-service has started."
 
-python -m src.force_deploy
+if [ "$ENV" = "oss" ]; then
+    # Wait for wren-ui to be responsive
+    echo "Waiting for wren-ui to start..."
+    while ! nc -z -w 5 wren-ui $WREN_UI_PORT && ! nc -z -w 5 host.docker.internal $WREN_UI_PORT; do   
+        sleep 1  # wait for 1 second before check again
+    done
+
+    python -m src.force_deploy
 
 # Bring wren-ai-service to the foreground
 wait
