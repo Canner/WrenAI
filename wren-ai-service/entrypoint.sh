@@ -26,6 +26,7 @@ if [ "$ENV" = "oss" ]; then
     done
 
     python -m src.force_deploy
+fi
 
 # Bring wren-ai-service to the foreground
 wait
