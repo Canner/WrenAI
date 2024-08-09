@@ -5,4 +5,5 @@ export enum DATA_SOURCES {
   MYSQL = 'MYSQL',
   MSSQL = 'MSSQL',
   CLICK_HOUSE = 'CLICK_HOUSE',
+  TRINO = 'TRINO',
 }

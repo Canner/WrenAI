@@ -8,6 +8,7 @@ import {
   MS_SQL_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
+  TRINO_CONNECTION_INFO,
 } from '../../repositories';
 import { snakeCase } from 'lodash';
 import { Encryptor } from '../../utils';
@@ -62,6 +63,16 @@ describe('IbisAdaptor', () => {
     projectId: 'my-bq-project-id',
     datasetId: 'my-bq-dataset-id',
     credentials: 'encrypted-credential-string',
+  };
+
+  const mockTrinoConnectionInfo: TRINO_CONNECTION_INFO = {
+    catalog: 'my-catalog',
+    schema: 'my-schema',
+    host: 'localhost',
+    port: 5450,
+    password: 'my-password',
+    ssl: true,
+    username: 'my-username',
   };
 
   const mockManifest: Manifest = {
@@ -207,6 +218,34 @@ describe('IbisAdaptor', () => {
       );
     },
   );
+
+  it('should get trino constraints', async () => {
+    const mockResponse = { data: [] };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockTrinoConnectionInfo.password }),
+    );
+
+    const result = await ibisAdaptor.getConstraints(
+      DataSourceName.TRINO,
+      mockTrinoConnectionInfo,
+    );
+
+    const { username, catalog, host, password, port, schema, ssl } =
+      mockTrinoConnectionInfo;
+    const expectConnectionInfo = {
+      connectionUrl: `jdbc:trino://${host}:${port}/${catalog}/${schema}?user=${username}&password=${password}`,
+    };
+
+    if (ssl) expectConnectionInfo.connectionUrl += '&SSL=true';
+
+    expect(result).toEqual([]);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/connector/trino/metadata/constraints`,
+      { connectionInfo: expectConnectionInfo },
+    );
+  });
 
   it('should get click house constraints', async () => {
     const mockResponse = { data: [] };

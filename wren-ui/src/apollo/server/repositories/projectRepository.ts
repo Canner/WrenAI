@@ -49,6 +49,16 @@ export interface CLICK_HOUSE_CONNECTION_INFO {
   ssl: boolean;
 }
 
+export interface TRINO_CONNECTION_INFO {
+  host: string;
+  port: number;
+  catalog: string;
+  schema: string;
+  username: string;
+  password: string;
+  ssl: boolean;
+}
+
 export interface DUCKDB_CONNECTION_INFO {
   initSql: string;
   extensions: Array<string>;
@@ -61,7 +71,8 @@ export type WREN_AI_CONNECTION_INFO =
   | MYSQL_CONNECTION_INFO
   | DUCKDB_CONNECTION_INFO
   | MS_SQL_CONNECTION_INFO
-  | CLICK_HOUSE_CONNECTION_INFO;
+  | CLICK_HOUSE_CONNECTION_INFO
+  | TRINO_CONNECTION_INFO;
 
 export interface Project {
   id: number; // ID

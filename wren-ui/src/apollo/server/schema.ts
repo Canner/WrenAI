@@ -10,6 +10,7 @@ export const typeDefs = gql`
     MYSQL
     MSSQL
     CLICK_HOUSE
+    TRINO
   }
 
   enum ExpressionName {

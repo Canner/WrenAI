@@ -130,7 +130,8 @@ export enum DataSourceName {
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
-  POSTGRES = 'POSTGRES'
+  POSTGRES = 'POSTGRES',
+  TRINO = 'TRINO'
 }
 
 export type DetailStep = {
