@@ -11,16 +11,17 @@ logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-explanations
-class StepWithAnalysisResult(BaseModel):
+class StepWithAnalysisResults(BaseModel):
     sql: str
     summary: str
+    cte_name: str
     sql_analysis_results: List[Dict]
 
 
 class SQLExplanationRequest(BaseModel):
     _query_id: str | None = None
     question: str
-    steps_with_analysis_results: List[StepWithAnalysisResult]
+    steps_with_analysis_results: List[StepWithAnalysisResults]
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
@@ -73,19 +74,42 @@ class SQLExplanationService:
 
             async def _task(
                 question: str,
-                step_with_analysis_results: StepWithAnalysisResult,
+                cte_names: List[str],
+                selected_data_sources: List[List[dict]],
+                step_with_analysis_results: StepWithAnalysisResults,
+                i: int,
             ):
                 return await self._pipelines["generation"].run(
                     question=question,
+                    cte_names=cte_names,
+                    selected_data_sources=selected_data_sources[:i],
                     step_with_analysis_results=step_with_analysis_results,
                 )
 
+            cte_names = [
+                step_with_analysis_results.cte_name
+                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+            ]
+            selected_data_sources = [
+                [
+                    select_item["exprSources"][0]
+                    for analysis_result in step_with_analysis_results.sql_analysis_results
+                    for select_item in analysis_result.get("selectItems", [])
+                    if select_item.get("exprSources", [])
+                ]
+                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+            ]
             tasks = [
                 _task(
                     sql_explanation_request.question,
+                    cte_names,
+                    selected_data_sources,
                     step_with_analysis_results,
+                    i,
                 )
-                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+                for i, step_with_analysis_results in enumerate(
+                    sql_explanation_request.steps_with_analysis_results
+                )
             ]
             generation_results = await asyncio.gather(*tasks)
 
