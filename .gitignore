@@ -14,6 +14,8 @@ wren-ai-service/**/spider/
 !wren-ai-service/src/eval/data/baseball_1*.json
 !wren-ai-service/src/eval/data/college_3*.json
 !wren-ai-service/src/eval/data/college_3_optimal_ddl.json
+wren-ai-service/*.csv
+wren-ai-service/*.json
 wren-ai-service/assertion.log
 wren-ai-service/redis.*
 wren-ai-service/demo/spider
