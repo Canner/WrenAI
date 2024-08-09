@@ -42,6 +42,8 @@ def generate_meta(
         "embedding_model": embedder_provider.get_model(),
         "generation_model": llm_provider.get_model(),
         "pipeline": pipe,
+        "batch_size": os.getenv("BATCH_SIZE") or 4,
+        "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
     }
 
 

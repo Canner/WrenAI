@@ -15,6 +15,7 @@ sys.path.append(f"{Path().parent.resolve()}")
 
 from eval.metrics.column import (
     AccuracyMetric,
+    AccuracyMultiCandidateMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
@@ -89,18 +90,27 @@ class Eval:
     def __init__(self, meta: dict, candidate_size: int = 1, **_):
         self._meta = meta
         self._candidate_size = candidate_size
+        self._batch_size = int(meta["batch_size"])
+        self._batch_interval = int(meta["batch_interval"])
 
     @property
     def candidate_size(self):
         return self._candidate_size
 
     def predict(self, queries: list) -> List[Dict[str, Any]]:
-        async def wrapper():
-            tasks = [self(query) for query in queries]
+        def split(batch_size: int) -> list[list]:
+            return [
+                queries[i : i + batch_size] for i in range(0, len(queries), batch_size)
+            ]
+
+        async def wrapper(batch: list):
+            tasks = [self(query) for query in batch]
             results = await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
+            await asyncio.sleep(self._batch_interval)
             return [prediction for predictions in results for prediction in predictions]
 
-        return asyncio.run(wrapper())
+        batches = [asyncio.run(wrapper(batch)) for batch in split(self._batch_size)]
+        return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
     def _process(self, prediction: dict, **_) -> dict:
@@ -193,12 +203,14 @@ class RetrievalPipeline(Eval):
         return [prediction, await self.flat(prediction.copy())]
 
     @staticmethod
-    def mertics(config: dict):
-        return [
-            ContextualRecallMetric(config),
-            ContextualRelevancyMetric(),
-            ContextualPrecisionMetric(),
-        ]
+    def mertics(config: dict) -> dict:
+        return {
+            "metrics": [
+                ContextualRecallMetric(config),
+                ContextualRelevancyMetric(),
+                ContextualPrecisionMetric(),
+            ]
+        }
 
 
 class GenerationPipeline(Eval):
@@ -254,11 +266,15 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict):
-        return [
-            AccuracyMetric(ibis_engine_config),
-            AnswerRelevancyMetric(config),
-        ]
+    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+        return {
+            "metrics": [
+                AccuracyMetric(ibis_engine_config),
+                AnswerRelevancyMetric(config),
+                FaithfulnessMetric(config),
+            ],
+            "post_metrics": [AccuracyMultiCandidateMetric()],
+        }
 
 
 class AskPipeline(Eval):
@@ -327,15 +343,18 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict):
-        return [
-            AccuracyMetric(ibis_engine_config),
-            AnswerRelevancyMetric(config),
-            FaithfulnessMetric(config),
-            ContextualRecallMetric(config),
-            ContextualRelevancyMetric(),
-            ContextualPrecisionMetric(),
-        ]
+    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+        return {
+            "metrics": [
+                AccuracyMetric(ibis_engine_config),
+                AnswerRelevancyMetric(config),
+                FaithfulnessMetric(config),
+                ContextualRecallMetric(config),
+                ContextualRelevancyMetric(),
+                ContextualPrecisionMetric(),
+            ],
+            "post_metrics": [AccuracyMultiCandidateMetric()],
+        }
 
 
 def init(
@@ -356,7 +375,7 @@ def init(
             raise ValueError(f"Invalid pipeline name: {name}")
 
 
-def metrics_initiator(pipeline: str, mdl: dict) -> list:
+def metrics_initiator(pipeline: str, mdl: dict) -> dict:
     config = engine_config(mdl)
     ibis_engine_config = {
         "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),

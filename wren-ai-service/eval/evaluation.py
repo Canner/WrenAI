@@ -48,11 +48,12 @@ def parse_args() -> Tuple[str]:
 
 
 class Evaluator:
-    def __init__(self, metrics: list):
+    def __init__(self, metrics: list, **kwargs):
         self._score_collector = {}
         self._langfuse = Langfuse()
         self._metrics = metrics
         self._failed_count = 0
+        self._post_metrics = kwargs.get("post_metrics", [])
 
     def eval(self, meta: dict, predictions: list) -> None:
         for prediction in predictions:
@@ -63,6 +64,7 @@ class Evaluator:
                 test_case = LLMTestCase(**formatter(prediction))
                 result = evaluate([test_case], self._metrics)[0]
                 self._score_metrics(test_case, result)
+                [metric.collect(test_case, result) for metric in self._post_metrics]
             except Exception:
                 self._failed_count += 1
                 traceback.print_exc()
@@ -110,6 +112,13 @@ class Evaluator:
                 comment=f"Average score for {name}",
             )
 
+        for metric in self._post_metrics:
+            langfuse_context.score_current_trace(
+                name=metric.__name__,
+                value=metric.measure(),
+                comment=f"Average score for {metric.__name__}",
+            )
+
 
 if __name__ == "__main__":
     path = parse_args()
@@ -124,7 +133,7 @@ if __name__ == "__main__":
     dataset = parse_toml(meta["evaluation_dataset"])
     metrics = pipelines.metrics_initiator(meta["pipeline"], dataset["mdl"])
 
-    evaluator = Evaluator(metrics)
+    evaluator = Evaluator(**metrics)
     evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
