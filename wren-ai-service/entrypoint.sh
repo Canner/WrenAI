@@ -3,7 +3,7 @@ set -e
 
 # Wait for qdrant to be responsive
 echo "Waiting for qdrant to start..."
-while ! nc -z -w 5 qdrant 6333; do   
+while ! nc -z -w 5 $QDRANT_HOST 6333; do   
     sleep 1  # wait for 1 second before check again
 done
 
