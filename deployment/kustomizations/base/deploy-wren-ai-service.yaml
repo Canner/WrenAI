@@ -58,13 +58,13 @@ spec:
                 key: GENERATION_MODEL
           - name: QDRANT_HOST
             valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
+              configMapKeyRef:
+                name: wren-config
                 key: QDRANT_HOST
           - name: DOCUMENT_STORE_PROVIDER
             valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
+              configMapKeyRef:
+                name: wren-config
                 key: DOCUMENT_STORE_PROVIDER
           - name: WREN_ENGINE_ENDPOINT
             valueFrom:
@@ -86,6 +86,11 @@ spec:
               configMapKeyRef:
                 name: wren-config
                 key: WREN_AI_SERVICE_ENABLE_TIMER
+          - name: AI_SERVICE_ENV
+            valueFrom:
+              configMapKeyRef:
+                name: wren-config
+                key: AI_SERVICE_ENV
           - name: PYTHONUNBUFFERED
             value: "1"
           ports:
