@@ -98,9 +98,9 @@ def gen_new_mdl_from_csv(mdl_path: str, csv_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--mdl_path", type=str, help="Path to the MDL JSON file", required=True
+        "--mdl-path", type=str, help="Path to the MDL JSON file", required=True
     )
-    parser.add_argument("--csv_path", type=str, help="Path to the input CSV file")
+    parser.add_argument("--csv-path", type=str, help="Path to the input CSV file")
     args = parser.parse_args()
 
     if args.mdl_path and not args.csv_path:
