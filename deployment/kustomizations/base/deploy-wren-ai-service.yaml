@@ -86,11 +86,6 @@ spec:
               configMapKeyRef:
                 name: wren-config
                 key: WREN_AI_SERVICE_ENABLE_TIMER
-          - name: AI_SERVICE_ENV
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: AI_SERVICE_ENV
           - name: PYTHONUNBUFFERED
             value: "1"
           ports:

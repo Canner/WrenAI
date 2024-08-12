@@ -26,7 +26,6 @@ metadata:
 ---
 apiVersion: v1
 data:
-  AI_SERVICE_ENV: prod
   DOCUMENT_STORE_PROVIDER: qdrant
   EMBEDDER_OPENAI_API_BASE: https://api.openai.com/v1
   EMBEDDER_PROVIDER: openai_embedder
@@ -429,11 +428,6 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: WREN_AI_SERVICE_ENABLE_TIMER
-              name: wren-config
-        - name: AI_SERVICE_ENV
-          valueFrom:
-            configMapKeyRef:
-              key: AI_SERVICE_ENV
               name: wren-config
         - name: PYTHONUNBUFFERED
           value: "1"

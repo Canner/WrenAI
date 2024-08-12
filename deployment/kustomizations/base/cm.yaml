@@ -49,6 +49,5 @@ data:
   
   #DEBUG, INFO
   LOGGING_LEVEL: INFO
-  AI_SERVICE_ENV: prod
 
   IBIS_SERVER_ENDPOINT: http://wren-ibis-server-svc:8000
