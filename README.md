@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <a href="https://getwren.ai">
+  <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
       <img src="./misc/wrenai_logo.png">
@@ -23,40 +23,40 @@
   <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
     <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20">
   </a>
-  <a aria-label="Canner" href="https://cannerdata.com/">
+  <a aria-label="Canner" href="https://cannerdata.com/?utm_source=github&utm_medium=badge&utm_campaign=readme">
     <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge">
   </a>
 </p>
 
 
-> Wren AI is a **text-to-SQL solution** for data teams to get results and insights faster by asking business questions without writing SQL.
+> Wren AI is a **SQL AI Agent** for data teams to get results and insights faster by asking business questions without writing SQL.
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
 ## 🕶 Try Our Demo!
 
-[Play around with Wren AI yourself!](https://demo.getwren.ai/)
+[Play around with Wren AI yourself!](https://demo.getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 
 ## 🎯 Our Vision & Mission
 
-Wren AI’s mission is to democratize data by bringing text-to-SQL ability to any data source and industry. We believe that breakthroughs in Text-to-SQL technology will usher in a new era of Data Democratization.
+Wren AI’s mission is to democratize data by bringing AI Agent with SQL ability to any data source.
 
 🤩 [About our Vision](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
 
-🙌 [About our Mission](https://docs.getwren.ai/overview/introduction)
+🙌 [About our Mission](https://docs.getwren.ai/overview/introduction/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
-## 👊 Text-to-SQL End-To-End Solution
+## 🤖 SQL AI Agent on your data
 
 ### 1. Indexing With Semantics
 
 > Wren AI has implemented a [semantic engine architecture](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
-### 2. Augment LLM Prompts
+### 2. Generate SQL Queries With Context
 
-> With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language” (MDL)](https://docs.getwren.ai/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
+> With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
 
-### 3. Generate Insights
+### 3. Get Insights Without Writing Code
 
 > When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
 
@@ -76,7 +76,7 @@ Wren AI’s mission is to democratize data by bringing text-to-SQL ability to an
 
 ## 🤔 Why Wren AI?
 
-We focus on providing an open, secure, and reliable text-to-SQL solution for everyone.
+We focus on providing an open, secure, and reliable SQL AI Agent for everyone.
 
 ### 1. Turnkey Solution
 
@@ -90,7 +90,7 @@ We focus on providing an open, secure, and reliable text-to-SQL solution for eve
 
 > Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
 
-## 🤖 Wren AI's Architecture
+## 🤖 Wren AI Agentic Architecture
 
 Wren AI consists of three core services:
 
@@ -106,23 +106,32 @@ Wren AI consists of three core services:
 
 Want to get our latest sharing? [Follow us on Medium!](https://blog.getwren.ai/)
 
-- [Easily query your database using LLMs without writing SQL and then import the data into Microsoft Excel.](https://blog.getwren.ai/easily-query-your-database-using-llms-without-writing-sql-and-then-import-the-data-into-microsoft-871c9672c656)
+### Trends
 - [Can AI Solve Data Silos Challenge? New Challenges To The Multi-AI Agents Era.](https://blog.getwren.ai/can-ai-solve-data-silos-challenge-new-challenges-to-the-multi-ai-agents-era-cec7fabc7c20)
-- [Wren AI in Kubernetes: Text-to-SQL](https://blog.getwren.ai/wren-ai-in-kubernetes-text-to-sql-39b82bda3d34)
-- [How to use Meta Llama 3 to query MySQL database using Ollama and Wren AI](https://blog.getwren.ai/how-to-use-meta-llama-3-to-query-mysql-database-using-ollama-on-your-machine-2c087b204e41)
-- [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://blog.getwren.ai/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online-9ba5c121afc3)
 - [The new wave of Composable Data Systems and the Interface to LLM agents](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
-- [How do you use OpenAI GPT-4o to query your database?](https://medium.com/wrenai/how-do-you-use-openai-gpt-4o-to-query-your-database-f24be68b0b70)
-- [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
-- [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa)
 - [How do you use LangChain to build a Text-to-SQL solution? What are the challenges? How to solve it?](https://blog.getwren.ai/how-do-you-use-langchain-to-build-a-text-to-sql-solution-what-are-the-challenges-how-to-solve-it-b6d9c66aa038)
 - [Deep dive into how Pinterest built its Text-to-SQL solution.](https://blog.getwren.ai/what-we-learned-from-pinterests-text-to-sql-solution-840fa5840635)
 - [How Snowflake building the most powerful SQL LLM in the world](https://blog.getwren.ai/what-we-learned-from-snowflake-copilot-building-the-most-powerful-sql-llm-in-the-world-52f82d661bc1)
+
+
+### Architecture
+- [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://blog.getwren.ai/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online-9ba5c121afc3)
+- [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
+- [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa)
+
+
+### Tutorials
+- [Using RAG Architecture to query databases, export to Google Sheets, and visualize in Looker Studio.](https://blog.getwren.ai/using-rag-architecture-to-query-databases-and-export-to-google-sheets-and-visualize-in-looker-3427944a0f9b)
+- [Easily query your database using LLMs without writing SQL and then import the data into Microsoft Excel.](https://blog.getwren.ai/easily-query-your-database-using-llms-without-writing-sql-and-then-import-the-data-into-microsoft-871c9672c656)
+- [Wren AI in Kubernetes: Text-to-SQL](https://blog.getwren.ai/wren-ai-in-kubernetes-text-to-sql-39b82bda3d34)
+- [How to use Meta Llama 3 to query MySQL database using Ollama and Wren AI](https://blog.getwren.ai/how-to-use-meta-llama-3-to-query-mysql-database-using-ollama-on-your-machine-2c087b204e41)
+- [How do you use OpenAI GPT-4o to query your database?](https://medium.com/wrenai/how-do-you-use-openai-gpt-4o-to-query-your-database-f24be68b0b70)
 - [How to directly access 150k+ Hugging Face Datasets with DuckDB and query using GPT-4o](https://medium.com/wrenai/how-to-load-huggingface-datasets-into-duckdb-and-query-with-gpt-4o-c2db89519e4d)
+
 
 ## 🚧 Project Status
 
-Wren AI is currently in ***alpha version***. The project team is actively working on progress and aiming to release new versions at least biweekly.
+Wren AI is currently in ***Beta Version***. The project team is actively working on progress and aiming to release new versions at least biweekly.
 
 ## 🚀 Getting Started
 
