@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
         engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
     )
     container.init_globals(
-        *providers, should_force_deploy=os.getenv("SHOULD_FORCE_DEPLOY", "")
+        *providers, should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", ""))
     )
     service_metadata(*providers)
     init_langfuse()
