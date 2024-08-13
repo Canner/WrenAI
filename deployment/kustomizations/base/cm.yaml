@@ -26,6 +26,9 @@ data:
   EMBEDDER_PROVIDER: "openai_embedder"
   EMBEDDER_OPENAI_API_BASE: "https://api.openai.com/v1"
 
+  # Document store related
+  QDRANT_HOST: "wren-qdrant"
+  DOCUMENT_STORE_PROVIDER: "qdrant"
 
   # Telemetry
   POSTHOG_HOST: "https://app.posthog.com"

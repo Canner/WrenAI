@@ -1,3 +1,5 @@
+from typing import Optional
+
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.ask import (
@@ -45,6 +47,7 @@ def init_globals(
     embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
     engine: Engine,
+    should_force_deploy: Optional[str] = None,
 ):
     global \
         INDEXING_SERVICE, \
@@ -53,12 +56,11 @@ def init_globals(
         SQL_EXPLANATION_SERVICE, \
         SQL_REGENERATION_SERVICE
 
-    # Recreate the document store to ensure a clean slate
-    # TODO: for SaaS, we need to use a flag to prevent this collection_recreation
-    document_store_provider.get_store(recreate_index=True)
-    document_store_provider.get_store(
-        dataset_name="view_questions", recreate_index=True
-    )
+    if should_force_deploy:
+        document_store_provider.get_store(recreate_index=True)
+        document_store_provider.get_store(
+            dataset_name="view_questions", recreate_index=True
+        )
 
     INDEXING_SERVICE = IndexingService(
         pipelines={
