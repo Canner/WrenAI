@@ -63,25 +63,36 @@ class GenerationPostProcessor:
         invalid_generation_results = []
 
         async def _task(result: Dict[str, str]):
-            quoted_sql = add_quotes(result["sql"])
+            quoted_sql, no_error = add_quotes(result["sql"])
 
-            status, error = await self._engine.dry_run_sql(
-                quoted_sql, session, project_id=project_id
-            )
-
-            if status:
-                valid_generation_results.append(
-                    {
-                        "sql": quoted_sql,
-                        "summary": result["summary"],
-                    }
+            if no_error:
+                status, error = await self._engine.dry_run_sql(
+                    quoted_sql, session, project_id=project_id
                 )
+
+                if status:
+                    valid_generation_results.append(
+                        {
+                            "sql": quoted_sql,
+                            "summary": result["summary"],
+                        }
+                    )
+                else:
+                    invalid_generation_results.append(
+                        {
+                            "sql": quoted_sql,
+                            "summary": result["summary"],
+                            "type": "DRY_RUN",
+                            "error": error,
+                        }
+                    )
             else:
                 invalid_generation_results.append(
                     {
-                        "sql": quoted_sql,
+                        "sql": result["sql"],
                         "summary": result["summary"],
-                        "error": error,
+                        "type": "ADD_QUOTES",
+                        "error": "add_quotes failed",
                     }
                 )
 

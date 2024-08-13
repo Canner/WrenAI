@@ -106,6 +106,11 @@ class AskService:
 
         return False
 
+    def _get_failed_dry_run_results(self, invalid_generation_results: list[dict]):
+        return list(
+            filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
+        )
+
     @async_timer
     @observe(name="Ask Question")
     @trace_metadata
@@ -208,16 +213,16 @@ class AskService:
                 logger.debug("Before sql correction:")
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
 
-                if text_to_sql_generation_results["post_process"][
-                    "invalid_generation_results"
-                ]:
+                if failed_dry_run_results := self._get_failed_dry_run_results(
+                    text_to_sql_generation_results["post_process"][
+                        "invalid_generation_results"
+                    ]
+                ):
                     sql_correction_results = await self._pipelines[
                         "sql_correction"
                     ].run(
                         contexts=documents,
-                        invalid_generation_results=text_to_sql_generation_results[
-                            "post_process"
-                        ]["invalid_generation_results"],
+                        invalid_generation_results=failed_dry_run_results,
                         project_id=ask_request.project_id,
                     )
                     valid_generation_results += sql_correction_results["post_process"][
@@ -228,17 +233,15 @@ class AskService:
                         f'sql_correction_results: {sql_correction_results["post_process"]}'
                     )
 
-                    for invalid_generation_result in sql_correction_results[
-                        "post_process"
-                    ]["invalid_generation_results"]:
+                    for failed_dry_run_result in failed_dry_run_results:
                         logger.debug(
                             f"{sqlparse.format(
-                                invalid_generation_result['sql'],
+                                failed_dry_run_result['sql'],
                                 reindent=True,
                                 keyword_case='upper')
                             }"
                         )
-                        logger.debug(invalid_generation_result["error"])
+                        logger.debug(failed_dry_run_result["error"])
                         logger.debug("\n\n")
 
                 # remove duplicates of valid_generation_results, which consists of a sql and a summary
