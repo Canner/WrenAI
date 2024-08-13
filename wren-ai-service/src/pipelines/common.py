@@ -43,7 +43,14 @@ class GenerationPostProcessor:
         steps[-1]["cte_name"] = ""
 
         for step in steps:
-            step["sql"] = add_quotes(step["sql"])
+            step["sql"], no_error = add_quotes(step["sql"])
+            if not no_error:
+                return {
+                    "results": {
+                        "description": cleaned_generation_result["description"],
+                        "steps": [],
+                    },
+                }
 
         sql = self._build_cte_query(steps)
         logger.debug(f"GenerationPostProcessor: steps: {pformat(steps)}")
