@@ -25,16 +25,15 @@ async def embedding(query: str, embedder: Any) -> dict:
 @async_timer
 @observe(capture_input=False)
 async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "id", "operator": "==", "value": id},
-            ],
-        }
-        if id
-        else None
-    )
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+        ],
+    }
+
+    if id:
+        filters["conditions"].append({"field": "id", "operator": "==", "value": id})
 
     return await retriever.run(
         query_embedding=embedding.get("embedding"),
@@ -53,7 +52,7 @@ class Retrieval(BasicPipeline):
     ):
         self._embedder = embedder_provider.get_text_embedder()
         self._retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store()
+            document_store_provider.get_store(),
         )
 
         super().__init__(

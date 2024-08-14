@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -145,20 +146,30 @@ class DDLConverter:
         return {
             "documents": [
                 Document(
-                    id=str(i),
-                    meta={"id": id} if id else {},
-                    content=ddl_command,
+                    id=str(uuid.uuid4()),
+                    meta=(
+                        {
+                            "id": id,
+                            "type": "TABLE_SCHEMA",
+                            "mdl_type": ddl_command["mdl_type"],
+                        }
+                        if id
+                        else {
+                            "type": "TABLE_SCHEMA",
+                            "mdl_type": ddl_command["mdl_type"],
+                        }
+                    ),
+                    content=payload,
                 )
-                for i, ddl_command in enumerate(
-                    tqdm(
-                        ddl_commands,
-                        desc="indexing ddl commands into the ddl store",
-                    )
+                for ddl_command in tqdm(
+                    ddl_commands,
+                    desc="indexing ddl commands into the ddl store",
                 )
+                for payload in ddl_command["payload"]
             ]
         }
 
-    def _get_ddl_commands(self, mdl: Dict[str, Any]) -> List[str]:
+    def _get_ddl_commands(self, mdl: Dict[str, Any]) -> List[dict]:
         semantics = {
             "models": [],
             "relationships": mdl["relationships"],
@@ -186,7 +197,6 @@ class DDLConverter:
 
             semantics["models"].append(
                 {
-                    "type": "model",
                     "name": model.get("name", ""),
                     "properties": model.get("properties", {}),
                     "columns": columns,
@@ -194,13 +204,19 @@ class DDLConverter:
                 }
             )
 
-        return (
-            self._convert_models_and_relationships(
-                semantics["models"], semantics["relationships"]
-            )
-            + self._convert_metrics(semantics["metrics"])
-            + self._convert_views(semantics["views"])
-        )
+        return [
+            {
+                "mdl_type": "MODEL",
+                "payload": self._convert_models_and_relationships(
+                    semantics["models"], semantics["relationships"]
+                ),
+            },
+            {
+                "mdl_type": "METRIC",
+                "payload": self._convert_metrics(semantics["metrics"]),
+            },
+            {"mdl_type": "VIEW", "payload": self._convert_views(semantics["views"])},
+        ]
 
     # TODO: refactor this method
     def _convert_models_and_relationships(
@@ -326,6 +342,69 @@ class DDLConverter:
 
 
 @component
+class TableDescriptionConverter:
+    @component.output_types(documents=List[Document])
+    def run(self, mdl: Dict[str, Any], id: Optional[str] = None):
+        logger.info(
+            "Ask Indexing pipeline is writing new documents for table descriptions..."
+        )
+
+        logger.debug(f"original mdl_json: {mdl}")
+
+        table_descriptions = self._get_table_descriptions(mdl)
+
+        return {
+            "documents": [
+                Document(
+                    id=str(uuid.uuid4()),
+                    meta=(
+                        {"id": id, "type": "TABLE_DESCRIPTION"}
+                        if id
+                        else {"type": "TABLE_DESCRIPTION"}
+                    ),
+                    content=table_description,
+                )
+                for table_description in tqdm(
+                    table_descriptions,
+                    desc="indexing table descriptions into the ddl store",
+                )
+            ]
+        }
+
+    def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[str]:
+        table_descriptions = []
+        mdl_data = [
+            {
+                "mdl_type": "MODEL",
+                "payload": mdl["models"],
+            },
+            {
+                "mdl_type": "METRIC",
+                "payload": mdl["metrics"],
+            },
+            {
+                "mdl_type": "VIEW",
+                "payload": mdl["views"],
+            },
+        ]
+
+        for data in mdl_data:
+            payload = data["payload"]
+            for unit in payload:
+                if name := unit.get("name", ""):
+                    table_description = {
+                        "name": name,
+                        "mdl_type": data["mdl_type"],
+                        "description": unit.get("properties", {}).get(
+                            "description", ""
+                        ),
+                    }
+                    table_descriptions.append(str(table_description))
+
+        return table_descriptions
+
+
+@component
 class AsyncDocumentWriter(DocumentWriter):
     @component.output_types(documents_written=int)
     async def run(
@@ -366,6 +445,19 @@ def validate_mdl(
 
 @timer
 @observe(capture_input=False)
+def covert_to_table_descriptions(
+    mdl: Dict[str, Any],
+    table_description_converter: TableDescriptionConverter,
+    id: Optional[str] = None,
+) -> Dict[str, Any]:
+    logger.debug(
+        f"input in convert_to_table_descriptions: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
+    )
+    return table_description_converter.run(mdl=mdl, id=id)
+
+
+@timer
+@observe(capture_input=False)
 def convert_to_ddl(
     mdl: Dict[str, Any], ddl_converter: DDLConverter, id: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -378,12 +470,21 @@ def convert_to_ddl(
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_ddl(
-    convert_to_ddl: Dict[str, Any], ddl_embedder: Any
+    convert_to_ddl: Dict[str, Any],
+    covert_to_table_descriptions: Dict[str, Any],
+    ddl_embedder: Any,
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input in embed_ddl: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
+        f"input(convert_to_ddl) in embed_ddl: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await ddl_embedder.run(documents=convert_to_ddl["documents"])
+    logger.debug(
+        f"input(covert_to_table_descriptions) in embed_ddl: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
+    )
+    print(convert_to_ddl["documents"])
+    return await ddl_embedder.run(
+        documents=convert_to_ddl["documents"]
+        + covert_to_table_descriptions["documents"]
+    )
 
 
 @async_timer
@@ -436,6 +537,7 @@ class Indexing(BasicPipeline):
         self.validator = MDLValidator()
 
         self.ddl_converter = DDLConverter()
+        self.table_description_converter = TableDescriptionConverter()
         self.ddl_embedder = embedder_provider.get_document_embedder()
         self.ddl_writer = AsyncDocumentWriter(
             document_store=ddl_store,
@@ -466,6 +568,7 @@ class Indexing(BasicPipeline):
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
+                "table_description_converter": self.table_description_converter,
                 "ddl_embedder": self.ddl_embedder,
                 "ddl_writer": self.ddl_writer,
                 "view_converter": self.view_converter,
@@ -488,6 +591,7 @@ class Indexing(BasicPipeline):
                 "cleaner": self.cleaner,
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
+                "table_description_converter": self.table_description_converter,
                 "ddl_embedder": self.ddl_embedder,
                 "ddl_writer": self.ddl_writer,
                 "view_converter": self.view_converter,
