@@ -47,11 +47,14 @@ async def is_sql_valid(
     timeout: float = TIMEOUT_SECONDS,
 ) -> Tuple[bool, str]:
     sql = sql.rstrip(";") if sql.endswith(";") else sql
+    quoted_sql, no_error = add_quotes(sql)
+    assert no_error, f"Error in quoting SQL: {sql}"
+
     async with aiohttp.request(
         "POST",
         f"{api_endpoint}/v2/connector/{data_source}/query?dryRun=true",
         json={
-            "sql": add_quotes(sql),
+            "sql": quoted_sql,
             "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
             "connectionInfo": connection_info,
         },

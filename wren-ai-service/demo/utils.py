@@ -5,7 +5,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import orjson
 import pandas as pd
@@ -25,8 +25,12 @@ LLM_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
 load_dotenv()
 
 
-def add_quotes(sql: str) -> str:
-    return sqlglot.transpile(sql, read="trino", identify=True)[0]
+def add_quotes(sql: str) -> Tuple[str, bool]:
+    try:
+        quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
+        return quoted_sql, True
+    except Exception:
+        return sql, False
 
 
 def get_connection_info(data_source: str):
@@ -135,10 +139,13 @@ def get_data_from_wren_engine(
     manifest: dict,
 ):
     if dataset_type == "duckdb":
+        quoted_sql, no_error = add_quotes(sql)
+        assert no_error, f"Error in adding quotes to SQL: {sql}"
+
         response = requests.get(
             f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
             json={
-                "sql": add_quotes(sql),
+                "sql": quoted_sql,
                 "manifest": manifest,
                 "limit": 100,
             },
@@ -151,10 +158,12 @@ def get_data_from_wren_engine(
 
         return pd.DataFrame(data["data"], columns=column_names)
     else:
+        quoted_sql, no_error = add_quotes(sql)
+        assert no_error, f"Error in adding quotes to SQL: {sql}"
         response = requests.post(
             f"{WREN_IBIS_API_URL}/v2/connector/{dataset_type}/query?limit=100",
             json={
-                "sql": add_quotes(sql),
+                "sql": quoted_sql,
                 "manifestStr": base64.b64encode(orjson.dumps(manifest)).decode(),
                 "connectionInfo": get_connection_info(dataset_type),
                 "limit": 100,

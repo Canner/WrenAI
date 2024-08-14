@@ -1,6 +1,6 @@
 import base64
 import os
-from typing import Any, Dict, List, Literal, Optional, get_args
+from typing import Any, Dict, List, Literal, Optional, Tuple, get_args
 
 import aiohttp
 import orjson
@@ -8,8 +8,12 @@ import sqlglot
 from tomlkit import parse
 
 
-def add_quotes(sql: str) -> str:
-    return sqlglot.transpile(sql, read="trino", identify=True)[0]
+def add_quotes(sql: str) -> Tuple[str, bool]:
+    try:
+        quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
+        return quoted_sql, True
+    except Exception:
+        return sql, False
 
 
 async def get_data_from_wren_engine(
@@ -25,11 +29,14 @@ async def get_data_from_wren_engine(
     if limit is not None:
         url += f"?limit={limit}"
 
+    quoted_sql, no_error = add_quotes(sql)
+    assert no_error, f"Error in quoting SQL: {sql}"
+
     async with aiohttp.request(
         "POST",
         url,
         json={
-            "sql": add_quotes(sql),
+            "sql": quoted_sql,
             "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
             "connectionInfo": connection_info,
         },
@@ -123,11 +130,14 @@ async def get_contexts_from_sql(
         timeout: float,
     ) -> List[dict]:
         sql = sql.rstrip(";") if sql.endswith(";") else sql
+        quoted_sql, no_error = add_quotes(sql)
+        assert no_error, f"Error in quoting SQL: {sql}"
+
         async with aiohttp.request(
             "GET",
             f"{api_endpoint}/v1/analysis/sql",
             json={
-                "sql": add_quotes(sql),
+                "sql": quoted_sql,
                 "manifest": mdl_json,
             },
             timeout=aiohttp.ClientTimeout(total=timeout),

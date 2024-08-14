@@ -106,9 +106,10 @@ class AskDetailsService:
             ask_details_result = generation_result["post_process"]["results"]
 
             if not ask_details_result["steps"]:
+                quoted_sql, no_error = add_quotes(ask_details_request.sql)
                 ask_details_result["steps"] = [
                     {
-                        "sql": add_quotes(ask_details_request.sql),
+                        "sql": quoted_sql if no_error else ask_details_request.sql,
                         "summary": ask_details_request.summary,
                         "cte_name": "",
                     }
