@@ -35,7 +35,9 @@
 
 ## 🕶 Try Our Demo!
 
-[Play around with Wren AI yourself!](https://demo.getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
+https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
+
+👉 [Play around with Wren AI yourself!](https://demo.getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 
 ## 🎯 Our Vision & Mission
@@ -63,16 +65,6 @@ Wren AI’s mission is to democratize data by bringing AI Agent with SQL ability
 ### 4. Self-Learning Feedback Loop (Coming Soon)
 
 > The AI self-learning feedback loop is designed to refine SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantics enhancement, and query frequency.
-
-## 🔥 Preview
-
-### Ask your business questions and follow-up insights
-
-![](./misc/preview_ask.png)
-
-### Modeling with semantics, such as relationships, metrics, and calculations
-
-![](./misc/preview_model.png)
 
 ## 🤔 Why Wren AI?
 

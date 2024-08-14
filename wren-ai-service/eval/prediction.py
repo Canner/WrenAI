@@ -33,7 +33,7 @@ def generate_meta(
 ) -> Dict[str, Any]:
     return {
         "user_id": "wren-evaluator",  # this property is using for langfuse
-        "session_id": f"eval_{uuid.uuid4()}",
+        "session_id": f"eval_{pipe}_{uuid.uuid4()}",
         "date": datetime.now(),
         "dataset_id": dataset["dataset_id"],
         "evaluation_dataset": path,

@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 
 import pandas as pd
 from deepeval.evaluate import TestResult
@@ -44,15 +45,19 @@ class AccuracyMetric(BaseMetric):
         return df[sorted_columns].sort_values(by=sorted_columns)
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        expected_dataset = await self._retrieve_data(test_case.expected_output)
-        actual_dataset = await self._retrieve_data(test_case.actual_output)
+        try:
+            expected_dataset = await self._retrieve_data(test_case.expected_output)
+            actual_dataset = await self._retrieve_data(test_case.actual_output)
 
-        if expected_dataset.equals(actual_dataset) or self.is_subset(
-            expected_dataset, actual_dataset
-        ):
-            self.success = True
-            self.score = 1
-            return self.score
+            if expected_dataset.equals(actual_dataset) or self.is_subset(
+                expected_dataset, actual_dataset
+            ):
+                self.success = True
+                self.score = 1
+                return self.score
+        except Exception as e:
+            self.error = f"Error occurred while evaluating the metric: {e}"
+            traceback.print_exc()
 
         # if didn't pass any of the above checks
         self.success = False
@@ -77,8 +82,9 @@ class AccuracyMultiCandidateMetric(BaseMetric):
             if metric.metric != "Accuracy(column-based)":
                 continue
 
+            # or 0 to avoid when metric.error is exist
             self._questions[test_case.input] = (
-                self._questions.get(test_case.input, False) or metric.score > 0
+                self._questions.get(test_case.input, False) or metric.score or 0 > 0
             )
 
     def measure(self):
