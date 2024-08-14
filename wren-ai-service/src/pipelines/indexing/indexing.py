@@ -163,7 +163,7 @@ class DDLConverter:
                 )
                 for ddl_command in tqdm(
                     ddl_commands,
-                    desc="indexing ddl commands into the ddl store",
+                    desc="indexing ddl commands into the dbschema store",
                 )
                 for payload in ddl_command["payload"]
             ]
@@ -366,7 +366,7 @@ class TableDescriptionConverter:
                 )
                 for table_description in tqdm(
                     table_descriptions,
-                    desc="indexing table descriptions into the ddl store",
+                    desc="indexing table descriptions into the dbshema store",
                 )
             ]
         }
@@ -469,19 +469,19 @@ def convert_to_ddl(
 
 @async_timer
 @observe(capture_input=False, capture_output=False)
-async def embed_ddl(
+async def embed_dbschema(
     convert_to_ddl: Dict[str, Any],
     covert_to_table_descriptions: Dict[str, Any],
-    ddl_embedder: Any,
+    dbschema_embedder: Any,
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input(convert_to_ddl) in embed_ddl: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
+        f"input(convert_to_ddl) in embed_dbschema: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
     )
     logger.debug(
-        f"input(covert_to_table_descriptions) in embed_ddl: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
+        f"input(covert_to_table_descriptions) in embed_dbschema: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
     )
 
-    return await ddl_embedder.run(
+    return await dbschema_embedder.run(
         documents=convert_to_ddl["documents"]
         + covert_to_table_descriptions["documents"]
     )
@@ -489,8 +489,10 @@ async def embed_ddl(
 
 @async_timer
 @observe(capture_input=False)
-async def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
-    return await ddl_writer.run(documents=embed_ddl["documents"])
+async def write_dbschema(
+    embed_dbschema: Dict[str, Any], dbschema_writer: DocumentWriter
+) -> None:
+    return await dbschema_writer.run(documents=embed_dbschema["documents"])
 
 
 @timer
@@ -530,17 +532,17 @@ class Indexing(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
     ) -> None:
-        ddl_store = document_store_provider.get_store()
+        dbschema_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")
 
-        self.cleaner = DocumentCleaner([ddl_store, view_store])
+        self.cleaner = DocumentCleaner([dbschema_store, view_store])
         self.validator = MDLValidator()
 
         self.ddl_converter = DDLConverter()
         self.table_description_converter = TableDescriptionConverter()
-        self.ddl_embedder = embedder_provider.get_document_embedder()
-        self.ddl_writer = AsyncDocumentWriter(
-            document_store=ddl_store,
+        self.dbschema_embedder = embedder_provider.get_document_embedder()
+        self.dbschema_writer = AsyncDocumentWriter(
+            document_store=dbschema_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
         self.view_converter = ViewConverter()
@@ -560,7 +562,7 @@ class Indexing(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["write_ddl", "write_view"],
+            ["write_dbschema", "write_view"],
             output_file_path=f"{destination}/indexing.dot",
             inputs={
                 "mdl_str": mdl_str,
@@ -569,8 +571,8 @@ class Indexing(BasicPipeline):
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
                 "table_description_converter": self.table_description_converter,
-                "ddl_embedder": self.ddl_embedder,
-                "ddl_writer": self.ddl_writer,
+                "dbschema_embedder": self.dbschema_embedder,
+                "dbschema_writer": self.dbschema_writer,
                 "view_converter": self.view_converter,
                 "view_embedder": self.view_embedder,
                 "view_writer": self.view_writer,
@@ -584,7 +586,7 @@ class Indexing(BasicPipeline):
     async def run(self, mdl_str: str, id: Optional[str] = None) -> Dict[str, Any]:
         logger.info("Document Indexing pipeline is running...")
         return await self._pipe.execute(
-            ["write_ddl", "write_view"],
+            ["write_dbschema", "write_view"],
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
@@ -592,8 +594,8 @@ class Indexing(BasicPipeline):
                 "validator": self.validator,
                 "ddl_converter": self.ddl_converter,
                 "table_description_converter": self.table_description_converter,
-                "ddl_embedder": self.ddl_embedder,
-                "ddl_writer": self.ddl_writer,
+                "dbschema_embedder": self.dbschema_embedder,
+                "dbschema_writer": self.dbschema_writer,
                 "view_converter": self.view_converter,
                 "view_embedder": self.view_embedder,
                 "view_writer": self.view_writer,
