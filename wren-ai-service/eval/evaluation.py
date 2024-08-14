@@ -62,7 +62,7 @@ class Evaluator:
 
             try:
                 test_case = LLMTestCase(**formatter(prediction))
-                result = evaluate([test_case], self._metrics)[0]
+                result = evaluate([test_case], self._metrics, ignore_errors=True)[0]
                 self._score_metrics(test_case, result)
                 [metric.collect(test_case, result) for metric in self._post_metrics]
             except Exception:
@@ -74,13 +74,13 @@ class Evaluator:
     def _score_metrics(self, test_case: LLMTestCase, result: TestResult) -> None:
         for metric in result.metrics_metadata:
             name = metric.metric
-            score = metric.score
+            score = metric.score or 0
 
             self._langfuse.score(
                 trace_id=test_case.additional_metadata["trace_id"],
                 name=name,
                 value=score,
-                comment=metric.reason,
+                comment=metric.reason or metric.error,
                 source="eval",
             )
 
