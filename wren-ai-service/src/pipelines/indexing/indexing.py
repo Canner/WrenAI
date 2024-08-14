@@ -480,7 +480,7 @@ async def embed_ddl(
     logger.debug(
         f"input(covert_to_table_descriptions) in embed_ddl: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
     )
-    print(convert_to_ddl["documents"])
+
     return await ddl_embedder.run(
         documents=convert_to_ddl["documents"]
         + covert_to_table_descriptions["documents"]
