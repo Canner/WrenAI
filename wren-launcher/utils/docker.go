@@ -29,9 +29,13 @@ const (
 )
 
 func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool) string {
-	// rplace PROJECT_DIR
+	// replace PROJECT_DIR
 	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
 	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
+
+	// replace SHOULD_FORCE_DEPLOY
+	reg = regexp.MustCompile(`SHOULD_FORCE_DEPLOY=(.*)`)
+	str = reg.ReplaceAllString(str, "SHOULD_FORCE_DEPLOY=1")
 
 	// replace LLM_OPENAI_API_KEY
 	// Might be overwritten by the .env.ai file
