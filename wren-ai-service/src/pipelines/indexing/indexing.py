@@ -134,11 +134,13 @@ class ViewConverter:
 class DDLConverter:
     @component.output_types(documents=List[Document])
     def run(self, mdl: Dict[str, Any], id: Optional[str] = None):
-        logger.info("Ask Indexing pipeline is writing new documents...")
+        logger.info(
+            "Ask Indexing pipeline is writing new documents for table schema..."
+        )
 
         logger.debug(f"original mdl_json: {mdl}")
 
-        ddl_commands = self.get_ddl_commands(mdl)
+        ddl_commands = self._get_ddl_commands(mdl)
 
         return {
             "documents": [
@@ -156,7 +158,7 @@ class DDLConverter:
             ]
         }
 
-    def get_ddl_commands(self, mdl: Dict[str, Any]) -> List[str]:
+    def _get_ddl_commands(self, mdl: Dict[str, Any]) -> List[str]:
         semantics = {
             "models": [],
             "relationships": mdl["relationships"],
@@ -166,10 +168,10 @@ class DDLConverter:
 
         for model in mdl["models"]:
             columns = []
-            for column in model["columns"]:
+            for column in model.get("columns", []):
                 ddl_column = {
-                    "name": column["name"],
-                    "type": column["type"],
+                    "name": column.get("name", ""),
+                    "type": column.get("type", ""),
                 }
                 if "properties" in column:
                     ddl_column["properties"] = column["properties"]
@@ -185,10 +187,10 @@ class DDLConverter:
             semantics["models"].append(
                 {
                     "type": "model",
-                    "name": model["name"],
-                    "properties": model["properties"] if "properties" in model else {},
+                    "name": model.get("name", ""),
+                    "properties": model.get("properties", {}),
                     "columns": columns,
-                    "primaryKey": model["primaryKey"],
+                    "primaryKey": model.get("primaryKey", ""),
                 }
             )
 
@@ -231,43 +233,37 @@ class DDLConverter:
                     column_ddl = f"{comment}{column_name} {column_type}"
 
                     # If column is a primary key
-                    if column_name == model.get("primaryKey", ""):
+                    if column_name == model["primaryKey"]:
                         column_ddl += " PRIMARY KEY"
 
                     columns_ddl.append(column_ddl)
 
             # Add foreign key constraints based on relationships
             for relationship in relationships:
-                comment = f'-- {{"condition": {relationship["condition"]}, "joinType": {relationship["joinType"]}}}\n  '
-                if (
-                    table_name == relationship["models"][0]
-                    and relationship["joinType"].upper() == "MANY_TO_ONE"
-                ):
-                    related_table = relationship["models"][1]
-                    fk_column = relationship["condition"].split(" = ")[0].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(f"{comment}{fk_constraint}")
-                elif (
-                    table_name == relationship["models"][1]
-                    and relationship["joinType"].upper() == "ONE_TO_MANY"
-                ):
-                    related_table = relationship["models"][0]
-                    fk_column = relationship["condition"].split(" = ")[1].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(f"{comment}{fk_constraint}")
-                elif (
-                    table_name in relationship["models"]
-                    and relationship["joinType"].upper() == "ONE_TO_ONE"
-                ):
-                    index = relationship["models"].index(table_name)
-                    related_table = [
-                        m for m in relationship["models"] if m != table_name
-                    ][0]
-                    fk_column = (
-                        relationship["condition"].split(" = ")[index].split(".")[1]
+                condition = relationship.get("condition", "")
+                join_type = relationship.get("joinType", "")
+                models = relationship.get("models", [])
+
+                if len(models) == 2:
+                    comment = (
+                        f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
                     )
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(f"{comment}{fk_constraint}")
+                    if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
+                        related_table = models[1]
+                        fk_column = condition.split(" = ")[0].split(".")[1]
+                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                        columns_ddl.append(f"{comment}{fk_constraint}")
+                    elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
+                        related_table = models[0]
+                        fk_column = condition.split(" = ")[1].split(".")[1]
+                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                        columns_ddl.append(f"{comment}{fk_constraint}")
+                    elif table_name in models and join_type.upper() == "ONE_TO_ONE":
+                        index = models.index(table_name)
+                        related_table = [m for m in models if m != table_name][0]
+                        fk_column = condition.split(" = ")[index].split(".")[1]
+                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                        columns_ddl.append(f"{comment}{fk_constraint}")
 
             if "properties" in model:
                 model["properties"]["alias"] = model["properties"].pop(
@@ -301,18 +297,18 @@ class DDLConverter:
         ddl_commands = []
 
         for metric in metrics:
-            table_name = metric["name"]
+            table_name = metric.get("name", "")
             columns_ddl = []
-            for dimension in metric["dimension"]:
-                column_name = dimension["name"]
-                column_type = dimension["type"]
+            for dimension in metric.get("dimension", []):
+                column_name = dimension.get("name", "")
+                column_type = dimension.get("type", "")
                 comment = "-- This column is a dimension\n  "
                 column_ddl = f"{comment}{column_name} {column_type}"
                 columns_ddl.append(column_ddl)
 
-            for measure in metric["measure"]:
-                column_name = measure["name"]
-                column_type = measure["type"]
+            for measure in metric.get("measure", []):
+                column_name = measure.get("name", "")
+                column_type = measure.get("type", "")
                 comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
                 column_ddl = f"{comment}{column_name} {column_type}"
                 columns_ddl.append(column_ddl)
