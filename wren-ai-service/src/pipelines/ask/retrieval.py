@@ -27,8 +27,8 @@ that are essential for crafting a SQL query to answer the question.
 
 ### Database Schema ###
 
-{% for document in db_schemas %}
-    {{ document.content }}
+{% for db_schema in db_schemas %}
+    {{ db_schema }}
 {% endfor %}
 
 This schema offers an in-depth description of the database’s architecture,
@@ -122,17 +122,34 @@ async def dbschema_retrieval(
 
 
 @timer
-@observe(capture_input=False)
-def prompt(
-    query: str, dbschema_retrieval: list[Document], prompt_builder: PromptBuilder
-) -> dict:
-    db_schemas = []
+@observe()
+def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
+    db_schemas = {}
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
         if content["type"] == "TABLE":
-            db_schemas.append(document)
+            if document.meta["name"] not in db_schemas:
+                db_schemas[document.meta["name"]] = content
+            else:
+                db_schemas[document.meta["name"]] = {
+                    **db_schemas[document.meta["name"]],
+                    **content,
+                }
+        elif content["type"] == "TABLE_COLUMNS":
+            if document.meta["name"] not in db_schemas:
+                db_schemas[document.meta["name"]] = {"columns": content["columns"]}
+            else:
+                db_schemas[document.meta["name"]]["columns"] = content["columns"]
 
-    return prompt_builder.run(question=query, db_schemas=db_schemas)
+    return list(db_schemas.values())
+
+
+@timer
+@observe(capture_input=False)
+def prompt(
+    query: str, construct_db_schemas: list[dict], prompt_builder: PromptBuilder
+) -> dict:
+    return prompt_builder.run(question=query, db_schemas=construct_db_schemas)
 
 
 @async_timer
@@ -145,7 +162,9 @@ async def filter_columns_in_tables(prompt: dict, generator: Any) -> dict:
 @timer
 @observe()
 def construct_retrieval_results(
-    filter_columns_in_tables: dict, dbschema_retrieval: list[Document]
+    filter_columns_in_tables: dict,
+    construct_db_schemas: list[dict],
+    dbschema_retrieval: list[Document],
 ) -> list[str]:
     def _build_table_ddl(content: dict, tables: set[str], columns: set[str]) -> str:
         columns_ddl = []
@@ -189,19 +208,24 @@ def construct_retrieval_results(
     tables = set(columns_and_tables_needed.keys())
     retrieval_results = []
 
+    for table_schema in construct_db_schemas:
+        if (
+            table_schema["name"] in columns_and_tables_needed
+            and table_schema["type"] == "TABLE"
+        ):
+            retrieval_results.append(
+                _build_table_ddl(
+                    table_schema,
+                    tables,
+                    set(columns_and_tables_needed[table_schema["name"]]),
+                )
+            )
+
     for document in dbschema_retrieval:
         if document.meta["name"] in columns_and_tables_needed:
             content = ast.literal_eval(document.content)
 
-            if content["type"] == "TABLE":
-                retrieval_results.append(
-                    _build_table_ddl(
-                        content,
-                        tables,
-                        set(columns_and_tables_needed[document.meta["name"]]),
-                    )
-                )
-            elif content["type"] == "METRIC":
+            if content["type"] == "METRIC":
                 retrieval_results.append(_build_metric_ddl(content))
             elif content["type"] == "VIEW":
                 retrieval_results.append(_build_view_ddl(content))

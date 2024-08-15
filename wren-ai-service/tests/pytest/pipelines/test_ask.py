@@ -57,7 +57,7 @@ async def test_clear_documents(mdl_str: str):
 
     await indexing_pipeline.run(mdl_str)
 
-    assert await store.count_documents() == 3
+    assert await store.count_documents() == 6
 
     await indexing_pipeline.run(
         """

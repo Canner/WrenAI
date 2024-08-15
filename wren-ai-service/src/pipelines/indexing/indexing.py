@@ -134,14 +134,19 @@ class ViewConverter:
 @component
 class DDLConverter:
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], id: Optional[str] = None):
+    def run(
+        self,
+        mdl: Dict[str, Any],
+        id: Optional[str] = None,
+        column_indexing_batch_size: Optional[int] = 50,
+    ):
         logger.info(
             "Ask Indexing pipeline is writing new documents for table schema..."
         )
 
         logger.debug(f"original mdl_json: {mdl}")
 
-        ddl_commands = self._get_ddl_commands(mdl)
+        ddl_commands = self._get_ddl_commands(mdl, column_indexing_batch_size)
 
         return {
             "documents": [
@@ -168,7 +173,9 @@ class DDLConverter:
             ]
         }
 
-    def _get_ddl_commands(self, mdl: Dict[str, Any]) -> List[dict]:
+    def _get_ddl_commands(
+        self, mdl: Dict[str, Any], column_indexing_batch_size: int
+    ) -> List[dict]:
         semantics = {
             "models": [],
             "relationships": mdl["relationships"],
@@ -205,7 +212,9 @@ class DDLConverter:
 
         return (
             self._convert_models_and_relationships(
-                semantics["models"], semantics["relationships"]
+                semantics["models"],
+                semantics["relationships"],
+                column_indexing_batch_size,
             )
             + self._convert_views(semantics["views"])
             + self._convert_metrics(semantics["metrics"])
@@ -213,7 +222,10 @@ class DDLConverter:
 
     # TODO: refactor this method
     def _convert_models_and_relationships(
-        self, models: List[Dict[str, Any]], relationships: List[Dict[str, Any]]
+        self,
+        models: List[Dict[str, Any]],
+        relationships: List[Dict[str, Any]],
+        column_indexing_batch_size: int,
     ) -> List[str]:
         ddl_commands = []
 
@@ -223,6 +235,7 @@ class DDLConverter:
         for model in models:
             table_name = model["name"]
             columns_ddl = []
+            columns = []
             for column in model["columns"]:
                 if "relationship" not in column:
                     if "properties" in column:
@@ -247,6 +260,7 @@ class DDLConverter:
                             "is_primary_key": column["name"] == model["primaryKey"],
                         }
                     )
+                    columns.append(column["name"])
 
             # Add foreign key constraints based on relationships
             for relationship in relationships:
@@ -304,13 +318,23 @@ class DDLConverter:
                             "type": "TABLE",
                             "comment": comment,
                             "name": table_name,
-                            "columns": columns_ddl,
                         }
                     ),
                 }
             )
-
-        logger.debug(f"DDL Commands: {ddl_commands}")
+            column_ddl_commands = [
+                {
+                    "name": table_name,
+                    "payload": str(
+                        {
+                            "type": "TABLE_COLUMNS",
+                            "columns": columns_ddl[i : i + column_indexing_batch_size],
+                        }
+                    ),
+                }
+                for i in range(0, len(columns_ddl), column_indexing_batch_size)
+            ]
+            ddl_commands += column_ddl_commands
 
         return ddl_commands
 
@@ -335,22 +359,24 @@ class DDLConverter:
             columns_ddl = []
             for dimension in metric.get("dimension", []):
                 comment = "-- This column is a dimension\n  "
+                name = dimension.get("name", "")
                 columns_ddl.append(
                     {
                         "type": "COLUMN",
                         "comment": comment,
-                        "name": dimension.get("name", ""),
+                        "name": name,
                         "data_type": dimension.get("type", ""),
                     }
                 )
 
             for measure in metric.get("measure", []):
                 comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
+                name = measure.get("name", "")
                 columns_ddl.append(
                     {
                         "type": "COLUMN",
                         "comment": comment,
-                        "name": measure.get("name", ""),
+                        "name": name,
                         "data_type": measure.get("type", ""),
                     }
                 )
@@ -491,12 +517,18 @@ def covert_to_table_descriptions(
 @timer
 @observe(capture_input=False)
 def convert_to_ddl(
-    mdl: Dict[str, Any], ddl_converter: DDLConverter, id: Optional[str] = None
+    mdl: Dict[str, Any],
+    ddl_converter: DDLConverter,
+    id: Optional[str] = None,
+    column_indexing_batch_size: Optional[int] = 50,
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return ddl_converter.run(mdl=mdl, id=id)
+
+    return ddl_converter.run(
+        mdl=mdl, id=id, column_indexing_batch_size=column_indexing_batch_size
+    )
 
 
 @async_timer
@@ -563,10 +595,12 @@ class Indexing(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        column_indexing_batch_size: int,
     ) -> None:
         dbschema_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")
 
+        self.column_indexing_batch_size = column_indexing_batch_size
         self.cleaner = DocumentCleaner([dbschema_store, view_store])
         self.validator = MDLValidator()
 
@@ -608,6 +642,7 @@ class Indexing(BasicPipeline):
                 "view_converter": self.view_converter,
                 "view_embedder": self.view_embedder,
                 "view_writer": self.view_writer,
+                "column_indexing_batch_size": self.column_indexing_batch_size,
             },
             show_legend=True,
             orient="LR",
@@ -631,6 +666,7 @@ class Indexing(BasicPipeline):
                 "view_converter": self.view_converter,
                 "view_embedder": self.view_embedder,
                 "view_writer": self.view_writer,
+                "column_indexing_batch_size": self.column_indexing_batch_size,
             },
         )
 
