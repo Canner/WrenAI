@@ -132,14 +132,20 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
                 db_schemas[document.meta["name"]] = content
             else:
                 db_schemas[document.meta["name"]] = {
-                    **db_schemas[document.meta["name"]],
                     **content,
+                    "columns": db_schemas[document.meta["name"]]["columns"],
                 }
         elif content["type"] == "TABLE_COLUMNS":
             if document.meta["name"] not in db_schemas:
                 db_schemas[document.meta["name"]] = {"columns": content["columns"]}
             else:
-                db_schemas[document.meta["name"]]["columns"] = content["columns"]
+                if "columns" not in db_schemas[document.meta["name"]]:
+                    db_schemas[document.meta["name"]]["columns"] = content["columns"]
+                else:
+                    db_schemas[document.meta["name"]]["columns"] += content["columns"]
+
+    # remove incomplete schemas
+    db_schemas = {k: v for k, v in db_schemas.items() if "type" in v and "columns" in v}
 
     return list(db_schemas.values())
 

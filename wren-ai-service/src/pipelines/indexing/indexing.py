@@ -235,7 +235,6 @@ class DDLConverter:
         for model in models:
             table_name = model["name"]
             columns_ddl = []
-            columns = []
             for column in model["columns"]:
                 if "relationship" not in column:
                     if "properties" in column:
@@ -260,7 +259,6 @@ class DDLConverter:
                             "is_primary_key": column["name"] == model["primaryKey"],
                         }
                     )
-                    columns.append(column["name"])
 
             # Add foreign key constraints based on relationships
             for relationship in relationships:
