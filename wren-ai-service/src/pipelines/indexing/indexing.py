@@ -328,6 +328,7 @@ class DDLConverter:
                     "payload": str(
                         {
                             "type": "TABLE_COLUMNS",
+                            "name": table_name,
                             "columns": columns_ddl[i : i + column_indexing_batch_size],
                         }
                     ),
