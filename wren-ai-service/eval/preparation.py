@@ -48,10 +48,10 @@ def gen_new_mdl_from_csv(mdl_path: str, csv_path: str):
     with open(mdl_path) as file:
         mdl = orjson.loads(file.read())
 
+    csv_data_by_table = {}
+
     with open(csv_path, newline="\n") as file:
         csv_data = csv.reader(file)
-
-        csv_data_by_table = {}
 
         for row in csv_data:
             model_name = row[0]
