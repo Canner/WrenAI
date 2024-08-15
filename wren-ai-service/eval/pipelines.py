@@ -240,7 +240,7 @@ class GenerationPipeline(Eval):
         return prediction
 
     async def _process(self, prediction: dict, document: list, **_) -> dict:
-        documents = [Document.from_dict(doc) for doc in document]
+        documents = [Document.from_dict(doc).content for doc in document]
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
@@ -248,9 +248,7 @@ class GenerationPipeline(Eval):
         )
 
         prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
+        prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
 
