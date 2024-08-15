@@ -209,17 +209,17 @@ def construct_retrieval_results(
     retrieval_results = []
 
     for table_schema in construct_db_schemas:
-        if (
-            table_schema["name"] in columns_and_tables_needed
-            and table_schema["type"] == "TABLE"
-        ):
-            retrieval_results.append(
-                _build_table_ddl(
-                    table_schema,
-                    tables,
-                    set(columns_and_tables_needed[table_schema["name"]]),
-                )
+        # if (
+        #     table_schema["name"] in columns_and_tables_needed
+        #     and table_schema["type"] == "TABLE"
+        # ):
+        retrieval_results.append(
+            _build_table_ddl(
+                table_schema,
+                tables,
+                set(columns_and_tables_needed[table_schema["name"]]),
             )
+        )
 
     for document in dbschema_retrieval:
         if document.meta["name"] in columns_and_tables_needed:
