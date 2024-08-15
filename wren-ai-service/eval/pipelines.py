@@ -82,7 +82,7 @@ def extract_units(docs: list) -> list:
 
     columns = []
     for doc in docs:
-        columns.extend(parse_ddl(doc["content"]))
+        columns.extend(parse_ddl(doc))
     return columns
 
 
@@ -194,11 +194,8 @@ class RetrievalPipeline(Eval):
 
     async def _process(self, prediction: dict, **_) -> dict:
         result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("retrieval", {}).get("documents", [])
-
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
+        documents = result.get("construct_retrieval_results", [])
+        prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
 
@@ -322,7 +319,7 @@ class AskPipeline(Eval):
 
     async def _process(self, prediction: dict, **_) -> dict:
         result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("retrieval", {}).get("documents", [])
+        documents = result.get("construct_retrieval_results", [])
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
@@ -330,9 +327,7 @@ class AskPipeline(Eval):
         )
 
         prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
+        prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
 
