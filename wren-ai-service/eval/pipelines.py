@@ -302,6 +302,7 @@ class AskPipeline(Eval):
 
         self._mdl = mdl
         self._retrieval = retrieval.Retrieval(
+            llm_provider=llm_provider,
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
         )
