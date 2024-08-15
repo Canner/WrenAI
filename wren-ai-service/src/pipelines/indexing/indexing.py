@@ -527,7 +527,9 @@ def convert_to_ddl(
     )
 
     return ddl_converter.run(
-        mdl=mdl, id=id, column_indexing_batch_size=column_indexing_batch_size
+        mdl=mdl,
+        column_indexing_batch_size=column_indexing_batch_size,
+        id=id,
     )
 
 

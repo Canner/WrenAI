@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
         column_indexing_batch_size=(
             int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
             if os.getenv("COLUMN_INDEXING_BATCH_SIZE")
-            else 50,
+            else 50
         ),
     )
     service_metadata(*providers)
