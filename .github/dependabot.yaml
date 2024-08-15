@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/wren-ai-service"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(wren-ai-service)"
+    labels:
+      - "dependencies"
+      - "python"
+      - "ci/ai-service"
+      - "module/ai-service"
