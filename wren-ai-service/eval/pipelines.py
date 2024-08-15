@@ -172,6 +172,7 @@ class RetrievalPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
+        llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         **kwargs,
@@ -186,6 +187,7 @@ class RetrievalPipeline(Eval):
         deploy_model(mdl, _indexing)
 
         self._retrieval = retrieval.Retrieval(
+            llm_provider=llm_provider,
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
         )
