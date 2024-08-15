@@ -39,9 +39,11 @@ async def lifespan(app: FastAPI):
     container.init_globals(
         *providers,
         should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
-        column_indexing_batch_size=int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
-        if os.getenv("COLUMN_INDEXING_BATCH_SIZE")
-        else 50,
+        column_indexing_batch_size=(
+            int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
+            if os.getenv("COLUMN_INDEXING_BATCH_SIZE")
+            else 50,
+        ),
     )
     service_metadata(*providers)
     init_langfuse()

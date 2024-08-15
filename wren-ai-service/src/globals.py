@@ -49,7 +49,7 @@ def init_globals(
     document_store_provider: DocumentStoreProvider,
     engine: Engine,
     should_force_deploy: Optional[str] = None,
-    column_indexing_batch_size: Optional[int] = None,
+    column_indexing_batch_size: Optional[int] = 50,
 ):
     global \
         INDEXING_SERVICE, \

@@ -137,8 +137,8 @@ class DDLConverter:
     def run(
         self,
         mdl: Dict[str, Any],
+        column_indexing_batch_size: int,
         id: Optional[str] = None,
-        column_indexing_batch_size: Optional[int] = 50,
     ):
         logger.info(
             "Ask Indexing pipeline is writing new documents for table schema..."
@@ -519,8 +519,8 @@ def covert_to_table_descriptions(
 def convert_to_ddl(
     mdl: Dict[str, Any],
     ddl_converter: DDLConverter,
+    column_indexing_batch_size: int,
     id: Optional[str] = None,
-    column_indexing_batch_size: Optional[int] = 50,
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
