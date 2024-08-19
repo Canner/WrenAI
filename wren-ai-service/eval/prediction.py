@@ -59,7 +59,8 @@ def write_prediction(
     if Path(dir_path).exists() is False:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-    output_path = f"{dir_path}/prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
+    output_file = f"prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
+    output_path = f"{dir_path}/{output_file}"
 
     doc = document()
     doc.add("meta", meta)
@@ -68,11 +69,10 @@ def write_prediction(
     with open(output_path, "w") as file:
         file.write(dumps(doc))
 
-    print(f"Prediction result is saved at {output_path}")
-    if meta["langfuse_url"]:
-        print(
-            f"You can view the prediction result in Langfuse at {meta['langfuse_url']}/sessions/{meta['session_id']}"
-        )
+    print(f"\n\nPrediction result is saved at {output_path}")
+    print(
+        f"You can then evaluate the prediction result by running `just eval {output_file}`"
+    )
 
 
 def obtain_commit_hash() -> str:
@@ -150,3 +150,8 @@ if __name__ == "__main__":
 
     write_prediction(meta, predictions)
     langfuse_context.flush()
+
+    if meta["langfuse_url"]:
+        print(
+            f"You can also view the prediction result in Langfuse at {meta['langfuse_url']}/sessions/{meta['session_id']}"
+        )

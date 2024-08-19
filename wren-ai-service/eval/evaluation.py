@@ -137,3 +137,8 @@ if __name__ == "__main__":
     evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
+
+    if meta["langfuse_url"]:
+        print(
+            f"\n\nYou can view the evaluation result in Langfuse at {meta['langfuse_url']}/sessions/{meta['session_id']}"
+        )
