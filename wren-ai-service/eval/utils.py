@@ -46,7 +46,7 @@ async def get_data_from_wren_engine(
             return {"data": [], "columns": []}
 
         data = await response.json()
-        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+        column_names = [col for col in data["columns"]]
 
         return {"data": data["data"], "columns": column_names}
 
