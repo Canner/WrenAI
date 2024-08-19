@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: wren-ai-service-virtualservice
+  namespace: wren
+spec:
+  hosts:
+    - wren-ai-service-svc.wren.svc.cluster.local
+  http:
+    - match:
+        - uri:
+            prefix: "/" # Matches all requests to the service
+      route:
+        - destination:
+            host: wren-ai-service-svc.wren.svc.cluster.local
+            port:
+              number: 5555

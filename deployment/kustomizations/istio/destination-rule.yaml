@@ -1,0 +1,11 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: wren-ai-service-destination
+  namespace: wren
+spec:
+  host: wren-ai-service-svc.wren.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      consistentHash:
+        httpHeaderName: "user-session" # Use a custom header for sticky sessions

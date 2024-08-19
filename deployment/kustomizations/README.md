@@ -93,6 +93,16 @@ helm install \
   --set installCRDs=true
 kubectl get pods -n cert-manager
 
+helm repo add istio https://istio-release.storage.googleapis.com/charts
+helm repo update
+helm install \
+  istio-base istio/base \
+  --namespace istio-system \
+  --set defaultRevision=default \
+  --create-namespace
+helm install istiod istio/istiod -n istio-system --wait
+kubectl get pods -n istio-system
+
 ##########
 # Use the `Steps to deploy` section to continue as you would on a production k8s cluster.
 ```

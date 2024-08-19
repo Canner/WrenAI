@@ -14,8 +14,7 @@ kind: Kustomization
 # Namespace for all resources here and in the Helm charts
 namespace: wren
 helmCharts:
-
-### Uncomment if you are planing to use postgresql
+  ### Uncomment if you are planing to use postgresql
   - name: postgresql
     repo: https://repo.vmware.com/bitnami-files
     version: 15.5.5
@@ -34,7 +33,6 @@ helmCharts:
     # The Same Namespace
     namespace: wren
 
-
 images:
   - name: ghcr.io/canner/wren-bootstrap
     newTag: 0.1.5 # WREN_BOOTSTRAP_VERSION
@@ -43,7 +41,7 @@ images:
   - name: ghcr.io/canner/wren-ui
     newTag: 0.9.2 # WREN_UI_VERSION
   - name: ghcr.io/canner/wren-ai-service
-    newTag: 0.8.2 # WREN_AI_SERVICE_VERSION
+    newTag: 0.8.3 # WREN_AI_SERVICE_VERSION
   - name: ghcr.io/canner/wren-engine-ibis
     newTag: 0.9.0 # IBIS_SERVER_VERSION
 
@@ -54,9 +52,11 @@ resources:
   - base/deploy-wren-ai-service.yaml
   - base/pvc.yaml
   - base/svc.yaml
+  - istio/destination-rule.yaml
+  - istio/virtual-service.yaml
 ### Modify these examples first and uncomment them:
-  # - examples/ingress-wren_example.yaml
-  # - examples/certificate-wren_example.yaml
+# - examples/ingress-wren_example.yaml
+# - examples/certificate-wren_example.yaml
 ### Usually you do not need to generate a certificate for Qdrant
 #  - examples/certificate-qdrant_example.yaml
 ### Best practice is to create and deploy Secrets manually, not as part of kustomization or GitOps!
