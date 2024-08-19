@@ -162,7 +162,9 @@ def trace_metadata(
     type: TRACE_TYPES,
 ) -> dict:
     if type not in get_args(TRACE_TYPES):
-        raise ValueError("Invalid type")
+        raise ValueError(
+            f"Invalid type: {type}, should be one of {get_args(TRACE_TYPES)}"
+        )
     return {
         "commit": meta["commit"],
         "dataset_id": meta["dataset_id"],

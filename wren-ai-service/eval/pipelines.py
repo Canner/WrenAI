@@ -33,7 +33,7 @@ from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
 
-def deploy_model(mdl: str, pipe) -> None:
+def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
     async def wrapper():
         await pipe.run(orjson.dumps(mdl).decode())
 
@@ -176,6 +176,8 @@ class RetrievalPipeline(Eval):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ):
+        super().__init__(meta)
+
         document_store_provider.get_store(recreate_index=True)
         _indexing = indexing.Indexing(
             embedder_provider=embedder_provider,
@@ -183,7 +185,6 @@ class RetrievalPipeline(Eval):
         )
         deploy_model(mdl, _indexing)
 
-        super().__init__(meta)
         self._retrieval = retrieval.Retrieval(
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
@@ -290,13 +291,14 @@ class AskPipeline(Eval):
         engine: Engine,
         **kwargs,
     ):
+        super().__init__(meta, 3)
+
         document_store_provider.get_store(recreate_index=True)
         _indexing = indexing.Indexing(
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
         )
         deploy_model(mdl, _indexing)
-        super().__init__(meta, 3)
 
         self._mdl = mdl
         self._retrieval = retrieval.Retrieval(

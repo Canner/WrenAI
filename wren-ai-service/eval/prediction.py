@@ -31,7 +31,13 @@ def generate_meta(
     embedder_provider: EmbedderProvider,
     **kwargs,
 ) -> Dict[str, Any]:
+    if langfuse_project_id := os.getenv("LANGFUSE_PROJECT_ID"):
+        langfuse_url = f'{os.getenv("LANGFUSE_URL", "https://cloud.langfuse.com").rstrip('/')}/project/{langfuse_project_id}'
+    else:
+        langfuse_url = ""
+
     return {
+        "langfuse_url": langfuse_url,
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{pipe}_{uuid.uuid4()}",
         "date": datetime.now(),
@@ -47,7 +53,9 @@ def generate_meta(
     }
 
 
-def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
+def write_prediction(
+    meta: dict, predictions: list[dict], dir_path: str = "outputs/predictions"
+) -> None:
     if Path(dir_path).exists() is False:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
@@ -61,6 +69,10 @@ def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
         file.write(dumps(doc))
 
     print(f"Prediction result is saved at {output_path}")
+    if meta["langfuse_url"]:
+        print(
+            f"You can view the prediction result in Langfuse at {meta['langfuse_url']}/sessions/{meta['session_id']}"
+        )
 
 
 def obtain_commit_hash() -> str:
