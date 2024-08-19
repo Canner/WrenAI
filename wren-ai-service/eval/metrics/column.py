@@ -11,7 +11,7 @@ from eval.utils import get_contexts_from_sql, get_data_from_wren_engine
 
 class AccuracyMetric(BaseMetric):
     def __init__(self, engine_config: dict):
-        self.threshold = 10
+        self.threshold = 0
         self.score = 0
         self._engine_config = engine_config
 
@@ -19,24 +19,7 @@ class AccuracyMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     def is_subset(self, expected: pd.DataFrame, actual: pd.DataFrame) -> bool:
-        if not set(actual.columns).issubset(set(expected.columns)):
-            return False
-
-        common_columns = actual.columns
-        if common_columns.empty:
-            return False
-
-        expected_sorted = expected[sorted(common_columns)]
-        actual_sorted = actual[sorted(common_columns)]
-
-        merged = pd.merge(
-            actual_sorted,
-            expected_sorted,
-            on=list(common_columns),
-            how="left",
-            indicator=True,
-        )
-        return all(merged["_merge"] == "both")
+        return set(expected.columns).issubset(set(actual.columns))
 
     async def _retrieve_data(self, sql: str) -> pd.DataFrame:
         response = await get_data_from_wren_engine(sql=sql, **self._engine_config)
@@ -84,7 +67,7 @@ class AccuracyMultiCandidateMetric(BaseMetric):
 
             # or 0 to avoid when metric.error is exist
             self._questions[test_case.input] = (
-                self._questions.get(test_case.input, False) or metric.score or 0 > 0
+                self._questions.get(test_case.input, 0) or metric.score or 0
             )
 
     def measure(self):
