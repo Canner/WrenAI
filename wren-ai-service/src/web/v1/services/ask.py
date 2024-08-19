@@ -280,8 +280,8 @@ class AskService:
                 ]
 
                 # only return top 3 results, thus remove the rest
-                if len(results) > 3:
-                    del results[3:]
+                if len(api_results) > 3:
+                    del api_results[3:]
 
                 self._ask_results[query_id] = AskResultResponse(
                     status="finished",
