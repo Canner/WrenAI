@@ -37,7 +37,8 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
     )
 
     return await retriever.run(
-        query_embedding=embedding.get("embedding"), filters=filters
+        query_embedding=embedding.get("embedding"),
+        filters=filters,
     )
 
 
