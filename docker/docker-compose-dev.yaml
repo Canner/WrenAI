@@ -59,7 +59,6 @@ services:
       - wren
     depends_on:
       - qdrant
-      - wren-ui
 
   ibis-server:
     image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
