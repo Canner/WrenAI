@@ -19,7 +19,51 @@ class AccuracyMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     def is_subset(self, expected: pd.DataFrame, actual: pd.DataFrame) -> bool:
-        return set(expected.columns).issubset(set(actual.columns))
+        if not set(expected.columns).issubset(set(actual.columns)):
+            return False
+
+        common_columns = sorted(expected.columns)
+        if not common_columns:
+            return False
+
+        expected_sorted = expected[common_columns]
+        actual_sorted = actual[common_columns]
+        # Ensure that the data types are the same
+        actual_sorted = actual_sorted.astype(expected_sorted.dtypes.to_dict())
+
+        merged = pd.merge(
+            actual_sorted,
+            expected_sorted,
+            on=common_columns,
+            how="left",
+            indicator=True,
+        )
+        return all(merged["_merge"] == "both")
+
+    def count_partial_matches(
+        self, expected: pd.DataFrame, actual: pd.DataFrame
+    ) -> int:
+        intersection = set(expected.columns).intersection(set(actual.columns))
+        common_columns = sorted(intersection)
+        if not common_columns:
+            return 0
+
+        expected_sorted = expected[common_columns]
+        actual_sorted = actual[common_columns]
+        # Ensure that the data types are the same
+        actual_sorted = actual_sorted.astype(expected_sorted.dtypes.to_dict())
+
+        merged = pd.merge(
+            actual_sorted,
+            expected_sorted,
+            on=common_columns,
+            how="left",
+            indicator=True,
+        )
+        if all(merged["_merge"] == "both"):
+            return len(intersection) / len(expected.columns)
+        else:
+            return 0
 
     async def _retrieve_data(self, sql: str) -> pd.DataFrame:
         response = await get_data_from_wren_engine(sql=sql, **self._engine_config)
@@ -38,6 +82,8 @@ class AccuracyMetric(BaseMetric):
                 self.success = True
                 self.score = 1
                 return self.score
+
+            self.score = self.count_partial_matches(expected_dataset, actual_dataset)
         except Exception as e:
             self.error = f"Error occurred while evaluating the metric: {e}"
             traceback.print_exc()

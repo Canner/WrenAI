@@ -390,7 +390,9 @@ def metrics_initiator(pipeline: str, mdl: dict) -> dict:
             "dataset_id": os.getenv("bigquery.dataset-id"),
             "credentials": os.getenv("bigquery.credentials-key"),
         },
-        "timeout": 10,
+        "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
+        if os.getenv("WREN_IBIS_TIMEOUT")
+        else 10,
         "limit": 10,
     }
 
