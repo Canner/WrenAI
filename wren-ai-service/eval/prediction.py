@@ -119,7 +119,7 @@ def parse_args() -> Tuple[str]:
 
 
 if __name__ == "__main__":
-    path, pipe = parse_args()
+    path, pipe_name = parse_args()
 
     dotenv.load_dotenv()
     utils.load_env_vars()
@@ -128,9 +128,9 @@ if __name__ == "__main__":
     dataset = parse_toml(path)
     providers = init_providers(dataset["mdl"])
 
-    meta = generate_meta(path=path, dataset=dataset, pipe=pipe, **providers)
+    meta = generate_meta(path=path, dataset=dataset, pipe=pipe_name, **providers)
 
-    pipe = pipelines.init(pipe, meta, mdl=dataset["mdl"], providers=providers)
+    pipe = pipelines.init(pipe_name, meta, mdl=dataset["mdl"], providers=providers)
 
     predictions = pipe.predict(dataset["eval_dataset"])
     meta["expected_batch_size"] = meta["query_count"] * pipe.candidate_size

@@ -98,7 +98,7 @@ class Eval:
         return self._candidate_size
 
     def predict(self, queries: list) -> List[Dict[str, Any]]:
-        def split(batch_size: int) -> list[list]:
+        def split(queries: list, batch_size: int) -> list[list]:
             return [
                 queries[i : i + batch_size] for i in range(0, len(queries), batch_size)
             ]
@@ -109,7 +109,9 @@ class Eval:
             await asyncio.sleep(self._batch_interval)
             return [prediction for predictions in results for prediction in predictions]
 
-        batches = [asyncio.run(wrapper(batch)) for batch in split(self._batch_size)]
+        batches = [
+            asyncio.run(wrapper(batch)) for batch in split(queries, self._batch_size)
+        ]
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
