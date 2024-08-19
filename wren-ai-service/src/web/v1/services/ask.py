@@ -166,7 +166,8 @@ class AskService:
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=ask_request.query
+                    query=ask_request.query,
+                    id=ask_request.project_id,
                 )
 
                 # we only return top 1 result

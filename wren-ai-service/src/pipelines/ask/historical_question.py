@@ -65,8 +65,22 @@ async def embedding(query: str, embedder: Any) -> dict:
 
 @async_timer
 @observe(capture_input=False)
-async def retrieval(embedding: dict, retriever: Any) -> dict:
-    res = await retriever.run(query_embedding=embedding.get("embedding"))
+async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+    filters = (
+        {
+            "operator": "AND",
+            "conditions": [
+                {"field": "id", "operator": "==", "value": id},
+            ],
+        }
+        if id
+        else None
+    )
+
+    res = await retriever.run(
+        query_embedding=embedding.get("embedding"),
+        filters=filters,
+    )
     return dict(documents=res.get("documents"))
 
 
@@ -114,6 +128,7 @@ class HistoricalQuestion(BasicPipeline):
     def visualize(
         self,
         query: str,
+        id: Optional[str] = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
         if not Path(destination).exists():
@@ -124,6 +139,7 @@ class HistoricalQuestion(BasicPipeline):
             output_file_path=f"{destination}/historical_question.dot",
             inputs={
                 "query": query,
+                "id": id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
                 "score_filter": self._score_filter,
@@ -135,12 +151,13 @@ class HistoricalQuestion(BasicPipeline):
 
     @async_timer
     @observe(name="Ask Historical Question")
-    async def run(self, query: str):
+    async def run(self, query: str, id: Optional[str] = None):
         logger.info("Ask HistoricalQuestion pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
+                "id": id or "",
                 "embedder": self._embedder,
                 "retriever": self._retriever,
                 "score_filter": self._score_filter,
