@@ -32,7 +32,7 @@ def generate_meta(
     **kwargs,
 ) -> Dict[str, Any]:
     if langfuse_project_id := os.getenv("LANGFUSE_PROJECT_ID"):
-        langfuse_url = f'{os.getenv("LANGFUSE_URL", "https://cloud.langfuse.com").rstrip('/')}/project/{langfuse_project_id}'
+        langfuse_url = f'{os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").rstrip('/')}/project/{langfuse_project_id}'
     else:
         langfuse_url = ""
 

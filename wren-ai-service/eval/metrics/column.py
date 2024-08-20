@@ -76,6 +76,9 @@ class AccuracyMetric(BaseMetric):
             expected_dataset = await self._retrieve_data(test_case.expected_output)
             actual_dataset = await self._retrieve_data(test_case.actual_output)
 
+            print(f"expected columns: {set(expected_dataset.columns)}")
+            print(f"actual columns: {set(actual_dataset.columns)}")
+
             if expected_dataset.equals(actual_dataset) or self.is_subset(
                 expected_dataset, actual_dataset
             ):
