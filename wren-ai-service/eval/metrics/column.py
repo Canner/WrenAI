@@ -107,8 +107,8 @@ class AccuracyMultiCandidateMetric(BaseMetric):
         self._questions = {}
 
     def collect(self, test_case: LLMTestCase, result: TestResult):
-        for metric in result.metrics_metadata:
-            if metric.metric != "Accuracy(column-based)":
+        for metric in result.metrics_data:
+            if metric.name != "Accuracy(column-based)":
                 continue
 
             # or 0 to avoid when metric.error is exist

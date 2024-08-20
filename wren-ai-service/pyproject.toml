@@ -35,7 +35,7 @@ watchdog = "==4.0.0"
 
 [tool.poetry.group.eval.dependencies]
 tomlkit = "==0.13.0"
-deepeval = "==0.21.68"
+deepeval = "==1.0.6"
 streamlit-tags = "==1.2.8"
 gitpython = "==3.1.43"
 pandas = "==2.2.2"

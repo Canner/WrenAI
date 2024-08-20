@@ -72,8 +72,8 @@ class Evaluator:
         self._average_score(meta)
 
     def _score_metrics(self, test_case: LLMTestCase, result: TestResult) -> None:
-        for metric in result.metrics_metadata:
-            name = metric.metric
+        for metric in result.metrics_data:
+            name = metric.name
             score = metric.score or 0
 
             self._langfuse.score(
