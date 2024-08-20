@@ -23,8 +23,6 @@ class AccuracyMetric(BaseMetric):
             return False
 
         common_columns = sorted(expected.columns)
-        if not common_columns:
-            return False
 
         expected_sorted = expected[common_columns]
         actual_sorted = actual[common_columns]
