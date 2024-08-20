@@ -3,6 +3,7 @@ import base64
 import os
 import sys
 import uuid
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -126,6 +127,8 @@ async def get_contexts_from_sqls(
 def get_documents_given_contexts(
     contexts_list: list[list[str]], mdl_json: dict
 ) -> list[list[dict]]:
+    mdl_json_cloned = deepcopy(mdl_json)
+
     def _build_partial_mdl_json(
         contexts_list: list[list[str]], mdl_json: dict
     ) -> list[dict]:
@@ -218,7 +221,7 @@ def get_documents_given_contexts(
 
         return new_mdl_jsons
 
-    new_mdl_jsons = _build_partial_mdl_json(contexts_list, mdl_json)
+    new_mdl_jsons = _build_partial_mdl_json(contexts_list, mdl_json_cloned)
 
     return [
         {
@@ -363,4 +366,4 @@ def get_eval_dataset_in_toml_string(mdl: dict, dataset: list) -> str:
     doc.add("mdl", mdl)
     doc.add("eval_dataset", dataset)
 
-    return tomlkit.dumps(doc)
+    return tomlkit.dumps(doc, sort_keys=True)
