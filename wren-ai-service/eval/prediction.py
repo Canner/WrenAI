@@ -31,7 +31,13 @@ def generate_meta(
     embedder_provider: EmbedderProvider,
     **kwargs,
 ) -> Dict[str, Any]:
+    if langfuse_project_id := os.getenv("LANGFUSE_PROJECT_ID"):
+        langfuse_url = f'{os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").rstrip('/')}/project/{langfuse_project_id}'
+    else:
+        langfuse_url = ""
+
     return {
+        "langfuse_url": langfuse_url,
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{pipe}_{uuid.uuid4()}",
         "date": datetime.now(),
@@ -47,11 +53,14 @@ def generate_meta(
     }
 
 
-def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
+def write_prediction(
+    meta: dict, predictions: list[dict], dir_path: str = "outputs/predictions"
+) -> None:
     if Path(dir_path).exists() is False:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-    output_path = f"{dir_path}/prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
+    output_file = f"prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
+    output_path = f"{dir_path}/{output_file}"
 
     doc = document()
     doc.add("meta", meta)
@@ -60,7 +69,10 @@ def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
     with open(output_path, "w") as file:
         file.write(dumps(doc))
 
-    print(f"Prediction result is saved at {output_path}")
+    print(f"\n\nPrediction result is saved at {output_path}")
+    print(
+        f"You can then evaluate the prediction result by running `just eval {output_file}`"
+    )
 
 
 def obtain_commit_hash() -> str:
@@ -119,7 +131,7 @@ def parse_args() -> Tuple[str]:
 
 
 if __name__ == "__main__":
-    path, pipe = parse_args()
+    path, pipe_name = parse_args()
 
     dotenv.load_dotenv()
     utils.load_env_vars()
@@ -128,9 +140,9 @@ if __name__ == "__main__":
     dataset = parse_toml(path)
     providers = init_providers(dataset["mdl"])
 
-    meta = generate_meta(path=path, dataset=dataset, pipe=pipe, **providers)
+    meta = generate_meta(path=path, dataset=dataset, pipe=pipe_name, **providers)
 
-    pipe = pipelines.init(pipe, meta, mdl=dataset["mdl"], providers=providers)
+    pipe = pipelines.init(pipe_name, meta, mdl=dataset["mdl"], providers=providers)
 
     predictions = pipe.predict(dataset["eval_dataset"])
     meta["expected_batch_size"] = meta["query_count"] * pipe.candidate_size
@@ -138,3 +150,8 @@ if __name__ == "__main__":
 
     write_prediction(meta, predictions)
     langfuse_context.flush()
+
+    if meta["langfuse_url"]:
+        print(
+            f"You can also view the prediction result in Langfuse at {meta['langfuse_url']}/sessions/{meta['session_id']}"
+        )

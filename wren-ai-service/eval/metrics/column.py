@@ -11,7 +11,7 @@ from eval.utils import get_contexts_from_sql, get_data_from_wren_engine
 
 class AccuracyMetric(BaseMetric):
     def __init__(self, engine_config: dict):
-        self.threshold = 10
+        self.threshold = 0
         self.score = 0
         self._engine_config = engine_config
 
@@ -19,24 +19,49 @@ class AccuracyMetric(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     def is_subset(self, expected: pd.DataFrame, actual: pd.DataFrame) -> bool:
-        if not set(actual.columns).issubset(set(expected.columns)):
+        if not set(expected.columns).issubset(set(actual.columns)):
             return False
 
-        common_columns = actual.columns
-        if common_columns.empty:
-            return False
+        common_columns = sorted(expected.columns)
 
-        expected_sorted = expected[sorted(common_columns)]
-        actual_sorted = actual[sorted(common_columns)]
+        expected_sorted = expected[common_columns]
+        actual_sorted = actual[common_columns]
+        # Ensure that the data types are the same
+        actual_sorted = actual_sorted.astype(expected_sorted.dtypes.to_dict())
 
         merged = pd.merge(
             actual_sorted,
             expected_sorted,
-            on=list(common_columns),
+            on=common_columns,
             how="left",
             indicator=True,
         )
         return all(merged["_merge"] == "both")
+
+    def count_partial_matches(
+        self, expected: pd.DataFrame, actual: pd.DataFrame
+    ) -> int:
+        intersection = set(expected.columns).intersection(set(actual.columns))
+        common_columns = sorted(intersection)
+        if not common_columns:
+            return 0
+
+        expected_sorted = expected[common_columns]
+        actual_sorted = actual[common_columns]
+        # Ensure that the data types are the same
+        actual_sorted = actual_sorted.astype(expected_sorted.dtypes.to_dict())
+
+        merged = pd.merge(
+            actual_sorted,
+            expected_sorted,
+            on=common_columns,
+            how="left",
+            indicator=True,
+        )
+        if all(merged["_merge"] == "both"):
+            return len(intersection) / len(expected.columns)
+        else:
+            return 0
 
     async def _retrieve_data(self, sql: str) -> pd.DataFrame:
         response = await get_data_from_wren_engine(sql=sql, **self._engine_config)
@@ -49,12 +74,17 @@ class AccuracyMetric(BaseMetric):
             expected_dataset = await self._retrieve_data(test_case.expected_output)
             actual_dataset = await self._retrieve_data(test_case.actual_output)
 
+            print(f"expected columns: {set(expected_dataset.columns)}")
+            print(f"actual columns: {set(actual_dataset.columns)}")
+
             if expected_dataset.equals(actual_dataset) or self.is_subset(
                 expected_dataset, actual_dataset
             ):
                 self.success = True
                 self.score = 1
                 return self.score
+
+            self.score = self.count_partial_matches(expected_dataset, actual_dataset)
         except Exception as e:
             self.error = f"Error occurred while evaluating the metric: {e}"
             traceback.print_exc()
@@ -78,13 +108,13 @@ class AccuracyMultiCandidateMetric(BaseMetric):
         self._questions = {}
 
     def collect(self, test_case: LLMTestCase, result: TestResult):
-        for metric in result.metrics_metadata:
-            if metric.metric != "Accuracy(column-based)":
+        for metric in result.metrics_data:
+            if metric.name != "Accuracy(column-based)":
                 continue
 
             # or 0 to avoid when metric.error is exist
             self._questions[test_case.input] = (
-                self._questions.get(test_case.input, False) or metric.score or 0 > 0
+                self._questions.get(test_case.input, 0) or metric.score or 0
             )
 
     def measure(self):

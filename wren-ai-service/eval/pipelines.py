@@ -33,7 +33,7 @@ from src.pipelines.ask import generation, retrieval
 from src.pipelines.indexing import indexing
 
 
-def deploy_model(mdl: str, pipe) -> None:
+def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
     async def wrapper():
         await pipe.run(orjson.dumps(mdl).decode())
 
@@ -98,7 +98,7 @@ class Eval:
         return self._candidate_size
 
     def predict(self, queries: list) -> List[Dict[str, Any]]:
-        def split(batch_size: int) -> list[list]:
+        def split(queries: list, batch_size: int) -> list[list]:
             return [
                 queries[i : i + batch_size] for i in range(0, len(queries), batch_size)
             ]
@@ -109,7 +109,9 @@ class Eval:
             await asyncio.sleep(self._batch_interval)
             return [prediction for predictions in results for prediction in predictions]
 
-        batches = [asyncio.run(wrapper(batch)) for batch in split(self._batch_size)]
+        batches = [
+            asyncio.run(wrapper(batch)) for batch in split(queries, self._batch_size)
+        ]
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
@@ -174,6 +176,8 @@ class RetrievalPipeline(Eval):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ):
+        super().__init__(meta)
+
         document_store_provider.get_store(recreate_index=True)
         _indexing = indexing.Indexing(
             embedder_provider=embedder_provider,
@@ -181,7 +185,6 @@ class RetrievalPipeline(Eval):
         )
         deploy_model(mdl, _indexing)
 
-        super().__init__(meta)
         self._retrieval = retrieval.Retrieval(
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
@@ -288,13 +291,14 @@ class AskPipeline(Eval):
         engine: Engine,
         **kwargs,
     ):
+        super().__init__(meta, 3)
+
         document_store_provider.get_store(recreate_index=True)
         _indexing = indexing.Indexing(
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
         )
         deploy_model(mdl, _indexing)
-        super().__init__(meta, 3)
 
         self._mdl = mdl
         self._retrieval = retrieval.Retrieval(
@@ -386,7 +390,9 @@ def metrics_initiator(pipeline: str, mdl: dict) -> dict:
             "dataset_id": os.getenv("bigquery.dataset-id"),
             "credentials": os.getenv("bigquery.credentials-key"),
         },
-        "timeout": 10,
+        "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
+        if os.getenv("WREN_IBIS_TIMEOUT")
+        else 10,
         "limit": 10,
     }
 

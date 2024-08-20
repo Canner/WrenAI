@@ -72,8 +72,8 @@ class Evaluator:
         self._average_score(meta)
 
     def _score_metrics(self, test_case: LLMTestCase, result: TestResult) -> None:
-        for metric in result.metrics_metadata:
-            name = metric.metric
+        for metric in result.metrics_data:
+            name = metric.name
             score = metric.score or 0
 
             self._langfuse.score(
@@ -137,3 +137,8 @@ if __name__ == "__main__":
     evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
+
+    if meta["langfuse_url"]:
+        print(
+            f"\n\nYou can view the evaluation result in Langfuse at {meta['langfuse_url']}/sessions/{meta['session_id']}"
+        )

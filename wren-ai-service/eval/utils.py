@@ -46,7 +46,7 @@ async def get_data_from_wren_engine(
             return {"data": [], "columns": []}
 
         data = await response.json()
-        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+        column_names = [col for col in data["columns"]]
 
         return {"data": data["data"], "columns": column_names}
 
@@ -162,7 +162,9 @@ def trace_metadata(
     type: TRACE_TYPES,
 ) -> dict:
     if type not in get_args(TRACE_TYPES):
-        raise ValueError("Invalid type")
+        raise ValueError(
+            f"Invalid type: {type}, should be one of {get_args(TRACE_TYPES)}"
+        )
     return {
         "commit": meta["commit"],
         "dataset_id": meta["dataset_id"],
