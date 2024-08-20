@@ -810,7 +810,7 @@ def sql_regeneration(sql_regeneration_data: dict):
         return None
 
 
-@st.experimental_dialog(
+@st.dialog(
     "Comparing SQL step-by-step breakdown before and after SQL Generation Feedback",
     width="large",
 )

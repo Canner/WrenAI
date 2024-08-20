@@ -27,9 +27,9 @@ helmCharts:
 
   - name: qdrant
     repo: https://qdrant.github.io/qdrant-helm
-    version: 0.10.1
+    version: 1.11.0
     releaseName: wren-qdrant
-    valuesFile: helm-values-qdrant_0.10.1.yaml
+    valuesFile: helm-values-qdrant_1.11.0.yaml
     includeCRDs: true
     # The Same Namespace
     namespace: wren
