@@ -14,6 +14,7 @@ from haystack_integrations.document_stores.qdrant import (
 )
 from haystack_integrations.document_stores.qdrant.converters import (
     DENSE_VECTORS_NAME,
+    SPARSE_VECTORS_NAME,
     convert_id,
     convert_qdrant_point_to_haystack_document,
 )
@@ -32,19 +33,15 @@ logger = logging.getLogger("wren-ai-service")
 def convert_haystack_documents_to_qdrant_points(
     documents: List[Document],
     *,
-    embedding_field: str,
     use_sparse_embeddings: bool,
 ) -> List[rest.PointStruct]:
-    DENSE_VECTORS_NAME = "text-dense"
-    SPARSE_VECTORS_NAME = "text-sparse"
-
     points = []
     for document in documents:
         payload = document.to_dict(flatten=True)
         if use_sparse_embeddings:
             vector = {}
 
-            dense_vector = payload.pop(embedding_field, None)
+            dense_vector = payload.pop("embedding", None)
             if dense_vector is not None:
                 vector[DENSE_VECTORS_NAME] = dense_vector
 
@@ -54,7 +51,7 @@ def convert_haystack_documents_to_qdrant_points(
                 vector[SPARSE_VECTORS_NAME] = sparse_vector_instance
 
         else:
-            vector = payload.pop(embedding_field) or {}
+            vector = payload.pop("embedding") or {}
         _id = convert_id(payload.get("id"))
 
         point = rest.PointStruct(
@@ -77,20 +74,18 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         https: Optional[bool] = None,
         api_key: Optional[Secret] = None,
         prefix: Optional[str] = None,
-        timeout: Optional[float] = None,
+        timeout: Optional[int] = None,
         host: Optional[str] = None,
         path: Optional[str] = None,
+        force_disable_check_same_thread: bool = False,
         index: str = "Document",
         embedding_dim: int = 768,
         on_disk: bool = False,
-        content_field: str = "content",
-        name_field: str = "name",
-        embedding_field: str = "embedding",
         use_sparse_embeddings: bool = False,
+        sparse_idf: bool = False,
         similarity: str = "cosine",
         return_embedding: bool = False,
         progress_bar: bool = True,
-        duplicate_documents: str = "overwrite",
         recreate_index: bool = False,
         shard_number: Optional[int] = None,
         replication_factor: Optional[int] = None,
@@ -119,17 +114,15 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             timeout=timeout,
             host=host,
             path=path,
+            force_disable_check_same_thread=force_disable_check_same_thread,
             index=index,
             embedding_dim=embedding_dim,
             on_disk=on_disk,
-            content_field=content_field,
-            name_field=name_field,
-            embedding_field=embedding_field,
             use_sparse_embeddings=use_sparse_embeddings,
+            sparse_idf=sparse_idf,
             similarity=similarity,
             return_embedding=return_embedding,
             progress_bar=progress_bar,
-            duplicate_documents=duplicate_documents,
             recreate_index=recreate_index,
             shard_number=shard_number,
             replication_factor=replication_factor,
@@ -159,6 +152,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             timeout=timeout,
             host=host,
             path=path,
+            force_disable_check_same_thread=force_disable_check_same_thread,
             metadata=metadata or {},
         )
 
@@ -251,6 +245,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             False,
             self.similarity,
             self.use_sparse_embeddings,
+            self.sparse_idf,
         )
 
         if len(documents) == 0:
@@ -274,7 +269,6 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             for document_batch in batched_documents:
                 batch = convert_haystack_documents_to_qdrant_points(
                     document_batch,
-                    embedding_field=self.embedding_field,
                     use_sparse_embeddings=self.use_sparse_embeddings,
                 )
 
