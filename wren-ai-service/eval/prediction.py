@@ -16,9 +16,7 @@ from tomlkit import document, dumps
 sys.path.append(f"{Path().parent.resolve()}")
 import eval.pipelines as pipelines
 import src.utils as utils
-from eval.utils import (
-    parse_toml,
-)
+from eval.utils import parse_toml
 from src.core.engine import EngineConfig
 from src.core.provider import EmbedderProvider, LLMProvider
 

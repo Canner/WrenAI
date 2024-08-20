@@ -24,7 +24,7 @@ orjson = "==3.10.3"
 sf-hamilton = {version = "==1.69.0", extras = ["visualization"]}
 aiohttp = {extras = ["speedups"], version = "==3.10.2"}
 ollama-haystack = "==0.0.6"
-langfuse = "==2.35.0"
+langfuse = "==2.43.3"
 ollama = "==0.2.1"
 toml = "==0.10.2"
 
@@ -39,6 +39,7 @@ deepeval = "==1.0.6"
 streamlit-tags = "==1.2.8"
 gitpython = "==3.1.43"
 pandas = "==2.2.2"
+dspy-ai = "==2.4.13"
 
 [tool.poetry.group.demo.dependencies]
 requests = "==2.32.2"
