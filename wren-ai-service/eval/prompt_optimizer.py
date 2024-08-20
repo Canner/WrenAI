@@ -29,7 +29,7 @@ def parse_args() -> Tuple[str]:
 
 
 def configure_llm_provider(llm: str, api_key: str):
-    dspy.settings.configure(lm=dspy.OpenAI(modle=llm, api_key=api_key))
+    dspy.settings.configure(lm=dspy.OpenAI(model=llm, api_key=api_key))
 
 
 def clean_sql(sql: str) -> str:
