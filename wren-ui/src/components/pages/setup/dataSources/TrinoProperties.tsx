@@ -6,7 +6,7 @@ interface Props {
   mode?: FORM_MODE;
 }
 
-export function TrinoProperties({ mode }: Props) {
+export default function TrinoProperties({ mode }: Props) {
   const isEditMode = mode === FORM_MODE.EDIT;
   return (
     <>
@@ -30,7 +30,7 @@ export function TrinoProperties({ mode }: Props) {
         rules={[
           {
             required: true,
-            message: ERROR_TEXTS.CONNECTION.DISPLAY_NAME.REQUIRED,
+            message: ERROR_TEXTS.CONNECTION.HOST.REQUIRED,
           },
         ]}
       >
@@ -43,7 +43,7 @@ export function TrinoProperties({ mode }: Props) {
         rules={[
           {
             required: true,
-            message: ERROR_TEXTS.CONNECTION.DISPLAY_NAME.REQUIRED,
+            message: ERROR_TEXTS.CONNECTION.PORT.REQUIRED,
           },
         ]}
       >
@@ -56,7 +56,7 @@ export function TrinoProperties({ mode }: Props) {
         rules={[
           {
             required: true,
-            message: ERROR_TEXTS.CONNECTION.DISPLAY_NAME.REQUIRED,
+            message: ERROR_TEXTS.CONNECTION.CATALOG.REQUIRED,
           },
         ]}
       >
@@ -69,7 +69,7 @@ export function TrinoProperties({ mode }: Props) {
         rules={[
           {
             required: true,
-            message: ERROR_TEXTS.CONNECTION.DISPLAY_NAME.REQUIRED,
+            message: ERROR_TEXTS.CONNECTION.SCHEMA.REQUIRED,
           },
         ]}
       >
@@ -82,7 +82,7 @@ export function TrinoProperties({ mode }: Props) {
         rules={[
           {
             required: true,
-            message: ERROR_TEXTS.CONNECTION.DISPLAY_NAME.REQUIRED,
+            message: ERROR_TEXTS.CONNECTION.USERNAME.REQUIRED,
           },
         ]}
       >
@@ -95,7 +95,7 @@ export function TrinoProperties({ mode }: Props) {
         rules={[
           {
             required: false,
-            message: ERROR_TEXTS.CONNECTION.DISPLAY_NAME.REQUIRED,
+            message: ERROR_TEXTS.CONNECTION.PASSWORD.REQUIRED,
           },
         ]}
       >

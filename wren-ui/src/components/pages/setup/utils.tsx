@@ -13,9 +13,9 @@ import MySQLProperties from './dataSources/MySQLProperties';
 import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
 import SQLServerProperties from './dataSources/SQLServerProperties';
 import ClickHouseProperties from './dataSources/ClickHouseProperties';
+import TrinoProperties from './dataSources/TrinoProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 import { ERROR_CODES } from '@/utils/errorHandler';
-import { TrinoProperties } from './dataSources/TrinoProperties';
 
 type SetupStep = {
   step: number;
