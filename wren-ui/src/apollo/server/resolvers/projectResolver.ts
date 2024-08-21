@@ -30,6 +30,7 @@ import DataSourceSchemaDetector, {
   SchemaChangeType,
 } from '@server/managers/dataSourceSchemaDetector';
 import { encryptConnectionInfo } from '../dataSource';
+import { TelemetryEvent } from '../telemetry/telemetry';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -78,23 +79,36 @@ export class ProjectResolver {
   }
 
   public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {
-    let id: number;
+    let project;
     try {
-      const project = await ctx.projectService.getCurrentProject();
-      id = project.id;
+      project = await ctx.projectService.getCurrentProject();
     } catch {
       // no project found
       return true;
     }
+    const eventName = TelemetryEvent.SETTING_RESET_PROJECT;
+    try {
+      const id = project.id;
+      await ctx.schemaChangeRepository.deleteAllBy({ projectId: id });
+      await ctx.deployService.deleteAllByProjectId(id);
+      await ctx.askingService.deleteAllByProjectId(id);
+      await ctx.modelService.deleteAllViewsByProjectId(id);
+      await ctx.modelService.deleteAllModelsByProjectId(id);
+      await ctx.projectService.deleteProject(id);
 
-    await ctx.schemaChangeRepository.deleteAllBy({ projectId: id });
-
-    await ctx.deployService.deleteAllByProjectId(id);
-    await ctx.askingService.deleteAllByProjectId(id);
-    await ctx.modelService.deleteAllViewsByProjectId(id);
-    await ctx.modelService.deleteAllModelsByProjectId(id);
-
-    await ctx.projectService.deleteProject(id);
+      // telemetry
+      ctx.telemetry.sendEvent(eventName, {
+        projectId: id,
+        dataSourceType: project.type,
+      });
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { dataSourceType: project.type, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
 
     return true;
   }
@@ -112,52 +126,69 @@ export class ProjectResolver {
     if (!(name in SampleDatasetName)) {
       throw new Error('Invalid sample dataset name');
     }
-    // telemetry
-    ctx.telemetry.send_event('start_sample_dataset', { datasetName: name });
-
-    // create duckdb datasource
-    const initSql = buildInitSql(name as SampleDatasetName);
-    const duckdbDatasourceProperties = {
-      initSql,
-      extensions: [],
-      configurations: {},
+    const eventName = TelemetryEvent.CONNECTION_START_SAMPLE_DATASET;
+    const eventProperties = {
+      datasetName: name,
     };
-    await this.saveDataSource(
-      _root,
-      {
-        data: {
-          type: DataSourceName.DUCKDB,
-          properties: duckdbDatasourceProperties,
-        } as DataSource,
-      },
-      ctx,
-    );
-    const project = await ctx.projectService.getCurrentProject();
+    try {
+      // create duckdb datasource
+      const initSql = buildInitSql(name as SampleDatasetName);
+      const duckdbDatasourceProperties = {
+        initSql,
+        extensions: [],
+        configurations: {},
+      };
+      await this.saveDataSource(
+        _root,
+        {
+          data: {
+            type: DataSourceName.DUCKDB,
+            properties: duckdbDatasourceProperties,
+          } as DataSource,
+        },
+        ctx,
+      );
+      const project = await ctx.projectService.getCurrentProject();
 
-    // list all the tables in the data source
-    const tables = await this.listDataSourceTables(_root, _arg, ctx);
-    const tableNames = tables.map((table) => table.name);
+      // list all the tables in the data source
+      const tables = await this.listDataSourceTables(_root, _arg, ctx);
+      const tableNames = tables.map((table) => table.name);
 
-    // save tables as model and modelColumns
-    await this.overwriteModelsAndColumns(tableNames, ctx, project);
+      // save tables as model and modelColumns
+      await this.overwriteModelsAndColumns(tableNames, ctx, project);
 
-    await ctx.modelService.updatePrimaryKeys(dataset.tables);
-    await ctx.modelService.batchUpdateModelProperties(dataset.tables);
-    await ctx.modelService.batchUpdateColumnProperties(dataset.tables);
+      await ctx.modelService.updatePrimaryKeys(dataset.tables);
+      await ctx.modelService.batchUpdateModelProperties(dataset.tables);
+      await ctx.modelService.batchUpdateColumnProperties(dataset.tables);
 
-    // save relations
-    const relations = getRelations(name as SampleDatasetName);
-    const models = await ctx.modelRepository.findAll();
-    const columns = await ctx.modelColumnRepository.findAll();
-    const mappedRelations = this.buildRelationInput(relations, models, columns);
-    await ctx.modelService.saveRelations(mappedRelations);
+      // save relations
+      const relations = getRelations(name as SampleDatasetName);
+      const models = await ctx.modelRepository.findAll();
+      const columns = await ctx.modelColumnRepository.findAll();
+      const mappedRelations = this.buildRelationInput(
+        relations,
+        models,
+        columns,
+      );
+      await ctx.modelService.saveRelations(mappedRelations);
 
-    // mark current project as using sample dataset
-    await ctx.projectRepository.updateOne(project.id, {
-      sampleDataset: name,
-    });
-    await this.deploy(ctx);
-    return { name };
+      // mark current project as using sample dataset
+      await ctx.projectRepository.updateOne(project.id, {
+        sampleDataset: name,
+      });
+      await this.deploy(ctx);
+      // telemetry
+      ctx.telemetry.sendEvent(eventName, eventProperties);
+      return { name };
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { ...eventProperties, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+      throw err;
+    }
   }
 
   public async getOnboardingStatus(_root: any, _arg: any, ctx: IContext) {
@@ -205,10 +236,15 @@ export class ProjectResolver {
       connectionInfo,
     } as ProjectData);
     logger.debug(`Project created `);
+    const eventName = TelemetryEvent.CONNECTION_SAVE_DATA_SOURCE;
+    const eventProperties = {
+      dataSourceType: type,
+    };
+
     // try to connect to the data source
     try {
+      // handle duckdb connection
       if (type === DataSourceName.DUCKDB) {
-        // handle duckdb connection
         connectionInfo as DUCKDB_CONNECTION_INFO;
         await this.buildDuckDbEnvironment(ctx, {
           initSql: connectionInfo.initSql,
@@ -216,21 +252,26 @@ export class ProjectResolver {
           configurations: connectionInfo.configurations,
         });
       } else {
+        // handle other data source
         await ctx.projectService.getProjectDataSourceTables(project);
         logger.debug(`Data source tables fetched`);
       }
+      // telemetry
+      ctx.telemetry.sendEvent(eventName, eventProperties);
     } catch (err) {
       logger.error(
         'Failed to get project tables',
         JSON.stringify(err, null, 2),
       );
       await ctx.projectRepository.deleteOne(project.id);
+      ctx.telemetry.sendEvent(
+        eventName,
+        { eventProperties, error: err.message },
+        err.extensions?.service,
+        false,
+      );
       throw err;
     }
-
-    // telemetry
-    ctx.telemetry.send_event('save_data_source', { dataSourceType: type });
-    ctx.telemetry.send_event('onboarding_step_1', { step: 'save_data_source' });
 
     return {
       type: project.type,
@@ -303,28 +344,36 @@ export class ProjectResolver {
     },
     ctx: IContext,
   ) {
-    const tables = arg.data.tables;
+    const eventName = TelemetryEvent.CONNECTION_SAVE_TABLES;
 
     // get current project
     const project = await ctx.projectService.getCurrentProject();
+    try {
+      // delete existing models and columns
+      const { models, columns } = await this.overwriteModelsAndColumns(
+        arg.data.tables,
+        ctx,
+        project,
+      );
+      // telemetry
+      ctx.telemetry.sendEvent(eventName, {
+        dataSourceType: project.type,
+        tablesCount: models.length,
+        columnsCount: columns.length,
+      });
 
-    // delete existing models and columns
-    const { models, columns } = await this.overwriteModelsAndColumns(
-      tables,
-      ctx,
-      project,
-    );
-
-    // telemetry
-    ctx.telemetry.send_event('save_tables', {
-      tablesCount: models.length,
-      columnsCount: columns.length,
-    });
-    ctx.telemetry.send_event('onboarding_step_2', { step: 'save_models' });
-
-    // async deploy to wren-engine and ai service
-    this.deploy(ctx);
-    return { models: models, columns };
+      // async deploy to wren-engine and ai service
+      this.deploy(ctx);
+      return { models: models, columns };
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { dataSourceType: project.type, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+      throw err;
+    }
   }
 
   public async autoGenerateRelation(_root: any, _arg: any, ctx: IContext) {
@@ -406,14 +455,26 @@ export class ProjectResolver {
     arg: { data: { relations: RelationData[] } },
     ctx: IContext,
   ) {
-    const savedRelations = await ctx.modelService.saveRelations(
-      arg.data.relations,
-    );
-    ctx.telemetry.send_event('onboarding_step_3', { step: 'save_relation' });
-
-    // async deploy
-    this.deploy(ctx);
-    return savedRelations;
+    const eventName = TelemetryEvent.CONNECTION_SAVE_RELATION;
+    try {
+      const savedRelations = await ctx.modelService.saveRelations(
+        arg.data.relations,
+      );
+      // async deploy
+      this.deploy(ctx);
+      ctx.telemetry.sendEvent(eventName, {
+        relationCount: savedRelations.length,
+      });
+      return savedRelations;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { error: err.message },
+        err.extensions?.service,
+        false,
+      );
+      throw err;
+    }
   }
 
   public async getSchemaChange(_root: any, _arg: any, ctx: IContext) {
@@ -480,8 +541,20 @@ export class ProjectResolver {
       ctx,
       projectId: project.id,
     });
-    const hasSchemaChange = await schemaDetector.detectSchemaChange();
-    return hasSchemaChange;
+    const eventName = TelemetryEvent.MODELING_DETECT_SCHEMA_CHANGE;
+    try {
+      const hasSchemaChange = await schemaDetector.detectSchemaChange();
+      ctx.telemetry.sendEvent(eventName, { hasSchemaChange });
+      return hasSchemaChange;
+    } catch (error: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { error },
+        error.extensions?.service,
+        false,
+      );
+      throw error;
+    }
   }
 
   public async resolveSchemaChange(
@@ -495,7 +568,19 @@ export class ProjectResolver {
       ctx,
       projectId: project.id,
     });
-    await schemaDetector.resolveSchemaChange(type);
+    const eventName = TelemetryEvent.MODELING_RESOLVE_SCHEMA_CHANGE;
+    try {
+      await schemaDetector.resolveSchemaChange(type);
+      ctx.telemetry.sendEvent(eventName, { type });
+    } catch (error) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { type, error },
+        error.extensions?.service,
+        false,
+      );
+      throw error;
+    }
     return true;
   }
 

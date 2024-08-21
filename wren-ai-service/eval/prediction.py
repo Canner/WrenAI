@@ -1,44 +1,66 @@
 import argparse
-import asyncio
 import base64
 import os
-import re
 import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 import dotenv
 import orjson
 from git import Repo
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import langfuse_context
 from tomlkit import document, dumps
-from tqdm.asyncio import tqdm_asyncio
 
 sys.path.append(f"{Path().parent.resolve()}")
+import eval.pipelines as pipelines
 import src.utils as utils
-from eval.utils import parse_toml
+from eval.utils import (
+    parse_toml,
+)
 from src.core.engine import EngineConfig
-from src.pipelines.ask import generation, retrieval
-from src.pipelines.indexing import indexing
+from src.core.provider import EmbedderProvider, LLMProvider
 
 
-def generate_meta(dataset_path: str) -> Dict[str, Any]:
+def generate_meta(
+    path: str,
+    dataset: dict,
+    pipe: str,
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
+    **kwargs,
+) -> Dict[str, Any]:
+    if langfuse_project_id := os.getenv("LANGFUSE_PROJECT_ID"):
+        langfuse_url = f'{os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").rstrip('/')}/project/{langfuse_project_id}'
+    else:
+        langfuse_url = ""
+
     return {
+        "langfuse_url": langfuse_url,
         "user_id": "wren-evaluator",  # this property is using for langfuse
-        "session_id": f"eval_{uuid.uuid4()}",
+        "session_id": f"eval_{pipe}_{uuid.uuid4()}",
         "date": datetime.now(),
-        "evaluation_dataset": dataset_path,
+        "dataset_id": dataset["dataset_id"],
+        "evaluation_dataset": path,
+        "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
+        "embedding_model": embedder_provider.get_model(),
+        "generation_model": llm_provider.get_model(),
+        "pipeline": pipe,
+        "batch_size": os.getenv("BATCH_SIZE") or 4,
+        "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
     }
 
 
-def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
+def write_prediction(
+    meta: dict, predictions: list[dict], dir_path: str = "outputs/predictions"
+) -> None:
     if Path(dir_path).exists() is False:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-    output_path = f"{dir_path}/prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
+    output_file = f"prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
+    output_path = f"{dir_path}/{output_file}"
 
     doc = document()
     doc.add("meta", meta)
@@ -46,6 +68,11 @@ def write_prediction(meta, predictions, dir_path="outputs/predictions") -> None:
 
     with open(output_path, "w") as file:
         file.write(dumps(doc))
+
+    print(f"\n\nPrediction result is saved at {output_path}")
+    print(
+        f"You can then evaluate the prediction result by running `just eval {output_file}`"
+    )
 
 
 def obtain_commit_hash() -> str:
@@ -61,115 +88,26 @@ def obtain_commit_hash() -> str:
     return f"{repo.head.commit}@{branch.name}"
 
 
-def predict(meta: dict, queries: list, pipes: dict) -> List[Dict[str, Any]]:
-    predictions = []
-
-    @observe(name="Prediction Process")
-    async def wrapper(query: dict) -> None:
-        prediction = {
-            "trace_id": langfuse_context.get_current_trace_id(),
-            "trace_url": langfuse_context.get_current_trace_url(),
-            "input": query["question"],
-            "actual_output": [],
-            "expected_output": query["sql"],
-            "retrieval_context": [],
-            "context": query["context"],
-        }
-
-        langfuse_context.update_current_trace(
-            session_id=meta["session_id"],
-            user_id=meta["user_id"],
-            metadata={
-                "commit": meta["commit"],
+def init_providers(mdl: dict) -> dict:
+    engine_config = EngineConfig(
+        provider="wren_ibis",
+        config={
+            "source": "bigquery",
+            "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
+            "connection_info": {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
             },
-        )
-
-        result = await pipes["retrieval"].run(query=prediction["input"])
-        documents = result.get("retrieval", {}).get("documents", [])
-        actual_output = await pipes["generation"].run(
-            query=prediction["input"],
-            contexts=documents,
-            exclude=[],
-        )
-
-        prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
-
-        predictions.append(prediction)
-
-    def extract_units(docs: list) -> list:
-        columns = []
-        for doc in docs:
-            columns.extend(parse_ddl(doc["content"]))
-        return columns
-
-    def parse_ddl(ddl: str) -> list:
-        # Regex to extract table name
-        table_name_match = re.search(r"CREATE TABLE (\w+)", ddl, re.IGNORECASE)
-        table_name = table_name_match.group(1) if table_name_match else None
-
-        # Regex to extract column names
-        columns = re.findall(r"-- \{[^}]*\}\n\s*(\w+)", ddl)
-
-        # Format columns with table name as prefix
-        if table_name:
-            columns = [f"{table_name}.{col}" for col in columns]
-
-        return columns
-
-    async def task():
-        tasks = [wrapper(query) for query in queries]
-        await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
-
-    asyncio.run(task())
-
-    return predictions
-
-
-def deploy_model(mdl, pipe) -> None:
-    async def wrapper():
-        await pipe.run(orjson.dumps(mdl).decode())
-
-    asyncio.run(wrapper())
-
-
-def setup_pipes(mdl: str) -> Dict[str, Any]:
-    (
-        llm_provider,
-        embedder_provider,
-        document_store_provider,
-        engine,
-    ) = utils.init_providers(
-        engine_config=EngineConfig(
-            provider="wren_ibis",
-            config={
-                "source": "bigquery",
-                "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
-                "connection_info": {
-                    "project_id": os.getenv("bigquery.project-id"),
-                    "dataset_id": os.getenv("bigquery.dataset-id"),
-                    "credentials": os.getenv("bigquery.credentials-key"),
-                },
-            },
-        )
+        },
     )
 
-    document_store_provider.get_store(recreate_index=True)
+    providers = utils.init_providers(engine_config=engine_config)
     return {
-        "indexing": indexing.Indexing(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
-        ),
-        "retrieval": retrieval.Retrieval(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
-        ),
-        "generation": generation.Generation(
-            llm_provider=llm_provider,
-            engine=engine,
-        ),
+        "llm_provider": providers[0],
+        "embedder_provider": providers[1],
+        "document_store_provider": providers[2],
+        "engine": providers[3],
     }
 
 
@@ -181,23 +119,39 @@ def parse_args() -> Tuple[str]:
         type=str,
         help="Eval dataset file name in the eval/dataset folder",
     )
+    parser.add_argument(
+        "--pipeline",
+        "-P",
+        type=str,
+        choices=["ask", "generation", "retrieval"],
+        help="Specify the pipeline that you want to evaluate",
+    )
     args = parser.parse_args()
-    return f"eval/dataset/{args.file}"
+    return f"eval/dataset/{args.file}", args.pipeline
 
 
 if __name__ == "__main__":
-    path = parse_args()
+    path, pipe_name = parse_args()
 
     dotenv.load_dotenv()
     utils.load_env_vars()
     utils.init_langfuse()
 
-    meta = generate_meta(dataset_path=path)
-
     dataset = parse_toml(path)
-    pipes = setup_pipes(dataset["mdl"])
-    deploy_model(dataset["mdl"], pipes["indexing"])
-    predictions = predict(meta, dataset["eval_dataset"], pipes)
+    providers = init_providers(dataset["mdl"])
+
+    meta = generate_meta(path=path, dataset=dataset, pipe=pipe_name, **providers)
+
+    pipe = pipelines.init(pipe_name, meta, mdl=dataset["mdl"], providers=providers)
+
+    predictions = pipe.predict(dataset["eval_dataset"])
+    meta["expected_batch_size"] = meta["query_count"] * pipe.candidate_size
+    meta["actual_batch_size"] = len(predictions) - meta["query_count"]
 
     write_prediction(meta, predictions)
     langfuse_context.flush()
+
+    if meta["langfuse_url"]:
+        print(
+            f"You can also view the prediction result in Langfuse at {meta['langfuse_url']}/sessions/{meta['session_id']}"
+        )

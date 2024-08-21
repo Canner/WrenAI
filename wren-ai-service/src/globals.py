@@ -1,6 +1,7 @@
-import os
+from typing import Optional
 
-from src.core.engine import EngineConfig
+from src.core.engine import Engine
+from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.ask import (
     followup_generation as ask_followup_generation,
 )
@@ -22,50 +23,48 @@ from src.pipelines.ask_details import (
 from src.pipelines.indexing import (
     indexing,
 )
-from src.pipelines.semantics import description
 from src.pipelines.sql_explanation import (
     generation as sql_explanation_generation,
 )
 from src.pipelines.sql_regeneration import (
     generation as sql_regeneration,
 )
-from src.utils import init_providers
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
-from src.web.v1.services.semantics import SemanticsService
+from src.web.v1.services.indexing import IndexingService
 from src.web.v1.services.sql_explanation import SQLExplanationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
-SEMANTIC_SERVICE = None
+INDEXING_SERVICE = None
 ASK_SERVICE = None
 ASK_DETAILS_SERVICE = None
 SQL_EXPLANATION_SERVICE = None
 SQL_REGENERATION_SERVICE = None
 
 
-def init_globals():
+def init_globals(
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
+    document_store_provider: DocumentStoreProvider,
+    engine: Engine,
+    should_force_deploy: Optional[str] = None,
+):
     global \
-        SEMANTIC_SERVICE, \
+        INDEXING_SERVICE, \
         ASK_SERVICE, \
         ASK_DETAILS_SERVICE, \
         SQL_EXPLANATION_SERVICE, \
         SQL_REGENERATION_SERVICE
 
-    llm_provider, embedder_provider, document_store_provider, engine = init_providers(
-        engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
-    )
+    if should_force_deploy:
+        document_store_provider.get_store(recreate_index=True)
+        document_store_provider.get_store(
+            dataset_name="view_questions", recreate_index=True
+        )
 
-    # Recreate the document store to ensure a clean slate
-    # TODO: for SaaS, we need to use a flag to prevent this collection_recreation
-    document_store_provider.get_store(recreate_index=True)
-    document_store_provider.get_store(
-        dataset_name="view_questions", recreate_index=True
-    )
-
-    SEMANTIC_SERVICE = SemanticsService(
+    INDEXING_SERVICE = IndexingService(
         pipelines={
-            "generate_description": description.Generation(
-                llm_provider=llm_provider,
+            "indexing": indexing.Indexing(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
@@ -74,10 +73,6 @@ def init_globals():
 
     ASK_SERVICE = AskService(
         pipelines={
-            "indexing": indexing.Indexing(
-                embedder_provider=embedder_provider,
-                document_store_provider=document_store_provider,
-            ),
             "retrieval": ask_retrieval.Retrieval(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,

@@ -14,8 +14,6 @@ services:
     platform: ${PLATFORM}
     environment:
       DATA_PATH: /app/data
-      PG_USERNAME: ${PG_USERNAME}
-      PG_PASSWORD: ${PG_PASSWORD}
     volumes:
       - data:/app/data
     command: /bin/sh /app/init.sh
@@ -55,7 +53,9 @@ services:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
       WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
+      WREN_UI_PORT: ${WREN_UI_PORT}
       WREN_UI_ENDPOINT: http://wren-ui:${WREN_UI_PORT}
+      QDRANT_HOST: ${QDRANT_HOST}
       LLM_OPENAI_API_KEY: ${LLM_OPENAI_API_KEY}
       EMBEDDER_OPENAI_API_KEY: ${EMBEDDER_OPENAI_API_KEY}
       LLM_AZURE_OPENAI_API_KEY: ${LLM_AZURE_OPENAI_API_KEY}
@@ -63,17 +63,17 @@ services:
       GENERATION_MODEL: ${GENERATION_MODEL}
       ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
       LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
+      SHOULD_FORCE_DEPLOY: ${SHOULD_FORCE_DEPLOY}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
     networks:
       - wren
     depends_on:
-      - wren-engine
       - qdrant
 
   qdrant:
-    image: qdrant/qdrant:v1.7.4
+    image: qdrant/qdrant:v1.11.0
     restart: on-failure
     expose:
       - 6333
@@ -97,8 +97,6 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
       EMBEDDING_MODEL_DIMENSION: ${EMBEDDING_MODEL_DIMENSION}
       GENERATION_MODEL: ${GENERATION_MODEL}
-      PG_USERNAME: ${PG_USERNAME}
-      PG_PASSWORD: ${PG_PASSWORD}
       # telemetry
       WREN_ENGINE_PORT: ${WREN_ENGINE_PORT}
       WREN_AI_SERVICE_VERSION: ${WREN_AI_SERVICE_VERSION}

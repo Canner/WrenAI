@@ -3,36 +3,12 @@ from typing import List, Literal, Optional
 
 import sqlparse
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer
+from src.utils import async_timer, trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
-
-
-# POST /v1/semantics-preparations
-class SemanticsPreparationRequest(BaseModel):
-    mdl: str
-    id: str
-
-
-class SemanticsPreparationResponse(BaseModel):
-    id: str
-
-
-# GET /v1/semantics-preparations/{task_id}/status
-class SemanticsPreparationStatusRequest(BaseModel):
-    id: str
-
-
-class SemanticsPreparationStatusResponse(BaseModel):
-    class SemanticsPreparationError(BaseModel):
-        code: Literal["OTHERS"]
-        message: str
-
-    status: Literal["indexing", "finished", "failed"]
-    error: Optional[SemanticsPreparationError] = None
 
 
 class SQLExplanation(BaseModel):
@@ -50,7 +26,12 @@ class AskRequest(BaseModel):
 
     _query_id: str | None = None
     query: str
-    id: str  # for identifying which collection to access from vectordb, the same hash string for identifying which mdl model deployment from backend
+    # for identifying which collection to access from vectordb
+    project_id: Optional[str] = None
+    # don't recommend to use id as a field name, but it's used in the older version of API spec
+    # so we need to support as a choice, and will remove it in the future
+    mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
+    thread_id: Optional[str] = None
     history: Optional[AskResponseDetails] = None
 
     @property
@@ -116,52 +97,6 @@ class AskService:
     ):
         self._pipelines = pipelines
         self._ask_results = {}
-        self._prepare_semantics_statuses = {}
-
-    @async_timer
-    @observe(name="Prepare Semantics")
-    async def prepare_semantics(
-        self, prepare_semantics_request: SemanticsPreparationRequest
-    ):
-        try:
-            logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
-
-            self._prepare_semantics_statuses[
-                prepare_semantics_request.id
-            ] = SemanticsPreparationStatusResponse(
-                status="finished",
-            )
-        except Exception as e:
-            logger.exception(f"ask pipeline - Failed to prepare semantics: {e}")
-
-            self._prepare_semantics_statuses[
-                prepare_semantics_request.id
-            ] = SemanticsPreparationStatusResponse(
-                status="failed",
-                error=f"Failed to prepare semantics: {e}",
-            )
-
-    def get_prepare_semantics_status(
-        self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
-    ) -> SemanticsPreparationStatusResponse:
-        if (
-            result := self._prepare_semantics_statuses.get(
-                prepare_semantics_status_request.id
-            )
-        ) is None:
-            logger.exception(
-                f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.id}"
-            )
-            return SemanticsPreparationStatusResponse(
-                status="failed",
-                error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
-                    code="OTHERS",
-                    message="{prepare_semantics_status_request.id} is not found",
-                ),
-            )
-
-        return result
 
     def _is_stopped(self, query_id: str):
         if (
@@ -171,12 +106,25 @@ class AskService:
 
         return False
 
+    def _get_failed_dry_run_results(self, invalid_generation_results: list[dict]):
+        return list(
+            filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
+        )
+
     @async_timer
     @observe(name="Ask Question")
+    @trace_metadata
     async def ask(
         self,
         ask_request: AskRequest,
     ):
+        results = {
+            "ask_result": {},
+            "metadata": {
+                "error_type": "",
+            },
+        }
+
         try:
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
@@ -194,6 +142,7 @@ class AskService:
 
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=ask_request.query,
+                    id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("retrieval", {}).get("documents", [])
 
@@ -208,7 +157,8 @@ class AskService:
                             message="No relevant data",
                         ),
                     )
-                    return
+                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                    return results
 
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
@@ -216,7 +166,8 @@ class AskService:
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=ask_request.query
+                    query=ask_request.query,
+                    id=ask_request.project_id,
                 )
 
                 # we only return top 1 result
@@ -235,6 +186,7 @@ class AskService:
                         query=ask_request.query,
                         contexts=documents,
                         history=ask_request.history,
+                        project_id=ask_request.project_id,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -243,6 +195,7 @@ class AskService:
                         query=ask_request.query,
                         contexts=documents,
                         exclude=historical_question_result,
+                        project_id=ask_request.project_id,
                     )
 
                 valid_generation_results = []
@@ -261,16 +214,17 @@ class AskService:
                 logger.debug("Before sql correction:")
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
 
-                if text_to_sql_generation_results["post_process"][
-                    "invalid_generation_results"
-                ]:
+                if failed_dry_run_results := self._get_failed_dry_run_results(
+                    text_to_sql_generation_results["post_process"][
+                        "invalid_generation_results"
+                    ]
+                ):
                     sql_correction_results = await self._pipelines[
                         "sql_correction"
                     ].run(
                         contexts=documents,
-                        invalid_generation_results=text_to_sql_generation_results[
-                            "post_process"
-                        ]["invalid_generation_results"],
+                        invalid_generation_results=failed_dry_run_results,
+                        project_id=ask_request.project_id,
                     )
                     valid_generation_results += sql_correction_results["post_process"][
                         "valid_generation_results"
@@ -280,17 +234,15 @@ class AskService:
                         f'sql_correction_results: {sql_correction_results["post_process"]}'
                     )
 
-                    for results in sql_correction_results["post_process"][
-                        "invalid_generation_results"
-                    ]:
+                    for failed_dry_run_result in failed_dry_run_results:
                         logger.debug(
                             f"{sqlparse.format(
-                                results['sql'],
+                                failed_dry_run_result['sql'],
                                 reindent=True,
                                 keyword_case='upper')
                             }"
                         )
-                        logger.debug(results["error"])
+                        logger.debug(failed_dry_run_result["error"])
                         logger.debug("\n\n")
 
                 # remove duplicates of valid_generation_results, which consists of a sql and a summary
@@ -310,9 +262,10 @@ class AskService:
                             message="No relevant SQL",
                         ),
                     )
-                    return
+                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    return results
 
-                results = [
+                api_results = [
                     AskResultResponse.AskResult(
                         **{
                             "sql": result.get("statement"),
@@ -328,13 +281,16 @@ class AskService:
                 ]
 
                 # only return top 3 results, thus remove the rest
-                if len(results) > 3:
-                    del results[3:]
+                if len(api_results) > 3:
+                    del api_results[3:]
 
                 self._ask_results[query_id] = AskResultResponse(
                     status="finished",
-                    response=results,
+                    response=api_results,
                 )
+
+                results["ask_result"] = api_results
+                return results
         except Exception as e:
             logger.exception(f"ask pipeline - OTHERS: {e}")
 
@@ -345,6 +301,9 @@ class AskService:
                     message=str(e),
                 ),
             )
+
+            results["metadata"]["error_type"] = "OTHERS"
+            return results
 
     def stop_ask(
         self,

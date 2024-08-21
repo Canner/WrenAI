@@ -307,9 +307,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       logger.debug(`Wren Engine Dry run success`);
       return res.data;
     } catch (err: any) {
-      logger.debug(
-        `Got error when dry running: ${JSON.stringify(err.response.data)}`,
-      );
+      logger.info(`Got error when dry running`);
       throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
         customMessage: err.response.data.message,
         originalError: err,

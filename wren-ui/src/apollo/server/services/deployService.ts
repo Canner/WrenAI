@@ -10,7 +10,11 @@ import {
 import { Manifest } from '../mdl/type';
 import { createHash } from 'node:crypto';
 import { getLogger } from '@server/utils';
-import { Telemetry } from '../telemetry/telemetry';
+import {
+  PostHogTelemetry,
+  TelemetryEvent,
+  WrenService,
+} from '../telemetry/telemetry';
 
 const logger = getLogger('DeployService');
 logger.level = 'debug';
@@ -40,7 +44,7 @@ export interface IDeployService {
 export class DeployService implements IDeployService {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private deployLogRepository: IDeployLogRepository;
-  private telemetry: Telemetry;
+  private telemetry: PostHogTelemetry;
 
   constructor({
     wrenAIAdaptor,
@@ -49,7 +53,7 @@ export class DeployService implements IDeployService {
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
     deployLogRepository: IDeployLogRepository;
-    telemetry: Telemetry;
+    telemetry: PostHogTelemetry;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployLogRepository = deployLogRepository;
@@ -72,46 +76,68 @@ export class DeployService implements IDeployService {
   }
 
   public async deploy(manifest, projectId, force = false) {
-    // generate hash of manifest
-    const hash = this.createMDLHash(manifest, projectId);
-    logger.debug(`Deploying model, hash: ${hash}`);
+    const eventName = TelemetryEvent.MODELING_DEPLOY_MDL;
+    try {
+      // generate hash of manifest
+      const hash = this.createMDLHash(manifest, projectId);
+      logger.debug(`Deploying model, hash: ${hash}`);
 
-    if (!force) {
-      // check if the model current deployment
-      const lastDeploy =
-        await this.deployLogRepository.findLastProjectDeployLog(projectId);
-      if (lastDeploy && lastDeploy.hash === hash) {
-        logger.log(`Model has been deployed, hash: ${hash}`);
-        return { status: DeployStatusEnum.SUCCESS };
+      if (!force) {
+        // check if the model current deployment
+        const lastDeploy =
+          await this.deployLogRepository.findLastProjectDeployLog(projectId);
+        if (lastDeploy && lastDeploy.hash === hash) {
+          logger.log(`Model has been deployed, hash: ${hash}`);
+          return { status: DeployStatusEnum.SUCCESS };
+        }
       }
-    }
-    const deployData = {
-      manifest,
-      hash,
-      projectId,
-      status: DeployStatusEnum.IN_PROGRESS,
-    } as Deploy;
-    const deploy = await this.deployLogRepository.createOne(deployData);
-
-    // deploy to AI-service
-    const { status: aiStatus, error: aiError } =
-      await this.wrenAIAdaptor.deploy({
+      const deployData = {
         manifest,
         hash,
+        projectId,
+        status: DeployStatusEnum.IN_PROGRESS,
+      } as Deploy;
+      const deploy = await this.deployLogRepository.createOne(deployData);
+
+      // deploy to AI-service
+      const { status: aiStatus, error: aiError } =
+        await this.wrenAIAdaptor.deploy({
+          manifest,
+          hash,
+        });
+
+      // update deploy status
+      const status =
+        aiStatus === WrenAIDeployStatusEnum.SUCCESS
+          ? DeployStatusEnum.SUCCESS
+          : DeployStatusEnum.FAILED;
+      await this.deployLogRepository.updateOne(deploy.id, {
+        status,
+        error: aiError,
       });
 
-    // update deploy status
-    const status =
-      aiStatus === WrenAIDeployStatusEnum.SUCCESS
-        ? DeployStatusEnum.SUCCESS
-        : DeployStatusEnum.FAILED;
-    await this.deployLogRepository.updateOne(deploy.id, {
-      status,
-      error: aiError,
-    });
-    this.telemetry.send_event('deploy_model', { mdl: manifest });
-
-    return { status, error: aiError };
+      // telemetry
+      if (status === DeployStatusEnum.SUCCESS) {
+        this.telemetry.sendEvent(eventName);
+      } else {
+        this.telemetry.sendEvent(
+          eventName,
+          { mdl: manifest, error: aiError },
+          WrenService.AI,
+          false,
+        );
+      }
+      return { status, error: aiError };
+    } catch (err: any) {
+      logger.error(`Error deploying model: ${err.message}`);
+      this.telemetry.sendEvent(
+        eventName,
+        { mdl: manifest, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+      return { status: DeployStatusEnum.FAILED, error: err.message };
+    }
   }
 
   public createMDLHash(manifest: Manifest, projectId: number) {

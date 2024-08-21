@@ -12,48 +12,6 @@ GLOBAL_DATA = {
 }
 
 
-# this function didn't using in the project, so let's skip it
-# when we need to use it, we can uncomment it, and also did the refactor for the pipelines
-# def test_semantics_description():
-#     # using TestClient as a context manager would trigger startup/shutdown events as well as lifespans.
-#     with TestClient(app) as client:
-#         response = client.post(
-#             url="/v1/semantics-descriptions",
-#             json={
-#                 "mdl": {
-#                     "name": "all_star",
-#                     "properties": {},
-#                     "refsql": 'select * from "wrenai".spider."baseball_1-all_star"',
-#                     "columns": [
-#                         {
-#                             "name": "player_id",
-#                             "type": "varchar",
-#                             "notnull": False,
-#                             "iscalculated": False,
-#                             "expression": "player_id",
-#                             "properties": {},
-#                         }
-#                     ],
-#                     "primarykey": "",
-#                 },
-#                 "model": "all_star",
-#                 "identifiers": ["column@player_id"],
-#             },
-#         )
-
-#         assert response.status_code == 200
-#         assert len(response.json()) == 1
-#         assert response.json()[0]["identifier"] == "column@player_id"
-#         assert (
-#             response.json()[0]["display_name"] is not None
-#             and response.json()[0]["display_name"] != ""
-#         )
-#         assert (
-#             response.json()[0]["description"] is not None
-#             and response.json()[0]["description"] != ""
-#         )
-
-
 def test_semantics_preparations():
     with TestClient(app) as client:
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
@@ -267,7 +225,7 @@ LIMIT 1
 def test_web_error_handler():
     with TestClient(app) as client:
         response = client.post(
-            url="/v1/semantics-descriptions",
+            url="/v1/asks",
             json={},
         )
 

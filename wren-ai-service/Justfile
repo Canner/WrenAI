@@ -1,5 +1,34 @@
-predict file:
-    @python3 -u eval/prediction.py --file {{file}}
+up: prepare-wren-engine
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
 
-eval file:
-    @python3 -u eval/evaluation.py --file {{file}}
+down:
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example down
+
+start:
+	poetry run python -m src.__main__
+
+curate_eval_data:
+	poetry run streamlit run eval/data_curation/app.py
+
+predict dataset pipeline='ask':
+    @poetry run python -u eval/prediction.py --file {{dataset}} --pipeline {{pipeline}}
+
+eval prediction_result:
+    @poetry run python -u eval/evaluation.py --file {{prediction_result}}
+
+demo:
+	poetry run streamlit run demo/app.py
+
+test: up && down
+	poetry run pytest -s $(args)
+
+load-test:
+	poetry run python -m tests.locust.locust_script
+
+prepare-wren-engine:
+	rm -rf tools/dev/etc
+	mkdir -p tools/dev/etc
+	cp tools/dev/config.properties.example tools/dev/etc/config.properties
+	mkdir -p tools/dev/etc/mdl
+	echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" \\
+		> tools/dev/etc/mdl/sample.json

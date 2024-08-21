@@ -121,6 +121,11 @@ class OpenAILLMProvider(LLMProvider):
         api_key: Secret = Secret.from_env_var("LLM_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_OPENAI_API_BASE") or LLM_OPENAI_API_BASE,
         generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
+        model_kwargs: Dict[str, Any] = (
+            orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
+            if os.getenv("GENERATION_MODEL_KWARGS")
+            else GENERATION_MODEL_KWARGS
+        ),
     ):
         def _verify_api_key(api_key: str, api_base: str) -> None:
             """
@@ -131,6 +136,7 @@ class OpenAILLMProvider(LLMProvider):
         self._api_key = api_key
         self._api_base = remove_trailing_slash(api_base)
         self._generation_model = generation_model
+        self._model_kwargs = model_kwargs
 
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
         # TODO: currently only OpenAI api key can be verified
@@ -142,18 +148,15 @@ class OpenAILLMProvider(LLMProvider):
 
     def get_generator(
         self,
-        model_kwargs: Dict[str, Any] = (
-            orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
-            if os.getenv("GENERATION_MODEL_KWARGS")
-            else GENERATION_MODEL_KWARGS
-        ),
         system_prompt: Optional[str] = None,
     ):
         if self._api_base == LLM_OPENAI_API_BASE:
-            logger.info(f"Creating OpenAI generator with model kwargs: {model_kwargs}")
+            logger.info(
+                f"Creating OpenAI generator with model kwargs: {self._model_kwargs}"
+            )
         else:
             logger.info(
-                f"Creating OpenAI API-compatible generator with model kwargs: {model_kwargs}"
+                f"Creating OpenAI API-compatible generator with model kwargs: {self._model_kwargs}"
             )
 
         return AsyncGenerator(
@@ -161,5 +164,5 @@ class OpenAILLMProvider(LLMProvider):
             api_base_url=self._api_base,
             model=self._generation_model,
             system_prompt=system_prompt,
-            generation_kwargs=model_kwargs,
+            generation_kwargs=self._model_kwargs,
         )

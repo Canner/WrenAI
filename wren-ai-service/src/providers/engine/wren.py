@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 import aiohttp
 import orjson
 
-from src.core.engine import Engine, add_quotes, remove_limit_statement
+from src.core.engine import Engine, remove_limit_statement
 from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
@@ -22,6 +22,8 @@ class WrenUI(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        project_id: str | None = None,
+        **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
             f"{self._endpoint}/api/graphql",
@@ -31,7 +33,8 @@ class WrenUI(Engine):
                     "data": {
                         "dryRun": True,
                         "limit": 1,
-                        "sql": remove_limit_statement(add_quotes(sql)),
+                        "sql": remove_limit_statement(sql),
+                        "projectId": project_id,
                     }
                 },
             },
@@ -65,11 +68,12 @@ class WrenIbis(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
-            f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true",
+            f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true&limit=1",
             json={
-                "sql": remove_limit_statement(add_quotes(sql)),
+                "sql": remove_limit_statement(sql),
                 "manifestStr": self._manifest,
                 "connectionInfo": self._connection_info,
             },
@@ -94,6 +98,7 @@ class WrenEngine(Engine):
         properties: Dict[str, Any] = {
             "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
         },
+        **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.get(
             f"{self._endpoint}/v1/mdl/dry-run",
@@ -101,7 +106,8 @@ class WrenEngine(Engine):
                 "manifest": orjson.loads(base64.b64decode(properties.get("manifest")))
                 if properties.get("manifest")
                 else {},
-                "sql": remove_limit_statement(add_quotes(sql)),
+                "sql": remove_limit_statement(sql),
+                "limit": 1,
             },
         ) as response:
             if response.status == 200:

@@ -14,6 +14,7 @@ import {
   SampleDatasetName,
   getSampleAskQuestions,
 } from '../data';
+import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -107,6 +108,26 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const askResult = await askingService.getAskingTask(taskId);
 
+    // telemetry
+    const eventName = TelemetryEvent.HOME_ASK_CANDIDATE;
+    if (askResult.status === AskResultStatus.FINISHED) {
+      ctx.telemetry.sendEvent(eventName, {
+        status: askResult.status,
+        candidates: askResult.response,
+      });
+    }
+    if (askResult.status === AskResultStatus.FAILED) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        {
+          status: askResult.status,
+          error: askResult.error,
+        },
+        WrenService.AI,
+        false,
+      );
+    }
+
     // construct candidates from response
     const candidates = await Promise.all(
       (askResult.response || []).map(async (response) => {
@@ -144,15 +165,25 @@ export class AskingResolver {
     const { question, sql, summary, viewId } = args.data;
 
     const askingService = ctx.askingService;
-    const thread = await askingService.createThread({
-      question,
-      sql,
-      summary,
-      viewId,
-    });
+    const eventName = TelemetryEvent.HOME_CREATE_THREAD;
+    try {
+      const thread = await askingService.createThread({
+        question,
+        sql,
+        summary,
+        viewId,
+      });
+      ctx.telemetry.sendEvent(eventName, {});
+      return thread;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
     // telemetry
-    ctx.telemetry.send_event('ask_question', {});
-    return thread;
   }
 
   public async getThread(
@@ -206,13 +237,26 @@ export class AskingResolver {
     const { where, data } = args;
 
     const askingService = ctx.askingService;
-    const thread = await askingService.updateThread(where.id, data);
-
-    // telemetry
-    ctx.telemetry.send_event('update_thread_summary', {
-      new_summary: data.summary,
-    });
-    return thread;
+    const eventName = TelemetryEvent.HOME_UPDATE_THREAD_SUMMARY;
+    const newSummary = data.summary;
+    try {
+      const thread = await askingService.updateThread(where.id, data);
+      // telemetry
+      ctx.telemetry.sendEvent(eventName, {
+        new_summary: newSummary,
+      });
+      return thread;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        {
+          new_summary: newSummary,
+        },
+        err.extensions?.service,
+        false,
+      );
+      throw err;
+    }
   }
 
   public async deleteThread(
@@ -252,9 +296,20 @@ export class AskingResolver {
     const { threadId, data } = args;
 
     const askingService = ctx.askingService;
-    const response = await askingService.createThreadResponse(threadId, data);
-    ctx.telemetry.send_event('ask_followup_question', {});
-    return response;
+    const eventName = TelemetryEvent.HOME_ASK_FOLLOWUP_QUESTION;
+    try {
+      const response = await askingService.createThreadResponse(threadId, data);
+      ctx.telemetry.sendEvent(eventName, { data });
+      return response;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { data, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+      throw err;
+    }
   }
 
   public async getResponse(

@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.engine import add_quotes
-from src.utils import async_timer
+from src.utils import async_timer, trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -23,6 +23,9 @@ class AskDetailsRequest(BaseModel):
     query: str
     sql: str
     summary: str
+    mdl_hash: Optional[str] = None
+    thread_id: Optional[str] = None
+    project_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:
@@ -66,10 +69,18 @@ class AskDetailsService:
 
     @async_timer
     @observe(name="Ask Details(Breakdown SQL)")
+    @trace_metadata
     async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,
     ):
+        results = {
+            "ask_details_result": {},
+            "metadata": {
+                "error_type": "",
+            },
+        }
+
         try:
             # ask details status can be understanding, searching, generating, finished, stopped
             # we will need to handle business logic for each status
@@ -89,18 +100,21 @@ class AskDetailsService:
 
             generation_result = await self._pipelines["generation"].run(
                 sql=ask_details_request.sql,
+                project_id=ask_details_request.project_id,
             )
 
             ask_details_result = generation_result["post_process"]["results"]
 
             if not ask_details_result["steps"]:
+                quoted_sql, no_error = add_quotes(ask_details_request.sql)
                 ask_details_result["steps"] = [
                     {
-                        "sql": add_quotes(ask_details_request.sql),
+                        "sql": quoted_sql if no_error else ask_details_request.sql,
                         "summary": ask_details_request.summary,
                         "cte_name": "",
                     }
                 ]
+                results["metadata"]["error_type"] = "SQL_BREAKDOWN_FAILED"
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="finished",
@@ -108,6 +122,10 @@ class AskDetailsService:
                     **ask_details_result
                 ),
             )
+
+            results["ask_details_result"] = ask_details_result
+
+            return results
         except Exception as e:
             logger.exception(f"ask-details pipeline - OTHERS: {e}")
 
@@ -118,6 +136,9 @@ class AskDetailsService:
                     message=str(e),
                 ),
             )
+
+            results["metadata"]["error_type"] = "OTHERS"
+            return results
 
     def get_ask_details_result(
         self,

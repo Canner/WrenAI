@@ -1,5 +1,4 @@
 import uuid
-from typing import List
 
 from fastapi import APIRouter, BackgroundTasks
 
@@ -9,10 +8,6 @@ from src.web.v1.services.ask import (
     AskResponse,
     AskResultRequest,
     AskResultResponse,
-    SemanticsPreparationRequest,
-    SemanticsPreparationResponse,
-    SemanticsPreparationStatusRequest,
-    SemanticsPreparationStatusResponse,
     StopAskRequest,
     StopAskResponse,
 )
@@ -22,9 +17,11 @@ from src.web.v1.services.ask_details import (
     AskDetailsResultRequest,
     AskDetailsResultResponse,
 )
-from src.web.v1.services.semantics import (
-    BulkGenerateDescriptionRequest,
-    GenerateDescriptionResponse,
+from src.web.v1.services.indexing import (
+    SemanticsPreparationRequest,
+    SemanticsPreparationResponse,
+    SemanticsPreparationStatusRequest,
+    SemanticsPreparationStatusResponse,
 )
 from src.web.v1.services.sql_explanation import (
     SQLExplanationRequest,
@@ -42,40 +39,30 @@ from src.web.v1.services.sql_regeneration import (
 router = APIRouter()
 
 
-@router.post("/semantics-descriptions")
-async def bulk_generate_description(
-    bulk_request: BulkGenerateDescriptionRequest,
-) -> List[GenerateDescriptionResponse]:
-    return [
-        container.SEMANTIC_SERVICE.generate_description(request)
-        for request in bulk_request
-    ]
-
-
 @router.post("/semantics-preparations")
 async def prepare_semantics(
     prepare_semantics_request: SemanticsPreparationRequest,
     background_tasks: BackgroundTasks,
 ) -> SemanticsPreparationResponse:
-    container.ASK_SERVICE._prepare_semantics_statuses[
-        prepare_semantics_request.id
+    container.INDEXING_SERVICE._prepare_semantics_statuses[
+        prepare_semantics_request.mdl_hash
     ] = SemanticsPreparationStatusResponse(
         status="indexing",
     )
 
     background_tasks.add_task(
-        container.ASK_SERVICE.prepare_semantics,
+        container.INDEXING_SERVICE.prepare_semantics,
         prepare_semantics_request,
     )
-    return SemanticsPreparationResponse(id=prepare_semantics_request.id)
+    return SemanticsPreparationResponse(mdl_hash=prepare_semantics_request.mdl_hash)
 
 
-@router.get("/semantics-preparations/{task_id}/status")
+@router.get("/semantics-preparations/{mdl_hash}/status")
 async def get_prepare_semantics_status(
-    task_id: str,
+    mdl_hash: str,
 ) -> SemanticsPreparationStatusResponse:
-    return container.ASK_SERVICE.get_prepare_semantics_status(
-        SemanticsPreparationStatusRequest(id=task_id)
+    return container.INDEXING_SERVICE.get_prepare_semantics_status(
+        SemanticsPreparationStatusRequest(mdl_hash=mdl_hash)
     )
 
 

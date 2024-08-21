@@ -14,7 +14,7 @@ from haystack_integrations.document_stores.qdrant import (
 )
 from haystack_integrations.document_stores.qdrant.converters import (
     DENSE_VECTORS_NAME,
-    convert_haystack_documents_to_qdrant_points,
+    SPARSE_VECTORS_NAME,
     convert_id,
     convert_qdrant_point_to_haystack_document,
 )
@@ -30,6 +30,39 @@ from src.providers.loader import get_default_embedding_model_dim, provider
 logger = logging.getLogger("wren-ai-service")
 
 
+def convert_haystack_documents_to_qdrant_points(
+    documents: List[Document],
+    *,
+    use_sparse_embeddings: bool,
+) -> List[rest.PointStruct]:
+    points = []
+    for document in documents:
+        payload = document.to_dict(flatten=True)
+        if use_sparse_embeddings:
+            vector = {}
+
+            dense_vector = payload.pop("embedding", None)
+            if dense_vector is not None:
+                vector[DENSE_VECTORS_NAME] = dense_vector
+
+            sparse_vector = payload.pop("sparse_embedding", None)
+            if sparse_vector is not None:
+                sparse_vector_instance = rest.SparseVector(**sparse_vector)
+                vector[SPARSE_VECTORS_NAME] = sparse_vector_instance
+
+        else:
+            vector = payload.pop("embedding") or {}
+        _id = convert_id(payload.get("id"))
+
+        point = rest.PointStruct(
+            payload=payload,
+            vector=vector,
+            id=_id,
+        )
+        points.append(point)
+    return points
+
+
 class AsyncQdrantDocumentStore(QdrantDocumentStore):
     def __init__(
         self,
@@ -41,20 +74,18 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         https: Optional[bool] = None,
         api_key: Optional[Secret] = None,
         prefix: Optional[str] = None,
-        timeout: Optional[float] = None,
+        timeout: Optional[int] = None,
         host: Optional[str] = None,
         path: Optional[str] = None,
+        force_disable_check_same_thread: bool = False,
         index: str = "Document",
         embedding_dim: int = 768,
         on_disk: bool = False,
-        content_field: str = "content",
-        name_field: str = "name",
-        embedding_field: str = "embedding",
         use_sparse_embeddings: bool = False,
+        sparse_idf: bool = False,
         similarity: str = "cosine",
         return_embedding: bool = False,
         progress_bar: bool = True,
-        duplicate_documents: str = "overwrite",
         recreate_index: bool = False,
         shard_number: Optional[int] = None,
         replication_factor: Optional[int] = None,
@@ -78,22 +109,20 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             grpc_port=grpc_port,
             prefer_grpc=prefer_grpc,
             https=https,
-            api_key=api_key.resolve_value() if api_key else None,
+            api_key=api_key,
             prefix=prefix,
             timeout=timeout,
             host=host,
             path=path,
+            force_disable_check_same_thread=force_disable_check_same_thread,
             index=index,
             embedding_dim=embedding_dim,
             on_disk=on_disk,
-            content_field=content_field,
-            name_field=name_field,
-            embedding_field=embedding_field,
             use_sparse_embeddings=use_sparse_embeddings,
+            sparse_idf=sparse_idf,
             similarity=similarity,
             return_embedding=return_embedding,
             progress_bar=progress_bar,
-            duplicate_documents=duplicate_documents,
             recreate_index=recreate_index,
             shard_number=shard_number,
             replication_factor=replication_factor,
@@ -111,7 +140,6 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             payload_fields_to_index=payload_fields_to_index,
         )
 
-        metadata = metadata or {}
         self.async_client = qdrant_client.AsyncQdrantClient(
             location=location,
             url=url,
@@ -124,7 +152,14 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             timeout=timeout,
             host=host,
             path=path,
-            metadata=metadata,
+            force_disable_check_same_thread=force_disable_check_same_thread,
+            metadata=metadata or {},
+        )
+
+        # to improve the indexing performance
+        # see https://qdrant.tech/documentation/guides/multiple-partitions/?q=mul#calibrate-performance
+        self.client.create_payload_index(
+            collection_name=index, field_name="id", field_schema="keyword"
         )
 
     async def _query_by_embedding(
@@ -142,6 +177,17 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             query_vector=rest.NamedVector(
                 name=DENSE_VECTORS_NAME if self.use_sparse_embeddings else "",
                 vector=query_embedding,
+            ),
+            search_params=(
+                rest.SearchParams(
+                    quantization=rest.QuantizationSearchParams(
+                        rescore=True,
+                        oversampling=3.0,
+                    ),
+                )
+                if len(query_embedding)
+                >= 1024  # reference: https://qdrant.tech/articles/binary-quantization/#when-should-you-not-use-bq
+                else None
             ),
             query_filter=qdrant_filters,
             limit=top_k,
@@ -176,8 +222,14 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                 "Called QdrantDocumentStore.delete_documents() on a non-existing ID",
             )
 
-    async def count_documents(self) -> int:
-        return (await self.async_client.count(collection_name=self.index)).count
+    async def count_documents(self, filters: Optional[Dict[str, Any]] = None) -> int:
+        qdrant_filters = convert_filters_to_qdrant(filters)
+
+        return (
+            await self.async_client.count(
+                collection_name=self.index, count_filter=qdrant_filters
+            )
+        ).count
 
     async def write_documents(
         self, documents: List[Document], policy: DuplicatePolicy = DuplicatePolicy.FAIL
@@ -193,6 +245,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             False,
             self.similarity,
             self.use_sparse_embeddings,
+            self.sparse_idf,
         )
 
         if len(documents) == 0:
@@ -216,7 +269,6 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             for document_batch in batched_documents:
                 batch = convert_haystack_documents_to_qdrant_points(
                     document_batch,
-                    embedding_field=self.embedding_field,
                     use_sparse_embeddings=self.use_sparse_embeddings,
                 )
 
@@ -269,8 +321,15 @@ class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
 
 @provider("qdrant")
 class QdrantProvider(DocumentStoreProvider):
-    def __init__(self, location: str = os.getenv("QDRANT_HOST", "qdrant")):
+    def __init__(
+        self,
+        location: str = os.getenv("QDRANT_HOST", "qdrant"),
+        api_key: Optional[Secret] = Secret.from_env_var("QDRANT_API_KEY")
+        if os.getenv("QDRANT_API_KEY")
+        else None,
+    ):
         self._location = location
+        self._api_key = api_key
 
     def get_store(
         self,
@@ -291,9 +350,26 @@ class QdrantProvider(DocumentStoreProvider):
 
         return AsyncQdrantDocumentStore(
             location=self._location,
+            api_key=self._api_key,
             embedding_dim=embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,
+            on_disk=True,
+            quantization_config=(
+                rest.BinaryQuantization(
+                    binary=rest.BinaryQuantizationConfig(
+                        always_ram=True,
+                    )
+                )
+                if embedding_model_dim >= 1024
+                else None
+            ),
+            # to improve the indexing performance, we disable building global index for the whole collection
+            # see https://qdrant.tech/documentation/guides/multiple-partitions/?q=mul#calibrate-performance
+            hnsw_config=rest.HnswConfigDiff(
+                payload_m=16,
+                m=0,
+            ),
         )
 
     def get_retriever(

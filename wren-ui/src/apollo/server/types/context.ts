@@ -18,11 +18,12 @@ import {
   IMDLService,
   IProjectService,
 } from '../services';
+import { ITelemetry } from '../telemetry/telemetry';
 
 export interface IContext {
   config: IConfig;
   // telemetry
-  telemetry: any;
+  telemetry: ITelemetry;
 
   // adaptor
   wrenEngineAdaptor: IWrenEngineAdaptor;

@@ -27,6 +27,7 @@ import {
   updateModelPrimaryKey,
 } from '../utils/model';
 import { CompactTable, PreviewDataResponse } from '@server/services';
+import { TelemetryEvent } from '../telemetry/telemetry';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -82,8 +83,20 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { data } = args;
-    const relation = await ctx.modelService.createRelation(data);
-    return relation;
+
+    const eventName = TelemetryEvent.MODELING_CREATE_RELATION;
+    try {
+      const relation = await ctx.modelService.createRelation(data);
+      ctx.telemetry.sendEvent(eventName, { data });
+      return relation;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { data: data, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
   }
 
   public async updateRelation(
@@ -92,8 +105,19 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { data, where } = args;
-    const relation = await ctx.modelService.updateRelation(data, where.id);
-    return relation;
+    const eventName = TelemetryEvent.MODELING_UPDATE_RELATION;
+    try {
+      const relation = await ctx.modelService.updateRelation(data, where.id);
+      ctx.telemetry.sendEvent(eventName, { data });
+      return relation;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { data: data, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
   }
 
   public async deleteRelation(
@@ -111,8 +135,19 @@ export class ModelResolver {
     _args: { data: CreateCalculatedFieldData },
     ctx: IContext,
   ) {
-    const column = await ctx.modelService.createCalculatedField(_args.data);
-    return column;
+    const eventName = TelemetryEvent.MODELING_CREATE_CF;
+    try {
+      const column = await ctx.modelService.createCalculatedField(_args.data);
+      ctx.telemetry.sendEvent(eventName, { data: _args.data });
+      return column;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { data: _args.data, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
   }
 
   public async validateCalculatedField(_root: any, args: any, ctx: IContext) {
@@ -130,8 +165,23 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { data, where } = _args;
-    const column = await ctx.modelService.updateCalculatedField(data, where.id);
-    return column;
+
+    const eventName = TelemetryEvent.MODELING_UPDATE_CF;
+    try {
+      const column = await ctx.modelService.updateCalculatedField(
+        data,
+        where.id,
+      );
+      ctx.telemetry.sendEvent(eventName, { data });
+      return column;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { data: data, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
   }
 
   public async deleteCalculatedField(_root: any, args: any, ctx: IContext) {
@@ -246,6 +296,33 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { sourceTableName, fields, primaryKey } = args.data;
+    try {
+      const model = await this.handleCreateModel(
+        ctx,
+        sourceTableName,
+        fields,
+        primaryKey,
+      );
+      ctx.telemetry.sendEvent(TelemetryEvent.MODELING_CREATE_MODEL, {
+        data: args.data,
+      });
+      return model;
+    } catch (error: any) {
+      ctx.telemetry.sendEvent(
+        TelemetryEvent.MODELING_CREATE_MODEL,
+        { data: args.data, error },
+        error.extensions?.service,
+        false,
+      );
+    }
+  }
+
+  private async handleCreateModel(
+    ctx: IContext,
+    sourceTableName: string,
+    fields: [string],
+    primaryKey: string,
+  ) {
     const project = await ctx.projectService.getCurrentProject();
     const dataSourceTables =
       await ctx.projectService.getProjectDataSourceTables(project);
@@ -303,7 +380,28 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { fields, primaryKey } = args.data;
+    try {
+      const model = await this.handleUpdateModel(ctx, args, fields, primaryKey);
+      ctx.telemetry.sendEvent(TelemetryEvent.MODELING_UPDATE_MODEL, {
+        data: args.data,
+      });
+      return model;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        TelemetryEvent.MODELING_UPDATE_MODEL,
+        { data: args.data, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
+  }
 
+  private async handleUpdateModel(
+    ctx: IContext,
+    args: { data: UpdateModelData; where: { id: number } },
+    fields: [string],
+    primaryKey: string,
+  ) {
     const project = await ctx.projectService.getCurrentProject();
     const dataSourceTables =
       await ctx.projectService.getProjectDataSourceTables(project);
@@ -364,7 +462,6 @@ export class ModelResolver {
     }
 
     logger.info(`Model updated: ${JSON.stringify(model)}`);
-
     return model;
   }
 
@@ -395,8 +492,46 @@ export class ModelResolver {
     if (!model) {
       throw new Error('Model not found');
     }
+    const eventName = TelemetryEvent.MODELING_UPDATE_MODEL_METADATA;
+    try {
+      // update model metadata
+      await this.handleUpdateModelMetadata(data, model, ctx, modelId);
 
-    // update model metadata
+      // todo: considering using update ... from statement to do a batch update
+      // update column metadata
+      if (!isEmpty(data.columns)) {
+        // find the columns that match the user requested columns
+        await this.handleUpdateColumnMetadata(data, ctx);
+      }
+
+      // update calculated field metadata
+      if (!isEmpty(data.calculatedFields)) {
+        await this.handleUpdateCFMetadata(data, ctx);
+      }
+
+      // update relationship metadata
+      if (!isEmpty(data.relationships)) {
+        await this.handleUpdateRelationshipMetadata(data, ctx);
+      }
+
+      ctx.telemetry.sendEvent(eventName, { data });
+      return true;
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        { data: data, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+    }
+  }
+
+  private async handleUpdateModelMetadata(
+    data: UpdateModelMetadataInput,
+    model: Model,
+    ctx: IContext,
+    modelId: number,
+  ) {
     const modelMetadata: any = {};
 
     // if displayName is not null, or undefined, update the displayName
@@ -417,95 +552,95 @@ export class ModelResolver {
     if (!isEmpty(modelMetadata)) {
       await ctx.modelRepository.updateOne(modelId, modelMetadata);
     }
+  }
 
-    // todo: considering using update ... from statement to do a batch update
-    // update column metadata
-    if (!isEmpty(data.columns)) {
-      // find the columns that match the user requested columns
-      const columnIds = data.columns.map((c) => c.id);
-      const modelColumns =
-        await ctx.modelColumnRepository.findColumnsByIds(columnIds);
-      for (const col of modelColumns) {
-        const requestedMetadata = data.columns.find((c) => c.id === col.id);
+  private async handleUpdateRelationshipMetadata(
+    data: UpdateModelMetadataInput,
+    ctx: IContext,
+  ) {
+    const relationshipIds = data.relationships.map((r) => r.id);
+    const relationships =
+      await ctx.relationRepository.findRelationsByIds(relationshipIds);
+    for (const rel of relationships) {
+      const requestedMetadata = data.relationships.find((r) => r.id === rel.id);
 
-        // update metadata
-        const columnMetadata: any = {};
+      const relationMetadata: any = {};
 
-        if (!isNil(requestedMetadata.displayName)) {
-          columnMetadata.displayName = this.determineMetadataValue(
-            requestedMetadata.displayName,
-          );
-        }
-
-        if (!isNil(requestedMetadata.description)) {
-          const properties = col.properties ? JSON.parse(col.properties) : {};
-          properties.description = this.determineMetadataValue(
-            requestedMetadata.description,
-          );
-          columnMetadata.properties = JSON.stringify(properties);
-        }
-
-        if (!isEmpty(columnMetadata)) {
-          await ctx.modelColumnRepository.updateOne(col.id, columnMetadata);
-        }
-      }
-    }
-
-    // update calculated field metadata
-    if (!isEmpty(data.calculatedFields)) {
-      const calculatedFieldIds = data.calculatedFields.map((c) => c.id);
-      const modelColumns =
-        await ctx.modelColumnRepository.findColumnsByIds(calculatedFieldIds);
-      for (const col of modelColumns) {
-        const requestedMetadata = data.calculatedFields.find(
-          (c) => c.id === col.id,
+      if (!isNil(requestedMetadata.description)) {
+        const properties = rel.properties ? JSON.parse(rel.properties) : {};
+        properties.description = this.determineMetadataValue(
+          requestedMetadata.description,
         );
+        relationMetadata.properties = JSON.stringify(properties);
+      }
 
-        const columnMetadata: any = {};
-        // check if description is empty
-        // if description is empty, skip the update
-        // if description is not empty, update the description in properties
-        if (!isNil(requestedMetadata.description)) {
-          const properties = col.properties ? JSON.parse(col.properties) : {};
-          properties.description = this.determineMetadataValue(
-            requestedMetadata.description,
-          );
-          columnMetadata.properties = JSON.stringify(properties);
-        }
-
-        if (!isEmpty(columnMetadata)) {
-          await ctx.modelColumnRepository.updateOne(col.id, columnMetadata);
-        }
+      if (!isEmpty(relationMetadata)) {
+        await ctx.relationRepository.updateOne(rel.id, relationMetadata);
       }
     }
+  }
 
-    // update relationship metadata
-    if (!isEmpty(data.relationships)) {
-      const relationshipIds = data.relationships.map((r) => r.id);
-      const relationships =
-        await ctx.relationRepository.findRelationsByIds(relationshipIds);
-      for (const rel of relationships) {
-        const requestedMetadata = data.relationships.find(
-          (r) => r.id === rel.id,
+  private async handleUpdateCFMetadata(
+    data: UpdateModelMetadataInput,
+    ctx: IContext,
+  ) {
+    const calculatedFieldIds = data.calculatedFields.map((c) => c.id);
+    const modelColumns =
+      await ctx.modelColumnRepository.findColumnsByIds(calculatedFieldIds);
+    for (const col of modelColumns) {
+      const requestedMetadata = data.calculatedFields.find(
+        (c) => c.id === col.id,
+      );
+
+      const columnMetadata: any = {};
+      // check if description is empty
+      // if description is empty, skip the update
+      // if description is not empty, update the description in properties
+      if (!isNil(requestedMetadata.description)) {
+        const properties = col.properties ? JSON.parse(col.properties) : {};
+        properties.description = this.determineMetadataValue(
+          requestedMetadata.description,
         );
+        columnMetadata.properties = JSON.stringify(properties);
+      }
 
-        const relationMetadata: any = {};
-
-        if (!isNil(requestedMetadata.description)) {
-          const properties = rel.properties ? JSON.parse(rel.properties) : {};
-          properties.description = this.determineMetadataValue(
-            requestedMetadata.description,
-          );
-          relationMetadata.properties = JSON.stringify(properties);
-        }
-
-        if (!isEmpty(relationMetadata)) {
-          await ctx.relationRepository.updateOne(rel.id, relationMetadata);
-        }
+      if (!isEmpty(columnMetadata)) {
+        await ctx.modelColumnRepository.updateOne(col.id, columnMetadata);
       }
     }
+  }
 
-    return true;
+  private async handleUpdateColumnMetadata(
+    data: UpdateModelMetadataInput,
+    ctx: IContext,
+  ) {
+    const columnIds = data.columns.map((c) => c.id);
+    const modelColumns =
+      await ctx.modelColumnRepository.findColumnsByIds(columnIds);
+    for (const col of modelColumns) {
+      const requestedMetadata = data.columns.find((c) => c.id === col.id);
+
+      // update metadata
+      const columnMetadata: any = {};
+
+      if (!isNil(requestedMetadata.displayName)) {
+        columnMetadata.displayName = this.determineMetadataValue(
+          requestedMetadata.displayName,
+        );
+      }
+
+      if (!isNil(requestedMetadata.description)) {
+        const properties = col.properties ? JSON.parse(col.properties) : {};
+        properties.description = this.determineMetadataValue(
+          requestedMetadata.description,
+        );
+        columnMetadata.properties = JSON.stringify(properties);
+      }
+
+      if (!isEmpty(columnMetadata)) {
+        await ctx.modelColumnRepository.updateOne(col.id, columnMetadata);
+      }
+    }
   }
 
   // list views
@@ -595,22 +730,38 @@ export class ModelResolver {
       detail: response.detail,
     };
 
-    // create view
-    const name = replaceAllowableSyntax(displayName);
-    const view = await ctx.viewRepository.createOne({
-      projectId: project.id,
-      name,
-      statement,
-      properties: JSON.stringify(properties),
-    });
-
-    // telemetry
-    ctx.telemetry.send_event('create_view', {
+    const eventName = TelemetryEvent.HOME_CREATE_VIEW;
+    const eventProperties = {
       statement,
       displayName,
-    });
+    };
+    // create view
+    try {
+      const name = replaceAllowableSyntax(displayName);
+      const view = await ctx.viewRepository.createOne({
+        projectId: project.id,
+        name,
+        statement,
+        properties: JSON.stringify(properties),
+      });
 
-    return { ...view, displayName };
+      // telemetry
+      ctx.telemetry.sendEvent(eventName, eventProperties);
+
+      return { ...view, displayName };
+    } catch (err: any) {
+      ctx.telemetry.sendEvent(
+        eventName,
+        {
+          ...eventProperties,
+          error: err,
+        },
+        err.extensions?.service,
+        false,
+      );
+
+      throw err;
+    }
   }
 
   // delete view

@@ -17,6 +17,9 @@ from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
     AskService,
+)
+from src.web.v1.services.indexing import (
+    IndexingService,
     SemanticsPreparationRequest,
 )
 
@@ -29,10 +32,6 @@ def ask_service():
 
     return AskService(
         {
-            "indexing": indexing.Indexing(
-                embedder_provider=embedder_provider,
-                document_store_provider=document_store_provider,
-            ),
             "retrieval": retrieval.Retrieval(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
@@ -54,18 +53,34 @@ def ask_service():
 
 
 @pytest.fixture
+def indexing_service():
+    _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
+
+    return IndexingService(
+        {
+            "indexing": indexing.Indexing(
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
+        }
+    )
+
+
+@pytest.fixture
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
         return orjson.dumps(json.load(f)).decode("utf-8")
 
 
 @pytest.mark.asyncio
-async def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
+async def test_ask_with_successful_query(
+    indexing_service: IndexingService, ask_service: AskService, mdl_str: str
+):
     id = str(uuid.uuid4())
-    await ask_service.prepare_semantics(
+    await indexing_service.prepare_semantics(
         SemanticsPreparationRequest(
             mdl=mdl_str,
-            id=id,
+            mdl_hash=id,
         )
     )
 
@@ -73,7 +88,7 @@ async def test_ask_with_successful_query(ask_service: AskService, mdl_str: str):
     query_id = str(uuid.uuid4())
     ask_request = AskRequest(
         query="How many books are there?",
-        id=id,
+        mdl_hash=id,
     )
     ask_request.query_id = query_id
     await ask_service.ask(ask_request)

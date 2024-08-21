@@ -21,6 +21,7 @@ class Engine(metaclass=ABCMeta):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         ...
 
@@ -47,11 +48,16 @@ def remove_limit_statement(sql: str) -> str:
     return modified_sql
 
 
-def add_quotes(sql: str) -> str:
-    logger.debug(f"Original SQL: {sql}")
+def add_quotes(sql: str) -> Tuple[str, bool]:
+    try:
+        logger.debug(f"Original SQL: {sql}")
 
-    quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
+        quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
 
-    logger.debug(f"Quoted SQL: {quoted_sql}")
+        logger.debug(f"Quoted SQL: {quoted_sql}")
+    except Exception as e:
+        logger.exception(f"Error in sqlglot.transpile to {sql}: {e}")
 
-    return quoted_sql
+        return "", False
+
+    return quoted_sql, True

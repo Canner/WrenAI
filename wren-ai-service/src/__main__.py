@@ -7,9 +7,17 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
+from langfuse.decorators import langfuse_context
 
 import src.globals as container
-from src.utils import init_langfuse, load_env_vars, setup_custom_logger
+from src.core.engine import EngineConfig
+from src.utils import (
+    init_langfuse,
+    init_providers,
+    load_env_vars,
+    service_metadata,
+    setup_custom_logger,
+)
 from src.web.v1 import routers
 
 env = load_env_vars()
@@ -25,12 +33,19 @@ setup_custom_logger(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-    container.init_globals()
+    providers = init_providers(
+        engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
+    )
+    container.init_globals(
+        *providers, should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", ""))
+    )
+    service_metadata(*providers)
     init_langfuse()
 
     yield
 
     # shutdown events
+    langfuse_context.flush()
 
 
 app = FastAPI(lifespan=lifespan, redoc_url=None, default_response_class=ORJSONResponse)

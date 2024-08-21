@@ -18,25 +18,24 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/google/uuid"
 	"github.com/pterm/pterm"
-
-	"github.com/sethvargo/go-password/password"
 )
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION        string = "0.8.0-rc.1"
+	WREN_PRODUCT_VERSION        string = "0.7.5"
 	DOCKER_COMPOSE_YAML_URL     string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_LLM_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.llm.yaml"
 	DOCKER_COMPOSE_ENV_URL      string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
-
-	// pg user
-	PG_USERNAME string = "wren-user"
 )
 
-func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, pg_password string, userUUID string, telemetryEnabled bool) string {
-	// rplace PROJECT_DIR
+func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool) string {
+	// replace PROJECT_DIR
 	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
 	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
+
+	// replace SHOULD_FORCE_DEPLOY
+	reg = regexp.MustCompile(`SHOULD_FORCE_DEPLOY=(.*)`)
+	str = reg.ReplaceAllString(str, "SHOULD_FORCE_DEPLOY=1")
 
 	// replace LLM_OPENAI_API_KEY
 	// Might be overwritten by the .env.ai file
@@ -65,14 +64,6 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	reg = regexp.MustCompile(`AI_SERVICE_FORWARD_PORT=(.*)`)
 	str = reg.ReplaceAllString(str, "AI_SERVICE_FORWARD_PORT="+fmt.Sprintf("%d", aiPort))
 
-	// replace PG_PASSWORD
-	reg = regexp.MustCompile(`PG_PASSWORD=(.*)`)
-	str = reg.ReplaceAllString(str, "PG_PASSWORD="+pg_password)
-
-	// replace PG_USERNAME
-	reg = regexp.MustCompile(`PG_USERNAME=(.*)`)
-	str = reg.ReplaceAllString(str, "PG_USERNAME="+PG_USERNAME)
-
 	// replace TELEMETRY_ENABLED
 	reg = regexp.MustCompile(`TELEMETRY_ENABLED=(.*)`)
 	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryEnabled))
@@ -99,35 +90,6 @@ func downloadFile(filepath string, url string) error {
 	// Write the body to file
 	_, err = io.Copy(out, resp.Body)
 	return err
-}
-
-func getPGPassword(w WrenRC) (string, error) {
-	pgPwdKey := "pg_password"
-	// get the password from rc file if exists
-	// if not exists, generate a new password
-	pgPwd, err := w.Read(pgPwdKey)
-	if err != nil {
-		return "", err
-	}
-
-	if pgPwd == "" {
-		genPwd, err := password.Generate(10, 2, 0, false, false)
-		if err != nil {
-			return "", err
-		}
-
-		// set the password to rc file
-		err = w.Set(pgPwdKey, genPwd, false)
-		if err != nil {
-			return "", err
-		}
-
-		// return the generated password
-		return genPwd, nil
-	}
-
-	// return the password from rc file
-	return pgPwd, nil
 }
 
 func CheckDockerDaemonRunning() (bool, error) {
@@ -182,11 +144,6 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		return err
 	}
 
-	pg_pwd, err := getPGPassword(WrenRC{projectDir})
-	if err != nil {
-		return err
-	}
-
 	userUUID, err := prepareUserUUID(projectDir)
 	if err != nil {
 		return err
@@ -214,7 +171,6 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		openaiGenerationModel,
 		hostPort,
 		aiPort,
-		pg_pwd,
 		userUUID,
 		telemetryEnabled,
 	)

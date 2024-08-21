@@ -13,10 +13,10 @@ data:
   WREN_UI_ENDPOINT: http://wren-ui-svc:3000
 
   #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
-  WREN_PRODUCT_VERSION: "0.8.0-rc.1"
-  WREN_ENGINE_VERSION: "0.8.0"
-  WREN_AI_SERVICE_VERSION: "0.8.0-rc-1"
-  WREN_UI_VERSION: "feedback-loop-1"
+  WREN_PRODUCT_VERSION: "0.7.5"
+  WREN_ENGINE_VERSION: "0.9.0"
+  WREN_AI_SERVICE_VERSION: "0.8.0"
+  WREN_UI_VERSION: "0.9.2"
 
   # LLM and Embedder Configurations
   LLM_PROVIDER: "openai_llm"
@@ -26,6 +26,9 @@ data:
   EMBEDDER_PROVIDER: "openai_embedder"
   EMBEDDER_OPENAI_API_BASE: "https://api.openai.com/v1"
 
+  # Document store related
+  QDRANT_HOST: "wren-qdrant"
+  DOCUMENT_STORE_PROVIDER: "qdrant"
 
   # Telemetry
   POSTHOG_HOST: "https://app.posthog.com"

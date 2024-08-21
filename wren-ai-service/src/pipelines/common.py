@@ -23,7 +23,11 @@ class GenerationPostProcessor:
     @component.output_types(
         results=Optional[Dict[str, Any]],
     )
-    async def run(self, replies: List[str]) -> Dict[str, Any]:
+    async def run(
+        self,
+        replies: List[str],
+        project_id: str | None = None,
+    ) -> Dict[str, Any]:
         cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
 
         steps = cleaned_generation_result.get("steps", [])
@@ -39,13 +43,20 @@ class GenerationPostProcessor:
         steps[-1]["cte_name"] = ""
 
         for step in steps:
-            step["sql"] = add_quotes(step["sql"])
+            step["sql"], no_error = add_quotes(step["sql"])
+            if not no_error:
+                return {
+                    "results": {
+                        "description": cleaned_generation_result["description"],
+                        "steps": [],
+                    },
+                }
 
         sql = self._build_cte_query(steps)
         logger.debug(f"GenerationPostProcessor: steps: {pformat(steps)}")
         logger.debug(f"GenerationPostProcessor: final sql: {sql}")
 
-        if not await self._check_if_sql_executable(sql):
+        if not await self._check_if_sql_executable(sql, project_id=project_id):
             return {
                 "results": {
                     "description": cleaned_generation_result["description"],
@@ -72,9 +83,14 @@ class GenerationPostProcessor:
     async def _check_if_sql_executable(
         self,
         sql: str,
+        project_id: str | None = None,
     ):
         async with aiohttp.ClientSession() as session:
-            status, error = await self._engine.dry_run_sql(sql, session)
+            status, error = await self._engine.dry_run_sql(
+                sql,
+                session,
+                project_id=project_id,
+            )
 
         if not status:
             logger.exception(f"SQL is not executable: {error}")

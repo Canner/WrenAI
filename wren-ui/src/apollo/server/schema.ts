@@ -589,15 +589,6 @@ export const typeDefs = gql`
     questions: [SuggestedQuestion]!
   }
 
-  # SQL protocol connection information
-  type ConnectionInfo {
-    port: Int!
-    database: String!
-    schema: String!
-    username: String
-    password: String
-  }
-
   # Settings
   input UpdateDataSourceInput {
     properties: JSON!
@@ -682,9 +673,6 @@ export const typeDefs = gql`
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!
     nativeSql(responseId: Int!): String!
-
-    # Connection Info
-    connectionInfo: ConnectionInfo!
 
     # Settings
     settings: Settings!

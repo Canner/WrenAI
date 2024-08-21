@@ -96,7 +96,7 @@ export default function ButtonItem(props: IterableComponent<Props>) {
       loading={loading}
       onClick={() => onSelect(value)}
     >
-      <div className="d-flex align-center">
+      <div className="d-flex align-center" style={{ width: '100%' }}>
         {logo ? (
           <Image
             className="mr-2"
