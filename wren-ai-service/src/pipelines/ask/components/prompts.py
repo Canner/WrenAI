@@ -1,5 +1,6 @@
 TEXT_TO_SQL_RULES = """
 ### ALERT ###
+- ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - DON'T USE "*" in SELECT queries.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.

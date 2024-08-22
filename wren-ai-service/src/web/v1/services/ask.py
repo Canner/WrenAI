@@ -245,13 +245,24 @@ class AskService:
                         logger.debug(failed_dry_run_result["error"])
                         logger.debug("\n\n")
 
-                # remove duplicates of valid_generation_results, which consists of a sql and a summary
-                valid_generation_results = remove_duplicates(valid_generation_results)
-
                 logger.debug("After sql correction:")
                 logger.debug(f"valid_generation_results: {valid_generation_results}")
 
-                if not valid_generation_results and not historical_question_result:
+                valid_sql_summary_results = []
+                if valid_generation_results:
+                    sql_summary_results = await self._pipelines["sql_summary"].run(
+                        query=ask_request.query,
+                        sqls=valid_generation_results,
+                    )
+                    valid_sql_summary_results = sql_summary_results["post_process"][
+                        "sql_summary_results"
+                    ]
+                    # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
+                    valid_sql_summary_results = remove_duplicates(
+                        valid_sql_summary_results
+                    )
+
+                if not valid_sql_summary_results and not historical_question_result:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
                     )
@@ -277,7 +288,7 @@ class AskService:
                     for result in historical_question_result
                 ] + [
                     AskResultResponse.AskResult(**result)
-                    for result in valid_generation_results
+                    for result in valid_sql_summary_results
                 ]
 
                 # only return top 3 results, thus remove the rest

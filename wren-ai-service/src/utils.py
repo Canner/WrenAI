@@ -126,11 +126,11 @@ def remove_trailing_slash(endpoint: str) -> str:
 
 
 def init_langfuse():
-    enabled = os.getenv("LANGFUSE_ENABLE", "false")
+    enabled = bool(os.getenv("LANGFUSE_ENABLE", False))
     host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
     langfuse_context.configure(
-        enabled=(True if enabled.lower() == "true" else False),
+        enabled=enabled,
         public_key=os.getenv("LANGFUSE_PUBLIC_KEY", ""),
         secret_key=os.getenv("LANGFUSE_SECRET_KEY", ""),
         host=host,
