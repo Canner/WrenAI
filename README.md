@@ -44,15 +44,15 @@ https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
 
 Wren AI’s mission is to democratize data by bringing AI Agent with SQL ability to any data source.
 
-🤩 [About our Vision](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
+🤩 [About our Vision](https://www.getwren.ai/post/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents)
 
-🙌 [About our Mission](https://docs.getwren.ai/overview/introduction/?utm_source=github&utm_medium=content&utm_campaign=readme)
+🙌 [About our Mission](https://www.getwren.ai/post/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it)
 
 ## 🤖 SQL AI Agent on your data
 
 ### 1. Indexing With Semantics
 
-> Wren AI has implemented a [semantic engine architecture](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
+> Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
 ### 2. Generate SQL Queries With Context
 
@@ -96,29 +96,29 @@ Wren AI consists of three core services:
 
 ## ❤️ Knowledge Sharing From Wren AI
 
-Want to get our latest sharing? [Follow us on Medium!](https://blog.getwren.ai/)
+Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog)
 
 ### Trends
-- [Can AI Solve Data Silos Challenge? New Challenges To The Multi-AI Agents Era.](https://blog.getwren.ai/can-ai-solve-data-silos-challenge-new-challenges-to-the-multi-ai-agents-era-cec7fabc7c20)
-- [The new wave of Composable Data Systems and the Interface to LLM agents](https://blog.getwren.ai/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents-ec8f0a2e7141)
-- [How do you use LangChain to build a Text-to-SQL solution? What are the challenges? How to solve it?](https://blog.getwren.ai/how-do-you-use-langchain-to-build-a-text-to-sql-solution-what-are-the-challenges-how-to-solve-it-b6d9c66aa038)
-- [Deep dive into how Pinterest built its Text-to-SQL solution.](https://blog.getwren.ai/what-we-learned-from-pinterests-text-to-sql-solution-840fa5840635)
-- [How Snowflake building the most powerful SQL LLM in the world](https://blog.getwren.ai/what-we-learned-from-snowflake-copilot-building-the-most-powerful-sql-llm-in-the-world-52f82d661bc1)
+- [Can AI Solve Data Silos Challenge? New Challenges To The Multi-AI Agents Era.](https://www.getwren.ai/post/can-ai-solve-data-silos-challenge-new-challenges-to-the-multi-ai-agents-era)
+- [The new wave of Composable Data Systems and the Interface to LLM agents](https://www.getwren.ai/post/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents)
+- [How do you use LangChain to build a Text-to-SQL solution? What are the challenges? How to solve it?](https://www.getwren.ai/post/how-do-you-use-langchain-to-build-a-text-to-sql-solution-what-are-the-challenges-how-to-solve-it)
+- [Deep dive into how Pinterest built its Text-to-SQL solution.](https://www.getwren.ai/post/deep-dive-into-how-pinterest-built-its-text-to-sql-solution)
+- [How Snowflake building the most powerful SQL LLM in the world](https://www.getwren.ai/post/how-snowflake-building-the-most-powerful-sql-llm-in-the-world)
 
 
 ### Architecture
-- [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://blog.getwren.ai/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online-9ba5c121afc3)
-- [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://blog.getwren.ai/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it-5d5a3d6682e5)
-- [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://blog.getwren.ai/how-we-design-our-semantic-engine-for-llms-84a00e6e3baa)
+- [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://www.getwren.ai/post/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online)
+- [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://www.getwren.ai/post/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it)
+- [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture)
 
 
 ### Tutorials
-- [Using RAG Architecture to query databases, export to Google Sheets, and visualize in Looker Studio.](https://blog.getwren.ai/using-rag-architecture-to-query-databases-and-export-to-google-sheets-and-visualize-in-looker-3427944a0f9b)
-- [Easily query your database using LLMs without writing SQL and then import the data into Microsoft Excel.](https://blog.getwren.ai/easily-query-your-database-using-llms-without-writing-sql-and-then-import-the-data-into-microsoft-871c9672c656)
+- [Using RAG Architecture to query databases, export to Google Sheets, and visualize in Looker Studio.](https://www.getwren.ai/post/using-rag-architecture-to-query-databases-export-to-google-sheets-and-visualize-in-looker-studio)
+- [Easily query your database using LLMs without writing SQL and then import the data into Microsoft Excel.](https://www.getwren.ai/post/easily-query-your-database-using-llms-without-writing-sql-and-then-import-the-data-into-microsoft-excel)
 - [Wren AI in Kubernetes: Text-to-SQL](https://blog.getwren.ai/wren-ai-in-kubernetes-text-to-sql-39b82bda3d34)
-- [How to use Meta Llama 3 to query MySQL database using Ollama and Wren AI](https://blog.getwren.ai/how-to-use-meta-llama-3-to-query-mysql-database-using-ollama-on-your-machine-2c087b204e41)
-- [How do you use OpenAI GPT-4o to query your database?](https://medium.com/wrenai/how-do-you-use-openai-gpt-4o-to-query-your-database-f24be68b0b70)
-- [How to directly access 150k+ Hugging Face Datasets with DuckDB and query using GPT-4o](https://medium.com/wrenai/how-to-load-huggingface-datasets-into-duckdb-and-query-with-gpt-4o-c2db89519e4d)
+- [How to use Meta Llama 3 to query MySQL database using Ollama and Wren AI](https://www.getwren.ai/post/how-to-use-meta-llama-3-to-query-mysql-database-using-ollama-and-wren-ai)
+- [How do you use OpenAI GPT-4o to query your database?](https://www.getwren.ai/post/how-to-use-openai-gpt-4o-to-query-your-database)
+- [How to directly access 150k+ Hugging Face Datasets with DuckDB and query using GPT-4o](https://www.getwren.ai/post/how-to-directly-access-150k-hugging-face-datasets-with-duckdb-and-query-using-gpt-4o)
 
 
 ## 🚧 Project Status
