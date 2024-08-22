@@ -5,6 +5,7 @@ export enum DataSourceName {
   MYSQL = 'MYSQL',
   MSSQL = 'MSSQL',
   CLICK_HOUSE = 'CLICK_HOUSE',
+  TRINO = 'TRINO',
 }
 
 export interface DataSource {

@@ -38,6 +38,12 @@ export const ERROR_TEXTS = {
     DATABASE: {
       REQUIRED: 'Please input database name.',
     },
+    SCHEMA: {
+      REQUIRED: 'Please input schema name.',
+    },
+    CATALOG: {
+      REQUIRED: 'Please input catalog name.',
+    },
   },
   ADD_RELATION: {
     FROM_FIELD: {
