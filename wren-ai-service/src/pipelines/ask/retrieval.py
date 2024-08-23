@@ -155,6 +155,8 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
 def prompt(
     query: str, construct_db_schemas: list[dict], prompt_builder: PromptBuilder
 ) -> dict:
+    logger.info(f"db_schemas: {construct_db_schemas}")
+
     return prompt_builder.run(question=query, db_schemas=construct_db_schemas)
 
 
@@ -235,6 +237,8 @@ def construct_retrieval_results(
                 retrieval_results.append(_build_metric_ddl(content))
             elif content["type"] == "VIEW":
                 retrieval_results.append(_build_view_ddl(content))
+
+    logger.info(f"retrieval_results: {retrieval_results}")
 
     return retrieval_results
 
