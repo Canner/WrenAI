@@ -262,6 +262,7 @@ class Retrieval(BasicPipeline):
         )
         self._dbschema_retriever = document_store_provider.get_retriever(
             document_store_provider.get_store(dataset_name="db_schema"),
+            top_k=1000,
         )
         self.prompt_builder = PromptBuilder(
             template=table_columns_selection_user_prompt_template
