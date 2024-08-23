@@ -255,7 +255,7 @@ class Retrieval(BasicPipeline):
     ):
         self._embedder = embedder_provider.get_text_embedder()
         self._table_retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store(),
+            document_store_provider.get_store(dataset_name="table_descriptions"),
             top_k=10,
         )
         self._dbschema_retriever = document_store_provider.get_retriever(

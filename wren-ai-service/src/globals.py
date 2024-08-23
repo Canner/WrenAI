@@ -61,6 +61,9 @@ def init_globals(
     if should_force_deploy:
         document_store_provider.get_store(recreate_index=True)
         document_store_provider.get_store(
+            dataset_name="table_descriptions", recreate_index=True
+        )
+        document_store_provider.get_store(
             dataset_name="view_questions", recreate_index=True
         )
 

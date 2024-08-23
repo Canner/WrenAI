@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -151,7 +150,7 @@ class DDLConverter:
         return {
             "documents": [
                 Document(
-                    id=str(uuid.uuid4()),
+                    id=str(i),
                     meta=(
                         {
                             "id": id,
@@ -166,9 +165,11 @@ class DDLConverter:
                     ),
                     content=ddl_command["payload"],
                 )
-                for ddl_command in tqdm(
-                    ddl_commands,
-                    desc="indexing ddl commands into the dbschema store",
+                for i, ddl_command in enumerate(
+                    tqdm(
+                        ddl_commands,
+                        desc="indexing ddl commands into the dbschema store",
+                    )
                 )
             ]
         }
@@ -412,7 +413,7 @@ class TableDescriptionConverter:
         return {
             "documents": [
                 Document(
-                    id=str(uuid.uuid4()),
+                    id=str(i),
                     meta=(
                         {"id": id, "type": "TABLE_DESCRIPTION"}
                         if id
@@ -420,9 +421,11 @@ class TableDescriptionConverter:
                     ),
                     content=table_description,
                 )
-                for table_description in tqdm(
-                    table_descriptions,
-                    desc="indexing table descriptions into the dbshema store",
+                for i, table_description in enumerate(
+                    tqdm(
+                        table_descriptions,
+                        desc="indexing table descriptions into the table description store",
+                    )
                 )
             ]
         }
@@ -512,6 +515,29 @@ def covert_to_table_descriptions(
     return table_description_converter.run(mdl=mdl, id=id)
 
 
+@async_timer
+@observe(capture_input=False, capture_output=False)
+async def embed_table_descriptions(
+    covert_to_table_descriptions: Dict[str, Any],
+    document_embedder: Any,
+) -> Dict[str, Any]:
+    logger.debug(
+        f"input(covert_to_table_descriptions) in embed_table_descriptions: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
+    )
+
+    return await document_embedder.run(covert_to_table_descriptions["documents"])
+
+
+@async_timer
+@observe(capture_input=False)
+async def write_table_description(
+    embed_table_descriptions: Dict[str, Any], table_description_writer: DocumentWriter
+) -> None:
+    return await table_description_writer.run(
+        documents=embed_table_descriptions["documents"]
+    )
+
+
 @timer
 @observe(capture_input=False)
 def convert_to_ddl(
@@ -535,20 +561,13 @@ def convert_to_ddl(
 @observe(capture_input=False, capture_output=False)
 async def embed_dbschema(
     convert_to_ddl: Dict[str, Any],
-    covert_to_table_descriptions: Dict[str, Any],
-    dbschema_embedder: Any,
+    document_embedder: Any,
 ) -> Dict[str, Any]:
     logger.debug(
         f"input(convert_to_ddl) in embed_dbschema: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    logger.debug(
-        f"input(covert_to_table_descriptions) in embed_dbschema: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
-    )
 
-    return await dbschema_embedder.run(
-        documents=convert_to_ddl["documents"]
-        + covert_to_table_descriptions["documents"]
-    )
+    return await document_embedder.run(documents=convert_to_ddl["documents"])
 
 
 @async_timer
@@ -573,12 +592,12 @@ def convert_to_view(
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_view(
-    convert_to_view: Dict[str, Any], view_embedder: Any
+    convert_to_view: Dict[str, Any], document_embedder: Any
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in embed_view: {orjson.dumps(convert_to_view, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await view_embedder.run(documents=convert_to_view["documents"])
+    return await document_embedder.run(documents=convert_to_view["documents"])
 
 
 @async_timer
@@ -599,22 +618,32 @@ class Indexing(BasicPipeline):
     ) -> None:
         dbschema_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")
+        table_description_store = document_store_provider.get_store(
+            dataset_name="table_descriptions"
+        )
 
         self.column_indexing_batch_size = column_indexing_batch_size
-        self.cleaner = DocumentCleaner([dbschema_store, view_store])
+        self.cleaner = DocumentCleaner(
+            [dbschema_store, view_store, table_description_store]
+        )
         self.validator = MDLValidator()
+        self.document_embedder = embedder_provider.get_document_embedder()
 
         self.ddl_converter = DDLConverter()
-        self.table_description_converter = TableDescriptionConverter()
-        self.dbschema_embedder = embedder_provider.get_document_embedder()
         self.dbschema_writer = AsyncDocumentWriter(
             document_store=dbschema_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
+
         self.view_converter = ViewConverter()
-        self.view_embedder = embedder_provider.get_document_embedder()
         self.view_writer = AsyncDocumentWriter(
             document_store=view_store,
+            policy=DuplicatePolicy.OVERWRITE,
+        )
+
+        self.table_description_converter = TableDescriptionConverter()
+        self.table_description_writer = AsyncDocumentWriter(
+            document_store=table_description_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
 
@@ -628,20 +657,20 @@ class Indexing(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["write_dbschema", "write_view"],
+            ["write_dbschema", "write_view", "write_table_description"],
             output_file_path=f"{destination}/indexing.dot",
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
                 "cleaner": self.cleaner,
                 "validator": self.validator,
+                "document_embedder": self.document_embedder,
                 "ddl_converter": self.ddl_converter,
-                "table_description_converter": self.table_description_converter,
-                "dbschema_embedder": self.dbschema_embedder,
-                "dbschema_writer": self.dbschema_writer,
                 "view_converter": self.view_converter,
-                "view_embedder": self.view_embedder,
+                "table_description_converter": self.table_description_converter,
+                "dbschema_writer": self.dbschema_writer,
                 "view_writer": self.view_writer,
+                "table_description_writer": self.table_description_writer,
                 "column_indexing_batch_size": self.column_indexing_batch_size,
             },
             show_legend=True,
@@ -653,19 +682,19 @@ class Indexing(BasicPipeline):
     async def run(self, mdl_str: str, id: Optional[str] = None) -> Dict[str, Any]:
         logger.info("Document Indexing pipeline is running...")
         return await self._pipe.execute(
-            ["write_dbschema", "write_view"],
+            ["write_dbschema", "write_view", "write_table_description"],
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
                 "cleaner": self.cleaner,
                 "validator": self.validator,
+                "document_embedder": self.document_embedder,
                 "ddl_converter": self.ddl_converter,
                 "table_description_converter": self.table_description_converter,
-                "dbschema_embedder": self.dbschema_embedder,
                 "dbschema_writer": self.dbschema_writer,
                 "view_converter": self.view_converter,
-                "view_embedder": self.view_embedder,
                 "view_writer": self.view_writer,
+                "table_description_writer": self.table_description_writer,
                 "column_indexing_batch_size": self.column_indexing_batch_size,
             },
         )
