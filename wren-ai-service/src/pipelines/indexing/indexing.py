@@ -616,7 +616,7 @@ class Indexing(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         column_indexing_batch_size: Optional[int] = 50,
     ) -> None:
-        dbschema_store = document_store_provider.get_store()
+        dbschema_store = document_store_provider.get_store(dataset_name="db_schema")
         view_store = document_store_provider.get_store(dataset_name="view_questions")
         table_description_store = document_store_provider.get_store(
             dataset_name="table_descriptions"

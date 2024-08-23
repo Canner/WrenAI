@@ -213,6 +213,8 @@ def construct_retrieval_results(
     columns_and_tables_needed = orjson.loads(filter_columns_in_tables["replies"][0])[
         "results"
     ]
+    logger.info(f"columns_and_tables_needed: {columns_and_tables_needed}")
+
     tables = set(columns_and_tables_needed.keys())
     retrieval_results = []
 
@@ -259,7 +261,7 @@ class Retrieval(BasicPipeline):
             top_k=10,
         )
         self._dbschema_retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store(),
+            document_store_provider.get_store(dataset_name="db_schema"),
         )
         self.prompt_builder = PromptBuilder(
             template=table_columns_selection_user_prompt_template
