@@ -10,6 +10,7 @@ from src.pipelines.ask import (
 )
 from src.pipelines.ask import (
     historical_question,
+    sql_summary,
 )
 from src.pipelines.ask import (
     retrieval as ask_retrieval,
@@ -92,6 +93,9 @@ def init_globals(
             "followup_generation": ask_followup_generation.FollowUpGeneration(
                 llm_provider=llm_provider,
                 engine=engine,
+            ),
+            "sql_summary": sql_summary.SQLSummary(
+                llm_provider=llm_provider,
             ),
         },
     )

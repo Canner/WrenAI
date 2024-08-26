@@ -74,14 +74,12 @@ class GenerationPostProcessor:
                     valid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "summary": result["summary"],
                         }
                     )
                 else:
                     invalid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "summary": result["summary"],
                             "type": "DRY_RUN",
                             "error": error,
                         }
@@ -90,7 +88,6 @@ class GenerationPostProcessor:
                 invalid_generation_results.append(
                     {
                         "sql": result["sql"],
-                        "summary": result["summary"],
                         "type": "ADD_QUOTES",
                         "error": "add_quotes failed",
                     }

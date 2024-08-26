@@ -88,5 +88,25 @@ spec:
                 key: WREN_AI_SERVICE_ENABLE_TIMER
           - name: PYTHONUNBUFFERED
             value: "1"
+          - name: LANGFUSE_ENABLE
+            valueFrom:
+              configMapKeyRef:
+                name: wren-config
+                key: LANGFUSE_ENABLE
+          - name: LANGFUSE_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: wren-config
+                key: LANGFUSE_HOST
+          - name: LANGFUSE_PUBLIC_KEY
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: LANGFUSE_PUBLIC_KEY
+          - name: LANGFUSE_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: wrenai-secrets
+                key: LANGFUSE_SECRET_KEY
           ports:
             - containerPort: 5555
