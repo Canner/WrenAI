@@ -39,7 +39,6 @@ deepeval = "==1.0.6"
 streamlit-tags = "==1.2.8"
 gitpython = "==3.1.43"
 pandas = "==2.2.2"
-dspy-ai = "==2.4.13"
 
 [tool.poetry.group.demo.dependencies]
 requests = "==2.32.2"
