@@ -69,6 +69,7 @@ def gen_new_mdl_from_csv(mdl_path: str, csv_path: str):
                 "description": row[5],
             }
 
+        new_models = []
         for model in mdl["models"]:
             if model["name"] in csv_data_by_table:
                 if "properties" not in model:
@@ -81,6 +82,8 @@ def gen_new_mdl_from_csv(mdl_path: str, csv_path: str):
                     model["properties"]["description"] = csv_data_by_table[
                         model["name"]
                     ]["model"]["description"]
+
+                new_columns = []
                 for column in model["columns"]:
                     if column["name"] in csv_data_by_table[model["name"]]["columns"]:
                         if "properties" not in column:
@@ -97,6 +100,12 @@ def gen_new_mdl_from_csv(mdl_path: str, csv_path: str):
                             column["properties"]["description"] = csv_data_by_table[
                                 model["name"]
                             ]["columns"][column["name"]]["description"]
+                        new_columns.append(column)
+
+                model["columns"] = new_columns
+                new_models.append(model)
+
+        mdl["models"] = new_models
 
     with open(f"{Path(mdl_path).stem}_new.json", "w") as file:
         file.write(orjson.dumps(mdl).decode())
