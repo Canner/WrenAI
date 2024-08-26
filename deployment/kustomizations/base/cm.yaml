@@ -32,7 +32,7 @@ data:
 
   # Langfuse: for LLM tracing
   LANGFUSE_HOST: "https://cloud.langfuse.com"
-  LANGFUSE_ENABLE: "true"
+  LANGFUSE_ENABLE: ""
 
   # Telemetry
   POSTHOG_HOST: "https://app.posthog.com"
