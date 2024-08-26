@@ -227,7 +227,10 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             )
 
     async def count_documents(self, filters: Optional[Dict[str, Any]] = None) -> int:
-        qdrant_filters = convert_filters_to_qdrant(filters)
+        if not filters:
+            qdrant_filters = rest.Filter()
+        else:
+            qdrant_filters = convert_filters_to_qdrant(filters)
 
         return (
             await self.async_client.count(
