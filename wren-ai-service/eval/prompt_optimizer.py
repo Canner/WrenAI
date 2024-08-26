@@ -2,6 +2,7 @@ import argparse
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Tuple
 
@@ -22,10 +23,27 @@ def parse_args() -> Tuple[str]:
         "--file",
         "-F",
         type=str,
+        required=True,
         help="Eval dataset file name in the eval/dataset folder",
     )
-    args = parser.parse_args()
-    return f"eval/dataset/{args.file}"
+    parser.add_argument(
+        "--program_file",
+        "-P",
+        type=str,
+        help="Optimized program file name in the eval/optimized folder",
+    )
+    parser.add_argument(
+        "--optimize",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to optimize the program or not",
+    )
+    parser.add_argument(
+        "--eval",
+        action=argparse.BooleanOptionalAction,
+        help="Whether to evaluate the program or not based on the devset of eval dataset",
+    )
+
+    return parser.parse_args()
 
 
 def configure_llm_provider(llm: str, api_key: str):
@@ -65,16 +83,20 @@ def validate_context_and_answer(example, pred, trace=None):
 
 def optimize(
     module: dspy.Module,
-    teleprompter: dspy.teleprompt.Teleprompter,
+    optimizer: dspy.teleprompt.Teleprompter,
     trainset: list,
-    validation_logic: Callable = validate_context_and_answer,
+    metric: Callable,
 ):
-    teleprompter = teleprompter(metric=validation_logic)
-    return teleprompter.compile(module(), trainset=trainset)
+    optimizer = optimizer(metric=metric)
+    return optimizer.compile(module(), trainset=trainset)
 
 
 if __name__ == "__main__":
-    path = parse_args()
+    args = parse_args()
+    path = f"eval/dataset/{args.file}"
+    optimized_program_file = args.program_file
+    should_optimize = args.optimize
+    should_eval = args.eval
 
     dotenv.load_dotenv()
     utils.load_env_vars()
@@ -85,10 +107,29 @@ if __name__ == "__main__":
 
     trainset, devset = prepare_dataset(path)
 
-    optimized_module = optimize(
-        AskGenerationV1,
-        dspy.teleprompt.BootstrapFewShot,
-        trainset=trainset,
-    )
+    if optimized_program_file:
+        module = AskGenerationV1()
+        module.load(f"eval/optimized/{optimized_program_file}")
+    elif should_optimize:
+        module = optimize(
+            AskGenerationV1,
+            dspy.teleprompt.BootstrapFewShot,
+            trainset=trainset,
+            metric=validate_context_and_answer,
+        )
+        module.save(
+            f"eval/optimized/{AskGenerationV1.__name__}_optimized_{datetime.now().strftime("%Y_%m_%d_%H%M%S")}.json"
+        )
+    else:
+        module = AskGenerationV1()
 
-    print(optimized_module)
+    if should_eval:
+        evaluator = dspy.evaluate.Evaluate(
+            devset=devset,
+            metric=validate_context_and_answer,
+            display_progress=True,
+            display_table=True,
+            return_outputs=True,
+        )
+
+        print(evaluator(module, metric=validate_context_and_answer))
