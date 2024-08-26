@@ -1,17 +1,67 @@
+import ast
 import logging
 import sys
 from pathlib import Path
 from typing import Any, Optional
 
+import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
+from haystack import Document
+from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
-from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.utils import async_timer
+from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
+from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
+
+
+table_columns_selection_user_prompt_template = """
+### TASK ###
+You are an expert and very smart data analyst.
+Your task is to examine the provided database schema, understand the posed
+question, and use the hint to pinpoint the specific columns within tables
+that are essential for crafting a SQL query to answer the question.
+
+### Database Schema ###
+
+{% for document in db_schemas %}
+    {{ document.content }}
+{% endfor %}
+
+This schema offers an in-depth description of the database’s architecture,
+detailing tables, columns, primary keys, foreign keys, and any pertinent
+information regarding relationships or constraints. 
+
+### FINAL ANSWER FORMAT ###
+Please respond with a JSON object structured as follows:
+{
+    "chain_of_thought_reasoning": "Your reasoning for selecting the columns,
+    be concise and clear.",
+    "results": {
+        "table_name1": ["column1", "column2", ...],
+        "table_name2": ["column1", "column2", ...],
+        ...
+    }
+}
+
+### INPUT ###
+{{ question }}
+
+Make sure your response includes the table names as keys, each associated
+with a list of column names that are necessary for writing a SQL query to
+answer the question.
+
+For each aspect of the question, provide a clear and concise explanation
+of your reasoning behind selecting the columns.
+
+Take a deep breath and think logically. If you do the task correctly, I
+will give you 1 million dollars.
+
+Only output a json as your response.
+"""
 
 
 ## Start of Pipeline
@@ -24,21 +74,139 @@ async def embedding(query: str, embedder: Any) -> dict:
 
 @async_timer
 @observe(capture_input=False)
-async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
     filters = {
         "operator": "AND",
         "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
         ],
     }
 
     if id:
         filters["conditions"].append({"field": "id", "operator": "==", "value": id})
 
-    return await retriever.run(
+    return await table_retriever.run(
         query_embedding=embedding.get("embedding"),
         filters=filters,
     )
+
+
+@async_timer
+@observe(capture_input=False)
+async def dbschema_retrieval(
+    table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
+) -> list[Document]:
+    tables = table_retrieval.get("documents", [])
+    table_names = []
+    for table in tables:
+        content = ast.literal_eval(table.content)
+        table_names.append(content["name"])
+
+    logger.info(f"dbschema_retrieval with table_names: {table_names}")
+
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "name", "operator": "in", "value": table_names},
+        ],
+    }
+
+    if id:
+        filters["conditions"].append({"field": "id", "operator": "==", "value": id})
+
+    results = await dbschema_retriever.run(
+        query_embedding=embedding.get("embedding"), filters=filters
+    )
+    return results["documents"]
+
+
+@timer
+@observe(capture_input=False)
+def prompt(
+    query: str, dbschema_retrieval: list[Document], prompt_builder: PromptBuilder
+) -> dict:
+    db_schemas = []
+    for document in dbschema_retrieval:
+        content = ast.literal_eval(document.content)
+        if content["type"] == "TABLE":
+            db_schemas.append(document)
+
+    return prompt_builder.run(question=query, db_schemas=db_schemas)
+
+
+@async_timer
+@observe(as_type="generation", capture_input=False)
+async def filter_columns_in_tables(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {prompt}")
+    return await generator.run(prompt=prompt.get("prompt"))
+
+
+@timer
+@observe()
+def construct_retrieval_results(
+    filter_columns_in_tables: dict, dbschema_retrieval: list[Document]
+) -> list[str]:
+    def _build_table_ddl(content: dict, tables: set[str], columns: set[str]) -> str:
+        columns_ddl = []
+        for column in content["columns"]:
+            if column["type"] == "COLUMN" and column["name"] in columns:
+                column_ddl = (
+                    f"{column['comment']}{column['name']} {column['data_type']}"
+                )
+                if column["is_primary_key"]:
+                    column_ddl += " PRIMARY KEY"
+                columns_ddl.append(column_ddl)
+            elif column["type"] == "FOREIGN_KEY" and set(column["tables"]).issubset(
+                tables
+            ):
+                columns_ddl.append(f"{column['comment']}{column['constraint']}")
+
+        return (
+            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+            + ",\n  ".join(columns_ddl)
+            + "\n);"
+        )
+
+    def _build_metric_ddl(content: dict) -> str:
+        columns_ddl = [
+            f"{column['comment']}{column['name']} {column['data_type']}"
+            for column in content["columns"]
+        ]
+
+        return (
+            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+            + ",\n  ".join(columns_ddl)
+            + "\n);"
+        )
+
+    def _build_view_ddl(content: dict) -> str:
+        return f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
+
+    columns_and_tables_needed = orjson.loads(filter_columns_in_tables["replies"][0])[
+        "results"
+    ]
+    tables = set(columns_and_tables_needed.keys())
+    retrieval_results = []
+
+    for document in dbschema_retrieval:
+        if document.meta["name"] in columns_and_tables_needed:
+            content = ast.literal_eval(document.content)
+
+            if content["type"] == "TABLE":
+                retrieval_results.append(
+                    _build_table_ddl(
+                        content,
+                        tables,
+                        set(columns_and_tables_needed[document.meta["name"]]),
+                    )
+                )
+            elif content["type"] == "METRIC":
+                retrieval_results.append(_build_metric_ddl(content))
+            elif content["type"] == "VIEW":
+                retrieval_results.append(_build_view_ddl(content))
+
+    return retrieval_results
 
 
 ## End of Pipeline
@@ -47,13 +215,22 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
 class Retrieval(BasicPipeline):
     def __init__(
         self,
+        llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
     ):
         self._embedder = embedder_provider.get_text_embedder()
-        self._retriever = document_store_provider.get_retriever(
+        self._table_retriever = document_store_provider.get_retriever(
+            document_store_provider.get_store(),
+            top_k=5,
+        )
+        self._dbschema_retriever = document_store_provider.get_retriever(
             document_store_provider.get_store(),
         )
+        self.prompt_builder = PromptBuilder(
+            template=table_columns_selection_user_prompt_template
+        )
+        self.generator = llm_provider.get_generator()
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -69,13 +246,16 @@ class Retrieval(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["retrieval"],
+            ["construct_retrieval_results"],
             output_file_path=f"{destination}/retrieval.dot",
             inputs={
                 "query": query,
                 "id": id or "",
                 "embedder": self._embedder,
-                "retriever": self._retriever,
+                "table_retriever": self._table_retriever,
+                "dbschema_retriever": self._dbschema_retriever,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
             },
             show_legend=True,
             orient="LR",
@@ -86,12 +266,15 @@ class Retrieval(BasicPipeline):
     async def run(self, query: str, id: Optional[str] = None):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
-            ["retrieval"],
+            ["construct_retrieval_results"],
             inputs={
                 "query": query,
                 "id": id or "",
                 "embedder": self._embedder,
-                "retriever": self._retriever,
+                "table_retriever": self._table_retriever,
+                "dbschema_retriever": self._dbschema_retriever,
+                "generator": self.generator,
+                "prompt_builder": self.prompt_builder,
             },
         )
 

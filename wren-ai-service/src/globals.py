@@ -75,6 +75,7 @@ def init_globals(
     ASK_SERVICE = AskService(
         pipelines={
             "retrieval": ask_retrieval.Retrieval(
+                llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),

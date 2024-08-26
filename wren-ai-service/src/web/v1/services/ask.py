@@ -144,7 +144,7 @@ class AskService:
                     query=ask_request.query,
                     id=ask_request.project_id,
                 )
-                documents = retrieval_result.get("retrieval", {}).get("documents", [])
+                documents = retrieval_result.get("construct_retrieval_results", [])
 
                 if not documents:
                     logger.exception(
@@ -208,8 +208,7 @@ class AskService:
 
                 logger.debug("Documents:")
                 for document in documents:
-                    logger.debug(f"score: {document.score}")
-                    logger.debug(f"content: {document.content}")
+                    logger.debug(f"content: {document}")
 
                 logger.debug("Before sql correction:")
                 logger.debug(f"valid_generation_results: {valid_generation_results}")

@@ -151,21 +151,20 @@ class DDLConverter:
                         {
                             "id": id,
                             "type": "TABLE_SCHEMA",
-                            "mdl_type": ddl_command["mdl_type"],
+                            "name": ddl_command["name"],
                         }
                         if id
                         else {
                             "type": "TABLE_SCHEMA",
-                            "mdl_type": ddl_command["mdl_type"],
+                            "name": ddl_command["name"],
                         }
                     ),
-                    content=payload,
+                    content=ddl_command["payload"],
                 )
                 for ddl_command in tqdm(
                     ddl_commands,
                     desc="indexing ddl commands into the dbschema store",
                 )
-                for payload in ddl_command["payload"]
             ]
         }
 
@@ -204,19 +203,13 @@ class DDLConverter:
                 }
             )
 
-        return [
-            {
-                "mdl_type": "MODEL",
-                "payload": self._convert_models_and_relationships(
-                    semantics["models"], semantics["relationships"]
-                ),
-            },
-            {
-                "mdl_type": "METRIC",
-                "payload": self._convert_metrics(semantics["metrics"]),
-            },
-            {"mdl_type": "VIEW", "payload": self._convert_views(semantics["views"])},
-        ]
+        return (
+            self._convert_models_and_relationships(
+                semantics["models"], semantics["relationships"]
+            )
+            + self._convert_views(semantics["views"])
+            + self._convert_metrics(semantics["metrics"])
+        )
 
     # TODO: refactor this method
     def _convert_models_and_relationships(
@@ -244,15 +237,16 @@ class DDLConverter:
                             comment
                             + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
                         )
-                    column_name = column["name"]
-                    column_type = column["type"]
-                    column_ddl = f"{comment}{column_name} {column_type}"
 
-                    # If column is a primary key
-                    if column_name == model["primaryKey"]:
-                        column_ddl += " PRIMARY KEY"
-
-                    columns_ddl.append(column_ddl)
+                    columns_ddl.append(
+                        {
+                            "type": "COLUMN",
+                            "comment": comment,
+                            "name": column["name"],
+                            "data_type": column["type"],
+                            "is_primary_key": column["name"] == model["primaryKey"],
+                        }
+                    )
 
             # Add foreign key constraints based on relationships
             for relationship in relationships:
@@ -264,22 +258,33 @@ class DDLConverter:
                     comment = (
                         f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
                     )
+                    should_add_fk = False
                     if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
                         related_table = models[1]
                         fk_column = condition.split(" = ")[0].split(".")[1]
                         fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                        columns_ddl.append(f"{comment}{fk_constraint}")
+                        should_add_fk = True
                     elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
                         related_table = models[0]
                         fk_column = condition.split(" = ")[1].split(".")[1]
                         fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                        columns_ddl.append(f"{comment}{fk_constraint}")
+                        should_add_fk = True
                     elif table_name in models and join_type.upper() == "ONE_TO_ONE":
                         index = models.index(table_name)
                         related_table = [m for m in models if m != table_name][0]
                         fk_column = condition.split(" = ")[index].split(".")[1]
                         fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                        columns_ddl.append(f"{comment}{fk_constraint}")
+                        should_add_fk = True
+
+                    if should_add_fk:
+                        columns_ddl.append(
+                            {
+                                "type": "FOREIGN_KEY",
+                                "comment": comment,
+                                "constraint": fk_constraint,
+                                "tables": models,
+                            }
+                        )
 
             if "properties" in model:
                 model["properties"]["alias"] = model["properties"].pop(
@@ -291,23 +296,36 @@ class DDLConverter:
             else:
                 comment = ""
 
-            create_table_ddl = (
-                f"{comment}CREATE TABLE {table_name} (\n  "
-                + ",\n  ".join(columns_ddl)
-                + "\n);"
+            ddl_commands.append(
+                {
+                    "name": table_name,
+                    "payload": str(
+                        {
+                            "type": "TABLE",
+                            "comment": comment,
+                            "name": table_name,
+                            "columns": columns_ddl,
+                        }
+                    ),
+                }
             )
-            ddl_commands.append(create_table_ddl)
 
         logger.debug(f"DDL Commands: {ddl_commands}")
 
         return ddl_commands
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
-        def _format(view: Dict[str, Any]) -> str:
-            properties = view["properties"] if "properties" in view else ""
-            return f"/* {properties} */\nCREATE VIEW {view['name']}\nAS ({view['statement']})"
+        def _format(view: Dict[str, Any]) -> dict:
+            return {
+                "type": "VIEW",
+                "comment": f"/* {view['properties']} */\n"
+                if "properties" in view
+                else "",
+                "name": view["name"],
+                "statement": view["statement"],
+            }
 
-        return [_format(view) for view in views]
+        return [{"name": view["name"], "payload": str(_format(view))} for view in views]
 
     def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[str]:
         ddl_commands = []
@@ -316,27 +334,41 @@ class DDLConverter:
             table_name = metric.get("name", "")
             columns_ddl = []
             for dimension in metric.get("dimension", []):
-                column_name = dimension.get("name", "")
-                column_type = dimension.get("type", "")
                 comment = "-- This column is a dimension\n  "
-                column_ddl = f"{comment}{column_name} {column_type}"
-                columns_ddl.append(column_ddl)
+                columns_ddl.append(
+                    {
+                        "type": "COLUMN",
+                        "comment": comment,
+                        "name": dimension.get("name", ""),
+                        "data_type": dimension.get("type", ""),
+                    }
+                )
 
             for measure in metric.get("measure", []):
-                column_name = measure.get("name", "")
-                column_type = measure.get("type", "")
                 comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
-                column_ddl = f"{comment}{column_name} {column_type}"
-                columns_ddl.append(column_ddl)
+                columns_ddl.append(
+                    {
+                        "type": "COLUMN",
+                        "comment": comment,
+                        "name": measure.get("name", ""),
+                        "data_type": measure.get("type", ""),
+                    }
+                )
 
             comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
-            create_table_ddl = (
-                f"{comment}CREATE TABLE {table_name} (\n  "
-                + ",\n  ".join(columns_ddl)
-                + "\n);"
+            ddl_commands.append(
+                {
+                    "name": table_name,
+                    "payload": str(
+                        {
+                            "type": "METRIC",
+                            "comment": comment,
+                            "name": table_name,
+                            "columns": columns_ddl,
+                        }
+                    ),
+                }
             )
-
-            ddl_commands.append(create_table_ddl)
 
         return ddl_commands
 
