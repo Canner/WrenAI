@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -50,10 +51,7 @@ class DocumentCleaner:
                 if id
                 else None
             )
-            document_count = await store.count_documents(filters=filters)
-            ids = [str(i) for i in range(document_count)]
-            if ids:
-                await store.delete_documents(ids)
+            await store.delete_documents(filters)
 
         logger.info("Ask Indexing pipeline is clearing old documents...")
         await asyncio.gather(*[_clear_documents(store, id) for store in self._stores])
@@ -116,15 +114,13 @@ class ViewConverter:
         return {
             "documents": [
                 Document(
-                    id=str(i),
+                    id=str(uuid.uuid4()),
                     meta={"id": id} if id else {},
                     content=converted_view,
                 )
-                for i, converted_view in enumerate(
-                    tqdm(
-                        converted_views,
-                        desc="indexing view into the historical view question store",
-                    )
+                for converted_view in tqdm(
+                    converted_views,
+                    desc="indexing view into the historical view question store",
                 )
             ]
         }
@@ -150,7 +146,7 @@ class DDLConverter:
         return {
             "documents": [
                 Document(
-                    id=str(i),
+                    id=str(uuid.uuid4()),
                     meta=(
                         {
                             "id": id,
@@ -165,11 +161,9 @@ class DDLConverter:
                     ),
                     content=ddl_command["payload"],
                 )
-                for i, ddl_command in enumerate(
-                    tqdm(
-                        ddl_commands,
-                        desc="indexing ddl commands into the dbschema store",
-                    )
+                for ddl_command in tqdm(
+                    ddl_commands,
+                    desc="indexing ddl commands into the dbschema store",
                 )
             ]
         }
@@ -413,7 +407,7 @@ class TableDescriptionConverter:
         return {
             "documents": [
                 Document(
-                    id=str(i),
+                    id=str(uuid.uuid4()),
                     meta=(
                         {"id": id, "type": "TABLE_DESCRIPTION"}
                         if id
@@ -421,11 +415,9 @@ class TableDescriptionConverter:
                     ),
                     content=table_description,
                 )
-                for i, table_description in enumerate(
-                    tqdm(
-                        table_descriptions,
-                        desc="indexing table descriptions into the table description store",
-                    )
+                for table_description in tqdm(
+                    table_descriptions,
+                    desc="indexing table descriptions into the table description store",
                 )
             ]
         }
