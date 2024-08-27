@@ -23,6 +23,12 @@ from src.web.v1.services.indexing import (
     SemanticsPreparationStatusRequest,
     SemanticsPreparationStatusResponse,
 )
+from src.web.v1.services.sql_answer import (
+    SqlAnswerRequest,
+    SqlAnswerResponse,
+    SqlAnswerResultRequest,
+    SqlAnswerResultResponse,
+)
 from src.web.v1.services.sql_explanation import (
     SQLExplanationRequest,
     SQLExplanationResponse,
@@ -101,6 +107,33 @@ async def stop_ask(
 @router.get("/asks/{query_id}/result")
 async def get_ask_result(query_id: str) -> AskResultResponse:
     return container.ASK_SERVICE.get_ask_result(AskResultRequest(query_id=query_id))
+
+
+@router.post("/sql-answer")
+async def sql_answer(
+    sql_answer_request: SqlAnswerRequest,
+    background_tasks: BackgroundTasks,
+) -> SqlAnswerResponse:
+    query_id = str(uuid.uuid4())
+    sql_answer_request.query_id = query_id
+    container.SQL_ANSWER_SERVICE._sql_answer_results[
+        query_id
+    ] = SqlAnswerResultResponse(
+        status="understanding",
+    )
+
+    background_tasks.add_task(
+        container.SQL_ANSWER_SERVICE.sql_answer,
+        sql_answer_request,
+    )
+    return SqlAnswerResponse(query_id=query_id)
+
+
+@router.get("/sql-answer/{query_id}/result")
+async def get_sql_answer_result(query_id: str) -> SqlAnswerResultResponse:
+    return container.SQL_ANSWER_SERVICE.get_sql_answer_result(
+        SqlAnswerResultRequest(query_id=query_id)
+    )
 
 
 @router.post("/ask-details")

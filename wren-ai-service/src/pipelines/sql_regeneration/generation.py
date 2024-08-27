@@ -132,6 +132,7 @@ class Generation(BasicPipeline):
         self,
         description: str,
         steps: List[SQLExplanationWithUserCorrections],
+        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/sql_regeneration"
         if not Path(destination).exists():
@@ -147,6 +148,7 @@ class Generation(BasicPipeline):
                 "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
                 "sql_regeneration_generator": self.sql_regeneration_generator,
                 "sql_regeneration_post_processor": self.sql_regeneration_post_processor,
+                "project_id": project_id,
             },
             show_legend=True,
             orient="LR",

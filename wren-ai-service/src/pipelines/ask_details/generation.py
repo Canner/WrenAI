@@ -93,7 +93,7 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, sql: str) -> None:
+    def visualize(self, sql: str, project_id: str | None = None) -> None:
         destination = "outputs/pipelines/ask_details"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -106,6 +106,7 @@ class Generation(BasicPipeline):
                 "generator": self.generator,
                 "prompt_builder": self.prompt_builder,
                 "post_processor": self.post_processor,
+                "project_id": project_id,
             },
             show_legend=True,
             orient="LR",
