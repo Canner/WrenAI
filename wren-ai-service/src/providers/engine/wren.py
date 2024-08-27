@@ -89,7 +89,7 @@ class WrenIbis(Engine):
                 return True, None
 
             res = await response.text()
-            return False, orjson.loads(res)
+            return False, res
 
 
 @provider("wren_engine")
@@ -121,4 +121,4 @@ class WrenEngine(Engine):
             if response.status == 200:
                 return True, None
             res = await response.text()
-            return False, orjson.loads(res)
+            return False, res
