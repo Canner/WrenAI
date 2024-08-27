@@ -154,11 +154,16 @@ async def dbschema_retrieval(
 
     logger.info(f"dbschema_retrieval with table_names: {table_names}")
 
+    table_name_conditions = [
+        {"field": "name", "operator": "==", "value": table_name}
+        for table_name in table_names
+    ]
+
     filters = {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"field": "name", "operator": "in", "value": table_names},
+            {"operator": "OR", "conditions": table_name_conditions},
         ],
     }
 
