@@ -24,6 +24,7 @@ from src.pipelines.ask_details import (
 from src.pipelines.indexing import (
     indexing,
 )
+from src.pipelines.sql_answer import generation as sql_answer_generation
 from src.pipelines.sql_explanation import (
     generation as sql_explanation_generation,
 )
@@ -33,11 +34,13 @@ from src.pipelines.sql_regeneration import (
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.indexing import IndexingService
+from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_explanation import SQLExplanationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
 INDEXING_SERVICE = None
 ASK_SERVICE = None
+SQL_ANSWER_SERVICE = None
 ASK_DETAILS_SERVICE = None
 SQL_EXPLANATION_SERVICE = None
 SQL_REGENERATION_SERVICE = None
@@ -57,6 +60,7 @@ def init_globals(
     global \
         INDEXING_SERVICE, \
         ASK_SERVICE, \
+        SQL_ANSWER_SERVICE, \
         ASK_DETAILS_SERVICE, \
         SQL_EXPLANATION_SERVICE, \
         SQL_REGENERATION_SERVICE
@@ -111,6 +115,14 @@ def init_globals(
             ),
         },
         **query_cache,
+    )
+
+    SQL_ANSWER_SERVICE = SqlAnswerService(
+        pipelines={
+            "generation": sql_answer_generation.Generation(
+                engine=engine,
+            )
+        },
     )
 
     ASK_DETAILS_SERVICE = AskDetailsService(
