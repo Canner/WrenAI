@@ -38,11 +38,16 @@ information regarding relationships or constraints.
 ### FINAL ANSWER FORMAT ###
 Please respond with a JSON object structured as follows:
 {
-    "chain_of_thought_reasoning": "Your reasoning for selecting the columns,
-    be concise and clear.",
+
     "results": {
-        "table_name1": ["column1", "column2", ...],
-        "table_name2": ["column1", "column2", ...],
+        "table_name1": {
+            "chain_of_thought_reasoning": "Your reasoning for selecting the columns, be concise and clear.",
+            "columns": ["column1", "column2", ...]
+        },
+        "table_name2": {
+            "chain_of_thought_reasoning": "Your reasoning for selecting the columns, be concise and clear.",
+            "columns": ["column1", "column2", ...]
+        },
         ...
     }
 }
@@ -238,7 +243,9 @@ def construct_retrieval_results(
             retrieval_results.append(
                 _build_table_ddl(
                     table_schema,
-                    columns=set(columns_and_tables_needed[table_schema["name"]]),
+                    columns=set(
+                        columns_and_tables_needed[table_schema["name"]]["columns"]
+                    ),
                     tables=tables,
                 )
             )
