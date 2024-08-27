@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import aiohttp
+import orjson
+import pandas as pd
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
@@ -74,10 +76,22 @@ class AnswerGenerator:
         query: str,
         sql_summary: str,
     ) -> dict:
-        df_data = {_col: _data for _col, _data in zip(data["columns"], data["data"])}
+        try:
+            data = orjson.loads(data)
+            df_data = pd.DataFrame(
+                {_col: _data for _col, _data in zip(data["columns"], data["data"])}
+            ).astype(data["dtypes"])
+            logger.info(f"df dtypes: {df_data.dtypes}")
 
-        df = SmartDataframe(df_data, description=sql_summary, config={"llm": self._llm})
-        return {"answer": str(df.chat(query))}
+            df = SmartDataframe(
+                df_data, description=sql_summary, config={"llm": self._llm}
+            )
+            answer = df.chat(query, output_type="string")
+
+            logger.info(f"SQL Answer: {answer}")
+            return {"answer": str(answer)}
+        except Exception as e:
+            return {"answer": f"Error: {e}"}
 
 
 ## Start of Pipeline
