@@ -72,10 +72,11 @@ class AnswerGenerator:
         self,
         data: dict,
         query: str,
+        sql_summary: str,
     ) -> dict:
         df_data = {_col: _data for _col, _data in zip(data["columns"], data["data"])}
 
-        df = SmartDataframe(df_data, config={"llm": self._llm})
+        df = SmartDataframe(df_data, description=sql_summary, config={"llm": self._llm})
         return {"answer": str(df.chat(query))}
 
 
@@ -93,13 +94,15 @@ async def execute_sql(
 @async_timer
 @observe(capture_input=False)
 async def generate_answer(
-    query: str, execute_sql: dict, answer_generator: AnswerGenerator
+    query: str, sql_summary: str, execute_sql: dict, answer_generator: AnswerGenerator
 ) -> str:
     logger.debug(f"Generating answer: {execute_sql}")
 
-    return (await answer_generator.run(data=execute_sql["results"], query=query))[
-        "answer"
-    ]
+    return (
+        await answer_generator.run(
+            data=execute_sql["results"], query=query, sql_summary=sql_summary
+        )
+    )["answer"]
 
 
 ## End of Pipeline
@@ -117,7 +120,9 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, query: str, sql: str, project_id: str | None = None) -> None:
+    def visualize(
+        self, query: str, sql: str, sql_summary: str, project_id: str | None = None
+    ) -> None:
         destination = "outputs/pipelines/sql_answer"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -128,6 +133,7 @@ class Generation(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
+                "sql_summary": sql_summary,
                 "project_id": project_id,
                 "data_fetcher": self.data_fetcher,
                 "answer_generator": self.answer_generator,
@@ -138,13 +144,16 @@ class Generation(BasicPipeline):
 
     @async_timer
     @observe(name="SQL Answer Generation")
-    async def run(self, query: str, sql: str, project_id: str | None = None) -> dict:
+    async def run(
+        self, query: str, sql: str, sql_summary: str, project_id: str | None = None
+    ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
             ["generate_answer"],
             inputs={
                 "query": query,
                 "sql": sql,
+                "sql_summary": sql_summary,
                 "project_id": project_id,
                 "data_fetcher": self.data_fetcher,
                 "answer_generator": self.answer_generator,

@@ -376,6 +376,7 @@ def show_asks_details_results(query: str):
                 get_sql_answer(
                     st.session_state["chosen_query_result"]["query"],
                     st.session_state["chosen_query_result"]["sql"],
+                    st.session_state["chosen_query_result"]["summary"],
                 )
             )
 
@@ -714,12 +715,14 @@ def ask(query: str, query_history: Optional[dict] = None):
 def get_sql_answer(
     query: str,
     sql: str,
+    sql_summary: str,
 ):
     sql_answer_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answer",
         json={
             "query": query,
             "sql": sql,
+            "sql_summary": sql_summary,
         },
     )
 
