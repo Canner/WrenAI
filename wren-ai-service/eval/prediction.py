@@ -45,6 +45,11 @@ def generate_meta(
         "commit": obtain_commit_hash(),
         "embedding_model": embedder_provider.get_model(),
         "generation_model": llm_provider.get_model(),
+        "column_indexing_batch_size": int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
+        or 50,
+        "table_retrieval_size": int(os.getenv("TABLE_RETRIEVAL_SIZE")) or 10,
+        "table_column_retrieval_size": int(os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE"))
+        or 1000,
         "pipeline": pipe,
         "batch_size": os.getenv("BATCH_SIZE") or 4,
         "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
@@ -138,9 +143,19 @@ if __name__ == "__main__":
     dataset = parse_toml(path)
     providers = init_providers(dataset["mdl"])
 
-    meta = generate_meta(path=path, dataset=dataset, pipe=pipe_name, **providers)
+    meta = generate_meta(
+        path=path,
+        dataset=dataset,
+        pipe=pipe_name,
+        **providers,
+    )
 
-    pipe = pipelines.init(pipe_name, meta, mdl=dataset["mdl"], providers=providers)
+    pipe = pipelines.init(
+        pipe_name,
+        meta,
+        mdl=dataset["mdl"],
+        providers=providers,
+    )
 
     predictions = pipe.predict(dataset["eval_dataset"])
     meta["expected_batch_size"] = meta["query_count"] * pipe.candidate_size

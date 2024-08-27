@@ -277,15 +277,17 @@ class Retrieval(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        table_retrieval_size: Optional[int] = 10,
+        table_column_retrieval_size: Optional[int] = 1000,
     ):
         self._embedder = embedder_provider.get_text_embedder()
         self._table_retriever = document_store_provider.get_retriever(
             document_store_provider.get_store(dataset_name="table_descriptions"),
-            top_k=10,
+            top_k=table_retrieval_size,
         )
         self._dbschema_retriever = document_store_provider.get_retriever(
             document_store_provider.get_store(dataset_name="db_schema"),
-            top_k=1000,
+            top_k=table_column_retrieval_size,
         )
         self.prompt_builder = PromptBuilder(
             template=table_columns_selection_user_prompt_template

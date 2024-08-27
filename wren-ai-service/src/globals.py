@@ -50,6 +50,8 @@ def init_globals(
     engine: Engine,
     should_force_deploy: Optional[str] = None,
     column_indexing_batch_size: Optional[int] = 50,
+    table_retrieval_size: Optional[int] = 10,
+    table_column_retrieval_size: Optional[int] = 1000,
 ):
     global \
         INDEXING_SERVICE, \
@@ -83,6 +85,8 @@ def init_globals(
                 llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
+                table_retrieval_size=table_retrieval_size,
+                table_column_retrieval_size=table_column_retrieval_size,
             ),
             "historical_question": historical_question.HistoricalQuestion(
                 embedder_provider=embedder_provider,

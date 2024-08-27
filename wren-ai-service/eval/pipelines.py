@@ -190,6 +190,8 @@ class RetrievalPipeline(Eval):
             llm_provider=llm_provider,
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
+            table_retrieval_size=meta["table_retrieval_size"],
+            table_column_retrieval_size=meta["table_column_retrieval_size"],
         )
 
     async def _process(self, prediction: dict, **_) -> dict:

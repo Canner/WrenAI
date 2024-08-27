@@ -44,6 +44,16 @@ async def lifespan(app: FastAPI):
             if os.getenv("COLUMN_INDEXING_BATCH_SIZE")
             else 50
         ),
+        table_retrieval_size=(
+            int(os.getenv("TABLE_RETRIEVAL_SIZE"))
+            if os.getenv("TABLE_RETRIEVAL_SIZE")
+            else 10
+        ),
+        table_column_retrieval_size=(
+            int(os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE"))
+            if os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE")
+            else 1000
+        ),
     )
     service_metadata(*providers)
     init_langfuse()
