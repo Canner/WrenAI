@@ -187,6 +187,7 @@ class FollowUpGeneration(BasicPipeline):
         query: str,
         contexts: List[Document],
         history: AskRequest.AskResponseDetails,
+        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
         if not Path(destination).exists():
@@ -203,6 +204,7 @@ class FollowUpGeneration(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "alert": TEXT_TO_SQL_RULES,
+                "project_id": project_id,
             },
             show_legend=True,
             orient="LR",

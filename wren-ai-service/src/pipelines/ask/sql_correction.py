@@ -125,6 +125,7 @@ class SQLCorrection(BasicPipeline):
         self,
         contexts: List[Document],
         invalid_generation_results: List[Dict[str, str]],
+        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
         if not Path(destination).exists():
@@ -140,6 +141,7 @@ class SQLCorrection(BasicPipeline):
                 "generator": self.generator,
                 "prompt_builder": self.prompt_builder,
                 "post_processor": self.post_processor,
+                "project_id": project_id,
             },
             show_legend=True,
             orient="LR",

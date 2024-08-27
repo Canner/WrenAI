@@ -157,6 +157,7 @@ class Generation(BasicPipeline):
         query: str,
         contexts: List[Document],
         exclude: List[Dict],
+        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
         if not Path(destination).exists():
@@ -173,6 +174,7 @@ class Generation(BasicPipeline):
                 "generator": self.generator,
                 "prompt_builder": self.prompt_builder,
                 "post_processor": self.post_processor,
+                "project_id": project_id,
             },
             show_legend=True,
             orient="LR",

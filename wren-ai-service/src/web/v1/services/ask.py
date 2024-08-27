@@ -305,7 +305,7 @@ class AskService:
         except Exception as e:
             logger.exception(f"ask pipeline - OTHERS: {e}")
 
-            self._ask_results[query_id] = AskResultResponse(
+            self._ask_results[ask_request.query_id] = AskResultResponse(
                 status="failed",
                 error=AskResultResponse.AskError(
                     code="OTHERS",
