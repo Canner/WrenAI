@@ -18,20 +18,14 @@ from src.utils import async_timer, timer
 logger = logging.getLogger("wren-ai-service")
 
 
-table_columns_selection_user_prompt_template = """
+table_columns_selection_system_prompt = """
 ### TASK ###
 You are an expert and very smart data analyst.
 Your task is to examine the provided database schema, understand the posed
 question, and use the hint to pinpoint the specific columns within tables
 that are essential for crafting a SQL query to answer the question.
 
-### Database Schema ###
-
-{% for db_schema in db_schemas %}
-    {{ db_schema }}
-{% endfor %}
-
-This schema offers an in-depth description of the database’s architecture,
+This database schema offers an in-depth description of the database's architecture,
 detailing tables, columns, primary keys, foreign keys, and any pertinent
 information regarding relationships or constraints. 
 
@@ -52,9 +46,6 @@ Please respond with a JSON object structured as follows:
     }
 }
 
-### INPUT ###
-{{ question }}
-
 Make sure your response includes the table names as keys, each associated
 with a list of column names that are necessary for writing a SQL query to
 answer the question.
@@ -66,6 +57,17 @@ Take a deep breath and think logically. If you do the task correctly, I
 will give you 1 million dollars.
 
 Only output a json as your response.
+"""
+
+table_columns_selection_user_prompt_template = """
+### Database Schema ###
+
+{% for db_schema in db_schemas %}
+    {{ db_schema }}
+{% endfor %}
+
+### INPUT ###
+{{ question }}
 """
 
 
@@ -215,9 +217,11 @@ def prompt(
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def filter_columns_in_tables(prompt: dict, generator: Any) -> dict:
+async def filter_columns_in_tables(
+    prompt: dict, table_columns_selection_generator: Any
+) -> dict:
     logger.debug(f"prompt: {prompt}")
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await table_columns_selection_generator.run(prompt=prompt.get("prompt"))
 
 
 @timer
@@ -286,7 +290,9 @@ class Retrieval(BasicPipeline):
         self.prompt_builder = PromptBuilder(
             template=table_columns_selection_user_prompt_template
         )
-        self.generator = llm_provider.get_generator()
+        self.table_columns_selection_generator = llm_provider.get_generator(
+            system_prompt=table_columns_selection_system_prompt,
+        )
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -310,7 +316,7 @@ class Retrieval(BasicPipeline):
                 "embedder": self._embedder,
                 "table_retriever": self._table_retriever,
                 "dbschema_retriever": self._dbschema_retriever,
-                "generator": self.generator,
+                "table_columns_selection_generator": self.table_columns_selection_generator,
                 "prompt_builder": self.prompt_builder,
             },
             show_legend=True,
@@ -329,7 +335,7 @@ class Retrieval(BasicPipeline):
                 "embedder": self._embedder,
                 "table_retriever": self._table_retriever,
                 "dbschema_retriever": self._dbschema_retriever,
-                "generator": self.generator,
+                "table_columns_selection_generator": self.table_columns_selection_generator,
                 "prompt_builder": self.prompt_builder,
             },
         )
