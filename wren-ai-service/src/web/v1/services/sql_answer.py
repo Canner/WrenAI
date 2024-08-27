@@ -15,6 +15,7 @@ class SqlAnswerRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
+    sql_summary: str
     thread_id: Optional[str] = None
 
     @property
@@ -81,6 +82,7 @@ class SqlAnswerService:
             data = await self._pipelines["generation"].run(
                 query=sql_answer_request.query,
                 sql=sql_answer_request.sql,
+                sql_summary=sql_answer_request.sql_summary,
                 project_id=sql_answer_request.thread_id,
             )
             answer = data["generate_answer"]
