@@ -64,6 +64,49 @@ Only output a json as your response.
 """
 
 
+def _build_table_ddl(
+    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+) -> str:
+    columns_ddl = []
+    for column in content["columns"]:
+        if column["type"] == "COLUMN":
+            if not columns or (columns and column["name"] in columns):
+                column_ddl = (
+                    f"{column['comment']}{column['name']} {column['data_type']}"
+                )
+                if column["is_primary_key"]:
+                    column_ddl += " PRIMARY KEY"
+                columns_ddl.append(column_ddl)
+        elif column["type"] == "FOREIGN_KEY":
+            if not tables or (tables and set(column["tables"]).issubset(tables)):
+                columns_ddl.append(f"{column['comment']}{column['constraint']}")
+
+    return (
+        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
+    )
+
+
+def _build_metric_ddl(content: dict) -> str:
+    columns_ddl = [
+        f"{column['comment']}{column['name']} {column['data_type']}"
+        for column in content["columns"]
+    ]
+
+    return (
+        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
+    )
+
+
+def _build_view_ddl(content: dict) -> str:
+    return (
+        f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
+    )
+
+
 ## Start of Pipeline
 @async_timer
 @observe(capture_input=False, capture_output=False)
@@ -157,7 +200,12 @@ def prompt(
 ) -> dict:
     logger.info(f"db_schemas: {construct_db_schemas}")
 
-    return prompt_builder.run(question=query, db_schemas=construct_db_schemas)
+    db_schemas = [
+        _build_table_ddl(construct_db_schema)
+        for construct_db_schema in construct_db_schemas
+    ]
+
+    return prompt_builder.run(question=query, db_schemas=db_schemas)
 
 
 @async_timer
@@ -174,42 +222,6 @@ def construct_retrieval_results(
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
 ) -> list[str]:
-    def _build_table_ddl(content: dict, tables: set[str], columns: set[str]) -> str:
-        columns_ddl = []
-        for column in content["columns"]:
-            if column["type"] == "COLUMN" and column["name"] in columns:
-                column_ddl = (
-                    f"{column['comment']}{column['name']} {column['data_type']}"
-                )
-                if column["is_primary_key"]:
-                    column_ddl += " PRIMARY KEY"
-                columns_ddl.append(column_ddl)
-            elif column["type"] == "FOREIGN_KEY" and set(column["tables"]).issubset(
-                tables
-            ):
-                columns_ddl.append(f"{column['comment']}{column['constraint']}")
-
-        return (
-            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
-            + ",\n  ".join(columns_ddl)
-            + "\n);"
-        )
-
-    def _build_metric_ddl(content: dict) -> str:
-        columns_ddl = [
-            f"{column['comment']}{column['name']} {column['data_type']}"
-            for column in content["columns"]
-        ]
-
-        return (
-            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
-            + ",\n  ".join(columns_ddl)
-            + "\n);"
-        )
-
-    def _build_view_ddl(content: dict) -> str:
-        return f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
-
     columns_and_tables_needed = orjson.loads(filter_columns_in_tables["replies"][0])[
         "results"
     ]
@@ -226,8 +238,8 @@ def construct_retrieval_results(
             retrieval_results.append(
                 _build_table_ddl(
                     table_schema,
-                    tables,
-                    set(columns_and_tables_needed[table_schema["name"]]),
+                    columns=set(columns_and_tables_needed[table_schema["name"]]),
+                    tables=tables,
                 )
             )
 
