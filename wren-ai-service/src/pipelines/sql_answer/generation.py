@@ -1,41 +1,28 @@
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import aiohttp
 import orjson
-import pandas as pd
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
+from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pandasai import SmartDataframe
-from pandasai.llm import OpenAI
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
-from src.utils import (
-    async_timer,
-)
+from src.core.provider import LLMProvider
+from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
+sql_to_answer_system_prompt = """
+"""
 
-def _get_llm() -> Dict[str, Any]:
-    llm_provider = os.getenv("LLM_PROVIDER", "openai_llm")
-
-    if llm_provider == "openai_llm":
-        return OpenAI(
-            api_token=os.getenv("LLM_OPENAI_API_KEY"),
-            model=os.getenv("GENERATION_MODEL"),
-            temperature=0,
-        )
-    elif llm_provider == "azure_openai_llm":
-        raise NotImplementedError
-    elif llm_provider == "ollama_llm":
-        raise NotImplementedError
+sql_to_answer_user_prompt_template = """
+"""
 
 
 @component
@@ -63,35 +50,22 @@ class DataFetcher:
 
 
 @component
-class AnswerGenerator:
-    def __init__(self, llm: Any):
-        self._llm = llm
-
+class GenerationPostProcessor:
     @component.output_types(
-        answer=str,
+        results=Dict[str, Any],
     )
     async def run(
         self,
-        data: dict,
-        query: str,
-        sql_summary: str,
-    ) -> dict:
+        replies: str,
+    ):
         try:
-            data = orjson.loads(data)
-            df_data = pd.DataFrame(
-                {_col: _data for _col, _data in zip(data["columns"], data["data"])}
-            ).astype(data["dtypes"])
-            logger.info(f"df dtypes: {df_data.dtypes}")
+            data = orjson.loads(replies[0])["results"]
 
-            df = SmartDataframe(
-                df_data, description=sql_summary, config={"llm": self._llm}
-            )
-            answer = df.chat(query, output_type="string")
-
-            logger.info(f"SQL Answer: {answer}")
-            return {"answer": str(answer)}
+            return {"results": {"answer": data, "error": ""}}
         except Exception as e:
-            return {"answer": f"Error: {e}"}
+            logger.exception(f"Error in GenerationPostProcessor: {e}")
+
+            return {"results": {"answer": "", "error": str(e)}}
 
 
 ## Start of Pipeline
@@ -105,18 +79,43 @@ async def execute_sql(
     return await data_fetcher.run(sql=sql, project_id=project_id)
 
 
-@async_timer
+@timer
 @observe(capture_input=False)
-async def generate_answer(
-    query: str, sql_summary: str, execute_sql: dict, answer_generator: AnswerGenerator
+def prompt(
+    query: str,
+    sql: str,
+    sql_summary: str,
+    execute_sql: dict,
+    prompt_builder: PromptBuilder,
 ) -> str:
-    logger.debug(f"Generating answer: {execute_sql}")
+    logger.debug(f"query: {query}")
+    logger.debug(f"sql: {sql}")
+    logger.debug(f"sql_summary: {sql_summary}")
+    logger.debug(f"sql data: {execute_sql}")
 
-    return (
-        await answer_generator.run(
-            data=execute_sql["results"], query=query, sql_summary=sql_summary
-        )
-    )["answer"]
+    return prompt_builder.run(
+        query=query, sql=sql, sql_summary=sql_summary, sql_data=execute_sql["results"]
+    )
+
+
+@async_timer
+@observe(as_type="generation", capture_input=False)
+async def generate_answer(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
+
+    return await generator.run(prompt=prompt.get("prompt"))
+
+
+@timer
+@observe(capture_input=False)
+def post_process(
+    generate_answer: dict, post_processor: GenerationPostProcessor
+) -> dict:
+    logger.debug(
+        f"generate_answer: {orjson.dumps(generate_answer, option=orjson.OPT_INDENT_2).decode()}"
+    )
+
+    return post_processor.run(generate_answer.get("replies"))
 
 
 ## End of Pipeline
@@ -125,10 +124,15 @@ async def generate_answer(
 class Generation(BasicPipeline):
     def __init__(
         self,
+        llm_provider: LLMProvider,
         engine: Engine,
     ):
         self.data_fetcher = DataFetcher(engine=engine)
-        self.answer_generator = AnswerGenerator(llm=_get_llm())
+        self.prompt_builder = PromptBuilder(template=sql_to_answer_user_prompt_template)
+        self.generator = llm_provider.get_generator(
+            system_prompt=sql_to_answer_system_prompt
+        )
+        self.post_processor = GenerationPostProcessor()
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -142,7 +146,7 @@ class Generation(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["generate_answer"],
+            ["post_process"],
             output_file_path=f"{destination}/generation.dot",
             inputs={
                 "query": query,
@@ -150,7 +154,9 @@ class Generation(BasicPipeline):
                 "sql_summary": sql_summary,
                 "project_id": project_id,
                 "data_fetcher": self.data_fetcher,
-                "answer_generator": self.answer_generator,
+                "prompt_builder": self.prompt_builder,
+                "generator": self.generator,
+                "post_processor": self.post_processor,
             },
             show_legend=True,
             orient="LR",
@@ -163,14 +169,16 @@ class Generation(BasicPipeline):
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
-            ["generate_answer"],
+            ["post_process"],
             inputs={
                 "query": query,
                 "sql": sql,
                 "sql_summary": sql_summary,
                 "project_id": project_id,
                 "data_fetcher": self.data_fetcher,
-                "answer_generator": self.answer_generator,
+                "prompt_builder": self.prompt_builder,
+                "generator": self.generator,
+                "post_processor": self.post_processor,
             },
         )
 
@@ -185,8 +193,9 @@ if __name__ == "__main__":
     load_env_vars()
     init_langfuse()
 
-    _, _, _, engine = init_providers(EngineConfig())
+    llm_provider, _, _, engine = init_providers(EngineConfig())
     pipeline = Generation(
+        llm_provider=llm_provider,
         engine=engine,
     )
 

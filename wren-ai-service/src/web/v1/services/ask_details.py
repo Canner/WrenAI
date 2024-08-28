@@ -78,7 +78,10 @@ class AskDetailsService:
         results = {
             "ask_details_result": {},
             "metadata": {
-                "error_type": "",
+                "error": {
+                    "type": "",
+                    "message": "",
+                },
             },
         }
 
@@ -115,7 +118,7 @@ class AskDetailsService:
                         "cte_name": "",
                     }
                 ]
-                results["metadata"]["error_type"] = "SQL_BREAKDOWN_FAILED"
+                results["metadata"]["error"]["type"] = "SQL_BREAKDOWN_FAILED"
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="finished",
@@ -138,7 +141,8 @@ class AskDetailsService:
                 ),
             )
 
-            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error"]["type"] = "OTHERS"
+            results["metadata"]["error"]["message"] = str(e)
             return results
 
     def get_ask_details_result(
