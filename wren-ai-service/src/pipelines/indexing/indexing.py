@@ -169,7 +169,7 @@ class DDLConverter:
         }
 
     def _get_ddl_commands(
-        self, mdl: Dict[str, Any], column_indexing_batch_size: int
+        self, mdl: Dict[str, Any], column_indexing_batch_size: int = 50
     ) -> List[dict]:
         semantics = {
             "models": [],
