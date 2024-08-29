@@ -87,6 +87,9 @@
     "ts-sinon": "^2.0.2",
     "typescript": "~4.6.2"
   },
+  "resolutions": {
+    "ws": "8.17.1"
+  },
   "_moduleAliases": {
     "@server": "src/apollo/server"
   }
