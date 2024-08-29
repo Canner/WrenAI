@@ -67,7 +67,7 @@ class GenerationPostProcessor:
     @component.output_types(
         results=Dict[str, Any],
     )
-    async def run(
+    def run(
         self,
         replies: str,
     ):
