@@ -169,6 +169,8 @@ def trace_metadata(func):
             metadata["thread_id"] = request.thread_id
         if hasattr(request, "mdl_hash"):
             metadata["mdl_hash"] = request.mdl_hash
+        if hasattr(request, "user_id"):
+            metadata["user_id"] = request.user_id
 
         return metadata
 
@@ -177,19 +179,19 @@ def trace_metadata(func):
         results = await func(*args, **kwargs)
 
         addition = {}
-        if results and isinstance(results, dict):
+        if isinstance(results, dict):
             additional_metadata = results.get("metadata", {})
-            for key, value in additional_metadata.items():
-                addition[key] = value
+            addition.update(additional_metadata)
 
         metadata = extract(*args)
         langfuse_metadata = {
             **MODELS_METADATA,
             **addition,
             "mdl_hash": metadata.get("mdl_hash"),
+            "project_id": metadata.get("project_id"),
         }
         langfuse_context.update_current_trace(
-            user_id=metadata.get("project_id"),
+            user_id=metadata.get("user_id"),
             session_id=metadata.get("thread_id"),
             release=SERVICE_VERSION,
             metadata=langfuse_metadata,
