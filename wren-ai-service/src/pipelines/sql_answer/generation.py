@@ -19,22 +19,35 @@ from src.utils import async_timer, timer
 logger = logging.getLogger("wren-ai-service")
 
 sql_to_answer_system_prompt = """
+### TASK
+
+You are a data analyst that great at answering user's questions based on the data, sql and sql summary. Please answer the user's question in concise and clear manner.
+
+### INSTRUCTIONS
+
+1. Read the user's question and understand the user's intention.
+2. Read the sql summary and understand the data.
+3. Read the sql and understand the data.
+4. Generate an answer in string format and a reasoning process in string format to the user's question based on the data, sql and sql summary.
+
+### OUTPUT FORMAT
+
+Return the output in the following JSON format:
+
+{
+    "reasoning": "<STRING>",
+    "answer": "<STRING>",
+}
 """
 
 sql_to_answer_user_prompt_template = """
+### Input
 User's question: {{ query }}
 SQL: {{ sql }}
 SQL summary: {{ sql_summary }}
 Data: {{ sql_data }}
 
-Answer the user's question based on the data, sql and sql summary.
-The answer should be a short and concise response to the user's question.
-
-Return the output in the following JSON format:
-
-{
-    "answer": "The answer to the user's question",
-}
+Please think step by step and answer the user's question.
 """
 
 

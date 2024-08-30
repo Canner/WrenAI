@@ -88,8 +88,8 @@ class SqlAnswerService:
                 sql_summary=sql_answer_request.sql_summary,
                 project_id=sql_answer_request.thread_id,
             )
-            results = data["post_process"]["results"]
-            if answer := results["answer"]:
+            api_results = data["post_process"]["results"]
+            if answer := api_results["answer"]:
                 self._sql_answer_results[query_id] = SqlAnswerResultResponse(
                     status="finished",
                     response=answer,
@@ -99,12 +99,12 @@ class SqlAnswerService:
                     status="failed",
                     error=SqlAnswerResultResponse.SqlAnswerError(
                         code="OTHERS",
-                        message=results["error"],
+                        message=api_results["error"],
                     ),
                 )
 
                 results["metadata"]["error"]["type"] = "OTHERS"
-                results["metadata"]["error"]["message"] = results["error"]
+                results["metadata"]["error"]["message"] = api_results["error"]
 
             results["sql_answer_result"] = answer
             return results
