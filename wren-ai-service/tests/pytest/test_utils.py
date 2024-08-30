@@ -47,21 +47,31 @@ def test_service_metadata(mocker: MockFixture):
 
 
 def test_trace_metadata(mocker: MockFixture):
-    metadata = mocker.patch("src.utils.MODELS_METADATA", {"mdl_hash": None})
+    metadata = mocker.patch("src.utils.MODELS_METADATA", {})
     version = mocker.patch("src.utils.SERVICE_VERSION", "0.8.0-mock")
     function = mocker.patch(
         "src.utils.langfuse_context.update_current_trace", return_value=None
     )
 
+    class Request:
+        project_id = "mock-project-id"
+        thread_id = "mock-thread-id"
+        mdl_hash = "mock-mdl-hash"
+        user_id = "mock-user-id"
+
     @utils.trace_metadata
-    async def my_function(a: str, b: str):
+    async def my_function(_: str, b: Request):
         return "Hello, World!"
 
-    asyncio.run(my_function("Hello", "World!"))
+    asyncio.run(my_function("", Request()))
 
     function.assert_called_once_with(
-        user_id=None,
-        session_id=None,
+        user_id="mock-user-id",
+        session_id="mock-thread-id",
         release=version,
-        metadata=metadata,
+        metadata={
+            "mdl_hash": "mock-mdl-hash",
+            "project_id": "mock-project-id",
+            **metadata,
+        },
     )
