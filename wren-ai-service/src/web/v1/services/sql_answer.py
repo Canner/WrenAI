@@ -62,7 +62,7 @@ class SqlAnswerService:
         sql_answer_request: SqlAnswerRequest,
     ):
         results = {
-            "sql_answer_result": "",
+            "sql_answer_result": {},
             "metadata": {
                 "error": {
                     "type": "",
@@ -106,7 +106,10 @@ class SqlAnswerService:
                 results["metadata"]["error"]["type"] = "OTHERS"
                 results["metadata"]["error"]["message"] = api_results["error"]
 
-            results["sql_answer_result"] = answer
+            results["sql_answer_result"] = {
+                "answer": api_results["answer"],
+                "reasoning": api_results["reasoning"],
+            }
             return results
         except Exception as e:
             logger.exception(f"sql answer pipeline - OTHERS: {e}")
