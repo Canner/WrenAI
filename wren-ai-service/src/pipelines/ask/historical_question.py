@@ -8,6 +8,7 @@ import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document, component
+from haystack.document_stores.types import DocumentStore
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
@@ -57,15 +58,8 @@ class OutputFormatter:
 
 ## Start of Pipeline
 @async_timer
-@observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any) -> dict:
-    logger.debug(f"query: {query}")
-    return await embedder.run(query)
-
-
-@async_timer
 @observe(capture_input=False)
-async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+async def count_documents(store: DocumentStore, id: Optional[str] = None) -> int:
     filters = (
         {
             "operator": "AND",
@@ -76,21 +70,54 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
         if id
         else None
     )
+    document_count = await store.count_documents(filters=filters)
+    return document_count
 
-    res = await retriever.run(
-        query_embedding=embedding.get("embedding"),
-        filters=filters,
-    )
-    return dict(documents=res.get("documents"))
+
+@async_timer
+@observe(capture_input=False, capture_output=False)
+async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
+    if count_documents:
+        logger.debug(f"query: {query}")
+        return await embedder.run(query)
+
+    return {}
+
+
+@async_timer
+@observe(capture_input=False)
+async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+    if embedding:
+        filters = (
+            {
+                "operator": "AND",
+                "conditions": [
+                    {"field": "id", "operator": "==", "value": id},
+                ],
+            }
+            if id
+            else None
+        )
+
+        res = await retriever.run(
+            query_embedding=embedding.get("embedding"),
+            filters=filters,
+        )
+        return dict(documents=res.get("documents"))
+
+    return {}
 
 
 @timer
 @observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
-    logger.debug(
-        f"retrieval: {orjson.dumps(retrieval, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    return score_filter.run(documents=retrieval.get("documents"))
+    if retrieval:
+        logger.debug(
+            f"retrieval: {orjson.dumps(retrieval, option=orjson.OPT_INDENT_2).decode()}"
+        )
+        return score_filter.run(documents=retrieval.get("documents"))
+
+    return {}
 
 
 @timer
@@ -98,10 +125,13 @@ def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
 ) -> dict:
-    logger.debug(
-        f"filtered_documents: {orjson.dumps(filtered_documents, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    return output_formatter.run(documents=filtered_documents.get("documents"))
+    if filtered_documents:
+        logger.debug(
+            f"filtered_documents: {orjson.dumps(filtered_documents, option=orjson.OPT_INDENT_2).decode()}"
+        )
+        return output_formatter.run(documents=filtered_documents.get("documents"))
+
+    return {"documents": []}
 
 
 ## End of Pipeline
@@ -113,9 +143,10 @@ class HistoricalQuestion(BasicPipeline):
         embedder_provider: EmbedderProvider,
         store_provider: DocumentStoreProvider,
     ) -> None:
+        self._store = store_provider.get_store(dataset_name="view_questions")
         self._embedder = embedder_provider.get_text_embedder()
         self._retriever = store_provider.get_retriever(
-            document_store=store_provider.get_store(dataset_name="view_questions"),
+            document_store=self._store,
         )
         self._score_filter = ScoreFilter()
         # todo: add a llm filter to filter out low scoring document
@@ -140,6 +171,7 @@ class HistoricalQuestion(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
+                "store": self._store,
                 "embedder": self._embedder,
                 "retriever": self._retriever,
                 "score_filter": self._score_filter,
@@ -158,6 +190,7 @@ class HistoricalQuestion(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
+                "store": self._store,
                 "embedder": self._embedder,
                 "retriever": self._retriever,
                 "score_filter": self._score_filter,

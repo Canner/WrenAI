@@ -209,12 +209,16 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                 document.score = score
         return results
 
-    async def delete_documents(self, ids: List[str]):
-        ids = [convert_id(_id) for _id in ids]
+    async def delete_documents(self, filters: Optional[Dict[str, Any]] = None):
+        if not filters:
+            qdrant_filters = rest.Filter()
+        else:
+            qdrant_filters = convert_filters_to_qdrant(filters)
+
         try:
             await self.async_client.delete(
                 collection_name=self.index,
-                points_selector=ids,
+                points_selector=qdrant_filters,
                 wait=self.wait_result_from_api,
             )
         except KeyError:
@@ -223,7 +227,10 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             )
 
     async def count_documents(self, filters: Optional[Dict[str, Any]] = None) -> int:
-        qdrant_filters = convert_filters_to_qdrant(filters)
+        if not filters:
+            qdrant_filters = rest.Filter()
+        else:
+            qdrant_filters = convert_filters_to_qdrant(filters)
 
         return (
             await self.async_client.count(

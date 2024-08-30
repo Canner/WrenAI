@@ -82,7 +82,7 @@ def extract_units(docs: list) -> list:
 
     columns = []
     for doc in docs:
-        columns.extend(parse_ddl(doc["content"]))
+        columns.extend(parse_ddl(doc))
     return columns
 
 
@@ -172,6 +172,7 @@ class RetrievalPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
+        llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         **kwargs,
@@ -186,17 +187,17 @@ class RetrievalPipeline(Eval):
         deploy_model(mdl, _indexing)
 
         self._retrieval = retrieval.Retrieval(
+            llm_provider=llm_provider,
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
+            table_retrieval_size=meta["table_retrieval_size"],
+            table_column_retrieval_size=meta["table_column_retrieval_size"],
         )
 
     async def _process(self, prediction: dict, **_) -> dict:
         result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("retrieval", {}).get("documents", [])
-
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
+        documents = result.get("construct_retrieval_results", [])
+        prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
 
@@ -241,7 +242,7 @@ class GenerationPipeline(Eval):
         return prediction
 
     async def _process(self, prediction: dict, document: list, **_) -> dict:
-        documents = [Document.from_dict(doc) for doc in document]
+        documents = [Document.from_dict(doc).content for doc in document]
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
@@ -249,9 +250,7 @@ class GenerationPipeline(Eval):
         )
 
         prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
+        prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
 
@@ -302,6 +301,7 @@ class AskPipeline(Eval):
 
         self._mdl = mdl
         self._retrieval = retrieval.Retrieval(
+            llm_provider=llm_provider,
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
         )
@@ -319,7 +319,7 @@ class AskPipeline(Eval):
 
     async def _process(self, prediction: dict, **_) -> dict:
         result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("retrieval", {}).get("documents", [])
+        documents = result.get("construct_retrieval_results", [])
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
@@ -327,9 +327,7 @@ class AskPipeline(Eval):
         )
 
         prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(
-            [doc.to_dict() for doc in documents]
-        )
+        prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
 

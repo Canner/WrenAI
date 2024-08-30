@@ -230,7 +230,7 @@ def get_documents_given_contexts(
             "content": ddl_command,
         }
         for new_mdl_json in new_mdl_jsons
-        for i, ddl_command in enumerate(ddl_converter.get_ddl_commands(new_mdl_json))
+        for i, ddl_command in enumerate(ddl_converter._get_ddl_commands(new_mdl_json))
     ]
 
 
@@ -274,7 +274,7 @@ Given the database DDL, generate {num_pairs} of the questions and corresponding 
 {custom_instructions}
 
 ### Input ###
-Data Model: {"\n\n".join(ddl_converter.get_ddl_commands(mdl_json))}
+Data Model: {"\n\n".join(ddl_converter._get_ddl_commands(mdl_json))}
 
 Generate {num_pairs} of the questions and corresponding SQL queries according to the Output Format in JSON
 Think step by step

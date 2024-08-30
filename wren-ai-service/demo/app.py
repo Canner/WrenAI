@@ -15,7 +15,6 @@ from utils import (
     save_mdl_json_file,
     show_asks_details_results,
     show_asks_results,
-    show_er_diagram,
     update_llm,
 )
 
@@ -143,11 +142,6 @@ with st.sidebar:
         st.json(
             body=st.session_state["mdl_json"],
             expanded=False,
-        )
-
-        show_er_diagram(
-            st.session_state["mdl_json"]["models"],
-            st.session_state["mdl_json"]["relationships"],
         )
 
         deploy_ok = st.button(

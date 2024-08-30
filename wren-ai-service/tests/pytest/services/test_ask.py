@@ -33,6 +33,7 @@ def ask_service():
     return AskService(
         {
             "retrieval": retrieval.Retrieval(
+                llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),

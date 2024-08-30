@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -50,10 +51,7 @@ class DocumentCleaner:
                 if id
                 else None
             )
-            document_count = await store.count_documents(filters=filters)
-            ids = [str(i) for i in range(document_count)]
-            if ids:
-                await store.delete_documents(ids)
+            await store.delete_documents(filters)
 
         logger.info("Ask Indexing pipeline is clearing old documents...")
         await asyncio.gather(*[_clear_documents(store, id) for store in self._stores])
@@ -116,15 +114,13 @@ class ViewConverter:
         return {
             "documents": [
                 Document(
-                    id=str(i),
+                    id=str(uuid.uuid4()),
                     meta={"id": id} if id else {},
                     content=converted_view,
                 )
-                for i, converted_view in enumerate(
-                    tqdm(
-                        converted_views,
-                        desc="indexing view into the historical view question store",
-                    )
+                for converted_view in tqdm(
+                    converted_views,
+                    desc="indexing view into the historical view question store",
                 )
             ]
         }
@@ -133,30 +129,48 @@ class ViewConverter:
 @component
 class DDLConverter:
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], id: Optional[str] = None):
-        logger.info("Ask Indexing pipeline is writing new documents...")
+    def run(
+        self,
+        mdl: Dict[str, Any],
+        column_indexing_batch_size: int,
+        id: Optional[str] = None,
+    ):
+        logger.info(
+            "Ask Indexing pipeline is writing new documents for table schema..."
+        )
 
         logger.debug(f"original mdl_json: {mdl}")
 
-        ddl_commands = self.get_ddl_commands(mdl)
+        ddl_commands = self._get_ddl_commands(mdl, column_indexing_batch_size)
 
         return {
             "documents": [
                 Document(
-                    id=str(i),
-                    meta={"id": id} if id else {},
-                    content=ddl_command,
+                    id=str(uuid.uuid4()),
+                    meta=(
+                        {
+                            "id": id,
+                            "type": "TABLE_SCHEMA",
+                            "name": ddl_command["name"],
+                        }
+                        if id
+                        else {
+                            "type": "TABLE_SCHEMA",
+                            "name": ddl_command["name"],
+                        }
+                    ),
+                    content=ddl_command["payload"],
                 )
-                for i, ddl_command in enumerate(
-                    tqdm(
-                        ddl_commands,
-                        desc="indexing ddl commands into the ddl store",
-                    )
+                for ddl_command in tqdm(
+                    ddl_commands,
+                    desc="indexing ddl commands into the dbschema store",
                 )
             ]
         }
 
-    def get_ddl_commands(self, mdl: Dict[str, Any]) -> List[str]:
+    def _get_ddl_commands(
+        self, mdl: Dict[str, Any], column_indexing_batch_size: int = 50
+    ) -> List[dict]:
         semantics = {
             "models": [],
             "relationships": mdl["relationships"],
@@ -166,10 +180,10 @@ class DDLConverter:
 
         for model in mdl["models"]:
             columns = []
-            for column in model["columns"]:
+            for column in model.get("columns", []):
                 ddl_column = {
-                    "name": column["name"],
-                    "type": column["type"],
+                    "name": column.get("name", ""),
+                    "type": column.get("type", ""),
                 }
                 if "properties" in column:
                     ddl_column["properties"] = column["properties"]
@@ -184,25 +198,29 @@ class DDLConverter:
 
             semantics["models"].append(
                 {
-                    "type": "model",
-                    "name": model["name"],
-                    "properties": model["properties"] if "properties" in model else {},
+                    "name": model.get("name", ""),
+                    "properties": model.get("properties", {}),
                     "columns": columns,
-                    "primaryKey": model["primaryKey"],
+                    "primaryKey": model.get("primaryKey", ""),
                 }
             )
 
         return (
             self._convert_models_and_relationships(
-                semantics["models"], semantics["relationships"]
+                semantics["models"],
+                semantics["relationships"],
+                column_indexing_batch_size,
             )
-            + self._convert_metrics(semantics["metrics"])
             + self._convert_views(semantics["views"])
+            + self._convert_metrics(semantics["metrics"])
         )
 
     # TODO: refactor this method
     def _convert_models_and_relationships(
-        self, models: List[Dict[str, Any]], relationships: List[Dict[str, Any]]
+        self,
+        models: List[Dict[str, Any]],
+        relationships: List[Dict[str, Any]],
+        column_indexing_batch_size: int,
     ) -> List[str]:
         ddl_commands = []
 
@@ -226,48 +244,54 @@ class DDLConverter:
                             comment
                             + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
                         )
-                    column_name = column["name"]
-                    column_type = column["type"]
-                    column_ddl = f"{comment}{column_name} {column_type}"
 
-                    # If column is a primary key
-                    if column_name == model.get("primaryKey", ""):
-                        column_ddl += " PRIMARY KEY"
-
-                    columns_ddl.append(column_ddl)
+                    columns_ddl.append(
+                        {
+                            "type": "COLUMN",
+                            "comment": comment,
+                            "name": column["name"],
+                            "data_type": column["type"],
+                            "is_primary_key": column["name"] == model["primaryKey"],
+                        }
+                    )
 
             # Add foreign key constraints based on relationships
             for relationship in relationships:
-                comment = f'-- {{"condition": {relationship["condition"]}, "joinType": {relationship["joinType"]}}}\n  '
-                if (
-                    table_name == relationship["models"][0]
-                    and relationship["joinType"].upper() == "MANY_TO_ONE"
-                ):
-                    related_table = relationship["models"][1]
-                    fk_column = relationship["condition"].split(" = ")[0].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(f"{comment}{fk_constraint}")
-                elif (
-                    table_name == relationship["models"][1]
-                    and relationship["joinType"].upper() == "ONE_TO_MANY"
-                ):
-                    related_table = relationship["models"][0]
-                    fk_column = relationship["condition"].split(" = ")[1].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(f"{comment}{fk_constraint}")
-                elif (
-                    table_name in relationship["models"]
-                    and relationship["joinType"].upper() == "ONE_TO_ONE"
-                ):
-                    index = relationship["models"].index(table_name)
-                    related_table = [
-                        m for m in relationship["models"] if m != table_name
-                    ][0]
-                    fk_column = (
-                        relationship["condition"].split(" = ")[index].split(".")[1]
+                condition = relationship.get("condition", "")
+                join_type = relationship.get("joinType", "")
+                models = relationship.get("models", [])
+
+                if len(models) == 2:
+                    comment = (
+                        f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
                     )
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    columns_ddl.append(f"{comment}{fk_constraint}")
+                    should_add_fk = False
+                    if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
+                        related_table = models[1]
+                        fk_column = condition.split(" = ")[0].split(".")[1]
+                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                        should_add_fk = True
+                    elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
+                        related_table = models[0]
+                        fk_column = condition.split(" = ")[1].split(".")[1]
+                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                        should_add_fk = True
+                    elif table_name in models and join_type.upper() == "ONE_TO_ONE":
+                        index = models.index(table_name)
+                        related_table = [m for m in models if m != table_name][0]
+                        fk_column = condition.split(" = ")[index].split(".")[1]
+                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                        should_add_fk = True
+
+                    if should_add_fk:
+                        columns_ddl.append(
+                            {
+                                "type": "FOREIGN_KEY",
+                                "comment": comment,
+                                "constraint": fk_constraint,
+                                "tables": models,
+                            }
+                        )
 
             if "properties" in model:
                 model["properties"]["alias"] = model["properties"].pop(
@@ -279,54 +303,156 @@ class DDLConverter:
             else:
                 comment = ""
 
-            create_table_ddl = (
-                f"{comment}CREATE TABLE {table_name} (\n  "
-                + ",\n  ".join(columns_ddl)
-                + "\n);"
+            ddl_commands.append(
+                {
+                    "name": table_name,
+                    "payload": str(
+                        {
+                            "type": "TABLE",
+                            "comment": comment,
+                            "name": table_name,
+                        }
+                    ),
+                }
             )
-            ddl_commands.append(create_table_ddl)
-
-        logger.debug(f"DDL Commands: {ddl_commands}")
+            column_ddl_commands = [
+                {
+                    "name": table_name,
+                    "payload": str(
+                        {
+                            "type": "TABLE_COLUMNS",
+                            "columns": columns_ddl[i : i + column_indexing_batch_size],
+                        }
+                    ),
+                }
+                for i in range(0, len(columns_ddl), column_indexing_batch_size)
+            ]
+            ddl_commands += column_ddl_commands
 
         return ddl_commands
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
-        def _format(view: Dict[str, Any]) -> str:
-            properties = view["properties"] if "properties" in view else ""
-            return f"/* {properties} */\nCREATE VIEW {view['name']}\nAS ({view['statement']})"
+        def _format(view: Dict[str, Any]) -> dict:
+            return {
+                "type": "VIEW",
+                "comment": f"/* {view['properties']} */\n"
+                if "properties" in view
+                else "",
+                "name": view["name"],
+                "statement": view["statement"],
+            }
 
-        return [_format(view) for view in views]
+        return [{"name": view["name"], "payload": str(_format(view))} for view in views]
 
     def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[str]:
         ddl_commands = []
 
         for metric in metrics:
-            table_name = metric["name"]
+            table_name = metric.get("name", "")
             columns_ddl = []
-            for dimension in metric["dimension"]:
-                column_name = dimension["name"]
-                column_type = dimension["type"]
+            for dimension in metric.get("dimension", []):
                 comment = "-- This column is a dimension\n  "
-                column_ddl = f"{comment}{column_name} {column_type}"
-                columns_ddl.append(column_ddl)
+                name = dimension.get("name", "")
+                columns_ddl.append(
+                    {
+                        "type": "COLUMN",
+                        "comment": comment,
+                        "name": name,
+                        "data_type": dimension.get("type", ""),
+                    }
+                )
 
-            for measure in metric["measure"]:
-                column_name = measure["name"]
-                column_type = measure["type"]
+            for measure in metric.get("measure", []):
                 comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
-                column_ddl = f"{comment}{column_name} {column_type}"
-                columns_ddl.append(column_ddl)
+                name = measure.get("name", "")
+                columns_ddl.append(
+                    {
+                        "type": "COLUMN",
+                        "comment": comment,
+                        "name": name,
+                        "data_type": measure.get("type", ""),
+                    }
+                )
 
             comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
-            create_table_ddl = (
-                f"{comment}CREATE TABLE {table_name} (\n  "
-                + ",\n  ".join(columns_ddl)
-                + "\n);"
+            ddl_commands.append(
+                {
+                    "name": table_name,
+                    "payload": str(
+                        {
+                            "type": "METRIC",
+                            "comment": comment,
+                            "name": table_name,
+                            "columns": columns_ddl,
+                        }
+                    ),
+                }
             )
 
-            ddl_commands.append(create_table_ddl)
-
         return ddl_commands
+
+
+@component
+class TableDescriptionConverter:
+    @component.output_types(documents=List[Document])
+    def run(self, mdl: Dict[str, Any], id: Optional[str] = None):
+        logger.info(
+            "Ask Indexing pipeline is writing new documents for table descriptions..."
+        )
+
+        logger.debug(f"original mdl_json: {mdl}")
+
+        table_descriptions = self._get_table_descriptions(mdl)
+
+        return {
+            "documents": [
+                Document(
+                    id=str(uuid.uuid4()),
+                    meta=(
+                        {"id": id, "type": "TABLE_DESCRIPTION"}
+                        if id
+                        else {"type": "TABLE_DESCRIPTION"}
+                    ),
+                    content=table_description,
+                )
+                for table_description in tqdm(
+                    table_descriptions,
+                    desc="indexing table descriptions into the table description store",
+                )
+            ]
+        }
+
+    def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[str]:
+        table_descriptions = []
+        mdl_data = [
+            {
+                "mdl_type": "MODEL",
+                "payload": mdl["models"],
+            },
+            {
+                "mdl_type": "METRIC",
+                "payload": mdl["metrics"],
+            },
+            {
+                "mdl_type": "VIEW",
+                "payload": mdl["views"],
+            },
+        ]
+
+        for data in mdl_data:
+            payload = data["payload"]
+            for unit in payload:
+                if name := unit.get("name", ""):
+                    table_description = {
+                        "name": name,
+                        "mdl_type": data["mdl_type"],
+                        "description": unit.get("properties", {}).get(
+                            "description", ""
+                        ),
+                    }
+                    table_descriptions.append(str(table_description))
+
+        return table_descriptions
 
 
 @component
@@ -370,30 +496,78 @@ def validate_mdl(
 
 @timer
 @observe(capture_input=False)
-def convert_to_ddl(
-    mdl: Dict[str, Any], ddl_converter: DDLConverter, id: Optional[str] = None
+def covert_to_table_descriptions(
+    mdl: Dict[str, Any],
+    table_description_converter: TableDescriptionConverter,
+    id: Optional[str] = None,
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
+        f"input in convert_to_table_descriptions: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return ddl_converter.run(mdl=mdl, id=id)
+    return table_description_converter.run(mdl=mdl, id=id)
 
 
 @async_timer
 @observe(capture_input=False, capture_output=False)
-async def embed_ddl(
-    convert_to_ddl: Dict[str, Any], ddl_embedder: Any
+async def embed_table_descriptions(
+    covert_to_table_descriptions: Dict[str, Any],
+    document_embedder: Any,
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input in embed_ddl: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
+        f"input(covert_to_table_descriptions) in embed_table_descriptions: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await ddl_embedder.run(documents=convert_to_ddl["documents"])
+
+    return await document_embedder.run(covert_to_table_descriptions["documents"])
 
 
 @async_timer
 @observe(capture_input=False)
-async def write_ddl(embed_ddl: Dict[str, Any], ddl_writer: DocumentWriter) -> None:
-    return await ddl_writer.run(documents=embed_ddl["documents"])
+async def write_table_description(
+    embed_table_descriptions: Dict[str, Any], table_description_writer: DocumentWriter
+) -> None:
+    return await table_description_writer.run(
+        documents=embed_table_descriptions["documents"]
+    )
+
+
+@timer
+@observe(capture_input=False)
+def convert_to_ddl(
+    mdl: Dict[str, Any],
+    ddl_converter: DDLConverter,
+    column_indexing_batch_size: int,
+    id: Optional[str] = None,
+) -> Dict[str, Any]:
+    logger.debug(
+        f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
+    )
+
+    return ddl_converter.run(
+        mdl=mdl,
+        column_indexing_batch_size=column_indexing_batch_size,
+        id=id,
+    )
+
+
+@async_timer
+@observe(capture_input=False, capture_output=False)
+async def embed_dbschema(
+    convert_to_ddl: Dict[str, Any],
+    document_embedder: Any,
+) -> Dict[str, Any]:
+    logger.debug(
+        f"input(convert_to_ddl) in embed_dbschema: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
+    )
+
+    return await document_embedder.run(documents=convert_to_ddl["documents"])
+
+
+@async_timer
+@observe(capture_input=False)
+async def write_dbschema(
+    embed_dbschema: Dict[str, Any], dbschema_writer: DocumentWriter
+) -> None:
+    return await dbschema_writer.run(documents=embed_dbschema["documents"])
 
 
 @timer
@@ -410,12 +584,12 @@ def convert_to_view(
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_view(
-    convert_to_view: Dict[str, Any], view_embedder: Any
+    convert_to_view: Dict[str, Any], document_embedder: Any
 ) -> Dict[str, Any]:
     logger.debug(
         f"input in embed_view: {orjson.dumps(convert_to_view, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await view_embedder.run(documents=convert_to_view["documents"])
+    return await document_embedder.run(documents=convert_to_view["documents"])
 
 
 @async_timer
@@ -432,23 +606,36 @@ class Indexing(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        column_indexing_batch_size: Optional[int] = 50,
     ) -> None:
-        ddl_store = document_store_provider.get_store()
+        dbschema_store = document_store_provider.get_store(dataset_name="db_schema")
         view_store = document_store_provider.get_store(dataset_name="view_questions")
+        table_description_store = document_store_provider.get_store(
+            dataset_name="table_descriptions"
+        )
 
-        self.cleaner = DocumentCleaner([ddl_store, view_store])
+        self.column_indexing_batch_size = column_indexing_batch_size
+        self.cleaner = DocumentCleaner(
+            [dbschema_store, view_store, table_description_store]
+        )
         self.validator = MDLValidator()
+        self.document_embedder = embedder_provider.get_document_embedder()
 
         self.ddl_converter = DDLConverter()
-        self.ddl_embedder = embedder_provider.get_document_embedder()
-        self.ddl_writer = AsyncDocumentWriter(
-            document_store=ddl_store,
+        self.dbschema_writer = AsyncDocumentWriter(
+            document_store=dbschema_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
+
         self.view_converter = ViewConverter()
-        self.view_embedder = embedder_provider.get_document_embedder()
         self.view_writer = AsyncDocumentWriter(
             document_store=view_store,
+            policy=DuplicatePolicy.OVERWRITE,
+        )
+
+        self.table_description_converter = TableDescriptionConverter()
+        self.table_description_writer = AsyncDocumentWriter(
+            document_store=table_description_store,
             policy=DuplicatePolicy.OVERWRITE,
         )
 
@@ -462,19 +649,21 @@ class Indexing(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["write_ddl", "write_view"],
+            ["write_dbschema", "write_view", "write_table_description"],
             output_file_path=f"{destination}/indexing.dot",
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
                 "cleaner": self.cleaner,
                 "validator": self.validator,
+                "document_embedder": self.document_embedder,
                 "ddl_converter": self.ddl_converter,
-                "ddl_embedder": self.ddl_embedder,
-                "ddl_writer": self.ddl_writer,
                 "view_converter": self.view_converter,
-                "view_embedder": self.view_embedder,
+                "table_description_converter": self.table_description_converter,
+                "dbschema_writer": self.dbschema_writer,
                 "view_writer": self.view_writer,
+                "table_description_writer": self.table_description_writer,
+                "column_indexing_batch_size": self.column_indexing_batch_size,
             },
             show_legend=True,
             orient="LR",
@@ -485,18 +674,20 @@ class Indexing(BasicPipeline):
     async def run(self, mdl_str: str, id: Optional[str] = None) -> Dict[str, Any]:
         logger.info("Document Indexing pipeline is running...")
         return await self._pipe.execute(
-            ["write_ddl", "write_view"],
+            ["write_dbschema", "write_view", "write_table_description"],
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
                 "cleaner": self.cleaner,
                 "validator": self.validator,
+                "document_embedder": self.document_embedder,
                 "ddl_converter": self.ddl_converter,
-                "ddl_embedder": self.ddl_embedder,
-                "ddl_writer": self.ddl_writer,
+                "table_description_converter": self.table_description_converter,
+                "dbschema_writer": self.dbschema_writer,
                 "view_converter": self.view_converter,
-                "view_embedder": self.view_embedder,
                 "view_writer": self.view_writer,
+                "table_description_writer": self.table_description_writer,
+                "column_indexing_batch_size": self.column_indexing_batch_size,
             },
         )
 

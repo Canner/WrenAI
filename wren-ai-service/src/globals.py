@@ -49,6 +49,9 @@ def init_globals(
     document_store_provider: DocumentStoreProvider,
     engine: Engine,
     should_force_deploy: Optional[str] = None,
+    column_indexing_batch_size: Optional[int] = 50,
+    table_retrieval_size: Optional[int] = 10,
+    table_column_retrieval_size: Optional[int] = 1000,
 ):
     global \
         INDEXING_SERVICE, \
@@ -58,7 +61,10 @@ def init_globals(
         SQL_REGENERATION_SERVICE
 
     if should_force_deploy:
-        document_store_provider.get_store(recreate_index=True)
+        document_store_provider.get_store(dataset_name="db_schema", recreate_index=True)
+        document_store_provider.get_store(
+            dataset_name="table_descriptions", recreate_index=True
+        )
         document_store_provider.get_store(
             dataset_name="view_questions", recreate_index=True
         )
@@ -68,6 +74,7 @@ def init_globals(
             "indexing": indexing.Indexing(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
+                column_indexing_batch_size=column_indexing_batch_size,
             ),
         },
     )
@@ -75,8 +82,11 @@ def init_globals(
     ASK_SERVICE = AskService(
         pipelines={
             "retrieval": ask_retrieval.Retrieval(
+                llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
+                table_retrieval_size=table_retrieval_size,
+                table_column_retrieval_size=table_column_retrieval_size,
             ),
             "historical_question": historical_question.HistoricalQuestion(
                 embedder_provider=embedder_provider,

@@ -4,7 +4,7 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
-from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.ask.followup_generation import FollowUpGeneration
 from src.pipelines.ask.generation import Generation
 from src.pipelines.ask.retrieval import Retrieval
@@ -48,7 +48,7 @@ def document_store_provider():
 @pytest.mark.asyncio
 async def test_clear_documents(mdl_str: str):
     _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
-    store = document_store_provider.get_store()
+    store = document_store_provider.get_store(dataset_name="db_schema")
 
     indexing_pipeline = Indexing(
         embedder_provider=embedder_provider,
@@ -57,7 +57,7 @@ async def test_clear_documents(mdl_str: str):
 
     await indexing_pipeline.run(mdl_str)
 
-    assert await store.count_documents() == 3
+    assert await store.count_documents() == 5
 
     await indexing_pipeline.run(
         """
@@ -95,7 +95,12 @@ async def test_indexing_pipeline(
 
     await indexing_pipeline.run(mdl_str)
 
-    assert await document_store_provider.get_store().count_documents() == 3
+    assert (
+        await document_store_provider.get_store(
+            dataset_name="db_schema"
+        ).count_documents()
+        == 5
+    )
     assert (
         await document_store_provider.get_store(
             dataset_name="view_questions",
@@ -106,10 +111,12 @@ async def test_indexing_pipeline(
 
 @pytest.mark.asyncio
 async def test_retrieval_pipeline(
+    llm_provider: LLMProvider,
     embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
 ):
     retrieval_pipeline = Retrieval(
+        llm_provider=llm_provider,
         embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,
     )
@@ -119,9 +126,9 @@ async def test_retrieval_pipeline(
     )
 
     assert retrieval_result is not None
-    assert len(retrieval_result["retrieval"]["documents"]) > 0
+    assert len(retrieval_result["construct_retrieval_results"]) > 0
 
-    GLOBAL_DATA["contexts"] = retrieval_result["retrieval"]["documents"]
+    GLOBAL_DATA["contexts"] = retrieval_result["construct_retrieval_results"]
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,6 @@ from typing import Any, Dict, List
 import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
-from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 
@@ -62,7 +61,7 @@ Proceed in a similar manner for the other queries.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
-    {{ document.content }}
+    {{ document }}
 {% endfor %}
 
 ### EXCLUDED STATEMETS ###
@@ -96,15 +95,13 @@ Let's think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
-    documents: List[Document],
+    documents: List[str],
     exclude: List[Dict],
     alert: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
-    logger.debug(
-        f"documents: {orjson.dumps(documents, option=orjson.OPT_INDENT_2).decode()}"
-    )
+    logger.debug(f"documents: {documents}")
     logger.debug(
         f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
     )
@@ -155,7 +152,7 @@ class Generation(BasicPipeline):
     def visualize(
         self,
         query: str,
-        contexts: List[Document],
+        contexts: List[str],
         exclude: List[Dict],
     ) -> None:
         destination = "outputs/pipelines/ask"
@@ -183,7 +180,7 @@ class Generation(BasicPipeline):
     async def run(
         self,
         query: str,
-        contexts: List[Document],
+        contexts: List[str],
         exclude: List[Dict],
         project_id: str | None = None,
     ):
