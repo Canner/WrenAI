@@ -85,13 +85,25 @@ class GenerationPostProcessor:
         replies: str,
     ):
         try:
-            data = orjson.loads(replies[0])["answer"]
+            data = orjson.loads(replies[0])
 
-            return {"results": {"answer": data, "error": ""}}
+            return {
+                "results": {
+                    "answer": data["answer"],
+                    "reasoning": data["reasoning"],
+                    "error": "",
+                }
+            }
         except Exception as e:
             logger.exception(f"Error in GenerationPostProcessor: {e}")
 
-            return {"results": {"answer": "", "error": str(e)}}
+            return {
+                "results": {
+                    "answer": "",
+                    "reasoning": "",
+                    "error": str(e),
+                }
+            }
 
 
 ## Start of Pipeline
