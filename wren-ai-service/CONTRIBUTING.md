@@ -4,7 +4,7 @@ Thank you for investing your time in contributing to our project! This document 
 
 ## New contributor guide
 
-- To get an overview of the project, please read the [concepts](https://docs.getwren.ai/concept/wren_ai_service).
+- To get an overview of the project, please read the [concepts](https://docs.getwren.ai/oss/concept/wren_ai_service).
 - To set up the project for local development, please read [Environment Setup](README.md#environment-setup) and [Start the service for development](README.md#start-the-service-for-development)
 
 ## Getting started
@@ -44,4 +44,5 @@ Once your PR is merged, your contributions will be worked on the next release.
 Now that you are part of the Canner community.
 
 ## How to add your preferred LLM, Embedder or Document Store
-- Please read [this documentation for further details](https://docs.getwren.ai/installation/custom_llm#adding-a-custom-llm-embedder-or-document-store-to-wren-ai).
+
+- Please read [this documentation for further details](https://docs.getwren.ai/oss/installation/custom_llm#adding-a-custom-llm-embedder-or-document-store-to-wren-ai).
