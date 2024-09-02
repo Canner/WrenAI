@@ -261,6 +261,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             )
             return
 
+        print(f"policy2: {policy}")
         document_objects = self._handle_duplicate_documents(
             documents=documents,
             index=self.index,
