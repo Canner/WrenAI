@@ -151,7 +151,7 @@ export default function AddCalculatedFieldModal(props: Props) {
             <LinkOutlined className="gray-6 mr-2" />
             <Typography.Link
               type="secondary"
-              href="https://docs.getwren.ai/guide/modeling/models#update-primary-key"
+              href="https://docs.getwren.ai/oss/guide/modeling/models#update-primary-key"
               target="_blank"
               rel="noopener noreferrer"
             >
