@@ -263,15 +263,11 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             )
             return
 
-        print(f"policy2: {policy}")
         document_objects = self._handle_duplicate_documents(
             documents=documents,
             index=self.index,
             policy=policy,
         )
-
-        print(f"write_batch_size: {self.write_batch_size}")
-        print(f"total documents: {len(document_objects)}")
 
         batched_documents = document_store.get_batches_from_generator(
             document_objects, self.write_batch_size

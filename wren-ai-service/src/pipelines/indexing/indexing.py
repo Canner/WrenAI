@@ -464,8 +464,6 @@ class AsyncDocumentWriter(DocumentWriter):
         if policy is None:
             policy = self.policy
 
-        print(f"policy: {policy}")
-
         documents_written = await self.document_store.write_documents(
             documents=documents, policy=policy
         )
