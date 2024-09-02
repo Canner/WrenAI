@@ -39,14 +39,14 @@ func evaluateTelemetryPreferences() (bool, error) {
 		return false, nil
 	}
 	fmt.Println("Wren AI relies on anonymous usage statistics to continuously improve.")
-	fmt.Println("You can opt out of sharing these statistics by manually adding flag `--disable-telemetry` as described at https://docs.getwren.ai/overview/telemetry")
+	fmt.Println("You can opt out of sharing these statistics by manually adding flag `--disable-telemetry` as described at https://docs.getwren.ai/oss/overview/telemetry")
 	return true, nil
 }
 
 func askForLLMProvider() (string, error) {
 	// let users know we're asking for a LLM provider
 	fmt.Println("Please provide the LLM provider you want to use")
-	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
+	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
 
 	prompt := promptui.Select{
 		Label: "Select an LLM provider",
@@ -118,7 +118,7 @@ func isEnvFileValidForCustomLLM(projectDir string) error {
 	envFilePath := path.Join(projectDir, ".env.ai")
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
-		errMessage := fmt.Sprintf("Please create a .env.ai file in %s first, more details at https://docs.getwren.ai/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
+		errMessage := fmt.Sprintf("Please create a .env.ai file in %s first, more details at https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
 		return errors.New(errMessage)
 	}
 
