@@ -56,7 +56,7 @@ Wren AI’s mission is to democratize data by bringing AI Agent with SQL ability
 
 ### 2. Generate SQL Queries With Context
 
-> With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
+> With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/oss/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
 
 ### 3. Get Insights Without Writing Code
 
@@ -129,12 +129,12 @@ Wren AI is currently in ***Beta Version***. The project team is actively working
 
 Using Wren AI is super simple, you can setup within 3 minutes, and start to interact with your own data!
 
-- Visit our [Installation Guide of Wren AI](http://docs.getwren.ai/installation).
-- Visit the [Usage Guides](http://docs.getwren.ai/guide/connect/overview) to learn more about how to use Wren AI.
+- Visit our [Installation Guide of Wren AI](http://docs.getwren.ai/oss/installation).
+- Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview) to learn more about how to use Wren AI.
 
 ## 📚 Documentation
 
-Visit [Wren AI documentation](https://docs.getwren.ai) to view the full documentation.
+Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction) to view the full documentation.
 
 ## ⭐️ Community
 
