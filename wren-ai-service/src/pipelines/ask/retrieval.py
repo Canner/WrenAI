@@ -133,7 +133,9 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
     }
 
     if id:
-        filters["conditions"].append({"field": "id", "operator": "==", "value": id})
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": id}
+        )
 
     return await table_retriever.run(
         query_embedding=embedding.get("embedding"),
@@ -168,7 +170,9 @@ async def dbschema_retrieval(
     }
 
     if id:
-        filters["conditions"].append({"field": "id", "operator": "==", "value": id})
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": id}
+        )
 
     results = await dbschema_retriever.run(
         query_embedding=embedding.get("embedding"), filters=filters
