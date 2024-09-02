@@ -268,6 +268,9 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             policy=policy,
         )
 
+        print(f"write_batch_size: {self.write_batch_size}")
+        print(f"total documents: {len(document_objects)}")
+
         batched_documents = document_store.get_batches_from_generator(
             document_objects, self.write_batch_size
         )
