@@ -253,6 +253,8 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             self.similarity,
             self.use_sparse_embeddings,
             self.sparse_idf,
+            self.on_disk,
+            self.payload_fields_to_index,
         )
 
         if len(documents) == 0:
