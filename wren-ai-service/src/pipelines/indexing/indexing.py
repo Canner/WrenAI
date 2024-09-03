@@ -45,7 +45,7 @@ class DocumentCleaner:
                 {
                     "operator": "AND",
                     "conditions": [
-                        {"field": "id", "operator": "==", "value": id},
+                        {"field": "project_id", "operator": "==", "value": id},
                     ],
                 }
                 if id
@@ -115,7 +115,7 @@ class ViewConverter:
             "documents": [
                 Document(
                     id=str(uuid.uuid4()),
-                    meta={"id": id} if id else {},
+                    meta={"project_id": id} if id else {},
                     content=converted_view,
                 )
                 for converted_view in tqdm(
@@ -149,7 +149,7 @@ class DDLConverter:
                     id=str(uuid.uuid4()),
                     meta=(
                         {
-                            "id": id,
+                            "project_id": id,
                             "type": "TABLE_SCHEMA",
                             "name": ddl_command["name"],
                         }
@@ -409,7 +409,7 @@ class TableDescriptionConverter:
                 Document(
                     id=str(uuid.uuid4()),
                     meta=(
-                        {"id": id, "type": "TABLE_DESCRIPTION"}
+                        {"project_id": id, "type": "TABLE_DESCRIPTION"}
                         if id
                         else {"type": "TABLE_DESCRIPTION"}
                     ),
