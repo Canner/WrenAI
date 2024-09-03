@@ -1,4 +1,3 @@
-import ast
 import logging
 import sys
 from pathlib import Path
@@ -26,10 +25,12 @@ class ScoreFilter:
     @component.output_types(
         documents=List[Document],
     )
-    def run(self, documents: List[Document], score: float = 0.8):
+    def run(self, documents: List[Document], score: float = 0.9):
         return {
-            "documents": list(
-                filter(lambda document: document.score >= score, documents)
+            "documents": sorted(
+                filter(lambda document: document.score >= score, documents),
+                key=lambda document: document.score,
+                reverse=True,
             )
         }
 
@@ -44,12 +45,11 @@ class OutputFormatter:
         logger.debug(f"historical_question_output_formatter: {documents}")
 
         for doc in documents:
-            content = ast.literal_eval(doc.content)
             formatted = {
-                "question": content.get("question"),
-                "summary": content.get("summary"),
-                "statement": content.get("statement"),
-                "viewId": content.get("viewId"),
+                "question": doc.content,
+                "summary": doc.meta.get("summary"),
+                "statement": doc.meta.get("statement"),
+                "viewId": doc.meta.get("viewId"),
             }
             list.append(formatted)
 

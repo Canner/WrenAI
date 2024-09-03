@@ -31,14 +31,12 @@ def test_single_view():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.content == str(
-        {
-            "question": "How many books are there?",
-            "summary": "Retrieve the number of books",
-            "statement": "SELECT * FROM book",
-            "viewId": "fake-id-1",
-        }
-    )
+    assert document.meta == {
+        "summary": "Retrieve the number of books",
+        "statement": "SELECT * FROM book",
+        "viewId": "fake-id-1",
+    }
+    assert document.content == "How many books are there?"
 
 
 def test_view_missing_properties():
@@ -56,14 +54,12 @@ def test_view_missing_properties():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.content == str(
-        {
-            "question": "",
-            "summary": "",
-            "statement": "SELECT * FROM book",
-            "viewId": "",
-        }
-    )
+    assert document.meta == {
+        "summary": "",
+        "statement": "SELECT * FROM book",
+        "viewId": "",
+    }
+    assert document.content == ""
 
 
 def test_view_missing_question():
@@ -85,14 +81,12 @@ def test_view_missing_question():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.content == str(
-        {
-            "question": "",
-            "summary": "Retrieve the number of books",
-            "statement": "SELECT * FROM book",
-            "viewId": "fake-id-1",
-        }
-    )
+    assert document.meta == {
+        "summary": "Retrieve the number of books",
+        "statement": "SELECT * FROM book",
+        "viewId": "fake-id-1",
+    }
+    assert document.content == ""
 
 
 def test_view_missing_summary():
@@ -114,14 +108,12 @@ def test_view_missing_summary():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.content == str(
-        {
-            "question": "How many books are there?",
-            "summary": "",
-            "statement": "SELECT * FROM book",
-            "viewId": "fake-id-1",
-        }
-    )
+    assert document.meta == {
+        "summary": "",
+        "statement": "SELECT * FROM book",
+        "viewId": "fake-id-1",
+    }
+    assert document.content == "How many books are there?"
 
 
 def test_view_missing_id():
@@ -143,14 +135,12 @@ def test_view_missing_id():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.content == str(
-        {
-            "question": "How many books are there?",
-            "summary": "Retrieve the number of books",
-            "statement": "SELECT * FROM book",
-            "viewId": "",
-        }
-    )
+    assert document.meta == {
+        "summary": "Retrieve the number of books",
+        "statement": "SELECT * FROM book",
+        "viewId": "",
+    }
+    assert document.content == "How many books are there?"
 
 
 def test_multi_views():
@@ -182,21 +172,17 @@ def test_multi_views():
     assert len(actual["documents"]) == 2
 
     document_1: Document = actual["documents"][0]
-    assert document_1.content == str(
-        {
-            "question": "How many books are there?",
-            "summary": "Retrieve the number of books",
-            "statement": "SELECT * FROM book",
-            "viewId": "fake-id-1",
-        }
-    )
+    assert document_1.meta == {
+        "summary": "Retrieve the number of books",
+        "statement": "SELECT * FROM book",
+        "viewId": "fake-id-1",
+    }
+    assert document_1.content == "How many books are there?"
 
     document_2: Document = actual["documents"][1]
-    assert document_2.content == str(
-        {
-            "question": "How many books are there?",
-            "summary": "Retrieve the number of books",
-            "statement": "SELECT * FROM book",
-            "viewId": "fake-id-2",
-        }
-    )
+    assert document_2.meta == {
+        "summary": "Retrieve the number of books",
+        "statement": "SELECT * FROM book",
+        "viewId": "fake-id-2",
+    }
+    assert document_2.content == "How many books are there?"

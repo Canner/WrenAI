@@ -98,25 +98,31 @@ class ViewConverter:
 
     @component.output_types(documents=List[Document])
     def run(self, mdl: Dict[str, Any], id: Optional[str] = None) -> None:
-        def _format(view: Dict[str, Any]) -> List[str]:
+        def _get_content(view: Dict[str, Any]) -> str:
             properties = view.get("properties", {})
-            return str(
-                {
-                    "question": properties.get("question", ""),
-                    "summary": properties.get("summary", ""),
-                    "statement": view.get("statement", ""),
-                    "viewId": properties.get("viewId", ""),
-                }
-            )
+            return str(properties.get("question", ""))
 
-        converted_views = [_format(view) for view in mdl["views"]]
+        def _get_meta(view: Dict[str, Any]) -> Dict[str, Any]:
+            properties = view.get("properties", {})
+            return {
+                "summary": properties.get("summary", ""),
+                "statement": view.get("statement", ""),
+                "viewId": properties.get("viewId", ""),
+            }
+
+        converted_views = [
+            {"content": _get_content(view), "meta": _get_meta(view)}
+            for view in mdl["views"]
+        ]
 
         return {
             "documents": [
                 Document(
                     id=str(uuid.uuid4()),
-                    meta={"project_id": id} if id else {},
-                    content=converted_view,
+                    meta={"project_id": id, **converted_view["meta"]}
+                    if id
+                    else {**converted_view["meta"]},
+                    content=converted_view["content"],
                 )
                 for converted_view in tqdm(
                     converted_views,
