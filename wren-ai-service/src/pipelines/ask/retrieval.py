@@ -295,7 +295,7 @@ class Retrieval(BasicPipeline):
             top_k=table_retrieval_size,
         )
         self._dbschema_retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store(dataset_name="db_schema"),
+            document_store_provider.get_store(),
             top_k=table_column_retrieval_size,
         )
         self.prompt_builder = PromptBuilder(
