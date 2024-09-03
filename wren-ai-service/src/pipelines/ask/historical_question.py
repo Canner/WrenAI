@@ -64,7 +64,7 @@ async def count_documents(store: DocumentStore, id: Optional[str] = None) -> int
         {
             "operator": "AND",
             "conditions": [
-                {"field": "id", "operator": "==", "value": id},
+                {"field": "project_id", "operator": "==", "value": id},
             ],
         }
         if id
@@ -92,7 +92,7 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
             {
                 "operator": "AND",
                 "conditions": [
-                    {"field": "id", "operator": "==", "value": id},
+                    {"field": "project_id", "operator": "==", "value": id},
                 ],
             }
             if id
