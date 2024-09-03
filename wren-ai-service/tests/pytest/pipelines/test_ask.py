@@ -48,7 +48,7 @@ def document_store_provider():
 @pytest.mark.asyncio
 async def test_clear_documents(mdl_str: str):
     _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
-    store = document_store_provider.get_store(dataset_name="db_schema")
+    store = document_store_provider.get_store()
 
     indexing_pipeline = Indexing(
         embedder_provider=embedder_provider,
@@ -95,12 +95,7 @@ async def test_indexing_pipeline(
 
     await indexing_pipeline.run(mdl_str)
 
-    assert (
-        await document_store_provider.get_store(
-            dataset_name="db_schema"
-        ).count_documents()
-        == 5
-    )
+    assert await document_store_provider.get_store().count_documents() == 5
     assert (
         await document_store_provider.get_store(
             dataset_name="view_questions",
