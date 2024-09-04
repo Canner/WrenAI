@@ -122,10 +122,8 @@ class AskService:
         results = {
             "ask_result": {},
             "metadata": {
-                "error": {
-                    "type": "",
-                    "message": "",
-                },
+                "error_type": "",
+                "error_message": "",
             },
         }
 
@@ -161,7 +159,7 @@ class AskService:
                             message="No relevant data",
                         ),
                     )
-                    results["metadata"]["error"]["type"] = "NO_RELEVANT_DATA"
+                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     return results
 
             if not self._is_stopped(query_id):
@@ -276,7 +274,7 @@ class AskService:
                             message="No relevant SQL",
                         ),
                     )
-                    results["metadata"]["error"]["type"] = "NO_RELEVANT_SQL"
+                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                     return results
 
                 api_results = [
@@ -316,8 +314,8 @@ class AskService:
                 ),
             )
 
-            results["metadata"]["error"]["type"] = "OTHERS"
-            results["metadata"]["error"]["message"] = str(e)
+            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error_message"] = str(e)
             return results
 
     def stop_ask(

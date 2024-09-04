@@ -58,11 +58,9 @@ class IndexingService:
     ):
         results = {
             "metadata": {
-                "error": {
-                    "type": "",
-                    "message": "",
-                },
-            }
+                "error_type": "",
+                "error_message": "",
+            },
         }
 
         try:
@@ -87,8 +85,8 @@ class IndexingService:
                 error=f"Failed to prepare semantics: {e}",
             )
 
-            results["metadata"]["error"]["type"] = "INDEXING_FAILED"
-            results["metadata"]["error"]["message"] = str(e)
+            results["metadata"]["error_type"] = "INDEXING_FAILED"
+            results["metadata"]["error_message"] = str(e)
 
         return results
 
