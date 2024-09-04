@@ -120,7 +120,7 @@ class AskDetailsService:
                         "cte_name": "",
                     }
                 ]
-                results["metadata"]["error"]["type"] = "SQL_BREAKDOWN_FAILED"
+                results["metadata"]["error_type"] = "SQL_BREAKDOWN_FAILED"
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="finished",

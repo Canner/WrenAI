@@ -103,8 +103,8 @@ class SqlAnswerService:
                     ),
                 )
 
-                results["metadata"]["error"]["type"] = "OTHERS"
-                results["metadata"]["error"]["message"] = api_results["error"]
+                results["metadata"]["error_type"] = "OTHERS"
+                results["metadata"]["error_message"] = api_results["error"]
 
             results["sql_answer_result"] = {
                 "answer": api_results["answer"],
@@ -124,8 +124,8 @@ class SqlAnswerService:
                 ),
             )
 
-            results["metadata"]["error"]["type"] = "OTHERS"
-            results["metadata"]["error"]["message"] = str(e)
+            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error_message"] = str(e)
             return results
 
     def get_sql_answer_result(
