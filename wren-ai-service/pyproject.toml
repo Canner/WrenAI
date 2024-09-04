@@ -32,6 +32,7 @@ sqlglot = "==25.18.0"
 pre-commit = "==3.7.1"
 streamlit = "==1.37.0"
 watchdog = "==4.0.0"
+pandas = "==2.2.2"
 
 [tool.poetry.group.eval.dependencies]
 tomlkit = "==0.13.0"
