@@ -79,6 +79,7 @@ class AskDetailsService:
             "ask_details_result": {},
             "metadata": {
                 "error_type": "",
+                "error_message": "",
             },
         }
 
@@ -130,7 +131,9 @@ class AskDetailsService:
         except Exception as e:
             logger.exception(f"ask-details pipeline - OTHERS: {e}")
 
-            self._ask_details_results[query_id] = AskDetailsResultResponse(
+            self._ask_details_results[
+                ask_details_request.query_id
+            ] = AskDetailsResultResponse(
                 status="failed",
                 error=AskDetailsResultResponse.AskDetailsError(
                     code="OTHERS",
@@ -139,6 +142,7 @@ class AskDetailsService:
             )
 
             results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error_message"] = str(e)
             return results
 
     def get_ask_details_result(
