@@ -78,7 +78,7 @@ def sql_regeneration_prompt(
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def sql_regeneration_generate(
+async def generate_sql_regeneration(
     sql_regeneration_prompt: dict,
     sql_regeneration_generator: Any,
 ) -> dict:
@@ -93,15 +93,15 @@ async def sql_regeneration_generate(
 @async_timer
 @observe(capture_input=False)
 async def sql_regeneration_post_process(
-    sql_regeneration_generate: dict,
+    generate_sql_regeneration: dict,
     sql_regeneration_post_processor: GenerationPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
-        f"sql_regeneration_generate: {orjson.dumps(sql_regeneration_generate, option=orjson.OPT_INDENT_2).decode()}"
+        f"generate_sql_regeneration: {orjson.dumps(generate_sql_regeneration, option=orjson.OPT_INDENT_2).decode()}"
     )
     return await sql_regeneration_post_processor.run(
-        replies=sql_regeneration_generate.get("replies"),
+        replies=generate_sql_regeneration.get("replies"),
         project_id=project_id,
     )
 

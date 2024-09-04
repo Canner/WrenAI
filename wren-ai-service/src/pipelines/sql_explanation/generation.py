@@ -469,7 +469,7 @@ def prompts(
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generates(prompts: List[dict], generator: Any) -> List[dict]:
+async def generate_sql_explanation(prompts: List[dict], generator: Any) -> List[dict]:
     logger.debug(
         f"prompts: {orjson.dumps(prompts, option=orjson.OPT_INDENT_2).decode()}"
     )
@@ -484,19 +484,19 @@ async def generates(prompts: List[dict], generator: Any) -> List[dict]:
 @timer
 @observe(capture_input=False)
 def post_process(
-    generates: List[dict],
+    generate_sql_explanation: List[dict],
     preprocess: dict,
     post_processor: GenerationPostProcessor,
 ) -> dict:
     logger.debug(
-        f"generates: {orjson.dumps(generates, option=orjson.OPT_INDENT_2).decode()}"
+        f"generate_sql_explanation: {orjson.dumps(generate_sql_explanation, option=orjson.OPT_INDENT_2).decode()}"
     )
     logger.debug(
         f"preprocess: {orjson.dumps(preprocess, option=orjson.OPT_INDENT_2).decode()}"
     )
 
     return post_processor.run(
-        generates,
+        generate_sql_explanation,
         preprocess["preprocessed_sql_analysis_results"],
     )
 

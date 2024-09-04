@@ -140,7 +140,7 @@ def prompt(
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generate(prompt: dict, generator: Any) -> dict:
+async def generate_sql_in_followup(prompt: dict, generator: Any) -> dict:
     logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
@@ -148,14 +148,16 @@ async def generate(prompt: dict, generator: Any) -> dict:
 @async_timer
 @observe(capture_input=False)
 async def post_process(
-    generate: dict,
+    generate_sql_in_followup: dict,
     post_processor: GenerationPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
-        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
+        f"generate_sql_in_followup: {orjson.dumps(generate_sql_in_followup, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await post_processor.run(generate.get("replies"), project_id=project_id)
+    return await post_processor.run(
+        generate_sql_in_followup.get("replies"), project_id=project_id
+    )
 
 
 ## End of Pipeline
