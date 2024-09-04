@@ -66,7 +66,7 @@ class GenerationPostProcessor:
             quoted_sql, no_error = add_quotes(result["sql"])
 
             if no_error:
-                status, response = await self._engine.execute_sql(
+                status, error = await self._engine.dry_run_sql(
                     quoted_sql, session, project_id=project_id
                 )
 
@@ -81,7 +81,7 @@ class GenerationPostProcessor:
                         {
                             "sql": quoted_sql,
                             "type": "DRY_RUN",
-                            "error": response,
+                            "error": error,
                         }
                     )
             else:

@@ -324,15 +324,6 @@ def show_asks_details_results(query: str):
                         )
                     )
 
-            st.markdown("### Answer")
-            st.markdown(
-                get_sql_answer(
-                    st.session_state["chosen_query_result"]["query"],
-                    st.session_state["chosen_query_result"]["sql"],
-                    st.session_state["chosen_query_result"]["summary"],
-                )
-            )
-
         st.markdown("---")
         st.button(
             label="SQL Explanation",
@@ -661,44 +652,6 @@ def ask(query: str, query_history: Optional[dict] = None):
     elif asks_status == "failed":
         st.error(
             f'An error occurred while processing the query: {asks_status_response.json()['error']}',
-            icon="🚨",
-        )
-
-
-def get_sql_answer(
-    query: str,
-    sql: str,
-    sql_summary: str,
-):
-    sql_answer_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answer",
-        json={
-            "query": query,
-            "sql": sql,
-            "sql_summary": sql_summary,
-        },
-    )
-
-    assert sql_answer_response.status_code == 200
-    query_id = sql_answer_response.json()["query_id"]
-    sql_answer_status = None
-
-    while not sql_answer_status or (
-        sql_answer_status != "finished" and sql_answer_status != "failed"
-    ):
-        sql_answer_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answer/{query_id}/result"
-        )
-        assert sql_answer_status_response.status_code == 200
-        sql_answer_status = sql_answer_status_response.json()["status"]
-        st.toast(f"The query processing status: {sql_answer_status}")
-        time.sleep(POLLING_INTERVAL)
-
-    if sql_answer_status == "finished":
-        return sql_answer_status_response.json()["response"]
-    elif sql_answer_status == "failed":
-        st.error(
-            f'An error occurred while processing the query: {sql_answer_status_response.json()['error']}',
             icon="🚨",
         )
 
