@@ -7,7 +7,7 @@
     WREN_AI_SERVICE_PORT: "5555"
 
     #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
-    WREN_PRODUCT_VERSION: "0.8.0-rc.3"
+    WREN_PRODUCT_VERSION: "0.8.0"
     #fix:
     WREN_ENGINE_VERSION: "0.9.2"
     WREN_AI_SERVICE_VERSION: "0.8.6"
