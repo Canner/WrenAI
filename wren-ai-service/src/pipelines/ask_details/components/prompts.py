@@ -13,8 +13,9 @@ The final step intentionally lacks a CTE name to simulate a final execution with
 - ALWAYS SHOW alias for columns and tables such as SELECT [column_name] AS [alias_column_name].
 - MUST USE alias from the original SQL query.
 
-### SUMMARY INSTRUCTIONS ###
-- MUST BE in the same language as the user's question.
+### SUMMARY AND DESCRIPTION GENERATION INSTRUCTIONS ###
+- MUST BE in the same language as the user's question
+- PUT special care on whether it's traditional Chinese or simplified Chinese.
 - MUST BE human-readable and easy to understand.
 - MUST BE concise and to the point.
 
