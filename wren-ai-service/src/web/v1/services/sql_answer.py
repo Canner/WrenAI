@@ -62,9 +62,12 @@ class SqlAnswerService:
         sql_answer_request: SqlAnswerRequest,
     ):
         results = {
-            "sql_answer_result": {},
+            "sql_answer_result": "",
             "metadata": {
-                "error_type": "",
+                "error": {
+                    "type": "",
+                    "message": "",
+                }
             },
         }
 
@@ -85,12 +88,23 @@ class SqlAnswerService:
                 sql_summary=sql_answer_request.sql_summary,
                 project_id=sql_answer_request.thread_id,
             )
-            answer = data["generate_answer"]
+            results = data["post_process"]["results"]
+            if answer := results["answer"]:
+                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
+                    status="finished",
+                    response=answer,
+                )
+            else:
+                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
+                    status="failed",
+                    error=SqlAnswerResultResponse.SqlAnswerError(
+                        code="OTHERS",
+                        message=results["error"],
+                    ),
+                )
 
-            self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="finished",
-                response=answer,
-            )
+                results["metadata"]["error"]["type"] = "OTHERS"
+                results["metadata"]["error"]["message"] = results["error"]
 
             results["sql_answer_result"] = answer
             return results
@@ -107,7 +121,8 @@ class SqlAnswerService:
                 ),
             )
 
-            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error"]["type"] = "OTHERS"
+            results["metadata"]["error"]["message"] = str(e)
             return results
 
     def get_sql_answer_result(

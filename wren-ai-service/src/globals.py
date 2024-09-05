@@ -120,6 +120,7 @@ def init_globals(
     SQL_ANSWER_SERVICE = SqlAnswerService(
         pipelines={
             "generation": sql_answer_generation.Generation(
+                llm_provider=llm_provider,
                 engine=engine,
             )
         },
