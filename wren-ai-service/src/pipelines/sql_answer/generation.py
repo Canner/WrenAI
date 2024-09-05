@@ -22,6 +22,19 @@ sql_to_answer_system_prompt = """
 """
 
 sql_to_answer_user_prompt_template = """
+User's question: {{ query }}
+SQL: {{ sql }}
+SQL summary: {{ sql_summary }}
+Data: {{ sql_data }}
+
+Answer the user's question based on the data, sql and sql summary.
+The answer should be a short and concise response to the user's question.
+
+Return the output in the following JSON format:
+
+{
+    "answer": "The answer to the user's question",
+}
 """
 
 
@@ -59,7 +72,7 @@ class GenerationPostProcessor:
         replies: str,
     ):
         try:
-            data = orjson.loads(replies[0])["results"]
+            data = orjson.loads(replies[0])["answer"]
 
             return {"results": {"answer": data, "error": ""}}
         except Exception as e:
@@ -87,7 +100,7 @@ def prompt(
     sql_summary: str,
     execute_sql: dict,
     prompt_builder: PromptBuilder,
-) -> str:
+) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
     logger.debug(f"sql_summary: {sql_summary}")
@@ -199,7 +212,9 @@ if __name__ == "__main__":
         engine=engine,
     )
 
-    pipeline.visualize("SELECT * FROM table_name")
-    async_validate(lambda: pipeline.run("SELECT * FROM table_name"))
+    pipeline.visualize("query", "SELECT * FROM table_name", "sql summary")
+    async_validate(
+        lambda: pipeline.run("query", "SELECT * FROM table_name", "sql summary")
+    )
 
     langfuse_context.flush()
