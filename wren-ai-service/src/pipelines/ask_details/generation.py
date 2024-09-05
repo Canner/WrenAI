@@ -33,13 +33,20 @@ SQL query: {{ sql }}
 The final answer must be a valid JSON format as following:
 
 {
+    "language": <LANGUAGE_IN_USER_QUESTION_STRING>,
     "description": <SHORT_SQL_QUERY_DESCRIPTION>,
     "steps: [
         {
             "sql": <SQL_QUERY_STRING_1>,
-            "summary": <SUMMARY_STRING_1>,
+            "summary": <SUMMARY_STRING_USING_SAME_LANGUAGE_AS_USER_QUESTION_1>,
             "cte_name": <CTE_NAME_STRING_1>
-        }
+        },
+        {
+            "sql": <SQL_QUERY_STRING_2>,
+            "summary": <SUMMARY_STRING_USING_SAME_LANGUAGE_AS_USER_QUESTION_2>,
+            "cte_name": <CTE_NAME_STRING_2>
+        },
+        ...
     ] # a list of steps
 }
 

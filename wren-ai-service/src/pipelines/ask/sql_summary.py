@@ -23,19 +23,27 @@ You are a great data analyst. You are now given a task to summarize a list SQL q
 You will be given a list of SQL queries and a user's question.
 
 ### INSTRUCTIONS ###
+- SQL query summary must be in the same language as the user's question.
+- PUT special care on whether it's traditional Chinese or simplified Chinese.
 - SQL query summary must be within 10-20 words.
 - SQL query summary must be human-readable and easy to understand.
 - SQL query summary must be concise and to the point.
-- SQL query summary must be in the same language as the user's question.
 
 ### OUTPUT FORMAT ###
 Please return the result in the following JSON format:
 
 {
+    "language": <LANGUAGE_IN_USER_QUESTION_STRING>,
     "sql_summary_results": [
-        {"summary": <SQL_QUERY_SUMMARY_1>},
-        {"summary": <SQL_QUERY_SUMMARY_2>},
-        {"summary": <SQL_QUERY_SUMMARY_3>}
+        {
+            "summary": <SQL_QUERY_SUMMARY_USING_SAME_LANGUAGE_AS_USER_QUESTION_1>
+        {
+            "summary": <SQL_QUERY_SUMMARY_USING_SAME_LANGUAGE_AS_USER_QUESTION_2>
+        },
+        {
+            "summary": <SQL_QUERY_SUMMARY_USING_SAME_LANGUAGE_AS_USER_QUESTION_3>
+        },
+        ...
     ]
 }
 """
