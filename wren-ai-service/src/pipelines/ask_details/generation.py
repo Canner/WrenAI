@@ -26,6 +26,7 @@ logger = logging.getLogger("wren-ai-service")
 
 ask_details_user_prompt_template = """
 ### INPUT ###
+User's Question: {{ query }}
 SQL query: {{ sql }}
 
 ### FINAL ANSWER FORMAT ###
@@ -49,9 +50,10 @@ Let's think step by step.
 ## Start of Pipeline
 @timer
 @observe(capture_input=False)
-def prompt(sql: str, prompt_builder: PromptBuilder) -> dict:
+def prompt(query: str, sql: str, prompt_builder: PromptBuilder) -> dict:
+    logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
-    return prompt_builder.run(sql=sql)
+    return prompt_builder.run(query=query, sql=sql)
 
 
 @async_timer
@@ -95,7 +97,7 @@ class Generation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, sql: str, project_id: str | None = None) -> None:
+    def visualize(self, query: str, sql: str, project_id: str | None = None) -> None:
         destination = "outputs/pipelines/ask_details"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -104,6 +106,7 @@ class Generation(BasicPipeline):
             ["post_process"],
             output_file_path=f"{destination}/generation.dot",
             inputs={
+                "query": query,
                 "sql": sql,
                 "generator": self.generator,
                 "prompt_builder": self.prompt_builder,
@@ -116,11 +119,12 @@ class Generation(BasicPipeline):
 
     @async_timer
     @observe(name="Ask_Details Generation")
-    async def run(self, sql: str, project_id: str | None = None) -> dict:
+    async def run(self, query: str, sql: str, project_id: str | None = None) -> dict:
         logger.info("Ask_Details Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
+                "query": query,
                 "sql": sql,
                 "generator": self.generator,
                 "prompt_builder": self.prompt_builder,
@@ -146,7 +150,7 @@ if __name__ == "__main__":
         engine=engine,
     )
 
-    pipeline.visualize("SELECT * FROM table_name")
-    async_validate(lambda: pipeline.run("SELECT * FROM table_name"))
+    pipeline.visualize("", "SELECT * FROM table_name")
+    async_validate(lambda: pipeline.run("", "SELECT * FROM table_name"))
 
     langfuse_context.flush()

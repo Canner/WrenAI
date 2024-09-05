@@ -22,6 +22,11 @@ sql_summary_system_prompt = """
 You are a great data analyst. You are now given a task to summarize a list SQL queries in a human-readable format where each summary should be within 10-20 words.
 You will be given a list of SQL queries and a user's question.
 
+### INSTRUCTIONS ###
+- SQL query summary must be within 10-20 words.
+- SQL query summary must be human-readable and easy to understand.
+- SQL query summary must be concise and to the point.
+- SQL query summary must be in the same language as the user's question.
 
 ### OUTPUT FORMAT ###
 Please return the result in the following JSON format:
