@@ -7,12 +7,10 @@ TEXT_TO_SQL_RULES = """
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 - DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
+- ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-
-- SHOWING ALIAS FOR COLUMNS AND TABLES IS MANDATORY.
-  - ALWAYS SHOW alias for columns and tables such as SELECT [column_name] AS [alias_column_name].
-  - MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
+- MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
   - EXAMPLE
     DATABASE SCHEMA
     /* {"displayName":"_orders","description":"A model representing the orders data."} */
