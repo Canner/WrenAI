@@ -22,7 +22,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION        string = "0.8.0-rc.1"
+	WREN_PRODUCT_VERSION        string = "0.8.0-rc.2"
 	DOCKER_COMPOSE_YAML_URL     string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_LLM_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.llm.yaml"
 	DOCKER_COMPOSE_ENV_URL      string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
