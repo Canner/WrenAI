@@ -28,5 +28,6 @@ async def test_generation_pipeline_producing_executable_sqls():
 
     for candidate_sql_query in candidate_sql_queries:
         assert await generation_pipeline.run(
+            "",
             candidate_sql_query,
         )
