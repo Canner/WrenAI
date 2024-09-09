@@ -2,6 +2,7 @@ TEXT_TO_SQL_RULES = """
 ### ALERT ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
+- ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
