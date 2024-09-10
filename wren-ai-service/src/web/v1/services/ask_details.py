@@ -1,6 +1,7 @@
 import logging
 from typing import List, Literal, Optional
 
+from cachetools import TTLCache
 from haystack import Pipeline
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -66,7 +67,7 @@ class AskDetailsService:
         pipelines: dict[str, Pipeline],
     ):
         self._pipelines = pipelines
-        self._ask_details_results = {}
+        self._ask_details_results = TTLCache(maxsize=1000, ttl=60)
 
     @async_timer
     @observe(name="Ask Details(Breakdown SQL)")

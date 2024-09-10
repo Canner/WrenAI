@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
 
+from cachetools import TTLCache
 from haystack import Pipeline
 from pydantic import BaseModel
 
@@ -56,7 +57,9 @@ class SQLExplanationResultResponse(BaseModel):
 class SQLExplanationService:
     def __init__(self, pipelines: dict[str, Pipeline]):
         self._pipelines = pipelines
-        self.sql_explanation_results: dict[str, SQLExplanationResultResponse] = {}
+        self.sql_explanation_results: dict[
+            str, SQLExplanationResultResponse
+        ] = TTLCache(maxsize=1000, ttl=60)
 
     @async_timer
     async def sql_explanation(self, sql_explanation_request: SQLExplanationRequest):

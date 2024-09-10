@@ -2,6 +2,7 @@ import logging
 from typing import List, Literal, Optional
 
 import sqlparse
+from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -97,7 +98,7 @@ class AskService:
         pipelines: dict[str, BasicPipeline],
     ):
         self._pipelines = pipelines
-        self._ask_results = {}
+        self._ask_results = TTLCache(maxsize=100, ttl=20)
 
     def _is_stopped(self, query_id: str):
         if (

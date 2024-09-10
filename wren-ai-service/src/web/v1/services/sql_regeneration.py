@@ -1,6 +1,7 @@
 import logging
 from typing import List, Literal, Optional
 
+from cachetools import TTLCache
 from haystack import Pipeline
 from pydantic import BaseModel
 
@@ -83,7 +84,9 @@ class SQLRegenerationResultResponse(BaseModel):
 class SQLRegenerationService:
     def __init__(self, pipelines: dict[str, Pipeline]):
         self._pipelines = pipelines
-        self.sql_regeneration_results: dict[str, SQLRegenerationResultResponse] = {}
+        self.sql_regeneration_results: dict[
+            str, SQLRegenerationResultResponse
+        ] = TTLCache(maxsize=1000, ttl=60)
 
     @async_timer
     async def sql_regeneration(
