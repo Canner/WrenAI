@@ -52,6 +52,7 @@ def init_globals(
     column_indexing_batch_size: Optional[int] = 50,
     table_retrieval_size: Optional[int] = 10,
     table_column_retrieval_size: Optional[int] = 1000,
+    query_cache: Optional[dict] = {},
 ):
     global \
         INDEXING_SERVICE, \
@@ -77,6 +78,7 @@ def init_globals(
                 column_indexing_batch_size=column_indexing_batch_size,
             ),
         },
+        **query_cache,
     )
 
     ASK_SERVICE = AskService(
@@ -108,6 +110,7 @@ def init_globals(
                 llm_provider=llm_provider,
             ),
         },
+        **query_cache,
     )
 
     ASK_DETAILS_SERVICE = AskDetailsService(
@@ -117,6 +120,7 @@ def init_globals(
                 engine=engine,
             ),
         },
+        **query_cache,
     )
 
     SQL_EXPLANATION_SERVICE = SQLExplanationService(
@@ -125,6 +129,7 @@ def init_globals(
                 llm_provider=llm_provider,
             )
         }
+        ** query_cache,
     )
 
     SQL_REGENERATION_SERVICE = SQLRegenerationService(
@@ -134,4 +139,5 @@ def init_globals(
                 engine=engine,
             )
         }
+        ** query_cache,
     )

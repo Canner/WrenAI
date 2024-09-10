@@ -47,9 +47,11 @@ class IndexingService:
     def __init__(
         self,
         pipelines: dict[str, BasicPipeline],
+        maxsize: int = 1000,
+        ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._prepare_semantics_statuses = TTLCache(maxsize=1000, ttl=60)
+        self._prepare_semantics_statuses = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
     @observe(name="Prepare Semantics")

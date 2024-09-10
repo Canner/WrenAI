@@ -65,9 +65,11 @@ class AskDetailsService:
     def __init__(
         self,
         pipelines: dict[str, Pipeline],
+        maxsize: int = 1000,
+        ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_details_results = TTLCache(maxsize=1000, ttl=60)
+        self._ask_details_results = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
     @observe(name="Ask Details(Breakdown SQL)")

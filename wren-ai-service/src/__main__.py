@@ -54,6 +54,10 @@ async def lifespan(app: FastAPI):
             if os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE")
             else 1000
         ),
+        query_cache={
+            "maxsize": int(os.getenv("QUERY_CACHE_MAXSIZE") or 1000),
+            "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
+        },
     )
     service_metadata(*providers)
     init_langfuse()

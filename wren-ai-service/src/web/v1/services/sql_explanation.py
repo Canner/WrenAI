@@ -55,11 +55,16 @@ class SQLExplanationResultResponse(BaseModel):
 
 
 class SQLExplanationService:
-    def __init__(self, pipelines: dict[str, Pipeline]):
+    def __init__(
+        self,
+        pipelines: dict[str, Pipeline],
+        maxsize: int = 1000,
+        ttl: int = 120,
+    ):
         self._pipelines = pipelines
         self.sql_explanation_results: dict[
             str, SQLExplanationResultResponse
-        ] = TTLCache(maxsize=1000, ttl=60)
+        ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
     async def sql_explanation(self, sql_explanation_request: SQLExplanationRequest):

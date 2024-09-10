@@ -96,9 +96,11 @@ class AskService:
     def __init__(
         self,
         pipelines: dict[str, BasicPipeline],
+        maxsize: int = 1000,
+        ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_results = TTLCache(maxsize=100, ttl=20)
+        self._ask_results = TTLCache(maxsize=maxsize, ttl=ttl)
 
     def _is_stopped(self, query_id: str):
         if (
