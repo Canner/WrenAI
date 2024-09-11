@@ -1,6 +1,7 @@
 import logging
 from typing import Literal, Optional
 
+from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -46,9 +47,11 @@ class IndexingService:
     def __init__(
         self,
         pipelines: dict[str, BasicPipeline],
+        maxsize: int = 1_000_000,
+        ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._prepare_semantics_statuses = {}
+        self._prepare_semantics_statuses = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
     @observe(name="Prepare Semantics")

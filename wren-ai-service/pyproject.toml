@@ -27,6 +27,7 @@ langfuse = "==2.43.3"
 ollama = "==0.2.1"
 toml = "==0.10.2"
 sqlglot = "==25.18.0"
+cachetools = "==5.5.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "==3.7.1"
