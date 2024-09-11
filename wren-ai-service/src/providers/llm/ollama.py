@@ -131,10 +131,14 @@ class OllamaLLMProvider(LLMProvider):
             if os.getenv("GENERATION_MODEL_KWARGS")
             else GENERATION_MODEL_KWARGS
         ),
+        timeout: int = (
+            int(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120
+        ),
     ):
         self._url = remove_trailing_slash(url)
         self._generation_model = generation_model
         self._model_kwargs = model_kwargs
+        self._timeout = timeout
 
         pull_ollama_model(self._url, self._generation_model)
 
@@ -153,4 +157,5 @@ class OllamaLLMProvider(LLMProvider):
             url=f"{self._url}/api/generate",
             generation_kwargs=self._model_kwargs,
             system_prompt=system_prompt,
+            timeout=self._timeout,
         )

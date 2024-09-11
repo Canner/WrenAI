@@ -33,6 +33,7 @@ class AsyncTextEmbedder(AzureOpenAITextEmbedder):
         api_base_url: Optional[str] = None,
         api_version: Optional[str] = None,
         organization: Optional[str] = None,
+        timeout: Optional[float] = None,
         prefix: str = "",
         suffix: str = "",
     ):
@@ -45,6 +46,7 @@ class AsyncTextEmbedder(AzureOpenAITextEmbedder):
             organization=organization,
             prefix=prefix,
             suffix=suffix,
+            timeout=timeout,
         )
 
         self.client = AsyncAzureOpenAI(
@@ -103,6 +105,7 @@ class AsyncDocumentEmbedder(AzureOpenAIDocumentEmbedder):
         progress_bar: bool = True,
         meta_fields_to_embed: Optional[List[str]] = None,
         embedding_separator: str = "\n",
+        timeout: Optional[float] = None,
     ):
         super(AsyncDocumentEmbedder, self).__init__(
             azure_endpoint=api_base_url,
@@ -117,6 +120,7 @@ class AsyncDocumentEmbedder(AzureOpenAIDocumentEmbedder):
             progress_bar=progress_bar,
             meta_fields_to_embed=meta_fields_to_embed,
             embedding_separator=embedding_separator,
+            timeout=timeout,
         )
 
         self.client = AsyncAzureOpenAI(
@@ -201,12 +205,18 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
             else 0
         )
         or EMBEDDING_MODEL_DIMENSION,
+        timeout: Optional[float] = (
+            float(os.getenv("EMBEDDER_TIMEOUT"))
+            if os.getenv("EMBEDDER_TIMEOUT")
+            else 120.0
+        ),
     ):
         self._embedding_api_base = remove_trailing_slash(embed_api_base)
         self._embedding_api_key = embed_api_key
         self._embedding_api_version = embed_api_version
         self._embedding_model = embedding_model
         self._embedding_model_dim = embedding_model_dim
+        self._timeout = timeout
 
         logger.info(f"Using Azure OpenAI Embedding Model: {self._embedding_model}")
         logger.info(
@@ -222,6 +232,7 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
             model=self._embedding_model,
             api_base_url=self._embedding_api_base,
             api_version=self._embedding_api_version,
+            timeout=self._timeout,
         )
 
     def get_document_embedder(self):
@@ -230,4 +241,5 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
             model=self._embedding_model,
             api_base_url=self._embedding_api_base,
             api_version=self._embedding_api_version,
+            timeout=self._timeout,
         )

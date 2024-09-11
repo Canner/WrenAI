@@ -39,6 +39,7 @@ class AsyncGenerator(OpenAIGenerator):
         organization: Optional[str] = None,
         system_prompt: Optional[str] = None,
         generation_kwargs: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None,
     ):
         super(AsyncGenerator, self).__init__(
             api_key,
@@ -48,6 +49,7 @@ class AsyncGenerator(OpenAIGenerator):
             organization,
             system_prompt,
             generation_kwargs,
+            timeout,
         )
         self.client = AsyncOpenAI(
             api_key=api_key.resolve_value(),
@@ -126,6 +128,9 @@ class OpenAILLMProvider(LLMProvider):
             if os.getenv("GENERATION_MODEL_KWARGS")
             else GENERATION_MODEL_KWARGS
         ),
+        timeout: Optional[float] = (
+            float(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120.0
+        ),
     ):
         def _verify_api_key(api_key: str, api_base: str) -> None:
             """
@@ -137,6 +142,7 @@ class OpenAILLMProvider(LLMProvider):
         self._api_base = remove_trailing_slash(api_base)
         self._generation_model = generation_model
         self._model_kwargs = model_kwargs
+        self._timeout = timeout
 
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
         # TODO: currently only OpenAI api key can be verified
@@ -165,4 +171,5 @@ class OpenAILLMProvider(LLMProvider):
             model=self._generation_model,
             system_prompt=system_prompt,
             generation_kwargs=self._model_kwargs,
+            timeout=self._timeout,
         )

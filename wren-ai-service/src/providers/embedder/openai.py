@@ -32,6 +32,7 @@ class AsyncTextEmbedder(OpenAITextEmbedder):
         organization: Optional[str] = None,
         prefix: str = "",
         suffix: str = "",
+        timeout: Optional[float] = None,
     ):
         super(AsyncTextEmbedder, self).__init__(
             api_key,
@@ -41,6 +42,7 @@ class AsyncTextEmbedder(OpenAITextEmbedder):
             organization,
             prefix,
             suffix,
+            timeout,
         )
         self.client = AsyncOpenAI(
             api_key=api_key.resolve_value(),
@@ -94,6 +96,7 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
         progress_bar: bool = True,
         meta_fields_to_embed: Optional[List[str]] = None,
         embedding_separator: str = "\n",
+        timeout: Optional[float] = None,
     ):
         super(AsyncDocumentEmbedder, self).__init__(
             api_key,
@@ -107,6 +110,7 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
             progress_bar,
             meta_fields_to_embed,
             embedding_separator,
+            timeout,
         )
         self.client = AsyncOpenAI(
             api_key=api_key.resolve_value(),
@@ -189,6 +193,11 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             else 0
         )
         or EMBEDDING_MODEL_DIMENSION,
+        timeout: Optional[float] = (
+            float(os.getenv("EMBEDDER_TIMEOUT"))
+            if os.getenv("EMBEDDER_TIMEOUT")
+            else 120.0
+        ),
     ):
         def _verify_api_key(api_key: str, api_base: str) -> None:
             """
@@ -200,6 +209,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         self._api_base = remove_trailing_slash(api_base)
         self._embedding_model = embedding_model
         self._embedding_model_dim = embedding_model_dim
+        self._timeout = timeout
 
         logger.info(
             f"Initializing OpenAIEmbedder provider with API base: {self._api_base}"
@@ -218,6 +228,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._embedding_model,
+            timeout=self._timeout,
         )
 
     def get_document_embedder(self):
@@ -225,4 +236,5 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             api_key=self._api_key,
             api_base_url=self._api_base,
             model=self._embedding_model,
+            timeout=self._timeout,
         )
