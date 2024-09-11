@@ -38,6 +38,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
         system_prompt: Optional[str] = None,
         generation_kwargs: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None,
     ):
         super(AsyncGenerator, self).__init__(
             azure_endpoint=api_base,
@@ -47,6 +48,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
             streaming_callback=streaming_callback,
             system_prompt=system_prompt,
             generation_kwargs=generation_kwargs,
+            timeout=timeout,
         )
 
         self.client = AsyncAzureOpenAI(
@@ -127,12 +129,16 @@ class AzureOpenAILLMProvider(LLMProvider):
             if os.getenv("GENERATION_MODEL_KWARGS")
             else GENERATION_MODEL_KWARGS
         ),
+        timeout: Optional[float] = (
+            float(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120.0
+        ),
     ):
         self._generation_api_key = chat_api_key
         self._generation_api_base = remove_trailing_slash(chat_api_base)
         self._generation_api_version = chat_api_version
         self._generation_model = generation_model
         self._model_kwargs = model_kwargs
+        self._timeout = timeout
 
         logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")
         logger.info(f"Using AzureOpenAI LLM with API base: {self._generation_api_base}")
@@ -154,4 +160,5 @@ class AzureOpenAILLMProvider(LLMProvider):
             api_version=self._generation_api_version,
             system_prompt=system_prompt,
             generation_kwargs=self._model_kwargs,
+            timeout=self._timeout,
         )
