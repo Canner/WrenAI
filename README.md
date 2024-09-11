@@ -1,12 +1,10 @@
-
-
 <p align="center">
   <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
       <img src="./misc/wrenai_logo.png">
     </picture>
-    <h1 align="center">Wren AI</h1>
+    <h1 align="center">Purgo AI</h1>
   </a>
 </p>
 
@@ -28,8 +26,7 @@
   </a>
 </p>
 
-
-> Wren AI is a **SQL AI Agent** for data teams to get results and insights faster by asking business questions without writing SQL.
+> Purgo AI is a **SQL AI Agent** for data teams to get results and insights faster by asking business questions without writing SQL.
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
@@ -38,7 +35,6 @@
 https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
 
 👉 [Play around with Wren AI yourself!](https://demo.getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
-
 
 ## 🎯 Our Vision & Mission
 
@@ -86,11 +82,11 @@ We focus on providing an open, secure, and reliable SQL AI Agent for everyone.
 
 Wren AI consists of three core services:
 
-- ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within Wren AI's framework.
+- **_[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):_** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within Wren AI's framework.
 
-- ***[Wren AI Service](https://github.com/Canner/WrenAI/tree/main/wren-ai-service):*** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
+- **_[Wren AI Service](https://github.com/Canner/WrenAI/tree/main/wren-ai-service):_** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
 
-- ***[Wren Engine](https://github.com/Canner/wren-engine):*** Serves as the semantic engine, mapping business terms to data sources, defining relationships, and incorporating predefined calculations and aggregations.
+- **_[Wren Engine](https://github.com/Canner/wren-engine):_** Serves as the semantic engine, mapping business terms to data sources, defining relationships, and incorporating predefined calculations and aggregations.
 
 ![wrenai_works](./misc/how_wrenai_works.png)
 
@@ -99,20 +95,21 @@ Wren AI consists of three core services:
 Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog)
 
 ### Trends
+
 - [Can AI Solve Data Silos Challenge? New Challenges To The Multi-AI Agents Era.](https://www.getwren.ai/post/can-ai-solve-data-silos-challenge-new-challenges-to-the-multi-ai-agents-era)
 - [The new wave of Composable Data Systems and the Interface to LLM agents](https://www.getwren.ai/post/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents)
 - [How do you use LangChain to build a Text-to-SQL solution? What are the challenges? How to solve it?](https://www.getwren.ai/post/how-do-you-use-langchain-to-build-a-text-to-sql-solution-what-are-the-challenges-how-to-solve-it)
 - [Deep dive into how Pinterest built its Text-to-SQL solution.](https://www.getwren.ai/post/deep-dive-into-how-pinterest-built-its-text-to-sql-solution)
 - [How Snowflake building the most powerful SQL LLM in the world](https://www.getwren.ai/post/how-snowflake-building-the-most-powerful-sql-llm-in-the-world)
 
-
 ### Architecture
+
 - [How do we rewrite Wren AI LLM Service to support 1500+ concurrent users online?](https://www.getwren.ai/post/how-do-we-rewrite-wren-ai-llm-service-to-support-1500-concurrent-users-online)
 - [Top 4 Challenges using RAG with LLMs to Query Database (Text-to-SQL) and how to solve it.](https://www.getwren.ai/post/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it)
 - [How we design our semantic engine for LLMs? The backbone of the semantic layer for LLM architecture.](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture)
 
-
 ### Tutorials
+
 - [Using RAG Architecture to query databases, export to Google Sheets, and visualize in Looker Studio.](https://www.getwren.ai/post/using-rag-architecture-to-query-databases-export-to-google-sheets-and-visualize-in-looker-studio)
 - [Easily query your database using LLMs without writing SQL and then import the data into Microsoft Excel.](https://www.getwren.ai/post/easily-query-your-database-using-llms-without-writing-sql-and-then-import-the-data-into-microsoft-excel)
 - [Wren AI in Kubernetes: Text-to-SQL](https://blog.getwren.ai/wren-ai-in-kubernetes-text-to-sql-39b82bda3d34)
@@ -120,10 +117,9 @@ Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog)
 - [How do you use OpenAI GPT-4o to query your database?](https://www.getwren.ai/post/how-to-use-openai-gpt-4o-to-query-your-database)
 - [How to directly access 150k+ Hugging Face Datasets with DuckDB and query using GPT-4o](https://www.getwren.ai/post/how-to-directly-access-150k-hugging-face-datasets-with-duckdb-and-query-using-gpt-4o)
 
-
 ## 🚧 Project Status
 
-Wren AI is currently in ***Beta Version***. The project team is actively working on progress and aiming to release new versions at least biweekly.
+Wren AI is currently in **_Beta Version_**. The project team is actively working on progress and aiming to release new versions at least biweekly.
 
 ## 🚀 Getting Started
 

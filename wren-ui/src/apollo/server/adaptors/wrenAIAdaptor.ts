@@ -152,7 +152,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
-      logger.debug(`Got error when asking wren AI: ${getAISerciceError(err)}`);
+      logger.debug(`Got error when asking Purgo AI: ${getAISerciceError(err)}`);
       throw err;
     }
   }
@@ -232,25 +232,25 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       const deployId = res.data.id;
       logger.debug(
-        `Wren AI: Deploying wren AI, hash: ${hash}, deployId: ${deployId}`,
+        `Purgo AI: Deploying Purgo AI, hash: ${hash}, deployId: ${deployId}`,
       );
       const deploySuccess = await this.waitDeployFinished(deployId);
       if (deploySuccess) {
-        logger.debug(`Wren AI: Deploy wren AI success, hash: ${hash}`);
+        logger.debug(`Purgo AI: Deploy Purgo AI success, hash: ${hash}`);
         return { status: WrenAIDeployStatusEnum.SUCCESS };
       } else {
         return {
           status: WrenAIDeployStatusEnum.FAILED,
-          error: `Wren AI: Deploy wren AI failed or timeout, hash: ${hash}`,
+          error: `Purgo AI: Deploy Purgo AI failed or timeout, hash: ${hash}`,
         };
       }
     } catch (err: any) {
       logger.debug(
-        `Got error when deploying to wren AI, hash: ${hash}. Error: ${err.message}`,
+        `Got error when deploying to Purgo AI, hash: ${hash}. Error: ${err.message}`,
       );
       return {
         status: WrenAIDeployStatusEnum.FAILED,
-        error: `Wren AI Error: deployment hash:${hash}, ${err.message}`,
+        error: `Purgo AI Error: deployment hash:${hash}, ${err.message}`,
       };
     }
   }
@@ -261,7 +261,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     for (let waitTime = 1; waitTime <= 7; waitTime++) {
       try {
         const status = await this.getDeployStatus(deployId);
-        logger.debug(`Wren AI: Deploy status: ${status}`);
+        logger.debug(`Purgo AI: Deploy status: ${status}`);
         if (status === WrenAISystemStatus.FINISHED) {
           deploySuccess = true;
           break;
@@ -270,7 +270,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         } else if (status === WrenAISystemStatus.INDEXING) {
           // do nothing
         } else {
-          logger.debug(`Wren AI: Unknown Wren AI deploy status: ${status}`);
+          logger.debug(`Purgo AI: Unknown Purgo AI deploy status: ${status}`);
           return;
         }
       } catch (err: any) {
