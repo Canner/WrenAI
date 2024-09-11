@@ -55,7 +55,9 @@ async def lifespan(app: FastAPI):
             else 1000
         ),
         query_cache={
-            "maxsize": int(os.getenv("QUERY_CACHE_MAXSIZE") or 1000),
+            # the maxsize is a necessary parameter to init cache, but we don't want to expose it to the user
+            # so we set it to 1_000_000, which is a large number
+            "maxsize": 1_000_000,
             "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
         },
     )

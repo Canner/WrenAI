@@ -85,7 +85,7 @@ class SQLRegenerationService:
     def __init__(
         self,
         pipelines: dict[str, Pipeline],
-        maxsize: int = 1000,
+        maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
