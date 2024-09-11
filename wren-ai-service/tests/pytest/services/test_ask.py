@@ -1,4 +1,6 @@
 import json
+import re
+import time
 import uuid
 
 import orjson
@@ -16,11 +18,18 @@ from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
+    AskResultResponse,
     AskService,
 )
 from src.web.v1.services.indexing import (
     IndexingService,
     SemanticsPreparationRequest,
+)
+from tests.pytest.services.mocks import (
+    GenerationMock,
+    HistoricalQuestionMock,
+    RetrievalMock,
+    SQLSummaryMock,
 )
 
 
@@ -120,3 +129,67 @@ async def test_ask_with_successful_query(
     # assert ask_result_response.response[0].sql != ""
     # assert ask_result_response.response[0].summary != ""
     # assert ask_result_response.response[0].type == "llm" or "view"
+
+
+def _ask_service_ttl_mock(query: str):
+    return AskService(
+        {
+            "retrieval": RetrievalMock(
+                [
+                    f"mock document 1 for {query}",
+                    f"mock document 2 for {query}",
+                ]
+            ),
+            "historical_question": HistoricalQuestionMock(),
+            "generation": GenerationMock(
+                valid=["select count(*) from books"],
+            ),
+            "sql_summary": SQLSummaryMock(
+                results=[
+                    {
+                        "sql": "select count(*) from books",
+                        "summary": "mock summary",
+                    }
+                ]
+            ),
+        },
+        ttl=3,
+    )
+
+
+@pytest.mark.asyncio
+async def test_ask_query_ttl():
+    query = "How many books are there?"
+    query_id = str(uuid.uuid4())
+
+    ask_service = _ask_service_ttl_mock(query)
+    ask_service._ask_results[query_id] = AskResultResponse(
+        status="understanding",
+    )
+
+    request = AskRequest(
+        query=query,
+        mdl_hash="mock mdl hash",
+    )
+    request.query_id = query_id
+
+    await ask_service.ask(request)
+
+    time.sleep(1)
+    response = ask_service.get_ask_result(
+        AskResultRequest(
+            query_id=query_id,
+        )
+    )
+    assert response.status == "finished"
+
+    time.sleep(3)
+    response = ask_service.get_ask_result(
+        AskResultRequest(
+            query_id=query_id,
+        )
+    )
+
+    assert response.status == "failed"
+    assert response.error.code == "OTHERS"
+    assert re.match(r".+ is not found", response.error.message)
