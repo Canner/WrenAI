@@ -128,8 +128,8 @@ def init_globals(
             "generation": sql_explanation_generation.Generation(
                 llm_provider=llm_provider,
             )
-        }
-        ** query_cache,
+        },
+        **query_cache,
     )
 
     SQL_REGENERATION_SERVICE = SQLRegenerationService(
@@ -138,6 +138,6 @@ def init_globals(
                 llm_provider=llm_provider,
                 engine=engine,
             )
-        }
-        ** query_cache,
+        },
+        **query_cache,
     )
