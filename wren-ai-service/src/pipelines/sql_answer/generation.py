@@ -65,14 +65,14 @@ class DataFetcher:
         project_id: str | None = None,
     ):
         async with aiohttp.ClientSession() as session:
-            _, response = await self._engine.execute_sql(
+            _, data, _ = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
                 dry_run=False,
             )
 
-            return {"results": response}
+            return {"results": data}
 
 
 @component

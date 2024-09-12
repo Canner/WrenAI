@@ -124,6 +124,7 @@ def init_globals(
                 engine=engine,
             )
         },
+        **query_cache,
     )
 
     ASK_DETAILS_SERVICE = AskDetailsService(

@@ -86,13 +86,13 @@ class GenerationPostProcessor:
         project_id: str | None = None,
     ):
         async with aiohttp.ClientSession() as session:
-            status, response = await self._engine.execute_sql(
+            status, _, error = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
             )
 
         if not status:
-            logger.exception(f"SQL is not executable: {response}")
+            logger.exception(f"SQL is not executable: {error}")
 
         return status

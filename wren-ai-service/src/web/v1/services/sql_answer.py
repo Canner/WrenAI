@@ -1,6 +1,7 @@
 import logging
 from typing import Literal, Optional
 
+from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
@@ -50,9 +51,11 @@ class SqlAnswerService:
     def __init__(
         self,
         pipelines: dict[str, BasicPipeline],
+        maxsize: int = 1_000_000,
+        ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._sql_answer_results = {}
+        self._sql_answer_results = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
     @observe(name="SQL Answer")
