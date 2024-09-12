@@ -84,7 +84,7 @@ class MDLValidator:
 
 
 @component
-class ViewConverter:
+class ViewChunker:
     """
     Convert the view MDL to the following format:
     {
@@ -580,24 +580,24 @@ async def write_dbschema(
 
 @timer
 @observe(capture_input=False)
-def convert_to_view(
-    mdl: Dict[str, Any], view_converter: ViewConverter, id: Optional[str] = None
+def view_chunk(
+    mdl: Dict[str, Any], view_chunker: ViewChunker, id: Optional[str] = None
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input in convert_to_view: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
+        f"input in view_chunk: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return view_converter.run(mdl=mdl, id=id)
+    return view_chunker.run(mdl=mdl, id=id)
 
 
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_view(
-    convert_to_view: Dict[str, Any], document_embedder: Any
+    view_chunk: Dict[str, Any], document_embedder: Any
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input in embed_view: {orjson.dumps(convert_to_view, option=orjson.OPT_INDENT_2).decode()}"
+        f"input in embed_view: {orjson.dumps(view_chunk, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await document_embedder.run(documents=convert_to_view["documents"])
+    return await document_embedder.run(documents=view_chunk["documents"])
 
 
 @async_timer
@@ -635,7 +635,7 @@ class Indexing(BasicPipeline):
             policy=DuplicatePolicy.OVERWRITE,
         )
 
-        self.view_converter = ViewConverter()
+        self.view_chunker = ViewChunker()
         self.view_writer = AsyncDocumentWriter(
             document_store=view_store,
             policy=DuplicatePolicy.OVERWRITE,
@@ -666,7 +666,7 @@ class Indexing(BasicPipeline):
                 "validator": self.validator,
                 "document_embedder": self.document_embedder,
                 "ddl_converter": self.ddl_converter,
-                "view_converter": self.view_converter,
+                "view_converter": self.view_chunker,
                 "table_description_converter": self.table_description_converter,
                 "dbschema_writer": self.dbschema_writer,
                 "view_writer": self.view_writer,
@@ -692,7 +692,7 @@ class Indexing(BasicPipeline):
                 "ddl_converter": self.ddl_converter,
                 "table_description_converter": self.table_description_converter,
                 "dbschema_writer": self.dbschema_writer,
-                "view_converter": self.view_converter,
+                "view_chunker": self.view_chunker,
                 "view_writer": self.view_writer,
                 "table_description_writer": self.table_description_writer,
                 "column_indexing_batch_size": self.column_indexing_batch_size,

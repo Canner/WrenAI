@@ -1,18 +1,18 @@
 from haystack import Document
 
-from src.pipelines.indexing.indexing import ViewConverter
+from src.pipelines.indexing.indexing import ViewChunker
 
 
 def test_empty_views():
-    converter = ViewConverter()
+    chunker = ViewChunker()
     mdl = {"views": []}
 
-    document = converter.run(mdl)
+    document = chunker.run(mdl)
     assert document == {"documents": []}
 
 
 def test_single_view():
-    converter = ViewConverter()
+    chunker = ViewChunker()
     mdl = {
         "views": [
             {
@@ -27,7 +27,7 @@ def test_single_view():
         ]
     }
 
-    actual = converter.run(mdl)
+    actual = chunker.run(mdl)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -40,7 +40,7 @@ def test_single_view():
 
 
 def test_view_missing_properties():
-    converter = ViewConverter()
+    chunker = ViewChunker()
     mdl = {
         "views": [
             {
@@ -50,7 +50,7 @@ def test_view_missing_properties():
         ]
     }
 
-    actual = converter.run(mdl)
+    actual = chunker.run(mdl)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -63,7 +63,7 @@ def test_view_missing_properties():
 
 
 def test_view_missing_question():
-    converter = ViewConverter()
+    chunker = ViewChunker()
     mdl = {
         "views": [
             {
@@ -77,7 +77,7 @@ def test_view_missing_question():
         ]
     }
 
-    actual = converter.run(mdl)
+    actual = chunker.run(mdl)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -90,7 +90,7 @@ def test_view_missing_question():
 
 
 def test_view_missing_summary():
-    converter = ViewConverter()
+    chunker = ViewChunker()
     mdl = {
         "views": [
             {
@@ -104,7 +104,7 @@ def test_view_missing_summary():
         ]
     }
 
-    actual = converter.run(mdl)
+    actual = chunker.run(mdl)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -117,7 +117,7 @@ def test_view_missing_summary():
 
 
 def test_view_missing_id():
-    converter = ViewConverter()
+    chunker = ViewChunker()
     mdl = {
         "views": [
             {
@@ -131,7 +131,7 @@ def test_view_missing_id():
         ]
     }
 
-    actual = converter.run(mdl)
+    actual = chunker.run(mdl)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -144,7 +144,7 @@ def test_view_missing_id():
 
 
 def test_multi_views():
-    converter = ViewConverter()
+    chunker = ViewChunker()
     mdl = {
         "views": [
             {
@@ -168,7 +168,7 @@ def test_multi_views():
         ]
     }
 
-    actual = converter.run(mdl)
+    actual = chunker.run(mdl)
     assert len(actual["documents"]) == 2
 
     document_1: Document = actual["documents"][0]
