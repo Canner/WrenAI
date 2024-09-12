@@ -3,9 +3,9 @@ from typing import Optional
 from src.pipelines.ask import (
     generation,
     historical_question,
-    retrieval,
     sql_summary,
 )
+from src.pipelines.retrieval import retrieval
 
 
 class RetrievalMock(retrieval.Retrieval):

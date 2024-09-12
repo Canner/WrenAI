@@ -13,9 +13,6 @@ from src.pipelines.ask import (
     sql_summary,
 )
 from src.pipelines.ask import (
-    retrieval as ask_retrieval,
-)
-from src.pipelines.ask import (
     sql_correction as ask_sql_correction,
 )
 from src.pipelines.ask_details import (
@@ -23,6 +20,9 @@ from src.pipelines.ask_details import (
 )
 from src.pipelines.indexing import (
     indexing,
+)
+from src.pipelines.retrieval import (
+    retrieval,
 )
 from src.pipelines.sql_answer import generation as sql_answer_generation
 from src.pipelines.sql_explanation import (
@@ -90,7 +90,7 @@ def init_globals(
 
     ASK_SERVICE = AskService(
         pipelines={
-            "retrieval": ask_retrieval.Retrieval(
+            "retrieval": retrieval.Retrieval(
                 llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,

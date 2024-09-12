@@ -18,7 +18,7 @@ from src.pipelines.ask.components.prompts import (
     text_to_sql_system_prompt,
 )
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskRequest
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -126,7 +126,7 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: List[str],
-    history: AskRequest.AskResponseDetails,
+    history: AskHistory,
     alert: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
@@ -185,7 +185,7 @@ class FollowUpGeneration(BasicPipeline):
         self,
         query: str,
         contexts: List[str],
-        history: AskRequest.AskResponseDetails,
+        history: AskHistory,
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/ask"
@@ -215,7 +215,7 @@ class FollowUpGeneration(BasicPipeline):
         self,
         query: str,
         contexts: List[str],
-        history: AskRequest.AskResponseDetails,
+        history: AskHistory,
         project_id: str | None = None,
     ):
         logger.info("Ask FollowUpGeneration pipeline is running...")
@@ -250,17 +250,13 @@ if __name__ == "__main__":
     pipeline.visualize(
         "this is a test query",
         [],
-        AskRequest.AskResponseDetails(
-            sql="SELECT * FROM table", summary="Summary", steps=[]
-        ),
+        AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
     )
     async_validate(
         lambda: pipeline.run(
             "this is a test query",
             [],
-            AskRequest.AskResponseDetails(
-                sql="SELECT * FROM table", summary="Summary", steps=[]
-            ),
+            AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
         )
     )
 

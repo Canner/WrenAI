@@ -29,8 +29,9 @@ from eval.utils import (
 )
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.ask import generation, retrieval
+from src.pipelines.ask import generation
 from src.pipelines.indexing import indexing
+from src.pipelines.retrieval import retrieval
 
 
 def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:

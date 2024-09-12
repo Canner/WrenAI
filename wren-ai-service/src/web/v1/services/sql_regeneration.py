@@ -6,6 +6,7 @@ from haystack import Pipeline
 from pydantic import BaseModel
 
 from src.utils import async_timer
+from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -61,16 +62,10 @@ class SQLRegenerationResultRequest(BaseModel):
     query_id: str
 
 
-class SQLExplanation(BaseModel):
-    sql: str
-    summary: str
-    cte_name: str
-
-
 class SQLRegenerationResultResponse(BaseModel):
     class SQLRegenerationResponseDetails(BaseModel):
         description: str
-        steps: List[SQLExplanation]
+        steps: List[SQLBreakdown]
 
     class SQLRegenerationError(BaseModel):
         code: Literal["NO_RELEVANT_SQL", "OTHERS"]

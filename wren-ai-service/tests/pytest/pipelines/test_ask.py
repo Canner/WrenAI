@@ -7,11 +7,12 @@ from src.core.engine import EngineConfig
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.ask.followup_generation import FollowUpGeneration
 from src.pipelines.ask.generation import Generation
-from src.pipelines.ask.retrieval import Retrieval
 from src.pipelines.ask.sql_correction import SQLCorrection
 from src.pipelines.indexing.indexing import Indexing
+from src.pipelines.retrieval.retrieval import Retrieval
 from src.utils import init_providers
-from src.web.v1.services.ask import AskRequest, SQLExplanation
+from src.web.v1.services.ask import AskHistory
+from src.web.v1.services.ask_details import SQLBreakdown
 
 GLOBAL_DATA = {
     "contexts": None,
@@ -157,11 +158,11 @@ async def test_followup_generation_pipeline():
     generation_result = await generation_pipeline.run(
         "What are names of the books?",
         contexts=GLOBAL_DATA["contexts"],
-        history=AskRequest.AskResponseDetails(
+        history=AskHistory(
             sql="SELECT COUNT(*) FROM book",
             summary="Retrieve the number of books",
             steps=[
-                SQLExplanation(
+                SQLBreakdown(
                     sql="SELECT COUNT(*) FROM book",
                     summary="Retrieve the number of books",
                     cte_name="",

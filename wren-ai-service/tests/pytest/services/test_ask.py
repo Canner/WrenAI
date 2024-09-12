@@ -10,10 +10,10 @@ from src.core.engine import EngineConfig
 from src.pipelines.ask import (
     generation,
     historical_question,
-    retrieval,
     sql_correction,
 )
 from src.pipelines.indexing import indexing
+from src.pipelines.retrieval import retrieval
 from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
