@@ -86,7 +86,7 @@ class GenerationPostProcessor:
         project_id: str | None = None,
     ):
         async with aiohttp.ClientSession() as session:
-            status, error = await self._engine.dry_run_sql(
+            status, _, error = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,

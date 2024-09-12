@@ -17,10 +17,11 @@ class EngineConfig(BaseModel):
 
 class Engine(metaclass=ABCMeta):
     @abstractmethod
-    async def dry_run_sql(
+    async def execute_sql(
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        dry_run: bool = True,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         ...
