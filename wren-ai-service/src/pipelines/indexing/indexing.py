@@ -102,7 +102,8 @@ class ViewChunker:
             properties = view.get("properties", {})
             historical_queries = properties.get("historical_queries", [])
             question = properties.get("question", "")
-            return " ".join(historical_queries) + " " + question
+
+            return " ".join(historical_queries + [question])
 
         def _get_meta(view: Dict[str, Any]) -> Dict[str, Any]:
             properties = view.get("properties", {})
