@@ -239,10 +239,13 @@ class DDLConverter:
             for column in model["columns"]:
                 if "relationship" not in column:
                     if "properties" in column:
-                        column["properties"]["alias"] = column["properties"].pop(
-                            "displayName", ""
+                        column_properties = {
+                            "alias": column["properties"].pop("displayName", ""),
+                            "description": column["properties"].pop("description", ""),
+                        }
+                        comment = (
+                            f"-- {orjson.dumps(column_properties).decode("utf-8")}\n  "
                         )
-                        comment = f"-- {orjson.dumps(column['properties']).decode("utf-8")}\n  "
                     else:
                         comment = ""
                     if "isCalculated" in column and column["isCalculated"]:
@@ -300,12 +303,11 @@ class DDLConverter:
                         )
 
             if "properties" in model:
-                model["properties"]["alias"] = model["properties"].pop(
-                    "displayName", ""
-                )
-                comment = (
-                    f"\n/* {orjson.dumps(model['properties']).decode("utf-8")} */\n"
-                )
+                model_properties = {
+                    "alias": model["properties"].pop("displayName", ""),
+                    "description": model["properties"].pop("description", ""),
+                }
+                comment = f"\n/* {orjson.dumps(model_properties).decode("utf-8")} */\n"
             else:
                 comment = ""
 
