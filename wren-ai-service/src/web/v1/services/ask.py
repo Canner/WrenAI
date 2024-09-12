@@ -145,8 +145,13 @@ class AskService:
                     status="searching",
                 )
 
+                query_for_retrieval = (
+                    ask_request.history.summary + " " + ask_request.query
+                    if ask_request.history
+                    else ask_request.query
+                )
                 retrieval_result = await self._pipelines["retrieval"].run(
-                    query=ask_request.query,
+                    query=query_for_retrieval,
                     id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
