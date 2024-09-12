@@ -622,30 +622,32 @@ class Indexing(BasicPipeline):
             dataset_name="table_descriptions"
         )
 
-        self.column_indexing_batch_size = column_indexing_batch_size
-        self.cleaner = DocumentCleaner(
-            [dbschema_store, view_store, table_description_store]
-        )
-        self.validator = MDLValidator()
-        self.document_embedder = embedder_provider.get_document_embedder()
+        self._components = {
+            "cleaner": DocumentCleaner(
+                [dbschema_store, view_store, table_description_store]
+            ),
+            "validator": MDLValidator(),
+            "document_embedder": embedder_provider.get_document_embedder(),
+            "ddl_converter": DDLConverter(),
+            "table_description_converter": TableDescriptionConverter(),
+            "dbschema_writer": AsyncDocumentWriter(
+                document_store=dbschema_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+            "view_chunker": ViewChunker(),
+            "view_writer": AsyncDocumentWriter(
+                document_store=view_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+            "table_description_writer": AsyncDocumentWriter(
+                document_store=table_description_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        }
 
-        self.ddl_converter = DDLConverter()
-        self.dbschema_writer = AsyncDocumentWriter(
-            document_store=dbschema_store,
-            policy=DuplicatePolicy.OVERWRITE,
-        )
-
-        self.view_chunker = ViewChunker()
-        self.view_writer = AsyncDocumentWriter(
-            document_store=view_store,
-            policy=DuplicatePolicy.OVERWRITE,
-        )
-
-        self.table_description_converter = TableDescriptionConverter()
-        self.table_description_writer = AsyncDocumentWriter(
-            document_store=table_description_store,
-            policy=DuplicatePolicy.OVERWRITE,
-        )
+        self._config = {
+            "column_indexing_batch_size": column_indexing_batch_size,
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -662,16 +664,8 @@ class Indexing(BasicPipeline):
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
-                "cleaner": self.cleaner,
-                "validator": self.validator,
-                "document_embedder": self.document_embedder,
-                "ddl_converter": self.ddl_converter,
-                "view_converter": self.view_chunker,
-                "table_description_converter": self.table_description_converter,
-                "dbschema_writer": self.dbschema_writer,
-                "view_writer": self.view_writer,
-                "table_description_writer": self.table_description_writer,
-                "column_indexing_batch_size": self.column_indexing_batch_size,
+                **self._components,
+                **self._config,
             },
             show_legend=True,
             orient="LR",
@@ -686,16 +680,8 @@ class Indexing(BasicPipeline):
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
-                "cleaner": self.cleaner,
-                "validator": self.validator,
-                "document_embedder": self.document_embedder,
-                "ddl_converter": self.ddl_converter,
-                "table_description_converter": self.table_description_converter,
-                "dbschema_writer": self.dbschema_writer,
-                "view_chunker": self.view_chunker,
-                "view_writer": self.view_writer,
-                "table_description_writer": self.table_description_writer,
-                "column_indexing_batch_size": self.column_indexing_batch_size,
+                **self._components,
+                **self._config,
             },
         )
 
