@@ -1,5 +1,5 @@
 import logging
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 import sqlparse
 from cachetools import TTLCache
@@ -8,23 +8,19 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
+from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
 
 
-class SQLExplanation(BaseModel):
+class AskHistory(BaseModel):
     sql: str
     summary: str
-    cte_name: str
+    steps: List[SQLBreakdown]
 
 
 # POST /v1/asks
 class AskRequest(BaseModel):
-    class AskResponseDetails(BaseModel):
-        sql: str
-        summary: str
-        steps: List[SQLExplanation]
-
     _query_id: str | None = None
     query: str
     # for identifying which collection to access from vectordb
@@ -34,7 +30,7 @@ class AskRequest(BaseModel):
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
-    history: Optional[AskResponseDetails] = None
+    history: Optional[AskHistory] = None
 
     @property
     def query_id(self) -> str:
@@ -68,23 +64,25 @@ class StopAskResponse(BaseModel):
 
 
 # GET /v1/asks/{query_id}/result
+class AskResult(BaseModel):
+    sql: str
+    summary: str
+    type: Literal["llm", "view"] = "llm"
+    viewId: Optional[str] = None
+
+
+class AskError(BaseModel):
+    code: Literal[
+        "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
+    ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
+    message: str
+
+
 class AskResultRequest(BaseModel):
     query_id: str
 
 
 class AskResultResponse(BaseModel):
-    class AskResult(BaseModel):
-        sql: str
-        summary: str
-        type: Literal["llm", "view"] = "llm"
-        viewId: Optional[str] = None
-
-    class AskError(BaseModel):
-        code: Literal[
-            "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
-        ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
-        message: str
-
     status: Literal[
         "understanding", "searching", "generating", "finished", "failed", "stopped"
     ]
@@ -95,12 +93,14 @@ class AskResultResponse(BaseModel):
 class AskService:
     def __init__(
         self,
-        pipelines: dict[str, BasicPipeline],
+        pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_results = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._ask_results: Dict[str, AskResultResponse] = TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
 
     def _is_stopped(self, query_id: str):
         if (
@@ -162,7 +162,7 @@ class AskService:
                     )
                     self._ask_results[query_id] = AskResultResponse(
                         status="failed",
-                        error=AskResultResponse.AskError(
+                        error=AskError(
                             code="NO_RELEVANT_DATA",
                             message="No relevant data",
                         ),
@@ -277,7 +277,7 @@ class AskService:
                     )
                     self._ask_results[query_id] = AskResultResponse(
                         status="failed",
-                        error=AskResultResponse.AskError(
+                        error=AskError(
                             code="NO_RELEVANT_SQL",
                             message="No relevant SQL",
                         ),
@@ -286,7 +286,7 @@ class AskService:
                     return results
 
                 api_results = [
-                    AskResultResponse.AskResult(
+                    AskResult(
                         **{
                             "sql": result.get("statement"),
                             "summary": result.get("summary"),
@@ -295,10 +295,7 @@ class AskService:
                         }
                     )
                     for result in historical_question_result
-                ] + [
-                    AskResultResponse.AskResult(**result)
-                    for result in valid_sql_summary_results
-                ]
+                ] + [AskResult(**result) for result in valid_sql_summary_results]
 
                 # only return top 3 results, thus remove the rest
                 if len(api_results) > 3:
@@ -316,7 +313,7 @@ class AskService:
 
             self._ask_results[ask_request.query_id] = AskResultResponse(
                 status="failed",
-                error=AskResultResponse.AskError(
+                error=AskError(
                     code="OTHERS",
                     message=str(e),
                 ),
@@ -344,7 +341,7 @@ class AskService:
             )
             return AskResultResponse(
                 status="failed",
-                error=AskResultResponse.AskError(
+                error=AskError(
                     code="OTHERS",
                     message=f"{ask_result_request.query_id} is not found",
                 ),

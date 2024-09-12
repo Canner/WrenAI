@@ -35,12 +35,14 @@ from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.indexing import IndexingService
 from src.web.v1.services.sql_answer import SqlAnswerService
+from src.web.v1.services.sql_expansion import SqlExpansionService
 from src.web.v1.services.sql_explanation import SQLExplanationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
 INDEXING_SERVICE = None
 ASK_SERVICE = None
 SQL_ANSWER_SERVICE = None
+SQL_EXPANSION_SERVICE = None
 ASK_DETAILS_SERVICE = None
 SQL_EXPLANATION_SERVICE = None
 SQL_REGENERATION_SERVICE = None
@@ -61,6 +63,7 @@ def init_globals(
         INDEXING_SERVICE, \
         ASK_SERVICE, \
         SQL_ANSWER_SERVICE, \
+        SQL_EXPANSION_SERVICE, \
         ASK_DETAILS_SERVICE, \
         SQL_EXPLANATION_SERVICE, \
         SQL_REGENERATION_SERVICE
@@ -134,6 +137,11 @@ def init_globals(
                 engine=engine,
             ),
         },
+        **query_cache,
+    )
+
+    SQL_EXPANSION_SERVICE = SqlExpansionService(
+        pipelines={},
         **query_cache,
     )
 

@@ -57,12 +57,12 @@ class SQLExplanationResultResponse(BaseModel):
 class SQLExplanationService:
     def __init__(
         self,
-        pipelines: dict[str, Pipeline],
+        pipelines: Dict[str, Pipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self.sql_explanation_results: dict[
+        self.sql_explanation_results: Dict[
             str, SQLExplanationResultResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, BackgroundTasks
 
 from src.utils import async_timer
 from src.web.v1.services.ask import (
+    AskError,
     AskRequest,
     AskResponse,
     AskResultRequest,
@@ -57,7 +58,7 @@ def get_dummy_ask_task_result(
     if (result := test_ask_results[ask_result_request.query_id]) is None:
         return AskResultResponse(
             status="failed",
-            error=AskResultResponse.AskError(
+            error=AskError(
                 code="OTHERS",
                 message=f"{ask_result_request.query_id} is not found",
             ),

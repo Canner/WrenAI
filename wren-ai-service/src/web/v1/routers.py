@@ -29,6 +29,14 @@ from src.web.v1.services.sql_answer import (
     SqlAnswerResultRequest,
     SqlAnswerResultResponse,
 )
+from src.web.v1.services.sql_expansion import (
+    SqlExpansionRequest,
+    SqlExpansionResponse,
+    SqlExpansionResultRequest,
+    SqlExpansionResultResponse,
+    StopSqlExpansionRequest,
+    StopSqlExpansionResponse,
+)
 from src.web.v1.services.sql_explanation import (
     SQLExplanationRequest,
     SQLExplanationResponse,
@@ -133,6 +141,47 @@ async def sql_answer(
 async def get_sql_answer_result(query_id: str) -> SqlAnswerResultResponse:
     return container.SQL_ANSWER_SERVICE.get_sql_answer_result(
         SqlAnswerResultRequest(query_id=query_id)
+    )
+
+
+@router.post("/sql-expansions")
+async def sql_expansion(
+    sql_expansion_request: SqlExpansionRequest,
+    background_tasks: BackgroundTasks,
+) -> SqlExpansionResponse:
+    query_id = str(uuid.uuid4())
+    sql_expansion_request.query = query_id
+    container.SQL_EXPANSION_SERVICE._sql_expansion_results[
+        query_id
+    ] = SqlExpansionResultResponse(
+        status="understanding",
+    )
+
+    background_tasks.add_task(
+        container.SQL_EXPANSION_SERVICE.sql_expansion,
+        sql_expansion_request,
+    )
+    return SqlExpansionResponse(query_id=query_id)
+
+
+@router.patch("/sql-expansions/{query_id}")
+async def stop_sql_expansion(
+    query_id: str,
+    stop_sql_expansion_request: StopSqlExpansionRequest,
+    background_tasks: BackgroundTasks,
+) -> StopSqlExpansionResponse:
+    stop_sql_expansion_request.query_id = query_id
+    background_tasks.add_task(
+        container.SQL_EXPANSION_SERVICE.stop_sql_expansion,
+        stop_sql_expansion_request,
+    )
+    return StopSqlExpansionResponse(query_id=query_id)
+
+
+@router.get("/sql-expansions/{query_id}/result")
+async def get_sql_expansion_result(query_id: str) -> SqlExpansionResultResponse:
+    return container.SQL_EXPANSION_SERVICE.get_sql_expansion_result(
+        SqlExpansionResultRequest(query_id=query_id)
     )
 
 

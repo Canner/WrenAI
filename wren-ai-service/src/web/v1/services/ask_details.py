@@ -1,5 +1,5 @@
 import logging
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from haystack import Pipeline
@@ -12,7 +12,7 @@ from src.utils import async_timer, trace_metadata
 logger = logging.getLogger("wren-ai-service")
 
 
-class SQLExplanation(BaseModel):
+class SQLBreakdown(BaseModel):
     sql: str
     summary: str
     cte_name: str
@@ -50,7 +50,7 @@ class AskDetailsResultRequest(BaseModel):
 class AskDetailsResultResponse(BaseModel):
     class AskDetailsResponseDetails(BaseModel):
         description: str
-        steps: List[SQLExplanation]
+        steps: List[SQLBreakdown]
 
     class AskDetailsError(BaseModel):
         code: Literal["NO_RELEVANT_SQL", "OTHERS"]
@@ -64,12 +64,14 @@ class AskDetailsResultResponse(BaseModel):
 class AskDetailsService:
     def __init__(
         self,
-        pipelines: dict[str, Pipeline],
+        pipelines: Dict[str, Pipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_details_results = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._ask_details_results: Dict[str, AskDetailsResultResponse] = TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
 
     @async_timer
     @observe(name="Ask Details(Breakdown SQL)")

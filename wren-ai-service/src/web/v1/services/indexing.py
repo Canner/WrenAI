@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -46,12 +46,14 @@ class SemanticsPreparationStatusResponse(BaseModel):
 class IndexingService:
     def __init__(
         self,
-        pipelines: dict[str, BasicPipeline],
+        pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._prepare_semantics_statuses = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._prepare_semantics_statuses: Dict[
+            str, SemanticsPreparationStatusResponse
+        ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
     @observe(name="Prepare Semantics")
