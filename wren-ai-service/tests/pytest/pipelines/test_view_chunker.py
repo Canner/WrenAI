@@ -186,3 +186,61 @@ def test_multi_views():
         "viewId": "fake-id-2",
     }
     assert document_2.content == "How many books are there?"
+
+
+def test_view_with_historical_query():
+    chunker = ViewChunker()
+    mdl = {
+        "views": [
+            {
+                "name": "book",
+                "statement": "SELECT * FROM book where created_at = 2020",
+                "properties": {
+                    "question": "in 2020",
+                    "summary": "Retrieve the number of books in 2020",
+                    "viewId": "fake-id-1",
+                    "historical_queries": ["Retrieve the number of books"],
+                },
+            }
+        ]
+    }
+
+    actual = chunker.run(mdl)
+    assert len(actual["documents"]) == 1
+
+    document: Document = actual["documents"][0]
+    assert document.meta == {
+        "summary": "Retrieve the number of books in 2020",
+        "statement": "SELECT * FROM book where created_at = 2020",
+        "viewId": "fake-id-1",
+    }
+    assert document.content == "Retrieve the number of books in 2020"
+
+
+def test_view_with_historical_queries():
+    chunker = ViewChunker()
+    mdl = {
+        "views": [
+            {
+                "name": "book",
+                "statement": "SELECT * FROM book where city = 'taipei' and created_at = 2020",
+                "properties": {
+                    "question": "in 2020",
+                    "summary": "Retrieve the number of books in taipei in 2020",
+                    "viewId": "fake-id-1",
+                    "historical_queries": ["Retrieve the number of books", "in taipei"],
+                },
+            }
+        ]
+    }
+
+    actual = chunker.run(mdl)
+    assert len(actual["documents"]) == 1
+
+    document: Document = actual["documents"][0]
+    assert document.meta == {
+        "summary": "Retrieve the number of books in taipei in 2020",
+        "statement": "SELECT * FROM book where city = 'taipei' and created_at = 2020",
+        "viewId": "fake-id-1",
+    }
+    assert document.content == "Retrieve the number of books in taipei in 2020"
