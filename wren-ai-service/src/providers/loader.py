@@ -104,7 +104,7 @@ def get_default_embedding_model_dim(embedder_provider: str):
 
 def pull_ollama_model(url: str, model_name: str):
     client = Client(host=url)
-    models = client.list()["models"]
+    models = [model["name"] for model in client.list()["models"]]
     if model_name not in models:
         logger.info(f"Pulling Ollama model {model_name}")
         percentage = 0
