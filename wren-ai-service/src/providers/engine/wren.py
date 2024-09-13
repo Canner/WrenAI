@@ -96,7 +96,7 @@ class WrenIbis(Engine):
             if response.status == 204:
                 return True, None, None
 
-            res = await response.json()
+            res = await response.text()
             if response.status == 200:
                 return True, res, None
 
