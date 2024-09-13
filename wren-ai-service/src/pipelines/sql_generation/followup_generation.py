@@ -171,13 +171,19 @@ class FollowUpGeneration(BasicPipeline):
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.generator = llm_provider.get_generator(
-            system_prompt=text_to_sql_system_prompt
-        )
-        self.prompt_builder = PromptBuilder(
-            template=text_to_sql_with_followup_user_prompt_template
-        )
-        self.post_processor = GenerationPostProcessor(engine=engine)
+        self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=text_to_sql_system_prompt
+            ),
+            "prompt_builder": PromptBuilder(
+                template=text_to_sql_with_followup_user_prompt_template
+            ),
+            "post_processor": GenerationPostProcessor(engine=engine),
+        }
+
+        self._configs = {
+            "alert": TEXT_TO_SQL_RULES,
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -199,13 +205,11 @@ class FollowUpGeneration(BasicPipeline):
             output_file_path=f"{destination}/followup_generation.dot",
             inputs={
                 "query": query,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "documents": contexts,
                 "history": history,
-                "alert": TEXT_TO_SQL_RULES,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -225,13 +229,11 @@ class FollowUpGeneration(BasicPipeline):
             ["post_process"],
             inputs={
                 "query": query,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "documents": contexts,
                 "history": history,
-                "alert": TEXT_TO_SQL_RULES,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
         )
 

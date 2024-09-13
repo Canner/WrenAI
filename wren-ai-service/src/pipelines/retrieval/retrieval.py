@@ -293,21 +293,23 @@ class Retrieval(BasicPipeline):
         table_retrieval_size: Optional[int] = 10,
         table_column_retrieval_size: Optional[int] = 1000,
     ):
-        self._embedder = embedder_provider.get_text_embedder()
-        self._table_retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store(dataset_name="table_descriptions"),
-            top_k=table_retrieval_size,
-        )
-        self._dbschema_retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store(),
-            top_k=table_column_retrieval_size,
-        )
-        self.prompt_builder = PromptBuilder(
-            template=table_columns_selection_user_prompt_template
-        )
-        self.table_columns_selection_generator = llm_provider.get_generator(
-            system_prompt=table_columns_selection_system_prompt,
-        )
+        self._components = {
+            "embedder": embedder_provider.get_text_embedder(),
+            "table_retriever": document_store_provider.get_retriever(
+                document_store_provider.get_store(dataset_name="table_descriptions"),
+                top_k=table_retrieval_size,
+            ),
+            "dbschema_retriever": document_store_provider.get_retriever(
+                document_store_provider.get_store(),
+                top_k=table_column_retrieval_size,
+            ),
+            "table_columns_selection_generator": llm_provider.get_generator(
+                system_prompt=table_columns_selection_system_prompt,
+            ),
+            "prompt_builder": PromptBuilder(
+                template=table_columns_selection_user_prompt_template
+            ),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -328,11 +330,7 @@ class Retrieval(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
-                "embedder": self._embedder,
-                "table_retriever": self._table_retriever,
-                "dbschema_retriever": self._dbschema_retriever,
-                "table_columns_selection_generator": self.table_columns_selection_generator,
-                "prompt_builder": self.prompt_builder,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -347,11 +345,7 @@ class Retrieval(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
-                "embedder": self._embedder,
-                "table_retriever": self._table_retriever,
-                "dbschema_retriever": self._dbschema_retriever,
-                "table_columns_selection_generator": self.table_columns_selection_generator,
-                "prompt_builder": self.prompt_builder,
+                **self._components,
             },
         )
 

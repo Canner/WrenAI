@@ -165,12 +165,16 @@ class Generation(BasicPipeline):
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.data_fetcher = DataFetcher(engine=engine)
-        self.prompt_builder = PromptBuilder(template=sql_to_answer_user_prompt_template)
-        self.generator = llm_provider.get_generator(
-            system_prompt=sql_to_answer_system_prompt
-        )
-        self.post_processor = GenerationPostProcessor()
+        self._components = {
+            "data_fetcher": DataFetcher(engine=engine),
+            "prompt_builder": PromptBuilder(
+                template=sql_to_answer_user_prompt_template
+            ),
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_to_answer_system_prompt
+            ),
+            "post_processor": GenerationPostProcessor(),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -191,10 +195,7 @@ class Generation(BasicPipeline):
                 "sql": sql,
                 "sql_summary": sql_summary,
                 "project_id": project_id,
-                "data_fetcher": self.data_fetcher,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -213,10 +214,7 @@ class Generation(BasicPipeline):
                 "sql": sql,
                 "sql_summary": sql_summary,
                 "project_id": project_id,
-                "data_fetcher": self.data_fetcher,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
         )
 

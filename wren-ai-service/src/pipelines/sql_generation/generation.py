@@ -139,11 +139,17 @@ class Generation(BasicPipeline):
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.generator = llm_provider.get_generator(
-            system_prompt=text_to_sql_system_prompt
-        )
-        self.prompt_builder = PromptBuilder(template=text_to_sql_user_prompt_template)
-        self.post_processor = GenerationPostProcessor(engine=engine)
+        self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=text_to_sql_system_prompt
+            ),
+            "prompt_builder": PromptBuilder(template=text_to_sql_user_prompt_template),
+            "post_processor": GenerationPostProcessor(engine=engine),
+        }
+
+        self._configs = {
+            "alert": TEXT_TO_SQL_RULES,
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -167,11 +173,9 @@ class Generation(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -193,11 +197,9 @@ class Generation(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
         )
 

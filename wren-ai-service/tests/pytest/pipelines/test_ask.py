@@ -137,7 +137,7 @@ async def test_generation_pipeline():
         exclude=[],
     )
 
-    # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
+    # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
     assert generation_result["post_process"]["valid_generation_results"] is not None
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 
@@ -171,7 +171,7 @@ async def test_followup_generation_pipeline():
         ),
     )
 
-    # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
+    # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
     assert generation_result["post_process"]["valid_generation_results"] is not None
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 

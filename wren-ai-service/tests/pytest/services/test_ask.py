@@ -120,7 +120,7 @@ async def test_ask_with_successful_query(
             )
         )
 
-    # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
+    # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
     assert ask_result_response.status == "finished" or "failed"
     # assert ask_result_response.response is not None
     # assert ask_result_response.response[0].sql != ""

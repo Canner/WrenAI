@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
-import pydantic
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
@@ -509,14 +508,16 @@ class Generation(BasicPipeline):
         self,
         llm_provider: LLMProvider,
     ):
-        self.pre_processor = SQLAnalysisPreprocessor()
-        self.prompt_builder = PromptBuilder(
-            template=sql_explanation_user_prompt_template
-        )
-        self.generator = llm_provider.get_generator(
-            system_prompt=sql_explanation_system_prompt
-        )
-        self.post_processor = GenerationPostProcessor()
+        self._components = {
+            "pre_processor": SQLAnalysisPreprocessor(),
+            "prompt_builder": PromptBuilder(
+                template=sql_explanation_user_prompt_template
+            ),
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_explanation_system_prompt
+            ),
+            "post_processor": GenerationPostProcessor(),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -525,7 +526,7 @@ class Generation(BasicPipeline):
     def visualize(
         self,
         question: str,
-        step_with_analysis_results: pydantic.BaseModel,
+        step_with_analysis_results: StepWithAnalysisResult,
     ) -> None:
         destination = "outputs/pipelines/sql_explanation"
         if not Path(destination).exists():
@@ -539,10 +540,7 @@ class Generation(BasicPipeline):
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
-                "pre_processor": self.pre_processor,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -564,10 +562,7 @@ class Generation(BasicPipeline):
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
-                "pre_processor": self.pre_processor,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
         )
 

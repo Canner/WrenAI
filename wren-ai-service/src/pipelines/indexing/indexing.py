@@ -648,7 +648,7 @@ class Indexing(BasicPipeline):
             ),
         }
 
-        self._config = {
+        self._configs = {
             "column_indexing_batch_size": column_indexing_batch_size,
         }
 
@@ -668,7 +668,7 @@ class Indexing(BasicPipeline):
                 "mdl_str": mdl_str,
                 "id": id,
                 **self._components,
-                **self._config,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -684,7 +684,7 @@ class Indexing(BasicPipeline):
                 "mdl_str": mdl_str,
                 "id": id,
                 **self._components,
-                **self._config,
+                **self._configs,
             },
         )
 

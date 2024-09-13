@@ -115,14 +115,16 @@ class Generation(BasicPipeline):
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.sql_regeneration_preprocesser = SQLRegenerationRreprocesser()
-        self.sql_regeneration_prompt_builder = PromptBuilder(
-            template=sql_regeneration_user_prompt_template
-        )
-        self.sql_regeneration_generator = llm_provider.get_generator(
-            system_prompt=sql_regeneration_system_prompt
-        )
-        self.sql_regeneration_post_processor = GenerationPostProcessor(engine=engine)
+        self._components = {
+            "sql_regeneration_preprocesser": SQLRegenerationRreprocesser(),
+            "sql_regeneration_prompt_builder": PromptBuilder(
+                template=sql_regeneration_user_prompt_template
+            ),
+            "sql_regeneration_generator": llm_provider.get_generator(
+                system_prompt=sql_regeneration_system_prompt
+            ),
+            "sql_regeneration_post_processor": GenerationPostProcessor(engine=engine),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -144,11 +146,8 @@ class Generation(BasicPipeline):
             inputs={
                 "description": description,
                 "steps": steps,
-                "sql_regeneration_preprocesser": self.sql_regeneration_preprocesser,
-                "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
-                "sql_regeneration_generator": self.sql_regeneration_generator,
-                "sql_regeneration_post_processor": self.sql_regeneration_post_processor,
                 "project_id": project_id,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -168,11 +167,8 @@ class Generation(BasicPipeline):
             inputs={
                 "description": description,
                 "steps": steps,
-                "sql_regeneration_preprocesser": self.sql_regeneration_preprocesser,
-                "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
-                "sql_regeneration_generator": self.sql_regeneration_generator,
-                "sql_regeneration_post_processor": self.sql_regeneration_post_processor,
                 "project_id": project_id,
+                **self._components,
             },
         )
 

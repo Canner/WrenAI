@@ -143,14 +143,17 @@ class HistoricalQuestion(BasicPipeline):
         embedder_provider: EmbedderProvider,
         store_provider: DocumentStoreProvider,
     ) -> None:
-        self._store = store_provider.get_store(dataset_name="view_questions")
-        self._embedder = embedder_provider.get_text_embedder()
-        self._retriever = store_provider.get_retriever(
-            document_store=self._store,
-        )
-        self._score_filter = ScoreFilter()
-        # todo: add a llm filter to filter out low scoring document
-        self._output_formatter = OutputFormatter()
+        _store = store_provider.get_store(dataset_name="view_questions")
+        self._components = {
+            "store": _store,
+            "embedder": embedder_provider.get_text_embedder(),
+            "retriever": store_provider.get_retriever(
+                document_store=_store,
+            ),
+            "score_filter": ScoreFilter(),
+            # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
+            "output_formatter": OutputFormatter(),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -171,11 +174,7 @@ class HistoricalQuestion(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
-                "store": self._store,
-                "embedder": self._embedder,
-                "retriever": self._retriever,
-                "score_filter": self._score_filter,
-                "output_formatter": self._output_formatter,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -190,11 +189,7 @@ class HistoricalQuestion(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
-                "store": self._store,
-                "embedder": self._embedder,
-                "retriever": self._retriever,
-                "score_filter": self._score_filter,
-                "output_formatter": self._output_formatter,
+                **self._components,
             },
         )
 

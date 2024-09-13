@@ -69,7 +69,7 @@ def test_asks_with_successful_query():
         ):
             response = client.get(url=f"/v1/asks/{query_id}/result")
 
-        # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert the status is finished or failed.
+        # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert the status is finished or failed.
         assert response.status_code == 200
         assert response.json()["status"] == "finished" or "failed"
         # for r in response.json()["response"]:

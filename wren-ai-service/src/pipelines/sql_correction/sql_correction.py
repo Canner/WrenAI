@@ -113,13 +113,19 @@ class SQLCorrection(BasicPipeline):
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.generator = llm_provider.get_generator(
-            system_prompt=text_to_sql_system_prompt
-        )
-        self.prompt_builder = PromptBuilder(
-            template=sql_correction_user_prompt_template
-        )
-        self.post_processor = GenerationPostProcessor(engine=engine)
+        self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=text_to_sql_system_prompt
+            ),
+            "prompt_builder": PromptBuilder(
+                template=sql_correction_user_prompt_template
+            ),
+            "post_processor": GenerationPostProcessor(engine=engine),
+        }
+
+        self._configs = {
+            "alert": TEXT_TO_SQL_RULES,
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -141,11 +147,9 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_results": invalid_generation_results,
                 "documents": contexts,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -165,11 +169,9 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_results": invalid_generation_results,
                 "documents": contexts,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
         )
 
