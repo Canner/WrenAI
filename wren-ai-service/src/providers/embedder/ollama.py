@@ -18,7 +18,7 @@ from src.utils import remove_trailing_slash
 logger = logging.getLogger("wren-ai-service")
 
 EMBEDDER_OLLAMA_URL = "http://localhost:11434"
-EMBEDDING_MODEL = "nomic-embed-text"
+EMBEDDING_MODEL = "nomic-embed-text:latest"
 EMBEDDING_MODEL_DIMENSION = 768  # https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
 
 
