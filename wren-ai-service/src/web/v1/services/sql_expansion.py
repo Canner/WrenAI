@@ -156,7 +156,7 @@ class SqlExpansionService:
                 )
 
                 sql_expansion_generation_results = await self._pipelines[
-                    "generation"
+                    "sql_expansion"
                 ].run(
                     query=sql_expansion_request.query,
                     contexts=documents,

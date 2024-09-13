@@ -163,7 +163,7 @@ async def post_process(
 ## End of Pipeline
 
 
-class FollowUpGeneration(BasicPipeline):
+class FollowUpSQLGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -194,13 +194,13 @@ class FollowUpGeneration(BasicPipeline):
         history: AskHistory,
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/sql_generation"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["post_process"],
-            output_file_path=f"{destination}/followup_generation.dot",
+            output_file_path=f"{destination}/followup_sql_generation.dot",
             inputs={
                 "query": query,
                 "documents": contexts,
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = FollowUpGeneration(llm_provider=llm_provider, engine=engine)
+    pipeline = FollowUpSQLGeneration(llm_provider=llm_provider, engine=engine)
 
     pipeline.visualize(
         "this is a test query",

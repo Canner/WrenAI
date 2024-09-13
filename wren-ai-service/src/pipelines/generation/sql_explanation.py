@@ -586,7 +586,7 @@ def post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLExplanation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -611,13 +611,13 @@ class Generation(BasicPipeline):
         question: str,
         step_with_analysis_results: StepWithAnalysisResult,
     ) -> None:
-        destination = "outputs/pipelines/sql_explanation"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_explanation.dot",
             inputs={
                 "question": question,
                 "sql": step_with_analysis_results.sql,
@@ -661,7 +661,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLExplanation(
         llm_provider=llm_provider,
     )
 

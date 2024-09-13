@@ -131,7 +131,7 @@ async def post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -160,13 +160,13 @@ class Generation(BasicPipeline):
         exclude: List[Dict],
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/sql_generation"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_generation.dot",
             inputs={
                 "query": query,
                 "documents": contexts,
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLGeneration(
         llm_provider=llm_provider,
         engine=engine,
     )

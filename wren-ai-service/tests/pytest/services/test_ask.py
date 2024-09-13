@@ -7,10 +7,9 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
+from src.pipelines.generation import sql_correction, sql_generation
 from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
-from src.pipelines.sql_correction import sql_correction
-from src.pipelines.sql_generation import generation
 from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
@@ -47,7 +46,7 @@ def ask_service():
                 embedder_provider=embedder_provider,
                 store_provider=document_store_provider,
             ),
-            "generation": generation.Generation(
+            "sql_generation": sql_generation.SQLGeneration(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -138,7 +137,7 @@ def _ask_service_ttl_mock(query: str):
                 ]
             ),
             "historical_question": HistoricalQuestionMock(),
-            "generation": GenerationMock(
+            "sql_generation": GenerationMock(
                 valid=["select count(*) from books"],
             ),
             "sql_summary": SQLSummaryMock(

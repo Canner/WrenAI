@@ -186,7 +186,7 @@ class AskService:
 
                 if ask_request.history:
                     text_to_sql_generation_results = await self._pipelines[
-                        "followup_generation"
+                        "followup_sql_generation"
                     ].run(
                         query=ask_request.query,
                         contexts=documents,
@@ -195,7 +195,7 @@ class AskService:
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
-                        "generation"
+                        "sql_generation"
                     ].run(
                         query=ask_request.query,
                         contexts=documents,

@@ -83,7 +83,7 @@ class SQLExplanationService:
                 question: str,
                 step_with_analysis_results: StepWithAnalysisResult,
             ):
-                return await self._pipelines["generation"].run(
+                return await self._pipelines["sql_explanation"].run(
                     question=question,
                     step_with_analysis_results=step_with_analysis_results,
                 )

@@ -139,7 +139,7 @@ class SQLSummary(BasicPipeline):
         query: str,
         sqls: List[str],
     ) -> None:
-        destination = "outputs/pipelines/sql_summary"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 

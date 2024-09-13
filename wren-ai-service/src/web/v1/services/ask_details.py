@@ -105,7 +105,7 @@ class AskDetailsService:
                 status="generating",
             )
 
-            generation_result = await self._pipelines["generation"].run(
+            generation_result = await self._pipelines["sql_breakdown"].run(
                 query=ask_details_request.query,
                 sql=ask_details_request.sql,
                 project_id=ask_details_request.project_id,

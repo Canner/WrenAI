@@ -135,7 +135,7 @@ class SQLCorrection(BasicPipeline):
         invalid_generation_results: List[Dict[str, str]],
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/sql_correction"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 

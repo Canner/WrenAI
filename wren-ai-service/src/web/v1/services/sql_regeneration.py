@@ -104,7 +104,7 @@ class SQLRegenerationService:
                 status="generating",
             )
 
-            generation_result = await self._pipelines["generation"].run(
+            generation_result = await self._pipelines["sql_regeneration"].run(
                 description=sql_regeneration_request.description,
                 steps=sql_regeneration_request.steps,
                 project_id=sql_regeneration_request.project_id,

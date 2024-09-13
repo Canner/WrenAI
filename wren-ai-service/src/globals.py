@@ -2,21 +2,19 @@ from typing import Optional
 
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
+from src.pipelines.generation import (
+    followup_sql_generation,
+    sql_answer,
+    sql_breakdown,
+    sql_correction,
+    sql_expansion,
+    sql_explanation,
+    sql_generation,
+    sql_regeneration,
+    sql_summary,
+)
 from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
-from src.pipelines.sql_answer import generation as sql_answer_generation
-from src.pipelines.sql_breakdown import generation as ask_details_generation
-from src.pipelines.sql_correction import sql_correction
-from src.pipelines.sql_expansion import generation as sql_expansion_generation
-from src.pipelines.sql_explanation import generation as sql_explanation_generation
-from src.pipelines.sql_generation import (
-    followup_generation as ask_followup_generation,
-)
-from src.pipelines.sql_generation import (
-    generation as ask_generation,
-)
-from src.pipelines.sql_regeneration import generation as sql_regeneration
-from src.pipelines.sql_summary import sql_summary
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
@@ -87,7 +85,7 @@ def init_globals(
                 embedder_provider=embedder_provider,
                 store_provider=document_store_provider,
             ),
-            "generation": ask_generation.Generation(
+            "sql_generation": sql_generation.SQLGeneration(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -95,7 +93,7 @@ def init_globals(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
-            "followup_generation": ask_followup_generation.FollowUpGeneration(
+            "followup_sql_generation": followup_sql_generation.FollowUpSQLGeneration(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -108,7 +106,7 @@ def init_globals(
 
     SQL_ANSWER_SERVICE = SqlAnswerService(
         pipelines={
-            "generation": sql_answer_generation.Generation(
+            "sql_answer": sql_answer.SQLAnswer(
                 llm_provider=llm_provider,
                 engine=engine,
             )
@@ -118,7 +116,7 @@ def init_globals(
 
     ASK_DETAILS_SERVICE = AskDetailsService(
         pipelines={
-            "generation": ask_details_generation.Generation(
+            "sql_breakdown": sql_breakdown.SQLBreakdown(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -135,7 +133,7 @@ def init_globals(
                 table_retrieval_size=table_retrieval_size,
                 table_column_retrieval_size=table_column_retrieval_size,
             ),
-            "generation": sql_expansion_generation.Generation(
+            "sql_expansion": sql_expansion.SQLExpansion(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -152,7 +150,7 @@ def init_globals(
 
     SQL_EXPLANATION_SERVICE = SQLExplanationService(
         pipelines={
-            "generation": sql_explanation_generation.Generation(
+            "sql_explanation": sql_explanation.SQLExplanation(
                 llm_provider=llm_provider,
             )
         },
@@ -161,7 +159,7 @@ def init_globals(
 
     SQL_REGENERATION_SERVICE = SQLRegenerationService(
         pipelines={
-            "generation": sql_regeneration.Generation(
+            "sql_regeneration": sql_regeneration.SQLRegeneration(
                 llm_provider=llm_provider,
                 engine=engine,
             )

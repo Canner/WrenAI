@@ -144,7 +144,7 @@ async def post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLBreakdown(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -165,13 +165,13 @@ class Generation(BasicPipeline):
         )
 
     def visualize(self, query: str, sql: str, project_id: str | None = None) -> None:
-        destination = "outputs/pipelines/sql_breakdown"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_breakdown.dot",
             inputs={
                 "query": query,
                 "sql": sql,
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLBreakdown(
         llm_provider=llm_provider,
         engine=engine,
     )

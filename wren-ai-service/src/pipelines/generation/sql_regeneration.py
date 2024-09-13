@@ -155,7 +155,7 @@ async def sql_regeneration_post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLRegeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -184,13 +184,13 @@ class Generation(BasicPipeline):
         steps: List[SQLExplanationWithUserCorrections],
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/sql_regeneration"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["sql_regeneration_post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_regeneration.dot",
             inputs={
                 "description": description,
                 "steps": steps,
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLRegeneration(
         llm_provider=llm_provider,
         engine=engine,
     )

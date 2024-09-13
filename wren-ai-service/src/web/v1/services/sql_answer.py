@@ -87,7 +87,7 @@ class SqlAnswerService:
                 status="processing",
             )
 
-            data = await self._pipelines["generation"].run(
+            data = await self._pipelines["sql_answer"].run(
                 query=sql_answer_request.query,
                 sql=sql_answer_request.sql,
                 sql_summary=sql_answer_request.sql_summary,
