@@ -14,10 +14,8 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import (
-    SQLGenerationPostProcessor,
-)
-from src.pipelines.sql_generation.components.prompts import (
     TEXT_TO_SQL_RULES,
+    SQLGenerationPostProcessor,
     text_to_sql_system_prompt,
 )
 from src.utils import async_timer, timer
