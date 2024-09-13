@@ -13,8 +13,8 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.sql_generation.components.post_processors import (
-    GenerationPostProcessor,
+from src.pipelines.common import (
+    SQLGenerationPostProcessor,
 )
 from src.pipelines.sql_generation.components.prompts import (
     TEXT_TO_SQL_RULES,
@@ -93,7 +93,7 @@ async def generate_sql_correction(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql_correction: dict,
-    post_processor: GenerationPostProcessor,
+    post_processor: SQLGenerationPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -120,7 +120,7 @@ class SQLCorrection(BasicPipeline):
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
             ),
-            "post_processor": GenerationPostProcessor(engine=engine),
+            "post_processor": SQLGenerationPostProcessor(engine=engine),
         }
 
         self._configs = {

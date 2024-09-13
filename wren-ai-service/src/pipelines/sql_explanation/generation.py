@@ -324,7 +324,7 @@ class SQLAnalysisPreprocessor:
 
 
 @component
-class GenerationPostProcessor:
+class SQLExplanationGenerationPostProcessor:
     @component.output_types(
         results=Optional[List[Dict[str, Any]]],
     )
@@ -466,7 +466,7 @@ class GenerationPostProcessor:
                                 }
                             )
         except Exception as e:
-            logger.exception(f"Error in GenerationPostProcessor: {e}")
+            logger.exception(f"Error in SQLExplanationGenerationPostProcessor: {e}")
 
         return {"results": results}
 
@@ -568,7 +568,7 @@ async def generate_sql_explanation(prompts: List[dict], generator: Any) -> List[
 def post_process(
     generate_sql_explanation: List[dict],
     preprocess: dict,
-    post_processor: GenerationPostProcessor,
+    post_processor: SQLExplanationGenerationPostProcessor,
 ) -> dict:
     logger.debug(
         f"generate_sql_explanation: {orjson.dumps(generate_sql_explanation, option=orjson.OPT_INDENT_2).decode()}"
@@ -599,7 +599,7 @@ class Generation(BasicPipeline):
             "generator": llm_provider.get_generator(
                 system_prompt=sql_explanation_system_prompt
             ),
-            "post_processor": GenerationPostProcessor(),
+            "post_processor": SQLExplanationGenerationPostProcessor(),
         }
 
         super().__init__(

@@ -13,7 +13,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import GenerationPostProcessor
+from src.pipelines.common import SQLBreakdownGenerationPostProcessor
 from src.utils import async_timer, timer
 from src.web.v1.services.sql_regeneration import (
     SQLExplanationWithUserCorrections,
@@ -140,7 +140,7 @@ async def generate_sql_regeneration(
 @observe(capture_input=False)
 async def sql_regeneration_post_process(
     generate_sql_regeneration: dict,
-    sql_regeneration_post_processor: GenerationPostProcessor,
+    sql_regeneration_post_processor: SQLBreakdownGenerationPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -169,7 +169,9 @@ class Generation(BasicPipeline):
             "sql_regeneration_generator": llm_provider.get_generator(
                 system_prompt=sql_regeneration_system_prompt
             ),
-            "sql_regeneration_post_processor": GenerationPostProcessor(engine=engine),
+            "sql_regeneration_post_processor": SQLBreakdownGenerationPostProcessor(
+                engine=engine
+            ),
         }
 
         super().__init__(

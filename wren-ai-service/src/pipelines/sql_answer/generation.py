@@ -76,7 +76,7 @@ class DataFetcher:
 
 
 @component
-class GenerationPostProcessor:
+class SQLAnswerGenerationPostProcessor:
     @component.output_types(
         results=Dict[str, Any],
     )
@@ -95,7 +95,7 @@ class GenerationPostProcessor:
                 }
             }
         except Exception as e:
-            logger.exception(f"Error in GenerationPostProcessor: {e}")
+            logger.exception(f"Error in SQLAnswerGenerationPostProcessor: {e}")
 
             return {
                 "results": {
@@ -147,7 +147,7 @@ async def generate_answer(prompt: dict, generator: Any) -> dict:
 @timer
 @observe(capture_input=False)
 def post_process(
-    generate_answer: dict, post_processor: GenerationPostProcessor
+    generate_answer: dict, post_processor: SQLAnswerGenerationPostProcessor
 ) -> dict:
     logger.debug(
         f"generate_answer: {orjson.dumps(generate_answer, option=orjson.OPT_INDENT_2).decode()}"
@@ -173,7 +173,7 @@ class Generation(BasicPipeline):
             "generator": llm_provider.get_generator(
                 system_prompt=sql_to_answer_system_prompt
             ),
-            "post_processor": GenerationPostProcessor(),
+            "post_processor": SQLAnswerGenerationPostProcessor(),
         }
 
         super().__init__(

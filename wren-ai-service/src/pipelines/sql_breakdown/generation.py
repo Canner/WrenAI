@@ -12,7 +12,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.common import GenerationPostProcessor
+from src.pipelines.common import SQLBreakdownGenerationPostProcessor
 from src.utils import (
     async_timer,
     timer,
@@ -130,7 +130,7 @@ async def generate_sql_details(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql_details: dict,
-    post_processor: GenerationPostProcessor,
+    post_processor: SQLBreakdownGenerationPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -157,7 +157,7 @@ class Generation(BasicPipeline):
             "prompt_builder": PromptBuilder(
                 template=sql_breakdown_user_prompt_template
             ),
-            "post_processor": GenerationPostProcessor(engine=engine),
+            "post_processor": SQLBreakdownGenerationPostProcessor(engine=engine),
         }
 
         super().__init__(
