@@ -140,16 +140,16 @@ class AskService:
                     status="understanding",
                 )
 
+            query_for_retrieval = (
+                ask_request.history.summary + " " + ask_request.query
+                if ask_request.history
+                else ask_request.query
+            )
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
                 )
 
-                query_for_retrieval = (
-                    ask_request.history.summary + " " + ask_request.query
-                    if ask_request.history
-                    else ask_request.query
-                )
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=query_for_retrieval,
                     id=ask_request.project_id,
@@ -176,7 +176,7 @@ class AskService:
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=ask_request.query,
+                    query=query_for_retrieval,
                     id=ask_request.project_id,
                 )
 

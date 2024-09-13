@@ -84,7 +84,7 @@ class MDLValidator:
 
 
 @component
-class ViewConverter:
+class ViewChunker:
     """
     Convert the view MDL to the following format:
     {
@@ -100,7 +100,10 @@ class ViewConverter:
     def run(self, mdl: Dict[str, Any], id: Optional[str] = None) -> None:
         def _get_content(view: Dict[str, Any]) -> str:
             properties = view.get("properties", {})
-            return str(properties.get("question", ""))
+            historical_queries = properties.get("historical_queries", [])
+            question = properties.get("question", "")
+
+            return " ".join(historical_queries + [question])
 
         def _get_meta(view: Dict[str, Any]) -> Dict[str, Any]:
             properties = view.get("properties", {})
@@ -580,24 +583,24 @@ async def write_dbschema(
 
 @timer
 @observe(capture_input=False)
-def convert_to_view(
-    mdl: Dict[str, Any], view_converter: ViewConverter, id: Optional[str] = None
+def view_chunk(
+    mdl: Dict[str, Any], view_chunker: ViewChunker, id: Optional[str] = None
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input in convert_to_view: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
+        f"input in view_chunk: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return view_converter.run(mdl=mdl, id=id)
+    return view_chunker.run(mdl=mdl, id=id)
 
 
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_view(
-    convert_to_view: Dict[str, Any], document_embedder: Any
+    view_chunk: Dict[str, Any], document_embedder: Any
 ) -> Dict[str, Any]:
     logger.debug(
-        f"input in embed_view: {orjson.dumps(convert_to_view, option=orjson.OPT_INDENT_2).decode()}"
+        f"input in embed_view: {orjson.dumps(view_chunk, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await document_embedder.run(documents=convert_to_view["documents"])
+    return await document_embedder.run(documents=view_chunk["documents"])
 
 
 @async_timer
@@ -622,30 +625,32 @@ class Indexing(BasicPipeline):
             dataset_name="table_descriptions"
         )
 
-        self.column_indexing_batch_size = column_indexing_batch_size
-        self.cleaner = DocumentCleaner(
-            [dbschema_store, view_store, table_description_store]
-        )
-        self.validator = MDLValidator()
-        self.document_embedder = embedder_provider.get_document_embedder()
+        self._components = {
+            "cleaner": DocumentCleaner(
+                [dbschema_store, view_store, table_description_store]
+            ),
+            "validator": MDLValidator(),
+            "document_embedder": embedder_provider.get_document_embedder(),
+            "ddl_converter": DDLConverter(),
+            "table_description_converter": TableDescriptionConverter(),
+            "dbschema_writer": AsyncDocumentWriter(
+                document_store=dbschema_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+            "view_chunker": ViewChunker(),
+            "view_writer": AsyncDocumentWriter(
+                document_store=view_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+            "table_description_writer": AsyncDocumentWriter(
+                document_store=table_description_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        }
 
-        self.ddl_converter = DDLConverter()
-        self.dbschema_writer = AsyncDocumentWriter(
-            document_store=dbschema_store,
-            policy=DuplicatePolicy.OVERWRITE,
-        )
-
-        self.view_converter = ViewConverter()
-        self.view_writer = AsyncDocumentWriter(
-            document_store=view_store,
-            policy=DuplicatePolicy.OVERWRITE,
-        )
-
-        self.table_description_converter = TableDescriptionConverter()
-        self.table_description_writer = AsyncDocumentWriter(
-            document_store=table_description_store,
-            policy=DuplicatePolicy.OVERWRITE,
-        )
+        self._config = {
+            "column_indexing_batch_size": column_indexing_batch_size,
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -662,16 +667,8 @@ class Indexing(BasicPipeline):
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
-                "cleaner": self.cleaner,
-                "validator": self.validator,
-                "document_embedder": self.document_embedder,
-                "ddl_converter": self.ddl_converter,
-                "view_converter": self.view_converter,
-                "table_description_converter": self.table_description_converter,
-                "dbschema_writer": self.dbschema_writer,
-                "view_writer": self.view_writer,
-                "table_description_writer": self.table_description_writer,
-                "column_indexing_batch_size": self.column_indexing_batch_size,
+                **self._components,
+                **self._config,
             },
             show_legend=True,
             orient="LR",
@@ -686,16 +683,8 @@ class Indexing(BasicPipeline):
             inputs={
                 "mdl_str": mdl_str,
                 "id": id,
-                "cleaner": self.cleaner,
-                "validator": self.validator,
-                "document_embedder": self.document_embedder,
-                "ddl_converter": self.ddl_converter,
-                "table_description_converter": self.table_description_converter,
-                "dbschema_writer": self.dbschema_writer,
-                "view_converter": self.view_converter,
-                "view_writer": self.view_writer,
-                "table_description_writer": self.table_description_writer,
-                "column_indexing_batch_size": self.column_indexing_batch_size,
+                **self._components,
+                **self._config,
             },
         )
 
