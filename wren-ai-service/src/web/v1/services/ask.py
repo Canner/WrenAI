@@ -1,13 +1,12 @@
 import logging
 from typing import Dict, List, Literal, Optional
 
-import sqlparse
 from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, trace_metadata
+from src.utils import async_timer, remove_sql_summary_duplicates, trace_metadata
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
@@ -185,10 +184,6 @@ class AskService:
                     "formatted_output", {}
                 ).get("documents", [])[:1]
 
-                logger.debug(
-                    f"historical_question_result: {historical_question_result}"
-                )
-
                 if ask_request.history:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_generation"
@@ -209,19 +204,10 @@ class AskService:
                     )
 
                 valid_generation_results = []
-                if text_to_sql_generation_results["post_process"][
+                if sql_valid_results := text_to_sql_generation_results["post_process"][
                     "valid_generation_results"
                 ]:
-                    valid_generation_results += text_to_sql_generation_results[
-                        "post_process"
-                    ]["valid_generation_results"]
-
-                logger.debug("Documents:")
-                for document in documents:
-                    logger.debug(f"content: {document}")
-
-                logger.debug("Before sql correction:")
-                logger.debug(f"valid_generation_results: {valid_generation_results}")
+                    valid_generation_results += sql_valid_results
 
                 if failed_dry_run_results := self._get_failed_dry_run_results(
                     text_to_sql_generation_results["post_process"][
@@ -239,24 +225,6 @@ class AskService:
                         "valid_generation_results"
                     ]
 
-                    logger.debug(
-                        f'sql_correction_results: {sql_correction_results["post_process"]}'
-                    )
-
-                    for failed_dry_run_result in failed_dry_run_results:
-                        logger.debug(
-                            f"{sqlparse.format(
-                                failed_dry_run_result['sql'],
-                                reindent=True,
-                                keyword_case='upper')
-                            }"
-                        )
-                        logger.debug(failed_dry_run_result["error"])
-                        logger.debug("\n\n")
-
-                logger.debug("After sql correction:")
-                logger.debug(f"valid_generation_results: {valid_generation_results}")
-
                 valid_sql_summary_results = []
                 if valid_generation_results:
                     sql_summary_results = await self._pipelines["sql_summary"].run(
@@ -267,7 +235,7 @@ class AskService:
                         "sql_summary_results"
                     ]
                     # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
-                    valid_sql_summary_results = remove_duplicates(
+                    valid_sql_summary_results = remove_sql_summary_duplicates(
                         valid_sql_summary_results
                     )
 
@@ -348,27 +316,3 @@ class AskService:
             )
 
         return result
-
-
-def remove_duplicates(dicts):
-    """
-    Removes duplicates from a list of dictionaries based on 'sql' and 'summary' fields.
-
-    Args:
-    dicts (list of dict): The list of dictionaries to be deduplicated.
-
-    Returns:
-    list of dict: A list of dictionaries after removing duplicates.
-    """
-    # Convert each dictionary to a tuple of (sql, summary) to make them hashable
-    seen = set()
-    unique_dicts = []
-    for d in dicts:
-        identifier = (
-            d["sql"],
-            d["summary"],
-        )  # This assumes 'sql' and 'summary' always exist
-        if identifier not in seen:
-            seen.add(identifier)
-            unique_dicts.append(d)
-    return unique_dicts

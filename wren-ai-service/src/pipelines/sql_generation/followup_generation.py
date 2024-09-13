@@ -12,8 +12,10 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.ask.components.post_processors import GenerationPostProcessor
-from src.pipelines.ask.components.prompts import (
+from src.pipelines.sql_generation.components.post_processors import (
+    GenerationPostProcessor,
+)
+from src.pipelines.sql_generation.components.prompts import (
     TEXT_TO_SQL_RULES,
     text_to_sql_system_prompt,
 )
@@ -188,7 +190,7 @@ class FollowUpGeneration(BasicPipeline):
         history: AskHistory,
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/ask"
+        destination = "outputs/pipelines/sql_generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
@@ -210,7 +212,7 @@ class FollowUpGeneration(BasicPipeline):
         )
 
     @async_timer
-    @observe(name="Ask Follow Up Generation")
+    @observe(name="Follow-Up SQL Generation")
     async def run(
         self,
         query: str,
@@ -218,7 +220,7 @@ class FollowUpGeneration(BasicPipeline):
         history: AskHistory,
         project_id: str | None = None,
     ):
-        logger.info("Ask FollowUpGeneration pipeline is running...")
+        logger.info("Follow-Up SQL Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={

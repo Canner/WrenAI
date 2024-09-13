@@ -318,7 +318,7 @@ class Retrieval(BasicPipeline):
         query: str,
         id: Optional[str] = None,
     ) -> None:
-        destination = "outputs/pipelines/ask"
+        destination = "outputs/pipelines/retrieval"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 

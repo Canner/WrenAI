@@ -1,7 +1,7 @@
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.ask_details.generation import Generation
+from src.pipelines.sql_breakdown.generation import Generation
 from src.utils import init_providers
 
 

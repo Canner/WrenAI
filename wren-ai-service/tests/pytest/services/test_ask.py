@@ -7,13 +7,10 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.ask import (
-    generation,
-    historical_question,
-    sql_correction,
-)
 from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import retrieval
+from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.sql_correction import sql_correction
+from src.pipelines.sql_generation import generation
 from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
@@ -21,9 +18,9 @@ from src.web.v1.services.ask import (
     AskResultResponse,
     AskService,
 )
-from src.web.v1.services.indexing import (
-    IndexingService,
+from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
+    SemanticsPreparationService,
 )
 from tests.pytest.services.mocks import (
     GenerationMock,
@@ -66,7 +63,7 @@ def ask_service():
 def indexing_service():
     _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
 
-    return IndexingService(
+    return SemanticsPreparationService(
         {
             "indexing": indexing.Indexing(
                 embedder_provider=embedder_provider,
@@ -84,7 +81,7 @@ def mdl_str():
 
 @pytest.mark.asyncio
 async def test_ask_with_successful_query(
-    indexing_service: IndexingService, ask_service: AskService, mdl_str: str
+    indexing_service: SemanticsPreparationService, ask_service: AskService, mdl_str: str
 ):
     id = str(uuid.uuid4())
     await indexing_service.prepare_semantics(

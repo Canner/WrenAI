@@ -5,11 +5,11 @@ import pytest
 
 from src.core.engine import EngineConfig
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.ask.followup_generation import FollowUpGeneration
-from src.pipelines.ask.generation import Generation
-from src.pipelines.ask.sql_correction import SQLCorrection
 from src.pipelines.indexing.indexing import Indexing
 from src.pipelines.retrieval.retrieval import Retrieval
+from src.pipelines.sql_correction.sql_correction import SQLCorrection
+from src.pipelines.sql_generation.followup_generation import FollowUpGeneration
+from src.pipelines.sql_generation.generation import Generation
 from src.utils import init_providers
 from src.web.v1.services.ask import AskHistory
 from src.web.v1.services.ask_details import SQLBreakdown

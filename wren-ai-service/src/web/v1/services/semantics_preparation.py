@@ -43,7 +43,7 @@ class SemanticsPreparationStatusResponse(BaseModel):
     error: Optional[SemanticsPreparationError] = None
 
 
-class IndexingService:
+class SemanticsPreparationService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
@@ -81,7 +81,7 @@ class IndexingService:
                 status="finished",
             )
         except Exception as e:
-            logger.exception(f"ask pipeline - Failed to prepare semantics: {e}")
+            logger.exception(f"Failed to prepare semantics: {e}")
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.mdl_hash
@@ -104,7 +104,7 @@ class IndexingService:
             )
         ) is None:
             logger.exception(
-                f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.mdl_hash}"
+                f"id is not found for SemanticsPreparation: {prepare_semantics_status_request.mdl_hash}"
             )
             return SemanticsPreparationStatusResponse(
                 status="failed",

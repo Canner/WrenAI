@@ -114,8 +114,6 @@ class SQLRegenerationService:
                 "sql_regeneration_post_process"
             ]["results"]
 
-            logger.debug(f"sql regeneration results: {sql_regeneration_result}")
-
             if not sql_regeneration_result["steps"]:
                 self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
                     status="failed",

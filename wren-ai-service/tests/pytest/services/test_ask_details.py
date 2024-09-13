@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.ask_details import generation
+from src.pipelines.sql_breakdown import generation
 from src.utils import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,

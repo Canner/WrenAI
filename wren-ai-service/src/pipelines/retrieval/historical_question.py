@@ -161,7 +161,7 @@ class HistoricalQuestion(BasicPipeline):
         query: str,
         id: Optional[str] = None,
     ) -> None:
-        destination = "outputs/pipelines/ask"
+        destination = "outputs/pipelines/retrieval"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
@@ -182,9 +182,9 @@ class HistoricalQuestion(BasicPipeline):
         )
 
     @async_timer
-    @observe(name="Ask Historical Question")
+    @observe(name="Historical Question")
     async def run(self, query: str, id: Optional[str] = None):
-        logger.info("Ask HistoricalQuestion pipeline is running...")
+        logger.info("HistoricalQuestion pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={

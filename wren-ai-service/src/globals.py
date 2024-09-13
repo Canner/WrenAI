@@ -2,44 +2,30 @@ from typing import Optional
 
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.ask import (
+from src.pipelines.indexing import indexing
+from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.sql_answer import generation as sql_answer_generation
+from src.pipelines.sql_breakdown import generation as ask_details_generation
+from src.pipelines.sql_correction import sql_correction
+from src.pipelines.sql_expansion import generation as sql_expansion_generation
+from src.pipelines.sql_explanation import generation as sql_explanation_generation
+from src.pipelines.sql_generation import (
     followup_generation as ask_followup_generation,
 )
-from src.pipelines.ask import (
+from src.pipelines.sql_generation import (
     generation as ask_generation,
 )
-from src.pipelines.ask import (
-    historical_question,
-    sql_summary,
-)
-from src.pipelines.ask import (
-    sql_correction as ask_sql_correction,
-)
-from src.pipelines.ask_details import (
-    generation as ask_details_generation,
-)
-from src.pipelines.indexing import (
-    indexing,
-)
-from src.pipelines.retrieval import (
-    retrieval,
-)
-from src.pipelines.sql_answer import generation as sql_answer_generation
-from src.pipelines.sql_explanation import (
-    generation as sql_explanation_generation,
-)
-from src.pipelines.sql_regeneration import (
-    generation as sql_regeneration,
-)
+from src.pipelines.sql_regeneration import generation as sql_regeneration
+from src.pipelines.sql_summary import sql_summary
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
-from src.web.v1.services.indexing import IndexingService
+from src.web.v1.services.semantics_preparation import SemanticsPreparationService
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
 from src.web.v1.services.sql_explanation import SQLExplanationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
-INDEXING_SERVICE = None
+SEMANTICS_PREPARATION_SERVICE = None
 ASK_SERVICE = None
 SQL_ANSWER_SERVICE = None
 SQL_EXPANSION_SERVICE = None
@@ -60,7 +46,7 @@ def init_globals(
     query_cache: Optional[dict] = {},
 ):
     global \
-        INDEXING_SERVICE, \
+        SEMANTICS_PREPARATION_SERVICE, \
         ASK_SERVICE, \
         SQL_ANSWER_SERVICE, \
         SQL_EXPANSION_SERVICE, \
@@ -77,7 +63,7 @@ def init_globals(
             dataset_name="view_questions", recreate_index=True
         )
 
-    INDEXING_SERVICE = IndexingService(
+    SEMANTICS_PREPARATION_SERVICE = SemanticsPreparationService(
         pipelines={
             "indexing": indexing.Indexing(
                 embedder_provider=embedder_provider,
@@ -105,7 +91,7 @@ def init_globals(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
-            "sql_correction": ask_sql_correction.SQLCorrection(
+            "sql_correction": sql_correction.SQLCorrection(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -141,7 +127,26 @@ def init_globals(
     )
 
     SQL_EXPANSION_SERVICE = SqlExpansionService(
-        pipelines={},
+        pipelines={
+            "retrieval": retrieval.Retrieval(
+                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+                table_retrieval_size=table_retrieval_size,
+                table_column_retrieval_size=table_column_retrieval_size,
+            ),
+            "generation": sql_expansion_generation.Generation(
+                llm_provider=llm_provider,
+                engine=engine,
+            ),
+            "sql_correction": sql_correction.SQLCorrection(
+                llm_provider=llm_provider,
+                engine=engine,
+            ),
+            "sql_summary": sql_summary.SQLSummary(
+                llm_provider=llm_provider,
+            ),
+        },
         **query_cache,
     )
 

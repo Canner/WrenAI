@@ -17,7 +17,7 @@ from src.web.v1.services.ask_details import (
     AskDetailsResultRequest,
     AskDetailsResultResponse,
 )
-from src.web.v1.services.indexing import (
+from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationResponse,
     SemanticsPreparationStatusRequest,
@@ -58,14 +58,14 @@ async def prepare_semantics(
     prepare_semantics_request: SemanticsPreparationRequest,
     background_tasks: BackgroundTasks,
 ) -> SemanticsPreparationResponse:
-    container.INDEXING_SERVICE._prepare_semantics_statuses[
+    container.SEMANTICS_PREPARATION_SERVICE._prepare_semantics_statuses[
         prepare_semantics_request.mdl_hash
     ] = SemanticsPreparationStatusResponse(
         status="indexing",
     )
 
     background_tasks.add_task(
-        container.INDEXING_SERVICE.prepare_semantics,
+        container.SEMANTICS_PREPARATION_SERVICE.prepare_semantics,
         prepare_semantics_request,
     )
     return SemanticsPreparationResponse(mdl_hash=prepare_semantics_request.mdl_hash)
@@ -75,7 +75,7 @@ async def prepare_semantics(
 async def get_prepare_semantics_status(
     mdl_hash: str,
 ) -> SemanticsPreparationStatusResponse:
-    return container.INDEXING_SERVICE.get_prepare_semantics_status(
+    return container.SEMANTICS_PREPARATION_SERVICE.get_prepare_semantics_status(
         SemanticsPreparationStatusRequest(mdl_hash=mdl_hash)
     )
 

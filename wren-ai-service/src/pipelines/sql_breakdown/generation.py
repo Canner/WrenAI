@@ -12,10 +12,10 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.ask_details.components.prompts import (
+from src.pipelines.common import GenerationPostProcessor
+from src.pipelines.sql_breakdown.components.prompts import (
     ask_details_system_prompt,
 )
-from src.pipelines.common import GenerationPostProcessor
 from src.utils import (
     async_timer,
     timer,
@@ -84,7 +84,7 @@ class Generation(BasicPipeline):
         )
 
     def visualize(self, query: str, sql: str, project_id: str | None = None) -> None:
-        destination = "outputs/pipelines/ask_details"
+        destination = "outputs/pipelines/sql_breakdown"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
@@ -104,9 +104,9 @@ class Generation(BasicPipeline):
         )
 
     @async_timer
-    @observe(name="Ask_Details Generation")
+    @observe(name="SQL Breakdown Generation")
     async def run(self, query: str, sql: str, project_id: str | None = None) -> dict:
-        logger.info("Ask_Details Generation pipeline is running...")
+        logger.info("SQL Breakdown Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={

@@ -1,11 +1,8 @@
 from typing import Optional
 
-from src.pipelines.ask import (
-    generation,
-    historical_question,
-    sql_summary,
-)
-from src.pipelines.retrieval import retrieval
+from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.sql_generation import generation
+from src.pipelines.sql_summary import sql_summary
 
 
 class RetrievalMock(retrieval.Retrieval):

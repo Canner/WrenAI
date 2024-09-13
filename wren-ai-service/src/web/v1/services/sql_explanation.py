@@ -102,8 +102,6 @@ class SQLExplanationService:
                 for generation_result in generation_results
             ]
 
-            logger.debug(f"sql explanation results: {sql_explanation_results}")
-
             if sql_explanation_results:
                 self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
                     status="finished",
