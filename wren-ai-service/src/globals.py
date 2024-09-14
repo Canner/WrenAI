@@ -69,7 +69,7 @@ def create_service_container(
             dataset_name="view_questions", recreate_index=True
         )
 
-    app.state.service_container = ServiceContainer(
+    return ServiceContainer(
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
                 "indexing": indexing.Indexing(
@@ -185,7 +185,7 @@ def create_service_metadata(
     embedder_provider: EmbedderProvider,
     *_,
     pyproject_path: str = "pyproject.toml",
-):
+) -> ServiceMetadata:
     def _get_version_from_pyproject() -> str:
         with open(pyproject_path, "r") as f:
             pyproject = toml.load(f)
@@ -201,7 +201,7 @@ def create_service_metadata(
 
     logger.info(f"Service version: {service_version}")
 
-    app.state.service_metadata = ServiceMetadata(models_metadata, service_version)
+    return ServiceMetadata(models_metadata, service_version)
 
 
 # Create a dependency that will be used to access the ServiceMetadata
