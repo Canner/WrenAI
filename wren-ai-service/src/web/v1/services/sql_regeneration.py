@@ -84,7 +84,7 @@ class SQLRegenerationService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self.sql_regeneration_results: Dict[
+        self._sql_regeneration_results: Dict[
             str, SQLRegenerationResultResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
@@ -96,11 +96,11 @@ class SQLRegenerationService:
         try:
             query_id = sql_regeneration_request.query_id
 
-            self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+            self._sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
                 status="understanding",
             )
 
-            self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+            self._sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
                 status="generating",
             )
 
@@ -115,7 +115,9 @@ class SQLRegenerationService:
             ]["results"]
 
             if not sql_regeneration_result["steps"]:
-                self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+                self._sql_regeneration_results[
+                    query_id
+                ] = SQLRegenerationResultResponse(
                     status="failed",
                     error=SQLRegenerationResultResponse.SQLRegenerationError(
                         code="NO_RELEVANT_SQL",
@@ -123,13 +125,15 @@ class SQLRegenerationService:
                     ),
                 )
             else:
-                self.sql_regeneration_results[query_id] = SQLRegenerationResultResponse(
+                self._sql_regeneration_results[
+                    query_id
+                ] = SQLRegenerationResultResponse(
                     status="finished",
                     response=sql_regeneration_result,
                 )
         except Exception as e:
             logger.exception(f"sql regeneration pipeline - OTHERS: {e}")
-            self.sql_regeneration_results[
+            self._sql_regeneration_results[
                 sql_regeneration_request.query_id
             ] = SQLRegenerationResultResponse(
                 status="failed",
@@ -144,7 +148,7 @@ class SQLRegenerationService:
     ) -> SQLRegenerationResultResponse:
         if (
             sql_regeneration_result_request.query_id
-            not in self.sql_regeneration_results
+            not in self._sql_regeneration_results
         ):
             return SQLRegenerationResultResponse(
                 status="failed",
@@ -154,4 +158,4 @@ class SQLRegenerationService:
                 ),
             )
 
-        return self.sql_regeneration_results[sql_regeneration_result_request.query_id]
+        return self._sql_regeneration_results[sql_regeneration_result_request.query_id]

@@ -9,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
 from langfuse.decorators import langfuse_context
 
-import src.globals as container
 from src.core.engine import EngineConfig
+from src.globals import create_service_container
 from src.utils import (
     init_langfuse,
     init_providers,
@@ -36,7 +36,8 @@ async def lifespan(app: FastAPI):
     providers = init_providers(
         engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
     )
-    container.init_globals(
+    create_service_container(
+        app,
         *providers,
         should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
         column_indexing_batch_size=(

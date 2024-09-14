@@ -62,7 +62,7 @@ class SQLExplanationService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self.sql_explanation_results: Dict[
+        self._sql_explanation_results: Dict[
             str, SQLExplanationResultResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
@@ -71,11 +71,11 @@ class SQLExplanationService:
         try:
             query_id = sql_explanation_request.query_id
 
-            self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+            self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                 status="understanding",
             )
 
-            self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+            self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                 status="generating",
             )
 
@@ -103,12 +103,12 @@ class SQLExplanationService:
             ]
 
             if sql_explanation_results:
-                self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                     status="finished",
                     response=sql_explanation_results,
                 )
             else:
-                self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                     status="failed",
                     error=SQLExplanationResultResponse.SQLExplanationResultError(
                         code="OTHERS",
@@ -119,7 +119,7 @@ class SQLExplanationService:
             logger.exception(
                 f"sql explanation pipeline - Failed to provide SQL explanation: {e}"
             )
-            self.sql_explanation_results[
+            self._sql_explanation_results[
                 sql_explanation_request.query_id
             ] = SQLExplanationResultResponse(
                 status="failed",
@@ -132,10 +132,10 @@ class SQLExplanationService:
     def get_sql_explanation_result(
         self, sql_explanation_result_request: SQLExplanationResultRequest
     ) -> SQLExplanationResultResponse:
-        if sql_explanation_result_request.query_id not in self.sql_explanation_results:
+        if sql_explanation_result_request.query_id not in self._sql_explanation_results:
             return SQLExplanationResultResponse(
                 status="failed",
                 error=f"{sql_explanation_result_request.query_id} is not found",
             )
 
-        return self.sql_explanation_results[sql_explanation_result_request.query_id]
+        return self._sql_explanation_results[sql_explanation_result_request.query_id]
