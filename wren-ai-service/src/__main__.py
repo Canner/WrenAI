@@ -128,9 +128,6 @@ if __name__ == "__main__":
         port=server_port,
         reload=should_reload,
         reload_includes=["src/**/*.py", ".env.dev"],
-        reload_excludes=[
-            "./demo/*.py",
-        ],  # TODO: add eval folder when evaluation system is ready
         workers=1,
         loop="uvloop",
         http="httptools",
