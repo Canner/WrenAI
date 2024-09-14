@@ -67,7 +67,11 @@ class SQLExplanationService:
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
-    async def sql_explanation(self, sql_explanation_request: SQLExplanationRequest):
+    async def sql_explanation(
+        self,
+        sql_explanation_request: SQLExplanationRequest,
+        **kwargs,
+    ):
         try:
             query_id = sql_explanation_request.query_id
 

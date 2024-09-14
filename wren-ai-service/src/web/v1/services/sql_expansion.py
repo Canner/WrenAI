@@ -103,6 +103,7 @@ class SqlExpansionService:
     async def sql_expansion(
         self,
         sql_expansion_request: SqlExpansionRequest,
+        **kwargs,
     ):
         results = {
             "sql_expansion_result": {},

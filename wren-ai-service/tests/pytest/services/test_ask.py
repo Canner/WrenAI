@@ -73,6 +73,14 @@ def indexing_service():
 
 
 @pytest.fixture
+def service_metadata():
+    return {
+        "models_metadata": {},
+        "service_version": "",
+    }
+
+
+@pytest.fixture
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
         return orjson.dumps(json.load(f)).decode("utf-8")
@@ -80,14 +88,18 @@ def mdl_str():
 
 @pytest.mark.asyncio
 async def test_ask_with_successful_query(
-    indexing_service: SemanticsPreparationService, ask_service: AskService, mdl_str: str
+    indexing_service: SemanticsPreparationService,
+    ask_service: AskService,
+    mdl_str: str,
+    service_metadata: dict,
 ):
     id = str(uuid.uuid4())
     await indexing_service.prepare_semantics(
         SemanticsPreparationRequest(
             mdl=mdl_str,
             mdl_hash=id,
-        )
+        ),
+        service_metadata=service_metadata,
     )
 
     # asking
@@ -97,7 +109,7 @@ async def test_ask_with_successful_query(
         mdl_hash=id,
     )
     ask_request.query_id = query_id
-    await ask_service.ask(ask_request)
+    await ask_service.ask(ask_request, service_metadata=service_metadata)
 
     # getting ask result
     ask_result_response = ask_service.get_ask_result(
@@ -154,7 +166,7 @@ def _ask_service_ttl_mock(query: str):
 
 
 @pytest.mark.asyncio
-async def test_ask_query_ttl():
+async def test_ask_query_ttl(service_metadata: dict):
     query = "How many books are there?"
     query_id = str(uuid.uuid4())
 
@@ -169,7 +181,7 @@ async def test_ask_query_ttl():
     )
     request.query_id = query_id
 
-    await ask_service.ask(request)
+    await ask_service.ask(request, service_metadata=service_metadata)
 
     time.sleep(1)
     response = ask_service.get_ask_result(

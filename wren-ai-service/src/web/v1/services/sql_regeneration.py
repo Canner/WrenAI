@@ -92,6 +92,7 @@ class SQLRegenerationService:
     async def sql_regeneration(
         self,
         sql_regeneration_request: SQLRegenerationRequest,
+        **kwargs,
     ):
         try:
             query_id = sql_regeneration_request.query_id

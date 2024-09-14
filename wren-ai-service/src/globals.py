@@ -1,6 +1,8 @@
+import logging
 from dataclasses import dataclass
 from typing import Optional
 
+import toml
 from fastapi import FastAPI
 
 from src.core.engine import Engine
@@ -26,6 +28,8 @@ from src.web.v1.services.sql_expansion import SqlExpansionService
 from src.web.v1.services.sql_explanation import SQLExplanationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
+logger = logging.getLogger("wren-ai-service")
+
 
 @dataclass
 class ServiceContainer:
@@ -36,6 +40,12 @@ class ServiceContainer:
     ask_details_service: AskDetailsService
     sql_explanation_service: SQLExplanationService
     sql_regeneration_service: SQLRegenerationService
+
+
+@dataclass
+class ServiceMetadata:
+    models_metadata: dict
+    service_version: str
 
 
 def create_service_container(
@@ -167,3 +177,35 @@ def get_service_container():
     from src.__main__ import app
 
     return app.state.service_container
+
+
+def create_service_metadata(
+    app: FastAPI,
+    llm_provider: LLMProvider,
+    embedder_provider: EmbedderProvider,
+    *_,
+    pyproject_path: str = "pyproject.toml",
+):
+    def _get_version_from_pyproject() -> str:
+        with open(pyproject_path, "r") as f:
+            pyproject = toml.load(f)
+            return pyproject["tool"]["poetry"]["version"]
+
+    models_metadata = {
+        "generation_model": llm_provider.get_model(),
+        "generation_model_kwargs": llm_provider.get_model_kwargs(),
+        "embedding_model": embedder_provider.get_model(),
+        "embedding_model_dim": embedder_provider.get_dimensions(),
+    }
+    service_version = _get_version_from_pyproject()
+
+    logger.info(f"Service version: {service_version}")
+
+    app.state.service_metadata = ServiceMetadata(models_metadata, service_version)
+
+
+# Create a dependency that will be used to access the ServiceMetadata
+def get_service_metadata():
+    from src.__main__ import app
+
+    return app.state.service_metadata

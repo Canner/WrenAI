@@ -65,6 +65,7 @@ class SqlAnswerService:
     async def sql_answer(
         self,
         sql_answer_request: SqlAnswerRequest,
+        **kwargs,
     ):
         results = {
             "sql_answer_result": {},

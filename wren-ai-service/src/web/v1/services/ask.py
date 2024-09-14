@@ -120,6 +120,7 @@ class AskService:
     async def ask(
         self,
         ask_request: AskRequest,
+        **kwargs,
     ):
         results = {
             "ask_result": {},

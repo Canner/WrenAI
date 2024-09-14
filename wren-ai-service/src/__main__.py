@@ -10,12 +10,14 @@ from fastapi.responses import ORJSONResponse, RedirectResponse
 from langfuse.decorators import langfuse_context
 
 from src.core.engine import EngineConfig
-from src.globals import create_service_container
+from src.globals import (
+    create_service_container,
+    create_service_metadata,
+)
 from src.utils import (
     init_langfuse,
     init_providers,
     load_env_vars,
-    service_metadata,
     setup_custom_logger,
 )
 from src.web.v1 import routers
@@ -62,7 +64,7 @@ async def lifespan(app: FastAPI):
             "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
         },
     )
-    service_metadata(*providers)
+    create_service_metadata(app, *providers)
     init_langfuse()
 
     yield

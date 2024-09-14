@@ -79,6 +79,7 @@ class AskDetailsService:
     async def ask_details(
         self,
         ask_details_request: AskDetailsRequest,
+        **kwargs,
     ):
         results = {
             "ask_details_result": {},

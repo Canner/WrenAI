@@ -59,7 +59,9 @@ class SemanticsPreparationService:
     @observe(name="Prepare Semantics")
     @trace_metadata
     async def prepare_semantics(
-        self, prepare_semantics_request: SemanticsPreparationRequest
+        self,
+        prepare_semantics_request: SemanticsPreparationRequest,
+        **kwargs,
     ):
         results = {
             "metadata": {

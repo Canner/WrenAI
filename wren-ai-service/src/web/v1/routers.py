@@ -1,8 +1,14 @@
 import uuid
+from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
-from src.globals import ServiceContainer, get_service_container
+from src.globals import (
+    ServiceContainer,
+    ServiceMetadata,
+    get_service_container,
+    get_service_metadata,
+)
 from src.web.v1.services.ask import (
     AskRequest,
     AskResponse,
@@ -58,6 +64,7 @@ async def prepare_semantics(
     prepare_semantics_request: SemanticsPreparationRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> SemanticsPreparationResponse:
     service_container.semantics_preparation_service._prepare_semantics_statuses[
         prepare_semantics_request.mdl_hash
@@ -68,6 +75,7 @@ async def prepare_semantics(
     background_tasks.add_task(
         service_container.semantics_preparation_service.prepare_semantics,
         prepare_semantics_request,
+        service_metadata=asdict(service_metadata),
     )
     return SemanticsPreparationResponse(mdl_hash=prepare_semantics_request.mdl_hash)
 
@@ -87,6 +95,7 @@ async def ask(
     ask_request: AskRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> AskResponse:
     query_id = str(uuid.uuid4())
     ask_request.query_id = query_id
@@ -97,6 +106,7 @@ async def ask(
     background_tasks.add_task(
         service_container.ask_service.ask,
         ask_request,
+        service_metadata=asdict(service_metadata),
     )
     return AskResponse(query_id=query_id)
 
@@ -131,6 +141,7 @@ async def sql_answer(
     sql_answer_request: SqlAnswerRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> SqlAnswerResponse:
     query_id = str(uuid.uuid4())
     sql_answer_request.query_id = query_id
@@ -143,6 +154,7 @@ async def sql_answer(
     background_tasks.add_task(
         service_container.sql_answer_service.sql_answer,
         sql_answer_request,
+        service_metadata=asdict(service_metadata),
     )
     return SqlAnswerResponse(query_id=query_id)
 
@@ -162,6 +174,7 @@ async def sql_expansion(
     sql_expansion_request: SqlExpansionRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> SqlExpansionResponse:
     query_id = str(uuid.uuid4())
     sql_expansion_request.query = query_id
@@ -174,6 +187,7 @@ async def sql_expansion(
     background_tasks.add_task(
         service_container.sql_expansion_service.sql_expansion,
         sql_expansion_request,
+        service_metadata=asdict(service_metadata),
     )
     return SqlExpansionResponse(query_id=query_id)
 
@@ -208,6 +222,7 @@ async def ask_details(
     ask_details_request: AskDetailsRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> AskDetailsResponse:
     query_id = str(uuid.uuid4())
     ask_details_request.query_id = query_id
@@ -220,6 +235,7 @@ async def ask_details(
     background_tasks.add_task(
         service_container.ask_details_service.ask_details,
         ask_details_request,
+        service_metadata=asdict(service_metadata),
     )
     return AskDetailsResponse(query_id=query_id)
 
@@ -239,6 +255,7 @@ async def sql_explanation(
     sql_explanation_request: SQLExplanationRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> SQLExplanationResponse:
     query_id = str(uuid.uuid4())
     sql_explanation_request.query_id = query_id
@@ -248,6 +265,7 @@ async def sql_explanation(
     background_tasks.add_task(
         service_container.sql_explanation_service.sql_explanation,
         sql_explanation_request,
+        service_metadata=asdict(service_metadata),
     )
     return SQLExplanationResponse(query_id=query_id)
 
@@ -267,6 +285,7 @@ async def sql_regeneration(
     sql_regeneration_request: SQLRegenerationRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> SQLRegenerationResponse:
     query_id = str(uuid.uuid4())
     sql_regeneration_request.query_id = query_id
@@ -276,6 +295,7 @@ async def sql_regeneration(
     background_tasks.add_task(
         service_container.sql_regeneration_service.sql_regeneration,
         sql_regeneration_request,
+        service_metadata=asdict(service_metadata),
     )
     return SQLRegenerationResponse(query_id=query_id)
 

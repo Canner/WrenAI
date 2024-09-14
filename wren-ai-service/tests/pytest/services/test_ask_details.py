@@ -25,9 +25,19 @@ def ask_details_service():
     )
 
 
+@pytest.fixture
+def service_metadata():
+    return {
+        "models_metadata": {},
+        "service_version": "",
+    }
+
+
 # TODO: we may need to add one more test for the case that steps must be more than 1
 @pytest.mark.asyncio
-async def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService):
+async def test_ask_details_with_successful_sql(
+    ask_details_service: AskDetailsService, service_metadata: dict
+):
     # asking details
     query_id = str(uuid.uuid4())
     sql = "SELECT * FROM book"
@@ -37,7 +47,9 @@ async def test_ask_details_with_successful_sql(ask_details_service: AskDetailsSe
         summary="This is a summary",
     )
     ask_details_request.query_id = query_id
-    await ask_details_service.ask_details(ask_details_request)
+    await ask_details_service.ask_details(
+        ask_details_request, service_metadata=service_metadata
+    )
 
     # getting ask details result
     ask_details_result_response = ask_details_service.get_ask_details_result(
@@ -69,7 +81,9 @@ async def test_ask_details_with_successful_sql(ask_details_service: AskDetailsSe
 
 
 @pytest.mark.asyncio
-async def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
+async def test_ask_details_with_failed_sql(
+    ask_details_service: AskDetailsService, service_metadata: dict
+):
     # asking details
     query_id = str(uuid.uuid4())
     sql = 'SELECT * FROM "xxx"'
@@ -80,7 +94,9 @@ async def test_ask_details_with_failed_sql(ask_details_service: AskDetailsServic
         summary=summary,
     )
     ask_details_request.query_id = query_id
-    await ask_details_service.ask_details(ask_details_request)
+    await ask_details_service.ask_details(
+        ask_details_request, service_metadata=service_metadata
+    )
 
     # getting ask details result
     ask_details_result_response = ask_details_service.get_ask_details_result(
