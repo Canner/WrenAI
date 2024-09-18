@@ -12,7 +12,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import SQLGenerationPostProcessor
+from src.pipelines.common import SQLGenPostProcessor
 from src.utils import async_timer, timer
 from src.web.v1.services.ask import AskHistory
 
@@ -75,7 +75,7 @@ async def generate_sql_expansion(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql_expansion: dict,
-    post_processor: SQLGenerationPostProcessor,
+    post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -102,7 +102,7 @@ class SQLExpansion(BasicPipeline):
             "prompt_builder": PromptBuilder(
                 template=sql_expansion_user_prompt_template
             ),
-            "post_processor": SQLGenerationPostProcessor(engine=engine),
+            "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
         super().__init__(

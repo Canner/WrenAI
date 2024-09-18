@@ -14,15 +14,15 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
-    SQLGenerationPostProcessor,
-    text_to_sql_system_prompt,
+    SQLGenPostProcessor,
+    sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
 
-text_to_sql_user_prompt_template = """
+sql_generation_user_prompt_template = """
 ### TASK ###
 Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and
 generate three SQL statements that could potentially answer each interpreted version of the queries.
@@ -119,7 +119,7 @@ async def generate_sql(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql: dict,
-    post_processor: SQLGenerationPostProcessor,
+    post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -139,10 +139,12 @@ class SQLGeneration(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=text_to_sql_system_prompt
+                system_prompt=sql_generation_system_prompt
             ),
-            "prompt_builder": PromptBuilder(template=text_to_sql_user_prompt_template),
-            "post_processor": SQLGenerationPostProcessor(engine=engine),
+            "prompt_builder": PromptBuilder(
+                template=sql_generation_user_prompt_template
+            ),
+            "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
         self._configs = {

@@ -13,7 +13,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import SQLBreakdownGenerationPostProcessor
+from src.pipelines.common import SQLBreakdownGenPostProcessor
 from src.utils import async_timer, timer
 from src.web.v1.services.sql_regeneration import (
     SQLExplanationWithUserCorrections,
@@ -79,7 +79,7 @@ Let's think step by step.
 
 
 @component
-class SQLRegenerationRreprocesser:
+class SQLRegenerationPreprocesser:
     @component.output_types(
         results=Dict[str, Any],
     )
@@ -102,11 +102,11 @@ class SQLRegenerationRreprocesser:
 def preprocess(
     description: str,
     steps: List[SQLExplanationWithUserCorrections],
-    sql_regeneration_preprocesser: SQLRegenerationRreprocesser,
+    preprocesser: SQLRegenerationPreprocesser,
 ) -> dict[str, Any]:
     logger.debug(f"steps: {steps}")
     logger.debug(f"description: {description}")
-    return sql_regeneration_preprocesser.run(
+    return preprocesser.run(
         description=description,
         steps=steps,
     )
@@ -116,37 +116,35 @@ def preprocess(
 @observe(capture_input=False)
 def sql_regeneration_prompt(
     preprocess: Dict[str, Any],
-    sql_regeneration_prompt_builder: PromptBuilder,
+    prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"preprocess: {preprocess}")
-    return sql_regeneration_prompt_builder.run(results=preprocess["results"])
+    return prompt_builder.run(results=preprocess["results"])
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_regeneration(
     sql_regeneration_prompt: dict,
-    sql_regeneration_generator: Any,
+    generator: Any,
 ) -> dict:
     logger.debug(
         f"sql_regeneration_prompt: {orjson.dumps(sql_regeneration_prompt, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await sql_regeneration_generator.run(
-        prompt=sql_regeneration_prompt.get("prompt")
-    )
+    return await generator.run(prompt=sql_regeneration_prompt.get("prompt"))
 
 
 @async_timer
 @observe(capture_input=False)
 async def sql_regeneration_post_process(
     generate_sql_regeneration: dict,
-    sql_regeneration_post_processor: SQLBreakdownGenerationPostProcessor,
+    post_processor: SQLBreakdownGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
         f"generate_sql_regeneration: {orjson.dumps(generate_sql_regeneration, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await sql_regeneration_post_processor.run(
+    return await post_processor.run(
         replies=generate_sql_regeneration.get("replies"),
         project_id=project_id,
     )
@@ -162,16 +160,14 @@ class SQLRegeneration(BasicPipeline):
         engine: Engine,
     ):
         self._components = {
-            "sql_regeneration_preprocesser": SQLRegenerationRreprocesser(),
-            "sql_regeneration_prompt_builder": PromptBuilder(
+            "preprocesser": SQLRegenerationPreprocesser(),
+            "prompt_builder": PromptBuilder(
                 template=sql_regeneration_user_prompt_template
             ),
-            "sql_regeneration_generator": llm_provider.get_generator(
+            "generator": llm_provider.get_generator(
                 system_prompt=sql_regeneration_system_prompt
             ),
-            "sql_regeneration_post_processor": SQLBreakdownGenerationPostProcessor(
-                engine=engine
-            ),
+            "post_processor": SQLBreakdownGenPostProcessor(engine=engine),
         }
 
         super().__init__(

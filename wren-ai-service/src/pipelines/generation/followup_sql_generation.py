@@ -14,8 +14,8 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
-    SQLGenerationPostProcessor,
-    text_to_sql_system_prompt,
+    SQLGenPostProcessor,
+    sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
 from src.web.v1.services.ask import AskHistory
@@ -149,7 +149,7 @@ async def generate_sql_in_followup(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql_in_followup: dict,
-    post_processor: SQLGenerationPostProcessor,
+    post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -171,12 +171,12 @@ class FollowUpSQLGeneration(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=text_to_sql_system_prompt
+                system_prompt=sql_generation_system_prompt
             ),
             "prompt_builder": PromptBuilder(
                 template=text_to_sql_with_followup_user_prompt_template
             ),
-            "post_processor": SQLGenerationPostProcessor(engine=engine),
+            "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
         self._configs = {

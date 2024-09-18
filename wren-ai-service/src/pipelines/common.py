@@ -17,7 +17,7 @@ logger = logging.getLogger("wren-ai-service")
 
 
 @component
-class SQLBreakdownGenerationPostProcessor:
+class SQLBreakdownGenPostProcessor:
     def __init__(self, engine: Engine):
         self._engine = engine
 
@@ -54,8 +54,8 @@ class SQLBreakdownGenerationPostProcessor:
                 }
 
         sql = self._build_cte_query(steps)
-        logger.debug(f"SQLBreakdownGenerationPostProcessor: steps: {pformat(steps)}")
-        logger.debug(f"SQLBreakdownGenerationPostProcessor: final sql: {sql}")
+        logger.debug(f": steps: {pformat(steps)}")
+        logger.debug(f"SQLBreakdownGenPostProcessor: final sql: {sql}")
 
         if not await self._check_if_sql_executable(sql, project_id=project_id):
             return {
@@ -100,7 +100,7 @@ class SQLBreakdownGenerationPostProcessor:
 
 
 @component
-class SQLGenerationPostProcessor:
+class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
         self._engine = engine
 
@@ -133,7 +133,7 @@ class SQLGenerationPostProcessor:
                 "invalid_generation_results": invalid_generation_results,
             }
         except Exception as e:
-            logger.exception(f"Error in SQLGenerationPostProcessor: {e}")
+            logger.exception(f"Error in SQLGenPostProcessor: {e}")
 
             return {
                 "valid_generation_results": [],
@@ -212,7 +212,7 @@ TEXT_TO_SQL_RULES = """
 """
 
 
-text_to_sql_system_prompt = """
+sql_generation_system_prompt = """
 You are a Trino SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
 Before the main task, you need to learn about some specific structures in the given DB schema.
 
