@@ -40,12 +40,12 @@ Please return the result in the following JSON format:
 sql_expansion_user_prompt_template = """
 SQL: {{sql}}
 
-User's input: {{query}}
-
 Database Schema:
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+User's input: {{query}}
 """
 
 
