@@ -21,7 +21,7 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_expansion_system_prompt = """
 ### TASK ###
-You are a great data analyst. You are now given a task to add columns to the SELECT clause from the given SQL.
+You are a great data analyst. You are now given a task to expand original SQL by adding more columns or add more keywords such as DISTINCT.
 
 ### INSTRUCTIONS ###
 - Columns are given from the user's input
