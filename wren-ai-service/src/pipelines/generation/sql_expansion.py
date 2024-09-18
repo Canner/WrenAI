@@ -12,7 +12,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import SQLBreakdownGenerationPostProcessor
+from src.pipelines.common import SQLGenerationPostProcessor
 from src.utils import async_timer, timer
 from src.web.v1.services.ask import AskHistory
 
@@ -20,9 +20,32 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_expansion_system_prompt = """
+### TASK ###
+You are a great data analyst. You are now given a task to add columns to the SELECT clause from the given SQL.
+
+### INSTRUCTIONS ###
+- Columns are given from the user's input
+- Columns to be added must belong to the given database schema
+
+### OUTPUT FORMAT ###
+Please return the result in the following JSON format:
+
+{
+    "results": [
+        {"sql": <SQL_QUERY_STRING>}
+    ]
+}
 """
 
 sql_expansion_user_prompt_template = """
+SQL: {{history.sql}}
+
+User's input: {{query}}
+
+Database Schema:
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
 """
 
 
@@ -52,7 +75,7 @@ async def generate_sql_expansion(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql_expansion: dict,
-    post_processor: SQLBreakdownGenerationPostProcessor,
+    post_processor: SQLGenerationPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -79,7 +102,7 @@ class SQLExpansion(BasicPipeline):
             "prompt_builder": PromptBuilder(
                 template=sql_expansion_user_prompt_template
             ),
-            "post_processor": SQLBreakdownGenerationPostProcessor(engine=engine),
+            "post_processor": SQLGenerationPostProcessor(engine=engine),
         }
 
         super().__init__(
