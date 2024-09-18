@@ -11,7 +11,7 @@ from src.utils import async_timer, trace_metadata
 logger = logging.getLogger("wren-ai-service")
 
 
-# POST /v1/sql-answer
+# POST /v1/sql-answers
 class SqlAnswerRequest(BaseModel):
     _query_id: str | None = None
     query: str
@@ -32,7 +32,7 @@ class SqlAnswerResponse(BaseModel):
     query_id: str
 
 
-# GET /v1/sql-answer/{query_id}/result
+# GET /v1/sql-answers/{query_id}/result
 class SqlAnswerResultRequest(BaseModel):
     query_id: str
 

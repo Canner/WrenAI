@@ -136,7 +136,7 @@ async def get_ask_result(
     )
 
 
-@router.post("/sql-answer")
+@router.post("/sql-answers")
 async def sql_answer(
     sql_answer_request: SqlAnswerRequest,
     background_tasks: BackgroundTasks,
@@ -159,7 +159,7 @@ async def sql_answer(
     return SqlAnswerResponse(query_id=query_id)
 
 
-@router.get("/sql-answer/{query_id}/result")
+@router.get("/sql-answers/{query_id}/result")
 async def get_sql_answer_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
