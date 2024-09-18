@@ -177,7 +177,7 @@ async def sql_expansion(
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> SqlExpansionResponse:
     query_id = str(uuid.uuid4())
-    sql_expansion_request.query = query_id
+    sql_expansion_request.query_id = query_id
     service_container.sql_expansion_service._sql_expansion_results[
         query_id
     ] = SqlExpansionResultResponse(

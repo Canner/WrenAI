@@ -39,7 +39,6 @@ async def lifespan(app: FastAPI):
         engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
     )
     app.state.service_container = create_service_container(
-        app,
         *providers,
         should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
         column_indexing_batch_size=(
@@ -64,7 +63,7 @@ async def lifespan(app: FastAPI):
             "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
         },
     )
-    app.state.service_metadata = create_service_metadata(app, *providers)
+    app.state.service_metadata = create_service_metadata(*providers)
     init_langfuse()
 
     yield

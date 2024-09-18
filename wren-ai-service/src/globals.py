@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 import toml
-from fastapi import FastAPI
 
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
@@ -49,7 +48,6 @@ class ServiceMetadata:
 
 
 def create_service_container(
-    app: FastAPI,
     llm_provider: LLMProvider,
     embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
@@ -180,7 +178,6 @@ def get_service_container():
 
 
 def create_service_metadata(
-    app: FastAPI,
     llm_provider: LLMProvider,
     embedder_provider: EmbedderProvider,
     *_,

@@ -38,7 +38,7 @@ Please return the result in the following JSON format:
 """
 
 sql_expansion_user_prompt_template = """
-SQL: {{history.sql}}
+SQL: {{sql}}
 
 User's input: {{query}}
 
@@ -61,7 +61,7 @@ def prompt(
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
     logger.debug(f"history: {history}")
-    return prompt_builder.run(query=query, documents=documents, history=history)
+    return prompt_builder.run(query=query, documents=documents, sql=history.sql)
 
 
 @async_timer
