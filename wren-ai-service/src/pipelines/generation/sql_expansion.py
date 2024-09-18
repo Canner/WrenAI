@@ -25,7 +25,7 @@ You are a great data analyst. You are now given a task to add columns to the SEL
 
 ### INSTRUCTIONS ###
 - Columns are given from the user's input
-- Columns to be added must belong to the given database schema
+- Columns to be added must belong to the given database schema; if no such column exists, keep SQL_QUERY_STRING empty
 
 ### OUTPUT FORMAT ###
 Please return the result in the following JSON format:
