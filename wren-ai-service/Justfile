@@ -19,8 +19,8 @@ eval prediction_result:
 demo:
 	poetry run streamlit run demo/app.py
 
-test: up && down
-	poetry run pytest -s $(args)
+test test_args: up && down
+	poetry run pytest -s {{test_args}}
 
 load-test:
 	poetry run python -m tests.locust.locust_script
