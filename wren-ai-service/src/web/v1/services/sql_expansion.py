@@ -270,7 +270,7 @@ class SqlExpansionService:
             logger.exception(
                 f"sql-expansion pipeline - OTHERS: {sql_expansion_result_request.query_id} is not found"
             )
-            return SqlExpansionResultRequest(
+            return SqlExpansionResultResponse(
                 status="failed",
                 error=AskError(
                     code="OTHERS",
