@@ -143,12 +143,12 @@ class HistoricalQuestion(BasicPipeline):
         embedder_provider: EmbedderProvider,
         store_provider: DocumentStoreProvider,
     ) -> None:
-        _store = store_provider.get_store(dataset_name="view_questions")
+        store = store_provider.get_store(dataset_name="view_questions")
         self._components = {
-            "store": _store,
+            "store": store,
             "embedder": embedder_provider.get_text_embedder(),
             "retriever": store_provider.get_retriever(
-                document_store=_store,
+                document_store=store,
             ),
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
