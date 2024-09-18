@@ -19,7 +19,7 @@ eval prediction_result:
 demo:
 	poetry run streamlit run demo/app.py
 
-test test_args: up && down
+test test_args='': up && down
 	poetry run pytest -s {{test_args}}
 
 load-test:
