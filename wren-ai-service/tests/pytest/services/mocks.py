@@ -1,11 +1,7 @@
 from typing import Optional
 
-from src.pipelines.ask import (
-    generation,
-    historical_question,
-    retrieval,
-    sql_summary,
-)
+from src.pipelines.generation import sql_generation, sql_summary
+from src.pipelines.retrieval import historical_question, retrieval
 
 
 class RetrievalMock(retrieval.Retrieval):
@@ -24,7 +20,7 @@ class HistoricalQuestionMock(historical_question.HistoricalQuestion):
         return {"formatted_output": {"documents": self._documents}}
 
 
-class GenerationMock(generation.Generation):
+class GenerationMock(sql_generation.SQLGeneration):
     def __init__(self, valid: list = [], invalid: list = []):
         self._valid = valid
         self._invalid = invalid

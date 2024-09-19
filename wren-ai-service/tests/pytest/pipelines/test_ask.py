@@ -5,13 +5,14 @@ import pytest
 
 from src.core.engine import EngineConfig
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.ask.followup_generation import FollowUpGeneration
-from src.pipelines.ask.generation import Generation
-from src.pipelines.ask.retrieval import Retrieval
-from src.pipelines.ask.sql_correction import SQLCorrection
+from src.pipelines.generation.followup_sql_generation import FollowUpSQLGeneration
+from src.pipelines.generation.sql_correction import SQLCorrection
+from src.pipelines.generation.sql_generation import SQLGeneration
 from src.pipelines.indexing.indexing import Indexing
+from src.pipelines.retrieval.retrieval import Retrieval
 from src.utils import init_providers
-from src.web.v1.services.ask import AskRequest, SQLExplanation
+from src.web.v1.services.ask import AskHistory
+from src.web.v1.services.ask_details import SQLBreakdown
 
 GLOBAL_DATA = {
     "contexts": None,
@@ -129,14 +130,14 @@ async def test_retrieval_pipeline(
 @pytest.mark.asyncio
 async def test_generation_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
-    generation_pipeline = Generation(llm_provider=llm_provider, engine=engine)
+    generation_pipeline = SQLGeneration(llm_provider=llm_provider, engine=engine)
     generation_result = await generation_pipeline.run(
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
         exclude=[],
     )
 
-    # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
+    # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
     assert generation_result["post_process"]["valid_generation_results"] is not None
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 
@@ -153,15 +154,17 @@ async def test_generation_pipeline():
 @pytest.mark.asyncio
 async def test_followup_generation_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
-    generation_pipeline = FollowUpGeneration(llm_provider=llm_provider, engine=engine)
+    generation_pipeline = FollowUpSQLGeneration(
+        llm_provider=llm_provider, engine=engine
+    )
     generation_result = await generation_pipeline.run(
         "What are names of the books?",
         contexts=GLOBAL_DATA["contexts"],
-        history=AskRequest.AskResponseDetails(
+        history=AskHistory(
             sql="SELECT COUNT(*) FROM book",
             summary="Retrieve the number of books",
             steps=[
-                SQLExplanation(
+                SQLBreakdown(
                     sql="SELECT COUNT(*) FROM book",
                     summary="Retrieve the number of books",
                     cte_name="",
@@ -170,7 +173,7 @@ async def test_followup_generation_pipeline():
         ),
     )
 
-    # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
+    # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
     assert generation_result["post_process"]["valid_generation_results"] is not None
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 

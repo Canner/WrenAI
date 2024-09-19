@@ -7,13 +7,9 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.ask import (
-    generation,
-    historical_question,
-    retrieval,
-    sql_correction,
-)
+from src.pipelines.generation import sql_correction, sql_generation
 from src.pipelines.indexing import indexing
+from src.pipelines.retrieval import historical_question, retrieval
 from src.utils import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
@@ -21,9 +17,9 @@ from src.web.v1.services.ask import (
     AskResultResponse,
     AskService,
 )
-from src.web.v1.services.indexing import (
-    IndexingService,
+from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
+    SemanticsPreparationService,
 )
 from tests.pytest.services.mocks import (
     GenerationMock,
@@ -50,7 +46,7 @@ def ask_service():
                 embedder_provider=embedder_provider,
                 store_provider=document_store_provider,
             ),
-            "generation": generation.Generation(
+            "sql_generation": sql_generation.SQLGeneration(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -66,7 +62,7 @@ def ask_service():
 def indexing_service():
     _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
 
-    return IndexingService(
+    return SemanticsPreparationService(
         {
             "indexing": indexing.Indexing(
                 embedder_provider=embedder_provider,
@@ -77,6 +73,19 @@ def indexing_service():
 
 
 @pytest.fixture
+def service_metadata():
+    return {
+        "models_metadata": {
+            "generation_model": "mock-llm-model",
+            "generation_model_kwargs": {},
+            "embedding_model": "mock-embedding-model",
+            "embedding_model_dim": 768,
+        },
+        "service_version": "0.8.0-mock",
+    }
+
+
+@pytest.fixture
 def mdl_str():
     with open("tests/data/book_2_mdl.json", "r") as f:
         return orjson.dumps(json.load(f)).decode("utf-8")
@@ -84,14 +93,18 @@ def mdl_str():
 
 @pytest.mark.asyncio
 async def test_ask_with_successful_query(
-    indexing_service: IndexingService, ask_service: AskService, mdl_str: str
+    indexing_service: SemanticsPreparationService,
+    ask_service: AskService,
+    mdl_str: str,
+    service_metadata: dict,
 ):
     id = str(uuid.uuid4())
     await indexing_service.prepare_semantics(
         SemanticsPreparationRequest(
             mdl=mdl_str,
             mdl_hash=id,
-        )
+        ),
+        service_metadata=service_metadata,
     )
 
     # asking
@@ -101,7 +114,7 @@ async def test_ask_with_successful_query(
         mdl_hash=id,
     )
     ask_request.query_id = query_id
-    await ask_service.ask(ask_request)
+    await ask_service.ask(ask_request, service_metadata=service_metadata)
 
     # getting ask result
     ask_result_response = ask_service.get_ask_result(
@@ -123,7 +136,7 @@ async def test_ask_with_successful_query(
             )
         )
 
-    # todo: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
+    # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
     assert ask_result_response.status == "finished" or "failed"
     # assert ask_result_response.response is not None
     # assert ask_result_response.response[0].sql != ""
@@ -141,7 +154,7 @@ def _ask_service_ttl_mock(query: str):
                 ]
             ),
             "historical_question": HistoricalQuestionMock(),
-            "generation": GenerationMock(
+            "sql_generation": GenerationMock(
                 valid=["select count(*) from books"],
             ),
             "sql_summary": SQLSummaryMock(
@@ -158,7 +171,7 @@ def _ask_service_ttl_mock(query: str):
 
 
 @pytest.mark.asyncio
-async def test_ask_query_ttl():
+async def test_ask_query_ttl(service_metadata: dict):
     query = "How many books are there?"
     query_id = str(uuid.uuid4())
 
@@ -173,7 +186,7 @@ async def test_ask_query_ttl():
     )
     request.query_id = query_id
 
-    await ask_service.ask(request)
+    await ask_service.ask(request, service_metadata=service_metadata)
 
     time.sleep(1)
     response = ask_service.get_ask_result(

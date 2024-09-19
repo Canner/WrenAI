@@ -143,14 +143,17 @@ class HistoricalQuestion(BasicPipeline):
         embedder_provider: EmbedderProvider,
         store_provider: DocumentStoreProvider,
     ) -> None:
-        self._store = store_provider.get_store(dataset_name="view_questions")
-        self._embedder = embedder_provider.get_text_embedder()
-        self._retriever = store_provider.get_retriever(
-            document_store=self._store,
-        )
-        self._score_filter = ScoreFilter()
-        # todo: add a llm filter to filter out low scoring document
-        self._output_formatter = OutputFormatter()
+        store = store_provider.get_store(dataset_name="view_questions")
+        self._components = {
+            "store": store,
+            "embedder": embedder_provider.get_text_embedder(),
+            "retriever": store_provider.get_retriever(
+                document_store=store,
+            ),
+            "score_filter": ScoreFilter(),
+            # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
+            "output_formatter": OutputFormatter(),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -161,7 +164,7 @@ class HistoricalQuestion(BasicPipeline):
         query: str,
         id: Optional[str] = None,
     ) -> None:
-        destination = "outputs/pipelines/ask"
+        destination = "outputs/pipelines/retrieval"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
@@ -171,30 +174,22 @@ class HistoricalQuestion(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
-                "store": self._store,
-                "embedder": self._embedder,
-                "retriever": self._retriever,
-                "score_filter": self._score_filter,
-                "output_formatter": self._output_formatter,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
         )
 
     @async_timer
-    @observe(name="Ask Historical Question")
+    @observe(name="Historical Question")
     async def run(self, query: str, id: Optional[str] = None):
-        logger.info("Ask HistoricalQuestion pipeline is running...")
+        logger.info("HistoricalQuestion pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
                 "id": id or "",
-                "store": self._store,
-                "embedder": self._embedder,
-                "retriever": self._retriever,
-                "score_filter": self._score_filter,
-                "output_formatter": self._output_formatter,
+                **self._components,
             },
         )
 

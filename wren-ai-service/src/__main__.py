@@ -9,13 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
 from langfuse.decorators import langfuse_context
 
-import src.globals as container
 from src.core.engine import EngineConfig
+from src.globals import (
+    create_service_container,
+    create_service_metadata,
+)
 from src.utils import (
     init_langfuse,
     init_providers,
     load_env_vars,
-    service_metadata,
     setup_custom_logger,
 )
 from src.web.v1 import routers
@@ -36,7 +38,7 @@ async def lifespan(app: FastAPI):
     providers = init_providers(
         engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
     )
-    container.init_globals(
+    app.state.service_container = create_service_container(
         *providers,
         should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
         column_indexing_batch_size=(
@@ -61,7 +63,7 @@ async def lifespan(app: FastAPI):
             "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
         },
     )
-    service_metadata(*providers)
+    app.state.service_metadata = create_service_metadata(*providers)
     init_langfuse()
 
     yield
@@ -128,9 +130,6 @@ if __name__ == "__main__":
         port=server_port,
         reload=should_reload,
         reload_includes=["src/**/*.py", ".env.dev"],
-        reload_excludes=[
-            "./demo/*.py",
-        ],  # TODO: add eval folder when evaluation system is ready
         workers=1,
         loop="uvloop",
         http="httptools",

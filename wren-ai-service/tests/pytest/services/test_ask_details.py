@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.ask_details import generation
+from src.pipelines.generation import sql_breakdown
 from src.utils import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
@@ -17,7 +17,7 @@ def ask_details_service():
     llm_provider, _, _, engine = init_providers(EngineConfig())
     return AskDetailsService(
         {
-            "generation": generation.Generation(
+            "sql_breakdown": sql_breakdown.SQLBreakdown(
                 llm_provider=llm_provider,
                 engine=engine,
             ),
@@ -25,9 +25,24 @@ def ask_details_service():
     )
 
 
+@pytest.fixture
+def service_metadata():
+    return {
+        "models_metadata": {
+            "generation_model": "mock-llm-model",
+            "generation_model_kwargs": {},
+            "embedding_model": "mock-embedding-model",
+            "embedding_model_dim": 768,
+        },
+        "service_version": "0.8.0-mock",
+    }
+
+
 # TODO: we may need to add one more test for the case that steps must be more than 1
 @pytest.mark.asyncio
-async def test_ask_details_with_successful_sql(ask_details_service: AskDetailsService):
+async def test_ask_details_with_successful_sql(
+    ask_details_service: AskDetailsService, service_metadata: dict
+):
     # asking details
     query_id = str(uuid.uuid4())
     sql = "SELECT * FROM book"
@@ -37,7 +52,9 @@ async def test_ask_details_with_successful_sql(ask_details_service: AskDetailsSe
         summary="This is a summary",
     )
     ask_details_request.query_id = query_id
-    await ask_details_service.ask_details(ask_details_request)
+    await ask_details_service.ask_details(
+        ask_details_request, service_metadata=service_metadata
+    )
 
     # getting ask details result
     ask_details_result_response = ask_details_service.get_ask_details_result(
@@ -69,7 +86,9 @@ async def test_ask_details_with_successful_sql(ask_details_service: AskDetailsSe
 
 
 @pytest.mark.asyncio
-async def test_ask_details_with_failed_sql(ask_details_service: AskDetailsService):
+async def test_ask_details_with_failed_sql(
+    ask_details_service: AskDetailsService, service_metadata: dict
+):
     # asking details
     query_id = str(uuid.uuid4())
     sql = 'SELECT * FROM "xxx"'
@@ -80,7 +99,9 @@ async def test_ask_details_with_failed_sql(ask_details_service: AskDetailsServic
         summary=summary,
     )
     ask_details_request.query_id = query_id
-    await ask_details_service.ask_details(ask_details_request)
+    await ask_details_service.ask_details(
+        ask_details_request, service_metadata=service_metadata
+    )
 
     # getting ask details result
     ask_details_result_response = ask_details_service.get_ask_details_result(

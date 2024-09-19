@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -43,21 +43,25 @@ class SemanticsPreparationStatusResponse(BaseModel):
     error: Optional[SemanticsPreparationError] = None
 
 
-class IndexingService:
+class SemanticsPreparationService:
     def __init__(
         self,
-        pipelines: dict[str, BasicPipeline],
+        pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._prepare_semantics_statuses = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._prepare_semantics_statuses: Dict[
+            str, SemanticsPreparationStatusResponse
+        ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
     @observe(name="Prepare Semantics")
     @trace_metadata
     async def prepare_semantics(
-        self, prepare_semantics_request: SemanticsPreparationRequest
+        self,
+        prepare_semantics_request: SemanticsPreparationRequest,
+        **kwargs,
     ):
         results = {
             "metadata": {
@@ -79,7 +83,7 @@ class IndexingService:
                 status="finished",
             )
         except Exception as e:
-            logger.exception(f"ask pipeline - Failed to prepare semantics: {e}")
+            logger.exception(f"Failed to prepare semantics: {e}")
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.mdl_hash
@@ -102,7 +106,7 @@ class IndexingService:
             )
         ) is None:
             logger.exception(
-                f"ask pipeline - id is not found for SemanticsPreparation: {prepare_semantics_status_request.mdl_hash}"
+                f"id is not found for SemanticsPreparation: {prepare_semantics_status_request.mdl_hash}"
             )
             return SemanticsPreparationStatusResponse(
                 status="failed",

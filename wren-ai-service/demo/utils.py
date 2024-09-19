@@ -671,7 +671,7 @@ def get_sql_answer(
     sql_summary: str,
 ):
     sql_answer_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answer",
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers",
         json={
             "query": query,
             "sql": sql,
@@ -687,7 +687,7 @@ def get_sql_answer(
         sql_answer_status != "finished" and sql_answer_status != "failed"
     ):
         sql_answer_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answer/{query_id}/result"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/result"
         )
         assert sql_answer_status_response.status_code == 200
         sql_answer_status = sql_answer_status_response.json()["status"]

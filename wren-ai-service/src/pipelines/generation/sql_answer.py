@@ -76,7 +76,7 @@ class DataFetcher:
 
 
 @component
-class GenerationPostProcessor:
+class SQLAnswerGenerationPostProcessor:
     @component.output_types(
         results=Dict[str, Any],
     )
@@ -95,7 +95,7 @@ class GenerationPostProcessor:
                 }
             }
         except Exception as e:
-            logger.exception(f"Error in GenerationPostProcessor: {e}")
+            logger.exception(f"Error in SQLAnswerGenerationPostProcessor: {e}")
 
             return {
                 "results": {
@@ -147,7 +147,7 @@ async def generate_answer(prompt: dict, generator: Any) -> dict:
 @timer
 @observe(capture_input=False)
 def post_process(
-    generate_answer: dict, post_processor: GenerationPostProcessor
+    generate_answer: dict, post_processor: SQLAnswerGenerationPostProcessor
 ) -> dict:
     logger.debug(
         f"generate_answer: {orjson.dumps(generate_answer, option=orjson.OPT_INDENT_2).decode()}"
@@ -159,18 +159,22 @@ def post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLAnswer(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.data_fetcher = DataFetcher(engine=engine)
-        self.prompt_builder = PromptBuilder(template=sql_to_answer_user_prompt_template)
-        self.generator = llm_provider.get_generator(
-            system_prompt=sql_to_answer_system_prompt
-        )
-        self.post_processor = GenerationPostProcessor()
+        self._components = {
+            "data_fetcher": DataFetcher(engine=engine),
+            "prompt_builder": PromptBuilder(
+                template=sql_to_answer_user_prompt_template
+            ),
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_to_answer_system_prompt
+            ),
+            "post_processor": SQLAnswerGenerationPostProcessor(),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -179,22 +183,19 @@ class Generation(BasicPipeline):
     def visualize(
         self, query: str, sql: str, sql_summary: str, project_id: str | None = None
     ) -> None:
-        destination = "outputs/pipelines/sql_answer"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_answer.dot",
             inputs={
                 "query": query,
                 "sql": sql,
                 "sql_summary": sql_summary,
                 "project_id": project_id,
-                "data_fetcher": self.data_fetcher,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -213,10 +214,7 @@ class Generation(BasicPipeline):
                 "sql": sql,
                 "sql_summary": sql_summary,
                 "project_id": project_id,
-                "data_fetcher": self.data_fetcher,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
         )
 
@@ -232,7 +230,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLAnswer(
         llm_provider=llm_provider,
         engine=engine,
     )

@@ -25,6 +25,7 @@ class SQLExplanationRequest(BaseModel):
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
+    user_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:
@@ -57,25 +58,29 @@ class SQLExplanationResultResponse(BaseModel):
 class SQLExplanationService:
     def __init__(
         self,
-        pipelines: dict[str, Pipeline],
+        pipelines: Dict[str, Pipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self.sql_explanation_results: dict[
+        self._sql_explanation_results: Dict[
             str, SQLExplanationResultResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     @async_timer
-    async def sql_explanation(self, sql_explanation_request: SQLExplanationRequest):
+    async def sql_explanation(
+        self,
+        sql_explanation_request: SQLExplanationRequest,
+        **kwargs,
+    ):
         try:
             query_id = sql_explanation_request.query_id
 
-            self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+            self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                 status="understanding",
             )
 
-            self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+            self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                 status="generating",
             )
 
@@ -83,7 +88,7 @@ class SQLExplanationService:
                 question: str,
                 step_with_analysis_results: StepWithAnalysisResult,
             ):
-                return await self._pipelines["generation"].run(
+                return await self._pipelines["sql_explanation"].run(
                     question=question,
                     step_with_analysis_results=step_with_analysis_results,
                 )
@@ -102,15 +107,13 @@ class SQLExplanationService:
                 for generation_result in generation_results
             ]
 
-            logger.debug(f"sql explanation results: {sql_explanation_results}")
-
             if sql_explanation_results:
-                self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                     status="finished",
                     response=sql_explanation_results,
                 )
             else:
-                self.sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
                     status="failed",
                     error=SQLExplanationResultResponse.SQLExplanationResultError(
                         code="OTHERS",
@@ -121,7 +124,7 @@ class SQLExplanationService:
             logger.exception(
                 f"sql explanation pipeline - Failed to provide SQL explanation: {e}"
             )
-            self.sql_explanation_results[
+            self._sql_explanation_results[
                 sql_explanation_request.query_id
             ] = SQLExplanationResultResponse(
                 status="failed",
@@ -134,10 +137,10 @@ class SQLExplanationService:
     def get_sql_explanation_result(
         self, sql_explanation_result_request: SQLExplanationResultRequest
     ) -> SQLExplanationResultResponse:
-        if sql_explanation_result_request.query_id not in self.sql_explanation_results:
+        if sql_explanation_result_request.query_id not in self._sql_explanation_results:
             return SQLExplanationResultResponse(
                 status="failed",
                 error=f"{sql_explanation_result_request.query_id} is not found",
             )
 
-        return self.sql_explanation_results[sql_explanation_result_request.query_id]
+        return self._sql_explanation_results[sql_explanation_result_request.query_id]

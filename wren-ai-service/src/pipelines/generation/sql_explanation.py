@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
-import pydantic
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
@@ -14,14 +13,97 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.sql_explanation.components.prompts import (
-    sql_explanation_system_prompt,
-)
 from src.utils import async_timer, timer
 from src.web.v1.services.sql_explanation import StepWithAnalysisResult
 
 logger = logging.getLogger("wren-ai-service")
 
+
+sql_explanation_system_prompt = """
+### INSTRUCTIONS ###
+
+Given the question, sql query, sql analysis result to the sql query, sql query summary for reference,
+please explain sql analysis result within 20 words in layman term based on sql query:
+1. how does the expression work
+2. why this expression is given based on the question
+3. why can it answer user's question
+The sql analysis will be one of the types: selectItems, relation, filter, groupByKeys, sortings
+
+### ALERT ###
+
+1. There must be only one type of sql analysis result in the input(sql analysis result) and output(sql explanation)
+2. The number of the sql explanation must be the same as the number of the <expression_string> in the input
+
+### INPUT STRUCTURE ###
+
+{
+  "selectItems": {
+    "withFunctionCallOrMathematicalOperation": [
+      {
+        "alias": "<alias_string>",
+        "expression": "<expression_string>"
+      }
+    ],
+    "withoutFunctionCallOrMathematicalOperation": [
+      {
+        "alias": "<alias_string>",
+        "expression": "<expression_string>"
+      }
+    ]
+  }
+} | {
+  "relation": [
+    {
+      "type": "INNER_JOIN" | "LEFT_JOIN" | "RIGHT_JOIN" | "FULL_JOIN" | "CROSS_JOIN" | "IMPLICIT_JOIN"
+      "criteria": <criteria_string>,
+      "exprSources": [
+        {
+          "expression": <expression_string>,
+          "sourceDataset": <sourceDataset_string>
+        }...
+      ]
+    } | {
+      "type": "TABLE",
+      "alias": "<alias_string>",
+      "tableName": "<expression_string>"
+    }
+  ]
+} | {
+  "filter": <expression_string>
+} | {
+  "groupByKeys": [<expression_string>, ...]
+} | {
+  "sortings": [<expression_string>, ...]
+}
+
+
+### OUTPUT STRUCTURE ###
+
+Please generate the output with the following JSON format depending on the type of the sql analysis result:
+
+{
+  "results": {
+    "selectItems": {
+      "withFunctionCallOrMathematicalOperation": [
+        <explanation1_string>,
+        <explanation2_string>,
+      ],
+      "withoutFunctionCallOrMathematicalOperation": [
+        <explanation1_string>,
+        <explanation2_string>,
+      ]
+    }
+  }
+} | {
+  "results": {
+    "groupByKeys|sortings|relation|filter": [
+      <explanation1_string>,
+      <explanation2_string>,
+      ...
+    ]
+  }
+}
+"""
 
 sql_explanation_user_prompt_template = """
 Question: {{ question }}
@@ -242,7 +324,7 @@ class SQLAnalysisPreprocessor:
 
 
 @component
-class GenerationPostProcessor:
+class SQLExplanationGenerationPostProcessor:
     @component.output_types(
         results=Optional[List[Dict[str, Any]]],
     )
@@ -384,7 +466,7 @@ class GenerationPostProcessor:
                                 }
                             )
         except Exception as e:
-            logger.exception(f"Error in GenerationPostProcessor: {e}")
+            logger.exception(f"Error in SQLExplanationGenerationPostProcessor: {e}")
 
         return {"results": results}
 
@@ -486,7 +568,7 @@ async def generate_sql_explanation(prompts: List[dict], generator: Any) -> List[
 def post_process(
     generate_sql_explanation: List[dict],
     preprocess: dict,
-    post_processor: GenerationPostProcessor,
+    post_processor: SQLExplanationGenerationPostProcessor,
 ) -> dict:
     logger.debug(
         f"generate_sql_explanation: {orjson.dumps(generate_sql_explanation, option=orjson.OPT_INDENT_2).decode()}"
@@ -504,19 +586,21 @@ def post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLExplanation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
     ):
-        self.pre_processor = SQLAnalysisPreprocessor()
-        self.prompt_builder = PromptBuilder(
-            template=sql_explanation_user_prompt_template
-        )
-        self.generator = llm_provider.get_generator(
-            system_prompt=sql_explanation_system_prompt
-        )
-        self.post_processor = GenerationPostProcessor()
+        self._components = {
+            "pre_processor": SQLAnalysisPreprocessor(),
+            "prompt_builder": PromptBuilder(
+                template=sql_explanation_user_prompt_template
+            ),
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_explanation_system_prompt
+            ),
+            "post_processor": SQLExplanationGenerationPostProcessor(),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -525,24 +609,21 @@ class Generation(BasicPipeline):
     def visualize(
         self,
         question: str,
-        step_with_analysis_results: pydantic.BaseModel,
+        step_with_analysis_results: StepWithAnalysisResult,
     ) -> None:
-        destination = "outputs/pipelines/sql_explanation"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_explanation.dot",
             inputs={
                 "question": question,
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
-                "pre_processor": self.pre_processor,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -564,10 +645,7 @@ class Generation(BasicPipeline):
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
-                "pre_processor": self.pre_processor,
-                "prompt_builder": self.prompt_builder,
-                "generator": self.generator,
-                "post_processor": self.post_processor,
+                **self._components,
             },
         )
 
@@ -583,7 +661,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLExplanation(
         llm_provider=llm_provider,
     )
 

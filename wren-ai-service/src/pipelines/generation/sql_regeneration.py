@@ -13,10 +13,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import GenerationPostProcessor
-from src.pipelines.sql_regeneration.components.prompts import (
-    sql_regeneration_system_prompt,
-)
+from src.pipelines.common import SQLBreakdownGenPostProcessor
 from src.utils import async_timer, timer
 from src.web.v1.services.sql_regeneration import (
     SQLExplanationWithUserCorrections,
@@ -24,6 +21,55 @@ from src.web.v1.services.sql_regeneration import (
 
 logger = logging.getLogger("wren-ai-service")
 
+
+sql_regeneration_system_prompt = """
+### Instructions ###
+
+- Given a list of user corrections, regenerate the corresponding SQL query.
+- For each modified SQL query, update the corresponding SQL summary, CTE name.
+- If subsequent steps are dependent on the corrected step, make sure to update the SQL query, SQL summary and CTE name in subsequent steps if needed.
+- Regenerate the description after correcting all of the steps.
+
+### INPUT STRUCTURE ###
+
+{
+    "description": "<original_description_string>",
+    "steps": [
+        {
+            "summary": "<original_sql_summary_string>",
+            "sql": "<original_sql_string>",
+            "cte_name": "<original_cte_name_string>",
+            "corrections": [
+                {
+                    "before": {
+                        "type": "<filter/selectItems/relation/groupByKeys/sortings>",
+                        "value": "<original_value_string>"
+                    },
+                    "after": {
+                        "type": "<sql_expression/nl_expression>",
+                        "value": "<new_value_string>"
+                    }
+                },...
+            ]
+        },...
+    ]
+}
+
+### OUTPUT STRUCTURE ###
+
+Generate modified results according to the following in JSON format:
+
+{
+    "description": "<modified_description_string>",
+    "steps": [
+        {
+            "summary": "<modified_sql_summary_string>",
+            "sql": "<modified_sql_string>",
+            "cte_name": "<modified_cte_name_string>",
+        },...
+    ]
+}
+"""
 
 sql_regeneration_user_prompt_template = """
 inputs: {{ results }}
@@ -33,7 +79,7 @@ Let's think step by step.
 
 
 @component
-class SQLRegenerationRreprocesser:
+class SQLRegenerationPreprocesser:
     @component.output_types(
         results=Dict[str, Any],
     )
@@ -56,11 +102,11 @@ class SQLRegenerationRreprocesser:
 def preprocess(
     description: str,
     steps: List[SQLExplanationWithUserCorrections],
-    sql_regeneration_preprocesser: SQLRegenerationRreprocesser,
+    preprocesser: SQLRegenerationPreprocesser,
 ) -> dict[str, Any]:
     logger.debug(f"steps: {steps}")
     logger.debug(f"description: {description}")
-    return sql_regeneration_preprocesser.run(
+    return preprocesser.run(
         description=description,
         steps=steps,
     )
@@ -70,37 +116,35 @@ def preprocess(
 @observe(capture_input=False)
 def sql_regeneration_prompt(
     preprocess: Dict[str, Any],
-    sql_regeneration_prompt_builder: PromptBuilder,
+    prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"preprocess: {preprocess}")
-    return sql_regeneration_prompt_builder.run(results=preprocess["results"])
+    return prompt_builder.run(results=preprocess["results"])
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_regeneration(
     sql_regeneration_prompt: dict,
-    sql_regeneration_generator: Any,
+    generator: Any,
 ) -> dict:
     logger.debug(
         f"sql_regeneration_prompt: {orjson.dumps(sql_regeneration_prompt, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await sql_regeneration_generator.run(
-        prompt=sql_regeneration_prompt.get("prompt")
-    )
+    return await generator.run(prompt=sql_regeneration_prompt.get("prompt"))
 
 
 @async_timer
 @observe(capture_input=False)
 async def sql_regeneration_post_process(
     generate_sql_regeneration: dict,
-    sql_regeneration_post_processor: GenerationPostProcessor,
+    post_processor: SQLBreakdownGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
         f"generate_sql_regeneration: {orjson.dumps(generate_sql_regeneration, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await sql_regeneration_post_processor.run(
+    return await post_processor.run(
         replies=generate_sql_regeneration.get("replies"),
         project_id=project_id,
     )
@@ -109,20 +153,22 @@ async def sql_regeneration_post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLRegeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.sql_regeneration_preprocesser = SQLRegenerationRreprocesser()
-        self.sql_regeneration_prompt_builder = PromptBuilder(
-            template=sql_regeneration_user_prompt_template
-        )
-        self.sql_regeneration_generator = llm_provider.get_generator(
-            system_prompt=sql_regeneration_system_prompt
-        )
-        self.sql_regeneration_post_processor = GenerationPostProcessor(engine=engine)
+        self._components = {
+            "preprocesser": SQLRegenerationPreprocesser(),
+            "prompt_builder": PromptBuilder(
+                template=sql_regeneration_user_prompt_template
+            ),
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_regeneration_system_prompt
+            ),
+            "post_processor": SQLBreakdownGenPostProcessor(engine=engine),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -134,21 +180,18 @@ class Generation(BasicPipeline):
         steps: List[SQLExplanationWithUserCorrections],
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/sql_regeneration"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["sql_regeneration_post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_regeneration.dot",
             inputs={
                 "description": description,
                 "steps": steps,
-                "sql_regeneration_preprocesser": self.sql_regeneration_preprocesser,
-                "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
-                "sql_regeneration_generator": self.sql_regeneration_generator,
-                "sql_regeneration_post_processor": self.sql_regeneration_post_processor,
                 "project_id": project_id,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -168,11 +211,8 @@ class Generation(BasicPipeline):
             inputs={
                 "description": description,
                 "steps": steps,
-                "sql_regeneration_preprocesser": self.sql_regeneration_preprocesser,
-                "sql_regeneration_prompt_builder": self.sql_regeneration_prompt_builder,
-                "sql_regeneration_generator": self.sql_regeneration_generator,
-                "sql_regeneration_post_processor": self.sql_regeneration_post_processor,
                 "project_id": project_id,
+                **self._components,
             },
         )
 
@@ -188,7 +228,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLRegeneration(
         llm_provider=llm_provider,
         engine=engine,
     )

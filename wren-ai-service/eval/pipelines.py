@@ -29,8 +29,9 @@ from eval.utils import (
 )
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.ask import generation, retrieval
+from src.pipelines.generation import sql_generation
 from src.pipelines.indexing import indexing
+from src.pipelines.retrieval import retrieval
 
 
 def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
@@ -228,7 +229,7 @@ class GenerationPipeline(Eval):
     ):
         super().__init__(meta, 3)
         self._mdl = mdl
-        self._generation = generation.Generation(
+        self._generation = sql_generation.SQLGeneration(
             llm_provider=llm_provider,
             engine=engine,
         )
@@ -305,7 +306,7 @@ class AskPipeline(Eval):
             embedder_provider=embedder_provider,
             document_store_provider=document_store_provider,
         )
-        self._generation = generation.Generation(
+        self._generation = sql_generation.SQLGeneration(
             llm_provider=llm_provider,
             engine=engine,
         )

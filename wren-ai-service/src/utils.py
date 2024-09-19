@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 from typing import Tuple
 
-import toml
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
@@ -184,8 +183,15 @@ def trace_metadata(func):
             addition.update(additional_metadata)
 
         metadata = extract(*args)
+        service_metadata = kwargs.get(
+            "service_metadata",
+            {
+                "models_metadata": {},
+                "service_version": "",
+            },
+        )
         langfuse_metadata = {
-            **MODELS_METADATA,
+            **service_metadata.get("models_metadata"),
             **addition,
             "mdl_hash": metadata.get("mdl_hash"),
             "project_id": metadata.get("project_id"),
@@ -193,7 +199,7 @@ def trace_metadata(func):
         langfuse_context.update_current_trace(
             user_id=metadata.get("user_id"),
             session_id=metadata.get("thread_id"),
-            release=SERVICE_VERSION,
+            release=service_metadata.get("service_version"),
             metadata=langfuse_metadata,
         )
 
@@ -202,29 +208,25 @@ def trace_metadata(func):
     return wrapper
 
 
-MODELS_METADATA = {}
-SERVICE_VERSION = None
+def remove_sql_summary_duplicates(dicts):
+    """
+    Removes duplicates from a list of dictionaries based on 'sql' and 'summary' fields.
 
+    Args:
+    dicts (list of dict): The list of dictionaries to be deduplicated.
 
-def service_metadata(
-    llm_provider: LLMProvider,
-    embedder_provider: EmbedderProvider,
-    *_,
-    pyproject_path: str = "pyproject.toml",
-):
-    global MODELS_METADATA, SERVICE_VERSION
-
-    MODELS_METADATA = {
-        "generation_model": llm_provider.get_model(),
-        "generation_model_kwargs": llm_provider.get_model_kwargs(),
-        "embedding_model": embedder_provider.get_model(),
-        "embedding_model_dim": embedder_provider.get_dimensions(),
-    }
-
-    def get_version_from_pyproject() -> str:
-        with open(pyproject_path, "r") as f:
-            pyproject = toml.load(f)
-            return pyproject["tool"]["poetry"]["version"]
-
-    SERVICE_VERSION = get_version_from_pyproject()
-    logger.info(f"Service version: {SERVICE_VERSION}")
+    Returns:
+    list of dict: A list of dictionaries after removing duplicates.
+    """
+    # Convert each dictionary to a tuple of (sql, summary) to make them hashable
+    seen = set()
+    unique_dicts = []
+    for d in dicts:
+        identifier = (
+            d["sql"],
+            d["summary"],
+        )  # This assumes 'sql' and 'summary' always exist
+        if identifier not in seen:
+            seen.add(identifier)
+            unique_dicts.append(d)
+    return unique_dicts

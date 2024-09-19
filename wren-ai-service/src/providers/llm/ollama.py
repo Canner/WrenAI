@@ -15,7 +15,7 @@ from src.utils import remove_trailing_slash
 logger = logging.getLogger("wren-ai-service")
 
 LLM_OLLAMA_URL = "http://localhost:11434"
-GENERATION_MODEL = "llama3:70b"
+GENERATION_MODEL = "gemma2:9b"
 GENERATION_MODEL_KWARGS = {
     "temperature": 0,
 }

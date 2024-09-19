@@ -13,10 +13,10 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.ask.components.post_processors import GenerationPostProcessor
-from src.pipelines.ask.components.prompts import (
+from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
-    text_to_sql_system_prompt,
+    SQLGenPostProcessor,
+    sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
 
@@ -91,7 +91,7 @@ async def generate_sql_correction(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql_correction: dict,
-    post_processor: GenerationPostProcessor,
+    post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -111,13 +111,19 @@ class SQLCorrection(BasicPipeline):
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.generator = llm_provider.get_generator(
-            system_prompt=text_to_sql_system_prompt
-        )
-        self.prompt_builder = PromptBuilder(
-            template=sql_correction_user_prompt_template
-        )
-        self.post_processor = GenerationPostProcessor(engine=engine)
+        self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_generation_system_prompt
+            ),
+            "prompt_builder": PromptBuilder(
+                template=sql_correction_user_prompt_template
+            ),
+            "post_processor": SQLGenPostProcessor(engine=engine),
+        }
+
+        self._configs = {
+            "alert": TEXT_TO_SQL_RULES,
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -129,7 +135,7 @@ class SQLCorrection(BasicPipeline):
         invalid_generation_results: List[Dict[str, str]],
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/ask"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
@@ -139,35 +145,31 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_results": invalid_generation_results,
                 "documents": contexts,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
         )
 
     @async_timer
-    @observe(name="Ask SQL Correction")
+    @observe(name="SQL Correction")
     async def run(
         self,
         contexts: List[Document],
         invalid_generation_results: List[Dict[str, str]],
         project_id: str | None = None,
     ):
-        logger.info("Ask SQLCorrection pipeline is running...")
+        logger.info("SQLCorrection pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "invalid_generation_results": invalid_generation_results,
                 "documents": contexts,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
         )
 

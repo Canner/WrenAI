@@ -3,33 +3,26 @@ from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, remove_sql_summary_duplicates, trace_metadata
+from src.web.v1.services.ask import AskError, AskHistory
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
 
 
-class AskHistory(BaseModel):
-    sql: str
-    summary: str
-    steps: List[SQLBreakdown]
-
-
-# POST /v1/asks
-class AskRequest(BaseModel):
+# POST /v1/sql-expansions
+class SqlExpansionRequest(BaseModel):
     _query_id: str | None = None
     query: str
+    history: AskHistory
     # for identifying which collection to access from vectordb
     project_id: Optional[str] = None
-    # don't recommend to use id as a field name, but it's used in the older version of API spec
-    # so we need to support as a choice, and will remove it in the future
-    mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
+    mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
-    history: Optional[AskHistory] = None
 
     @property
     def query_id(self) -> str:
@@ -40,12 +33,12 @@ class AskRequest(BaseModel):
         self._query_id = query_id
 
 
-class AskResponse(BaseModel):
+class SqlExpansionResponse(BaseModel):
     query_id: str
 
 
-# PATCH /v1/asks/{query_id}
-class StopAskRequest(BaseModel):
+# PATCH /v1/sql-expansions/{query_id}
+class StopSqlExpansionRequest(BaseModel):
     _query_id: str | None = None
     status: Literal["stopped"]
 
@@ -58,38 +51,28 @@ class StopAskRequest(BaseModel):
         self._query_id = query_id
 
 
-class StopAskResponse(BaseModel):
+class StopSqlExpansionResponse(BaseModel):
     query_id: str
 
 
-# GET /v1/asks/{query_id}/result
-class AskResult(BaseModel):
-    sql: str
-    summary: str
-    type: Literal["llm", "view"] = "llm"
-    viewId: Optional[str] = None
-
-
-class AskError(BaseModel):
-    code: Literal[
-        "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
-    ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
-    message: str
-
-
-class AskResultRequest(BaseModel):
+# GET /v1/sql-expansions/{query_id}/result
+class SqlExpansionResultRequest(BaseModel):
     query_id: str
 
 
-class AskResultResponse(BaseModel):
+class SqlExpansionResultResponse(BaseModel):
+    class SqlExpansionResult(BaseModel):
+        description: str
+        steps: List[SQLBreakdown]
+
     status: Literal[
         "understanding", "searching", "generating", "finished", "failed", "stopped"
     ]
-    response: Optional[List[AskResult]] = None
+    response: Optional[SqlExpansionResult] = None
     error: Optional[AskError] = None
 
 
-class AskService:
+class SqlExpansionService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
@@ -97,13 +80,13 @@ class AskService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_results: Dict[str, AskResultResponse] = TTLCache(
+        self._sql_expansion_results: Dict[str, SqlExpansionResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
 
     def _is_stopped(self, query_id: str):
         if (
-            result := self._ask_results.get(query_id)
+            result := self._sql_expansion_results.get(query_id)
         ) is not None and result.status == "stopped":
             return True
 
@@ -115,15 +98,15 @@ class AskService:
         )
 
     @async_timer
-    @observe(name="Ask Question")
+    @observe(name="SQL Expansion")
     @trace_metadata
-    async def ask(
+    async def sql_expansion(
         self,
-        ask_request: AskRequest,
+        sql_expansion_request: SqlExpansionRequest,
         **kwargs,
     ):
         results = {
-            "ask_result": {},
+            "sql_expansion_result": {},
             "metadata": {
                 "error_type": "",
                 "error_message": "",
@@ -131,36 +114,34 @@ class AskService:
         }
 
         try:
-            # ask status can be understanding, searching, generating, finished, failed, stopped
-            # we will need to handle business logic for each status
-            query_id = ask_request.query_id
+            query_id = sql_expansion_request.query_id
 
             if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
+                self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="understanding",
                 )
 
-            query_for_retrieval = (
-                ask_request.history.summary + " " + ask_request.query
-                if ask_request.history
-                else ask_request.query
-            )
             if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
+                self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="searching",
                 )
 
+                query_for_retrieval = (
+                    sql_expansion_request.history.summary
+                    + " "
+                    + sql_expansion_request.query
+                )
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=query_for_retrieval,
-                    id=ask_request.project_id,
+                    id=sql_expansion_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
 
                 if not documents:
                     logger.exception(
-                        f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
+                        f"sql expansion pipeline - NO_RELEVANT_DATA: {sql_expansion_request.query}"
                     )
-                    self._ask_results[query_id] = AskResultResponse(
+                    self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                         status="failed",
                         error=AskError(
                             code="NO_RELEVANT_DATA",
@@ -171,47 +152,27 @@ class AskService:
                     return results
 
             if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
+                self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="generating",
                 )
 
-                historical_question = await self._pipelines["historical_question"].run(
-                    query=query_for_retrieval,
-                    id=ask_request.project_id,
+                sql_expansion_generation_results = await self._pipelines[
+                    "sql_expansion"
+                ].run(
+                    query=sql_expansion_request.query,
+                    contexts=documents,
+                    history=sql_expansion_request.history,
+                    project_id=sql_expansion_request.project_id,
                 )
 
-                # we only return top 1 result
-                historical_question_result = historical_question.get(
-                    "formatted_output", {}
-                ).get("documents", [])[:1]
-
-                if ask_request.history:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        history=ask_request.history,
-                        project_id=ask_request.project_id,
-                    )
-                else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        exclude=historical_question_result,
-                        project_id=ask_request.project_id,
-                    )
-
                 valid_generation_results = []
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
-                ]:
+                if sql_valid_results := sql_expansion_generation_results[
+                    "post_process"
+                ]["valid_generation_results"]:
                     valid_generation_results += sql_valid_results
 
                 if failed_dry_run_results := self._get_failed_dry_run_results(
-                    text_to_sql_generation_results["post_process"][
+                    sql_expansion_generation_results["post_process"][
                         "invalid_generation_results"
                     ]
                 ):
@@ -220,7 +181,7 @@ class AskService:
                     ].run(
                         contexts=documents,
                         invalid_generation_results=failed_dry_run_results,
-                        project_id=ask_request.project_id,
+                        project_id=sql_expansion_request.project_id,
                     )
                     valid_generation_results += sql_correction_results["post_process"][
                         "valid_generation_results"
@@ -229,7 +190,7 @@ class AskService:
                 valid_sql_summary_results = []
                 if valid_generation_results:
                     sql_summary_results = await self._pipelines["sql_summary"].run(
-                        query=ask_request.query,
+                        query=sql_expansion_request.query,
                         sqls=valid_generation_results,
                     )
                     valid_sql_summary_results = sql_summary_results["post_process"][
@@ -240,11 +201,11 @@ class AskService:
                         valid_sql_summary_results
                     )
 
-                if not valid_sql_summary_results and not historical_question_result:
+                if not valid_sql_summary_results:
                     logger.exception(
-                        f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
+                        f"sql expansion pipeline - NO_RELEVANT_SQL: {sql_expansion_request.query}"
                     )
-                    self._ask_results[query_id] = AskResultResponse(
+                    self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                         status="failed",
                         error=AskError(
                             code="NO_RELEVANT_SQL",
@@ -254,33 +215,30 @@ class AskService:
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                     return results
 
-                api_results = [
-                    AskResult(
-                        **{
-                            "sql": result.get("statement"),
-                            "summary": result.get("summary"),
-                            "type": "view",
-                            "viewId": result.get("viewId"),
+                api_results = SqlExpansionResultResponse.SqlExpansionResult(
+                    description=sql_expansion_request.history.summary,
+                    steps=[
+                        {
+                            "sql": valid_generation_results[0]["sql"],
+                            "summary": valid_sql_summary_results[0]["summary"],
+                            "cte_name": "",
                         }
-                    )
-                    for result in historical_question_result
-                ] + [AskResult(**result) for result in valid_sql_summary_results]
+                    ],
+                )
 
-                # only return top 3 results, thus remove the rest
-                if len(api_results) > 3:
-                    del api_results[3:]
-
-                self._ask_results[query_id] = AskResultResponse(
+                self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="finished",
                     response=api_results,
                 )
 
-                results["ask_result"] = api_results
+                results["sql_expansion_result"] = api_results
                 return results
         except Exception as e:
-            logger.exception(f"ask pipeline - OTHERS: {e}")
+            logger.exception(f"sql expansion pipeline - OTHERS: {e}")
 
-            self._ask_results[ask_request.query_id] = AskResultResponse(
+            self._sql_expansion_results[
+                sql_expansion_request.query_id
+            ] = SqlExpansionResultResponse(
                 status="failed",
                 error=AskError(
                     code="OTHERS",
@@ -292,27 +250,31 @@ class AskService:
             results["metadata"]["error_message"] = str(e)
             return results
 
-    def stop_ask(
+    def stop_sql_expansion(
         self,
-        stop_ask_request: StopAskRequest,
+        stop_sql_expansion_request: StopSqlExpansionRequest,
     ):
-        self._ask_results[stop_ask_request.query_id] = AskResultResponse(
-            status="stopped",
-        )
+        self._sql_expansion_results[
+            stop_sql_expansion_request.query_id
+        ] = SqlExpansionResultResponse(status="stopped")
 
-    def get_ask_result(
+    def get_sql_expansion_result(
         self,
-        ask_result_request: AskResultRequest,
-    ) -> AskResultResponse:
-        if (result := self._ask_results.get(ask_result_request.query_id)) is None:
-            logger.exception(
-                f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
+        sql_expansion_result_request: SqlExpansionResultRequest,
+    ) -> SqlExpansionResultResponse:
+        if (
+            result := self._sql_expansion_results.get(
+                sql_expansion_result_request.query_id
             )
-            return AskResultResponse(
+        ) is None:
+            logger.exception(
+                f"sql-expansion pipeline - OTHERS: {sql_expansion_result_request.query_id} is not found"
+            )
+            return SqlExpansionResultResponse(
                 status="failed",
                 error=AskError(
                     code="OTHERS",
-                    message=f"{ask_result_request.query_id} is not found",
+                    message=f"{sql_expansion_result_request.query_id} is not found",
                 ),
             )
 

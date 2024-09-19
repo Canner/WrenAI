@@ -12,19 +12,17 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.ask.components.post_processors import (
-    GenerationPostProcessor,
-)
-from src.pipelines.ask.components.prompts import (
+from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
-    text_to_sql_system_prompt,
+    SQLGenPostProcessor,
+    sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
 
-text_to_sql_user_prompt_template = """
+sql_generation_user_prompt_template = """
 ### TASK ###
 Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and
 generate three SQL statements that could potentially answer each interpreted version of the queries.
@@ -121,7 +119,7 @@ async def generate_sql(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 async def post_process(
     generate_sql: dict,
-    post_processor: GenerationPostProcessor,
+    post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
@@ -133,17 +131,25 @@ async def post_process(
 ## End of Pipeline
 
 
-class Generation(BasicPipeline):
+class SQLGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
         engine: Engine,
     ):
-        self.generator = llm_provider.get_generator(
-            system_prompt=text_to_sql_system_prompt
-        )
-        self.prompt_builder = PromptBuilder(template=text_to_sql_user_prompt_template)
-        self.post_processor = GenerationPostProcessor(engine=engine)
+        self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_generation_system_prompt
+            ),
+            "prompt_builder": PromptBuilder(
+                template=sql_generation_user_prompt_template
+            ),
+            "post_processor": SQLGenPostProcessor(engine=engine),
+        }
+
+        self._configs = {
+            "alert": TEXT_TO_SQL_RULES,
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -156,29 +162,27 @@ class Generation(BasicPipeline):
         exclude: List[Dict],
         project_id: str | None = None,
     ) -> None:
-        destination = "outputs/pipelines/ask"
+        destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
             ["post_process"],
-            output_file_path=f"{destination}/generation.dot",
+            output_file_path=f"{destination}/sql_generation.dot",
             inputs={
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
         )
 
     @async_timer
-    @observe(name="Ask Generation")
+    @observe(name="SQL Generation")
     async def run(
         self,
         query: str,
@@ -186,18 +190,16 @@ class Generation(BasicPipeline):
         exclude: List[Dict],
         project_id: str | None = None,
     ):
-        logger.info("Ask Generation pipeline is running...")
+        logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
-                "alert": TEXT_TO_SQL_RULES,
-                "generator": self.generator,
-                "prompt_builder": self.prompt_builder,
-                "post_processor": self.post_processor,
                 "project_id": project_id,
+                **self._components,
+                **self._configs,
             },
         )
 
@@ -213,7 +215,7 @@ if __name__ == "__main__":
     init_langfuse()
 
     llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = Generation(
+    pipeline = SQLGeneration(
         llm_provider=llm_provider,
         engine=engine,
     )
