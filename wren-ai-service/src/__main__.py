@@ -72,7 +72,12 @@ async def lifespan(app: FastAPI):
     langfuse_context.flush()
 
 
-app = FastAPI(lifespan=lifespan, redoc_url=None, default_response_class=ORJSONResponse)
+app = FastAPI(
+    title="Wren AI Agentic System",
+    lifespan=lifespan,
+    redoc_url=None,
+    default_response_class=ORJSONResponse,
+)
 
 app.add_middleware(
     CORSMiddleware,
