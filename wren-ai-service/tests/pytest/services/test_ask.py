@@ -75,8 +75,13 @@ def indexing_service():
 @pytest.fixture
 def service_metadata():
     return {
-        "models_metadata": {},
-        "service_version": "",
+        "models_metadata": {
+            "generation_model": "mock-llm-model",
+            "generation_model_kwargs": {},
+            "embedding_model": "mock-embedding-model",
+            "embedding_model_dim": 768,
+        },
+        "service_version": "0.8.0-mock",
     }
 
 
