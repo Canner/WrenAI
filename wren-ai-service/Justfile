@@ -25,6 +25,9 @@ test test_args='': up && down
 load-test:
 	poetry run python -m tests.locust.locust_script
 
+langfuse_dashboard:
+	poetry run streamlit run eval/dashboard/app.py
+
 prepare-wren-engine:
 	rm -rf tools/dev/etc
 	mkdir -p tools/dev/etc
