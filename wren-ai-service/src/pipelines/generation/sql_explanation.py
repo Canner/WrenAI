@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
-from src.web.v1.services.sql_explanation import StepWithAnalysisResult
+from src.web.v1.services.sql_explanation import StepWithAnalysisResults
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -155,7 +155,9 @@ def _compose_sql_expression_of_groupby_type(
     ]
 
 
-def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
+def _compose_sql_expression_of_relation_type(
+    relation: Dict, cte_names: List[str]
+) -> List[str]:
     def _is_subquery_or_has_subquery_child(relation):
         if relation["type"] == "SUBQUERY":
             return True
@@ -167,11 +169,14 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
                 return True
         return False
 
-    def _collect_relations(relation, result, top_level: bool = True):
+    def _collect_relations(relation, result, cte_names, top_level: bool = True):
         if _is_subquery_or_has_subquery_child(relation):
             return
 
         if relation["type"] == "TABLE" and top_level:
+            if relation["tableName"] in cte_names:
+                return
+
             result.append(
                 {
                     "values": {
@@ -198,12 +203,11 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
                     "id": relation.get("id", ""),
                 }
             )
-            _collect_relations(relation["left"], result, top_level=False)
-            _collect_relations(relation["right"], result, top_level=False)
+            _collect_relations(relation["left"], cte_names, result, top_level=False)
+            _collect_relations(relation["right"], cte_names, result, top_level=False)
 
     results = []
-    print(f"relation: {relation}")
-    _collect_relations(relation, results)
+    _collect_relations(relation, results, cte_names)
     return results
 
 
@@ -267,6 +271,7 @@ class SQLAnalysisPreprocessor:
     )
     def run(
         self,
+        cte_names: List[str],
         sql_analysis_results: List[Dict],
     ) -> Dict[str, List[Dict]]:
         preprocessed_sql_analysis_results = []
@@ -293,7 +298,8 @@ class SQLAnalysisPreprocessor:
                     preprocessed_sql_analysis_result[
                         "relation"
                     ] = _compose_sql_expression_of_relation_type(
-                        sql_analysis_result["relation"]
+                        sql_analysis_result["relation"],
+                        cte_names,
                     )
                 else:
                     preprocessed_sql_analysis_result["relation"] = []
@@ -475,12 +481,14 @@ class SQLExplanationGenerationPostProcessor:
 @timer
 @observe(capture_input=False)
 def preprocess(
-    sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
+    sql_analysis_results: List[dict],
+    cte_names: List[str],
+    pre_processor: SQLAnalysisPreprocessor,
 ) -> dict:
     logger.debug(
         f"sql_analysis_results: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return pre_processor.run(sql_analysis_results)
+    return pre_processor.run(cte_names, sql_analysis_results)
 
 
 @timer
@@ -643,7 +651,8 @@ class SQLExplanation(BasicPipeline):
     def visualize(
         self,
         question: str,
-        step_with_analysis_results: StepWithAnalysisResult,
+        cte_names: List[str],
+        step_with_analysis_results: StepWithAnalysisResults,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -654,6 +663,7 @@ class SQLExplanation(BasicPipeline):
             output_file_path=f"{destination}/sql_explanation.dot",
             inputs={
                 "question": question,
+                "cte_names": cte_names,
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
@@ -668,7 +678,8 @@ class SQLExplanation(BasicPipeline):
     async def run(
         self,
         question: str,
-        step_with_analysis_results: StepWithAnalysisResult,
+        cte_names: List[str],
+        step_with_analysis_results: StepWithAnalysisResults,
     ):
         logger.info("SQL Explanation Generation pipeline is running...")
 
@@ -676,6 +687,7 @@ class SQLExplanation(BasicPipeline):
             ["post_process"],
             inputs={
                 "question": question,
+                "cte_names": cte_names,
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
@@ -702,18 +714,22 @@ if __name__ == "__main__":
 
     pipeline.visualize(
         "this is a test question",
-        StepWithAnalysisResult(
+        ["xxx"],
+        StepWithAnalysisResults(
             sql="xxx",
             summary="xxx",
+            cte_name="xxx",
             sql_analysis_results=[],
         ),
     )
     async_validate(
         lambda: pipeline.run(
             "this is a test question",
-            StepWithAnalysisResult(
+            ["xxx"],
+            StepWithAnalysisResults(
                 sql="xxx",
                 summary="xxx",
+                cte_name="xxx",
                 sql_analysis_results=[],
             ),
         )

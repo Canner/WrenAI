@@ -12,16 +12,17 @@ logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-explanations
-class StepWithAnalysisResult(BaseModel):
+class StepWithAnalysisResults(BaseModel):
     sql: str
     summary: str
+    cte_name: str
     sql_analysis_results: List[Dict]
 
 
 class SQLExplanationRequest(BaseModel):
     _query_id: str | None = None
     question: str
-    steps_with_analysis_results: List[StepWithAnalysisResult]
+    steps_with_analysis_results: List[StepWithAnalysisResults]
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
@@ -86,16 +87,23 @@ class SQLExplanationService:
 
             async def _task(
                 question: str,
-                step_with_analysis_results: StepWithAnalysisResult,
+                cte_names: List[str],
+                step_with_analysis_results: StepWithAnalysisResults,
             ):
                 return await self._pipelines["sql_explanation"].run(
                     question=question,
+                    cte_names=cte_names,
                     step_with_analysis_results=step_with_analysis_results,
                 )
 
+            cte_names = [
+                step_with_analysis_results.cte_name
+                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+            ]
             tasks = [
                 _task(
                     sql_explanation_request.question,
+                    cte_names,
                     step_with_analysis_results,
                 )
                 for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
