@@ -89,7 +89,10 @@ class SemanticsPreparationService:
                 prepare_semantics_request.mdl_hash
             ] = SemanticsPreparationStatusResponse(
                 status="failed",
-                error=f"Failed to prepare semantics: {e}",
+                error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
+                    code="OTHERS",
+                    message=f"Failed to prepare semantics: {e}",
+                ),
             )
 
             results["metadata"]["error_type"] = "INDEXING_FAILED"
