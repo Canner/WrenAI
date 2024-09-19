@@ -106,6 +106,12 @@ Please generate the output with the following JSON format depending on the type 
 """
 
 sql_explanation_user_prompt_template = """
+### TASK ###
+
+Given the SQL query analysis and other related information, {{ explanation_hint }}
+
+### INPUT ###
+
 Question: {{ question }}
 SQL query: {{ sql }}
 SQL query summary: {{ sql_summary }}
@@ -253,6 +259,20 @@ def _compose_sql_expression_of_sortings_type(sortings: List[Dict]) -> List[str]:
         }
         for sorting in sortings
     ]
+
+
+def get_sql_explanation_prompt_given_analysis_type(sql_analysis_type: str) -> str:
+    if sql_analysis_type == "filter":
+        return "Explain the filter condition in the SQL query."
+    elif sql_analysis_type == "groupByKeys":
+        return "Explain the group by keys in the SQL query."
+    elif sql_analysis_type == "relation":
+        return "Explain the relation in the SQL query."
+    elif sql_analysis_type == "selectItems":
+        return "Explain the select items in the SQL query."
+    elif sql_analysis_type == "sortings":
+        return "Explain the sortings in the SQL query."
+    return ""
 
 
 def _extract_to_str(data):
@@ -507,12 +527,14 @@ def prompts(
     )
     logger.debug(f"sql_summary: {sql_summary}")
 
+    sql_analysis_types = []
     preprocessed_sql_analysis_results_with_values = []
     for preprocessed_sql_analysis_result in preprocess[
         "preprocessed_sql_analysis_results"
     ]:
         for key, value in preprocessed_sql_analysis_result.items():
             if value:
+                sql_analysis_types.append(key)
                 if key != "selectItems":
                     if isinstance(value, list):
                         preprocessed_sql_analysis_results_with_values.append(
@@ -551,9 +573,14 @@ def prompts(
             question=question,
             sql=sql,
             sql_analysis_result=sql_analysis_result,
+            explanation_hint=get_sql_explanation_prompt_given_analysis_type(
+                sql_analysis_type
+            ),
             sql_summary=sql_summary,
         )
-        for sql_analysis_result in preprocessed_sql_analysis_results_with_values
+        for sql_analysis_type, sql_analysis_result in zip(
+            sql_analysis_types, preprocessed_sql_analysis_results_with_values
+        )
     ]
 
 
