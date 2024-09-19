@@ -18,6 +18,7 @@ class SqlAnswerRequest(BaseModel):
     sql: str
     sql_summary: str
     thread_id: Optional[str] = None
+    user_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:

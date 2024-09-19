@@ -43,6 +43,7 @@ class SQLRegenerationRequest(BaseModel):
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
+    user_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:
