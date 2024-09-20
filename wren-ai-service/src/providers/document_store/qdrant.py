@@ -336,9 +336,13 @@ class QdrantProvider(DocumentStoreProvider):
         api_key: Optional[Secret] = Secret.from_env_var("QDRANT_API_KEY")
         if os.getenv("QDRANT_API_KEY")
         else None,
+        timeout: Optional[int] = (
+            int(os.getenv("QDRANT_TIMEOUT")) if os.getenv("QDRANT_TIMEOUT") else 120
+        ),
     ):
         self._location = location
         self._api_key = api_key
+        self._timeout = timeout
 
     def get_store(
         self,
@@ -364,6 +368,7 @@ class QdrantProvider(DocumentStoreProvider):
             index=dataset_name or "Document",
             recreate_index=recreate_index,
             on_disk=True,
+            timeout=self._timeout,
             quantization_config=(
                 rest.BinaryQuantization(
                     binary=rest.BinaryQuantizationConfig(
