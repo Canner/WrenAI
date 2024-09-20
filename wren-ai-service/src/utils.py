@@ -186,12 +186,12 @@ def trace_metadata(func):
         service_metadata = kwargs.get(
             "service_metadata",
             {
-                "models_metadata": {},
+                "pipes_metadata": {},
                 "service_version": "",
             },
         )
         langfuse_metadata = {
-            **service_metadata.get("models_metadata"),
+            **service_metadata.get("pipes_metadata"),
             **addition,
             "mdl_hash": metadata.get("mdl_hash"),
             "project_id": metadata.get("project_id"),

@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Optional
 
 import toml
@@ -43,7 +43,7 @@ class ServiceContainer:
 
 @dataclass
 class ServiceMetadata:
-    models_metadata: dict
+    pipes_metadata: dict
     service_version: str
 
 
@@ -162,9 +162,7 @@ def get_service_container():
 
 
 def create_service_metadata(
-    llm_provider: LLMProvider,
-    embedder_provider: EmbedderProvider,
-    *_,
+    pipe_components: dict[str, PipelineComponent],
     pyproject_path: str = "pyproject.toml",
 ) -> ServiceMetadata:
     def _get_version_from_pyproject() -> str:
@@ -172,17 +170,40 @@ def create_service_metadata(
             pyproject = toml.load(f)
             return pyproject["tool"]["poetry"]["version"]
 
-    models_metadata = {
-        "generation_model": llm_provider.get_model(),
-        "generation_model_kwargs": llm_provider.get_model_kwargs(),
-        "embedding_model": embedder_provider.get_model(),
-        "embedding_model_dim": embedder_provider.get_dimensions(),
+    def _convert_pipe_metadata(
+        llm_provider: LLMProvider,
+        embedder_provider: EmbedderProvider,
+        **_,
+    ) -> dict:
+        llm_metadata = (
+            {
+                "llm_model": llm_provider.get_model(),
+                "llm_model_kwargs": llm_provider.get_model_kwargs(),
+            }
+            if llm_provider
+            else {}
+        )
+
+        embedding_metadata = (
+            {
+                "embedding_model": embedder_provider.get_model(),
+                "embedding_model_dim": embedder_provider.get_dimensions(),
+            }
+            if embedder_provider
+            else {}
+        )
+        return {**llm_metadata, **embedding_metadata}
+
+    pipes_metadata = {
+        pipe_name: _convert_pipe_metadata(**asdict(component))
+        for pipe_name, component in pipe_components.items()
     }
+
     service_version = _get_version_from_pyproject()
 
     logger.info(f"Service version: {service_version}")
 
-    return ServiceMetadata(models_metadata, service_version)
+    return ServiceMetadata(pipes_metadata, service_version)
 
 
 # Create a dependency that will be used to access the ServiceMetadata

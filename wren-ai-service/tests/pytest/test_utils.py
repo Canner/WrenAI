@@ -43,7 +43,7 @@ def service_metadata(mocker: MockFixture):
 
 
 def test_service_metadata(service_metadata: ServiceMetadata):
-    assert service_metadata.models_metadata == {
+    assert service_metadata.pipes_metadata == {
         "generation_model": "mock-llm-model",
         "generation_model_kwargs": {},
         "embedding_model": "mock-embedding-model",
@@ -77,6 +77,6 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
         metadata={
             "mdl_hash": "mock-mdl-hash",
             "project_id": "mock-project-id",
-            **service_metadata.models_metadata,
+            **service_metadata.pipes_metadata,
         },
     )
