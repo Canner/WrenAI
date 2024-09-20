@@ -4,8 +4,8 @@ from typing import Optional
 
 import toml
 
-from src.core.engine import Engine
-from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
+from src.core.pipeline import PipelineComponent
+from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
     followup_sql_generation,
     sql_answer,
@@ -45,15 +45,6 @@ class ServiceContainer:
 class ServiceMetadata:
     models_metadata: dict
     service_version: str
-
-
-# TODO: move to pipeline module
-@dataclass
-class PipelineComponent:
-    llm_provider: LLMProvider = None
-    embedder_provider: EmbedderProvider = None
-    document_store_provider: DocumentStoreProvider = None
-    engine: Engine = None
 
 
 def create_service_container(
