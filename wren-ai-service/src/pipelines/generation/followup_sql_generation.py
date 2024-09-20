@@ -179,6 +179,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        **kwargs,
     ):
         self._components = {
             "generator": llm_provider.get_generator(

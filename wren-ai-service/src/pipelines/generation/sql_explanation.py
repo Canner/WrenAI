@@ -590,6 +590,7 @@ class SQLExplanation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        **kwargs,
     ):
         self._components = {
             "pre_processor": SQLAnalysisPreprocessor(),

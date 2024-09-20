@@ -121,6 +121,7 @@ class SQLSummary(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        **kwargs,
     ):
         self._components = {
             "generator": llm_provider.get_generator(

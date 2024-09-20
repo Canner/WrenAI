@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
         engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
     )
     app.state.service_container = create_service_container(
+        # todo: using pipeline components to replace providers
         *providers,
         should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
         column_indexing_batch_size=(

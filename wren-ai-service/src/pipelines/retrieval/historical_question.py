@@ -142,6 +142,7 @@ class HistoricalQuestion(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         store_provider: DocumentStoreProvider,
+        **kwargs,
     ) -> None:
         store = store_provider.get_store(dataset_name="view_questions")
         self._components = {

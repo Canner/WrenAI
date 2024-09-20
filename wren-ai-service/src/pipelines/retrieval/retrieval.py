@@ -292,6 +292,7 @@ class Retrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: Optional[int] = 10,
         table_column_retrieval_size: Optional[int] = 1000,
+        **kwargs,
     ):
         self._components = {
             "embedder": embedder_provider.get_text_embedder(),

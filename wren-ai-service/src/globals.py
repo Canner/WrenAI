@@ -47,32 +47,38 @@ class ServiceMetadata:
     service_version: str
 
 
+# TODO: move to pipeline module
+@dataclass
+class PipelineComponent:
+    llm_provider: LLMProvider = None
+    embedder_provider: EmbedderProvider = None
+    document_store_provider: DocumentStoreProvider = None
+    engine: Engine = None
+
+
 def create_service_container(
-    llm_provider: LLMProvider,
-    embedder_provider: EmbedderProvider,
-    document_store_provider: DocumentStoreProvider,
-    engine: Engine,
+    pipe_components: dict[str, PipelineComponent],
     should_force_deploy: Optional[str] = None,
     column_indexing_batch_size: Optional[int] = 50,
     table_retrieval_size: Optional[int] = 10,
     table_column_retrieval_size: Optional[int] = 1000,
     query_cache: Optional[dict] = {},
 ) -> ServiceContainer:
-    if should_force_deploy:
-        document_store_provider.get_store(recreate_index=True)
-        document_store_provider.get_store(
-            dataset_name="table_descriptions", recreate_index=True
-        )
-        document_store_provider.get_store(
-            dataset_name="view_questions", recreate_index=True
-        )
+    # todo: think about when to execute this
+    # if should_force_deploy:
+    #     document_store_provider.get_store(recreate_index=True)
+    #     document_store_provider.get_store(
+    #         dataset_name="table_descriptions", recreate_index=True
+    #     )
+    #     document_store_provider.get_store(
+    #         dataset_name="view_questions", recreate_index=True
+    #     )
 
     return ServiceContainer(
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
                 "indexing": indexing.Indexing(
-                    embedder_provider=embedder_provider,
-                    document_store_provider=document_store_provider,
+                    **pipe_components["indexing"],
                     column_indexing_batch_size=column_indexing_batch_size,
                 ),
             },
@@ -81,30 +87,24 @@ def create_service_container(
         ask_service=AskService(
             pipelines={
                 "retrieval": retrieval.Retrieval(
-                    llm_provider=llm_provider,
-                    embedder_provider=embedder_provider,
-                    document_store_provider=document_store_provider,
+                    **pipe_components["retrieval"],
                     table_retrieval_size=table_retrieval_size,
                     table_column_retrieval_size=table_column_retrieval_size,
                 ),
                 "historical_question": historical_question.HistoricalQuestion(
-                    embedder_provider=embedder_provider,
-                    store_provider=document_store_provider,
+                    **pipe_components["historical_question"],
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["sql_generation"],
                 ),
                 "sql_correction": sql_correction.SQLCorrection(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["sql_correction"],
                 ),
                 "followup_sql_generation": followup_sql_generation.FollowUpSQLGeneration(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["followup_sql_generation"],
                 ),
                 "sql_summary": sql_summary.SQLSummary(
-                    llm_provider=llm_provider,
+                    **pipe_components["sql_summary"],
                 ),
             },
             **query_cache,
@@ -112,8 +112,7 @@ def create_service_container(
         sql_answer_service=SqlAnswerService(
             pipelines={
                 "sql_answer": sql_answer.SQLAnswer(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["sql_answer"],
                 )
             },
             **query_cache,
@@ -121,8 +120,7 @@ def create_service_container(
         ask_details_service=AskDetailsService(
             pipelines={
                 "sql_breakdown": sql_breakdown.SQLBreakdown(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["sql_breakdown"],
                 ),
             },
             **query_cache,
@@ -130,22 +128,18 @@ def create_service_container(
         sql_expansion_service=SqlExpansionService(
             pipelines={
                 "retrieval": retrieval.Retrieval(
-                    llm_provider=llm_provider,
-                    embedder_provider=embedder_provider,
-                    document_store_provider=document_store_provider,
+                    **pipe_components["retrieval"],
                     table_retrieval_size=table_retrieval_size,
                     table_column_retrieval_size=table_column_retrieval_size,
                 ),
                 "sql_expansion": sql_expansion.SQLExpansion(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["sql_expansion"],
                 ),
                 "sql_correction": sql_correction.SQLCorrection(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["sql_correction"],
                 ),
                 "sql_summary": sql_summary.SQLSummary(
-                    llm_provider=llm_provider,
+                    **pipe_components["sql_summary"],
                 ),
             },
             **query_cache,
@@ -153,7 +147,7 @@ def create_service_container(
         sql_explanation_service=SQLExplanationService(
             pipelines={
                 "sql_explanation": sql_explanation.SQLExplanation(
-                    llm_provider=llm_provider,
+                    **pipe_components["sql_explanation"],
                 )
             },
             **query_cache,
@@ -161,8 +155,7 @@ def create_service_container(
         sql_regeneration_service=SQLRegenerationService(
             pipelines={
                 "sql_regeneration": sql_regeneration.SQLRegeneration(
-                    llm_provider=llm_provider,
-                    engine=engine,
+                    **pipe_components["sql_regeneration"],
                 )
             },
             **query_cache,

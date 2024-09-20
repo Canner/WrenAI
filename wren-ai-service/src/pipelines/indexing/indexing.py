@@ -625,6 +625,7 @@ class Indexing(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         column_indexing_batch_size: Optional[int] = 50,
+        **kwargs,
     ) -> None:
         dbschema_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")

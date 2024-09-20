@@ -164,6 +164,7 @@ class SQLAnswer(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        **kwargs,
     ):
         self._components = {
             "data_fetcher": DataFetcher(engine=engine),
