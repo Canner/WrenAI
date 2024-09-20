@@ -72,7 +72,12 @@ async def lifespan(app: FastAPI):
     langfuse_context.flush()
 
 
-app = FastAPI(lifespan=lifespan, redoc_url=None, default_response_class=ORJSONResponse)
+app = FastAPI(
+    title="wren-ai-service API Docs",
+    lifespan=lifespan,
+    redoc_url=None,
+    default_response_class=ORJSONResponse,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -81,11 +86,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(routers.router, prefix="/v1")
+app.include_router(routers.router, prefix="/v1", tags=["v1"])
 if env == "dev":
     from src.web import development
 
-    app.include_router(development.router, prefix="/dev")
+    app.include_router(development.router, prefix="/dev", tags=["dev"])
 
 
 @app.exception_handler(Exception)
