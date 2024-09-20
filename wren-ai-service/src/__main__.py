@@ -13,6 +13,7 @@ from src.globals import (
     create_service_container,
     create_service_metadata,
 )
+from src.providers import generate_components
 from src.utils import (
     init_langfuse,
     load_env_vars,
@@ -33,12 +34,8 @@ setup_custom_logger(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-    # todo: I think the next is init provider by config and then assume to the pipe components
-    # providers = init_providers(
-    #     engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
-    # )
 
-    pipe_components = {}
+    pipe_components = generate_components()
     app.state.service_container = create_service_container(
         pipe_components,
         should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
