@@ -16,6 +16,17 @@ class EngineConfig(BaseModel):
 
 
 class Engine(metaclass=ABCMeta):
+    """
+    The Engine class is responsible for SQL-related operations such as
+    executing SQL queries and cleaning the result.
+    """
+    """
+        Executes SQL queries asynchronously.
+        :param sql: The SQL query string.
+        :param session: An aiohttp session for making async HTTP requests.
+        :param dry_run: If True, simulates the SQL execution without performing it.
+        :return: A tuple with the status of the execution and optional response data.
+    """
     @abstractmethod
     async def execute_sql(
         self,
