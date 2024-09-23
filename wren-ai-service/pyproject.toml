@@ -9,48 +9,48 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.12.*, <4.0"
-fastapi = "==0.109.2"
-uvicorn = {extras = ["standard"], version = "==0.30.1"}
+fastapi = "==0.115.0"
+uvicorn = {extras = ["standard"], version = "==0.30.6"}
 python-dotenv = "==1.0.1"
-haystack-ai = "==2.4.0"
-openai = "==1.30.1"
-qdrant-haystack = "==4.1.2"
+haystack-ai = "==2.5.1"
+openai = "==1.47.0"
+qdrant-haystack = "==6.0.0"
 backoff = "==2.2.1"
-tqdm = "==4.66.4"
+tqdm = "==4.66.5"
 numpy = "==1.26.4"
-sqlparse = "==0.5.0"
-orjson = "==3.10.3"
-sf-hamilton = {version = "==1.69.0", extras = ["visualization"]}
-aiohttp = {extras = ["speedups"], version = "==3.10.2"}
-ollama-haystack = "==0.0.6"
-langfuse = "==2.43.3"
-ollama = "==0.2.1"
+sqlparse = "==0.5.1"
+orjson = "==3.10.7"
+sf-hamilton = {version = "==1.77.0", extras = ["visualization"]}
+aiohttp = {extras = ["speedups"], version = "==3.10.5"}
+ollama-haystack = "==1.0.0"
+langfuse = "==2.50.2"
+ollama = "==0.3.3"
 toml = "==0.10.2"
-sqlglot = "==25.18.0"
+sqlglot = "==25.22.0"
 cachetools = "==5.5.0"
 
 [tool.poetry.group.dev.dependencies]
-pre-commit = "==3.7.1"
-streamlit = "==1.37.0"
-watchdog = "==4.0.0"
-pandas = "==2.2.2"
+pre-commit = "==3.8.0"
+streamlit = "==1.38.0"
+watchdog = "==4.0.2"
+pandas = "==2.2.3"
 matplotlib = "==3.9.2"
 
 [tool.poetry.group.eval.dependencies]
-tomlkit = "==0.13.0"
-deepeval = "==1.0.6"
+tomlkit = "==0.13.2"
+deepeval = "==1.2.9"
 streamlit-tags = "==1.2.8"
 gitpython = "==3.1.43"
 ipykernel = "==6.29.5"
 
 [tool.poetry.group.demo.dependencies]
-requests = "==2.32.2"
+requests = "==2.32.3"
 
 [tool.poetry.group.test.dependencies]
-locust = "==2.28.0"
-pytest = "==8.2.0"
-pytest-cov = "==4.1.0"
-pytest-asyncio = "==0.23.8"
+locust = "==2.31.6"
+pytest = "==8.3.3"
+pytest-cov = "==5.0.0"
+pytest-asyncio = "==0.24.0"
 aioresponses = "==0.7.6"
 pytest-mock = "==3.14.0"
 
