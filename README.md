@@ -33,11 +33,11 @@
 
 ![wrenai_overview](./misc/wrenai_view.png)
 
-## 🕶 Try Our Demo!
+## 🕶 Try it yourself!
 
 https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
 
-👉 [Play around with Wren AI yourself!](https://demo.getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
+👉 [Start and try with your data!](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 
 ## 🎯 Our Vision & Mission
