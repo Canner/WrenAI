@@ -7,7 +7,7 @@ import openai
 from haystack import Document, component
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
 from haystack.utils import Secret
-from openai import AsyncOpenAI, OpenAI
+from openai import AsyncOpenAI
 from tqdm import tqdm
 
 from src.core.provider import EmbedderProvider
@@ -199,12 +199,6 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             else 120.0
         ),
     ):
-        def _verify_api_key(api_key: str, api_base: str) -> None:
-            """
-            this is a temporary solution to verify that the required environment variables are set
-            """
-            OpenAI(api_key=api_key, base_url=api_base).models.list()
-
         self._api_key = api_key
         self._api_base = remove_trailing_slash(api_base)
         self._embedding_model = embedding_model
@@ -214,9 +208,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         logger.info(
             f"Initializing OpenAIEmbedder provider with API base: {self._api_base}"
         )
-        # TODO: currently only OpenAI api key can be verified
         if self._api_base == EMBEDDER_OPENAI_API_BASE:
-            _verify_api_key(self._api_key.resolve_value(), self._api_base)
             logger.info(f"Using OpenAI Embedding Model: {self._embedding_model}")
         else:
             logger.info(

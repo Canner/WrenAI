@@ -9,7 +9,7 @@ from haystack import component
 from haystack.components.generators import OpenAIGenerator
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from haystack.utils import Secret
-from openai import AsyncOpenAI, OpenAI, Stream
+from openai import AsyncOpenAI, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from src.core.provider import LLMProvider
@@ -132,12 +132,6 @@ class OpenAILLMProvider(LLMProvider):
             float(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120.0
         ),
     ):
-        def _verify_api_key(api_key: str, api_base: str) -> None:
-            """
-            this is a temporary solution to verify that the required environment variables are set
-            """
-            OpenAI(api_key=api_key, base_url=api_base).models.list()
-
         self._api_key = api_key
         self._api_base = remove_trailing_slash(api_base)
         self._generation_model = generation_model
@@ -145,9 +139,7 @@ class OpenAILLMProvider(LLMProvider):
         self._timeout = timeout
 
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
-        # TODO: currently only OpenAI api key can be verified
         if self._api_base == LLM_OPENAI_API_BASE:
-            _verify_api_key(self._api_key.resolve_value(), self._api_base)
             logger.info(f"Using OpenAI LLM: {self._generation_model}")
         else:
             logger.info(f"Using OpenAI API-compatible LLM: {self._generation_model}")
