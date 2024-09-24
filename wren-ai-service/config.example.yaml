@@ -1,0 +1,61 @@
+type: llm
+vender: openai
+models:
+  - model: gpt-4o-mini
+    kwargs: {}
+    default: true
+api_key: sk-xxx
+api_base: https://api.openai.com/v1
+
+---
+type: llm
+vender: azure_openai
+models:
+  - model: gpt-4o
+    kwargs: {}
+api_key: sk-xxx
+api_base: https://api.openai.com/v1
+version: "2024-05-13"
+
+---
+type: embedder
+vender: openai
+models:
+  - model: text-embedding-3-small
+    dimension: 3072
+    default: true
+api_key: sk-xxx
+api_base: https://api.openai.com/v1
+
+---
+type: engine
+vender: wren
+engines:
+  - name: wren-ui
+    endpoint: http://localhost:3000
+    default: true
+  - name: wren-ibis
+    endpoint: http://localhost:8000
+    source: bigquery
+    manifest: "" # base64 encoded string of the MDL
+    connection_info: "" # base64 encoded string of the connection info
+  - name: wren-engine
+    endpoint: http://localhost:8080
+    manifest: ""
+
+---
+type: document_store
+vender: qdrant
+host: http://localhost:6333
+api_key: ""
+
+---
+type: pipeline
+pipes:
+  - name: sql_generation
+    llm_provider: openai.gpt-4o-mini
+  - name: retrieval
+    embedding_provider: openai.text-embedding-3-small
+    llm_provider: openai.gpt-4o-mini
+  - name: sql_answer
+    llm_provider: azure_openai.gpt-4o
