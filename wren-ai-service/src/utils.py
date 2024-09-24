@@ -58,6 +58,7 @@ def load_env_vars() -> str:
     return "prod"
 
 
+# todo: remove this function
 def init_providers(
     engine_config: EngineConfig,
 ) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
