@@ -1,5 +1,5 @@
 type: llm
-vender: openai
+vender: openai_llm
 models:
   - model: gpt-4o-mini
     kwargs: {}
@@ -9,7 +9,7 @@ api_base: https://api.openai.com/v1
 
 ---
 type: llm
-vender: azure_openai
+vender: azure_openai_llm
 models:
   - model: gpt-4o
     kwargs: {}
@@ -19,7 +19,7 @@ version: "2024-05-13"
 
 ---
 type: embedder
-vender: openai
+vender: openai_embedder
 models:
   - model: text-embedding-3-small
     dimension: 3072
@@ -31,15 +31,15 @@ api_base: https://api.openai.com/v1
 type: engine
 vender: wren
 engines:
-  - name: wren-ui
+  - name: wren_ui
     endpoint: http://localhost:3000
     default: true
-  - name: wren-ibis
+  - name: wren_ibis
     endpoint: http://localhost:8000
     source: bigquery
     manifest: "" # base64 encoded string of the MDL
     connection_info: "" # base64 encoded string of the connection info
-  - name: wren-engine
+  - name: wren_engine
     endpoint: http://localhost:8080
     manifest: ""
 

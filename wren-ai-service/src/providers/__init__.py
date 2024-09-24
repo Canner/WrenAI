@@ -9,13 +9,14 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvid
 from src.providers import loader
 
 logger = logging.getLogger("wren-ai-service")
+loader.import_mods()
 
 
 def provider_factory(
-    type: str, config: dict = {}
+    config: dict = {},
 ) -> LLMProvider | EmbedderProvider | DocumentStoreProvider | Engine:
     # todo: check all provider config
-    return loader.get_provider(type)(**config)
+    return loader.get_provider(config.get("vender"))(**config)
 
 
 def load_config(path: str = "config.yaml") -> list[dict]:
@@ -33,7 +34,7 @@ def process_llm(entry: dict) -> dict:
     for model in entry["models"]:
         model_name = f"{entry['vender']}.{model['model']}"
         returned[model_name] = {
-            # todo: might be need to put type here
+            "vender": entry["vender"],
             "api_key": entry["api_key"],
             "kwargs": model["kwargs"],
             **others,
@@ -41,7 +42,7 @@ def process_llm(entry: dict) -> dict:
     return returned
 
 
-def process_embedder(entry) -> dict:
+def process_embedder(entry: dict) -> dict:
     others = {
         k: v
         for k, v in entry.items()
@@ -51,6 +52,7 @@ def process_embedder(entry) -> dict:
     for model in entry["models"]:
         model_name = f"{entry['vender']}.{model['model']}"
         returned[model_name] = {
+            "vender": entry["vender"],
             "api_key": entry["api_key"],
             "dimension": model["dimension"],
             **others,
@@ -60,9 +62,7 @@ def process_embedder(entry) -> dict:
 
 
 def process_document_store(entry: dict) -> dict:
-    return {
-        entry["vender"]: {k: v for k, v in entry.items() if k not in ["type", "vender"]}
-    }
+    return {entry["vender"]: {k: v for k, v in entry.items() if k not in ["type"]}}
 
 
 def process_engine(entry: dict) -> dict:
@@ -87,7 +87,7 @@ def convert_data(config: dict) -> dict:
         "llm": {},
         "document_store": {},
         "engine": {},
-        "pipelines": {},
+        "pipeline": {},
     }
 
     type_to_processor = {
@@ -123,7 +123,8 @@ def generate_components() -> dict[str, PipelineComponent]:
 
     instantiated_providers = {
         category: {
-            type: provider_factory(type, config) for type, config in configs.items()
+            identifier: provider_factory(config)
+            for identifier, config in configs.items()
         }
         for category, configs in providers.items()
     }
@@ -140,5 +141,6 @@ def generate_components() -> dict[str, PipelineComponent]:
         )
 
     return {
-        pipe_name: componentize(components) for pipe_name, components in config.items()
+        pipe_name: componentize(components)
+        for pipe_name, components in config.get("pipelines").items()
     }
