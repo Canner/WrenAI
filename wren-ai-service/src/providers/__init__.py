@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Mapping
 from typing import Tuple
 
 import yaml
@@ -20,6 +21,9 @@ def provider_factory(
 
 
 def load_config(path: str = "config.yaml") -> list[dict]:
+    if not os.path.exists(path):
+        return []
+
     with open(path, "r") as f:
         return list(yaml.load_all(f, Loader=SafeLoader))
 
@@ -81,7 +85,7 @@ def process_pipeline(entry: dict) -> dict:
     }
 
 
-def convert_data(config: dict) -> dict:
+def convert_data(config: list[dict]) -> dict:
     returned = {
         "embedder": {},
         "llm": {},
@@ -129,8 +133,34 @@ def init_providers(
     return llm_provider, embedder_provider, document_store_provider, engine
 
 
+class Wrapper(Mapping):
+    def __init__(self):
+        self.value = PipelineComponent(
+            *init_providers(
+                engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
+            )
+        )
+
+    def __getitem__(self, key):
+        return self.value
+
+    def __repr__(self):
+        return f"Wrapper({self.value})"
+
+    def __iter__(self):
+        return iter(self.value)
+
+    def __len__(self):
+        return len(self.value)
+
+
 def generate_components() -> dict[str, PipelineComponent]:
-    config = convert_data(load_config())
+    raw = load_config()
+    if not raw:
+        # if no config, initialize the providers from the environment variables
+        return Wrapper()
+
+    config = convert_data(raw)
     loader.import_mods()
 
     providers = {
