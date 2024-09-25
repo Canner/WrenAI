@@ -4,7 +4,7 @@ import pytest
 
 from src.core.engine import EngineConfig
 from src.pipelines.generation import sql_breakdown
-from src.utils import init_providers
+from src.providers import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
     AskDetailsResultRequest,

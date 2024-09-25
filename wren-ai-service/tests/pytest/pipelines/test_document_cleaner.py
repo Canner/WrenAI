@@ -4,7 +4,7 @@ from haystack.document_stores.types import DocumentStore
 
 from src.core.engine import EngineConfig
 from src.pipelines.indexing.indexing import DocumentCleaner
-from src.utils import init_providers
+from src.providers import init_providers
 
 
 @pytest.mark.asyncio

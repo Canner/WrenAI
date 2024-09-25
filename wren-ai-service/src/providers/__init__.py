@@ -1,9 +1,11 @@
 import logging
+import os
+from typing import Tuple
 
 import yaml
 from yaml.loader import SafeLoader
 
-from src.core.engine import Engine
+from src.core.engine import Engine, EngineConfig
 from src.core.pipeline import PipelineComponent
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.providers import loader
@@ -107,6 +109,24 @@ def convert_data(config: dict) -> dict:
         returned[type].update(converted)
 
     return returned
+
+
+def init_providers(
+    engine_config: EngineConfig,
+) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
+    logger.info("Initializing providers...")
+    loader.import_mods()
+
+    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai_llm"))()
+    embedder_provider = loader.get_provider(
+        os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
+    )()
+    document_store_provider = loader.get_provider(
+        os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
+    )()
+    engine = loader.get_provider(engine_config.provider)(**engine_config.config)
+
+    return llm_provider, embedder_provider, document_store_provider, engine
 
 
 def generate_components() -> dict[str, PipelineComponent]:

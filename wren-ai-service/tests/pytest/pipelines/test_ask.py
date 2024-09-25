@@ -10,7 +10,7 @@ from src.pipelines.generation.sql_correction import SQLCorrection
 from src.pipelines.generation.sql_generation import SQLGeneration
 from src.pipelines.indexing.indexing import Indexing
 from src.pipelines.retrieval.retrieval import Retrieval
-from src.utils import init_providers
+from src.providers import init_providers
 from src.web.v1.services.ask import AskHistory
 from src.web.v1.services.ask_details import SQLBreakdown
 
