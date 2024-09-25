@@ -198,6 +198,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
             if os.getenv("EMBEDDER_TIMEOUT")
             else 120.0
         ),
+        **_,
     ):
         self._api_key = api_key
         self._api_base = remove_trailing_slash(api_base)

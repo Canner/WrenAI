@@ -210,6 +210,7 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
             if os.getenv("EMBEDDER_TIMEOUT")
             else 120.0
         ),
+        **_,
     ):
         self._embedding_api_base = remove_trailing_slash(embed_api_base)
         self._embedding_api_key = embed_api_key

@@ -132,6 +132,7 @@ class AzureOpenAILLMProvider(LLMProvider):
         timeout: Optional[float] = (
             float(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120.0
         ),
+        **_,
     ):
         self._generation_api_key = chat_api_key
         self._generation_api_base = remove_trailing_slash(chat_api_base)

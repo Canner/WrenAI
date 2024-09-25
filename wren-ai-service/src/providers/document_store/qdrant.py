@@ -339,6 +339,7 @@ class QdrantProvider(DocumentStoreProvider):
         timeout: Optional[int] = (
             int(os.getenv("QDRANT_TIMEOUT")) if os.getenv("QDRANT_TIMEOUT") else 120
         ),
+        **_,
     ):
         self._location = location
         self._api_key = api_key

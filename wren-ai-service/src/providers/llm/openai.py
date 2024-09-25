@@ -131,6 +131,7 @@ class OpenAILLMProvider(LLMProvider):
         timeout: Optional[float] = (
             float(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120.0
         ),
+        **_,
     ):
         self._api_key = api_key
         self._api_base = remove_trailing_slash(api_base)

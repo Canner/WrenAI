@@ -172,6 +172,7 @@ class OllamaEmbedderProvider(EmbedderProvider):
         timeout: Optional[int] = (
             int(os.getenv("EMBEDDER_TIMEOUT")) if os.getenv("EMBEDDER_TIMEOUT") else 120
         ),
+        **_,
     ):
         self._url = remove_trailing_slash(url)
         self._embedding_model = embedding_model

@@ -134,6 +134,7 @@ class OllamaLLMProvider(LLMProvider):
         timeout: int = (
             int(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120
         ),
+        **_,
     ):
         self._url = remove_trailing_slash(url)
         self._generation_model = generation_model

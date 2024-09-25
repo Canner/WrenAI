@@ -14,7 +14,11 @@ logger = logging.getLogger("wren-ai-service")
 
 @provider("wren_ui")
 class WrenUI(Engine):
-    def __init__(self, endpoint: str = os.getenv("WREN_UI_ENDPOINT")):
+    def __init__(
+        self,
+        endpoint: str = os.getenv("WREN_UI_ENDPOINT"),
+        **_,
+    ):
         self._endpoint = endpoint
         logger.info("Using Engine: wren_ui")
 
@@ -65,6 +69,7 @@ class WrenIbis(Engine):
             if os.getenv("WREN_IBIS_CONNECTION_INFO")
             else {}
         ),
+        **_,
     ):
         self._endpoint = endpoint
         self._source = source
@@ -108,7 +113,11 @@ class WrenIbis(Engine):
 
 @provider("wren_engine")
 class WrenEngine(Engine):
-    def __init__(self, endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT")):
+    def __init__(
+        self,
+        endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT"),
+        **_,
+    ):
         self._endpoint = endpoint
         logger.info("Using Engine: wren_engine")
 
