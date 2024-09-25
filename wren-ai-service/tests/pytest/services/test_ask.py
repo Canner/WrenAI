@@ -44,7 +44,7 @@ def ask_service():
             ),
             "historical_question": historical_question.HistoricalQuestion(
                 embedder_provider=embedder_provider,
-                store_provider=document_store_provider,
+                document_store_provider=document_store_provider,
             ),
             "sql_generation": sql_generation.SQLGeneration(
                 llm_provider=llm_provider,

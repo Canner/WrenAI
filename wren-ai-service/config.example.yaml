@@ -3,7 +3,6 @@ provider: openai_llm
 models:
   - model: gpt-4o-mini
     kwargs: {}
-    default: true
 api_key: sk-xxx
 api_base: https://api.openai.com/v1
 
@@ -23,7 +22,6 @@ provider: openai_embedder
 models:
   - model: text-embedding-3-small
     dimension: 3072
-    default: true
 api_key: sk-xxx
 api_base: https://api.openai.com/v1
 
@@ -31,7 +29,6 @@ api_base: https://api.openai.com/v1
 type: engine
 provider: wren_ui
 endpoint: http://localhost:3000
-default: true
 
 ---
 type: engine
@@ -56,11 +53,38 @@ api_key: ""
 ---
 type: pipeline
 pipes:
+  - name: indexing
+    embedder: openai_embedder.text-embedding-3-small
+    document_store: qdrant
+  - name: retrieval
+    llm: openai_llm.gpt-4o-mini
+    embedder: openai_embedder.text-embedding-3-small
+    document_store: qdrant
+  - name: historical_question
+    embedder: openai_embedder.text-embedding-3-small
+    document_store: qdrant
   - name: sql_generation
     llm: openai_llm.gpt-4o-mini
-  - name: retrieval
-    embedder: openai_embedder.text-embedding-3-small
+    engine: wren_ui
+  - name: sql_correction
     llm: openai_llm.gpt-4o-mini
-    document_store: qdrant
+    engine: wren_ui
+  - name: followup_sql_generation
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_summary
+    llm: openai_llm.gpt-4o-mini
   - name: sql_answer
-    llm: azure_openai_llm.gpt-4o
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_breakdown
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_expansion
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_explanation
+    llm: openai_llm.gpt-4o-mini
+  - name: sql_regeneration
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui

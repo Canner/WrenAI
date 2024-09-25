@@ -141,14 +141,14 @@ class HistoricalQuestion(BasicPipeline):
     def __init__(
         self,
         embedder_provider: EmbedderProvider,
-        store_provider: DocumentStoreProvider,
+        document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
-        store = store_provider.get_store(dataset_name="view_questions")
+        store = document_store_provider.get_store(dataset_name="view_questions")
         self._components = {
             "store": store,
             "embedder": embedder_provider.get_text_embedder(),
-            "retriever": store_provider.get_retriever(
+            "retriever": document_store_provider.get_retriever(
                 document_store=store,
             ),
             "score_filter": ScoreFilter(),
@@ -210,7 +210,8 @@ if __name__ == "__main__":
     )
 
     pipeline = HistoricalQuestion(
-        embedder_provider=embedder_provider, store_provider=document_store_provider
+        embedder_provider=embedder_provider,
+        document_store_provider=document_store_provider,
     )
 
     pipeline.visualize("this is a query")
