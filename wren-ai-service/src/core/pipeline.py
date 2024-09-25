@@ -1,5 +1,6 @@
 import asyncio
 from abc import ABCMeta, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -26,8 +27,17 @@ def async_validate(task: callable):
 
 
 @dataclass
-class PipelineComponent:
+class PipelineComponent(Mapping):
     llm_provider: LLMProvider = None
     embedder_provider: EmbedderProvider = None
     document_store_provider: DocumentStoreProvider = None
     engine: Engine = None
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __iter__(self):
+        return iter(self.__dict__)
+
+    def __len__(self):
+        return len(self.__dict__)

@@ -9,7 +9,6 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvid
 from src.providers import loader
 
 logger = logging.getLogger("wren-ai-service")
-loader.import_mods()
 
 
 def provider_factory(
@@ -72,7 +71,7 @@ def process_pipeline(entry: dict) -> dict:
     return {
         pipe["name"]: {
             "llm": pipe.get("llm"),
-            "embedder": pipe.get("embedding"),
+            "embedder": pipe.get("embedder"),
             "document_store": pipe.get("document_store"),
             "engine": pipe.get("engine"),
         }
@@ -112,6 +111,7 @@ def convert_data(config: dict) -> dict:
 
 def generate_components() -> dict[str, PipelineComponent]:
     config = convert_data(load_config())
+    loader.import_mods()
 
     providers = {
         "embedder": config.get("embedder", {}),

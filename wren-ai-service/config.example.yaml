@@ -47,7 +47,7 @@ manifest: ""
 ---
 type: document_store
 provider: qdrant
-host: http://localhost:6333
+location: http://localhost:6333
 api_key: ""
 
 ---
