@@ -38,7 +38,6 @@ async def lifespan(app: FastAPI):
     pipe_components = generate_components()
     app.state.service_container = create_service_container(
         pipe_components,
-        should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
         column_indexing_batch_size=(
             int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
             if os.getenv("COLUMN_INDEXING_BATCH_SIZE")

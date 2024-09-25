@@ -339,14 +339,6 @@ class QdrantProvider(DocumentStoreProvider):
         timeout: Optional[int] = (
             int(os.getenv("QDRANT_TIMEOUT")) if os.getenv("QDRANT_TIMEOUT") else 120
         ),
-        **_,
-    ):
-        self._location = location
-        self._api_key = api_key
-        self._timeout = timeout
-
-    def get_store(
-        self,
         embedding_model_dim: int = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
@@ -355,17 +347,26 @@ class QdrantProvider(DocumentStoreProvider):
         or get_default_embedding_model_dim(
             os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
         ),
+        **_,
+    ):
+        self._location = location
+        self._api_key = api_key
+        self._timeout = timeout
+        self._embedding_model_dim = embedding_model_dim
+
+    def get_store(
+        self,
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):
         logger.info(
-            f"Using Qdrant Document Store with Embedding Model Dimension: {embedding_model_dim}"
+            f"Using Qdrant Document Store with Embedding Model Dimension: {self._embedding_model_dim}"
         )
 
         return AsyncQdrantDocumentStore(
             location=self._location,
             api_key=self._api_key,
-            embedding_dim=embedding_model_dim,
+            embedding_dim=self._embedding_model_dim,
             index=dataset_name or "Document",
             recreate_index=recreate_index,
             on_disk=True,
@@ -376,7 +377,7 @@ class QdrantProvider(DocumentStoreProvider):
                         always_ram=True,
                     )
                 )
-                if embedding_model_dim >= 1024
+                if self._embedding_model_dim >= 1024
                 else None
             ),
             # to improve the indexing performance, we disable building global index for the whole collection
