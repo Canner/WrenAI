@@ -16,7 +16,7 @@ def provider_factory(
     config: dict = {},
 ) -> LLMProvider | EmbedderProvider | DocumentStoreProvider | Engine:
     # todo: check all provider config
-    return loader.get_provider(config.get("vender"))(**config)
+    return loader.get_provider(config.get("provider"))(**config)
 
 
 def load_config(path: str = "config.yaml") -> list[dict]:
@@ -28,13 +28,13 @@ def process_llm(entry: dict) -> dict:
     others = {
         k: v
         for k, v in entry.items()
-        if k not in ["type", "vender", "api_key", "models"]
+        if k not in ["type", "provider", "api_key", "models"]
     }
     returned = {}
     for model in entry["models"]:
-        model_name = f"{entry['vender']}.{model['model']}"
+        model_name = f"{entry['provider']}.{model['model']}"
         returned[model_name] = {
-            "vender": entry["vender"],
+            "provider": entry["provider"],
             "api_key": entry["api_key"],
             "kwargs": model["kwargs"],
             **others,
@@ -46,13 +46,13 @@ def process_embedder(entry: dict) -> dict:
     others = {
         k: v
         for k, v in entry.items()
-        if k not in ["type", "vender", "api_key", "models"]
+        if k not in ["type", "provider", "api_key", "models"]
     }
     returned = {}
     for model in entry["models"]:
-        model_name = f"{entry['vender']}.{model['model']}"
+        model_name = f"{entry['provider']}.{model['model']}"
         returned[model_name] = {
-            "vender": entry["vender"],
+            "provider": entry["provider"],
             "api_key": entry["api_key"],
             "dimension": model["dimension"],
             **others,
@@ -62,11 +62,11 @@ def process_embedder(entry: dict) -> dict:
 
 
 def process_document_store(entry: dict) -> dict:
-    return {entry["vender"]: {k: v for k, v in entry.items() if k not in ["type"]}}
+    return {entry["provider"]: {k: v for k, v in entry.items() if k not in ["type"]}}
 
 
 def process_engine(entry: dict) -> dict:
-    return {engine["name"]: engine for engine in entry["engines"]}
+    return {entry["provider"]: {k: v for k, v in entry.items() if k not in ["type"]}}
 
 
 def process_pipeline(entry: dict) -> dict:
@@ -142,5 +142,5 @@ def generate_components() -> dict[str, PipelineComponent]:
 
     return {
         pipe_name: componentize(components)
-        for pipe_name, components in config.get("pipelines").items()
+        for pipe_name, components in config.get("pipeline", {}).items()
     }
