@@ -28,6 +28,10 @@
   </a>
 </p>
 
+🤘 Our first Product Hunt launch! We need your support on Product Hunt! 🥺
+
+<a href="https://www.producthunt.com/posts/wren-ai-cloud?embed=true&utm_source=badge-featured&utm_medium=badge&utm_souce=badge-wren&#0045;ai&#0045;cloud" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=491989&theme=light" alt="Wren&#0032;AI&#0032;Cloud - Unleash&#0032;Customer&#0032;Insights&#0046;&#0032;Chat&#0032;with&#0032;Data&#0046;&#0032;Drive&#0032;Results&#0046; | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
 
 > Wren AI is a **SQL AI Agent** for data teams to get results and insights faster by asking business questions without writing SQL.
 
