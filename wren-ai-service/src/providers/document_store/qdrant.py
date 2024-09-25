@@ -333,9 +333,7 @@ class QdrantProvider(DocumentStoreProvider):
     def __init__(
         self,
         location: str = os.getenv("QDRANT_HOST", "qdrant"),
-        api_key: Optional[Secret] = Secret.from_env_var("QDRANT_API_KEY")
-        if os.getenv("QDRANT_API_KEY")
-        else None,
+        api_key: Optional[str] = os.getenv("QDRANT_API_KEY", None),
         timeout: Optional[int] = (
             int(os.getenv("QDRANT_TIMEOUT")) if os.getenv("QDRANT_TIMEOUT") else 120
         ),
@@ -350,7 +348,7 @@ class QdrantProvider(DocumentStoreProvider):
         **_,
     ):
         self._location = location
-        self._api_key = api_key
+        self._api_key = Secret.from_token(api_key) if api_key else None
         self._timeout = timeout
         self._embedding_model_dim = embedding_model_dim
 

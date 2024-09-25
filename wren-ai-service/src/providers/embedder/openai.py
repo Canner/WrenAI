@@ -183,7 +183,7 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
 class OpenAIEmbedderProvider(EmbedderProvider):
     def __init__(
         self,
-        api_key: Secret = Secret.from_env_var("EMBEDDER_OPENAI_API_KEY"),
+        api_key: str = os.getenv("EMBEDDER_OPENAI_API_KEY"),
         api_base: str = os.getenv("EMBEDDER_OPENAI_API_BASE")
         or EMBEDDER_OPENAI_API_BASE,
         embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
@@ -200,7 +200,7 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         ),
         **_,
     ):
-        self._api_key = api_key
+        self._api_key = Secret.from_token(api_key)
         self._api_base = remove_trailing_slash(api_base)
         self._embedding_model = embedding_model
         self._embedding_model_dim = embedding_model_dim
