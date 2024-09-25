@@ -41,7 +41,10 @@ tomlkit = "==0.13.0"
 deepeval = "==1.0.6"
 streamlit-tags = "==1.2.8"
 gitpython = "==3.1.43"
+plotly = "==5.24.1"
+nbformat = "==5.1.3"
 ipykernel = "==6.29.5"
+itables = "^2.2.1"
 
 [tool.poetry.group.demo.dependencies]
 requests = "==2.32.2"
