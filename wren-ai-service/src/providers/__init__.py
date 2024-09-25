@@ -15,7 +15,6 @@ loader.import_mods()
 def provider_factory(
     config: dict = {},
 ) -> LLMProvider | EmbedderProvider | DocumentStoreProvider | Engine:
-    # todo: check all provider config
     return loader.get_provider(config.get("provider"))(**config)
 
 
@@ -72,8 +71,8 @@ def process_engine(entry: dict) -> dict:
 def process_pipeline(entry: dict) -> dict:
     return {
         pipe["name"]: {
-            "llm": pipe.get("llm_provider"),
-            "embedder": pipe.get("embedding_provider"),
+            "llm": pipe.get("llm"),
+            "embedder": pipe.get("embedding"),
             "document_store": pipe.get("document_store"),
             "engine": pipe.get("engine"),
         }

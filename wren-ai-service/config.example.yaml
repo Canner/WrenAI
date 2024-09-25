@@ -57,9 +57,10 @@ api_key: ""
 type: pipeline
 pipes:
   - name: sql_generation
-    llm_provider: openai.gpt-4o-mini
+    llm: openai_llm.gpt-4o-mini
   - name: retrieval
-    embedding_provider: openai.text-embedding-3-small
-    llm_provider: openai.gpt-4o-mini
+    embedder: openai_embedder.text-embedding-3-small
+    llm: openai_llm.gpt-4o-mini
+    document_store: qdrant
   - name: sql_answer
-    llm_provider: azure_openai.gpt-4o
+    llm: azure_openai_llm.gpt-4o
