@@ -2,7 +2,13 @@ type: llm
 provider: openai_llm
 models:
   - model: gpt-4o-mini
-    kwargs: {}
+    kwargs:
+      {
+        "temperature": 0,
+        "n": 1,
+        "max_tokens": 4096,
+        "response_format": { "type": "json_object" },
+      }
 api_key: sk-xxx
 api_base: https://api.openai.com/v1
 
@@ -11,7 +17,13 @@ type: llm
 provider: azure_openai_llm
 models:
   - model: gpt-4o
-    kwargs: {}
+    kwargs:
+      {
+        "temperature": 0,
+        "n": 1,
+        "max_tokens": 4096,
+        "response_format": { "type": "json_object" },
+      }
 api_key: sk-xxx
 api_base: https://api.openai.com/v1
 api_version: "2024-05-13"
