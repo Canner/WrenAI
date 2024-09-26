@@ -69,14 +69,14 @@ timeout: 120
 type: pipeline
 pipes:
   - name: indexing
-    embedder: openai_embedder.text-embedding-3-small
+    embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: retrieval
     llm: openai_llm.gpt-4o-mini
-    embedder: openai_embedder.text-embedding-3-small
+    embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: historical_question
-    embedder: openai_embedder.text-embedding-3-small
+    embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: sql_generation
     llm: openai_llm.gpt-4o-mini
