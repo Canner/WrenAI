@@ -18,6 +18,7 @@ from src.pipelines.common import (
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskConfigurations
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -82,7 +83,10 @@ The final answer must be the JSON format like following:
 }
 
 ### QUESTION ###
-{{ query }}
+User's Question: {{ query }}
+{% if instructions %}
+Instructions: {{ instructions }}
+{% endif %}
 
 Let's think step by step.
 """
@@ -97,14 +101,28 @@ def prompt(
     exclude: List[Dict],
     alert: str,
     prompt_builder: PromptBuilder,
+    configurations: AskConfigurations | None = None,
 ) -> dict:
+    def construct_instructions(configurations: AskConfigurations | None):
+        instructions = ""
+        if configurations:
+            if configurations.fiscal_year:
+                instructions += f"For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
+
+        return instructions
+
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
     logger.debug(
         f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
     )
+    logger.debug(f"configurations: {configurations}")
     return prompt_builder.run(
-        query=query, documents=documents, exclude=exclude, alert=alert
+        query=query,
+        documents=documents,
+        exclude=exclude,
+        alert=alert,
+        instructions=construct_instructions(configurations),
     )
 
 
@@ -161,6 +179,7 @@ class SQLGeneration(BasicPipeline):
         contexts: List[str],
         exclude: List[Dict],
         project_id: str | None = None,
+        configurations: AskConfigurations | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -174,6 +193,7 @@ class SQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "exclude": exclude,
                 "project_id": project_id,
+                "configurations": configurations,
                 **self._components,
                 **self._configs,
             },
@@ -189,6 +209,7 @@ class SQLGeneration(BasicPipeline):
         contexts: List[str],
         exclude: List[Dict],
         project_id: str | None = None,
+        configurations: AskConfigurations | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(
@@ -198,6 +219,7 @@ class SQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "exclude": exclude,
                 "project_id": project_id,
+                "configurations": configurations,
                 **self._components,
                 **self._configs,
             },

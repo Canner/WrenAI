@@ -18,6 +18,14 @@ class AskHistory(BaseModel):
     steps: List[SQLBreakdown]
 
 
+class AskConfigurations(BaseModel):
+    class FiscalYear(BaseModel):
+        start: str
+        end: str
+
+    fiscal_year: Optional[FiscalYear] = None
+
+
 # POST /v1/asks
 class AskRequest(BaseModel):
     _query_id: str | None = None
@@ -30,6 +38,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[AskHistory] = None
+    configurations: Optional[AskConfigurations] = None
 
     @property
     def query_id(self) -> str:
@@ -193,6 +202,7 @@ class AskService:
                         contexts=documents,
                         history=ask_request.history,
                         project_id=ask_request.project_id,
+                        configurations=ask_request.configurations,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -202,6 +212,7 @@ class AskService:
                         contexts=documents,
                         exclude=historical_question_result,
                         project_id=ask_request.project_id,
+                        configurations=ask_request.configurations,
                     )
 
                 valid_generation_results = []
