@@ -15,6 +15,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
+    construct_instructions,
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
@@ -103,14 +104,6 @@ def prompt(
     prompt_builder: PromptBuilder,
     configurations: AskConfigurations | None = None,
 ) -> dict:
-    def construct_instructions(configurations: AskConfigurations | None):
-        instructions = ""
-        if configurations:
-            if configurations.fiscal_year:
-                instructions += f"For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
-
-        return instructions
-
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
     logger.debug(
