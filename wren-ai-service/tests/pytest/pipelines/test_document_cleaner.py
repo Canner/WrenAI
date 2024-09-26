@@ -11,15 +11,14 @@ from src.providers import init_providers
 async def _mock_store(name: str = "default") -> DocumentStore:
     _, _, document_store_provider, _ = init_providers(EngineConfig())
     store = document_store_provider.get_store(
-        embedding_model_dim=5,
         dataset_name=name,
         recreate_index=True,
     )
 
     await store.write_documents(
         [
-            Document(id=str(0), content="This is first", embedding=[0.0] * 5),
-            Document(id=str(1), content="This is second", embedding=[0.1] * 5),
+            Document(id=str(0), content="This is first", embedding=[0.0] * 3072),
+            Document(id=str(1), content="This is second", embedding=[0.1] * 3072),
         ]
     )
     assert (await store.count_documents()) == 2
