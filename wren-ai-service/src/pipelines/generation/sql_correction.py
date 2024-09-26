@@ -32,7 +32,7 @@ With given database schema, please think step by step to correct these wrong Tri
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
-    {{ document.content }}
+    {{ document }}
 {% endfor %}
 
 ### FINAL ANSWER FORMAT ###
