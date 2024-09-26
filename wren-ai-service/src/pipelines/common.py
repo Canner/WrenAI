@@ -12,6 +12,7 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
+from src.web.v1.services.ask import AskConfigurations
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -351,3 +352,12 @@ WHERE
 Learn about the usage of the schema structures and generate SQL based on them.
 
 """
+
+
+def construct_instructions(configurations: AskConfigurations | None):
+    instructions = ""
+    if configurations:
+        if configurations.fiscal_year:
+            instructions += f"For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
+
+    return instructions
