@@ -40,6 +40,7 @@ def process_llm(entry: dict) -> dict:
         returned[model_name] = {
             "provider": entry["provider"],
             "api_key": entry["api_key"],
+            "model": model["model"],
             "kwargs": model["kwargs"],
             **others,
         }
@@ -58,6 +59,7 @@ def process_embedder(entry: dict) -> dict:
         returned[model_name] = {
             "provider": entry["provider"],
             "api_key": entry["api_key"],
+            "model": model["model"],
             "dimension": model["dimension"],
             **others,
         }

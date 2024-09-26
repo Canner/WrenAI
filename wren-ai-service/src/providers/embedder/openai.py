@@ -186,8 +186,8 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         api_key: str = os.getenv("EMBEDDER_OPENAI_API_KEY"),
         api_base: str = os.getenv("EMBEDDER_OPENAI_API_BASE")
         or EMBEDDER_OPENAI_API_BASE,
-        embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        embedding_model_dim: int = (
+        model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
+        dimension: int = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
@@ -202,8 +202,8 @@ class OpenAIEmbedderProvider(EmbedderProvider):
     ):
         self._api_key = Secret.from_token(api_key)
         self._api_base = remove_trailing_slash(api_base)
-        self._embedding_model = embedding_model
-        self._embedding_model_dim = embedding_model_dim
+        self._embedding_model = model
+        self._embedding_model_dim = dimension
         self._timeout = timeout
 
         logger.info(

@@ -125,8 +125,8 @@ class OllamaLLMProvider(LLMProvider):
     def __init__(
         self,
         url: str = os.getenv("LLM_OLLAMA_URL") or LLM_OLLAMA_URL,
-        generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
-        model_kwargs: Dict[str, Any] = (
+        model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
+        kwargs: Dict[str, Any] = (
             orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
             if os.getenv("GENERATION_MODEL_KWARGS")
             else GENERATION_MODEL_KWARGS
@@ -137,8 +137,8 @@ class OllamaLLMProvider(LLMProvider):
         **_,
     ):
         self._url = remove_trailing_slash(url)
-        self._generation_model = generation_model
-        self._model_kwargs = model_kwargs
+        self._generation_model = model
+        self._model_kwargs = kwargs
         self._timeout = timeout
 
         pull_ollama_model(self._url, self._generation_model)

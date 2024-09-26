@@ -20,10 +20,11 @@ api_version: "2024-05-13"
 type: embedder
 provider: openai_embedder
 models:
-  - model: text-embedding-3-small
+  - model: text-embedding-3-large
     dimension: 3072
 api_key: sk-xxx
 api_base: https://api.openai.com/v1
+timeout: 120
 
 ---
 type: engine
@@ -49,6 +50,8 @@ type: document_store
 provider: qdrant
 location: http://localhost:6333
 api_key: ""
+embedding_model_dim: 3072
+timeout: 120
 
 ---
 type: pipeline

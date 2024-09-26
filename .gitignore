@@ -1,6 +1,6 @@
 # wren-ai-service
 wren-ai-service/.env.*
-wren-ai-service/config.yaml.*
+wren-ai-service/config.yaml*
 !wren-ai-service/.env.*.example
 !wren-ai-service/src/eval/wren-engine/.env
 wren-ai-service/src/eval/wren-engine/**/config.properties
