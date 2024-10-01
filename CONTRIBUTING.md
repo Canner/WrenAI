@@ -50,19 +50,36 @@ To contribute, please refer to [Wren Engine Contributing Guide](https://github.c
 
 To create a new data source connector, please follow the guide outlined below.
 
-#### Wren UI Guide
+### Wren UI Guide
 
-- Making the data source's logo
-  - The image size is `40 x 40` px
-  - The image format recommend to use `svg`
-  - Ensure that any logos used are within a container of about `30px` for consistent formatting.
+1. Prepare the data source's logo:
+   - Image size should be `40 x 40` px
+   - Preferably use SVG format
+   - Ensure the logo is centered within a `30px` container for consistent formatting
 
-    Example:
+   Example:
 
-    <img src="./misc/logo_template.jpg" width="120">
+   <img src="./misc/logo_template.jpg" width="120">
 
+2. Create the data source form template:
+   - In `wren-ui/src/components/pages/setup/dataSources`, add a new file named `${dataSource}Properties.tsx`
+   - Implement the data source form template in this file
 
-Check the quick [example](https://github.com/Canner/WrenAI/issues/492) for creating a data source connector.
+3. Set up the data source template:
+   - Navigate to `wren-ui/src/components/pages/setup/utils` > `DATA_SOURCE_FORM`
+   - Update the necessary files to include the new data source template settings
+
+4. Update the data source list:
+   - Add the new data source to the `DATA_SOURCES` enum in `wren-ui/src/utils/enum/dataSources.ts`
+   - Update relevant files in `wren-ui/src/components/pages/setup/` to include the new data source
+   - Ensure `wren-ui/src/apollo/server/adaptors/ibisAdaptor.ts` handles the new data source
+
+5. Test the new connector:
+   - Ensure the new data source appears in the UI
+   - Verify that the form works correctly
+   - Test the connection to the new data source
+
+For a quick example of creating a data source connector, refer to [this issue](https://github.com/Canner/WrenAI/issues/492).
 
 ### Wren Engine
 Please see [How to Add a New Data Source](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/how-to-add-data-source.md) for more information.
