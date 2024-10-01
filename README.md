@@ -125,10 +125,6 @@ Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog)
 - [How to directly access 150k+ Hugging Face Datasets with DuckDB and query using GPT-4o](https://www.getwren.ai/post/how-to-directly-access-150k-hugging-face-datasets-with-duckdb-and-query-using-gpt-4o)
 
 
-## 🚧 Project Status
-
-Wren AI is currently in ***Beta Version***. The project team is actively working on progress and aiming to release new versions at least biweekly.
-
 ## 🚀 Getting Started
 
 Using Wren AI is super simple, you can setup within 3 minutes, and start to interact with your own data!
