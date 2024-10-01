@@ -121,6 +121,7 @@ class SQLSummary(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        **kwargs,
     ):
         self._components = {
             "generator": llm_provider.get_generator(
@@ -178,7 +179,8 @@ if __name__ == "__main__":
 
     from src.core.engine import EngineConfig
     from src.core.pipeline import async_validate
-    from src.utils import init_langfuse, init_providers, load_env_vars
+    from src.providers import init_providers
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
     init_langfuse()

@@ -6,6 +6,7 @@ import pytest
 from pytest_mock import MockFixture
 
 import src.utils as utils
+from src.core.pipeline import PipelineComponent
 from src.globals import ServiceMetadata, create_service_metadata
 
 
@@ -37,17 +38,19 @@ def service_metadata(mocker: MockFixture):
     current_path = os.path.dirname(__file__)
 
     return create_service_metadata(
-        *_mock(mocker),
+        pipe_components={"mock": PipelineComponent(*_mock(mocker))},
         pyproject_path=os.path.join(current_path, "../data/mock_pyproject.toml"),
     )
 
 
 def test_service_metadata(service_metadata: ServiceMetadata):
-    assert service_metadata.models_metadata == {
-        "generation_model": "mock-llm-model",
-        "generation_model_kwargs": {},
-        "embedding_model": "mock-embedding-model",
-        "embedding_model_dim": 768,
+    assert service_metadata.pipes_metadata == {
+        "mock": {
+            "llm_model": "mock-llm-model",
+            "llm_model_kwargs": {},
+            "embedding_model": "mock-embedding-model",
+            "embedding_model_dim": 768,
+        },
     }
 
     assert service_metadata.service_version == "0.8.0-mock"
@@ -77,6 +80,6 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
         metadata={
             "mdl_hash": "mock-mdl-hash",
             "project_id": "mock-project-id",
-            **service_metadata.models_metadata,
+            **service_metadata.pipes_metadata,
         },
     )

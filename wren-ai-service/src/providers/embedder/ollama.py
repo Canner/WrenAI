@@ -162,8 +162,8 @@ class OllamaEmbedderProvider(EmbedderProvider):
     def __init__(
         self,
         url: str = os.getenv("EMBEDDER_OLLAMA_URL") or EMBEDDER_OLLAMA_URL,
-        embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        embedding_model_dim: int = (
+        model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
+        dimension: int = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
@@ -172,10 +172,11 @@ class OllamaEmbedderProvider(EmbedderProvider):
         timeout: Optional[int] = (
             int(os.getenv("EMBEDDER_TIMEOUT")) if os.getenv("EMBEDDER_TIMEOUT") else 120
         ),
+        **_,
     ):
         self._url = remove_trailing_slash(url)
-        self._embedding_model = embedding_model
-        self._embedding_model_dim = embedding_model_dim
+        self._embedding_model = model
+        self._embedding_model_dim = dimension
         self._timeout = timeout
 
         pull_ollama_model(self._url, self._embedding_model)

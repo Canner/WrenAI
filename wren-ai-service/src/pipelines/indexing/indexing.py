@@ -625,6 +625,7 @@ class Indexing(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         column_indexing_batch_size: Optional[int] = 50,
+        **kwargs,
     ) -> None:
         dbschema_store = document_store_provider.get_store()
         view_store = document_store_provider.get_store(dataset_name="view_questions")
@@ -701,7 +702,8 @@ if __name__ == "__main__":
 
     from src.core.engine import EngineConfig
     from src.core.pipeline import async_validate
-    from src.utils import init_langfuse, init_providers, load_env_vars
+    from src.providers import init_providers
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
     init_langfuse()

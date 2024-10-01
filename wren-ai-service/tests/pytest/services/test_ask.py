@@ -10,7 +10,7 @@ from src.core.engine import EngineConfig
 from src.pipelines.generation import sql_correction, sql_generation
 from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
-from src.utils import init_providers
+from src.providers import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
@@ -44,7 +44,7 @@ def ask_service():
             ),
             "historical_question": historical_question.HistoricalQuestion(
                 embedder_provider=embedder_provider,
-                store_provider=document_store_provider,
+                document_store_provider=document_store_provider,
             ),
             "sql_generation": sql_generation.SQLGeneration(
                 llm_provider=llm_provider,
@@ -75,11 +75,13 @@ def indexing_service():
 @pytest.fixture
 def service_metadata():
     return {
-        "models_metadata": {
-            "generation_model": "mock-llm-model",
-            "generation_model_kwargs": {},
-            "embedding_model": "mock-embedding-model",
-            "embedding_model_dim": 768,
+        "pipes_metadata": {
+            "mock": {
+                "generation_model": "mock-llm-model",
+                "generation_model_kwargs": {},
+                "embedding_model": "mock-embedding-model",
+                "embedding_model_dim": 768,
+            },
         },
         "service_version": "0.8.0-mock",
     }

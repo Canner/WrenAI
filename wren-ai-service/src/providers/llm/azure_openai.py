@@ -120,11 +120,11 @@ class AsyncGenerator(AzureOpenAIGenerator):
 class AzureOpenAILLMProvider(LLMProvider):
     def __init__(
         self,
-        chat_api_key: Secret = Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
-        chat_api_base: str = os.getenv("LLM_AZURE_OPENAI_API_BASE"),
-        chat_api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
-        generation_model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
-        model_kwargs: Dict[str, Any] = (
+        api_key: Secret = Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
+        api_base: str = os.getenv("LLM_AZURE_OPENAI_API_BASE"),
+        api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
+        model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
+        kwargs: Dict[str, Any] = (
             orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
             if os.getenv("GENERATION_MODEL_KWARGS")
             else GENERATION_MODEL_KWARGS
@@ -132,12 +132,13 @@ class AzureOpenAILLMProvider(LLMProvider):
         timeout: Optional[float] = (
             float(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120.0
         ),
+        **_,
     ):
-        self._generation_api_key = chat_api_key
-        self._generation_api_base = remove_trailing_slash(chat_api_base)
-        self._generation_api_version = chat_api_version
-        self._generation_model = generation_model
-        self._model_kwargs = model_kwargs
+        self._generation_api_key = api_key
+        self._generation_api_base = remove_trailing_slash(api_base)
+        self._generation_api_version = api_version
+        self._generation_model = model
+        self._model_kwargs = kwargs
         self._timeout = timeout
 
         logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")

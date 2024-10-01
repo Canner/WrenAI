@@ -28,6 +28,8 @@ ollama = "==0.2.1"
 toml = "==0.10.2"
 sqlglot = "==25.18.0"
 cachetools = "==5.5.0"
+pyyaml = "==6.0.2"
+pydantic-settings = "==2.5.2"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "==3.7.1"

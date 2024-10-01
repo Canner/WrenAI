@@ -4,14 +4,9 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Tuple
 
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
-
-from src.core.engine import Engine, EngineConfig
-from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.providers import loader
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -56,24 +51,6 @@ def load_env_vars() -> str:
         return "dev"
 
     return "prod"
-
-
-def init_providers(
-    engine_config: EngineConfig,
-) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
-    logger.info("Initializing providers...")
-    loader.import_mods()
-
-    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai_llm"))()
-    embedder_provider = loader.get_provider(
-        os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
-    )()
-    document_store_provider = loader.get_provider(
-        os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
-    )()
-    engine = loader.get_provider(engine_config.provider)(**engine_config.config)
-
-    return llm_provider, embedder_provider, document_store_provider, engine
 
 
 def timer(func):
@@ -186,12 +163,12 @@ def trace_metadata(func):
         service_metadata = kwargs.get(
             "service_metadata",
             {
-                "models_metadata": {},
+                "pipes_metadata": {},
                 "service_version": "",
             },
         )
         langfuse_metadata = {
-            **service_metadata.get("models_metadata"),
+            **service_metadata.get("pipes_metadata"),
             **addition,
             "mdl_hash": metadata.get("mdl_hash"),
             "project_id": metadata.get("project_id"),

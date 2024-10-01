@@ -9,14 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
 from langfuse.decorators import langfuse_context
 
-from src.core.engine import EngineConfig
 from src.globals import (
     create_service_container,
     create_service_metadata,
 )
+from src.providers import generate_components
 from src.utils import (
     init_langfuse,
-    init_providers,
     load_env_vars,
     setup_custom_logger,
 )
@@ -35,12 +34,10 @@ setup_custom_logger(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-    providers = init_providers(
-        engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
-    )
+
+    pipe_components = generate_components()
     app.state.service_container = create_service_container(
-        *providers,
-        should_force_deploy=bool(os.getenv("SHOULD_FORCE_DEPLOY", "")),
+        pipe_components,
         column_indexing_batch_size=(
             int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
             if os.getenv("COLUMN_INDEXING_BATCH_SIZE")
@@ -63,7 +60,7 @@ async def lifespan(app: FastAPI):
             "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
         },
     )
-    app.state.service_metadata = create_service_metadata(*providers)
+    app.state.service_metadata = create_service_metadata(pipe_components)
     init_langfuse()
 
     yield
@@ -134,7 +131,7 @@ if __name__ == "__main__":
         host=server_host,
         port=server_port,
         reload=should_reload,
-        reload_includes=["src/**/*.py", ".env.dev"],
+        reload_includes=["src/**/*.py", ".env.dev", "config.yaml"],
         workers=1,
         loop="uvloop",
         http="httptools",

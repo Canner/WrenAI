@@ -15,6 +15,7 @@ from tomlkit import document, dumps
 
 sys.path.append(f"{Path().parent.resolve()}")
 import eval.pipelines as pipelines
+import src.providers as provider
 import src.utils as utils
 from eval.utils import parse_toml
 from src.core.engine import EngineConfig
@@ -105,7 +106,7 @@ def init_providers(mdl: dict) -> dict:
         },
     )
 
-    providers = utils.init_providers(engine_config=engine_config)
+    providers = provider.init_providers(engine_config=engine_config)
     return {
         "llm_provider": providers[0],
         "embedder_provider": providers[1],

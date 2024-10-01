@@ -195,11 +195,11 @@ class AsyncDocumentEmbedder(AzureOpenAIDocumentEmbedder):
 class AzureOpenAIEmbedderProvider(EmbedderProvider):
     def __init__(
         self,
-        embed_api_key: Secret = Secret.from_env_var("EMBEDDER_AZURE_OPENAI_API_KEY"),
-        embed_api_base: str = os.getenv("EMBEDDER_AZURE_OPENAI_API_BASE"),
-        embed_api_version: str = os.getenv("EMBEDDER_AZURE_OPENAI_VERSION"),
-        embedding_model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        embedding_model_dim: int = (
+        api_key: Secret = Secret.from_env_var("EMBEDDER_AZURE_OPENAI_API_KEY"),
+        api_base: str = os.getenv("EMBEDDER_AZURE_OPENAI_API_BASE"),
+        api_version: str = os.getenv("EMBEDDER_AZURE_OPENAI_VERSION"),
+        model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
+        dimension: int = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
@@ -210,12 +210,13 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
             if os.getenv("EMBEDDER_TIMEOUT")
             else 120.0
         ),
+        **_,
     ):
-        self._embedding_api_base = remove_trailing_slash(embed_api_base)
-        self._embedding_api_key = embed_api_key
-        self._embedding_api_version = embed_api_version
-        self._embedding_model = embedding_model
-        self._embedding_model_dim = embedding_model_dim
+        self._embedding_api_base = remove_trailing_slash(api_base)
+        self._embedding_api_key = api_key
+        self._embedding_api_version = api_version
+        self._embedding_model = model
+        self._embedding_model_dim = dimension
         self._timeout = timeout
 
         logger.info(f"Using Azure OpenAI Embedding Model: {self._embedding_model}")

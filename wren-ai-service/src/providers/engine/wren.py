@@ -14,7 +14,11 @@ logger = logging.getLogger("wren-ai-service")
 
 @provider("wren_ui")
 class WrenUI(Engine):
-    def __init__(self, endpoint: str = os.getenv("WREN_UI_ENDPOINT")):
+    def __init__(
+        self,
+        endpoint: str = os.getenv("WREN_UI_ENDPOINT"),
+        **_,
+    ):
         self._endpoint = endpoint
         logger.info("Using Engine: wren_ui")
 
@@ -60,16 +64,15 @@ class WrenIbis(Engine):
         endpoint: str = os.getenv("WREN_IBIS_ENDPOINT"),
         source: str = os.getenv("WREN_IBIS_SOURCE"),
         manifest: str = os.getenv("WREN_IBIS_MANIFEST"),
-        connection_info: dict = (
-            orjson.loads(base64.b64decode(os.getenv("WREN_IBIS_CONNECTION_INFO")))
-            if os.getenv("WREN_IBIS_CONNECTION_INFO")
-            else {}
-        ),
+        connection_info: str = os.getenv("WREN_IBIS_CONNECTION_INFO"),
+        **_,
     ):
         self._endpoint = endpoint
         self._source = source
         self._manifest = manifest
-        self._connection_info = connection_info
+        self._connection_info = (
+            orjson.loads(base64.b64decode(connection_info)) if connection_info else {}
+        )
         logger.info("Using Engine: wren_ibis")
 
     async def execute_sql(
@@ -108,7 +111,11 @@ class WrenIbis(Engine):
 
 @provider("wren_engine")
 class WrenEngine(Engine):
-    def __init__(self, endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT")):
+    def __init__(
+        self,
+        endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT"),
+        **_,
+    ):
         self._endpoint = endpoint
         logger.info("Using Engine: wren_engine")
 

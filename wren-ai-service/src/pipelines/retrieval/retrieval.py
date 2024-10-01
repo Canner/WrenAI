@@ -292,6 +292,7 @@ class Retrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: Optional[int] = 10,
         table_column_retrieval_size: Optional[int] = 1000,
+        **kwargs,
     ):
         self._components = {
             "embedder": embedder_provider.get_text_embedder(),
@@ -355,7 +356,7 @@ if __name__ == "__main__":
 
     from src.core.engine import EngineConfig
     from src.core.pipeline import async_validate
-    from src.utils import init_langfuse, init_providers, load_env_vars
+    from src.providers import init_langfuse, init_providers, load_env_vars
 
     load_env_vars()
     init_langfuse()

@@ -1,0 +1,105 @@
+type: llm
+provider: openai_llm
+models:
+  - model: gpt-4o-mini
+    kwargs:
+      {
+        "temperature": 0,
+        "n": 1,
+        "max_tokens": 4096,
+        "response_format": { "type": "json_object" },
+      }
+api_key: sk-xxx
+api_base: https://api.openai.com/v1
+
+---
+type: llm
+provider: azure_openai_llm
+models:
+  - model: gpt-4o
+    kwargs:
+      {
+        "temperature": 0,
+        "n": 1,
+        "max_tokens": 4096,
+        "response_format": { "type": "json_object" },
+      }
+api_key: sk-xxx
+api_base: https://api.openai.com/v1
+api_version: "2024-05-13"
+
+---
+type: embedder
+provider: openai_embedder
+models:
+  - model: text-embedding-3-large
+    dimension: 3072
+api_key: sk-xxx
+api_base: https://api.openai.com/v1
+timeout: 120
+
+---
+type: engine
+provider: wren_ui
+endpoint: http://localhost:3000
+
+---
+type: engine
+provider: wren_ibis
+endpoint: http://localhost:8000
+source: bigquery
+manifest: "" # base64 encoded string of the MDL
+connection_info: "" # base64 encoded string of the connection info
+
+---
+type: engine
+provider: wren_engine
+endpoint: http://localhost:8080
+manifest: ""
+
+---
+type: document_store
+provider: qdrant
+location: http://localhost:6333
+api_key: ""
+embedding_model_dim: 3072
+timeout: 120
+
+---
+type: pipeline
+pipes:
+  - name: indexing
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: retrieval
+    llm: openai_llm.gpt-4o-mini
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: historical_question
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: sql_generation
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_correction
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: followup_sql_generation
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_summary
+    llm: openai_llm.gpt-4o-mini
+  - name: sql_answer
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_breakdown
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_expansion
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
+  - name: sql_explanation
+    llm: openai_llm.gpt-4o-mini
+  - name: sql_regeneration
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
