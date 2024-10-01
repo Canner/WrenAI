@@ -5,26 +5,19 @@ import orjson
 import streamlit as st
 from utils import (
     DATA_SOURCES,
-    LLM_MODELS,
     ask,
     ask_details,
-    get_default_llm_model,
     get_mdl_json,
     prepare_semantics,
     rerun_wren_engine,
     save_mdl_json_file,
     show_asks_details_results,
     show_asks_results,
-    update_llm,
 )
 
 st.set_page_config(layout="wide")
 st.title("Wren AI LLM Service Demo")
 
-llm_model = get_default_llm_model(LLM_MODELS)
-
-if "chosen_llm_model" not in st.session_state:
-    st.session_state["chosen_llm_model"] = llm_model
 if "deployment_id" not in st.session_state:
     st.session_state["deployment_id"] = str(uuid.uuid4())
 if "chosen_dataset" not in st.session_state:
@@ -68,25 +61,6 @@ if "sql_regeneration_results" not in st.session_state:
 def onchange_demo_dataset():
     st.session_state["chosen_dataset"] = st.session_state["choose_demo_dataset"]
 
-
-def onchange_llm_model():
-    if (
-        st.session_state["llm_model_selectbox"]
-        and st.session_state["chosen_llm_model"]
-        != st.session_state["llm_model_selectbox"]
-    ):
-        st.session_state["chosen_llm_model"] = st.session_state["llm_model_selectbox"]
-
-        update_llm(st.session_state["chosen_llm_model"], st.session_state["mdl_json"])
-
-
-st.selectbox(
-    "Select an OpenAI LLM model",
-    LLM_MODELS,
-    index=LLM_MODELS.index(llm_model),
-    key="llm_model_selectbox",
-    on_change=onchange_llm_model,
-)
 
 with st.sidebar:
     st.markdown("## Deploy MDL Model")
