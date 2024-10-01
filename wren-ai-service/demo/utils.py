@@ -12,6 +12,7 @@ import requests
 import sqlglot
 import sqlparse
 import streamlit as st
+import yaml
 from dotenv import load_dotenv
 
 WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
@@ -74,41 +75,22 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
         )
 
         _prepare_duckdb(dataset)
-
-        # replace the values of WREN_ENGINE_xxx to ../.env.dev
-        with open(".env.dev", "r") as f:
-            lines = f.readlines()
-            for i, line in enumerate(lines):
-                if line.startswith("ENGINE"):
-                    lines[i] = "ENGINE=wren_engine\n"
-                elif line.startswith("WREN_ENGINE_MANIFEST"):
-                    lines[i] = f"WREN_ENGINE_MANIFEST={MANIFEST}\n"
-        with open(".env.dev", "w") as f:
-            f.writelines(lines)
+        _replace_wren_engine_env_variables("wren_engine", {"manifest": MANIFEST})
     else:
         WREN_IBIS_CONNECTION_INFO = base64.b64encode(
             orjson.dumps(get_connection_info(dataset_type))
         ).decode()
 
-        # replace the values of WREN_IBIS_xxx to ../.env.dev
-        with open(".env.dev", "r") as f:
-            lines = f.readlines()
-            for i, line in enumerate(lines):
-                if line.startswith("ENGINE"):
-                    lines[i] = "ENGINE=wren_ibis\n"
-                elif line.startswith("WREN_IBIS_SOURCE"):
-                    lines[i] = f"WREN_IBIS_SOURCE={SOURCE}\n"
-                elif line.startswith("WREN_IBIS_MANIFEST"):
-                    lines[i] = f"WREN_IBIS_MANIFEST={MANIFEST}\n"
-                elif (
-                    line.startswith("WREN_IBIS_CONNECTION_INFO")
-                    and dataset_type != "duckdb"
-                ):
-                    lines[
-                        i
-                    ] = f"WREN_IBIS_CONNECTION_INFO={WREN_IBIS_CONNECTION_INFO}\n"
-        with open(".env.dev", "w") as f:
-            f.writelines(lines)
+        _replace_wren_engine_env_variables(
+            "wren_ibis",
+            {
+                "manifest": MANIFEST,
+                "source": SOURCE,
+                "connection_info": WREN_IBIS_CONNECTION_INFO
+                if dataset_type != "duckdb"
+                else "",
+            },
+        )
 
     # wait for wren-ai-service to restart
     time.sleep(5)
@@ -585,6 +567,49 @@ CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/de
     )
 
     assert response.status_code == 200, response.text
+
+
+def _replace_wren_engine_env_variables(engine_type: str, data: dict):
+    assert engine_type in ("wren_engine", "wren_ibis")
+
+    if not Path("config.yaml").exists():
+        if engine_type == "wren_engine":
+            with open(".env.dev", "r") as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if line.startswith("ENGINE"):
+                        lines[i] = "ENGINE=wren_engine\n"
+                    elif line.startswith("WREN_ENGINE_MANIFEST"):
+                        lines[i] = f"WREN_ENGINE_MANIFEST={data['manifest']}\n"
+        else:
+            with open(".env.dev", "r") as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if line.startswith("ENGINE"):
+                        lines[i] = "ENGINE=wren_ibis\n"
+                    elif line.startswith("WREN_IBIS_SOURCE"):
+                        lines[i] = f"WREN_IBIS_SOURCE={data['source']}\n"
+                    elif line.startswith("WREN_IBIS_MANIFEST"):
+                        lines[i] = f"WREN_IBIS_MANIFEST={data['manifest']}\n"
+                    elif line.startswith("WREN_IBIS_CONNECTION_INFO"):
+                        lines[
+                            i
+                        ] = f"WREN_IBIS_CONNECTION_INFO={data['connection_info']}\n"
+
+        with open(".env.dev", "w") as f:
+            f.writelines(lines)
+    else:
+        with open("config.yaml", "r+") as f:
+            configs = list(yaml.safe_load_all(f))
+
+            for config in configs:
+                if config["type"] == "engine" and config["provider"] == engine_type:
+                    for key, value in data.items():
+                        config[key] = value
+
+            f.seek(0)
+
+            yaml.safe_dump_all(configs, f, default_flow_style=False)
 
 
 def prepare_semantics(mdl_json: dict):
