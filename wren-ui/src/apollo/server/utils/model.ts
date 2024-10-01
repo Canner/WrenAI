@@ -1,4 +1,8 @@
-import { IModelColumnRepository, ModelColumn } from '@server/repositories';
+import {
+  IModelColumnRepository,
+  ModelColumn,
+  ModelNestedColumn,
+} from '@server/repositories';
 import { replaceAllowableSyntax } from './regex';
 import { CompactColumn } from '@server/services/metadataService';
 
@@ -26,6 +30,7 @@ export function findColumnsToUpdate(
   toCreateColumns: string[];
   toUpdateColumns: Array<{
     id: number;
+    sourceColumnName: string;
     type: string;
   }>;
 } {
@@ -57,6 +62,7 @@ export function findColumnsToUpdate(
       ...acc,
       {
         id: existingColumn.id,
+        sourceColumnName: sourceColumn.name,
         type: sourceColumn.type || 'string',
       },
     ];
@@ -78,4 +84,41 @@ export async function updateModelPrimaryKey(
   if (primaryKey) {
     await repository.setModelPrimaryKey(modelId, primaryKey);
   }
+}
+
+export function handleNestedColumns(
+  column: CompactColumn,
+  parent: {
+    modelId: number;
+    sourceColumnName: string;
+    columnPath?: string[];
+  },
+): Partial<ModelNestedColumn>[] {
+  if (!column.nestedColumns) return [];
+
+  const nestedColumnValues = [];
+  for (const nestedColumn of column.nestedColumns) {
+    const parentColumnPath = (parent as Partial<ModelNestedColumn>)
+      .columnPath || [parent.sourceColumnName];
+    const name = nestedColumn.name.split(`${parent.sourceColumnName}.`)[1];
+    const columnPath = [...parentColumnPath, name];
+    const nestedColumnValue = {
+      modelId: parent.modelId,
+      columnPath,
+      displayName: nestedColumn.name,
+      sourceColumnName: nestedColumn.name,
+      referenceName: columnPath.map(transformInvalidColumnName).join('.'),
+      type: nestedColumn.type || 'string',
+      properties: nestedColumn.properties,
+    } as Partial<ModelNestedColumn>;
+    nestedColumnValues.push(nestedColumnValue);
+    nestedColumnValues.push(
+      ...handleNestedColumns(nestedColumn, {
+        modelId: parent.modelId,
+        sourceColumnName: nestedColumn.name,
+        columnPath,
+      }),
+    );
+  }
+  return nestedColumnValues;
 }

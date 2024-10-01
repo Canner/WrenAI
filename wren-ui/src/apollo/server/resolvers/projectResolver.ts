@@ -8,7 +8,13 @@ import {
   RelationType,
   SampleDatasetData,
 } from '../types';
-import { getLogger, replaceInvalidReferenceName, trim } from '@server/utils';
+import {
+  trim,
+  getLogger,
+  replaceInvalidReferenceName,
+  transformInvalidColumnName,
+  handleNestedColumns,
+} from '@server/utils';
 import {
   DUCKDB_CONNECTION_INFO,
   Model,
@@ -24,7 +30,6 @@ import {
 } from '@server/data';
 import { snakeCase } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
-import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
 import DataSourceSchemaDetector, {
   SchemaChangeType,
@@ -671,6 +676,7 @@ export class ProjectResolver {
     const models = await ctx.modelRepository.createMany(modelValues);
 
     const columnValues = [];
+    const nestedColumnValues = [];
     tables.forEach((tableName) => {
       const compactTable = compactTables.find(
         (table) => table.name === tableName,
@@ -683,7 +689,7 @@ export class ProjectResolver {
           modelId: model.id,
           isCalculated: false,
           displayName: column.name,
-          referenceName: this.transformInvalidColumnName(column.name),
+          referenceName: transformInvalidColumnName(column.name),
           sourceColumnName: column.name,
           type: column.type || 'string',
           notNull: column.notNull || false,
@@ -693,21 +699,21 @@ export class ProjectResolver {
             : null,
         } as Partial<ModelColumn>;
         columnValues.push(columnValue);
+
+        // handle nested columns if any
+        nestedColumnValues.push(
+          handleNestedColumns(column, {
+            modelId: model.id,
+            sourceColumnName: column.name,
+          }),
+        );
       });
     });
     const columns = await ctx.modelColumnRepository.createMany(columnValues);
+    // save nested columns
+    await ctx.modelNestedColumnRepository.createMany(nestedColumnValues.flat());
 
     return { models, columns };
-  }
-
-  private transformInvalidColumnName(columnName: string) {
-    let referenceName = replaceAllowableSyntax(columnName);
-    // If the reference name does not start with a letter, add a prefix
-    const startWithLetterRegex = /^[A-Za-z]/;
-    if (!startWithLetterRegex.test(referenceName)) {
-      referenceName = `col_${referenceName}`;
-    }
-    return referenceName;
   }
 
   private concatInitSql(initSql: string, extensions: string[]) {

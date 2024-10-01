@@ -19,6 +19,7 @@ export interface CompactColumn {
   notNull: boolean;
   description?: string;
   properties?: Record<string, any>;
+  nestedColumns?: CompactColumn[];
 }
 
 export enum ConstraintType {
