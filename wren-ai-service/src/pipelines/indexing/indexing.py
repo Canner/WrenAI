@@ -246,6 +246,13 @@ class DDLConverter:
                             "alias": column["properties"].pop("displayName", ""),
                             "description": column["properties"].pop("description", ""),
                         }
+                        nested_cols = {
+                            k: v
+                            for k, v in column["properties"].items()
+                            if k.startswith("nested")
+                        }
+                        if nested_cols:
+                            column_properties["nested_columns"] = nested_cols
                         comment = (
                             f"-- {orjson.dumps(column_properties).decode("utf-8")}\n  "
                         )
