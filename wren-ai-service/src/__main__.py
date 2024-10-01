@@ -131,7 +131,7 @@ if __name__ == "__main__":
         host=server_host,
         port=server_port,
         reload=should_reload,
-        reload_includes=["src/**/*.py", ".env.dev"],
+        reload_includes=["src/**/*.py", ".env.dev", "config.yaml"],
         workers=1,
         loop="uvloop",
         http="httptools",
