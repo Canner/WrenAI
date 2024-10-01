@@ -388,6 +388,15 @@ export const typeDefs = gql`
     relationFields: [DiagramModelRelationField]!
   }
 
+  type DiagramModelNestedField {
+    id: String!
+    nestedColumnId: Int!
+    displayName: String!
+    referenceName: String!
+    type: String!
+    description: String
+  }
+
   type DiagramModelField {
     id: String!
     columnId: Int!
@@ -400,6 +409,7 @@ export const typeDefs = gql`
     expression: String
     aggregation: String
     lineage: [Int!]
+    nestedFields: [DiagramModelNestedField!]
   }
 
   type DiagramModelRelationField {
