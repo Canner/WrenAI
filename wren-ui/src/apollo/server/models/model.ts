@@ -9,6 +9,12 @@ export interface UpdateModelData {
   primaryKey: string;
 }
 
+export interface NestedColumnMetadataInput {
+  id: number;
+  displayName: string;
+  description: string;
+}
+
 export interface ColumnMetadataInput {
   id: number;
   displayName: string;
@@ -34,6 +40,7 @@ export interface UpdateModelMetadataInput {
   displayName: string;
   description: string;
   columns: Array<ColumnMetadataInput>;
+  nestedColumns: Array<NestedColumnMetadataInput>;
   calculatedFields: Array<CalculatedFieldMetadataInput>;
   relationships: Array<RelationshipMetadataInput>;
 }

@@ -23,6 +23,7 @@ import * as Errors from '@server/utils/error';
 import { Model, ModelColumn } from '../repositories';
 import {
   findColumnsToUpdate,
+  handleNestedColumns,
   replaceInvalidReferenceName,
   updateModelPrimaryKey,
 } from '../utils/model';
@@ -427,37 +428,58 @@ export class ModelResolver {
 
     // delete columns
     if (toDeleteColumnIds.length) {
+      await ctx.modelNestedColumnRepository.deleteByParentColumnIds(
+        toDeleteColumnIds,
+      );
       await ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
     }
 
     // create columns
     if (toCreateColumns.length) {
-      const columnValues = toCreateColumns.map((columnName) => {
-        const sourceTableColumn = sourceTableColumns.find(
-          (col) => col.name === columnName,
-        );
-        if (!sourceTableColumn) {
-          throw new Error(`Column not found: ${columnName}`);
-        }
+      const columns = sourceTableColumns.filter((sourceColumn) =>
+        toCreateColumns.includes(sourceColumn.name),
+      );
+      const columnValues = columns.map((column) => {
         const columnValue = {
           modelId: model.id,
           isCalculated: false,
-          displayName: columnName,
-          sourceColumnName: columnName,
-          referenceName: transformInvalidColumnName(columnName),
-          type: sourceTableColumn.type || 'string',
-          notNull: sourceTableColumn.notNull,
-          isPk: primaryKey === columnName,
+          displayName: column.name,
+          sourceColumnName: column.name,
+          referenceName: transformInvalidColumnName(column.name),
+          type: column.type || 'string',
+          notNull: column.notNull,
+          isPk: primaryKey === column.name,
         } as Partial<ModelColumn>;
         return columnValue;
       });
+      const nestedColumnValues = columns.flatMap((column) => {
+        return handleNestedColumns(column, {
+          modelId: model.id,
+          sourceColumnName: column.name,
+        });
+      });
       await ctx.modelColumnRepository.createMany(columnValues);
+      await ctx.modelNestedColumnRepository.createMany(nestedColumnValues);
     }
 
     // update columns
     if (toUpdateColumns.length) {
-      for (const { id, type } of toUpdateColumns) {
+      for (const { id, sourceColumnName, type } of toUpdateColumns) {
         await ctx.modelColumnRepository.updateOne(id, { type });
+
+        // if the struct type is changed, need to re-create nested columns
+        if (type.includes('STRUCT')) {
+          const sourceColumn = sourceTableColumns.find(
+            (sourceColumn) => sourceColumn.name === sourceColumnName,
+          );
+          await ctx.modelNestedColumnRepository.deleteByParentColumnIds([id]);
+          await ctx.modelNestedColumnRepository.createMany(
+            handleNestedColumns(sourceColumn, {
+              modelId: model.id,
+              sourceColumnName: sourceColumnName,
+            }),
+          );
+        }
       }
     }
 
@@ -502,6 +524,11 @@ export class ModelResolver {
       if (!isEmpty(data.columns)) {
         // find the columns that match the user requested columns
         await this.handleUpdateColumnMetadata(data, ctx);
+      }
+
+      // update nested column metadata
+      if (!isEmpty(data.nestedColumns)) {
+        await this.handleUpdateNestedColumnMetadata(data, ctx);
       }
 
       // update calculated field metadata
@@ -639,6 +666,44 @@ export class ModelResolver {
 
       if (!isEmpty(columnMetadata)) {
         await ctx.modelColumnRepository.updateOne(col.id, columnMetadata);
+      }
+    }
+  }
+
+  private async handleUpdateNestedColumnMetadata(
+    data: UpdateModelMetadataInput,
+    ctx: IContext,
+  ) {
+    const nestedColumnIds = data.nestedColumns.map((nc) => nc.id);
+    const modelNestedColumns =
+      await ctx.modelNestedColumnRepository.findNestedColumnsByIds(
+        nestedColumnIds,
+      );
+    for (const col of modelNestedColumns) {
+      const requestedMetadata = data.nestedColumns.find((c) => c.id === col.id);
+
+      const nestedColumnMetadata: any = {};
+
+      if (!isNil(requestedMetadata.displayName)) {
+        nestedColumnMetadata.displayName = this.determineMetadataValue(
+          requestedMetadata.displayName,
+        );
+      }
+
+      if (!isNil(requestedMetadata.description)) {
+        nestedColumnMetadata.properties = {
+          ...col.properties,
+          description: this.determineMetadataValue(
+            requestedMetadata.description,
+          ),
+        };
+      }
+
+      if (!isEmpty(nestedColumnMetadata)) {
+        await ctx.modelNestedColumnRepository.updateOne(
+          col.id,
+          nestedColumnMetadata,
+        );
       }
     }
   }

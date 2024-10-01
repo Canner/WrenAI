@@ -208,6 +208,12 @@ export const typeDefs = gql`
   }
 
   # Metadata related
+  input UpdateNestedColumnMetadataInput {
+    id: Int!
+    displayName: String
+    description: String
+  }
+
   input UpdateColumnMetadataInput {
     id: Int!
     displayName: String
@@ -233,6 +239,7 @@ export const typeDefs = gql`
     displayName: String # Model display name, i,e, the alias of the model
     description: String # Model description
     columns: [UpdateColumnMetadataInput!] # Update column metadata
+    nestedColumns: [UpdateNestedColumnMetadataInput!] # Update nested column metadata
     calculatedFields: [UpdateCalculatedFieldMetadataInput!] # Update calculated field metadata
     relationships: [UpdateRelationshipMetadataInput!] # Update relationship metadata
   }
