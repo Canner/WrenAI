@@ -605,6 +605,10 @@ def _replace_wren_engine_env_variables(engine_type: str, data: dict):
                 if config["type"] == "engine" and config["provider"] == engine_type:
                     for key, value in data.items():
                         config[key] = value
+                if "pipes" in config:
+                    for i, pipe in enumerate(config["pipes"]):
+                        if "engine" in pipe:
+                            config["pipes"][i]["engine"] = engine_type
 
             f.seek(0)
 
