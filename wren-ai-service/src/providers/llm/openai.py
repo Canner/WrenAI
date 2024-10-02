@@ -3,6 +3,8 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import backoff
+import google.auth
+import google.auth.transport.requests
 import openai
 import orjson
 from haystack import component
@@ -56,6 +58,29 @@ class AsyncGenerator(OpenAIGenerator):
             organization=organization,
             base_url=api_base_url,
         )
+
+        # check if the model is actually Vertex AI model
+        # currently we support Vertex AI through openai api compatible way
+        # in the near future, we might use litellm instead, so we can more easily support different kinds of llm providers
+        # this is workaround as of now
+        self._vertexai_creds = None
+        if model.startswith("google/"):
+            self._vertexai_creds, _ = google.auth.default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+
+    def __getattr__(self, name: str) -> Any:
+        # dealing with auto-refreshing expired credential for Vertex AI model
+        # https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/call-vertex-using-openai-library#refresh_your_credentials
+        if self._vertexai_creds and not self._vertexai_creds.valid:
+            auth_req = google.auth.transport.requests.Request()
+            self._vertexai_creds.refresh(auth_req)
+
+            if not self._vertexai_creds.valid:
+                raise RuntimeError("Unable to refresh auth")
+
+            self.client.api_key = self._vertexai_creds.token
+        return getattr(self.client, name)
 
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
@@ -151,11 +176,11 @@ class OpenAILLMProvider(LLMProvider):
     ):
         if self._api_base == LLM_OPENAI_API_BASE:
             logger.info(
-                f"Creating OpenAI generator with model kwargs: {self._model_kwargs}"
+                f"Creating OpenAI generator {self._generation_model} with model kwargs: {self._model_kwargs}"
             )
         else:
             logger.info(
-                f"Creating OpenAI API-compatible generator with model kwargs: {self._model_kwargs}"
+                f"Creating OpenAI API-compatible generator {self._generation_model} with model kwargs: {self._model_kwargs}"
             )
 
         return AsyncGenerator(
