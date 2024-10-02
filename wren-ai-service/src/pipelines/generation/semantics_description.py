@@ -17,6 +17,7 @@ logger = logging.getLogger("wren-ai-service")
 
 
 ## Start of Pipeline
+@observe(capture_input=False)
 def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
     def extract(model: dict) -> dict:
         return {
@@ -30,20 +31,26 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
     ]
 
 
+@observe(capture_input=False)
 def prompt(
     picked_models: list[dict],
     user_prompt: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    logger.debug(f"User prompt: {user_prompt}")
+    logger.debug(f"Picked models: {picked_models}")
     return prompt_builder.run(picked_models=picked_models, user_prompt=user_prompt)
 
 
+@observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-def post_process(generate: dict) -> dict:
-    def normalize(text: str) -> str:
+@observe(capture_input=False)
+def normalize(generate: dict) -> dict:
+    def wrapper(text: str) -> str:
         text = text.replace("\n", " ")
         text = " ".join(text.split())
         # Convert the normalized text to a dictionary
@@ -54,8 +61,12 @@ def post_process(generate: dict) -> dict:
             logger.error(f"Error decoding JSON: {e}")
             return {}  # Return an empty dictionary if JSON decoding fails
 
+    logger.debug(
+        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
+    )
+
     reply = generate.get("replies")[0]  # Expecting only one reply
-    normalized = normalize(reply)
+    normalized = wrapper(reply)
 
     return {model["name"]: model for model in normalized["models"]}
 
@@ -123,8 +134,7 @@ Make sure that the descriptions are concise, informative, and contextually appro
 """
 
 user_prompt_template = """
-
-### Input
+### Input:
 User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
 
@@ -141,6 +151,7 @@ class SemanticsDescription(BasicPipeline):
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(system_prompt=system_prompt),
         }
+        self._final = "normalize"
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -157,7 +168,7 @@ class SemanticsDescription(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            [""],
+            [self._final],
             output_file_path=f"{destination}/semantics_description.dot",
             inputs={
                 "user_prompt": user_prompt,
@@ -178,7 +189,7 @@ class SemanticsDescription(BasicPipeline):
     ) -> dict:
         logger.info("Semantics Description Generation pipeline is running...")
         return await self._pipe.execute(
-            ["post_process"],
+            [self._final],
             inputs={
                 "user_prompt": user_prompt,
                 "selected_models": selected_models,
@@ -189,6 +200,8 @@ class SemanticsDescription(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from langfuse.decorators import langfuse_context
+
     from src.core.engine import EngineConfig
     from src.core.pipeline import async_validate
     from src.providers import init_providers
@@ -209,11 +222,7 @@ if __name__ == "__main__":
         "mdl": mdl,
     }
 
-    # pipeline.visualize(**input)
+    pipeline.visualize(**input)
     async_validate(lambda: pipeline.run(**input))
 
-    # expected = {
-    #     "model_name": ["column1", "column2"],
-    # }
-
-    # langfuse_context.flush()
+    langfuse_context.flush()
