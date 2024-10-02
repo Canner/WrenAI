@@ -4,6 +4,7 @@ export interface RelationData {
   toModelId: number;
   toColumnId: number;
   type: RelationType;
+  description?: string;
 }
 
 export interface UpdateRelationData {

@@ -630,6 +630,7 @@ export class ProjectResolver {
         toModelId,
         toColumnId,
         type,
+        description: relation.description,
       } as RelationData;
     });
     return relationInput;
@@ -658,7 +659,7 @@ export class ProjectResolver {
       // compactTable contain schema and catalog, these information are for building tableReference in mdl
       const model = {
         projectId: project.id,
-        displayName: tableName, //use table name as displayName, referenceName and tableName
+        displayName: tableName, // use table name as displayName, referenceName and tableName
         referenceName: replaceInvalidReferenceName(tableName),
         sourceTableName: tableName,
         cached: false,
