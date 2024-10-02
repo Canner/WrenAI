@@ -28,11 +28,13 @@
   </a>
 </p>
 
-## Wren AI @ [Hacktoberfest 2024](https://hacktoberfest.com/) - Oct 1 till Oct 31
+## Wren AI @ Hacktoberfest 2024 - Oct 1 till Oct 31
 
-[Hacktoberfest 2024](https://hacktoberfest.com/) is here, and we're inviting developers of all levels to join our open-source community. Together, we'll build Wren AI as a friendly community for all. [Win Wren AI Exclusive Swag Pack & Holopin from Digital Ocean Rewards, learn how](https://getwren.ai/wren-ai-hacktoberfest-2024)!
+[Hacktoberfest 2024](https://hacktoberfest.com/) is here, and we're inviting developers of all levels to join our open-source community. Together, we'll build Wren AI as a friendly community for all. 
 
-![image](https://github.com/user-attachments/assets/9048d701-a97b-4c6b-b3ed-fc636201f234)
+👉 Learn how to [Win Wren AI Exclusive Swag Pack & Holopin From Digital Ocean Rewards](https://getwren.ai/wren-ai-hacktoberfest-2024)!
+
+[![image](https://github.com/user-attachments/assets/9048d701-a97b-4c6b-b3ed-fc636201f234)](https://getwren.ai/wren-ai-hacktoberfest-2024)
 
 
 ---
