@@ -60,6 +60,9 @@ class AsyncGenerator(OpenAIGenerator):
         )
 
         # check if the model is actually Vertex AI model
+        # currently we support Vertex AI through openai api compatible way
+        # in the near future, we might use litellm instead, so we can more easily support different kinds of llm providers
+        # this is workaround as of now
         self._vertexai_creds = None
         if model.startswith("google/"):
             self._vertexai_creds, _ = google.auth.default(
@@ -67,7 +70,7 @@ class AsyncGenerator(OpenAIGenerator):
             )
 
     def __getattr__(self, name: str) -> Any:
-        # dealing with auto-refreshing expired credential
+        # dealing with auto-refreshing expired credential for Vertex AI model
         # https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/call-vertex-using-openai-library#refresh_your_credentials
         if self._vertexai_creds and not self._vertexai_creds.valid:
             auth_req = google.auth.transport.requests.Request()
