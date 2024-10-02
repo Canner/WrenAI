@@ -400,6 +400,7 @@ export const typeDefs = gql`
     nestedColumnId: Int!
     displayName: String!
     referenceName: String!
+    columnPath: [String!]!
     type: String!
     description: String
   }

@@ -172,6 +172,7 @@ export class DiagramResolver {
         ? nestedColumns.map((nestedColumn) => ({
             id: uuidv4(),
             nestedColumnId: nestedColumn.id,
+            columnPath: nestedColumn.columnPath,
             type: this.convertColumnType(nestedColumn.type),
             displayName: nestedColumn.displayName,
             referenceName: nestedColumn.referenceName,
