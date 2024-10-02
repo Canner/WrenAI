@@ -213,12 +213,21 @@ if __name__ == "__main__":
     llm_provider, _, _, _ = init_providers(EngineConfig())
     pipeline = SemanticsDescription(llm_provider=llm_provider)
 
-    with open("src/pipelines/prototype/example.json", "r") as file:
+    with open("sample/college_3_bigquery_mdl.json", "r") as file:
         mdl = json.load(file)
 
     input = {
-        "user_prompt": "The Orders and Customers dataset is utilized to analyze customer behavior and preferences over time, enabling the improvement of marketing strategies. By examining purchasing patterns and trends, businesses can tailor their marketing efforts to better meet customer needs and enhance engagement.",
-        "selected_models": ["orders", "customers"],
+        "user_prompt": "Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
+        "selected_models": [
+            "Student",
+            "Minor_in",
+            "Member_of",
+            "Gradeconversion",
+            "Faculty",
+            "Enrolled_in",
+            "Department",
+            "Course",
+        ],
         "mdl": mdl,
     }
 
