@@ -1,7 +1,7 @@
 import { merge } from 'lodash';
 import IconComponentProps from '@ant-design/icons';
 import ShoppingCartOutlined from '@ant-design/icons/ShoppingCartOutlined';
-import TrophyOutlined from '@ant-design/icons/TrophyOutlined';
+import IdCardOutlined from '@ant-design/icons/IdcardOutlined';
 import { SETUP, DATA_SOURCES } from '@/utils/enum';
 import Starter from './Starter';
 import ConnectDataSource from './ConnectDataSource';
@@ -119,9 +119,9 @@ export const TEMPLATE_OPTIONS = {
     label: 'E-commerce',
     IconComponent: ShoppingCartOutlined,
   },
-  [SampleDatasetName.NBA]: {
-    label: 'NBA',
-    IconComponent: TrophyOutlined,
+  [SampleDatasetName.HR]: {
+    label: 'Human Resource',
+    IconComponent: IdCardOutlined,
   },
 };
 

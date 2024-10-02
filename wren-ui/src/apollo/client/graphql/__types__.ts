@@ -746,6 +746,7 @@ export type SampleDatasetInput = {
 
 export enum SampleDatasetName {
   ECOMMERCE = 'ECOMMERCE',
+  HR = 'HR',
   MUSIC = 'MUSIC',
   NBA = 'NBA'
 }

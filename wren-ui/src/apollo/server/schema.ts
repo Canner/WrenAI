@@ -35,6 +35,7 @@ export const typeDefs = gql`
   }
 
   enum SampleDatasetName {
+    HR
     ECOMMERCE
     NBA
     MUSIC
