@@ -271,6 +271,7 @@ export class ModelService implements IModelService {
           ? { ...JSON.parse(model.properties), ...table.properties }
           : { ...table.properties };
         await this.modelRepository.updateOne(model.id, {
+          displayName: table.properties?.displayName || model.displayName,
           properties: JSON.stringify(properties),
         });
       }),
@@ -372,6 +373,9 @@ export class ModelService implements IModelService {
         fromColumnId: relation.fromColumnId,
         toColumnId: relation.toColumnId,
         joinType: relation.type,
+        properties: relation.description
+          ? JSON.stringify({ description: relation.description })
+          : null,
       } as Partial<Relation>;
     });
 

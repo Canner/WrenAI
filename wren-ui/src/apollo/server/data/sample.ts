@@ -26,6 +26,7 @@ export interface SampleDatasetRelationship {
   toModelName: string;
   toColumnName: string;
   type: RelationType;
+  description?: string;
 }
 export interface SuggestedQuestion {
   question: string;
@@ -198,319 +199,582 @@ export const sampleDatasets: Record<string, SampleDataset> = {
     name: SampleDatasetName.ECOMMERCE,
     tables: [
       {
-        tableName: 'customers',
-        primaryKey: 'Id',
+        tableName: 'olist_customers_dataset',
+        primaryKey: 'customer_id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/customers.csv',
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_customers_dataset.parquet',
         properties: {
+          displayName: 'customers',
+        },
+        columns: [
+          {
+            name: 'customer_city',
+            properties: {
+              description: 'Name of the city where the customer is located',
+              displayName: 'customer_city',
+            },
+          },
+          {
+            name: 'customer_id',
+            properties: {
+              description: null,
+              displayName: 'customer_id',
+            },
+          },
+          {
+            name: 'customer_state',
+            properties: {
+              description: 'Name of the state where the customer is located',
+              displayName: 'customer_state',
+            },
+          },
+          {
+            name: 'customer_unique_id',
+            properties: {
+              description: 'Unique id of the customer',
+              displayName: 'customer_unique_id',
+            },
+          },
+          {
+            name: 'customer_zip_code_prefix',
+            properties: {
+              description: 'First 5 digits of customer zip code',
+              displayName: 'customer_zip_code_prefix',
+            },
+          },
+        ],
+        schema: [
+          { columnName: 'customer_city', dataType: 'VARCHAR' },
+          { columnName: 'customer_id', dataType: 'VARCHAR' },
+          { columnName: 'customer_state', dataType: 'VARCHAR' },
+          { columnName: 'customer_unique_id', dataType: 'VARCHAR' },
+          { columnName: 'customer_zip_code_prefix', dataType: 'VARCHAR' },
+        ],
+      },
+      {
+        tableName: 'olist_order_items_dataset',
+        primaryKey: 'order_item_id',
+        filePath:
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_items_dataset.parquet',
+        properties: {
+          displayName: 'order items',
           description:
-            'A table of customers who have made purchases, including their city',
+            'This table contains the information related to a specific order containing its shipping cost, products, cost, number of order items, and the seller.',
         },
         columns: [
           {
-            name: 'City',
+            name: 'freight_value',
             properties: {
               description:
-                'The Customer City, where the customer company is located. Also called "customer segment".',
+                'Cost of shipping associated with the specific order item',
+              displayName: 'freight_value',
             },
           },
           {
-            name: 'Id',
+            name: 'order_id',
             properties: {
               description:
-                'A unique identifier for each customer in the data model.',
+                'Unique identifier for the order across the platform',
+              displayName: 'order_id',
             },
           },
           {
-            name: 'State',
+            name: 'order_item_id',
             properties: {
               description:
-                'A field indicating the state where the customer is located.',
+                'Unique identifier for each item within a specific order',
+              displayName: 'order_item_id',
+            },
+          },
+          {
+            name: 'price',
+            properties: {
+              description: 'Price of the individual item within the order',
+              displayName: 'price',
+            },
+          },
+          {
+            name: 'product_id',
+            properties: {
+              description:
+                'Unique identifier for the product sold in the order.',
+              displayName: 'product_id',
+            },
+          },
+          {
+            name: 'seller_id',
+            properties: {
+              description:
+                'Unique identifier of the seller who fulfilled the order item.',
+              displayName: 'seller_id',
+            },
+          },
+          {
+            name: 'shipping_limit_date',
+            properties: {
+              description:
+                'Deadline for the order item to be shipped by the seller.',
+              displayName: 'shipping_limit_date',
             },
           },
         ],
         schema: [
-          { columnName: 'Id', dataType: 'VARCHAR' },
-          { columnName: 'City', dataType: 'VARCHAR' },
-          { columnName: 'State', dataType: 'VARCHAR' },
+          { columnName: 'freight_value', dataType: 'DOUBLE' },
+          { columnName: 'order_id', dataType: 'VARCHAR' },
+          { columnName: 'order_item_id', dataType: 'BIGINT' },
+          { columnName: 'price', dataType: 'DOUBLE' },
+          { columnName: 'product_id', dataType: 'VARCHAR' },
+          { columnName: 'seller_id', dataType: 'VARCHAR' },
+          { columnName: 'shipping_limit_date', dataType: 'TIMESTAMP' },
         ],
       },
       {
-        tableName: 'order_items',
-        primaryKey: 'Id',
+        tableName: 'olist_orders_dataset',
+        primaryKey: 'order_id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/order_items.csv',
-        columns: [
-          {
-            name: 'FreightValue',
-            properties: {
-              description:
-                'A numerical value representing the cost of shipping for an item in an order.',
-            },
-          },
-          {
-            name: 'ItemNumber',
-            properties: {
-              description:
-                'The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber.',
-            },
-          },
-          {
-            name: 'OrderId',
-            properties: {
-              description:
-                'A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship.',
-            },
-          },
-          {
-            name: 'Price',
-            properties: {
-              description:
-                'A numerical value representing the price of an item in an order.',
-            },
-          },
-          {
-            name: 'ProductId',
-            properties: {
-              description:
-                'A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship.',
-            },
-          },
-          {
-            name: 'ShippingLimitDate',
-            properties: {
-              description:
-                'A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the "order_items" model.',
-            },
-          },
-        ],
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_orders_dataset.parquet',
         properties: {
+          displayName: 'orders',
           description:
-            'The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.',
+            'This table contains detailed information about customer orders, including timestamps for various stages of the order process (approval, shipping, delivery), as well as the order status and customer identification. It helps track the lifecycle of an order from purchase to delivery.',
         },
+        columns: [
+          {
+            name: 'customer_id',
+            properties: {
+              description:
+                'Unique identifier for the customer who placed the order.',
+              displayName: 'customer_id',
+            },
+          },
+          {
+            name: 'order_approved_at',
+            properties: {
+              description:
+                'Date and time when the order was approved for processing.',
+              displayName: 'order_approved_at',
+            },
+          },
+          {
+            name: 'order_delivered_carrier_date',
+            properties: {
+              description:
+                'Date when the order was handed over to the carrier or freight forwarder for delivery.',
+              displayName: 'order_delivered_carrier_date',
+            },
+          },
+          {
+            name: 'order_delivered_customer_date',
+            properties: {
+              description: 'Date when the order was delivered to the customer.',
+              displayName: 'order_delivered_customer_date',
+            },
+          },
+          {
+            name: 'order_estimated_delivery_date',
+            properties: {
+              description:
+                'Expected delivery date based on the initial estimate.',
+              displayName: 'order_estimated_delivery_date',
+            },
+          },
+          {
+            name: 'order_id',
+            properties: {
+              description: 'Unique identifier for the specific order',
+              displayName: 'order_id',
+            },
+          },
+          {
+            name: 'order_purchase_timestamp',
+            properties: {
+              description:
+                'Date and time when the order was placed by the customer.',
+              displayName: 'order_purchase_timestamp',
+            },
+          },
+          {
+            name: 'order_status',
+            properties: {
+              description:
+                'Current status of the order (e.g., delivered, shipped, canceled).',
+              displayName: 'order_status',
+            },
+          },
+        ],
         schema: [
-          { columnName: 'Id', dataType: 'VARCHAR' },
-          { columnName: 'OrderId', dataType: 'VARCHAR' },
-          { columnName: 'ItemNumber', dataType: 'BIGINT' },
-          { columnName: 'ProductId', dataType: 'VARCHAR' },
-          { columnName: 'ShippingLimitDate', dataType: 'DATE' },
-          { columnName: 'Price', dataType: 'DOUBLE' },
-          { columnName: 'FreightValue', dataType: 'DOUBLE' },
+          { columnName: 'customer_id', dataType: 'VARCHAR' },
+          { columnName: 'order_approved_at', dataType: 'TIMESTAMP' },
+          { columnName: 'order_delivered_carrier_date', dataType: 'TIMESTAMP' },
+          {
+            columnName: 'order_delivered_customer_date',
+            dataType: 'TIMESTAMP',
+          },
+          {
+            columnName: 'order_estimated_delivery_date',
+            dataType: 'TIMESTAMP',
+          },
+          { columnName: 'order_id', dataType: 'VARCHAR' },
+          { columnName: 'order_purchase_timestamp', dataType: 'TIMESTAMP' },
+          { columnName: 'order_status', dataType: 'VARCHAR' },
         ],
       },
       {
-        tableName: 'orders',
-        primaryKey: 'OrderId',
+        tableName: 'olist_order_payments_dataset',
+        primaryKey: 'order_id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/orders.csv',
-        columns: [
-          {
-            name: 'ApprovedTimestamp',
-            properties: {
-              description:
-                'A column that represents the timestamp when the order was approved.',
-            },
-          },
-          {
-            name: 'CustomerId',
-            properties: {
-              description:
-                'A unique identifier representing the customer who purchased this order.',
-            },
-          },
-          {
-            name: 'DeliveredCarrierDate',
-            properties: {
-              description:
-                'A column that represents the date when the order was delivered by the carrier.',
-            },
-          },
-          {
-            name: 'DeliveredCustomerDate',
-            properties: {
-              description:
-                'A column that represents the date when the order was delivered to the customer.',
-            },
-          },
-          {
-            name: 'EstimatedDeliveryDate',
-            properties: {
-              description:
-                'A column that represents the estimated delivery date of the order.',
-            },
-          },
-          {
-            name: 'OrderId',
-            properties: {
-              description:
-                'A column that represents a unique identifier of this order.',
-            },
-          },
-          {
-            name: 'PurchaseTimestamp',
-            properties: {
-              description:
-                'A column that represents the timestamp when the order was purchased.',
-            },
-          },
-          {
-            name: 'Status',
-            properties: {
-              description: 'A column representing the status of the order.',
-            },
-          },
-        ],
-        properties: { description: 'A model representing the orders data.' },
-        schema: [
-          { columnName: 'OrderId', dataType: 'VARCHAR' },
-          { columnName: 'CustomerId', dataType: 'VARCHAR' },
-          { columnName: 'Status', dataType: 'VARCHAR' },
-          { columnName: 'PurchaseTimestamp', dataType: 'TIMESTAMP' },
-          { columnName: 'ApprovedTimestamp', dataType: 'TIMESTAMP' },
-          { columnName: 'DeliveredCarrierDate', dataType: 'DATE' },
-          { columnName: 'DeliveredCustomerDate', dataType: 'DATE' },
-          { columnName: 'EstimatedDeliveryDate', dataType: 'DATE' },
-        ],
-      },
-      {
-        tableName: 'payments',
-        primaryKey: 'Id',
-        filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/payments.csv',
-        columns: [
-          {
-            name: 'Installments',
-            properties: {
-              description:
-                'A column representing the number of installments in the payments data model.',
-            },
-          },
-          {
-            name: 'OrderId',
-            properties: {
-              description:
-                'A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship.',
-            },
-          },
-          {
-            name: 'Sequential',
-            properties: {
-              description:
-                'A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number.',
-            },
-          },
-          {
-            name: 'Type',
-            properties: {
-              description:
-                'A column representing the type of payment in the payments data model.',
-            },
-          },
-          {
-            name: 'Value',
-            properties: {
-              description:
-                'A column representing the value of the payment in the payments data model.',
-            },
-          },
-        ],
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_payments_dataset.parquet',
         properties: {
+          displayName: 'order payments',
           description:
-            'A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.',
+            'This table contains information about payment details for each order, including payment methods, amounts, installment plans, and payment sequences, helping to track how orders were paid and processed within the e-commerce platform.',
         },
+        columns: [
+          {
+            name: 'order_id',
+            properties: {
+              description:
+                'Unique identifier for the order associated with the payment.',
+              displayName: 'order_id',
+            },
+          },
+          {
+            name: 'payment_installments',
+            properties: {
+              description:
+                'Number of installments the payment is divided into for the order.',
+              displayName: 'payment_installments',
+            },
+          },
+          {
+            name: 'payment_sequential',
+            properties: {
+              description:
+                'Sequence number for tracking multiple payments within the same order.',
+              displayName: 'payment_sequential',
+            },
+          },
+          {
+            name: 'payment_type',
+            properties: {
+              description:
+                'Method used for the payment, such as credit card, debit, or voucher.',
+              displayName: 'payment_type',
+            },
+          },
+          {
+            name: 'payment_value',
+            properties: {
+              description: 'Total amount paid in the specific transaction.',
+              displayName: 'payment_value',
+            },
+          },
+        ],
         schema: [
-          { columnName: 'Id', dataType: 'VARCHAR' },
-          { columnName: 'OrderId', dataType: 'VARCHAR' },
-          { columnName: 'Sequential', dataType: 'BIGINT' },
-          { columnName: 'Type', dataType: 'VARCHAR' },
-          { columnName: 'Installments', dataType: 'BIGINT' },
-          { columnName: 'Value', dataType: 'DOUBLE' },
+          { columnName: 'order_id', dataType: 'VARCHAR' },
+          { columnName: 'payment_installments', dataType: 'BIGINT' },
+          { columnName: 'payment_sequential', dataType: 'BIGINT' },
+          { columnName: 'payment_type', dataType: 'VARCHAR' },
+          { columnName: 'payment_value', dataType: 'DOUBLE' },
         ],
       },
       {
-        tableName: 'products',
-        primaryKey: 'Id',
+        tableName: 'olist_products_dataset',
+        primaryKey: 'product_id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/products.csv',
-        columns: [
-          {
-            name: 'Category',
-            properties: {
-              description:
-                'A category that classifies the products in the data model.',
-            },
-          },
-          {
-            name: 'Id',
-            properties: {
-              description:
-                'A unique identifier assigned to each product in the data model.',
-            },
-          },
-          {
-            name: 'Name',
-            properties: {
-              description: 'A name of the product in the data model.',
-            },
-          },
-        ],
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_products_dataset.parquet',
         properties: {
+          displayName: 'products',
           description:
-            'A data model containing information about products such as category, ID, and name, with a relationship to order items.',
+            'This table provides detailed information about products, including their category, dimensions, weight, description length, and the number of photos. This helps in managing product details and enhancing the shopping experience on the e-commerce platform.',
         },
+        columns: [
+          {
+            name: 'product_category_name',
+            properties: {
+              description:
+                'Name of the product category to which the item belongs.',
+              displayName: 'product_category_name',
+            },
+          },
+          {
+            name: 'product_description_lenght',
+            properties: {
+              description: 'Length of the product description in characters.',
+              displayName: 'product_description_lenght',
+            },
+          },
+          {
+            name: 'product_height_cm',
+            properties: {
+              description: 'Height of the product in centimeters.',
+              displayName: 'product_height_cm',
+            },
+          },
+          {
+            name: 'product_id',
+            properties: {
+              description: 'Unique identifier for the product',
+              displayName: 'product_id',
+            },
+          },
+          {
+            name: 'product_length_cm',
+            properties: {
+              description: 'Length of the product in centimeters',
+              displayName: 'product_length_cm',
+            },
+          },
+          {
+            name: 'product_name_lenght',
+            properties: {
+              description: 'Length of the product name in characters',
+              displayName: 'product_name_lenght',
+            },
+          },
+          {
+            name: 'product_photos_qty',
+            properties: {
+              description: 'Number of photos available for the product',
+              displayName: 'product_photos_qty',
+            },
+          },
+          {
+            name: 'product_weight_g',
+            properties: {
+              description: 'Weight of the product in grams',
+              displayName: 'product_weight_g',
+            },
+          },
+          {
+            name: 'product_width_cm',
+            properties: {
+              description: 'Width of the product in centimeters',
+              displayName: 'product_width_cm',
+            },
+          },
+        ],
         schema: [
-          { columnName: 'Id', dataType: 'VARCHAR' },
-          { columnName: 'Category', dataType: 'VARCHAR' },
-          { columnName: 'Name', dataType: 'VARCHAR' },
+          { columnName: 'product_category_name', dataType: 'VARCHAR' },
+          { columnName: 'product_description_lenght', dataType: 'BIGINT' },
+          { columnName: 'product_height_cm', dataType: 'BIGINT' },
+          { columnName: 'product_id', dataType: 'VARCHAR' },
+          { columnName: 'product_length_cm', dataType: 'BIGINT' },
+          { columnName: 'product_name_lenght', dataType: 'BIGINT' },
+          { columnName: 'product_photos_qty', dataType: 'BIGINT' },
+          { columnName: 'product_weight_g', dataType: 'BIGINT' },
+          { columnName: 'product_width_cm', dataType: 'BIGINT' },
         ],
       },
       {
-        tableName: 'reviews',
-        primaryKey: 'Id',
+        tableName: 'olist_order_reviews_dataset',
+        primaryKey: 'review_id',
         filePath:
-          'https://wrenai-public.s3.amazonaws.com/demo/v0.3.0/E-Commerce/reviews.csv',
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_reviews_dataset.parquet',
+        properties: {
+          displayName: 'order reviews',
+          description:
+            'This table contains customer reviews for each order, including feedback comments, ratings, and timestamps for when the review was submitted and responded to. It helps track customer satisfaction and review management on the e-commerce platform.',
+        },
         columns: [
           {
-            name: 'AnswerTimestamp',
-            properties: {
-              description: 'The date when the answer was provided.',
-            },
-          },
-          {
-            name: 'CreationTimestamp',
-            properties: {
-              description: 'The date when the review was created.',
-            },
-          },
-          {
-            name: 'Id',
-            properties: {
-              description: 'A unique identifier assigned to each review entry.',
-            },
-          },
-          {
-            name: 'OrderId',
+            name: 'order_id',
             properties: {
               description:
-                'The order id of the order which the review belongs to.',
+                'Unique identifier linking the review to the corresponding order.',
+              displayName: 'order_id',
             },
           },
           {
-            name: 'Score',
+            name: 'review_answer_timestamp',
             properties: {
-              description: 'The score associated with each review entry.',
+              description:
+                'Date and time when the review was responded to by the seller',
+              displayName: 'review_answer_timestamp',
+            },
+          },
+          {
+            name: 'review_comment_message',
+            properties: {
+              description:
+                'Detailed feedback or comments provided by the customer regarding the order.',
+              displayName: 'review_comment_message',
+            },
+          },
+          {
+            name: 'review_comment_title',
+            properties: {
+              description: "Summary or title of the customer's review",
+              displayName: 'review_comment_title',
+            },
+          },
+          {
+            name: 'review_creation_date',
+            properties: {
+              description:
+                'Date and time when the customer initially submitted the review.',
+              displayName: 'review_creation_date',
+            },
+          },
+          {
+            name: 'review_id',
+            properties: {
+              description: 'Unique identifier for the specific review entry.',
+              displayName: 'review_id',
+            },
+          },
+          {
+            name: 'review_score',
+            properties: {
+              description:
+                'Numeric rating given by the customer, typically ranging from 1 (worst) to 5 (best).',
+              displayName: 'review_score',
             },
           },
         ],
-        properties: {
-          description: 'A model containing information about review of orders.',
-        },
         schema: [
-          { columnName: 'Id', dataType: 'VARCHAR' },
-          { columnName: 'OrderId', dataType: 'VARCHAR' },
-          { columnName: 'Score', dataType: 'BIGINT' },
-          { columnName: 'CreationTimestamp', dataType: 'TIMESTAMP' },
-          { columnName: 'AnswerTimestamp', dataType: 'TIMESTAMP' },
+          { columnName: 'order_id', dataType: 'VARCHAR' },
+          { columnName: 'review_answer_timestamp', dataType: 'TIMESTAMP' },
+          { columnName: 'review_comment_message', dataType: 'VARCHAR' },
+          { columnName: 'review_comment_title', dataType: 'VARCHAR' },
+          { columnName: 'review_creation_date', dataType: 'TIMESTAMP' },
+          { columnName: 'review_id', dataType: 'VARCHAR' },
+          { columnName: 'review_score', dataType: 'BIGINT' },
+        ],
+      },
+      {
+        tableName: 'olist_geolocation_dataset',
+        primaryKey: '',
+        filePath:
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_geolocation_dataset.parquet',
+        properties: {
+          displayName: 'geolocation',
+          description:
+            'This table contains detailed information about Brazilian zip codes and their corresponding latitude and longitude coordinates. It can be used to plot maps, calculate distances between sellers and customers, and perform geographic analysis.',
+        },
+        columns: [
+          {
+            name: 'geolocation_city',
+            properties: {
+              displayName: 'geolocation_city',
+              description: 'The city name of the geolocation',
+            },
+          },
+          {
+            name: 'geolocation_lat',
+            properties: {
+              displayName: 'geolocation_lat',
+              description: 'The coordinations for the locations latitude',
+            },
+          },
+          {
+            name: 'geolocation_lng',
+            properties: {
+              displayName: 'geolocation_lng',
+              description: 'The coordinations for the locations longitude',
+            },
+          },
+          {
+            name: 'geolocation_state',
+            properties: {
+              displayName: 'geolocation_state',
+              description: 'The state of the geolocation',
+            },
+          },
+          {
+            name: 'geolocation_zip_code_prefix',
+            properties: {
+              displayName: 'geolocation_zip_code_prefix',
+              description: 'First 5 digits of zip code',
+            },
+          },
+        ],
+        schema: [
+          { columnName: 'geolocation_city', dataType: 'VARCHAR' },
+          { columnName: 'geolocation_lat', dataType: 'DOUBLE' },
+          { columnName: 'geolocation_lng', dataType: 'DOUBLE' },
+          { columnName: 'geolocation_state', dataType: 'VARCHAR' },
+          { columnName: 'geolocation_zip_code_prefix', dataType: 'VARCHAR' },
+        ],
+      },
+      {
+        tableName: 'olist_sellers_dataset',
+        primaryKey: '',
+        filePath:
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_sellers_dataset.parquet',
+        properties: {
+          displayName: 'sellers',
+          description:
+            'This table includes data about the sellers that fulfilled orders made. Use it to find the seller location and to identify which seller fulfilled each product.',
+        },
+        columns: [
+          {
+            name: 'seller_city',
+            properties: {
+              description: 'The Brazilian city where the seller is located',
+              displayName: 'seller_city',
+            },
+          },
+          {
+            name: 'seller_id',
+            properties: {
+              description: 'Unique identifier for the seller on the platform',
+              displayName: 'seller_id',
+            },
+          },
+          {
+            name: 'seller_state',
+            properties: {
+              description: 'The Brazilian state where the seller is located',
+              displayName: 'seller_state',
+            },
+          },
+          {
+            name: 'seller_zip_code_prefix',
+            properties: {
+              description: 'First 5 digits of seller zip code',
+              displayName: 'seller_zip_code_prefix',
+            },
+          },
+        ],
+        schema: [
+          { columnName: 'seller_city', dataType: 'VARCHAR' },
+          { columnName: 'seller_id', dataType: 'VARCHAR' },
+          { columnName: 'seller_state', dataType: 'VARCHAR' },
+          { columnName: 'seller_zip_code_prefix', dataType: 'VARCHAR' },
+        ],
+      },
+      {
+        tableName: 'product_category_name_translation',
+        primaryKey: 'product_category_name',
+        filePath:
+          'https://assets.getwren.ai/sample_data/brazilian-ecommerce/product_category_name_translation.parquet',
+        properties: {
+          displayName: 'product category name translation',
+          description:
+            'This table contains translations of product categories from Portuguese to English.',
+        },
+        columns: [
+          {
+            name: 'product_category_name',
+            properties: {
+              description:
+                'Original name of the product category in Portuguese.',
+              displayName: 'product_category_name',
+            },
+          },
+          {
+            name: 'product_category_name_english',
+            properties: {
+              description:
+                'Translated name of the product category in English.',
+              displayName: 'product_category_name_english',
+            },
+          },
+        ],
+        schema: [
+          { columnName: 'product_category_name', dataType: 'VARCHAR' },
+          { columnName: 'product_category_name_english', dataType: 'VARCHAR' },
         ],
       },
     ],
@@ -532,40 +796,78 @@ export const sampleDatasets: Record<string, SampleDataset> = {
       },
     ],
     relations: [
+      // orders
+      // orders -> customers
       {
-        fromModelName: 'customers',
-        fromColumnName: 'Id',
-        toModelName: 'orders',
-        toColumnName: 'CustomerId',
-        type: RelationType.ONE_TO_MANY,
-      },
-      {
-        fromModelName: 'orders',
-        fromColumnName: 'OrderId',
-        toModelName: 'order_items',
-        toColumnName: 'OrderId',
-        type: RelationType.ONE_TO_MANY,
-      },
-      {
-        fromModelName: 'products',
-        fromColumnName: 'Id',
-        toModelName: 'order_items',
-        toColumnName: 'ProductId',
-        type: RelationType.ONE_TO_MANY,
-      },
-      {
-        fromModelName: 'orders',
-        fromColumnName: 'OrderId',
-        toModelName: 'reviews',
-        toColumnName: 'OrderId',
-        type: RelationType.ONE_TO_MANY,
-      },
-      {
-        fromModelName: 'payments',
-        fromColumnName: 'OrderId',
-        toModelName: 'orders',
-        toColumnName: 'OrderId',
+        fromModelName: 'olist_orders_dataset',
+        fromColumnName: 'customer_id',
+        toModelName: 'olist_customers_dataset',
+        toColumnName: 'customer_id',
         type: RelationType.MANY_TO_ONE,
+      },
+      // orders -> items
+      {
+        fromModelName: 'olist_orders_dataset',
+        fromColumnName: 'order_id',
+        toModelName: 'olist_order_items_dataset',
+        toColumnName: 'order_id',
+        type: RelationType.ONE_TO_MANY,
+      },
+      // orders -> reviews
+      {
+        fromModelName: 'olist_orders_dataset',
+        fromColumnName: 'order_id',
+        toModelName: 'olist_order_reviews_dataset',
+        toColumnName: 'order_id',
+        type: RelationType.ONE_TO_MANY,
+      },
+      // orders -> payments
+      {
+        fromModelName: 'olist_orders_dataset',
+        fromColumnName: 'order_id',
+        toModelName: 'olist_order_payments_dataset',
+        toColumnName: 'order_id',
+        type: RelationType.ONE_TO_MANY,
+      },
+      // items -> products
+      {
+        fromModelName: 'olist_order_items_dataset',
+        fromColumnName: 'product_id',
+        toModelName: 'olist_products_dataset',
+        toColumnName: 'product_id',
+        type: RelationType.MANY_TO_ONE,
+      },
+      // items -> sellers
+      {
+        fromModelName: 'olist_order_items_dataset',
+        fromColumnName: 'seller_id',
+        toModelName: 'olist_sellers_dataset',
+        toColumnName: 'seller_id',
+        type: RelationType.MANY_TO_ONE,
+      },
+      // geolocation -> customers (zip code prefix)
+      {
+        fromModelName: 'olist_geolocation_dataset',
+        fromColumnName: 'geolocation_zip_code_prefix',
+        toModelName: 'olist_customers_dataset',
+        toColumnName: 'customer_zip_code_prefix',
+        type: RelationType.ONE_TO_MANY,
+      },
+      // geolocation -> sellers (zip code prefix)
+      {
+        fromModelName: 'olist_geolocation_dataset',
+        fromColumnName: 'geolocation_zip_code_prefix',
+        toModelName: 'olist_sellers_dataset',
+        toColumnName: 'seller_zip_code_prefix',
+        type: RelationType.ONE_TO_MANY,
+      },
+      // product category name translation -> products
+      {
+        fromModelName: 'product_category_name_translation',
+        fromColumnName: 'product_category_name',
+        toModelName: 'olist_products_dataset',
+        toColumnName: 'product_category_name',
+        type: RelationType.ONE_TO_MANY,
       },
     ],
   },
@@ -1216,11 +1518,19 @@ export const buildInitSql = (datasetName: SampleDatasetName) => {
       const schema = table.schema
         ?.map(({ columnName, dataType }) => `'${columnName}': '${dataType}'`)
         .join(', ');
-      if (!schema) {
-        return `CREATE TABLE ${table.tableName} AS FROM read_csv('${table.filePath}',header=true);`;
-      } else {
-        return `CREATE TABLE ${table.tableName} AS FROM read_csv('${table.filePath}',header=true, columns={${schema}});`;
-      }
+      const fileExtension = table.filePath.split('.').pop();
+      const createTableStatement = (fileType: string, schema?: string) => {
+        if (fileType !== 'csv' && fileType !== 'parquet') {
+          throw new Error(`Unsupported file type: ${fileType}`);
+        }
+        const baseStatement = `CREATE TABLE ${table.tableName} AS select * FROM read_${fileType}('${table.filePath}'`;
+        const schemaPart =
+          fileType === 'csv' && schema ? `, columns={${schema}}` : '';
+        const headerPart = fileType === 'csv' ? ',header=true' : '';
+        return `${baseStatement}${headerPart}${schemaPart});`;
+      };
+
+      return createTableStatement(fileExtension, schema);
     })
     .join('\n');
 };
