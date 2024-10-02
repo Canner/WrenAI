@@ -10,6 +10,7 @@ type Props = Omit<BaseTableProps, 'onChange'> & {
 const EditableCell = (props) => {
   const {
     className,
+    colSpan,
     title,
     editable,
     record,
@@ -29,7 +30,7 @@ const EditableCell = (props) => {
     children
   );
   return (
-    <td className={className} title={title}>
+    <td className={className} title={title} colSpan={colSpan}>
       {childNode}
     </td>
   );

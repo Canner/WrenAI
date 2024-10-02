@@ -17,7 +17,7 @@
   }
 
   .ant-table-expanded-row {
-    .ant-table-cell {
+    > .ant-table-cell {
       background-color: @gray-3;
     }
   }
@@ -35,6 +35,12 @@
       .ant-table-tbody > tr > td.ant-table-cell-row-hover {
         background: @gray-2;
       }
+    }
+  }
+
+  &--text-sm {
+    .ant-table {
+      font-size: @font-size-sm !important;
     }
   }
 }
