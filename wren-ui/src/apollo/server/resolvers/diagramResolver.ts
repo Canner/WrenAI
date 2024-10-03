@@ -162,7 +162,7 @@ export class DiagramResolver {
       nodeType: column.isCalculated
         ? NodeType.CALCULATED_FIELD
         : NodeType.FIELD,
-      type: this.convertColumnType(column.type),
+      type: column.type,
       displayName: column.displayName,
       referenceName: column.referenceName,
       description: properties?.description,
@@ -173,7 +173,7 @@ export class DiagramResolver {
             id: uuidv4(),
             nestedColumnId: nestedColumn.id,
             columnPath: nestedColumn.columnPath,
-            type: this.convertColumnType(nestedColumn.type),
+            type: nestedColumn.type,
             displayName: nestedColumn.displayName,
             referenceName: nestedColumn.referenceName,
             description: nestedColumn.properties?.description,
@@ -269,9 +269,5 @@ export class DiagramResolver {
       fields,
       description: properties?.description,
     };
-  }
-
-  private convertColumnType(type: string) {
-    return type.includes('STRUCT') ? 'RECORD' : type;
   }
 }
