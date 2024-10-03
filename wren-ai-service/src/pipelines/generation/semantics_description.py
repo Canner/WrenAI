@@ -143,10 +143,7 @@ Please provide a brief description for the model and each column based on the us
 
 
 class SemanticsDescription(BasicPipeline):
-    def __init__(
-        self,
-        llm_provider: LLMProvider,
-    ):
+    def __init__(self, llm_provider: LLMProvider, **_):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(system_prompt=system_prompt),

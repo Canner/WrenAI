@@ -8,6 +8,7 @@ from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
     followup_sql_generation,
+    semantics_description,
     sql_answer,
     sql_breakdown,
     sql_correction,
@@ -57,7 +58,14 @@ def create_service_container(
     query_cache: Optional[dict] = {},
 ) -> ServiceContainer:
     return ServiceContainer(
-        semantics_description=SemanticsDescription(pipelines={}, **query_cache),
+        semantics_description=SemanticsDescription(
+            pipelines={
+                "semantics_description": semantics_description.SemanticsDescription(
+                    **pipe_components["semantics_description"],
+                )
+            },
+            **query_cache,
+        ),
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
                 "indexing": indexing.Indexing(
