@@ -13,6 +13,55 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class RelationshipRecommendation:
+    """
+    RelationshipRecommendation Service
+
+    This service provides endpoints for generating and retrieving relationship recommendations
+    based on data models.
+
+    Endpoints:
+    1. POST /v1/relationship-recommendations
+        Generate new relationship recommendations.
+
+        Request body:
+        {
+            "mdl": "..."  # MDL (Model Definition Language) string
+        }
+
+        Response:
+        {
+            "id": "unique_id",  # Unique identifier for the generated recommendations
+            "status": "generating"  # Initial status
+        }
+
+    2. GET /v1/relationship-recommendations/{id}
+        Retrieve the status and result of relationship recommendations generation.
+
+        Path parameter:
+        - id: Unique identifier of the relationship recommendations resource.
+
+        Response:
+        {
+            "id": "unique_id",
+            "status": "finished",  # Can be "generating", "finished", or "failed"
+            "response": {  # Present only if status is "finished"
+                // Generated relationship recommendations
+            },
+            "error": {  # Present only if status is "failed"
+                "code": "OTHERS",
+                "message": "Error description"
+            }
+        }
+
+    Usage:
+    1. Call the POST endpoint to initiate relationship recommendations generation.
+    2. Use the returned ID to poll the GET endpoint until the status is "finished" or "failed".
+    3. Once finished, retrieve the generated recommendations from the "response" field.
+
+    Note: The generation process may take some time, so implement appropriate polling
+    intervals when checking the status.
+    """
+
     class Request(BaseModel):
         _id: str | None = None
         mdl: str | None = None
