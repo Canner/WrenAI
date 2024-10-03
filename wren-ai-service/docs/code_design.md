@@ -81,11 +81,13 @@ async def lifespan(app: FastAPI):
 ```
 
 - For startup logic, we initialize pipeline components, service containers(which include all services), service metadata(which is some metadata logged for traces inside [Langfuse, an open-source LLM engineering platform](https://langfuse.com/)) and Langfuse.
+- For initializing pipeline components, we are in the progress of supporting multiple LLMs, namely users can choose which LLM is responsible for each pipeline.
+    - You still need to have `.env.dev` locally, then you can prepare `config.yaml` and run `just start`.
 - For shutdown logic, we make sure all Langfuse events are transmitted successfully
 
 ### Globals
 
-- The entry point of wren-ai-service is located at [`wren-ai-service/src/globals.py`](../src/globals.py)
+- The file is located at [`wren-ai-service/src/globals.py`](../src/globals.py)
 - You can understand the details of service containers and service metadata here
     - service containers(Other services are not supported in UI yet)
         - SemanticsPreparationService: this is responsible for indexing [MDL](https://docs.getwren.ai/oss/engine/concept/what_is_mdl) to Qdarnt
@@ -96,11 +98,22 @@ async def lifespan(app: FastAPI):
 
 ### API endpoints
 
+- All business related API endpoints are located at [`wren-ai-service/src/web/v1/routers.py`](../src/web/v1/routers.py)
+- Since computation for each kind of API endpoint(ex. ask, etc.) takes several seconds, so we use FastAPI's `background_tasks`. For example, after the `ask` api is invoked, the response is immediately returned, then users need to conduct polling in order to get the latest task status; and once the status is `finished`, the result is returned correspondingly
+- Each kind of API endpoint corresponds to one kind of business related task, for example, AskService, AskDetailsService
+
 ### Services
+
+- All services are located at [`wren-ai-service/src/web/v1/services`](../src/web/v1/services)
 
 ### Pipelines
 
+- All pipelines are located at [`wren-ai-service/src/pipelines`](../src/pipelines)
+- Since all pipelines are actually RAG systems, so we classify the role of each pipeline as indexing, retrieval or generation
+- The abstract class is defined at [`wren-ai-service/src/core/pipeline.py`](../src/core/pipeline.py)
+
 ### Providers
 
-### Others
-
+- All providers are located at [`wren-ai-service/src/providers`](../src/providers)
+- The abstract classes for providers(LLM, embedding model and document store) are defined at [`wren-ai-service/src/core/provider.py`](../src/core/provider.py)
+- The abstract class for engine is defined at [`wren-ai-service/src/core/engine.py`](../src/core/engine.py)
