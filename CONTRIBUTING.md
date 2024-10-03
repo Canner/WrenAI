@@ -48,34 +48,35 @@ To contribute, please refer to [Wren Engine Contributing Guide](https://github.c
 
 ## :electric_plug: Creating a New Data Source Connector
 
-To create a new data source connector, you'll need to make changes in `Wren UI`(FE plus BE) and `Wren Engine`.
+To create a new data source connector, you will need to make changes to both the front-end and back-end of Wren UI, as well as the Wren Engine.
 
-Here is a brief overview of an data source connector:
+Below is a brief overview of a data source connector:
 
 <img src="./misc/data_source.png" width="400">
 
-UI is mainly responsible for storing database connection settings, providing an interface for users to fill in database connection settings, and submitting the database connection settings to the Engine so that the Engine can connect to the database.
+The UI is primarily responsible for storing database connection settings, providing an interface for users to input these settings, and submitting them to the Engine, which then connects to the database.
 
-UI will need to know the connection info it needs to store, which is decided by Engine. So the implementation sequence would be like:
+The UI needs to be aware of the connection information it must store, as determined by the Engine. Therefore, the implementation sequence would be as follows:
 
 
 - Engine:
-  - implement a new data source(you'll know what and how connection info you need to passed from UI)
-  - implement the metadata API for UI to use
+  - Implement the new data source (you’ll determine what connection information is needed and how it should be passed from the UI).
+  - Implement the metadata API for the UI to access.
 - UI:
-  - implement the BE 
-    - store the connection info safely
-    - provide the connection info to Engine
-  - implement the FE
-    - prepare the icon for the data source
-    - set up the form template for users to fill in the connection info
-    - update the data source list
+  - Back-End:
+    - Safely store the connection information.
+    - Provide the connection information to the Engine.
+  - Front-End:
+    - Prepare an icon for the data source.
+    - Set up the form template for users to input the connection information.
+    - Update the data source list.
 
 ### Wren Engine
 
 - To implement a new data source, please refer to [How to Add a New Data Source](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/how-to-add-data-source.md) .
-- After adding a new data source, you can continue to implement the metadata API for UI to use. 
-  Here are some prior PRs that added new data sources:
+- After adding a new data source, you can proceed with implementing the metadata API for the UI.
+
+  Here are some previous PRs that introduced new data sources:
     - [Add MSSQL data source](https://github.com/Canner/wren-engine/pull/631)
     - [Add MySQL data source](https://github.com/Canner/wren-engine/pull/618)
     - [Add ClickHouse data source](https://github.com/Canner/wren-engine/pull/648)
