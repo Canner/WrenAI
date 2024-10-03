@@ -2,16 +2,16 @@
 
 ## Table of Contents
 
-- [Purpose]()
-- [Environment Setup and Start wren-ai-service Locally]()
+- [Purpose](#purpose)
+- [Environment Setup and Start wren-ai-service Locally](#environment-setup-and-start-wren-ai-service-locally)
 - Codebase Introduction
-    - [Entrypoint]()
-    - [Globals]()
-    - [API endpoints]()
-    - [Services]()
-    - [Pipelines]()
-    - [Providers]()
-    - Others
+    - [Entrypoint](#entrypoint)
+    - [Globals](#globals)
+    - [API endpoints](#api-endpoints)
+    - [Services](#services)
+    - [Pipelines](#pipelines)
+    - [Providers](#providers)
+    - [Others](#others)
 
 ## Purpose
 
