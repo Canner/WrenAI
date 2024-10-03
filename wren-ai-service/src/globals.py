@@ -57,6 +57,7 @@ def create_service_container(
     query_cache: Optional[dict] = {},
 ) -> ServiceContainer:
     return ServiceContainer(
+        semantics_description=SemanticsDescription(pipelines={}, **query_cache),
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
                 "indexing": indexing.Indexing(

@@ -1,20 +1,11 @@
 import logging
-import uuid
-from dataclasses import asdict
 from typing import Dict, Literal, Optional
 
 from cachetools import TTLCache
-from fastapi import APIRouter, BackgroundTasks, Depends
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.globals import (
-    ServiceContainer,
-    ServiceMetadata,
-    get_service_container,
-    get_service_metadata,
-)
 from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
@@ -76,7 +67,7 @@ class SemanticsDescription:
         _id: str | None = None
         selected_models: list[str] = []
         user_prompt: str = ""
-        mdl: str
+        mdl: str | None = None
 
         @property
         def id(self) -> str:
@@ -118,47 +109,17 @@ class SemanticsDescription:
         response = self._cache.get(request.id)
 
         if response is None:
-            # todo: error handling
-            logger.error(
+            message = (
                 f"Semantics Description Resource with ID '{request.id}' not found."
             )
-            return self.Response()
+            logger.exception(message)
+            return self.Response(
+                id=request.id,
+                status="failed",
+                error=self.Response.Error(code="OTHERS", message=message),
+            )
 
         return response
 
     def __setitem__(self, request: Request, value: Response):
         self._cache[request.id] = value
-
-
-router = APIRouter()
-
-
-@router.post("/v1/semantics-descriptions", response_model=SemanticsDescription.Response)
-async def generate(
-    request: SemanticsDescription.Request,
-    background_tasks: BackgroundTasks,
-    service_container: ServiceContainer = Depends(get_service_container),
-    service_metadata: ServiceMetadata = Depends(get_service_metadata),
-) -> SemanticsDescription.Response:
-    id = str(uuid.uuid4())
-    request.id = id
-    service = service_container.semantics_description
-
-    # todo: consider to simplify the code by using the service_container
-    service[request] = SemanticsDescription.Response(id=id)
-
-    background_tasks.add_task(
-        service.generate, request, service_metadata=asdict(service_metadata)
-    )
-    return service[request]
-
-
-@router.get(
-    "/v1/semantics-descriptions/{id}",
-    response_model=SemanticsDescription.Response,
-)
-async def get(
-    id: str,
-    service_container: ServiceContainer = Depends(get_service_container),
-) -> SemanticsDescription.Response:
-    return service_container.semantics_description[SemanticsDescription.Request(id=id)]

@@ -9,6 +9,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
+from src.web.v1.routers import semantics_description
 from src.web.v1.services.ask import (
     AskRequest,
     AskResponse,
@@ -57,6 +58,7 @@ from src.web.v1.services.sql_regeneration import (
 )
 
 router = APIRouter()
+router.include_router(semantics_description.router)
 
 
 @router.post("/semantics-preparations")
