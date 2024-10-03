@@ -48,10 +48,63 @@ To contribute, please refer to [Wren Engine Contributing Guide](https://github.c
 
 ## :electric_plug: Creating a New Data Source Connector
 
-To create a new data source connector, please follow the guide outlined below.
+To create a new data source connector, you'll need to make changes in `Wren UI`(FE plus BE) and `Wren Engine`.
+
+Here is a brief overview of an data source connector:
+
+<img src="./misc/data_source.png" width="400">
+
+UI is mainly responsible for storing database connection settings, providing an interface for users to fill in database connection settings, and submitting the database connection settings to the Engine so that the Engine can connect to the database.
+
+UI will need to know the connection info it needs to store, which is decided by Engine. So the implementation sequence would be like:
+
+
+- Engine:
+  - implement a new data source(you'll know what and how connection info you need to passed from UI)
+  - implement the metadata API for UI to use
+- UI:
+  - implement the BE 
+    - store the connection info safely
+    - provide the connection info to Engine
+  - implement the FE
+    - prepare the icon for the data source
+    - set up the form template for users to fill in the connection info
+    - update the data source list
+
+### Wren Engine
+
+- To implement a new data source, please refer to [How to Add a New Data Source](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/how-to-add-data-source.md) .
+- After adding a new data source, you can continue to implement the metadata API for UI to use. 
+  Here are some prior PRs that added new data sources:
+    - [Add MSSQL data source](https://github.com/Canner/wren-engine/pull/631)
+    - [Add MySQL data source](https://github.com/Canner/wren-engine/pull/618)
+    - [Add ClickHouse data source](https://github.com/Canner/wren-engine/pull/648)
 
 ### Wren UI Guide
 
+We'll describe what should be done in the UI for each new data source. 
+
+If you prefer to learn by example, you can refer to this Trino [issue](https://github.com/Canner/WrenAI/issues/492) and [PR](https://github.com/Canner/WrenAI/pull/535).
+
+
+#### BE
+1. Define the data source in `wren-ui/src/apollo/server/dataSource.ts`
+  - define the `toIbisConnectionInfo` and `sensitiveProps` methods
+
+2. Modify the ibis adaptor in `wren-ui/src/apollo/server/adaptors/ibisAdaptor.ts`
+  - define a ibis connection info type for the new data source
+  - set up the `dataSourceUrlMap` for the new data source
+
+3. Modify the repository in `wren-ui/src/apollo/server/repositories/projectRepository.ts`
+  - define the wren ui connection info type for the new data source 
+
+4. Update the graphql schema in `wren-ui/src/apollo/server/schema.ts` so that the new data source can be used in the UI 
+  - add the new data source to the `DataSource` enum
+
+5. Update the type definition in `wren-ui/src/apollo/server/types/dataSource.ts`
+  - add the new data source to the `DataSourceName` enum
+
+#### FE
 1. Prepare the data source's logo:
    - Image size should be `40 x 40` px
    - Preferably use SVG format
@@ -78,8 +131,3 @@ To create a new data source connector, please follow the guide outlined below.
    - Ensure the new data source appears in the UI
    - Verify that the form works correctly
    - Test the connection to the new data source
-
-For a quick example of creating a data source connector, refer to [this issue](https://github.com/Canner/WrenAI/issues/492).
-
-### Wren Engine
-Please see [How to Add a New Data Source](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/how-to-add-data-source.md) for more information.
