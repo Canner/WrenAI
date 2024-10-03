@@ -17,9 +17,7 @@
 
 ## Environment Setup and Start wren-ai-service Locally
 
-If you haven't setup the environment or don't know how to run wren-ai-service locally, please refer to the documents here first.
-- [Environment Setup](../README.md#environment-setup)
-- [Start the service for development](../README.md##start-the-service-for-development)
+If you haven't setup the environment or don't know how to run wren-ai-service locally, please refer to the [document](../README.md#setup-for-local-development) here first.
 
 ## Codebase Introduction
 
