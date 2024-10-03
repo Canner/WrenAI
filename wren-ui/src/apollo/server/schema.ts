@@ -250,6 +250,16 @@ export const typeDefs = gql`
     columns: [UpdateViewColumnMetadataInput!]
   }
 
+  type NestedFieldInfo {
+    id: Int!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    columnPath: [String!]!
+    type: String!
+    properties: JSON!
+  }
+
   type FieldInfo {
     id: Int!
     displayName: String!
@@ -260,6 +270,7 @@ export const typeDefs = gql`
     notNull: Boolean!
     expression: String
     properties: JSON
+    nestedColumns: [NestedFieldInfo!]
   }
 
   type ModelInfo {
@@ -277,6 +288,16 @@ export const typeDefs = gql`
     properties: JSON
   }
 
+  type DetailedNestedColumn {
+    id: Int!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    columnPath: [String!]!
+    type: String
+    properties: JSON
+  }
+
   type DetailedColumn {
     displayName: String!
     referenceName: String!
@@ -285,6 +306,7 @@ export const typeDefs = gql`
     isCalculated: Boolean!
     notNull: Boolean!
     properties: JSON!
+    nestedColumns: [DetailedNestedColumn!]
   }
 
   type DetailedRelation {

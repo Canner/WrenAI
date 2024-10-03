@@ -236,14 +236,23 @@ export class ModelResolver {
     const modelIds = models.map((m) => m.id);
     const modelColumnList =
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+    const modelNestedColumnList =
+      await ctx.modelNestedColumnRepository.findNestedColumnsByModelIds(
+        modelIds,
+      );
     const result = [];
     for (const model of models) {
       const modelFields = modelColumnList
         .filter((c) => c.modelId === model.id)
-        .map((c) => {
-          c.properties = JSON.parse(c.properties);
-          return c;
-        });
+        .map((c) => ({
+          ...c,
+          properties: JSON.parse(c.properties),
+          nestedColumns: c.type.includes('STRUCT')
+            ? modelNestedColumnList.filter(
+                (nc) => nc.columnPath[0] === c.sourceColumnName,
+              )
+            : undefined,
+        }));
       const fields = modelFields.filter((c) => !c.isCalculated);
       const calculatedFields = modelFields.filter((c) => c.isCalculated);
       result.push({
@@ -264,17 +273,28 @@ export class ModelResolver {
     if (!model) {
       throw new Error('Model not found');
     }
-    let modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
+
+    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
       model.id,
     ]);
-    modelColumns = modelColumns.map((c) => {
-      c.properties = JSON.parse(c.properties);
-      return c;
+    const modelNestedColumns = await ctx.modelNestedColumnRepository.findAllBy({
+      modelId: model.id,
     });
-    let relations = await ctx.relationRepository.findRelationsBy({
-      columnIds: modelColumns.map((c) => c.id),
-    });
-    relations = relations.map((r) => ({
+
+    const columns = modelColumns.map((c) => ({
+      ...c,
+      properties: JSON.parse(c.properties),
+      nestedColumns: c.type.includes('STRUCT')
+        ? modelNestedColumns.filter(
+            (nc) => nc.columnPath[0] === c.sourceColumnName,
+          )
+        : undefined,
+    }));
+    const relations = (
+      await ctx.relationRepository.findRelationsBy({
+        columnIds: modelColumns.map((c) => c.id),
+      })
+    ).map((r) => ({
       ...r,
       type: r.joinType,
       properties: r.properties ? JSON.parse(r.properties) : {},
@@ -282,8 +302,8 @@ export class ModelResolver {
 
     return {
       ...model,
-      fields: modelColumns.filter((c) => !c.isCalculated),
-      calculatedFields: modelColumns.filter((c) => c.isCalculated),
+      fields: columns.filter((c) => !c.isCalculated),
+      calculatedFields: columns.filter((c) => c.isCalculated),
       relations,
       properties: {
         ...JSON.parse(model.properties),
