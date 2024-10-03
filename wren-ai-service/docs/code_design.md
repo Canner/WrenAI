@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
 
 ### Globals
 
-- The entry point of wren-ai-service is located at [`wren-ai-service/src/__main__.py`](../src/__main__.py)
+- The entry point of wren-ai-service is located at [`wren-ai-service/src/globals.py`](../src/globals.py)
 - You can understand the details of service containers and service metadata here
     - service containers(Other services are not supported in UI yet)
         - SemanticsPreparationService: this is responsible for indexing [MDL](https://docs.getwren.ai/oss/engine/concept/what_is_mdl) to Qdarnt
