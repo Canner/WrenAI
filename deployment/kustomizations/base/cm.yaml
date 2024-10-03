@@ -13,10 +13,10 @@ data:
   WREN_UI_ENDPOINT: http://wren-ui-svc:3000
 
   #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
-  WREN_PRODUCT_VERSION: "0.8.0"
-  WREN_ENGINE_VERSION: "0.9.3"
-  WREN_AI_SERVICE_VERSION: "0.8.11"
-  WREN_UI_VERSION: "0.11.1"
+  WREN_PRODUCT_VERSION: "0.8.1-rc.1"
+  WREN_ENGINE_VERSION: "0.10.1"
+  WREN_AI_SERVICE_VERSION: "0.8.18"
+  WREN_UI_VERSION: "0.12.0"
 
   # LLM and Embedder Configurations
   LLM_PROVIDER: "openai_llm"
@@ -50,7 +50,7 @@ data:
   WREN_ENGINE_DATA_PATH: "/app/data"
 
   ### if DB_TYPE = "postgres" you must provide PG_URL string in the *Secret* manifest file (deployment/kustomizations/examples/secret-wren_example.yaml) to connect to postgres
-  
+
   #DEBUG, INFO
   LOGGING_LEVEL: INFO
 
