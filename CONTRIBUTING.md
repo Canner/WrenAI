@@ -15,10 +15,16 @@
 
 Please review our [Code of Conduct](https://github.com/Canner/WrenAI/blob/main/CODE_OF_CONDUCT.md). It is in effect at all times. We expect it to be honored by everyone who contributes to this project. Acting like an asshole will not be tolerated.
 
-## :mag: Overview
 
-- including architecture diagram
-- including responsibilities of different services
+## :rocket: Get Started
+1. Visit [How Wren AI works?](https://docs.getwren.ai/oss/overview/how_wrenai_works) to understand the architecture of Wren AI
+1. After you understand the architecture of Wren AI, understand the scope of the services you want to contribute to.
+  Check each service's section under [Contribution Guide of Different Services](#love_letter-contribution-guide-of-different-services) to learn how to contribute to each service.
+    1. If you are dealing with UI-related tasks, such as adding a dark mode, you only need to contribute to the [Wren UI Service](#wren-ui-service).
+    2. If you are dealing with LLM-related tasks, such as enhancing the prompts used in the LLM pipelines, you only need to contribute to the [Wren AI Service](#wren-ai-service).
+    3. If you are working on data-source-related tasks, such as fixing a bug in SQL server connector, you will need to contribute to the [Wren Engine Service](#wren-engine-service).
+1. If you are not sure which service to contribute to, please reach out to us in [Discord](https://discord.gg/canner) or [GitHub Issues](https://github.com/Canner/WrenAI/issues).
+1. It's possible that you need to contribute to multiple services. For example, if you are adding a new data source, you will need to contribute to the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service). Follow [Guide for Contributing to Multiple Services](#guide-for-contributing-to-multiple-services) to learn how to contribute to multiple services.
 
 ## :love_letter: Contribution Guide of Different Services
 
@@ -40,11 +46,32 @@ Wren Engine is the backbone of the Wren AI project. The semantic engine for LLMs
 
 To contribute, please refer to [Wren Engine Contributing Guide](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/CONTRIBUTING.md)
 
-### Other Services
+## Guide for Contributing to Multiple Services
+We rely on docker-compose to start all services. If you are contributing to multiple services, you could just comment out the services you'd like to start from source code and change the `env` variables to point to the services you started by yourself.
 
-- directions on how to modify docker-compose file
-- ask users to check readme of services to start services
-- let users know should be aware of env related to endpoints, url need to point to service they started by themselves
+### Example: Contributing to the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service)
+If you are contributing to both the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service), you should comment out the `wren-engine` service in the `docker/docker-compose-dev.yml` file (note that the UI service is already excluded from `docker/docker-compose-dev.yml`). Then, adjust the environment variables in your `.env` file to point to the services you have started manually. This will ensure that your local development environment correctly interfaces with the services you are working on.
+
+1. Prepare your `.env` file: In the `WrenAI/docker` folder, use the `.env.example` file as a template. Copy this file to create a `.env.local` file.
+    ```sh
+    # assuming the current directory is wren-ui
+    cd ../docker
+    cp .env.example .env.local
+    ```
+1. Modify your `.env.local` file: Fill in the `LLM_OPENAI_API_KEY` and `EMBEDDER_OPENAI_API_KEY` with your OpenAI API keys before starting.
+1. Start the UI and engine services from the source code.
+1. Update the `env` variables in the `.env.local` file to point to the services you started manually.
+1. Start the other services using docker-compose:
+    ```sh
+    # current directory is WrenAI/docker
+    docker-compose -f docker-compose-dev.yaml --env-file .env.example up
+
+    # you can add the -d flag to run the services in the background
+    docker-compose -f docker-compose-dev.yaml --env-file .env.example up -d
+    # to stop the services, use
+    docker-compose -f docker-compose-dev.yaml --env-file .env.example down
+    ```
+1. Happy coding!
 
 ## :electric_plug: Creating a New Data Source Connector
 
@@ -132,3 +159,4 @@ If you prefer to learn by example, you can refer to this Trino [issue](https://g
    - Ensure the new data source appears in the UI
    - Verify that the form works correctly
    - Test the connection to the new data source
+
