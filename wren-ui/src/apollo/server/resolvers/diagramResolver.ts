@@ -56,6 +56,7 @@ export class DiagramResolver {
       project,
       models,
       columns: modelColumns,
+      nestedColumns: modelNestedColumns,
       relations: modelRelations,
       views,
       relatedModels: models,

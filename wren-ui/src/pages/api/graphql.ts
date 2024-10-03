@@ -97,6 +97,7 @@ const bootstrapServer = async () => {
     projectRepository,
     modelRepository,
     modelColumnRepository,
+    modelNestedColumnRepository,
     relationRepository,
     viewRepository,
   });

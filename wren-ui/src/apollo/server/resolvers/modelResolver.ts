@@ -350,6 +350,7 @@ export class ModelResolver {
     const model = await ctx.modelRepository.createOne(modelValue);
 
     const columnValues = [];
+    const nestedColumnValues = [];
     fields.forEach((field) => {
       const compactColumn = dataSourceTable.columns.find(
         (c) => c.name === field,
@@ -368,8 +369,15 @@ export class ModelResolver {
           : null,
       } as Partial<ModelColumn>;
       columnValues.push(columnValue);
+      nestedColumnValues.push(
+        ...handleNestedColumns(compactColumn, {
+          modelId: model.id,
+          sourceColumnName: compactColumn.name,
+        }),
+      );
     });
     await ctx.modelColumnRepository.createMany(columnValues);
+    await ctx.modelNestedColumnRepository.createMany(nestedColumnValues.flat());
     logger.info(`Model created: ${JSON.stringify(model)}`);
 
     return model;
