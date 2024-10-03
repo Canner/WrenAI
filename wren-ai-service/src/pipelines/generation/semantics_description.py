@@ -100,8 +100,9 @@ Follow these steps:
 ### Output Format:
 
 ```
-[
-    {
+{
+    "models": [
+        {
         "name": "model",
         "columns": [
             {
@@ -124,10 +125,11 @@ Follow these steps:
             }
         ],
         "properties": {
-            "description": "<description for model>"
+                "description": "<description for model>"
+            }
         }
-    }
-]
+    ]
+}
 ```
 
 Make sure that the descriptions are concise, informative, and contextually appropriate based on the input provided by the user.
