@@ -52,7 +52,7 @@ kubectl get pods -n wren
 - `deployment/kustomizations/patches` folder is empty, feel free to add your own patches & overlays there.
 
 #### Wren-UI Database
-Starting with wren-ui version 0.6.0 by default the postgres database is used for wren-ui in this kuberenetes kustomization and will be installed in the same namespace as wren-ai.
+Starting with wren-ui version 0.6.0 by default the postgres database is used for wren-ui in this kubernetes kustomization and will be installed in the same namespace as wren-ai.
 - `postgres`: Database that will be installed in the same namespace as wren-ai. You *must* update `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
 
 Example: `PG_URL: "postgres://postgres:postgres@wrenai-postgresql:5432/admin_ui"`
