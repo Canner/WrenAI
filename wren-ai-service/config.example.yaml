@@ -105,3 +105,6 @@ pipes:
     engine: wren_ui
   - name: semantics_description
     llm: openai_llm.gpt-4o-mini
+  - name: relationship_recommendation
+    llm: openai_llm.gpt-4o-mini
+    engine: wren_ui
