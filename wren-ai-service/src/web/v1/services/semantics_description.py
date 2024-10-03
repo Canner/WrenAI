@@ -114,7 +114,7 @@ class SemanticsDescription:
         # todo: implement the service flow
         pass
 
-    def get(self, request: Request) -> Response:
+    def __getitem__(self, request: Request) -> Response:
         response = self._cache.get(request.id)
 
         if response is None:
@@ -125,6 +125,9 @@ class SemanticsDescription:
             return self.Response()
 
         return response
+
+    def __setitem__(self, request: Request, value: Response):
+        self._cache[request.id] = value
 
 
 router = APIRouter()
@@ -142,12 +145,12 @@ async def generate(
     service = service_container.semantics_description
 
     # todo: consider to simplify the code by using the service_container
-    service._cache[request.id] = SemanticsDescription.Response(id=id)
+    service[request] = SemanticsDescription.Response(id=id)
 
     background_tasks.add_task(
         service.generate, request, service_metadata=asdict(service_metadata)
     )
-    return service._cache[request.id]
+    return service[request]
 
 
 @router.get(
@@ -158,6 +161,4 @@ async def get(
     id: str,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> SemanticsDescription.Response:
-    return service_container.semantics_description.get(
-        SemanticsDescription.Request(id=id)
-    )
+    return service_container.semantics_description[SemanticsDescription.Request(id=id)]
