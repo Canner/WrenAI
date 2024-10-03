@@ -10,6 +10,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 
+from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 
@@ -46,8 +47,9 @@ def normalized(generate: dict) -> dict:
     return normalized
 
 
-def validate(normalized: dict) -> dict:
-    # todo: validate the relationships with SQL engine and return the validated relationships
+def validated(normalized: dict, engine: Engine) -> dict:
+    # todo: after wren-engine support function to validate the relationships, we will use that function to validate the relationships
+    # for now, we will just return the normalized relationships
     return normalized
 
 
@@ -107,11 +109,16 @@ class RelationshipRecommendation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        engine: Engine,
+        **_,
     ):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(system_prompt=system_prompt),
+            "engine": engine,
         }
+
+        self._final = "validated"
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -126,7 +133,7 @@ class RelationshipRecommendation(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            [""],
+            [self._final],
             output_file_path=f"{destination}/relationship_recommendation.dot",
             inputs={
                 "mdl": mdl,
@@ -143,7 +150,7 @@ class RelationshipRecommendation(BasicPipeline):
     ) -> dict:
         logger.info("Relationship Recommendation pipeline is running...")
         return await self._pipe.execute(
-            ["validate"],
+            [self._final],
             inputs={
                 "mdl": mdl,
                 **self._components,
@@ -152,6 +159,8 @@ class RelationshipRecommendation(BasicPipeline):
 
 
 if __name__ == "__main__":
+    from langfuse.decorators import langfuse_context
+
     from src.core.engine import EngineConfig
     from src.core.pipeline import async_validate
     from src.providers import init_providers
@@ -160,15 +169,15 @@ if __name__ == "__main__":
     load_env_vars()
     init_langfuse()
 
-    llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = RelationshipRecommendation(llm_provider=llm_provider)
+    llm_provider, _, _, engine = init_providers(EngineConfig())
+    pipeline = RelationshipRecommendation(llm_provider=llm_provider, engine=engine)
 
-    with open("src/pipelines/prototype/example.json", "r") as file:
+    with open("sample/college_3_bigquery_mdl.json", "r") as file:
         mdl = json.load(file)
 
     input = {"mdl": mdl}
 
-    # pipeline.visualize(**input)
+    pipeline.visualize(**input)
     async_validate(lambda: pipeline.run(**input))
 
-    # langfuse_context.flush()
+    langfuse_context.flush()
