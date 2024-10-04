@@ -19,7 +19,7 @@ def relationship_recommendation_service(mock_pipeline):
 @pytest.mark.asyncio
 async def test_recommend_success(relationship_recommendation_service, mock_pipeline):
     # Arrange
-    request = RelationshipRecommendation.Request(id="test_id", mdl='{"key": "value"}')
+    request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
     mock_pipeline.run.return_value = {"recommendations": {"test": "data"}}
 
     # Act
@@ -35,7 +35,7 @@ async def test_recommend_success(relationship_recommendation_service, mock_pipel
 @pytest.mark.asyncio
 async def test_recommend_invalid_mdl(relationship_recommendation_service):
     # Arrange
-    request = RelationshipRecommendation.Request(id="test_id", mdl="invalid_json")
+    request = RelationshipRecommendation.Input(id="test_id", mdl="invalid_json")
 
     # Act
     response = await relationship_recommendation_service.recommend(request)
@@ -50,7 +50,7 @@ async def test_recommend_invalid_mdl(relationship_recommendation_service):
 @pytest.mark.asyncio
 async def test_recommend_missing_mdl(relationship_recommendation_service):
     # Arrange
-    request = RelationshipRecommendation.Request(id="test_id")
+    request = RelationshipRecommendation.Input(id="test_id")
 
     # Act
     response = await relationship_recommendation_service.recommend(request)
@@ -67,7 +67,7 @@ async def test_recommend_pipeline_error(
     relationship_recommendation_service, mock_pipeline
 ):
     # Arrange
-    request = RelationshipRecommendation.Request(id="test_id", mdl='{"key": "value"}')
+    request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
     mock_pipeline.run.side_effect = Exception("Pipeline error")
 
     # Act
@@ -85,8 +85,8 @@ async def test_recommend_pipeline_error(
 
 def test_getitem_existing(relationship_recommendation_service):
     # Arrange
-    request = RelationshipRecommendation.Request(id="test_id")
-    expected_response = RelationshipRecommendation.Response(
+    request = RelationshipRecommendation.Input(id="test_id")
+    expected_response = RelationshipRecommendation.Resource(
         id="test_id", status="finished"
     )
     relationship_recommendation_service._cache["test_id"] = expected_response
@@ -100,7 +100,7 @@ def test_getitem_existing(relationship_recommendation_service):
 
 def test_getitem_not_found(relationship_recommendation_service):
     # Arrange
-    request = RelationshipRecommendation.Request(id="non_existent_id")
+    request = RelationshipRecommendation.Input(id="non_existent_id")
 
     # Act
     response = relationship_recommendation_service[request]
@@ -114,8 +114,8 @@ def test_getitem_not_found(relationship_recommendation_service):
 
 def test_setitem(relationship_recommendation_service):
     # Arrange
-    request = RelationshipRecommendation.Request(id="test_id")
-    value = RelationshipRecommendation.Response(id="test_id", status="finished")
+    request = RelationshipRecommendation.Input(id="test_id")
+    value = RelationshipRecommendation.Resource(id="test_id", status="finished")
 
     # Act
     relationship_recommendation_service[request] = value

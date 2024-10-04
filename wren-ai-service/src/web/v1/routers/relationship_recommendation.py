@@ -1,7 +1,9 @@
 import uuid
 from dataclasses import asdict
+from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
+from pydantic import BaseModel
 
 from src.globals import (
     ServiceContainer,
@@ -13,38 +15,105 @@ from src.web.v1.services.relationship_recommendation import RelationshipRecommen
 
 router = APIRouter()
 
+"""
+Relationship Recommendation Router
+
+This router handles endpoints related to generating and retrieving relationship recommendations.
+
+Endpoints:
+1. POST /relationship-recommendations
+   - Generates a new relationship recommendation
+   - Request body: PostRequest
+     {
+       "mdl": "{ ... }"                          # JSON string of the MDL (Model Definition Language)
+     }
+   - Response: PostResponse
+     {
+       "id": "unique-uuid"                       # Unique identifier for the generated recommendation
+     }
+
+2. GET /relationship-recommendations/{id}
+   - Retrieves the status and result of a relationship recommendation generation
+   - Path parameter: id (str)
+   - Response: GetResponse
+     {
+       "id": "unique-uuid",                      # Unique identifier of the recommendation
+       "status": "generating" | "finished" | "failed",
+       "response": {                             # Present only if status is "finished"
+         "recommendations": [...]                # List of relationship recommendations
+       },
+       "error": {                                # Present only if status is "failed"
+         "code": "OTHERS",
+         "message": "Error description"
+       }
+     }
+
+The relationship recommendation generation is an asynchronous process. The POST endpoint
+initiates the generation and returns immediately with an ID. The GET endpoint can
+then be used to check the status and retrieve the result when it's ready.
+
+Usage:
+1. Send a POST request to start the generation process.
+2. Use the returned ID to poll the GET endpoint until the status is "finished" or "failed".
+
+Note: The actual generation is performed in the background using FastAPI's BackgroundTasks.
+"""
+
+
+class PostRequest(BaseModel):
+    mdl: str
+
+
+class PostResponse(BaseModel):
+    id: str
+
 
 @router.post(
     "/relationship-recommendations",
-    response_model=RelationshipRecommendation.Response,
+    response_model=PostResponse,
 )
 async def recommend(
-    request: RelationshipRecommendation.Request,
+    request: PostRequest,
     background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
-) -> RelationshipRecommendation.Response:
+) -> PostResponse:
     id = str(uuid.uuid4())
-    request.id = id
     service = service_container.relationship_recommendation
 
-    service[request] = RelationshipRecommendation.Response(id=id)
+    service[id] = RelationshipRecommendation.Resource(id=id)
+    input = RelationshipRecommendation.Input(
+        id=id,
+        mdl=request.mdl,
+    )
 
     background_tasks.add_task(
-        service.recommend, request, service_metadata=asdict(service_metadata)
+        service.recommend, input, service_metadata=asdict(service_metadata)
     )
-    return service[request]
+
+    return PostResponse(id=id)
+
+
+class GetResponse(BaseModel):
+    id: str
+    status: Literal["generating", "finished", "failed"]
+    response: Optional[dict]
+    error: Optional[dict]
 
 
 @router.get(
     "/relationship-recommendations/{id}",
-    response_model=RelationshipRecommendation.Response,
+    response_model=GetResponse,
 )
 async def get(
     id: str,
     service_container: ServiceContainer = Depends(get_service_container),
-) -> RelationshipRecommendation.Response:
-    request = RelationshipRecommendation.Request()
-    request.id = id
+) -> GetResponse:
+    resource = service_container.relationship_recommendation[id]
 
-    return service_container.relationship_recommendation[request]
+    return GetResponse(
+        id=resource.id,
+        status=resource.status,
+        response=resource.response,
+        error=resource.error and resource.error.model_dump(),
+    )
