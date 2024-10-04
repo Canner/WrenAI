@@ -24,12 +24,38 @@ Endpoints:
 1. POST /semantics-descriptions
    - Generates a new semantic description
    - Request body: PostRequest
-   - Response: PostResponse with a unique ID
+     {
+       "selected_models": ["model1", "model2"],  # List of model names to describe
+       "user_prompt": "Describe these models",   # User's instruction for description
+       "mdl": "{ ... }"                          # JSON string of the MDL (Model Definition Language)
+     }
+   - Response: PostResponse
+     {
+       "id": "unique-uuid"                       # Unique identifier for the generated description
+     }
 
 2. GET /semantics-descriptions/{id}
    - Retrieves the status and result of a semantic description generation
    - Path parameter: id (str)
-   - Response: GetResponse with status, response, and error information
+   - Response: GetResponse
+     {
+       "id": "unique-uuid",                      # Unique identifier of the description
+       "status": "generating" | "finished" | "failed",
+       "response": {                             # Present only if status is "finished"
+         "model1": {
+           "columns": [...],
+           "properties": {...}
+         },
+         "model2": {
+           "columns": [...],
+           "properties": {...}
+         }
+       },
+       "error": {                                # Present only if status is "failed"
+         "code": "OTHERS",
+         "message": "Error description"
+       }
+     }
 
 The semantic description generation is an asynchronous process. The POST endpoint
 initiates the generation and returns immediately with an ID. The GET endpoint can
