@@ -19,7 +19,7 @@ def relationship_recommendation_service(mock_pipeline):
 @pytest.mark.asyncio
 async def test_recommend_success(relationship_recommendation_service, mock_pipeline):
     request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
-    mock_pipeline.run.return_value = {"recommendations": {"test": "data"}}
+    mock_pipeline.run.return_value = {"validated": {"test": "data"}}
 
     response = await relationship_recommendation_service.recommend(request)
 

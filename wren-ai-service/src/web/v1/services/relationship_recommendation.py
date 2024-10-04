@@ -61,7 +61,7 @@ class RelationshipRecommendation:
             resp = await self._pipelines["relationship_recommendation"].run(**input)
 
             self._cache[request.id] = self.Resource(
-                id=request.id, status="finished", response=resp.get("recommendations")
+                id=request.id, status="finished", response=resp.get("validated")
             )
         except orjson.JSONDecodeError as e:
             self._handle_exception(request, f"Failed to parse MDL: {str(e)}")
