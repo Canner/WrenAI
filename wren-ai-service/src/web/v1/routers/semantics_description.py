@@ -70,18 +70,9 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 
 
 class PostRequest(BaseModel):
-    _id: str | None = None
     selected_models: list[str]
     user_prompt: str
     mdl: str
-
-    @property
-    def id(self) -> str:
-        return self._id
-
-    @id.setter
-    def id(self, id: str):
-        self._id = id
 
 
 class PostResponse(BaseModel):
@@ -99,11 +90,10 @@ async def generate(
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> PostResponse:
     id = str(uuid.uuid4())
-    request.id = id
     service = service_container.semantics_description
 
     service[id] = SemanticsDescription.Resource(id=id)
-    SemanticsDescription.Input(
+    input = SemanticsDescription.Input(
         id=id,
         selected_models=request.selected_models,
         user_prompt=request.user_prompt,
@@ -111,7 +101,7 @@ async def generate(
     )
 
     background_tasks.add_task(
-        service.generate, request, service_metadata=asdict(service_metadata)
+        service.generate, input, service_metadata=asdict(service_metadata)
     )
     return PostResponse(id=id)
 

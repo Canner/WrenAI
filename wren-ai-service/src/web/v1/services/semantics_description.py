@@ -77,7 +77,7 @@ class SemanticsDescription:
 
         return self[request.id]
 
-    def __getitem__(self, id: int) -> Resource:
+    def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)
 
         if response is None:
@@ -91,5 +91,5 @@ class SemanticsDescription:
 
         return response
 
-    def __setitem__(self, id: int, value: Resource):
+    def __setitem__(self, id: str, value: Resource):
         self._cache[id] = value
