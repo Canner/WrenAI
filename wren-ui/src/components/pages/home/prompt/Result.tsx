@@ -226,13 +226,7 @@ const Finished = (props: Props) => {
   );
 };
 
-const getProcessStateComponent = (
-  state: PROCESS_STATE,
-  data: AskingTask['candidates'],
-) => {
-  if (state === PROCESS_STATE.FINISHED && data.length === 0) {
-    return NoResult;
-  }
+const getProcessStateComponent = (state: PROCESS_STATE) => {
   return (
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
@@ -246,12 +240,9 @@ const getProcessStateComponent = (
 };
 
 export default function PromptResult(props: Props) {
-  const { processState, data } = props;
+  const { processState } = props;
 
-  const StateComponent = getProcessStateComponent(
-    processState.currentState,
-    data,
-  );
+  const StateComponent = getProcessStateComponent(processState.currentState);
 
   if (StateComponent === null) return null;
 
