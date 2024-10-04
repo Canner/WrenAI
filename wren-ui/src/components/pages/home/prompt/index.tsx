@@ -131,7 +131,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
 
   const submitAsk = async () => {
     if (isProcessing || !question) return;
-
+    askProcessState.resetState();
     onSubmit && (await onSubmit(question));
   };
 
