@@ -598,7 +598,7 @@ def _replace_wren_engine_env_variables(engine_type: str, data: dict):
         with open(".env.dev", "w") as f:
             f.writelines(lines)
     else:
-        with open("config.yaml", "r+") as f:
+        with open("config.yaml", "r") as f:
             configs = list(yaml.safe_load_all(f))
 
             for config in configs:
@@ -610,8 +610,7 @@ def _replace_wren_engine_env_variables(engine_type: str, data: dict):
                         if "engine" in pipe:
                             config["pipes"][i]["engine"] = engine_type
 
-            f.seek(0)
-
+        with open("config.yaml", "w") as f:
             yaml.safe_dump_all(configs, f, default_flow_style=False)
 
 

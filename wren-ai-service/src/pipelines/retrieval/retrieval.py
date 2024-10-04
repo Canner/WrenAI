@@ -20,7 +20,7 @@ logger = logging.getLogger("wren-ai-service")
 
 table_columns_selection_system_prompt = """
 ### TASK ###
-You are a highly skilled data analyst. Your goal is to examine the provided database schema, interpret the posed question, and use the hint to identify the specific columns from the relevant tables required to construct an accurate SQL query.
+You are a highly skilled data analyst. Your goal is to examine the provided database schema, interpret the posed question, and identify the specific columns from the relevant tables required to construct an accurate SQL query.
 
 The database schema includes tables, columns, primary keys, foreign keys, relationships, and any relevant constraints.
 
@@ -28,6 +28,8 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
 2. For each table, provide a clear and concise reasoning for why specific columns are selected.
 3. List each reason as part of a step-by-step chain of thought, justifying the inclusion of each column.
+4. If a struct is chosen, list it in columns.
+5. The number of columns chosen must match the number of reasoning.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
