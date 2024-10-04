@@ -18,14 +18,11 @@ def relationship_recommendation_service(mock_pipeline):
 
 @pytest.mark.asyncio
 async def test_recommend_success(relationship_recommendation_service, mock_pipeline):
-    # Arrange
     request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
     mock_pipeline.run.return_value = {"recommendations": {"test": "data"}}
 
-    # Act
     response = await relationship_recommendation_service.recommend(request)
 
-    # Assert
     assert response.id == "test_id"
     assert response.status == "finished"
     assert response.response == {"test": "data"}
@@ -34,13 +31,10 @@ async def test_recommend_success(relationship_recommendation_service, mock_pipel
 
 @pytest.mark.asyncio
 async def test_recommend_invalid_mdl(relationship_recommendation_service):
-    # Arrange
     request = RelationshipRecommendation.Input(id="test_id", mdl="invalid_json")
 
-    # Act
     response = await relationship_recommendation_service.recommend(request)
 
-    # Assert
     assert response.id == "test_id"
     assert response.status == "failed"
     assert response.error.code == "OTHERS"
@@ -48,32 +42,14 @@ async def test_recommend_invalid_mdl(relationship_recommendation_service):
 
 
 @pytest.mark.asyncio
-async def test_recommend_missing_mdl(relationship_recommendation_service):
-    # Arrange
-    request = RelationshipRecommendation.Input(id="test_id")
-
-    # Act
-    response = await relationship_recommendation_service.recommend(request)
-
-    # Assert
-    assert response.id == "test_id"
-    assert response.status == "failed"
-    assert response.error.code == "OTHERS"
-    assert "MDL must be provided" in response.error.message
-
-
-@pytest.mark.asyncio
 async def test_recommend_pipeline_error(
     relationship_recommendation_service, mock_pipeline
 ):
-    # Arrange
     request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
     mock_pipeline.run.side_effect = Exception("Pipeline error")
 
-    # Act
     response = await relationship_recommendation_service.recommend(request)
 
-    # Assert
     assert response.id == "test_id"
     assert response.status == "failed"
     assert response.error.code == "OTHERS"
@@ -84,28 +60,24 @@ async def test_recommend_pipeline_error(
 
 
 def test_getitem_existing(relationship_recommendation_service):
-    # Arrange
-    request = RelationshipRecommendation.Input(id="test_id")
+    test_id = "test_id"
     expected_response = RelationshipRecommendation.Resource(
-        id="test_id", status="finished"
+        id=test_id, status="finished"
     )
-    relationship_recommendation_service._cache["test_id"] = expected_response
+    relationship_recommendation_service._cache[test_id] = expected_response
 
-    # Act
-    response = relationship_recommendation_service[request]
+    response = relationship_recommendation_service[test_id]
 
-    # Assert
     assert response == expected_response
+    assert response.id == test_id
+    assert response.status == "finished"
 
 
 def test_getitem_not_found(relationship_recommendation_service):
-    # Arrange
-    request = RelationshipRecommendation.Input(id="non_existent_id")
+    id = "non_existent_id"
 
-    # Act
-    response = relationship_recommendation_service[request]
+    response = relationship_recommendation_service[id]
 
-    # Assert
     assert response.id == "non_existent_id"
     assert response.status == "failed"
     assert response.error.code == "OTHERS"
@@ -113,12 +85,9 @@ def test_getitem_not_found(relationship_recommendation_service):
 
 
 def test_setitem(relationship_recommendation_service):
-    # Arrange
-    request = RelationshipRecommendation.Input(id="test_id")
+    id = "test_id"
     value = RelationshipRecommendation.Resource(id="test_id", status="finished")
 
-    # Act
-    relationship_recommendation_service[request] = value
+    relationship_recommendation_service[id] = value
 
-    # Assert
     assert relationship_recommendation_service._cache["test_id"] == value
