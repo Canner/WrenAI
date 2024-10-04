@@ -33,7 +33,6 @@ class SemanticsDescription:
        Response:
        {
            "id": "unique_id",  # Unique identifier for the generated description
-           "status": "generating"  # Initial status
        }
 
     2. GET /v1/semantics-descriptions/{id}
@@ -84,7 +83,7 @@ class SemanticsDescription:
             message: str
 
         id: str
-        status: Literal["generating", "finished", "failed"] = "generating"
+        status: Literal["generating", "finished", "failed"] = None
         response: Optional[dict] = None
         error: Optional[Error] = None
 
