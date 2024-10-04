@@ -25,12 +25,12 @@ def semantics_description_service():
 async def test_generate_semantics_description(
     semantics_description_service: SemanticsDescription,
 ):
-    request = SemanticsDescription.Request(
+    request = SemanticsDescription.Input(
+        id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
         mdl='{"models": [{"name": "model1", "columns": []}]}',
     )
-    request.id = "test_id"
 
     response = await semantics_description_service.generate(request)
 
@@ -49,12 +49,12 @@ async def test_generate_semantics_description(
 async def test_generate_semantics_description_with_invalid_mdl(
     semantics_description_service: SemanticsDescription,
 ):
-    request = SemanticsDescription.Request(
+    request = SemanticsDescription.Input(
+        id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
         mdl="invalid_json",
     )
-    request.id = "test_id"
 
     response = await semantics_description_service.generate(request)
 
@@ -69,12 +69,12 @@ async def test_generate_semantics_description_with_invalid_mdl(
 async def test_generate_semantics_description_with_exception(
     semantics_description_service: SemanticsDescription,
 ):
-    request = SemanticsDescription.Request(
+    request = SemanticsDescription.Input(
+        id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
         mdl='{"models": [{"name": "model1", "columns": []}]}',
     )
-    request.id = "test_id"
 
     semantics_description_service._pipelines[
         "semantics_description"
@@ -95,17 +95,16 @@ async def test_generate_semantics_description_with_exception(
 def test_get_semantics_description_result(
     semantics_description_service: SemanticsDescription,
 ):
-    request = SemanticsDescription.Request()
-    request.id = "test_id"
+    id = "test_id"
 
-    expected_response = SemanticsDescription.Response(
-        id="test_id",
+    expected_response = SemanticsDescription.Resource(
+        id=id,
         status="finished",
         response={"model1": {"description": "Test description"}},
     )
-    semantics_description_service._cache["test_id"] = expected_response
+    semantics_description_service._cache[id] = expected_response
 
-    result = semantics_description_service[request]
+    result = semantics_description_service[id]
 
     assert result == expected_response
 
@@ -113,10 +112,9 @@ def test_get_semantics_description_result(
 def test_get_non_existent_semantics_description_result(
     semantics_description_service: SemanticsDescription,
 ):
-    request = SemanticsDescription.Request()
-    request.id = "non_existent_id"
+    id = "non_existent_id"
 
-    result = semantics_description_service[request]
+    result = semantics_description_service[id]
 
     assert result.id == "non_existent_id"
     assert result.status == "failed"
