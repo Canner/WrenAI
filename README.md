@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
 
 ## 🎯 Our Vision & Mission
 
-Wren AI’s mission is to democratize data by bringing AI Agent with SQL ability to any data source.
+Wren AI’s mission is to democratize data by bringing AI agents with SQL ability to any data source.
 
 🤩 [About our Vision](https://www.getwren.ai/post/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents)
 
@@ -110,7 +110,7 @@ Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog)
 
 ## 🚀 Getting Started
 
-Using Wren AI is super simple, you can setup within 3 minutes, and start to interact with your own data!
+Using Wren AI is super simple, you can set it up within 3 minutes, and start to interact with your data!
 
 - Visit our [Installation Guide of Wren AI](http://docs.getwren.ai/oss/installation).
 - Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview) to learn more about how to use Wren AI.
@@ -126,6 +126,6 @@ Want to contribute to Wren AI? Check out our [Contribution Guidelines](https://g
 ## ⭐️ Community
 
 - Welcome to our [Discord server](https://discord.gg/5DvshJqG8Z) to give us feedback!
-- If there is any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
+- If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
 
 Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
