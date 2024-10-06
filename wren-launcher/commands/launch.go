@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
 	"time"
@@ -134,6 +135,18 @@ func Launch() {
 		}
 	}()
 
+	// Setup a channel to receive a signal
+    done := make(chan os.Signal, 1)
+	
+	signal.Notify(done, os.Interrupt)
+
+    // Fire off a goroutine to loop until that channel receives a signal.
+    // When a signal is received simply exit the program
+    go func() {
+        for _ = range done {
+            os.Exit(0)
+        }
+    }()
 	// print Wren AI header
 	fmt.Println(strings.Repeat("=", 55))
 	myFigure := figure.NewFigure("WrenAI", "", true)
