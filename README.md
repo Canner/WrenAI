@@ -4,7 +4,7 @@
   <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
-      <img src="./misc/wrenai_logo.png">
+      <img src="./misc/wrenai_logo_white.png" width="300px">
     </picture>
     <h1 align="center">Wren AI</h1>
   </a>
