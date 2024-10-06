@@ -9,6 +9,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -105,6 +106,26 @@ async def post_process(
 ## End of Pipeline
 
 
+class CorrectedSQLResult(BaseModel):
+    sql: str
+    summary: str
+
+
+class CorrectedResults(BaseModel):
+    results: list[CorrectedSQLResult]
+
+
+Correction_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "corrected_sql",
+            "schema": CorrectedResults.model_json_schema(),
+        },
+    }
+}
+
+
 class SQLCorrection(BasicPipeline):
     def __init__(
         self,
@@ -114,7 +135,8 @@ class SQLCorrection(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt
+                system_prompt=sql_generation_system_prompt,
+                generation_kwargs=Correction_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template

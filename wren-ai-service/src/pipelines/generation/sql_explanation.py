@@ -10,6 +10,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -17,7 +18,6 @@ from src.utils import async_timer, timer
 from src.web.v1.services.sql_explanation import StepWithAnalysisResult
 
 logger = logging.getLogger("wren-ai-service")
-
 
 sql_explanation_system_prompt = """
 ### INSTRUCTIONS ###
@@ -586,6 +586,38 @@ def post_process(
 ## End of Pipeline
 
 
+class AggregatedItemsResult(BaseModel):
+    groupByKeys: Optional[list[str]]
+    sortings: Optional[list[str]]
+    relation: Optional[list[str]]
+    filter: Optional[list[str]]
+
+
+class SelectedItem(BaseModel):
+    withFunctionCallOrMathematicalOperation: list[str]
+    withoutFunctionCallOrMathematicalOperation: list[str]
+
+
+class SelectedItemsResult(BaseModel):
+    selectItems: SelectedItem
+
+
+class ExplanationResults(BaseModel):
+    results: Optional[SelectedItemsResult]
+    results: Optional[AggregatedItemsResult]
+
+
+Explanation_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "explanation_results",
+            "schema": ExplanationResults.model_json_schema(),
+        },
+    }
+}
+
+
 class SQLExplanation(BasicPipeline):
     def __init__(
         self,
@@ -598,7 +630,8 @@ class SQLExplanation(BasicPipeline):
                 template=sql_explanation_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=sql_explanation_system_prompt
+                system_prompt=sql_explanation_system_prompt,
+                generation_kwargs=Explanation_MODEL_KWARGS,
             ),
             "post_processor": SQLExplanationGenerationPostProcessor(),
         }

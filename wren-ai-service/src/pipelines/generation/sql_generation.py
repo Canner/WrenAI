@@ -8,6 +8,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -140,6 +141,23 @@ async def post_process(
 
 
 ## End of Pipeline
+class SQLResult(BaseModel):
+    sql: str
+
+
+class GenerationResults(BaseModel):
+    results: list[SQLResult]
+
+
+Generation_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_results",
+            "schema": GenerationResults.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLGeneration(BasicPipeline):
@@ -151,7 +169,8 @@ class SQLGeneration(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt
+                system_prompt=sql_generation_system_prompt,
+                generation_kwargs=Generation_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_user_prompt_template

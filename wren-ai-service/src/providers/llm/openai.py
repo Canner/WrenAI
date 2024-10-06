@@ -90,7 +90,8 @@ class AsyncGenerator(OpenAIGenerator):
         logger.debug(f"Running AsyncOpenAI generator with prompt: {prompt}")
         message = ChatMessage.from_user(prompt)
         if self.system_prompt:
-            messages = [ChatMessage.from_system(self.system_prompt), message]
+            # updated from_system to from_assistent as the new openai api is not accepting system prompts anymore, only user and assistant.
+            messages = [ChatMessage.from_assistant(self.system_prompt), message]
         else:
             messages = [message]
 
@@ -148,7 +149,7 @@ class OpenAILLMProvider(LLMProvider):
         api_key: str = os.getenv("LLM_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_OPENAI_API_BASE") or LLM_OPENAI_API_BASE,
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
-        kwargs: Dict[str, Any] = (
+        kwargs: set[Dict[str, Any]] = (
             orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
             if os.getenv("GENERATION_MODEL_KWARGS")
             else GENERATION_MODEL_KWARGS
@@ -173,6 +174,8 @@ class OpenAILLMProvider(LLMProvider):
     def get_generator(
         self,
         system_prompt: Optional[str] = None,
+        # it is expected to only path the response format only, others will be merged from the model parameters.
+        generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
         if self._api_base == LLM_OPENAI_API_BASE:
             logger.info(
@@ -188,6 +191,7 @@ class OpenAILLMProvider(LLMProvider):
             api_base_url=self._api_base,
             model=self._generation_model,
             system_prompt=system_prompt,
-            generation_kwargs=self._model_kwargs,
+            # merge model args with the shared args related to response_format
+            generation_kwargs={**generation_kwargs, **self._model_kwargs},
             timeout=self._timeout,
         )
