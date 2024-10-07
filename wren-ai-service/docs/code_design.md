@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
 
 ### API endpoints
 
-- All business related API endpoints are located at [`wren-ai-service/src/web/v1/routers.py`](../src/web/v1/routers.py)
+- All business related API endpoints are located at [`wren-ai-service/src/web/v1/routers`](../src/web/v1/routers)
 - Since computation for each kind of API endpoint(ex. ask, etc.) takes several seconds, so we use FastAPI's `background_tasks`. For example, after the `ask` api is invoked, the response is immediately returned, then users need to conduct polling in order to get the latest task status; and once the status is `finished`, the result is returned correspondingly
 - Each kind of API endpoint corresponds to one kind of business related task, for example, AskService, AskDetailsService
 
