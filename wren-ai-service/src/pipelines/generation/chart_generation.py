@@ -151,6 +151,7 @@ class ChartGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        **kwargs,
     ):
         self._components = {
             "prompt_builder": PromptBuilder(
