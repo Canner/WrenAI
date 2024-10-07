@@ -109,6 +109,29 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
     setForceRender(!forceRender);
   };
 
+  const triggerMouseDown = (event: React.MouseEvent | MouseEvent) => {
+    const mouseDownEvent = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: 0,
+    });
+    document.dispatchEvent(mouseDownEvent);
+  };
+
+  const isTargetInDropdown = (target: EventTarget | null) => {
+    const dropdowns = document.querySelectorAll('.ant-dropdown');
+    return Array.from(dropdowns).some((dropdown) =>
+      dropdown.contains(target as Node),
+    );
+  };
+
+  const dispatchMouseEvent = (event: React.MouseEvent | MouseEvent) => {
+    if (!event.isTrusted || isTargetInDropdown(event.target)) return;
+    triggerMouseDown(event);
+  };
+
   return (
     <>
       <DiagramContext.Provider value={{ onMoreClick, onNodeClick, onAddClick }}>
@@ -123,6 +146,7 @@ const ReactFlowDiagram = forwardRef(function ReactFlowDiagram(
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           maxZoom={1}
+          onPointerDown={(event) => dispatchMouseEvent(event)}
           proOptions={{ hideAttribution: true }}
         >
           <MiniMap style={minimapStyle} zoomable pannable />
