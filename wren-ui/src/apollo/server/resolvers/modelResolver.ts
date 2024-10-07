@@ -369,35 +369,38 @@ export class ModelResolver {
     } as Partial<Model>;
     const model = await ctx.modelRepository.createOne(modelValue);
 
-    const columnValues = [];
-    const nestedColumnValues = [];
-    fields.forEach((field) => {
-      const compactColumn = dataSourceTable.columns.find(
-        (c) => c.name === field,
-      );
-      const columnValue = {
-        modelId: model.id,
-        isCalculated: false,
-        displayName: compactColumn.name,
-        referenceName: transformInvalidColumnName(compactColumn.name),
-        sourceColumnName: compactColumn.name,
-        type: compactColumn.type || 'string',
-        notNull: compactColumn.notNull || false,
-        isPk: primaryKey === field,
-        properties: compactColumn.properties
-          ? JSON.stringify(compactColumn.properties)
-          : null,
-      } as Partial<ModelColumn>;
-      columnValues.push(columnValue);
-      nestedColumnValues.push(
-        ...handleNestedColumns(compactColumn, {
+    // create columns
+    const compactColumns = dataSourceTable.columns.filter((c) =>
+      fields.includes(c.name),
+    );
+    const columnValues = compactColumns.map(
+      (column) =>
+        ({
           modelId: model.id,
-          sourceColumnName: compactColumn.name,
-        }),
-      );
+          isCalculated: false,
+          displayName: column.name,
+          referenceName: transformInvalidColumnName(column.name),
+          sourceColumnName: column.name,
+          type: column.type || 'string',
+          notNull: column.notNull || false,
+          isPk: primaryKey === column.name,
+          properties: column.properties
+            ? JSON.stringify(column.properties)
+            : null,
+        }) as Partial<ModelColumn>,
+    );
+    const columns = await ctx.modelColumnRepository.createMany(columnValues);
+
+    // create nested columns
+    const nestedColumnValues = compactColumns.flatMap((compactColumn) => {
+      const column = columns.find((c) => c.sourceColumnName === column.name);
+      return handleNestedColumns(compactColumn, {
+        modelId: column.modelId,
+        columnId: column.id,
+        sourceColumnName: column.name,
+      });
     });
-    await ctx.modelColumnRepository.createMany(columnValues);
-    await ctx.modelNestedColumnRepository.createMany(nestedColumnValues.flat());
+    await ctx.modelNestedColumnRepository.createMany(nestedColumnValues);
     logger.info(`Model created: ${JSON.stringify(model)}`);
 
     return model;
@@ -456,18 +459,15 @@ export class ModelResolver {
 
     // delete columns
     if (toDeleteColumnIds.length) {
-      await ctx.modelNestedColumnRepository.deleteByParentColumnIds(
-        toDeleteColumnIds,
-      );
       await ctx.modelColumnRepository.deleteMany(toDeleteColumnIds);
     }
 
     // create columns
     if (toCreateColumns.length) {
-      const columns = sourceTableColumns.filter((sourceColumn) =>
+      const compactColumns = sourceTableColumns.filter((sourceColumn) =>
         toCreateColumns.includes(sourceColumn.name),
       );
-      const columnValues = columns.map((column) => {
+      const columnValues = compactColumns.map((column) => {
         const columnValue = {
           modelId: model.id,
           isCalculated: false,
@@ -480,30 +480,39 @@ export class ModelResolver {
         } as Partial<ModelColumn>;
         return columnValue;
       });
-      const nestedColumnValues = columns.flatMap((column) => {
-        return handleNestedColumns(column, {
-          modelId: model.id,
-          sourceColumnName: column.name,
+      const columns = await ctx.modelColumnRepository.createMany(columnValues);
+
+      // create nested columns
+      const nestedColumnValues = compactColumns.flatMap((compactColumn) => {
+        const column = columns.find(
+          (c) => c.sourceColumnName === compactColumn.name,
+        );
+        return handleNestedColumns(compactColumn, {
+          modelId: column.modelId,
+          columnId: column.id,
+          sourceColumnName: column.sourceColumnName,
         });
       });
-      await ctx.modelColumnRepository.createMany(columnValues);
       await ctx.modelNestedColumnRepository.createMany(nestedColumnValues);
     }
 
     // update columns
     if (toUpdateColumns.length) {
       for (const { id, sourceColumnName, type } of toUpdateColumns) {
-        await ctx.modelColumnRepository.updateOne(id, { type });
+        const column = await ctx.modelColumnRepository.updateOne(id, { type });
 
         // if the struct type is changed, need to re-create nested columns
         if (type.includes('STRUCT')) {
           const sourceColumn = sourceTableColumns.find(
             (sourceColumn) => sourceColumn.name === sourceColumnName,
           );
-          await ctx.modelNestedColumnRepository.deleteByParentColumnIds([id]);
+          await ctx.modelNestedColumnRepository.deleteAllBy({
+            columnId: column.id,
+          });
           await ctx.modelNestedColumnRepository.createMany(
             handleNestedColumns(sourceColumn, {
-              modelId: model.id,
+              modelId: column.modelId,
+              columnId: column.id,
               sourceColumnName: sourceColumnName,
             }),
           );

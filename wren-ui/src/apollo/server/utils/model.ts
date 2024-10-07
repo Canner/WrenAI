@@ -90,6 +90,7 @@ export function handleNestedColumns(
   column: CompactColumn,
   parent: {
     modelId: number;
+    columnId: number;
     sourceColumnName: string;
     columnPath?: string[];
   },
@@ -104,6 +105,7 @@ export function handleNestedColumns(
     const columnPath = [...parentColumnPath, name];
     const nestedColumnValue = {
       modelId: parent.modelId,
+      columnId: parent.columnId,
       columnPath,
       displayName: nestedColumn.name,
       sourceColumnName: nestedColumn.name,
@@ -115,6 +117,7 @@ export function handleNestedColumns(
     nestedColumnValues.push(
       ...handleNestedColumns(nestedColumn, {
         modelId: parent.modelId,
+        columnId: parent.columnId,
         sourceColumnName: nestedColumn.name,
         columnPath,
       }),

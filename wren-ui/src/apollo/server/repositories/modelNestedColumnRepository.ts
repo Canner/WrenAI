@@ -11,6 +11,7 @@ import {
 export interface ModelNestedColumn {
   id: number; // ID
   modelId: number; // Reference to model ID
+  columnId: number; // Reference to column ID
   columnPath: string[];
   displayName: string; // Nested column name displayed in UI
   referenceName: string; // The name used in the MDL structure and when querying the data
@@ -23,10 +24,6 @@ export interface IModelNestedColumnRepository
   extends IBasicRepository<ModelNestedColumn> {
   findNestedColumnsByModelIds(modelIds: number[]): Promise<ModelNestedColumn[]>;
   findNestedColumnsByIds(ids: number[]): Promise<ModelNestedColumn[]>;
-  findNestedColumnsByParentColumnIds(
-    columnIds: number[],
-  ): Promise<ModelNestedColumn[]>;
-  deleteByParentColumnIds(columnIds: number[]): Promise<void>;
 }
 
 export class ModelNestedColumnRepository
@@ -49,29 +46,6 @@ export class ModelNestedColumnRepository
       .select('*')
       .whereIn('id', ids);
     return result.map((r) => this.transformFromDBData(r));
-  };
-
-  public findNestedColumnsByParentColumnIds = async (columnIds: number[]) => {
-    const sourceColumns = await this.knex('model_column')
-      .select('source_column_name as sourceColumnName')
-      .whereIn('id', columnIds);
-    const matcherStrings = sourceColumns.map((c) => `"${c.sourceColumnName}"`);
-    const result = await this.knex(this.tableName)
-      .select('*')
-      .where(function () {
-        this.where('column_path', 'like', `%[${matcherStrings[0]}%`);
-        for (let i = 1; i < matcherStrings.length; i++) {
-          this.orWhere('column_path', 'like', `%[${matcherStrings[i]}%`);
-        }
-      });
-    return result.map((r) => this.transformFromDBData(r));
-  };
-
-  public deleteByParentColumnIds = async (columnIds: number[]) => {
-    const nestedColumns =
-      await this.findNestedColumnsByParentColumnIds(columnIds);
-    const nestedColumnIds = nestedColumns.map((nc) => nc.id);
-    await this.deleteMany(nestedColumnIds);
   };
 
   protected override transformToDBData = (data: any) => {

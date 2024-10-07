@@ -6,6 +6,7 @@ exports.up = function (knex) {
   return knex.schema.createTable('model_nested_column', (table) => {
     table.increments('id').comment('ID');
     table.integer('model_id').comment('Reference to model ID');
+    table.integer('column_id').comment('Reference to column ID');
     table
       .string('column_path')
       .comment(
@@ -30,7 +31,10 @@ exports.up = function (knex) {
       )
       .nullable();
 
-    table.foreign('model_id').references('model.id').onDelete('CASCADE');
+    table
+      .foreign('column_id')
+      .references('model_column.id')
+      .onDelete('CASCADE');
     table.timestamps(true, true);
   });
 };
