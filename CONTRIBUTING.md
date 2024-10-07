@@ -47,7 +47,7 @@ Wren Engine is the backbone of the Wren AI project. The semantic engine for LLMs
 To contribute, please refer to [Wren Engine Contributing Guide](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/CONTRIBUTING.md)
 
 ## Guide for Contributing to Multiple Services
-We rely on docker-compose to start all services. If you are contributing to multiple services, you could just comment out the services you'd like to start from source code and change the `env` variables to point to the services you started by yourself.
+We rely on docker-compose to start all services. If you are contributing to multiple services, you could just comment out the services you'd like to start from the source code and change the `env` variables to point to the services you started by yourself.
 
 ### Example: Contributing to the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service)
 If you are contributing to both the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service), you should comment out the `wren-engine` service in the `docker/docker-compose-dev.yml` file (note that the UI service is already excluded from `docker/docker-compose-dev.yml`). Then, adjust the environment variables in your `.env` file to point to the services you have started manually. This will ensure that your local development environment correctly interfaces with the services you are working on.
@@ -75,7 +75,7 @@ If you are contributing to both the [Wren UI Service](#wren-ui-service) and [Wre
 
 ## :electric_plug: Creating a New Data Source Connector
 
-To create a new data source connector, you will need to make changes to both the front-end and back-end of Wren UI, as well as the Wren Engine.
+To develop a new data source connector, you'll need to modify both the front-end and back-end of the Wren UI, in addition to the Wren Engine.
 
 Below is a brief overview of a data source connector:
 
@@ -83,7 +83,7 @@ Below is a brief overview of a data source connector:
 
 The UI is primarily responsible for storing database connection settings, providing an interface for users to input these settings, and submitting them to the Engine, which then connects to the database.
 
-The UI needs to be aware of the connection information it must store, as determined by the Engine. Therefore, the implementation sequence would be as follows:
+The UI must be aware of the connection details it needs to retain, as specified by the Engine. Therefore, the implementation sequence would be as follows:
 
 
 - Engine:
@@ -100,7 +100,7 @@ The UI needs to be aware of the connection information it must store, as determi
 
 ### Wren Engine
 
-- To implement a new data source, please refer to [How to Add a New Data Source](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/how-to-add-data-source.md) .
+- To implement a new data source, please refer to [How to Add a New Data Source](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/how-to-add-data-source.md).
 - After adding a new data source, you can proceed with implementing the metadata API for the UI.
 
   Here are some previous PRs that introduced new data sources:
@@ -120,7 +120,7 @@ If you prefer to learn by example, you can refer to this Trino [issue](https://g
   - define the `toIbisConnectionInfo` and `sensitiveProps` methods
 
 2. Modify the ibis adaptor in `wren-ui/src/apollo/server/adaptors/ibisAdaptor.ts`
-  - define a ibis connection info type for the new data source
+  - define an ibis connection info type for the new data source
   - set up the `dataSourceUrlMap` for the new data source
 
 3. Modify the repository in `wren-ui/src/apollo/server/repositories/projectRepository.ts`
@@ -153,7 +153,7 @@ If you prefer to learn by example, you can refer to this Trino [issue](https://g
 4. Update the data source list:
    - Add the new data source to the `DATA_SOURCES` enum in `wren-ui/src/utils/enum/dataSources.ts`
    - Update relevant files in `wren-ui/src/components/pages/setup/` to include the new data source
-   - Ensure `wren-ui/src/apollo/server/adaptors/ibisAdaptor.ts` handles the new data source
+   - Ensure `wren-ui/src/apollo/server/adaptors/ibisAdaptor.ts` handle the new data source
 
 5. Test the new connector:
    - Ensure the new data source appears in the UI
