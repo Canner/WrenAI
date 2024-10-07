@@ -9,6 +9,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
@@ -72,8 +73,36 @@ def normalize(generate: dict) -> dict:
 
 
 ## End of Pipeline
+class ModelProperties(BaseModel):
+    description: str
 
-system_prompt = """ 
+
+class ModelColumns(BaseModel):
+    name: str
+    properties: ModelProperties
+
+
+class SemanticModel(BaseModel):
+    name: str
+    columns: list[ModelColumns]
+    properties: ModelProperties
+
+
+class SemanticResult(BaseModel):
+    models: list[SemanticModel]
+
+
+Semantic_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "semantic_description",
+            "schema": SemanticResult.model_json_schema(),
+        },
+    }
+}
+
+system_prompt = """
 I have a data model represented in JSON format, with the following structure:
 
 ```
@@ -90,8 +119,8 @@ I have a data model represented in JSON format, with the following structure:
 ]
 ```
 
-Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself. 
-Each `description` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns. 
+Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
+Each `description` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns.
 Follow these steps:
 1. **For the `model`**: Prompt the user to provide a brief description of the model's overall purpose or its context. Insert this description in the `properties` field of the `model`.
 2. **For each `column`**: Ask the user to describe each column's role or significance. Each column's description should be added under its respective `properties` field in the format: `'description': 'user-provided text'`.
@@ -148,7 +177,9 @@ class SemanticsDescription(BasicPipeline):
     def __init__(self, llm_provider: LLMProvider, **_):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
-            "generator": llm_provider.get_generator(system_prompt=system_prompt),
+            "generator": llm_provider.get_generator(
+                system_prompt=system_prompt, generation_kwargs=Semantic_MODEL_KWARGS
+            ),
         }
         self._final = "normalize"
 

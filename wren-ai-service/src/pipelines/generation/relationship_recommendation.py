@@ -9,6 +9,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -54,8 +55,28 @@ def validated(normalized: dict, engine: Engine) -> dict:
 
 
 ## End of Pipeline
+class ModelRelationship(BaseModel):
+    name: str
+    models: list[str]
+    joinType: str
+    condition: str
+    reason: str
 
-system_prompt = """ 
+
+class RelationshipResult(BaseModel):
+    relationships: list[ModelRelationship]
+
+
+Relationship_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "semantic_description",
+            "schema": RelationshipResult.model_json_schema(),
+        },
+    }
+}
+system_prompt = """
 You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them. For each relationship, provide the following details:
 
 - **name**: A descriptive name for the relationship.
@@ -67,7 +88,7 @@ Output all relationships in the following JSON structure:
 
 ```json
 {
-    "relationships": [ 
+    "relationships": [
         {
             "name": "<name for the relationship>",
             "models": [
@@ -100,7 +121,7 @@ Here is my data model's relationship specification:
 {{models}}
 
 
-**Please review these models and provide recommendations of relationship to optimize them.** 
+**Please review these models and provide recommendations of relationship to optimize them.**
 Consider best practices in database design, potential normalization opportunities, indexing strategies, and any additional relationships that might enhance data integrity and query performance.
 """
 
@@ -114,7 +135,9 @@ class RelationshipRecommendation(BasicPipeline):
     ):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
-            "generator": llm_provider.get_generator(system_prompt=system_prompt),
+            "generator": llm_provider.get_generator(
+                system_prompt=system_prompt, generation_kwargs=Relationship_MODEL_KWARGS
+            ),
             "engine": engine,
         }
 
