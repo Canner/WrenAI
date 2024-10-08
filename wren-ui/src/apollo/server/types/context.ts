@@ -3,6 +3,7 @@ import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import { IConfig } from '../config';
 import {
   IModelColumnRepository,
+  IModelNestedColumnRepository,
   IModelRepository,
   IProjectRepository,
   IRelationRepository,
@@ -41,6 +42,7 @@ export interface IContext {
   projectRepository: IProjectRepository;
   modelRepository: IModelRepository;
   modelColumnRepository: IModelColumnRepository;
+  modelNestedColumnRepository: IModelNestedColumnRepository;
   relationRepository: IRelationRepository;
   viewRepository: IViewRepository;
   deployRepository: IDeployLogRepository;

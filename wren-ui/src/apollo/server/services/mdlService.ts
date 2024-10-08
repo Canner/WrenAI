@@ -1,5 +1,6 @@
 import { MDLBuilder } from '../mdl/mdlBuilder';
 import {
+  IModelNestedColumnRepository,
   IModelColumnRepository,
   IModelRepository,
   IProjectRepository,
@@ -20,6 +21,7 @@ export class MDLService implements IMDLService {
   private projectRepository: IProjectRepository;
   private modelRepository: IModelRepository;
   private modelColumnRepository: IModelColumnRepository;
+  private modelNestedColumnRepository: IModelNestedColumnRepository;
   private relationRepository: IRelationRepository;
   private viewRepository: IViewRepository;
 
@@ -27,18 +29,21 @@ export class MDLService implements IMDLService {
     projectRepository,
     modelRepository,
     modelColumnRepository,
+    modelNestedColumnRepository,
     relationRepository,
     viewRepository,
   }: {
     projectRepository: IProjectRepository;
     modelRepository: IModelRepository;
     modelColumnRepository: IModelColumnRepository;
+    modelNestedColumnRepository: IModelNestedColumnRepository;
     relationRepository: IRelationRepository;
     viewRepository: IViewRepository;
   }) {
     this.projectRepository = projectRepository;
     this.modelRepository = modelRepository;
     this.modelColumnRepository = modelColumnRepository;
+    this.modelNestedColumnRepository = modelNestedColumnRepository;
     this.relationRepository = relationRepository;
     this.viewRepository = viewRepository;
   }
@@ -50,6 +55,10 @@ export class MDLService implements IMDLService {
     const modelIds = models.map((m) => m.id);
     const columns =
       await this.modelColumnRepository.findColumnsByModelIds(modelIds);
+    const modelNestedColumns =
+      await this.modelNestedColumnRepository.findNestedColumnsByModelIds(
+        modelIds,
+      );
     const relations = await this.relationRepository.findRelationInfoBy({
       projectId,
     });
@@ -61,6 +70,7 @@ export class MDLService implements IMDLService {
       project,
       models,
       columns,
+      nestedColumns: modelNestedColumns,
       relations,
       views,
       relatedModels,

@@ -7,12 +7,14 @@ export type ViewFieldFragment = { __typename?: 'DiagramViewField', id: string, d
 
 export type RelationFieldFragment = { __typename?: 'DiagramModelRelationField', id: string, relationId: number, type: Types.RelationType, nodeType: Types.NodeType, displayName: string, referenceName: string, fromModelId: number, fromModelName: string, fromModelDisplayName: string, fromColumnId: number, fromColumnName: string, fromColumnDisplayName: string, toModelId: number, toModelName: string, toModelDisplayName: string, toColumnId: number, toColumnName: string, toColumnDisplayName: string, description?: string | null };
 
-export type FieldFragment = { __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null };
+export type NestedFieldFragment = { __typename?: 'DiagramModelNestedField', id: string, nestedColumnId: number, columnPath: Array<string>, type: string, displayName: string, referenceName: string, description?: string | null };
+
+export type FieldFragment = { __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null, nestedFields?: Array<{ __typename?: 'DiagramModelNestedField', id: string, nestedColumnId: number, columnPath: Array<string>, type: string, displayName: string, referenceName: string, description?: string | null }> | null };
 
 export type DiagramQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type DiagramQuery = { __typename?: 'Query', diagram: { __typename?: 'Diagram', models: Array<{ __typename?: 'DiagramModel', id: string, modelId: number, nodeType: Types.NodeType, displayName: string, referenceName: string, sourceTableName: string, refSql?: string | null, cached: boolean, refreshTime?: string | null, description?: string | null, fields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null } | null>, calculatedFields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null } | null>, relationFields: Array<{ __typename?: 'DiagramModelRelationField', id: string, relationId: number, type: Types.RelationType, nodeType: Types.NodeType, displayName: string, referenceName: string, fromModelId: number, fromModelName: string, fromModelDisplayName: string, fromColumnId: number, fromColumnName: string, fromColumnDisplayName: string, toModelId: number, toModelName: string, toModelDisplayName: string, toColumnId: number, toColumnName: string, toColumnDisplayName: string, description?: string | null } | null> } | null>, views: Array<{ __typename?: 'DiagramView', id: string, viewId: number, nodeType: Types.NodeType, displayName: string, description?: string | null, referenceName: string, statement: string, fields: Array<{ __typename?: 'DiagramViewField', id: string, displayName: string, referenceName: string, type: string, nodeType: Types.NodeType, description?: string | null } | null> } | null> } };
+export type DiagramQuery = { __typename?: 'Query', diagram: { __typename?: 'Diagram', models: Array<{ __typename?: 'DiagramModel', id: string, modelId: number, nodeType: Types.NodeType, displayName: string, referenceName: string, sourceTableName: string, refSql?: string | null, cached: boolean, refreshTime?: string | null, description?: string | null, fields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null, nestedFields?: Array<{ __typename?: 'DiagramModelNestedField', id: string, nestedColumnId: number, columnPath: Array<string>, type: string, displayName: string, referenceName: string, description?: string | null }> | null } | null>, calculatedFields: Array<{ __typename?: 'DiagramModelField', id: string, columnId: number, type: string, nodeType: Types.NodeType, displayName: string, referenceName: string, description?: string | null, isPrimaryKey: boolean, expression?: string | null, aggregation?: string | null, lineage?: Array<number> | null, nestedFields?: Array<{ __typename?: 'DiagramModelNestedField', id: string, nestedColumnId: number, columnPath: Array<string>, type: string, displayName: string, referenceName: string, description?: string | null }> | null } | null>, relationFields: Array<{ __typename?: 'DiagramModelRelationField', id: string, relationId: number, type: Types.RelationType, nodeType: Types.NodeType, displayName: string, referenceName: string, fromModelId: number, fromModelName: string, fromModelDisplayName: string, fromColumnId: number, fromColumnName: string, fromColumnDisplayName: string, toModelId: number, toModelName: string, toModelDisplayName: string, toColumnId: number, toColumnName: string, toColumnDisplayName: string, description?: string | null } | null> } | null>, views: Array<{ __typename?: 'DiagramView', id: string, viewId: number, nodeType: Types.NodeType, displayName: string, description?: string | null, referenceName: string, statement: string, fields: Array<{ __typename?: 'DiagramViewField', id: string, displayName: string, referenceName: string, type: string, nodeType: Types.NodeType, description?: string | null } | null> } | null> } };
 
 export const ViewFieldFragmentDoc = gql`
     fragment ViewField on DiagramViewField {
@@ -47,6 +49,17 @@ export const RelationFieldFragmentDoc = gql`
   description
 }
     `;
+export const NestedFieldFragmentDoc = gql`
+    fragment NestedField on DiagramModelNestedField {
+  id
+  nestedColumnId
+  columnPath
+  type
+  displayName
+  referenceName
+  description
+}
+    `;
 export const FieldFragmentDoc = gql`
     fragment Field on DiagramModelField {
   id
@@ -60,8 +73,11 @@ export const FieldFragmentDoc = gql`
   expression
   aggregation
   lineage
+  nestedFields {
+    ...NestedField
+  }
 }
-    `;
+    ${NestedFieldFragmentDoc}`;
 export const DiagramDocument = gql`
     query Diagram {
   diagram {

@@ -8,6 +8,7 @@ import { makeEditableBaseTable } from '@/components/table/EditableBaseTable';
 import { COLUMN } from '@/components/table/BaseTable';
 import { EditableContext } from '@/components/EditableWrapper';
 import EditBasicMetadata from './EditBasicMetadata';
+import NestedFieldTable from '@/components/table/NestedFieldTable';
 
 export interface Props {
   formNamespace: string;
@@ -24,11 +25,13 @@ export interface Props {
 
 const FIELDS_NAME = {
   FIELDS: 'columns',
+  NESTED_FIELDS: 'nestedColumns',
   CALCULATED_FIELDS: 'calculatedFields',
   RELATIONSHIPS: 'relationships',
 };
 
 const FieldEditableTable = makeEditableBaseTable(FieldTable);
+const NestedFieldEditableTable = makeEditableBaseTable(NestedFieldTable as any);
 const CalculatedFieldEditableTable =
   makeEditableBaseTable(CalculatedFieldTable);
 const RelationshipEditableTable = makeEditableBaseTable(RelationTable);
@@ -62,10 +65,10 @@ export default function EditModelMetadata(props: Props) {
     // bind changeable metadata values
     onChange({
       [fieldsName]: value.map((item) => ({
-        id: item.relationId || item.columnId,
+        id: item.relationId || item.columnId || item.nestedColumnId,
         description: item.description,
-        // Only models & fields have alias
-        ...(fieldsName === FIELDS_NAME.FIELDS
+        // Only models & fields, nested fields have alias
+        ...([FIELDS_NAME.FIELDS, FIELDS_NAME.NESTED_FIELDS].includes(fieldsName)
           ? { displayName: item.displayName }
           : {}),
       })),
@@ -93,6 +96,24 @@ export default function EditModelMetadata(props: Props) {
             { ...COLUMN.DESCRIPTION, width: 280 },
           ]}
           onChange={handleMetadataChange(FIELDS_NAME.FIELDS)}
+          showExpandable
+          expandable={{
+            expandedRowRender: (record) => (
+              <div className="px-3 py-2">
+                <NestedFieldEditableTable
+                  dataSource={record.nestedFields as any}
+                  columns={[
+                    COLUMN.NAME,
+                    COLUMN.ALIAS,
+                    COLUMN.TYPE,
+                    COLUMN.DESCRIPTION,
+                  ]}
+                  onChange={handleMetadataChange(FIELDS_NAME.NESTED_FIELDS)}
+                />
+              </div>
+            ),
+            rowExpandable: (record) => !!record.nestedFields,
+          }}
         />
       </div>
 

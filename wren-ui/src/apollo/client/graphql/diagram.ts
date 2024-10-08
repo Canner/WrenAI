@@ -35,6 +35,18 @@ const RELATION_FIELD = gql`
   }
 `;
 
+const NESTED_FIELD = gql`
+  fragment NestedField on DiagramModelNestedField {
+    id
+    nestedColumnId
+    columnPath
+    type
+    displayName
+    referenceName
+    description
+  }
+`;
+
 const FIELD = gql`
   fragment Field on DiagramModelField {
     id
@@ -48,7 +60,11 @@ const FIELD = gql`
     expression
     aggregation
     lineage
+    nestedFields {
+      ...NestedField
+    }
   }
+  ${NESTED_FIELD}
 `;
 
 export const DIAGRAM = gql`
