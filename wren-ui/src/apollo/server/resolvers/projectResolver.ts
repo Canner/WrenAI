@@ -8,7 +8,13 @@ import {
   RelationType,
   SampleDatasetData,
 } from '../types';
-import { getLogger, replaceInvalidReferenceName, trim } from '@server/utils';
+import {
+  trim,
+  getLogger,
+  replaceInvalidReferenceName,
+  transformInvalidColumnName,
+  handleNestedColumns,
+} from '@server/utils';
 import {
   DUCKDB_CONNECTION_INFO,
   Model,
@@ -24,7 +30,6 @@ import {
 } from '@server/data';
 import { snakeCase } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
-import { replaceAllowableSyntax } from '../utils/regex';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
 import DataSourceSchemaDetector, {
   SchemaChangeType,
@@ -644,24 +649,22 @@ export class ProjectResolver {
     // delete existing models and columns
     await ctx.modelService.deleteAllModelsByProjectId(project.id);
 
-    // create model and columns
     const compactTables: CompactTable[] =
       await ctx.projectService.getProjectDataSourceTables(project);
 
-    const modelValues = tables.map((tableName) => {
-      const compactTable = compactTables.find(
-        (table) => table.name === tableName,
-      );
-      if (!compactTable) {
-        throw new Error(`Table not found in data source: ${tableName}`);
-      }
-      const properties = compactTable?.properties;
+    const selectedTables = compactTables.filter((table) =>
+      tables.includes(table.name),
+    );
+
+    // create models
+    const modelValues = selectedTables.map((table) => {
+      const properties = table?.properties;
       // compactTable contain schema and catalog, these information are for building tableReference in mdl
       const model = {
         projectId: project.id,
-        displayName: tableName, // use table name as displayName, referenceName and tableName
-        referenceName: replaceInvalidReferenceName(tableName),
-        sourceTableName: tableName,
+        displayName: table.name, // use table name as displayName, referenceName and tableName
+        referenceName: replaceInvalidReferenceName(table.name),
+        sourceTableName: table.name,
         cached: false,
         refreshTime: null,
         properties: properties ? JSON.stringify(properties) : null,
@@ -670,44 +673,45 @@ export class ProjectResolver {
     });
     const models = await ctx.modelRepository.createMany(modelValues);
 
-    const columnValues = [];
-    tables.forEach((tableName) => {
-      const compactTable = compactTables.find(
-        (table) => table.name === tableName,
+    // create columns
+    const columnValues = selectedTables.flatMap((table) => {
+      const compactColumns = table.columns;
+      const primaryKey = table.primaryKey;
+      const model = models.find((m) => m.sourceTableName === table.name);
+      return compactColumns.map(
+        (column) =>
+          ({
+            modelId: model.id,
+            isCalculated: false,
+            displayName: column.name,
+            referenceName: transformInvalidColumnName(column.name),
+            sourceColumnName: column.name,
+            type: column.type || 'string',
+            notNull: column.notNull || false,
+            isPk: primaryKey === column.name,
+            properties: column.properties
+              ? JSON.stringify(column.properties)
+              : null,
+          }) as Partial<ModelColumn>,
       );
-      const compactColumns = compactTable.columns;
-      const primaryKey = compactTable.primaryKey;
-      const model = models.find((m) => m.sourceTableName === compactTable.name);
-      compactColumns.forEach((column) => {
-        const columnValue = {
-          modelId: model.id,
-          isCalculated: false,
-          displayName: column.name,
-          referenceName: this.transformInvalidColumnName(column.name),
-          sourceColumnName: column.name,
-          type: column.type || 'string',
-          notNull: column.notNull || false,
-          isPk: primaryKey === column.name,
-          properties: column.properties
-            ? JSON.stringify(column.properties)
-            : null,
-        } as Partial<ModelColumn>;
-        columnValues.push(columnValue);
-      });
     });
     const columns = await ctx.modelColumnRepository.createMany(columnValues);
 
-    return { models, columns };
-  }
+    // create nested columns
+    const compactColumns = selectedTables.flatMap((table) => table.columns);
+    const nestedColumnValues = compactColumns.flatMap((compactColumn) => {
+      const column = columns.find(
+        (c) => c.sourceColumnName === compactColumn.name,
+      );
+      return handleNestedColumns(compactColumn, {
+        modelId: column.modelId,
+        columnId: column.id,
+        sourceColumnName: column.sourceColumnName,
+      });
+    });
+    await ctx.modelNestedColumnRepository.createMany(nestedColumnValues);
 
-  private transformInvalidColumnName(columnName: string) {
-    let referenceName = replaceAllowableSyntax(columnName);
-    // If the reference name does not start with a letter, add a prefix
-    const startWithLetterRegex = /^[A-Za-z]/;
-    if (!startWithLetterRegex.test(referenceName)) {
-      referenceName = `col_${referenceName}`;
-    }
-    return referenceName;
+    return { models, columns };
   }
 
   private concatInitSql(initSql: string, extensions: string[]) {

@@ -148,7 +148,10 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return await builder;
   }
 
-  public async deleteMany(ids: string[], queryOptions?: IQueryOptions) {
+  public async deleteMany(
+    ids: (string | number)[],
+    queryOptions?: IQueryOptions,
+  ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const builder = executer.from(this.tableName).whereIn('id', ids).delete();
     return await builder;

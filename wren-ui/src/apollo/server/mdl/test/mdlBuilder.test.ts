@@ -3,6 +3,7 @@ import {
   Model,
   Project,
   ModelColumn,
+  ModelNestedColumn,
   RelationInfo,
   View,
   BIG_QUERY_CONNECTION_INFO,
@@ -19,6 +20,7 @@ describe('MDLBuilder', () => {
         project: {},
         models: [],
         columns: [],
+        nestedColumns: [],
         relations: [],
         relatedModels: [],
         relatedColumns: [],
@@ -109,7 +111,35 @@ describe('MDLBuilder', () => {
           isPk: false,
           properties: null,
         },
+        {
+          id: 3,
+          modelId: 2,
+          isCalculated: false,
+          displayName: 'event_params',
+          referenceName: 'event_params',
+          sourceColumnName: 'event_params',
+          aggregation: null,
+          lineage: null,
+          customExpression: null,
+          type: 'ARRAY<STRUCT<key STRING>>',
+          notNull: true,
+          isPk: false,
+          properties: null,
+        },
       ] as ModelColumn[];
+      const nestedColumns = [
+        {
+          id: 1,
+          modelId: 2,
+          columnId: 3,
+          columnPath: ['event_params', 'key'],
+          displayName: 'event_params.key',
+          referenceName: 'event_params.key',
+          sourceColumnName: 'event_params.key',
+          type: 'STRING',
+          properties: { description: 'bar' },
+        },
+      ] as ModelNestedColumn[];
       const relations = [
         {
           id: 1,
@@ -133,6 +163,7 @@ describe('MDLBuilder', () => {
         project,
         models,
         columns,
+        nestedColumns,
         relations,
         relatedModels: [],
         relatedColumns: [],
@@ -197,6 +228,18 @@ describe('MDLBuilder', () => {
               properties: { displayName: 'orderKey' },
             },
             {
+              name: 'event_params',
+              expression: '',
+              type: 'ARRAY<STRUCT<key STRING>>',
+              isCalculated: false,
+              notNull: true,
+              properties: {
+                displayName: 'event_params',
+                'nestedColumn.event_params.key.displayName': 'event_params.key',
+                'nestedColumn.event_params.key.description': 'bar',
+              },
+            },
+            {
               name: 'order',
               type: 'order',
               isCalculated: false,
@@ -209,6 +252,7 @@ describe('MDLBuilder', () => {
           cached: false,
           refreshTime: null,
           properties: {
+            description: undefined,
             displayName: 'customer',
           },
         },
@@ -231,7 +275,7 @@ describe('MDLBuilder', () => {
     });
   });
 
-  it('should return a manifest with models & columns & relations & views.', () => {
+  it('should return a manifest with models & columns & nestedColumns & relations & views.', () => {
     // Arrange
     const project = {
       id: 1,
@@ -310,7 +354,35 @@ describe('MDLBuilder', () => {
         isPk: false,
         properties: null,
       },
+      {
+        id: 3,
+        modelId: 2,
+        isCalculated: false,
+        displayName: 'event_params',
+        referenceName: 'event_params',
+        sourceColumnName: 'event_params',
+        aggregation: null,
+        lineage: null,
+        customExpression: null,
+        type: 'ARRAY<STRUCT<key STRING>>',
+        notNull: true,
+        isPk: false,
+        properties: null,
+      },
     ] as ModelColumn[];
+    const nestedColumns = [
+      {
+        id: 1,
+        modelId: 2,
+        columnId: 3,
+        columnPath: ['event_params', 'key'],
+        displayName: 'event_params.key',
+        referenceName: 'event_params.key',
+        sourceColumnName: 'event_params.key',
+        type: 'STRING',
+        properties: { description: 'bar' },
+      },
+    ] as ModelNestedColumn[];
     const relations = [
       {
         id: 1,
@@ -349,6 +421,7 @@ describe('MDLBuilder', () => {
       models,
       views,
       columns,
+      nestedColumns,
       relations,
       relatedModels: [],
       relatedColumns: [],
@@ -410,6 +483,18 @@ describe('MDLBuilder', () => {
             properties: { displayName: 'orderKey' },
           },
           {
+            name: 'event_params',
+            expression: '',
+            type: 'ARRAY<STRUCT<key STRING>>',
+            isCalculated: false,
+            notNull: true,
+            properties: {
+              displayName: 'event_params',
+              'nestedColumn.event_params.key.displayName': 'event_params.key',
+              'nestedColumn.event_params.key.description': 'bar',
+            },
+          },
+          {
             name: 'order',
             type: 'order',
             isCalculated: false,
@@ -421,7 +506,7 @@ describe('MDLBuilder', () => {
         primaryKey: '',
         cached: false,
         refreshTime: null,
-        properties: { displayName: 'customer' },
+        properties: { description: undefined, displayName: 'customer' },
       },
     ] as ModelMDL[];
 

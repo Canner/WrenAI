@@ -208,6 +208,12 @@ export const typeDefs = gql`
   }
 
   # Metadata related
+  input UpdateNestedColumnMetadataInput {
+    id: Int!
+    displayName: String
+    description: String
+  }
+
   input UpdateColumnMetadataInput {
     id: Int!
     displayName: String
@@ -233,6 +239,7 @@ export const typeDefs = gql`
     displayName: String # Model display name, i,e, the alias of the model
     description: String # Model description
     columns: [UpdateColumnMetadataInput!] # Update column metadata
+    nestedColumns: [UpdateNestedColumnMetadataInput!] # Update nested column metadata
     calculatedFields: [UpdateCalculatedFieldMetadataInput!] # Update calculated field metadata
     relationships: [UpdateRelationshipMetadataInput!] # Update relationship metadata
   }
@@ -241,6 +248,16 @@ export const typeDefs = gql`
     displayName: String # View display name, i,e, the alias of the view
     description: String # View description
     columns: [UpdateViewColumnMetadataInput!]
+  }
+
+  type NestedFieldInfo {
+    id: Int!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    columnPath: [String!]!
+    type: String!
+    properties: JSON!
   }
 
   type FieldInfo {
@@ -253,6 +270,7 @@ export const typeDefs = gql`
     notNull: Boolean!
     expression: String
     properties: JSON
+    nestedColumns: [NestedFieldInfo!]
   }
 
   type ModelInfo {
@@ -270,6 +288,16 @@ export const typeDefs = gql`
     properties: JSON
   }
 
+  type DetailedNestedColumn {
+    id: Int!
+    displayName: String!
+    referenceName: String!
+    sourceColumnName: String!
+    columnPath: [String!]!
+    type: String
+    properties: JSON
+  }
+
   type DetailedColumn {
     displayName: String!
     referenceName: String!
@@ -278,6 +306,7 @@ export const typeDefs = gql`
     isCalculated: Boolean!
     notNull: Boolean!
     properties: JSON!
+    nestedColumns: [DetailedNestedColumn!]
   }
 
   type DetailedRelation {
@@ -388,6 +417,16 @@ export const typeDefs = gql`
     relationFields: [DiagramModelRelationField]!
   }
 
+  type DiagramModelNestedField {
+    id: String!
+    nestedColumnId: Int!
+    displayName: String!
+    referenceName: String!
+    columnPath: [String!]!
+    type: String!
+    description: String
+  }
+
   type DiagramModelField {
     id: String!
     columnId: Int!
@@ -400,6 +439,7 @@ export const typeDefs = gql`
     expression: String
     aggregation: String
     lineage: [Int!]
+    nestedFields: [DiagramModelNestedField!]
   }
 
   type DiagramModelRelationField {

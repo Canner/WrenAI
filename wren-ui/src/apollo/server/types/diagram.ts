@@ -49,6 +49,15 @@ export interface DiagramModel {
   relationFields: DiagramModelRelationField[];
 }
 
+export interface DiagramModelNestedField {
+  id: string;
+  nestedColumnId: number;
+  type: string;
+  displayName: string;
+  referenceName: string;
+  description: string;
+}
+
 export interface DiagramModelField {
   id: string;
   columnId: number;
@@ -61,6 +70,7 @@ export interface DiagramModelField {
   expression?: string;
   lineage?: string;
   aggregation?: string;
+  nestedFields?: DiagramModelNestedField[];
 }
 
 export interface DiagramModelRelationField {
