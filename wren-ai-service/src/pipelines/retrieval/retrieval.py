@@ -31,30 +31,39 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 3. List each reason as part of a step-by-step chain of thought, justifying the inclusion of each column.
 4. If a struct is chosen, list it in columns.
 5. The number of columns chosen must match the number of reasoning.
+6. Final chosen columns must be only column names, don't prefix it with table names.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
-    "results": {
-        "table_name1": {
-            "chain_of_thought_reasoning": [
-                "Reason 1 for selecting column1",
-                "Reason 2 for selecting column2",
-                ...
-            ],
-            "columns": ["column1", "column2", ...]
+    "results": [
+        {
+            "table_name":"tablename1",
+            "table_contents":
+            {
+              "chain_of_thought_reasoning": [
+                  "Reason 1 for selecting column1",
+                  "Reason 2 for selecting column2",
+                  ...
+              ],
+              "columns": ["column1", "column2", ...]
+            }
         },
-        "table_name2": {
-            "chain_of_thought_reasoning": [
-                "Reason 1 for selecting column1",
-                "Reason 2 for selecting column2",
-                ...
-            ],
-            "columns": ["column1", "column2", ...]
+        {
+            "table_name":"tablename2",
+            "table_contents":
+            {
+              "chain_of_thought_reasoning": [
+                  "Reason 1 for selecting column1",
+                  "Reason 2 for selecting column2",
+                  ...
+              ],
+              "columns": ["column1", "column2", ...]
+            }
         },
         ...
-    }
+    ]
 }
 
 ### ADDITIONAL NOTES ###
@@ -62,6 +71,8 @@ Please provide your response as a JSON object, structured as follows:
 - Provide a reasoning list (`chain_of_thought_reasoning`) for each table, explaining why each column is necessary.
 - Be logical, concise, and ensure the output strictly follows the required JSON format.
 - Use table name used in the "Create Table" statement, don't use "alias".
+- Match Column names with the definition in the "Create Table" statement.
+- Match Table names with the definition in the "Create Table" statement.
 
 Good luck!
 

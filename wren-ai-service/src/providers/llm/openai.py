@@ -149,7 +149,7 @@ class OpenAILLMProvider(LLMProvider):
         api_key: str = os.getenv("LLM_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_OPENAI_API_BASE") or LLM_OPENAI_API_BASE,
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
-        kwargs: set[Dict[str, Any]] = (
+        kwargs: Dict[str, Any] = (
             orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
             if os.getenv("GENERATION_MODEL_KWARGS")
             else GENERATION_MODEL_KWARGS
@@ -174,7 +174,7 @@ class OpenAILLMProvider(LLMProvider):
     def get_generator(
         self,
         system_prompt: Optional[str] = None,
-        # it is expected to only path the response format only, others will be merged from the model parameters.
+        # it is expected to only pass the response format only, others will be merged from the model parameters.
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
         if self._api_base == LLM_OPENAI_API_BASE:
