@@ -1,5 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Model, ModelColumn, RelationInfo, View } from '@server/repositories';
+import {
+  Model,
+  ModelColumn,
+  ModelNestedColumn,
+  RelationInfo,
+  View,
+} from '@server/repositories';
 import {
   Diagram,
   DiagramModel,
@@ -31,9 +37,14 @@ export class DiagramResolver {
     const models = await ctx.modelRepository.findAllBy({
       projectId: project.id,
     });
-    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds(
-      models.map((model) => model.id),
-    );
+
+    const modelIds = models.map((model) => model.id);
+    const modelColumns =
+      await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+    const modelNestedColumns =
+      await ctx.modelNestedColumnRepository.findNestedColumnsByModelIds(
+        modelIds,
+      );
     const modelRelations = await ctx.relationRepository.findRelationInfoBy({
       columnIds: modelColumns.map((column) => column.id),
     });
@@ -45,6 +56,7 @@ export class DiagramResolver {
       project,
       models,
       columns: modelColumns,
+      nestedColumns: modelNestedColumns,
       relations: modelRelations,
       views,
       relatedModels: models,
@@ -57,6 +69,7 @@ export class DiagramResolver {
     return this.buildDiagram(
       models,
       modelColumns,
+      modelNestedColumns,
       modelRelations,
       views,
       manifest,
@@ -66,6 +79,7 @@ export class DiagramResolver {
   private buildDiagram(
     models: Model[],
     modelColumns: ModelColumn[],
+    modelNestedColumns: ModelNestedColumn[],
     relations: RelationInfo[],
     views: View[],
     manifest: Manifest,
@@ -103,7 +117,12 @@ export class DiagramResolver {
             this.transformCalculatedField(column, modelMDL.columns),
           );
         } else {
-          transformedModel.fields.push(this.transformNormalField(column));
+          const nestedColumns = modelNestedColumns.filter(
+            (nestedColumn) => nestedColumn.columnId === column.id,
+          );
+          transformedModel.fields.push(
+            this.transformNormalField(column, nestedColumns),
+          );
         }
       });
       return transformedModel;
@@ -132,7 +151,10 @@ export class DiagramResolver {
     };
   }
 
-  private transformNormalField(column: ModelColumn): DiagramModelField {
+  private transformNormalField(
+    column: ModelColumn,
+    nestedColumns: ModelNestedColumn[],
+  ): DiagramModelField {
     const properties = JSON.parse(column.properties);
     return {
       id: uuidv4(),
@@ -146,6 +168,17 @@ export class DiagramResolver {
       description: properties?.description,
       isPrimaryKey: column.isPk,
       expression: column.aggregation,
+      nestedFields: nestedColumns.length
+        ? nestedColumns.map((nestedColumn) => ({
+            id: uuidv4(),
+            nestedColumnId: nestedColumn.id,
+            columnPath: nestedColumn.columnPath,
+            type: nestedColumn.type,
+            displayName: nestedColumn.displayName,
+            referenceName: nestedColumn.referenceName,
+            description: nestedColumn.properties?.description,
+          }))
+        : null,
     };
   }
 
@@ -172,6 +205,7 @@ export class DiagramResolver {
       expression: columnMDL.expression,
     };
   }
+
   private transformModelRelationField({
     relation,
     currentModel,

@@ -9,3 +9,7 @@ export const parseJson = (data) => {
     return false;
   }
 };
+
+export const convertColumnType = (parent: { type: string }) => {
+  return parent.type.includes('STRUCT') ? 'RECORD' : parent.type;
+};

@@ -118,7 +118,7 @@ const ExpandableRowIterator = makeIterable((props) => {
   return (
     <>
       {index > 0 && <div className="border-b border-gray-5" />}
-      <Row wrap={false} className="py-1 px-4">
+      <Row wrap={false} className="py-1 px-2">
         <Col span={6} className="gray-6">
           {title}
         </Col>
@@ -129,10 +129,11 @@ const ExpandableRowIterator = makeIterable((props) => {
 });
 
 export function ExpandableRows(props) {
-  const { data } = props;
+  const { data, extra } = props;
   return (
     <div className="pl-12 text-sm gray-8 -my-1">
       <ExpandableRowIterator data={data} />
+      {extra}
     </div>
   );
 }

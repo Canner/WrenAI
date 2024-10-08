@@ -34,7 +34,9 @@ export type ComposeDiagramField = (
   | DiagramViewField
 ) &
   Partial<Pick<DiagramModel, 'description'>> &
-  Partial<Pick<DiagramModelField, 'isPrimaryKey' | 'columnId'>> &
+  Partial<
+    Pick<DiagramModelField, 'isPrimaryKey' | 'columnId' | 'nestedFields'>
+  > &
   Partial<
     Pick<
       DiagramModelRelationField,

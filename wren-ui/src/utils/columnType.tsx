@@ -19,6 +19,7 @@ export const getColumnTypeIcon = (payload: { type: string }, attrs?: any) => {
       return <TickIcon {...attrs} />;
 
     case COLUMN_TYPE.JSON:
+    case COLUMN_TYPE.RECORD:
       return <JsonBracesIcon {...attrs} />;
 
     case COLUMN_TYPE.TEXT:
