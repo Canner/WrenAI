@@ -131,6 +131,7 @@ describe('MDLBuilder', () => {
         {
           id: 1,
           modelId: 2,
+          columnId: 3,
           columnPath: ['event_params', 'key'],
           displayName: 'event_params.key',
           referenceName: 'event_params.key',
@@ -373,6 +374,7 @@ describe('MDLBuilder', () => {
       {
         id: 1,
         modelId: 2,
+        columnId: 3,
         columnPath: ['event_params', 'key'],
         displayName: 'event_params.key',
         referenceName: 'event_params.key',

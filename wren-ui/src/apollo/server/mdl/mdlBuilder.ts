@@ -189,9 +189,7 @@ export class MDLBuilder implements IMDLBuilder {
         // put nested columns in properties
         if (column.type.includes('STRUCT')) {
           const nestedColumns = this.nestedColumns.filter(
-            (nestedColumn) =>
-              nestedColumn.modelId === column.modelId &&
-              nestedColumn.columnPath[0] === column.sourceColumnName,
+            (nestedColumn) => nestedColumn.columnId === column.id,
           );
           nestedColumns.forEach((column) => {
             if (column.displayName) {

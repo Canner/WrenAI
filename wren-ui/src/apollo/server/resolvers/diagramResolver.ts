@@ -118,8 +118,7 @@ export class DiagramResolver {
           );
         } else {
           const nestedColumns = modelNestedColumns.filter(
-            (nestedColumn) =>
-              nestedColumn.columnPath[0] === column.sourceColumnName,
+            (nestedColumn) => nestedColumn.columnId === column.id,
           );
           transformedModel.fields.push(
             this.transformNormalField(column, nestedColumns),

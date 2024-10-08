@@ -248,9 +248,7 @@ export class ModelResolver {
           ...c,
           properties: JSON.parse(c.properties),
           nestedColumns: c.type.includes('STRUCT')
-            ? modelNestedColumnList.filter(
-                (nc) => nc.columnPath[0] === c.sourceColumnName,
-              )
+            ? modelNestedColumnList.filter((nc) => nc.columnId === c.id)
             : undefined,
         }));
       const fields = modelFields.filter((c) => !c.isCalculated);
@@ -285,9 +283,7 @@ export class ModelResolver {
       ...c,
       properties: JSON.parse(c.properties),
       nestedColumns: c.type.includes('STRUCT')
-        ? modelNestedColumns.filter(
-            (nc) => nc.columnPath[0] === c.sourceColumnName,
-          )
+        ? modelNestedColumns.filter((nc) => nc.columnId === c.id)
         : undefined,
     }));
     const relations = (
