@@ -29,7 +29,7 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
 2. For each table, provide a clear and concise reasoning for why specific columns are selected.
 3. List each reason as part of a step-by-step chain of thought, justifying the inclusion of each column.
-4. If a struct is chosen, list it in columns.
+4. If a "." is included in columns, put the name before the first dot into chosen columns.
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 
