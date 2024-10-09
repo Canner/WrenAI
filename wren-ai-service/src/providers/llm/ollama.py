@@ -149,13 +149,15 @@ class OllamaLLMProvider(LLMProvider):
     def get_generator(
         self,
         system_prompt: Optional[str] = None,
+        # it is expected to only pass the response format only, others will be merged from the model parameters.
+        generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
         logger.info(
             f"Creating Ollama generator with model kwargs: {self._model_kwargs}"
         )
         return AsyncGenerator(
             model=self._generation_model,
-            url=f"{self._url}/api/generate",
+            url=f"{self._url}/apx i/generate",
             generation_kwargs=self._model_kwargs,
             system_prompt=system_prompt,
             timeout=self._timeout,

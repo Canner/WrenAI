@@ -39,19 +39,19 @@ Please provide your response as a JSON object, structured as follows:
 {
     "results": [
         {
-            "table_name":"tablename1",
-            "table_contents":
-            {
+            "table_selection_reason": "Reason for selecting tablename1",
+            "table_contents": {
               "chain_of_thought_reasoning": [
                   "Reason 1 for selecting column1",
                   "Reason 2 for selecting column2",
                   ...
               ],
               "columns": ["column1", "column2", ...]
-            }
+            },
+            "table_name":"tablename1",
         },
         {
-            "table_name":"tablename2",
+            "table_selection_reason": "Reason for selecting tablename2",
             "table_contents":
             {
               "chain_of_thought_reasoning": [
@@ -60,7 +60,8 @@ Please provide your response as a JSON object, structured as follows:
                   ...
               ],
               "columns": ["column1", "column2", ...]
-            }
+            },
+            "table_name":"tablename2"
         },
         ...
     ]
@@ -69,6 +70,7 @@ Please provide your response as a JSON object, structured as follows:
 ### ADDITIONAL NOTES ###
 - Each table key must list only the columns relevant to answering the question.
 - Provide a reasoning list (`chain_of_thought_reasoning`) for each table, explaining why each column is necessary.
+- Provide the reason of selecting the table in (`table_selection_reason`) for each table.
 - Be logical, concise, and ensure the output strictly follows the required JSON format.
 - Use table name used in the "Create Table" statement, don't use "alias".
 - Match Column names with the definition in the "Create Table" statement.
@@ -308,6 +310,7 @@ class MatchingTableContents(BaseModel):
 class MatchingTable(BaseModel):
     table_name: str
     table_contents: MatchingTableContents
+    table_selection_reason: str
 
 
 class RetrievalResults(BaseModel):
