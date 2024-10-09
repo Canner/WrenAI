@@ -78,7 +78,30 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 
 ## 🤔 Why Wren AI?
 
-We focus on providing an open, secure, and reliable SQL AI Agent for everyone.
+> Wren AI is built for data teams who need fast, reliable insights without the complexity of writing SQL queries. Here’s why Wren AI stands out:
+
+### 1.Effortless Data Discovery
+
+> Wren AI makes it easy to explore and analyze your data with an intuitive interface. By turning natural language questions into SQL, it allows team members of any skill level to obtain insights quickly, without coding experience.
+
+### 2.Enhanced Security
+
+> We prioritize data security at every level. Wren AI transmits only metadata—such as schema, documentation, and query parameters—during semantic search, keeping your sensitive data safe and secure.
+
+### 3.Open-Source Flexibility
+
+> With Wren AI, you have complete control. As an open-source tool, it can be deployed anywhere—on your infrastructure or using your preferred LLM API. This flexibility ensures that you’re not locked into any specific platform.
+
+### 4.Customizable AI Integration
+
+> Wren AI’s semantic engine architecture is designed to learn your unique business context. This customizability makes it easy to adapt to different data environments, helping you set up a logical representation of your data to enhance the accuracy of AI-generated insights.
+
+### 4.Future-Ready with Self-Learning Capabilities
+
+> We’re building a self-learning feedback loop to continuously improve SQL generation. This upcoming feature will use historical queries and user feedback to fine-tune and optimize query results, ensuring that Wren AI evolves alongside your business needs.
+
+#### By choosing Wren AI, you’re investing in a tool that enhances accessibility, scalability, and precision—making it easier than ever to leverage AI-driven insights for your data.
+
 
 ### 1. Turnkey Solution
 
