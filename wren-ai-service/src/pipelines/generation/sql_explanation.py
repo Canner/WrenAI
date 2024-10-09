@@ -607,7 +607,7 @@ class ExplanationResults(BaseModel):
     results: Optional[AggregatedItemsResult]
 
 
-Explanation_MODEL_KWARGS = {
+EXPLANATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -631,7 +631,7 @@ class SQLExplanation(BasicPipeline):
             ),
             "generator": llm_provider.get_generator(
                 system_prompt=sql_explanation_system_prompt,
-                generation_kwargs=Explanation_MODEL_KWARGS,
+                generation_kwargs=EXPLANATION_MODEL_KWARGS,
             ),
             "post_processor": SQLExplanationGenerationPostProcessor(),
         }

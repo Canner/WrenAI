@@ -183,7 +183,7 @@ class GenerationResults(BaseModel):
     results: list[SQLResult]
 
 
-GENERATION_MODEL_KWARGS = {
+FOLLOWUP_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -204,7 +204,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
-                generation_kwargs=GENERATION_MODEL_KWARGS,
+                generation_kwargs=FOLLOWUP_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=text_to_sql_with_followup_user_prompt_template

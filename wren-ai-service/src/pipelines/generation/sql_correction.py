@@ -115,7 +115,7 @@ class CorrectedResults(BaseModel):
     results: list[CorrectedSQLResult]
 
 
-Correction_MODEL_KWARGS = {
+CORRECTION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -136,7 +136,7 @@ class SQLCorrection(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
-                generation_kwargs=Correction_MODEL_KWARGS,
+                generation_kwargs=CORRECTION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template

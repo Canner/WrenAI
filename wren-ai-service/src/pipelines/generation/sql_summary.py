@@ -124,7 +124,7 @@ class SummaryResults(BaseModel):
     sql_summary_results: list[SummaryResult]
 
 
-Summary_MODEL_KWARGS = {
+SUMMARY_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -144,7 +144,7 @@ class SQLSummary(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_summary_system_prompt,
-                generation_kwargs=Summary_MODEL_KWARGS,
+                generation_kwargs=SUMMARY_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(template=sql_summary_user_prompt_template),
             "post_processor": SQLSummaryPostProcessor(),

@@ -164,7 +164,7 @@ class RegenerationResults(BaseModel):
     steps: list[StepResult]
 
 
-Regeneration_MODEL_KWARGS = {
+REGENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -189,7 +189,7 @@ class SQLRegeneration(BasicPipeline):
             ),
             "generator": llm_provider.get_generator(
                 system_prompt=sql_regeneration_system_prompt,
-                generation_kwargs=Regeneration_MODEL_KWARGS,
+                generation_kwargs=REGENERATION_MODEL_KWARGS,
             ),
             "post_processor": SQLBreakdownGenPostProcessor(engine=engine),
         }

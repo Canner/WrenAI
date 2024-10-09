@@ -165,7 +165,7 @@ class AnswerResults(BaseModel):
     answer: str
 
 
-Answer_MODEL_KWARGS = {
+ANSWER_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -190,7 +190,7 @@ class SQLAnswer(BasicPipeline):
             ),
             "generator": llm_provider.get_generator(
                 system_prompt=sql_to_answer_system_prompt,
-                generation_kwargs=Answer_MODEL_KWARGS,
+                generation_kwargs=ANSWER_MODEL_KWARGS,
             ),
             "post_processor": SQLAnswerGenerationPostProcessor(),
         }

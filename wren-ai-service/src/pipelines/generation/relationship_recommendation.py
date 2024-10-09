@@ -67,7 +67,7 @@ class RelationshipResult(BaseModel):
     relationships: list[ModelRelationship]
 
 
-Relationship_MODEL_KWARGS = {
+RELATIONSHIP_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -136,7 +136,7 @@ class RelationshipRecommendation(BasicPipeline):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(
-                system_prompt=system_prompt, generation_kwargs=Relationship_MODEL_KWARGS
+                system_prompt=system_prompt, generation_kwargs=RELATIONSHIP_MODEL_KWARGS
             ),
             "engine": engine,
         }
