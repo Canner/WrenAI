@@ -24,6 +24,14 @@ from src.web.v1.services.ask_details import (
     AskDetailsResultRequest,
     AskDetailsResultResponse,
 )
+from src.web.v1.services.chart import (
+    ChartRequest,
+    ChartResponse,
+    ChartResultRequest,
+    ChartResultResponse,
+    StopChartRequest,
+    StopChartResponse,
+)
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationResponse,
@@ -310,4 +318,49 @@ async def get_sql_regeneration_result(
 ) -> SQLRegenerationResultResponse:
     return service_container.sql_regeneration_service.get_sql_regeneration_result(
         SQLRegenerationResultRequest(query_id=query_id)
+    )
+
+
+@router.post("/charts")
+async def chart(
+    chart_request: ChartRequest,
+    background_tasks: BackgroundTasks,
+    service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
+) -> ChartResponse:
+    query_id = str(uuid.uuid4())
+    chart_request.query_id = query_id
+    service_container.chart_service._chart_results[query_id] = ChartResultResponse(
+        status="understanding"
+    )
+    background_tasks.add_task(
+        service_container.chart_service.chart,
+        chart_request,
+        service_metadata=asdict(service_metadata),
+    )
+    return ChartResponse(query_id=query_id)
+
+
+@router.patch("/charts/{query_id}")
+async def stop_chart(
+    query_id: str,
+    stop_chart_request: StopChartRequest,
+    background_tasks: BackgroundTasks,
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> StopChartResponse:
+    stop_chart_request.query_id = query_id
+    background_tasks.add_task(
+        service_container.chart_service.stop_chart,
+        stop_chart_request,
+    )
+    return StopChartResponse(query_id=query_id)
+
+
+@router.get("/charts/{query_id}/result")
+async def get_chart_result(
+    query_id: str,
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> ChartResultResponse:
+    return service_container.chart_service.get_chart_result(
+        ChartResultRequest(query_id=query_id)
     )
