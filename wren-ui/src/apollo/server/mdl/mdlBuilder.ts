@@ -193,14 +193,12 @@ export class MDLBuilder implements IMDLBuilder {
           );
           nestedColumns.forEach((column) => {
             if (column.displayName) {
-              properties[
-                `nestedColumn.${column.sourceColumnName}.displayName`
-              ] = column.displayName;
+              properties[`nestedDisplayName.${column.sourceColumnName}`] =
+                column.displayName;
             }
             if (column.properties?.description) {
-              properties[
-                `nestedColumn.${column.sourceColumnName}.description`
-              ] = column.properties.description;
+              properties[`nestedDescription.${column.sourceColumnName}`] =
+                column.properties.description;
             }
           }, {});
         }
