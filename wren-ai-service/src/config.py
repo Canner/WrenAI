@@ -8,6 +8,19 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class Settings(BaseSettings):
+    """
+    Configuration settings for the Wren AI service.
+
+    The settings are loaded in the following order of precedence:
+    1. Default values: Defined in the class attributes.
+    2. Environment variables: Overrides default values if set.
+    3. .env.dev file: Loads additional settings or overrides previous ones.
+    4. config.yaml file: Provides the highest priority configuration.
+
+    This hierarchical loading allows for flexible configuration management
+    across different environments and deployment scenarios.
+    """
+
     host: str = Field(default="127.0.0.1", env="WREN_AI_SERVICE_HOST")
     port: int = Field(default=5556, env="WREN_AI_SERVICE_PORT")
 
