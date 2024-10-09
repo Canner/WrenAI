@@ -61,10 +61,10 @@ export class MDLBuilder implements IMDLBuilder {
       relatedRelations,
     } = builderOptions;
     this.project = project;
-    this.models = models;
-    this.columns = columns;
+    this.models = models.sort((a, b) => a.id - b.id);
+    this.columns = columns.sort((a, b) => a.id - b.id);
     this.nestedColumns = nestedColumns;
-    this.relations = relations;
+    this.relations = relations.sort((a, b) => a.id - b.id);
     this.views = views || [];
     this.relatedModels = relatedModels;
     this.relatedColumns = relatedColumns;
