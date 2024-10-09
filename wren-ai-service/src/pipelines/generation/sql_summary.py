@@ -9,6 +9,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -115,6 +116,23 @@ def post_process(
 
 
 ## End of Pipeline
+class SummaryResult(BaseModel):
+    summary: str
+
+
+class SummaryResults(BaseModel):
+    sql_summary_results: list[SummaryResult]
+
+
+SUMMARY_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_summary",
+            "schema": SummaryResults.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLSummary(BasicPipeline):
@@ -125,7 +143,8 @@ class SQLSummary(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_summary_system_prompt
+                system_prompt=sql_summary_system_prompt,
+                generation_kwargs=SUMMARY_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(template=sql_summary_user_prompt_template),
             "post_processor": SQLSummaryPostProcessor(),
