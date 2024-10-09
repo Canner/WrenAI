@@ -1,3 +1,6 @@
+init-config:
+	@cp tools/config/config.example.yaml config.yaml
+
 up: prepare-wren-engine
 	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
 
