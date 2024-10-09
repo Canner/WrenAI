@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     query_cache_maxsize: int = Field(default=1000)
     query_cache_ttl: int = Field(default=3600)
 
+    # provider api keys
+    openai_api_key: str
+    azure_openai_api_key: str
+    qdrant_api_key: str
+
     # langfuse config
     langfuse_host: str = Field(default="https://cloud.langfuse.com")
     langfuse_enable: bool = Field(default=True)
