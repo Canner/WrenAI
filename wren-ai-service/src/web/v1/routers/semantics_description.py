@@ -43,12 +43,24 @@ Endpoints:
        "status": "generating" | "finished" | "failed",
        "response": {                             # Present only if status is "finished"
          "model1": {
-           "columns": [...],
-           "properties": {...}
+           "name": "model1",
+           "columns": [
+              {
+                 "name": "col1",
+                 "description": "Unique identifier for each record in the example model."
+              }
+           ],
+           "description": "This model is used for analysis purposes, capturing key attributes of records."
          },
          "model2": {
-           "columns": [...],
-           "properties": {...}
+           "name": "model2",
+           "columns": [
+              {
+                 "name": "col1",
+                 "description": "Unique identifier for each record in the example model."
+              }
+           ],
+           "description": "This model is used for analysis purposes, capturing key attributes of records."
          }
        },
        "error": {                                # Present only if status is "failed"
@@ -109,7 +121,7 @@ async def generate(
 class GetResponse(BaseModel):
     id: str
     status: Literal["generating", "finished", "failed"]
-    response: Optional[dict]
+    response: Optional[list[dict]]
     error: Optional[dict]
 
 
@@ -123,9 +135,28 @@ async def get(
 ) -> GetResponse:
     resource = service_container.semantics_description[id]
 
+    def _formatter(response: Optional[dict]) -> Optional[list[dict]]:
+        if response is None:
+            return None
+
+        return [
+            {
+                "name": model_name,
+                "columns": [
+                    {
+                        "name": column["name"],
+                        "description": column["properties"].get("description", ""),
+                    }
+                    for column in model_data["columns"]
+                ],
+                "description": model_data["properties"].get("description", ""),
+            }
+            for model_name, model_data in response.items()
+        ]
+
     return GetResponse(
         id=resource.id,
         status=resource.status,
-        response=resource.response,
+        response=resource.response and _formatter(resource.response),
         error=resource.error and resource.error.model_dump(),
     )
