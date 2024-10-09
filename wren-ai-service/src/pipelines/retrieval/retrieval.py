@@ -28,8 +28,7 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
 2. For each table, provide a clear and concise reasoning for why specific columns are selected.
 3. List each reason as part of a step-by-step chain of thought, justifying the inclusion of each column.
-4. If a struct is chosen, list it in columns.
-5. The number of columns chosen must match the number of reasoning.
+4. If a "." is included in columns, put the name before the first dot into chosen columns.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -58,7 +57,6 @@ Please provide your response as a JSON object, structured as follows:
 
 ### ADDITIONAL NOTES ###
 - Each table key must list only the columns relevant to answering the question.
-- Provide a reasoning list (`chain_of_thought_reasoning`) for each table, explaining why each column is necessary.
 - Be logical, concise, and ensure the output strictly follows the required JSON format.
 
 Good luck!
