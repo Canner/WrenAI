@@ -10,7 +10,6 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
@@ -29,52 +28,40 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
 2. For each table, provide a clear and concise reasoning for why specific columns are selected.
 3. List each reason as part of a step-by-step chain of thought, justifying the inclusion of each column.
-4. If a struct is chosen, list it in columns.
+4. If a "." is included in columns, put the name before the first dot into chosen columns.
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
+
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
-    "results": [
-        {
-            "table_selection_reason": "Reason for selecting tablename1",
-            "table_contents": {
-              "chain_of_thought_reasoning": [
-                  "Reason 1 for selecting column1",
-                  "Reason 2 for selecting column2",
-                  ...
-              ],
-              "columns": ["column1", "column2", ...]
-            },
-            "table_name":"tablename1",
+    "results": {
+        "table_name1": {
+            "chain_of_thought_reasoning": [
+                "Reason 1 for selecting column1",
+                "Reason 2 for selecting column2",
+                ...
+            ],
+            "columns": ["column1", "column2", ...]
         },
-        {
-            "table_selection_reason": "Reason for selecting tablename2",
-            "table_contents":
-            {
-              "chain_of_thought_reasoning": [
-                  "Reason 1 for selecting column1",
-                  "Reason 2 for selecting column2",
-                  ...
-              ],
-              "columns": ["column1", "column2", ...]
-            },
-            "table_name":"tablename2"
+        "table_name2": {
+            "chain_of_thought_reasoning": [
+                "Reason 1 for selecting column1",
+                "Reason 2 for selecting column2",
+                ...
+            ],
+            "columns": ["column1", "column2", ...]
         },
         ...
-    ]
+    }
 }
 
 ### ADDITIONAL NOTES ###
 - Each table key must list only the columns relevant to answering the question.
 - Provide a reasoning list (`chain_of_thought_reasoning`) for each table, explaining why each column is necessary.
-- Provide the reason of selecting the table in (`table_selection_reason`) for each table.
 - Be logical, concise, and ensure the output strictly follows the required JSON format.
-- Use table name used in the "Create Table" statement, don't use "alias".
-- Match Column names with the definition in the "Create Table" statement.
-- Match Table names with the definition in the "Create Table" statement.
 
 Good luck!
 
@@ -266,17 +253,14 @@ def construct_retrieval_results(
     ]
     logger.info(f"columns_and_tables_needed: {columns_and_tables_needed}")
 
-    # we need to change the below code to match the new schema of structured output
-    # the objective of this loop is to change the structure of JSON to match the needed format
-    reformated_json = {}
-    for table in columns_and_tables_needed:
-        reformated_json[table["table_name"]] = table["table_contents"]
-    columns_and_tables_needed = reformated_json
     tables = set(columns_and_tables_needed.keys())
     retrieval_results = []
 
     for table_schema in construct_db_schemas:
-        if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
+        if (
+            table_schema["type"] == "TABLE"
+            and table_schema["name"] in columns_and_tables_needed
+        ):
             retrieval_results.append(
                 _build_table_ddl(
                     table_schema,
@@ -302,30 +286,6 @@ def construct_retrieval_results(
 
 
 ## End of Pipeline
-class MatchingTableContents(BaseModel):
-    chain_of_thought_reasoning: list[str]
-    columns: list[str]
-
-
-class MatchingTable(BaseModel):
-    table_name: str
-    table_contents: MatchingTableContents
-    table_selection_reason: str
-
-
-class RetrievalResults(BaseModel):
-    results: list[MatchingTable]
-
-
-Retrieval_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "matched_schema",
-            "schema": RetrievalResults.model_json_schema(),
-        },
-    }
-}
 
 
 class Retrieval(BasicPipeline):
@@ -350,7 +310,6 @@ class Retrieval(BasicPipeline):
             ),
             "table_columns_selection_generator": llm_provider.get_generator(
                 system_prompt=table_columns_selection_system_prompt,
-                generation_kwargs=Retrieval_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template

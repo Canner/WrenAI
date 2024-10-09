@@ -51,6 +51,7 @@ resources:
   - base/cm.yaml
   - base/deploy-wren-ui.yaml
   - base/deploy-wren-engine.yaml
+  - base/deploy-wren-ibis-server.yaml
   - base/deploy-wren-ai-service.yaml
   - base/pvc.yaml
   - base/svc.yaml
