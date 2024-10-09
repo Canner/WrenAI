@@ -27,6 +27,11 @@ api_base: https://api.openai.com/v1
 api_version: "2024-05-13"
 
 ---
+type: llm
+provider: ollama
+# todo: add example
+
+---
 type: embedder
 provider: openai_embedder
 models:
@@ -34,6 +39,16 @@ models:
     dimension: 3072
 api_base: https://api.openai.com/v1
 timeout: 120
+
+---
+type: embedder
+provider: azure_openai_embedder
+# todo: add example
+
+---
+type: embedder
+provider: ollama
+# todo: add example
 
 ---
 type: engine
@@ -104,3 +119,17 @@ pipes:
   - name: relationship_recommendation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
+
+---
+settings:
+  host: 127.0.0.1
+  port: 5556
+  column_indexing_batch_size: 50
+  table_retrieval_size: 10
+  table_column_retrieval_size: 1000
+  query_cache_maxsize: 1000
+  query_cache_ttl: 3600
+  langfuse_host: https://cloud.langfuse.com
+  langfuse_enable: true
+  enable_timer: false
+  logging_level: INFO
