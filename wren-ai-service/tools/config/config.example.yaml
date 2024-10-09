@@ -133,3 +133,4 @@ settings:
   langfuse_enable: true
   enable_timer: false
   logging_level: INFO
+  development: false
