@@ -9,7 +9,6 @@ models:
         "max_tokens": 4096,
         "response_format": { "type": "json_object" },
       }
-api_key: sk-xxx
 api_base: https://api.openai.com/v1
 
 ---
@@ -24,7 +23,6 @@ models:
         "max_tokens": 4096,
         "response_format": { "type": "json_object" },
       }
-api_key: sk-xxx
 api_base: https://api.openai.com/v1
 api_version: "2024-05-13"
 
@@ -34,7 +32,6 @@ provider: openai_embedder
 models:
   - model: text-embedding-3-large
     dimension: 3072
-api_key: sk-xxx
 api_base: https://api.openai.com/v1
 timeout: 120
 
@@ -61,7 +58,6 @@ manifest: ""
 type: document_store
 provider: qdrant
 location: http://localhost:6333
-api_key: ""
 embedding_model_dim: 3072
 timeout: 120
 
