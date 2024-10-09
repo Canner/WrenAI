@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # debug config
     enable_timer: bool = Field(default=False)
     logging_level: str = Field(default="INFO")
+    development: bool = Field(default=False)
 
     # override from .env.dev file
     model_config = SettingsConfigDict(env_file=".env.dev", extra="allow")
