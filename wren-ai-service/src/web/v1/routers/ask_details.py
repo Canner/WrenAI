@@ -21,6 +21,18 @@ from src.web.v1.services.ask_details import (
 
 router = APIRouter()
 """
+Router for handling SQL query details requests and retrieving results.
+
+This router provides endpoints for initiating an ask-details operation
+and retrieving its results. It uses background tasks to process the
+ask-details requests asynchronously.
+
+Endpoints:
+- POST /ask-details: Initiate an ask-details operation
+- GET /ask-details/{query_id}/result: Retrieve the result of an ask-details operation
+
+The router depends on the ServiceContainer and ServiceMetadata, which are
+injected using FastAPI's dependency injection system.
 """
 
 

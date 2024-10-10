@@ -18,6 +18,21 @@ from src.web.v1.services.sql_explanation import (
 
 router = APIRouter()
 
+"""
+Router for handling SQL explanation requests and retrieving results.
+
+This router provides endpoints for initiating an SQL explanation operation
+and retrieving its results. It uses background tasks to process the
+SQL explanation requests asynchronously.
+
+Endpoints:
+- POST /sql-explanations: Initiate an SQL explanation operation
+- GET /sql-explanations/{query_id}/result: Retrieve the result of an SQL explanation operation
+
+The router depends on the ServiceContainer and ServiceMetadata, which are
+injected using FastAPI's dependency injection system.
+"""
+
 @router.post("/sql-explanations")
 async def sql_explanation(
     sql_explanation_request: SQLExplanationRequest,

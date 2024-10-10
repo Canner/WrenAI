@@ -19,6 +19,22 @@ from src.web.v1.services.sql_answer import (
     SqlAnswerResultResponse,
 )
 
+"""
+Router for handling SQL answer requests and retrieving results.
+
+This router provides endpoints for initiating an SQL answer operation
+and retrieving its results. It uses background tasks to process the
+SQL answer requests asynchronously.
+
+Endpoints:
+- POST /sql-answers: Initiate an SQL answer operation
+- GET /sql-answers/{query_id}/result: Retrieve the result of an SQL answer operation
+
+The router depends on the ServiceContainer and ServiceMetadata, which are
+injected using FastAPI's dependency injection system.
+"""
+
+
 @router.post("/sql-answers")
 async def sql_answer(
     sql_answer_request: SqlAnswerRequest,

@@ -20,6 +20,21 @@ from src.web.v1.services.sql_expansion import (
 
 router = APIRouter()
 
+"""
+Router for handling SQL expansion requests and retrieving results.
+
+This router provides endpoints for initiating an SQL expansion operation
+and retrieving its results. It uses background tasks to process the
+SQL expansion requests asynchronously.
+
+Endpoints:
+- POST /sql-expansions: Initiate an SQL expansion operation
+- GET /sql-expansions/{query_id}/result: Retrieve the result of an SQL expansion operation
+
+The router depends on the ServiceContainer and ServiceMetadata, which are
+injected using FastAPI's dependency injection system.
+"""
+
 @router.post("/sql-expansions")
 async def sql_expansion(
     sql_expansion_request: SqlExpansionRequest,

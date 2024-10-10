@@ -21,7 +21,22 @@ from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationStatusRequest,
     SemanticsPreparationStatusResponse,
 )
+"""
+Router for handling semantics preparations requests and retrieving results.
 
+This router provides endpoints for initiating a semantics preparation operation
+and retrieving its results. It uses background tasks to process the
+semantics preparation requests asynchronously.
+
+Endpoints:
+- POST /semantics-preparations: Initiate a semantics preparation operation
+- GET /semantics-preparations/{mdl_hash}/status: Retrieve the status of a semantics preparation operation
+
+The router depends on the ServiceContainer and ServiceMetadata, which are
+injected using FastAPI's dependency injection system.
+
+
+"""
 
 @router.post("/semantics-preparations")
 async def prepare_semantics(

@@ -17,6 +17,18 @@ from src.web.v1.services.sql_regeneration import (
 )
 
 router = APIRouter()
+"""
+Router for handling SQL regeneration requests and retrieving results.
+
+This router provides endpoints for initiating an SQL regeneration operation
+and retrieving its results. It uses background tasks to process the
+SQL regeneration requests asynchronously.
+
+Endpoints:
+- POST /sql-regenerations: Initiate an SQL regeneration operation
+- GET /sql-regenerations/{query_id}/result: Retrieve the result of an SQL regeneration operation
+
+"""
 
 @router.post("/sql-regenerations")
 async def sql_regeneration(
