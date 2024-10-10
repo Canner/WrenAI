@@ -1,9 +1,9 @@
 import uuid
 from dataclasses import asdict
-from typing import Literal, Optional
+# from typing import Literal, Optional  # Unnecessary import
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from pydantic import BaseModel
+# from pydantic import BaseModel  # Unnecessary import
 
 from src.globals import (
     ServiceContainer,
@@ -12,7 +12,6 @@ from src.globals import (
     get_service_metadata,
 )
 
-#added imports
 from src.web.v1.services.ask import (
     AskRequest,
     AskResponse,
