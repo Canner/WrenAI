@@ -44,6 +44,9 @@ export enum COLUMN_TYPE {
   // JSON Types
   JSON = 'JSON',
 
+  // Record Types
+  RECORD = 'RECORD',
+
   // Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
   // https://www.postgresql.org/docs/current/datatype-oid.html
   OID = 'OID',

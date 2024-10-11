@@ -2,6 +2,7 @@ import { isEmpty, isNil, pickBy } from 'lodash';
 import {
   Model,
   ModelColumn,
+  ModelNestedColumn,
   Project,
   RelationInfo,
   View,
@@ -16,6 +17,7 @@ export interface MDLBuilderBuildFromOptions {
   project: Project;
   models: Model[];
   columns?: ModelColumn[];
+  nestedColumns?: ModelNestedColumn[];
   relations?: RelationInfo[];
   views: View[];
   relatedModels?: Model[];
@@ -34,6 +36,7 @@ export class MDLBuilder implements IMDLBuilder {
   private project: Project;
   private readonly models: Model[];
   private readonly columns: ModelColumn[];
+  private readonly nestedColumns: ModelNestedColumn[];
   private readonly relations: RelationInfo[];
   private readonly views: View[];
 
@@ -50,6 +53,7 @@ export class MDLBuilder implements IMDLBuilder {
       project,
       models,
       columns,
+      nestedColumns,
       relations,
       views,
       relatedModels,
@@ -59,6 +63,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.project = project;
     this.models = models;
     this.columns = columns;
+    this.nestedColumns = nestedColumns;
     this.relations = relations;
     this.views = views || [];
     this.relatedModels = relatedModels;
@@ -180,6 +185,22 @@ export class MDLBuilder implements IMDLBuilder {
         // put displayName in properties
         if (column.displayName) {
           properties.displayName = column.displayName;
+        }
+        // put nested columns in properties
+        if (column.type.includes('STRUCT')) {
+          const nestedColumns = this.nestedColumns.filter(
+            (nestedColumn) => nestedColumn.columnId === column.id,
+          );
+          nestedColumns.forEach((column) => {
+            if (column.displayName) {
+              properties[`nestedDisplayName.${column.sourceColumnName}`] =
+                column.displayName;
+            }
+            if (column.properties?.description) {
+              properties[`nestedDescription.${column.sourceColumnName}`] =
+                column.properties.description;
+            }
+          }, {});
         }
         const expression = this.getColumnExpression(column, model);
         model.columns.push({

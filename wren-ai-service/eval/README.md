@@ -41,7 +41,7 @@ just eval <prediction-result>
 
 The evaluation results will be presented on Langfuse as follows:
 
-![shallow_trace_example](../docs/shallow_trace_example.png)
+![shallow_trace_example](../docs/imgs/shallow_trace_example.png)
 
 ## Terms
 

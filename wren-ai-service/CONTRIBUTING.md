@@ -6,6 +6,7 @@ Thank you for investing your time in contributing to our project! This document 
 
 - To get an overview of the project, please read the [concepts](https://docs.getwren.ai/oss/concept/wren_ai_service).
 - To set up the project for local development, please read [Environment Setup](README.md#environment-setup) and [Start the service for development](README.md#start-the-service-for-development)
+- To understand the codebase more quickly, we've prepared [a codebase introduciton](docs/code_design.md) for you.
 
 ## Getting started
 

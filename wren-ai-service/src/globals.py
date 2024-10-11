@@ -8,6 +8,8 @@ from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
     followup_sql_generation,
+    relationship_recommendation,
+    semantics_description,
     sql_answer,
     sql_breakdown,
     sql_correction,
@@ -21,6 +23,8 @@ from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
+from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
+from src.web.v1.services.semantics_description import SemanticsDescription
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
@@ -32,6 +36,8 @@ logger = logging.getLogger("wren-ai-service")
 
 @dataclass
 class ServiceContainer:
+    relationship_recommendation: RelationshipRecommendation
+    semantics_description: SemanticsDescription
     semantics_preparation_service: SemanticsPreparationService
     ask_service: AskService
     sql_answer_service: SqlAnswerService
@@ -55,6 +61,14 @@ def create_service_container(
     query_cache: Optional[dict] = {},
 ) -> ServiceContainer:
     return ServiceContainer(
+        semantics_description=SemanticsDescription(
+            pipelines={
+                "semantics_description": semantics_description.SemanticsDescription(
+                    **pipe_components["semantics_description"],
+                )
+            },
+            **query_cache,
+        ),
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
                 "indexing": indexing.Indexing(
@@ -136,6 +150,14 @@ def create_service_container(
             pipelines={
                 "sql_regeneration": sql_regeneration.SQLRegeneration(
                     **pipe_components["sql_regeneration"],
+                )
+            },
+            **query_cache,
+        ),
+        relationship_recommendation=RelationshipRecommendation(
+            pipelines={
+                "relationship_recommendation": relationship_recommendation.RelationshipRecommendation(
+                    **pipe_components["relationship_recommendation"],
                 )
             },
             **query_cache,

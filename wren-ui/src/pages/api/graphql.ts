@@ -5,6 +5,7 @@ import { typeDefs } from '@server';
 import resolvers from '@server/resolvers';
 import { IContext } from '@server/types';
 import {
+  ModelNestedColumnRepository,
   ModelColumnRepository,
   ModelRepository,
   ProjectRepository,
@@ -65,6 +66,7 @@ const bootstrapServer = async () => {
   const projectRepository = new ProjectRepository(knex);
   const modelRepository = new ModelRepository(knex);
   const modelColumnRepository = new ModelColumnRepository(knex);
+  const modelNestedColumnRepository = new ModelNestedColumnRepository(knex);
   const relationRepository = new RelationRepository(knex);
   const deployLogRepository = new DeployLogRepository(knex);
   const threadRepository = new ThreadRepository(knex);
@@ -95,6 +97,7 @@ const bootstrapServer = async () => {
     projectRepository,
     modelRepository,
     modelColumnRepository,
+    modelNestedColumnRepository,
     relationRepository,
     viewRepository,
   });
@@ -190,6 +193,7 @@ const bootstrapServer = async () => {
       projectRepository,
       modelRepository,
       modelColumnRepository,
+      modelNestedColumnRepository,
       relationRepository,
       viewRepository,
       deployRepository: deployLogRepository,

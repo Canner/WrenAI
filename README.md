@@ -32,7 +32,7 @@
 
 [Hacktoberfest 2024](https://hacktoberfest.com/) is here, and we're inviting developers of all levels to join our open-source community. Together, we'll build Wren AI as a friendly community for all. 
 
-👉 Learn how to [Win Wren AI Exclusive Swag Pack & Holopin From Digital Ocean Rewards](https://getwren.ai/wren-ai-hacktoberfest-2024)!
+👉 Learn how to [win Wren AI Exclusive Swag Pack & Holopin From Digital Ocean Rewards](https://getwren.ai/wren-ai-hacktoberfest-2024)!
 
 [![image](https://github.com/user-attachments/assets/9048d701-a97b-4c6b-b3ed-fc636201f234)](https://getwren.ai/wren-ai-hacktoberfest-2024)
 
@@ -47,7 +47,7 @@
 
 https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
 
-👉 [Start and try with your data!](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
+👉 [Try with your data!](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 
 ## 🎯 Our Vision & Mission
@@ -74,7 +74,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 
 ### 4. Self-Learning Feedback Loop (Coming Soon)
 
-> The AI self-learning feedback loop is designed to refine SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantics enhancement, and query frequency.
+  > The AI self-learning feedback loop refines SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantics enhancement, and query frequency.
 
 ## 🤔 Why Wren AI?
 
@@ -109,7 +109,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 
 ### 2. Secure By Design
 
-> Your database contents will never be transmitted to the LLM. Only metadata, like schemas, documentation, and queries, will be used in semantic search.
+> Your database content will never be transmitted to the LLM. Only metadata, like schemas, documentation, and queries, will be used in semantic search.
 
 ### 3. Open-Source
 

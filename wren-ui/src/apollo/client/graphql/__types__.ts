@@ -174,6 +174,7 @@ export type DetailedColumn = {
   __typename?: 'DetailedColumn';
   displayName: Scalars['String'];
   isCalculated: Scalars['Boolean'];
+  nestedColumns?: Maybe<Array<DetailedNestedColumn>>;
   notNull: Scalars['Boolean'];
   properties: Scalars['JSON'];
   referenceName: Scalars['String'];
@@ -195,6 +196,16 @@ export type DetailedModel = {
   refreshTime?: Maybe<Scalars['String']>;
   relations?: Maybe<Array<Maybe<DetailedRelation>>>;
   sourceTableName: Scalars['String'];
+};
+
+export type DetailedNestedColumn = {
+  __typename?: 'DetailedNestedColumn';
+  displayName: Scalars['String'];
+  id: Scalars['Int'];
+  properties?: Maybe<Scalars['JSON']>;
+  referenceName: Scalars['String'];
+  sourceColumnName: Scalars['String'];
+  type?: Maybe<Scalars['String']>;
 };
 
 export type DetailedRelation = {
@@ -250,7 +261,19 @@ export type DiagramModelField = {
   id: Scalars['String'];
   isPrimaryKey: Scalars['Boolean'];
   lineage?: Maybe<Array<Scalars['Int']>>;
+  nestedFields?: Maybe<Array<DiagramModelNestedField>>;
   nodeType: NodeType;
+  referenceName: Scalars['String'];
+  type: Scalars['String'];
+};
+
+export type DiagramModelNestedField = {
+  __typename?: 'DiagramModelNestedField';
+  columnPath: Array<Scalars['String']>;
+  description?: Maybe<Scalars['String']>;
+  displayName: Scalars['String'];
+  id: Scalars['String'];
+  nestedColumnId: Scalars['Int'];
   referenceName: Scalars['String'];
   type: Scalars['String'];
 };
@@ -880,7 +903,14 @@ export type UpdateModelMetadataInput = {
   columns?: InputMaybe<Array<UpdateColumnMetadataInput>>;
   description?: InputMaybe<Scalars['String']>;
   displayName?: InputMaybe<Scalars['String']>;
+  nestedColumns?: InputMaybe<Array<UpdateNestedColumnMetadataInput>>;
   relationships?: InputMaybe<Array<UpdateRelationshipMetadataInput>>;
+};
+
+export type UpdateNestedColumnMetadataInput = {
+  description?: InputMaybe<Scalars['String']>;
+  displayName?: InputMaybe<Scalars['String']>;
+  id: Scalars['Int'];
 };
 
 export type UpdateRelationInput = {

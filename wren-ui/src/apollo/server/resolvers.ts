@@ -3,6 +3,7 @@ import { ProjectResolver } from './resolvers/projectResolver';
 import { ModelResolver } from './resolvers/modelResolver';
 import { AskingResolver } from './resolvers/askingResolver';
 import { DiagramResolver } from './resolvers/diagramResolver';
+import { convertColumnType } from '@server/utils';
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
@@ -92,6 +93,15 @@ const resolvers = {
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),
   ResultCandidate: askingResolver.getResultCandidateNestedResolver(),
+
+  // Handle struct type to record for UI
+  DiagramModelField: { type: convertColumnType },
+  DiagramModelNestedField: { type: convertColumnType },
+  CompactColumn: { type: convertColumnType },
+  FieldInfo: { type: convertColumnType },
+  DetailedColumn: { type: convertColumnType },
+  DetailedNestedColumn: { type: convertColumnType },
+  DetailedChangeColumn: { type: convertColumnType },
 };
 
 export default resolvers;
