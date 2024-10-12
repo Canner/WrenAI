@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a aria-label="Follow us" href="https://x.com/getwrenai">
+  <a aria-label="Follow us on X" href="https://x.com/getwrenai">
     <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
   </a>
   <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
@@ -32,7 +32,7 @@
 
 [Hacktoberfest 2024](https://hacktoberfest.com/) is here, and we're inviting developers of all levels to join our open-source community. Together, we'll build Wren AI as a friendly community for all. 
 
-👉 Learn how to [win Wren AI Exclusive Swag Pack & Holopin From Digital Ocean Rewards](https://getwren.ai/wren-ai-hacktoberfest-2024)!
+👉 Learn how to [win a Wren AI Exclusive Swag Pack & Holopin from DigitalOcean Rewards](https://getwren.ai/wren-ai-hacktoberfest-2024)!
 
 [![image](https://github.com/user-attachments/assets/9048d701-a97b-4c6b-b3ed-fc636201f234)](https://getwren.ai/wren-ai-hacktoberfest-2024)
 
@@ -74,7 +74,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 
 ### 4. Self-Learning Feedback Loop (Coming Soon)
 
-  > The AI self-learning feedback loop refines SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantics enhancement, and query frequency.
+  > The AI self-learning feedback loop refines SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantic enhancements, and query frequency.
 
 ## 🤔 Why Wren AI?
 
@@ -96,7 +96,7 @@ We focus on providing an open, secure, and reliable SQL AI Agent for everyone.
 
 Wren AI consists of three core services:
 
-- ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within Wren AI's framework.
+- - ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources.
 
 - ***[Wren AI Service](https://github.com/Canner/WrenAI/tree/main/wren-ai-service):*** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
 
@@ -128,4 +128,4 @@ Want to contribute to Wren AI? Check out our [Contribution Guidelines](https://g
 - Welcome to our [Discord server](https://discord.gg/5DvshJqG8Z) to give us feedback!
 - If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
 
-Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
