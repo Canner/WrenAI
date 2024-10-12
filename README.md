@@ -178,6 +178,8 @@ Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI 
                     <sub><b>fredalai</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/chilijung">
                     <img src="https://avatars.githubusercontent.com/u/1216029?v=4" width="100;" alt="chilijung"/>
@@ -192,8 +194,6 @@ Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI 
                     <sub><b>imAsterSun</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/Ayushjhawar8">
                     <img src="https://avatars.githubusercontent.com/u/111112495?v=4" width="100;" alt="Ayushjhawar8"/>
@@ -222,6 +222,8 @@ Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI 
                     <sub><b>goldmedal</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/eltociear">
                     <img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="100;" alt="eltociear"/>
@@ -250,8 +252,6 @@ Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI 
                     <sub><b>kpman</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/grieve54706">
                     <img src="https://avatars.githubusercontent.com/u/8724385?v=4" width="100;" alt="grieve54706"/>
@@ -266,6 +266,8 @@ Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI 
                     <sub><b>RoacherM</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/Innovatorcloudy">
                     <img src="https://avatars.githubusercontent.com/u/183274513?v=4" width="100;" alt="Innovatorcloudy"/>
