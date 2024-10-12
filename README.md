@@ -129,3 +129,8 @@ Want to contribute to Wren AI? Check out our [Contribution Guidelines](https://g
 - If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
 
 Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+
+## Our Contributors ❤️
+<!-- Do not manually edit this section! It should get updated using the Github action "Manually update contributors list" -->
+<!-- readme: contributors -start -->
+<!-- readme: contributors -end -->
