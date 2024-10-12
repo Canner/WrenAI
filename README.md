@@ -131,7 +131,7 @@ Want to contribute to Wren AI? Check out our [Contribution Guidelines](https://g
 Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
 
 ## Our Contributors ❤️
-<!-- Do not manually edit this section! It should get updated using the Github action "Manually update contributors list" -->
+<!-- Do not manually edit this section! It should get updated using the Github action -->
 <!-- readme: contributors -start -->
 <table>
 	<tbody>
