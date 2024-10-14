@@ -1,2 +1,0 @@
-Please download the database from [the goolge drive link](https://drive.google.com/file/d/1mkCx2GOFIqNesD4y8TDAO1yX1QZORP5w/view) and decompress in this directory.
-After this step, "wren-ai-service/eval/spider_database/atis/atis.sqlite" should be a valid file path.
