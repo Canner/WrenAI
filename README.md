@@ -195,13 +195,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/Ayushjhawar8">
-                    <img src="https://avatars.githubusercontent.com/u/111112495?v=4" width="100;" alt="Ayushjhawar8"/>
-                    <br />
-                    <sub><b>Ayushjhawar8</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/qdrddr">
                     <img src="https://avatars.githubusercontent.com/u/564658?v=4" width="100;" alt="qdrddr"/>
                     <br />
@@ -222,8 +215,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>goldmedal</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/eltociear">
                     <img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="100;" alt="eltociear"/>
@@ -231,6 +222,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>eltociear</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/himanshu634">
                     <img src="https://avatars.githubusercontent.com/u/61757460?v=4" width="100;" alt="himanshu634"/>
@@ -266,13 +259,20 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>RoacherM</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/Innovatorcloudy">
                     <img src="https://avatars.githubusercontent.com/u/183274513?v=4" width="100;" alt="Innovatorcloudy"/>
                     <br />
                     <sub><b>Innovatorcloudy</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/NishantRana07">
+                    <img src="https://avatars.githubusercontent.com/u/126577697?v=4" width="100;" alt="NishantRana07"/>
+                    <br />
+                    <sub><b>Nishant Rana</b></sub>
                 </a>
             </td>
             <td align="center">
