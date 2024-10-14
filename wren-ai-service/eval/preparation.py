@@ -177,15 +177,23 @@ def build_question_sql_pairs_by_db(destination_path: Path):
     return question_sql_pairs_by_db
 
 
+def get_mdls_and_question_sql_pairs_by_common_db(mdl_by_db, question_sql_pairs_by_db):
+    common_dbs = set(mdl_by_db.keys()) & set(question_sql_pairs_by_db.keys())
+
+    return {
+        db: {"mdl": mdl_by_db[db], **question_sql_pairs_by_db[db]} for db in common_dbs
+    }
+
+
 if __name__ == "__main__":
     # download spider1.0 data if unavailable in wren-ai-service/eval/spider1.0
     download_spider_data(DESTINATION_PATH)
 
-    # generate mdl by db
-    mdl_by_db = build_mdl_by_db(DESTINATION_PATH)
-
-    # generate question sql pairs by db
-    question_sql_pairs_by_db = build_question_sql_pairs_by_db(DESTINATION_PATH)
+    # get mdl_by_db and question_sql_pairs_by_db whose dbs are present in both dictionaries
+    mdl_and_ground_truth_by_db = get_mdls_and_question_sql_pairs_by_common_db(
+        build_mdl_by_db(DESTINATION_PATH),
+        build_question_sql_pairs_by_db(DESTINATION_PATH),
+    )
 
     # dump data from sqlite to duckdb
 
