@@ -11,7 +11,7 @@ from haystack import Document
 from langfuse.decorators import langfuse_context, observe
 from tqdm.asyncio import tqdm_asyncio
 
-from eval.metrics.spider import ExactMatchAccuracy
+from eval.metrics.spider.exact_match import ExactMatchAccuracy
 
 sys.path.append(f"{Path().parent.resolve()}")
 
