@@ -98,11 +98,15 @@ def init_providers(mdl: dict) -> dict:
         config={
             "source": "bigquery",
             "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
-            "connection_info": {
-                "project_id": os.getenv("bigquery.project-id"),
-                "dataset_id": os.getenv("bigquery.dataset-id"),
-                "credentials": os.getenv("bigquery.credentials-key"),
-            },
+            "connection_info": base64.b64encode(
+                orjson.dumps(
+                    {
+                        "project_id": os.getenv("bigquery.project-id"),
+                        "dataset_id": os.getenv("bigquery.dataset-id"),
+                        "credentials": os.getenv("bigquery.credentials-key"),
+                    }
+                )
+            ).decode(),
         },
     )
 
