@@ -140,7 +140,7 @@ def build_mdl_by_db(destination_path: Path):
 
             relationships.append(
                 {
-                    "name": f"{first_foreign_key_table}_{second_foreign_key_table}",
+                    "name": f"{first_foreign_key_table}_{first_column_name}_{second_foreign_key_table}_{second_column_name}",
                     "models": [first_foreign_key_table, second_foreign_key_table],
                     "joinType": "MANY_TO_MANY",
                     "condition": f"{first_foreign_key_table}.{first_column_name} = {second_foreign_key_table}.{second_column_name}",
