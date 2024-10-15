@@ -215,7 +215,13 @@ Think step by step
         contexts = await get_contexts_from_sqls(sqls, mdl_json)
         documents = get_documents_given_contexts(contexts, mdl_json)
         sqls_data = await get_data_from_wren_engine_with_sqls(
-            sqls, data_source, mdl_json, connection_info
+            sqls,
+            data_source,
+            mdl_json,
+            connection_info,
+            WREN_ENGINE_ENDPOINT
+            if st.session_state["data_source"] == "duckdb"
+            else WREN_IBIS_ENDPOINT,
         )
         return [
             {
@@ -246,7 +252,7 @@ async def get_data_from_wren_engine_with_sqls(
     data_source: str,
     mdl_json: dict,
     connection_info: dict,
-    api_endpoint: str = WREN_IBIS_ENDPOINT,
+    api_endpoint: str,
     timeout: float = TIMEOUT_SECONDS,
 ) -> List[dict]:
     assert data_source in DATA_SOURCES, f"Invalid data source: {data_source}"

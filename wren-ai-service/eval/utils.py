@@ -48,7 +48,7 @@ async def get_data_from_wren_engine(
             if response.status != 200:
                 return {"data": [], "columns": []}
 
-            column_names = [col for col in data["columns"]]
+            column_names = [col["name"] for col in data["columns"]]
             return {"data": data["data"], "columns": column_names}
     else:
         url = f"{api_endpoint}/v2/connector/{data_source}/query"

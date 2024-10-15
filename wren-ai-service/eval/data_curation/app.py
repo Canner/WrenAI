@@ -404,6 +404,9 @@ if st.session_state["mdl_json"] is not None:
                             st.session_state["data_source"],
                             st.session_state["mdl_json"],
                             st.session_state["connection_info"],
+                            WREN_ENGINE_ENDPOINT
+                            if st.session_state["data_source"] == "duckdb"
+                            else WREN_IBIS_ENDPOINT,
                         )
                     )[0]
                     st.dataframe(
