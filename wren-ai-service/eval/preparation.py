@@ -11,10 +11,15 @@ import gdown
 import orjson
 import requests
 
-from eval.utils import get_data_from_wren_engine
+from eval.utils import (
+    get_contexts_from_sql,
+    get_documents_given_contexts,
+    get_eval_dataset_in_toml_string,
+)
 
-DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
+SPIDER_DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
 WREN_ENGINE_API_URL = "http://localhost:8080"
+EVAL_DATASET_DESTINATION_PATH = Path("./eval/dataset")
 
 
 def download_spider_data(destination_path: Path):
@@ -53,14 +58,13 @@ def get_database_names(path: Path):
     return [folder.name for folder in path.iterdir() if folder.is_dir()]
 
 
-def get_json_data_by_key(path: Path, key: str):
-    with open(path, "rb") as f:
-        json_data = orjson.loads(f.read())
-
-    return {item[key]: item for item in json_data}
-
-
 def build_mdl_by_db(destination_path: Path):
+    def _get_tables_by_db(path: Path, key: str):
+        with open(path, "rb") as f:
+            json_data = orjson.loads(f.read())
+
+        return {item[key]: item for item in json_data}
+
     def _merge_column_info(column_names_original, column_types):
         merged_info = []
         for (table_index, column_name), column_type in zip(
@@ -144,7 +148,7 @@ def build_mdl_by_db(destination_path: Path):
     databases = get_database_names(destination_path / "database")
 
     # read tables.json and transform it to be a dictionary with database name as key
-    tables_by_db = get_json_data_by_key(
+    tables_by_db = _get_tables_by_db(
         destination_path / "spider_data/tables.json", "db_id"
     )
 
@@ -165,23 +169,34 @@ def build_mdl_by_db(destination_path: Path):
 
 
 def build_question_sql_pairs_by_db(destination_path: Path):
+    def _get_ground_truths_by_db(path: Path, key: str):
+        with open(path, "rb") as f:
+            json_data = orjson.loads(f.read())
+
+        results = defaultdict(list)
+        for item in json_data:
+            results[item[key]].append(item)
+
+        return results
+
     # get all database names in the spider testsuite
     databases = get_database_names(destination_path / "database")
 
     # get dev.json and transform it to be a dictionary with database name as key
-    ground_truth_by_db = get_json_data_by_key(
+    ground_truths_by_db = _get_ground_truths_by_db(
         destination_path / "spider_data/dev.json", "db_id"
     )
 
     question_sql_pairs_by_db = defaultdict(list)
     for database in databases:
-        if ground_truth_info := ground_truth_by_db.get(database):
-            question_sql_pairs_by_db[database].append(
-                {
-                    "question": ground_truth_info["question"],
-                    "sql": ground_truth_info["query"],
-                }
-            )
+        if ground_truths_info := ground_truths_by_db.get(database):
+            for ground_truth in ground_truths_info:
+                question_sql_pairs_by_db[database].append(
+                    {
+                        "question": ground_truth["question"],
+                        "sql": ground_truth["query"],
+                    }
+                )
 
     return question_sql_pairs_by_db
 
@@ -220,39 +235,68 @@ def prepare_duckdb_init_sql(db: str):
 
 
 if __name__ == "__main__":
-    # download spider1.0 data if unavailable in wren-ai-service/eval/spider1.0
-    download_spider_data(DESTINATION_PATH)
+    print(f"Downloading Spider 1.0 data if unavailable in {SPIDER_DESTINATION_PATH}...")
+    download_spider_data(SPIDER_DESTINATION_PATH)
 
+    print("Building mdl and question sql pairs using Spider 1.0 data...")
     # get mdl_by_db and question_sql_pairs_by_db whose dbs are present in both dictionaries
-    mdl_and_ground_truth_by_db = get_mdls_and_question_sql_pairs_by_common_db(
-        build_mdl_by_db(DESTINATION_PATH),
-        build_question_sql_pairs_by_db(DESTINATION_PATH),
+    mdl_and_ground_truths_by_db = get_mdls_and_question_sql_pairs_by_common_db(
+        build_mdl_by_db(SPIDER_DESTINATION_PATH),
+        build_question_sql_pairs_by_db(SPIDER_DESTINATION_PATH),
     )
+
+    print("Creating eval dataset...")
+    # make eval dataset
+    candidate_eval_dataset = []
 
     # create duckdb connection in wren engine
     # https://duckdb.org/docs/guides/database_integration/sqlite.html
     prepare_duckdb_session_sql()
-    for db, values in mdl_and_ground_truth_by_db.items():
+    for db, values in mdl_and_ground_truths_by_db.items():
+        print(f"Database: {db}")
         prepare_duckdb_init_sql(db)
 
-        print(f'sql: {values["ground_truth"][0]["sql"]}')
-        print(f'mdl: {values["mdl"]}')
-
-        results = asyncio.run(
-            get_data_from_wren_engine(
-                values["ground_truth"][0]["sql"],
-                "duckdb",
-                values["mdl"],
-                {},
-                WREN_ENGINE_API_URL,
+        for i, ground_truth in enumerate(values["ground_truth"]):
+            context = asyncio.run(
+                get_contexts_from_sql(
+                    ground_truth["sql"],
+                    values["mdl"],
+                    WREN_ENGINE_API_URL,
+                )
             )
-        )
-        print(results)
 
-        break
+            # ignore empty context
+            # TODO: this might be engine bug, remove those empty context temporarily
+            if context:
+                candidate_eval_dataset.append(
+                    {
+                        "categories": [],
+                        "question": ground_truth["question"],
+                        "sql": ground_truth["sql"],
+                        "context": context,
+                        "document": get_documents_given_contexts(
+                            [context], values["mdl"]
+                        ),
+                    }
+                )
+            else:
+                print(
+                    "Warning: context is empty, ignore this question sql pair as of now..."
+                )
+                print(f"database: {db}")
+                print(f'question: {ground_truth["question"]}')
+                print(f'sql: {ground_truth["sql"]}')
+                print()
 
-    # sql validation using duckdb
-
-    # make eval dataset
-
-    # save eval dataset
+        # save eval dataset
+        if candidate_eval_dataset:
+            with open(
+                f"{EVAL_DATASET_DESTINATION_PATH}/spider_{db}_eval_dataset.toml", "w"
+            ) as f:
+                f.write(
+                    get_eval_dataset_in_toml_string(
+                        values["mdl"], candidate_eval_dataset
+                    )
+                )
+            print(f"Successfully creating eval dataset of database {db}")
+            print()
