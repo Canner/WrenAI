@@ -79,6 +79,7 @@ async def get_contexts_from_sql(
     mdl_json: dict,
     api_endpoint: str,
     timeout: float = 300,
+    **kwargs,
 ) -> list[str]:
     def _get_contexts_from_sql_analysis_results(sql_analysis_results: list[dict]):
         def _compose_contexts_of_select_type(select_items: list[dict]):
@@ -204,6 +205,7 @@ def trace_metadata(
 def engine_config(mdl: dict) -> dict:
     return {
         "mdl_json": mdl,
+        "data_source": os.getenv("datasource"),
         "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
         "timeout": 10,
     }

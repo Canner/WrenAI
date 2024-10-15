@@ -271,10 +271,10 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+    def mertics(config: dict, accuracy_config: dict) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(ibis_engine_config),
+                AccuracyMetric(accuracy_config),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
                 ExactMatchAccuracy(),
@@ -349,10 +349,10 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+    def mertics(config: dict, accuracy_config: dict) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(ibis_engine_config),
+                AccuracyMetric(accuracy_config),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
                 ContextualRecallMetric(config),
@@ -383,26 +383,31 @@ def init(
 
 
 def metrics_initiator(pipeline: str, mdl: dict) -> dict:
+    # todo: refactor configs
     config = engine_config(mdl)
-    ibis_engine_config = {
-        "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
-        "data_source": "bigquery",
-        "mdl_json": mdl,
-        "connection_info": {
-            "project_id": os.getenv("bigquery.project-id"),
-            "dataset_id": os.getenv("bigquery.dataset-id"),
-            "credentials": os.getenv("bigquery.credentials-key"),
-        },
-        "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
-        if os.getenv("WREN_IBIS_TIMEOUT")
-        else 10,
-        "limit": 10,
-    }
+    if os.getenv("datasource") == "bigquery":
+        accuracy_config = {
+            "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
+            "data_source": "bigquery",
+            "mdl_json": mdl,
+            "connection_info": {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
+            },
+            "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
+            if os.getenv("WREN_IBIS_TIMEOUT")
+            else 10,
+            "limit": 10,
+        }
+
+    if os.getenv("datasource") == "duckdb":
+        accuracy_config = config
 
     match pipeline:
         case "retrieval":
             return RetrievalPipeline.mertics(config)
         case "generation":
-            return GenerationPipeline.mertics(config, ibis_engine_config)
+            return GenerationPipeline.mertics(config, accuracy_config)
         case "ask":
-            return AskPipeline.mertics(config, ibis_engine_config)
+            return AskPipeline.mertics(config, accuracy_config)

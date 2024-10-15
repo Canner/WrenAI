@@ -11,7 +11,7 @@ from eval.metrics.spider.process_sql import Schema, get_schema
 class ExactMatchAccuracy(BaseMetric):
     def __init__(
         self,
-        kmap_path: str = "./tools/dev/etc/spider1.0/tables.json",
+        kmap_path: str = "./tools/dev/etc/spider1.0/spider_data/tables.json",
         db_dir: str = "./tools/dev/etc/spider1.0/database",
     ):
         self.threshold = 0
