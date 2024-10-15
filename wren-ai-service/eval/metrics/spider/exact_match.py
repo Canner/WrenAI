@@ -24,10 +24,10 @@ class ExactMatchAccuracy(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        if test_case.additional_metadata["database_name"] is None:
+        if test_case.additional_metadata["catalog"] is None:
             return 0
 
-        db_name = test_case.additional_metadata["database_name"]
+        db_name = test_case.additional_metadata["catalog"]
         db = os.path.join(self.db_dir, db_name, db_name + ".sqlite")
         schema = Schema(get_schema(db))
         gold_sql = tokenize(test_case.expected_output, schema, self.kmaps[db_name])

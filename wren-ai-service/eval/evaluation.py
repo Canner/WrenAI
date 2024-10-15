@@ -18,7 +18,7 @@ from eval.utils import parse_toml, trace_metadata
 from src import utils
 
 
-def formatter(prediction: dict) -> dict:
+def formatter(prediction: dict, meta: dict) -> dict:
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
     context = [str(context) for context in prediction["context"]]
 
@@ -31,7 +31,7 @@ def formatter(prediction: dict) -> dict:
         "additional_metadata": {
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
-            "database_name": prediction.get("database_name", None),
+            "catalog": meta.get("catalog", None),
         },
     }
 
@@ -62,7 +62,7 @@ class Evaluator:
                 continue
 
             try:
-                test_case = LLMTestCase(**formatter(prediction))
+                test_case = LLMTestCase(**formatter(prediction, meta))
                 result = evaluate([test_case], self._metrics, ignore_errors=True)[0]
                 self._score_metrics(test_case, result)
                 [metric.collect(test_case, result) for metric in self._post_metrics]

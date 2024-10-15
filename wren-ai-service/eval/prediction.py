@@ -54,6 +54,7 @@ def generate_meta(
         "pipeline": pipe,
         "batch_size": os.getenv("BATCH_SIZE") or 4,
         "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
+        "catalog": dataset["catalog"],
     }
 
 
