@@ -22,33 +22,51 @@ async def get_data_from_wren_engine(
     mdl_json: dict,
     connection_info: dict,
     api_endpoint: str,
-    timeout: float,
+    timeout: float = 300,
     limit: Optional[int] = None,
 ):
-    url = f"{api_endpoint}/v2/connector/{data_source}/query"
-    if limit is not None:
-        url += f"?limit={limit}"
-
     quoted_sql, no_error = add_quotes(sql)
     assert no_error, f"Error in quoting SQL: {sql}"
 
-    async with aiohttp.request(
-        "POST",
-        url,
-        json={
-            "sql": quoted_sql,
-            "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
-            "connectionInfo": connection_info,
-        },
-        timeout=aiohttp.ClientTimeout(total=timeout),
-    ) as response:
-        if response.status != 200:
-            return {"data": [], "columns": []}
+    if data_source == "duckdb":
+        async with aiohttp.request(
+            "GET",
+            f"{api_endpoint}/v1/mdl/preview",
+            json={
+                "sql": quoted_sql,
+                "manifest": mdl_json,
+                "limit": 500 if limit is None else limit,
+            },
+        ) as response:
+            data = await response.json()
 
-        data = await response.json()
-        column_names = [col for col in data["columns"]]
+            if response.status != 200:
+                return {"data": [], "columns": []}
 
-        return {"data": data["data"], "columns": column_names}
+            column_names = [col for col in data["columns"]]
+            return {"data": data["data"], "columns": column_names}
+    else:
+        url = f"{api_endpoint}/v2/connector/{data_source}/query"
+        if limit is not None:
+            url += f"?limit={limit}"
+
+        async with aiohttp.request(
+            "POST",
+            url,
+            json={
+                "sql": quoted_sql,
+                "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
+                "connectionInfo": connection_info,
+            },
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as response:
+            if response.status != 200:
+                return {"data": [], "columns": []}
+
+            data = await response.json()
+            column_names = [col for col in data["columns"]]
+
+            return {"data": data["data"], "columns": column_names}
 
 
 async def get_contexts_from_sql(
@@ -181,6 +199,7 @@ def trace_metadata(
 def engine_config(mdl: dict) -> dict:
     return {
         "mdl_json": mdl,
+        "data_source": "duckdb",
         "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
         "timeout": 10,
     }

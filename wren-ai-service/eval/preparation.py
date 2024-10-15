@@ -1,14 +1,20 @@
 """
-This file aims to prepare eval dataset from spider dataset for text-to-sql eval process
+This file aims to prepare spider 1.0 eval dataset for text-to-sql eval purpose
 """
+import asyncio
 import os
 import zipfile
+from collections import defaultdict
 from pathlib import Path
 
 import gdown
 import orjson
+import requests
 
-DESTINATION_PATH = Path("./eval/spider1.0")
+from eval.utils import get_data_from_wren_engine
+
+DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
+WREN_ENGINE_API_URL = "http://localhost:8080"
 
 
 def download_spider_data(destination_path: Path):
@@ -96,8 +102,8 @@ def build_mdl_by_db(destination_path: Path):
                 "name": table,
                 "properties": {},
                 "tableReference": {
-                    "catalog": "wrenai",
-                    "schema": database,
+                    "catalog": database,
+                    "schema": "main",
                     "table": table,
                 },
                 "primaryKey": tables_info["column_names_original"][i][-1],
@@ -131,6 +137,7 @@ def build_mdl_by_db(destination_path: Path):
                     "condition": f"{first_foreign_key_table}.{first_column_name} = {second_foreign_key_table}.{second_column_name}",
                 }
             )
+
         return relationships
 
     # get all database names in the spider testsuite
@@ -166,13 +173,15 @@ def build_question_sql_pairs_by_db(destination_path: Path):
         destination_path / "spider_data/dev.json", "db_id"
     )
 
-    question_sql_pairs_by_db = {}
+    question_sql_pairs_by_db = defaultdict(list)
     for database in databases:
         if ground_truth_info := ground_truth_by_db.get(database):
-            question_sql_pairs_by_db[database] = {
-                "question": ground_truth_info["question"],
-                "sql": ground_truth_info["query"],
-            }
+            question_sql_pairs_by_db[database].append(
+                {
+                    "question": ground_truth_info["question"],
+                    "sql": ground_truth_info["query"],
+                }
+            )
 
     return question_sql_pairs_by_db
 
@@ -181,8 +190,33 @@ def get_mdls_and_question_sql_pairs_by_common_db(mdl_by_db, question_sql_pairs_b
     common_dbs = set(mdl_by_db.keys()) & set(question_sql_pairs_by_db.keys())
 
     return {
-        db: {"mdl": mdl_by_db[db], **question_sql_pairs_by_db[db]} for db in common_dbs
+        db: {"mdl": mdl_by_db[db], "ground_truth": question_sql_pairs_by_db[db]}
+        for db in common_dbs
     }
+
+
+def prepare_duckdb_session_sql():
+    session_sql = "INSTALL sqlite;"
+
+    response = requests.put(
+        f"{WREN_ENGINE_API_URL}/v1/data-source/duckdb/settings/session-sql",
+        data=session_sql,
+    )
+
+    assert response.status_code == 200, response.text
+
+
+def prepare_duckdb_init_sql(db: str):
+    init_sql = (
+        f"ATTACH 'etc/spider1.0/database/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
+    )
+
+    response = requests.put(
+        f"{WREN_ENGINE_API_URL}/v1/data-source/duckdb/settings/init-sql",
+        data=init_sql,
+    )
+
+    assert response.status_code == 200, response.text
 
 
 if __name__ == "__main__":
@@ -195,7 +229,27 @@ if __name__ == "__main__":
         build_question_sql_pairs_by_db(DESTINATION_PATH),
     )
 
-    # dump data from sqlite to duckdb
+    # create duckdb connection in wren engine
+    # https://duckdb.org/docs/guides/database_integration/sqlite.html
+    prepare_duckdb_session_sql()
+    for db, values in mdl_and_ground_truth_by_db.items():
+        prepare_duckdb_init_sql(db)
+
+        print(f'sql: {values["ground_truth"][0]["sql"]}')
+        print(f'mdl: {values["mdl"]}')
+
+        results = asyncio.run(
+            get_data_from_wren_engine(
+                values["ground_truth"][0]["sql"],
+                "duckdb",
+                values["mdl"],
+                {},
+                WREN_ENGINE_API_URL,
+            )
+        )
+        print(results)
+
+        break
 
     # sql validation using duckdb
 
