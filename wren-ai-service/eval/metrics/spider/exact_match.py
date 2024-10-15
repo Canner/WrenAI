@@ -13,7 +13,7 @@ class ExactMatchAccuracy(BaseMetric):
         self.threshold = 0
         self.score = 0
         # todo: change the path
-        self.kamps = build_foreign_key_map_from_json(
+        self.kmaps = build_foreign_key_map_from_json(
             "./eval/dataset/spider/tables.json"
         )
 
@@ -29,8 +29,8 @@ class ExactMatchAccuracy(BaseMetric):
         db_name = test_case.additional_metadata["database_name"]
         db = os.path.join(self.db_dir, db_name, db_name + ".sqlite")
         schema = Schema(get_schema(db))
-        gold_sql = tokenize(test_case.expected_output, schema, self.kamps[db_name])
-        pred_sql = tokenize(test_case.actual_output, schema, self.kamps[db_name])
+        gold_sql = tokenize(test_case.expected_output, schema, self.kmaps[db_name])
+        pred_sql = tokenize(test_case.actual_output, schema, self.kmaps[db_name])
 
         evaluator = Evaluator()
         self.score = evaluator.eval_exact_match(pred_sql, gold_sql)
