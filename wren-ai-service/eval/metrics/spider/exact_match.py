@@ -9,15 +9,16 @@ from eval.metrics.spider.process_sql import Schema, get_schema
 
 
 class ExactMatchAccuracy(BaseMetric):
-    def __init__(self):
+    def __init__(
+        self,
+        kmap_path: str = "./tools/dev/etc/spider1.0/tables.json",
+        db_dir: str = "./tools/dev/etc/spider1.0/database",
+    ):
         self.threshold = 0
         self.score = 0
-        # todo: change the path
-        self.kmaps = build_foreign_key_map_from_json(
-            "./eval/dataset/spider/tables.json"
-        )
+        self.kmaps = build_foreign_key_map_from_json(kmap_path)
 
-        self.db_dir = "./eval/dataset/spider/database"
+        self.db_dir = db_dir
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
