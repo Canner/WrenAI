@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import os
+import re
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -27,7 +28,7 @@ load_dotenv()
 
 WREN_IBIS_ENDPOINT = os.getenv("WREN_IBIS_ENDPOINT", "http://localhost:8000")
 WREN_ENGINE_ENDPOINT = os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")
-DATA_SOURCES = ["bigquery"]
+DATA_SOURCES = ["bigquery", "duckdb"]
 TIMEOUT_SECONDS = 60
 ddl_converter = DDLConverter()
 
@@ -46,28 +47,45 @@ async def is_sql_valid(
     data_source: str,
     mdl_json: dict,
     connection_info: dict,
-    api_endpoint: str = WREN_IBIS_ENDPOINT,
+    api_endpoint: str,
     timeout: float = TIMEOUT_SECONDS,
 ) -> Tuple[bool, str]:
     sql = sql.rstrip(";") if sql.endswith(";") else sql
     quoted_sql, no_error = add_quotes(sql)
     assert no_error, f"Error in quoting SQL: {sql}"
 
-    async with aiohttp.request(
-        "POST",
-        f"{api_endpoint}/v2/connector/{data_source}/query?dryRun=true",
-        json={
-            "sql": quoted_sql,
-            "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
-            "connectionInfo": connection_info,
-        },
-        timeout=aiohttp.ClientTimeout(total=timeout),
-    ) as response:
-        if response.status == 204:
-            return True, None
-        res = await response.text()
+    if data_source == "duckdb":
+        async with aiohttp.request(
+            "GET",
+            f"{api_endpoint}/v1/mdl/dry-run",
+            json={
+                "sql": remove_limit_statement(quoted_sql),
+                "manifest": mdl_json,
+                "limit": 1,
+            },
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as response:
+            if response.status == 200:
+                return True, None
 
-        return False, res
+            res = await response.json()
+            return False, res
+    else:
+        async with aiohttp.request(
+            "POST",
+            f"{api_endpoint}/v2/connector/{data_source}/query?dryRun=true",
+            json={
+                "sql": remove_limit_statement(quoted_sql),
+                "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
+                "connectionInfo": connection_info,
+            },
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as response:
+            if response.status == 204:
+                return True, None
+            res = await response.text()
+
+            return False, res
 
 
 async def get_validated_question_sql_pairs(
@@ -86,6 +104,9 @@ async def get_validated_question_sql_pairs(
                     data_source,
                     mdl_json,
                     connection_info,
+                    WREN_ENGINE_ENDPOINT
+                    if data_source == "duckdb"
+                    else WREN_IBIS_ENDPOINT,
                 )
             )
             tasks.append(task)
@@ -247,3 +268,10 @@ async def get_data_from_wren_engine_with_sqls(
             tasks.append(task)
 
         return await asyncio.gather(*tasks)
+
+
+def remove_limit_statement(sql: str) -> str:
+    pattern = r"\s*LIMIT\s+\d+(\s*;?\s*--.*|\s*;?\s*)$"
+    modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
+
+    return modified_sql

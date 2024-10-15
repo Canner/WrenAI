@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, get_args
 
 import aiohttp
 import orjson
+import requests
 import sqlglot
 import tomlkit
 from tomlkit import parse
@@ -498,3 +499,27 @@ def get_eval_dataset_in_toml_string(mdl: dict, dataset: list) -> str:
     doc.add("eval_dataset", dataset)
 
     return tomlkit.dumps(doc, sort_keys=True)
+
+
+def prepare_duckdb_session_sql(api_endpoint: str):
+    session_sql = "INSTALL sqlite;"
+
+    response = requests.put(
+        f"{api_endpoint}/v1/data-source/duckdb/settings/session-sql",
+        data=session_sql,
+    )
+
+    assert response.status_code == 200, response.text
+
+
+def prepare_duckdb_init_sql(api_endpoint: str, db: str):
+    init_sql = (
+        f"ATTACH 'etc/spider1.0/database/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
+    )
+
+    response = requests.put(
+        f"{api_endpoint}/v1/data-source/duckdb/settings/init-sql",
+        data=init_sql,
+    )
+
+    assert response.status_code == 200, response.text

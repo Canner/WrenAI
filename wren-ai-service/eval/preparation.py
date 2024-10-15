@@ -9,12 +9,13 @@ from pathlib import Path
 
 import gdown
 import orjson
-import requests
 
 from eval.utils import (
     get_contexts_from_sql,
     get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
+    prepare_duckdb_init_sql,
+    prepare_duckdb_session_sql,
 )
 
 SPIDER_DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
@@ -110,10 +111,14 @@ def build_mdl_by_db(destination_path: Path):
                     "schema": "main",
                     "table": table,
                 },
-                "primaryKey": tables_info["column_names_original"][i][-1],
+                "primaryKey": tables_info["column_names_original"][
+                    primary_key_column_index
+                ][-1],
                 "columns": _build_mdl_columns(tables_info, i),
             }
-            for i, table in enumerate(tables_info["table_names_original"])
+            for i, (table, primary_key_column_index) in enumerate(
+                zip(tables_info["table_names_original"], tables_info["primary_keys"])
+            )
         ]
 
     def _build_mdl_relationships(tables_info):
@@ -157,8 +162,8 @@ def build_mdl_by_db(destination_path: Path):
     for database in databases:
         if tables_info := tables_by_db.get(database):
             mdl_by_db[database] = {
-                "catalog": "wrenai",
-                "schema": database,
+                "catalog": database,
+                "schema": "main",
                 "models": _build_mdl_models(database, tables_info),
                 "relationships": _build_mdl_relationships(tables_info),
                 "views": [],
@@ -210,30 +215,6 @@ def get_mdls_and_question_sql_pairs_by_common_db(mdl_by_db, question_sql_pairs_b
     }
 
 
-def prepare_duckdb_session_sql():
-    session_sql = "INSTALL sqlite;"
-
-    response = requests.put(
-        f"{WREN_ENGINE_API_URL}/v1/data-source/duckdb/settings/session-sql",
-        data=session_sql,
-    )
-
-    assert response.status_code == 200, response.text
-
-
-def prepare_duckdb_init_sql(db: str):
-    init_sql = (
-        f"ATTACH 'etc/spider1.0/database/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
-    )
-
-    response = requests.put(
-        f"{WREN_ENGINE_API_URL}/v1/data-source/duckdb/settings/init-sql",
-        data=init_sql,
-    )
-
-    assert response.status_code == 200, response.text
-
-
 if __name__ == "__main__":
     print(f"Downloading Spider 1.0 data if unavailable in {SPIDER_DESTINATION_PATH}...")
     download_spider_data(SPIDER_DESTINATION_PATH)
@@ -251,10 +232,10 @@ if __name__ == "__main__":
 
     # create duckdb connection in wren engine
     # https://duckdb.org/docs/guides/database_integration/sqlite.html
-    prepare_duckdb_session_sql()
+    prepare_duckdb_session_sql(WREN_ENGINE_API_URL)
     for db, values in mdl_and_ground_truths_by_db.items():
         print(f"Database: {db}")
-        prepare_duckdb_init_sql(db)
+        prepare_duckdb_init_sql(WREN_ENGINE_API_URL, db)
 
         for i, ground_truth in enumerate(values["ground_truth"]):
             context = asyncio.run(
