@@ -31,6 +31,7 @@ def formatter(prediction: dict) -> dict:
         "additional_metadata": {
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
+            "database_name": prediction.get("database_name", None),
         },
     }
 

@@ -11,6 +11,8 @@ from haystack import Document
 from langfuse.decorators import langfuse_context, observe
 from tqdm.asyncio import tqdm_asyncio
 
+from eval.metrics.spider import ExactMatchAccuracy
+
 sys.path.append(f"{Path().parent.resolve()}")
 
 from eval.metrics.column import (
@@ -275,6 +277,7 @@ class GenerationPipeline(Eval):
                 AccuracyMetric(ibis_engine_config),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
+                ExactMatchAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -355,6 +358,7 @@ class AskPipeline(Eval):
                 ContextualRecallMetric(config),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
+                ExactMatchAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
