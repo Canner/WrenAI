@@ -55,6 +55,7 @@ def generate_meta(
         "batch_size": os.getenv("BATCH_SIZE") or 4,
         "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
         "catalog": dataset["mdl"]["catalog"],
+        "datasource": os.getenv("datasource"),
     }
 
 
@@ -94,22 +95,48 @@ def obtain_commit_hash() -> str:
 
 
 def init_providers(mdl: dict) -> dict:
-    engine_config = EngineConfig(
-        provider="wren_ibis",
-        config={
-            "source": "bigquery",
-            "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
-            "connection_info": base64.b64encode(
-                orjson.dumps(
-                    {
-                        "project_id": os.getenv("bigquery.project-id"),
-                        "dataset_id": os.getenv("bigquery.dataset-id"),
-                        "credentials": os.getenv("bigquery.credentials-key"),
-                    }
-                )
-            ).decode(),
-        },
-    )
+    engine_config = None
+
+    if os.getenv("datasource") == "bigquery":
+        engine_config = EngineConfig(
+            provider="wren_ibis",
+            config={
+                "source": "bigquery",
+                "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
+                "connection_info": base64.b64encode(
+                    orjson.dumps(
+                        {
+                            "project_id": os.getenv("bigquery.project-id"),
+                            "dataset_id": os.getenv("bigquery.dataset-id"),
+                            "credentials": os.getenv("bigquery.credentials-key"),
+                        }
+                    )
+                ).decode(),
+            },
+        )
+
+    if os.getenv("datasource") == "duckdb":
+        print("datasource is duckdb")
+        # init duckdb
+        from eval.utils import prepare_duckdb_init_sql, prepare_duckdb_session_sql
+
+        endpoint = os.getenv("WREN_ENGINE_ENDPOINT")
+        os.environ["WREN_ENGINE_MANIFEST"] = base64.b64encode(
+            orjson.dumps(mdl)
+        ).decode()
+
+        prepare_duckdb_session_sql(endpoint)
+        prepare_duckdb_init_sql(endpoint, mdl["catalog"])
+
+        engine_config = EngineConfig(
+            provider="wren_engine",
+            config={
+                "endpoint": endpoint,
+            },
+        )
+
+    if engine_config is None:
+        raise ValueError("Invalid datasource")
 
     providers = provider.init_providers(engine_config=engine_config)
     return {
