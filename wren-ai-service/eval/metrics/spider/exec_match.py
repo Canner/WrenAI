@@ -4,7 +4,7 @@ import os
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
-from eval.metrics.spider import eval_exec_match, rewrite_sql
+from eval.metrics.spider import eval_exec_match
 
 
 class ExecutionAccuracy(BaseMetric):
@@ -29,7 +29,7 @@ class ExecutionAccuracy(BaseMetric):
 
         self.score = await eval_exec_match(
             db=db,
-            p_str=rewrite_sql(test_case.actual_output),
+            p_str=test_case.actual_output,
             g_str=test_case.expected_output,
         )
 
