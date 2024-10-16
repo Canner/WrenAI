@@ -205,7 +205,7 @@ def trace_metadata(
 def engine_config(mdl: dict) -> dict:
     return {
         "mdl_json": mdl,
-        "data_source": os.getenv("datasource"),
+        "data_source": os.getenv("DATA_SOURCE"),
         "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
         "timeout": 10,
     }

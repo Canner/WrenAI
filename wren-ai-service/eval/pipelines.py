@@ -385,7 +385,7 @@ def init(
 def metrics_initiator(pipeline: str, mdl: dict) -> dict:
     # todo: refactor configs
     config = engine_config(mdl)
-    if os.getenv("datasource") == "bigquery":
+    if os.getenv("DATA_SOURCE") == "bigquery":
         accuracy_config = {
             "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
             "data_source": "bigquery",
@@ -401,7 +401,7 @@ def metrics_initiator(pipeline: str, mdl: dict) -> dict:
             "limit": 10,
         }
 
-    if os.getenv("datasource") == "duckdb":
+    if os.getenv("DATA_SOURCE") == "duckdb":
         accuracy_config = config
 
     match pipeline:

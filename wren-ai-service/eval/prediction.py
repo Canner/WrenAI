@@ -55,7 +55,7 @@ def generate_meta(
         "batch_size": os.getenv("BATCH_SIZE") or 4,
         "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
         "catalog": dataset["mdl"]["catalog"],
-        "datasource": os.getenv("datasource"),
+        "datasource": os.getenv("DATA_SOURCE"),
     }
 
 
@@ -97,7 +97,7 @@ def obtain_commit_hash() -> str:
 def init_providers(mdl: dict) -> dict:
     engine_config = None
 
-    if os.getenv("datasource") == "bigquery":
+    if os.getenv("DATA_SOURCE") == "bigquery":
         engine_config = EngineConfig(
             provider="wren_ibis",
             config={
@@ -115,7 +115,7 @@ def init_providers(mdl: dict) -> dict:
             },
         )
 
-    if os.getenv("datasource") == "duckdb":
+    if os.getenv("DATA_SOURCE") == "duckdb":
         print("datasource is duckdb")
         # init duckdb
         from eval.utils import prepare_duckdb_init_sql, prepare_duckdb_session_sql
