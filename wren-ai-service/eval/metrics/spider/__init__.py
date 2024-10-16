@@ -1,3 +1,16 @@
+import asyncio
+import itertools
+import os
+import random
+import re
+import sqlite3
+from collections import defaultdict
+from itertools import chain, product
+from typing import Any, Iterator, List, Set, Tuple
+
+import sqlparse
+import tqdm
+
 from eval.metrics.spider.process_sql import get_sql
 
 # Flag to disable value evaluation
@@ -539,6 +552,7 @@ def build_valid_col_units(table_units, schema):
 
 
 def tokenize(sql: str, schema: dict, kmap: dict) -> dict:
+    # todo: sql rewrite to without double quotes and alias after column name
     try:
         struct = get_sql(schema, sql)
     except:
@@ -610,3 +624,377 @@ def build_foreign_key_map_from_json(table):
     for entry in data:
         tables[entry["db_id"]] = build_foreign_key_map(entry)
     return tables
+
+
+VALUE_NUM_SYMBOL = "VALUERARE"
+
+
+# plug in the values into query with value slots
+def plugin(query_value_replaced: List[str], values_in_order: List[str]) -> str:
+    q_length = len(query_value_replaced)
+    query_w_values = query_value_replaced[:]
+    value_idx = [
+        idx
+        for idx in range(q_length)
+        if query_value_replaced[idx] == VALUE_NUM_SYMBOL.lower()
+    ]
+    assert len(value_idx) == len(values_in_order)
+
+    for idx, value in zip(value_idx, values_in_order):
+        query_w_values[idx] = value
+    return " ".join(query_w_values)
+
+
+# a generator generating all possible ways of
+# filling values into predicted query
+def plugin_all_permutations(
+    query_value_replaced: List[str], values: Set[str]
+) -> Iterator[str]:
+    num_slots = len([v for v in query_value_replaced if v == VALUE_NUM_SYMBOL.lower()])
+    for values in itertools.product(*[list(values) for _ in range(num_slots)]):
+        yield plugin(query_value_replaced, list(values))
+
+
+# strip_query, reformat_query and replace values
+# were implemented by Yu Tao for processing CoSQL
+def strip_query(query: str) -> Tuple[List[str], List[str]]:
+    query_keywords, all_values = [], []
+
+    # then replace all stuff enclosed by "" with a numerical value to get it marked as {VALUE}
+
+    # Tao's implementation is commented out here.
+    """
+    str_1 = re.findall("\"[^\"]*\"", query)
+    str_2 = re.findall("\'[^\']*\'", query)
+    values = str_1 + str_2
+        """
+
+    toks = sqlparse.parse(query)[0].flatten()
+    values = [
+        t.value
+        for t in toks
+        if t.ttype == sqlparse.tokens.Literal.String.Single
+        or t.ttype == sqlparse.tokens.Literal.String.Symbol
+    ]
+
+    for val in values:
+        all_values.append(val)
+        query = query.replace(val.strip(), VALUE_NUM_SYMBOL)
+
+    query_tokenized = query.split()
+    float_nums = re.findall("[-+]?\d*\.\d+", query)
+    all_values += [qt for qt in query_tokenized if qt in float_nums]
+    query_tokenized = [
+        VALUE_NUM_SYMBOL if qt in float_nums else qt for qt in query_tokenized
+    ]
+
+    query = " ".join(query_tokenized)
+    int_nums = [i.strip() for i in re.findall("[^tT]\d+", query)]
+
+    all_values += [qt for qt in query_tokenized if qt in int_nums]
+    query_tokenized = [
+        VALUE_NUM_SYMBOL if qt in int_nums else qt for qt in query_tokenized
+    ]
+    # print int_nums, query, query_tokenized
+
+    for tok in query_tokenized:
+        if "." in tok:
+            table = re.findall("[Tt]\d+\.", tok)
+            if len(table) > 0:
+                to = tok.replace(".", " . ").split()
+                to = [t.lower() for t in to if len(t) > 0]
+                query_keywords.extend(to)
+            else:
+                query_keywords.append(tok.lower())
+
+        elif len(tok) > 0:
+            query_keywords.append(tok.lower())
+    return query_keywords, all_values
+
+
+def reformat_query(query: str) -> str:
+    query = query.strip().replace(";", "").replace("\t", "")
+    query = " ".join(
+        [t.value for t in tokenize(query) if t.ttype != sqlparse.tokens.Whitespace]
+    )
+    t_stars = ["t1.*", "t2.*", "t3.*", "T1.*", "T2.*", "T3.*"]
+    for ts in t_stars:
+        query = query.replace(ts, "*")
+    return query
+
+
+def replace_values(sql: str) -> Tuple[List[str], Set[str]]:
+    sql = sqlparse.format(sql, reindent=False, keyword_case="upper")
+    # sql = re.sub(r"(<=|>=|!=|=|<|>|,)", r" \1 ", sql)
+    sql = re.sub(r"(T\d+\.)\s", r"\1", sql)
+    query_toks_no_value, values = strip_query(sql)
+    return query_toks_no_value, set(values)
+
+
+# extract the non-value tokens and the set of values
+# from a sql query
+def extract_query_values(sql: str) -> Tuple[List[str], Set[str]]:
+    reformated = reformat_query(query=sql)
+    query_value_replaced, values = replace_values(reformated)
+    return query_value_replaced, values
+
+
+# given the gold query and the model prediction
+# extract values from the gold, extract predicted sql with value slots
+# return 1) number of possible ways to plug in gold values and 2) an iterator of predictions with value plugged in
+def get_all_preds_for_execution(gold: str, pred: str) -> Tuple[int, Iterator[str]]:
+    _, gold_values = extract_query_values(gold)
+    pred_query_value_replaced, _ = extract_query_values(pred)
+    num_slots = len(
+        [v for v in pred_query_value_replaced if v == VALUE_NUM_SYMBOL.lower()]
+    )
+    num_alternatives = len(gold_values) ** num_slots
+    return num_alternatives, plugin_all_permutations(
+        pred_query_value_replaced, gold_values
+    )
+
+
+def remove_distinct(s):
+    toks = [t.value for t in list(sqlparse.parse(s)[0].flatten())]
+    return "".join([t for t in toks if t.lower() != "distinct"])
+
+
+# postprocess the model predictions to avoid execution errors
+# e.g. removing spaces between ">" and "="
+def postprocess(query: str) -> str:
+    query = query.replace("> =", ">=").replace("< =", "<=").replace("! =", "!=")
+    return query
+
+
+def replace_cur_year(query: str) -> str:
+    return re.sub(
+        "YEAR\s*\(\s*CURDATE\s*\(\s*\)\s*\)\s*", "2020", query, flags=re.IGNORECASE
+    )
+
+
+# get the database cursor for a sqlite database path
+def get_cursor_from_path(sqlite_path: str):
+    try:
+        if not os.path.exists(sqlite_path):
+            print("Openning a new connection %s" % sqlite_path)
+        connection = sqlite3.connect(sqlite_path)
+    except Exception as e:
+        print(sqlite_path)
+        raise e
+    connection.text_factory = lambda b: b.decode(errors="ignore")
+    cursor = connection.cursor()
+    return cursor
+
+
+async def exec_on_db_(sqlite_path: str, query: str) -> Tuple[str, Any]:
+    query = replace_cur_year(query)
+    cursor = get_cursor_from_path(sqlite_path)
+    try:
+        cursor.execute(query)
+        result = cursor.fetchall()
+        cursor.close()
+        cursor.connection.close()
+        return "result", result
+    except Exception as e:
+        cursor.close()
+        cursor.connection.close()
+        return "exception", e
+
+
+TIMEOUT = 60
+
+
+async def exec_on_db(
+    sqlite_path: str, query: str, process_id: str = "", timeout: int = TIMEOUT
+) -> Tuple[str, Any]:
+    try:
+        return await asyncio.wait_for(exec_on_db_(sqlite_path, query), timeout)
+    except asyncio.TimeoutError:
+        return ("exception", TimeoutError)
+    except Exception as e:
+        return ("exception", e)
+
+
+def permute_tuple(element: Tuple, perm: Tuple) -> Tuple:
+    assert len(element) == len(perm)
+    return tuple([element[i] for i in perm])
+
+
+def unorder_row(row: Tuple) -> Tuple:
+    return tuple(sorted(row, key=lambda x: str(x) + str(type(x))))
+
+
+# unorder each row in the table
+# [result_1 and result_2 has the same bag of unordered row]
+# is a necessary condition of
+# [result_1 and result_2 are equivalent in denotation]
+def quick_rej(result1: List[Tuple], result2: List[Tuple], order_matters: bool) -> bool:
+    s1 = [unorder_row(row) for row in result1]
+    s2 = [unorder_row(row) for row in result2]
+    if order_matters:
+        return s1 == s2
+    else:
+        return set(s1) == set(s2)
+
+
+def get_constraint_permutation(tab1_sets_by_columns: List[Set], result2: List[Tuple]):
+    num_cols = len(result2[0])
+    perm_constraints = [{i for i in range(num_cols)} for _ in range(num_cols)]
+    if num_cols <= 3:
+        return product(*perm_constraints)
+
+    # we sample 20 rows and constrain the space of permutations
+    for _ in range(20):
+        random_tab2_row = random.choice(result2)
+
+        for tab1_col in range(num_cols):
+            for tab2_col in set(perm_constraints[tab1_col]):
+                if random_tab2_row[tab2_col] not in tab1_sets_by_columns[tab1_col]:
+                    perm_constraints[tab1_col].remove(tab2_col)
+    return product(*perm_constraints)
+
+
+# return whether two bag of relations are equivalent
+def multiset_eq(l1: List, l2: List) -> bool:
+    if len(l1) != len(l2):
+        return False
+    d = defaultdict(int)
+    for e in l1:
+        d[e] = d[e] + 1
+    for e in l2:
+        d[e] = d[e] - 1
+        if d[e] < 0:
+            return False
+    return True
+
+
+# check whether two denotations are correct
+def result_eq(result1: List[Tuple], result2: List[Tuple], order_matters: bool) -> bool:
+    if len(result1) == 0 and len(result2) == 0:
+        return True
+
+    # if length is not the same, then they are definitely different bag of rows
+    if len(result1) != len(result2):
+        return False
+
+    num_cols = len(result1[0])
+
+    # if the results do not have the same number of columns, they are different
+    if len(result2[0]) != num_cols:
+        return False
+
+    # unorder each row and compare whether the denotation is the same
+    # this can already find most pair of denotations that are different
+    if not quick_rej(result1, result2, order_matters):
+        return False
+
+    # the rest of the problem is in fact more complicated than one might think
+    # we want to find a permutation of column order and a permutation of row order,
+    # s.t. result_1 is the same as result_2
+    # we return true if we can find such column & row permutations
+    # and false if we cannot
+    tab1_sets_by_columns = [{row[i] for row in result1} for i in range(num_cols)]
+
+    # on a high level, we enumerate all possible column permutations that might make result_1 == result_2
+    # we decrease the size of the column permutation space by the function get_constraint_permutation
+    # if one of the permutation make result_1, result_2 equivalent, then they are equivalent
+    for perm in get_constraint_permutation(tab1_sets_by_columns, result2):
+        if len(perm) != len(set(perm)):
+            continue
+        if num_cols == 1:
+            result2_perm = result2
+        else:
+            result2_perm = [permute_tuple(element, perm) for element in result2]
+        if order_matters:
+            if result1 == result2_perm:
+                return True
+        else:
+            # in fact the first condition must hold if the second condition holds
+            # but the first is way more efficient implementation-wise
+            # and we use it to quickly reject impossible candidates
+            if set(result1) == set(result2_perm) and multiset_eq(result1, result2_perm):
+                return True
+    return False
+
+
+# approximate whether p_str and g_str are semantically equivalent
+# db is the database path
+# we are going to evaluate whether they are equivalent in all the databases
+# that are in the same directory as db
+# 0 if denotationally equivalent
+# 1 otherwise
+# the meaning of each auxillary argument can be seen in the parser definition in evaluation.py
+async def eval_exec_match(
+    db: str,
+    p_str: str,
+    g_str: str,
+    plug_value: bool = False,
+    keep_distinct: bool = False,
+    progress_bar_for_each_datapoint: bool = False,
+) -> int:
+    # post-process the prediction.
+    # e.g. removing spaces between ">" and "="
+    p_str, g_str = postprocess(p_str), postprocess(g_str)
+    if not keep_distinct:
+        p_str = remove_distinct(p_str)
+        g_str = remove_distinct(g_str)
+
+    # we decide whether two denotations are equivalent based on "bag semantics"
+    # https://courses.cs.washington.edu/courses/cse444/10sp/lectures/lecture16.pdf
+    # if there is order by in query, then we assume order of the rows matter
+    # order by might also be used to find the max/min instead of sorting,
+    # but in that case the result mostly only contains one row and hence order_matters does not make a difference
+    order_matters = "order by" in g_str.lower()
+
+    # find all databases in the same directory
+    db_dir = os.path.dirname(db)
+    db_paths = [
+        os.path.join(db_dir, basename)
+        for basename in os.listdir(db_dir)
+        if ".sqlite" in basename
+    ]
+
+    preds = [p_str]
+    # if plug in value (i.e. we do not consider value prediction correctness)
+    # enumerate all ways to plug in values in the gold query to the model predictions
+    # otherwise, we only evaluate the predicted query with its own value prediction
+    if plug_value:
+        _, preds = get_all_preds_for_execution(g_str, p_str)
+        # we did not add this line in our EMNLP work
+        # this reduces "false negatives" when value is substituted
+        preds = chain([p_str], preds)
+
+    for pred in preds:
+        pred_passes = 1
+        # compare the gold and predicted denotations on each database in the directory
+        # wrap with progress bar if required
+        if progress_bar_for_each_datapoint:
+            ranger = tqdm.tqdm(db_paths)
+        else:
+            ranger = db_paths
+
+        for db_path in ranger:
+            g_flag, g_denotation = await exec_on_db(db_path, g_str)
+            p_flag, p_denotation = await exec_on_db(db_path, pred)
+
+            # we should expect the gold to be succesfully executed on the database
+            assert g_flag != "exception", (
+                "gold query %s has error on database file %s" % (g_str, db_path)
+            )
+
+            # wrong if execution fails
+            if p_flag == "exception":
+                pred_passes = 0
+
+            # if denotations are not equivalent, the prediction must be wrong
+            elif not result_eq(g_denotation, p_denotation, order_matters=order_matters):
+                pred_passes = 0
+            if pred_passes == 0:
+                break
+
+        # the model prediction has the same denotation as the gold for all databases
+        if pred_passes == 1:
+            return 1
+
+    # none of the predictions passed
+    return 0
