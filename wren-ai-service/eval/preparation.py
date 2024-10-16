@@ -5,6 +5,7 @@ import asyncio
 import os
 import zipfile
 from collections import defaultdict
+from itertools import zip_longest
 from pathlib import Path
 
 import gdown
@@ -113,11 +114,15 @@ def build_mdl_by_db(destination_path: Path):
                 },
                 "primaryKey": tables_info["column_names_original"][
                     primary_key_column_index
-                ][-1],
+                ][-1]
+                if primary_key_column_index
+                else "",
                 "columns": _build_mdl_columns(tables_info, i),
             }
             for i, (table, primary_key_column_index) in enumerate(
-                zip(tables_info["table_names_original"], tables_info["primary_keys"])
+                zip_longest(
+                    tables_info["table_names_original"], tables_info["primary_keys"]
+                )
             )
         ]
 
