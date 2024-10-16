@@ -50,9 +50,9 @@ class ExactMatchAccuracy(BaseMetric):
 if __name__ == "__main__":
     metric = ExactMatchAccuracy()
     test_case = LLMTestCase(
-        input="show me the airlines",
-        expected_output="select * from airlines",
-        actual_output="select * from airlines",
-        additional_metadata={"catalog": "flight_2"},
+        input="",
+        expected_output="SELECT COUNT(DISTINCT Nationality) FROM people",
+        actual_output='SELECT COUNT(DISTINCT "Nationality") AS "nationality_count" FROM "people"',
+        additional_metadata={"catalog": "poker_player"},
     )
     print(metric.measure(test_case))

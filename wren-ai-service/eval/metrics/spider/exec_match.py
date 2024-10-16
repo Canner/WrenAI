@@ -4,7 +4,7 @@ import os
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
-from eval.metrics.spider import eval_exec_match
+from eval.metrics.spider import eval_exec_match, rewrite_sql
 
 
 class ExecutionAccuracy(BaseMetric):
@@ -29,7 +29,7 @@ class ExecutionAccuracy(BaseMetric):
 
         self.score = await eval_exec_match(
             db=db,
-            p_str=test_case.actual_output,
+            p_str=rewrite_sql(test_case.actual_output),
             g_str=test_case.expected_output,
         )
 
@@ -48,9 +48,9 @@ class ExecutionAccuracy(BaseMetric):
 if __name__ == "__main__":
     metric = ExecutionAccuracy()
     test_case = LLMTestCase(
-        input="show me the airlines",
-        expected_output="select * from airlines",
-        actual_output="select * from airlines",
-        additional_metadata={"catalog": "flight_2"},
+        input="",
+        expected_output="SELECT COUNT(DISTINCT Nationality) FROM people",
+        actual_output='SELECT COUNT(DISTINCT "Nationality") AS "nationality_count" FROM "people"',
+        additional_metadata={"catalog": "poker_player"},
     )
     print(metric.measure(test_case))

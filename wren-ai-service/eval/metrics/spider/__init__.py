@@ -551,10 +551,19 @@ def build_valid_col_units(table_units, schema):
     return valid_col_units
 
 
+def rewrite_sql(sql: str) -> str:
+    sql = re.sub(r'"([^"]*)"', r"\1", sql)
+    sql = re.sub(r"\s+AS\s+\w+", "", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\s+", " ", sql).strip()
+
+    return sql
+
+
 def tokenize(sql: str, schema: dict, kmap: dict) -> dict:
-    # todo: sql rewrite to without double quotes and alias after column name
+    rewritten_sql = rewrite_sql(sql)
+
     try:
-        struct = get_sql(schema, sql)
+        struct = get_sql(schema, rewritten_sql)
     except:
         struct = {
             "except": None,
