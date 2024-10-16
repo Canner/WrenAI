@@ -403,6 +403,7 @@ def metrics_initiator(pipeline: str, mdl: dict) -> dict:
 
     if os.getenv("DATA_SOURCE") == "duckdb":
         accuracy_config = config
+        accuracy_config["connection_info"] = None
 
     match pipeline:
         case "retrieval":
