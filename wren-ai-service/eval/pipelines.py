@@ -12,6 +12,7 @@ from langfuse.decorators import langfuse_context, observe
 from tqdm.asyncio import tqdm_asyncio
 
 from eval.metrics.spider.exact_match import ExactMatchAccuracy
+from eval.metrics.spider.exec_match import ExecutionAccuracy
 
 sys.path.append(f"{Path().parent.resolve()}")
 
@@ -278,6 +279,7 @@ class GenerationPipeline(Eval):
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
                 ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -359,6 +361,7 @@ class AskPipeline(Eval):
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
                 ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
