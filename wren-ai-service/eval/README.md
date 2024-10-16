@@ -15,6 +15,17 @@ The dataset curation process is used to prepare the evaluation dataset for the W
 - copy `.env.example` to `.env` and fill in the environment variables
 - execute the command under the `wren-ai-service` folder: `just curate_eval_data`
 
+## Eval Dataset Preparation(If using Spider 1.0 dataset)
+
+This command will download Spider 1.0 dataset in `wren-ai-service/tools/dev/spider1.0`; and there are two folders inside: database and spider_data
+
+- database: it contains test data. It's downloaded from [this repo](https://github.com/taoyds/test-suite-sql-eval).
+- spider_data: it contains table schema, ground truths(question sql pairs), etc. For more information, please refer to [this repo](https://github.com/taoyds/spider).
+
+```cli
+just prep
+```
+
 ## Prediction Process
 
 The prediction process is used to produce the results of the evaluation data using the Wren AI service. It will create traces and a session on Langfuse to make the results available to the user. You can use the following command to predict the evaluation dataset under the `eval/dataset` directory:

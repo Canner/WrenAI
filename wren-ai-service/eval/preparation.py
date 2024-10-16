@@ -247,7 +247,6 @@ if __name__ == "__main__":
             )
 
             # ignore empty context
-            # TODO: this might be engine bug, remove those empty context temporarily
             if context:
                 candidate_eval_dataset.append(
                     {
@@ -279,5 +278,7 @@ if __name__ == "__main__":
                         values["mdl"], candidate_eval_dataset
                     )
                 )
-            print(f"Successfully creating eval dataset of database {db}")
+            print(
+                f"Successfully creating eval dataset of database {db}, which has {len(candidate_eval_dataset)} questions"
+            )
             print()
