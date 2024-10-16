@@ -53,6 +53,6 @@ if __name__ == "__main__":
         input="show me the airlines",
         expected_output="select * from airlines",
         actual_output="select * from airlines",
-        additional_metadata={"database_name": "flight_2"},
+        additional_metadata={"catalog": "flight_2"},
     )
     print(metric.measure(test_case))
