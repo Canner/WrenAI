@@ -227,17 +227,17 @@ if __name__ == "__main__":
     )
 
     print("Creating eval dataset...")
-    # make eval dataset
-    candidate_eval_dataset = []
 
     # create duckdb connection in wren engine
     # https://duckdb.org/docs/guides/database_integration/sqlite.html
     prepare_duckdb_session_sql(WREN_ENGINE_API_URL)
-    for db, values in mdl_and_ground_truths_by_db.items():
+    for db, values in sorted(mdl_and_ground_truths_by_db.items()):
+        candidate_eval_dataset = []
+
         print(f"Database: {db}")
         prepare_duckdb_init_sql(WREN_ENGINE_API_URL, db)
 
-        for i, ground_truth in enumerate(values["ground_truth"]):
+        for ground_truth in values["ground_truth"]:
             context = asyncio.run(
                 get_contexts_from_sql(
                     ground_truth["sql"],
