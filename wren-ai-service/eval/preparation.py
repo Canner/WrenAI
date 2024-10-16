@@ -259,14 +259,14 @@ if __name__ == "__main__":
                         ),
                     }
                 )
-            else:
-                print(
-                    "Warning: context is empty, ignore this question sql pair as of now..."
-                )
-                print(f"database: {db}")
-                print(f'question: {ground_truth["question"]}')
-                print(f'sql: {ground_truth["sql"]}')
-                print()
+            # else:
+            #     print(
+            #         "Warning: context is empty, ignore this question sql pair as of now..."
+            #     )
+            #     print(f"database: {db}")
+            #     print(f'question: {ground_truth["question"]}')
+            #     print(f'sql: {ground_truth["sql"]}')
+            #     print()
 
         # save eval dataset
         if candidate_eval_dataset:
