@@ -11,6 +11,9 @@ from haystack import Document
 from langfuse.decorators import langfuse_context, observe
 from tqdm.asyncio import tqdm_asyncio
 
+from eval.metrics.spider.exact_match import ExactMatchAccuracy
+from eval.metrics.spider.exec_match import ExecutionAccuracy
+
 sys.path.append(f"{Path().parent.resolve()}")
 
 from eval.metrics.column import (
@@ -269,12 +272,14 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+    def mertics(config: dict, accuracy_config: dict) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(ibis_engine_config),
+                AccuracyMetric(accuracy_config),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
+                ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -346,15 +351,17 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+    def mertics(config: dict, accuracy_config: dict) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(ibis_engine_config),
+                AccuracyMetric(accuracy_config),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
                 ContextualRecallMetric(config),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
+                ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -379,26 +386,32 @@ def init(
 
 
 def metrics_initiator(pipeline: str, mdl: dict) -> dict:
+    # todo: refactor configs
     config = engine_config(mdl)
-    ibis_engine_config = {
-        "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
-        "data_source": "bigquery",
-        "mdl_json": mdl,
-        "connection_info": {
-            "project_id": os.getenv("bigquery.project-id"),
-            "dataset_id": os.getenv("bigquery.dataset-id"),
-            "credentials": os.getenv("bigquery.credentials-key"),
-        },
-        "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
-        if os.getenv("WREN_IBIS_TIMEOUT")
-        else 10,
-        "limit": 10,
-    }
+    if os.getenv("DATA_SOURCE") == "bigquery":
+        accuracy_config = {
+            "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
+            "data_source": "bigquery",
+            "mdl_json": mdl,
+            "connection_info": {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
+            },
+            "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
+            if os.getenv("WREN_IBIS_TIMEOUT")
+            else 10,
+            "limit": 10,
+        }
+
+    if os.getenv("DATA_SOURCE") == "duckdb":
+        accuracy_config = config
+        accuracy_config["connection_info"] = None
 
     match pipeline:
         case "retrieval":
             return RetrievalPipeline.mertics(config)
         case "generation":
-            return GenerationPipeline.mertics(config, ibis_engine_config)
+            return GenerationPipeline.mertics(config, accuracy_config)
         case "ask":
-            return AskPipeline.mertics(config, ibis_engine_config)
+            return AskPipeline.mertics(config, accuracy_config)
