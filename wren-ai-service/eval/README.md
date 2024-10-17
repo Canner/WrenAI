@@ -58,6 +58,12 @@ The evaluation process is used to assess the prediction results of the Wren AI s
 just eval <prediction-result>
 ```
 
+Note: If you would like to enable semantics comparison between SQLs by LLM in order to improve the accuracy metric, please add `--semantics` to the end of the command like following:
+
+```cli
+just eval <prediction-result> --semantics
+```
+
 The evaluation results will be presented on Langfuse as follows:
 
 ![shallow_trace_example](../docs/imgs/shallow_trace_example.png)
