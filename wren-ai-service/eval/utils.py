@@ -524,3 +524,10 @@ def prepare_duckdb_init_sql(api_endpoint: str, db: str):
     )
 
     assert response.status_code == 200, response.text
+
+
+def get_next_few_items_circular(items: list, i: int, few: int = 5):
+    list_length = len(items)
+    if list_length < few + 1:
+        few = list_length - 1
+    return [items[(i + j) % list_length] for j in range(1, few + 1)]
