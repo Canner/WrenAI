@@ -2,12 +2,13 @@ import asyncio
 import re
 import traceback
 
+import orjson
 import pandas as pd
 from deepeval.evaluate import TestResult
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
-from eval.utils import get_data_from_wren_engine
+from eval.utils import get_data_from_wren_engine, get_openai_client
 
 
 class AccuracyMetric(BaseMetric):
@@ -15,11 +16,12 @@ class AccuracyMetric(BaseMetric):
         self.threshold = 0
         self.score = 0
         self._engine_config = engine_config
+        self._openai_client = get_openai_client()
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
 
-    def is_subset(self, expected: pd.DataFrame, actual: pd.DataFrame) -> bool:
+    def _is_subset(self, expected: pd.DataFrame, actual: pd.DataFrame) -> bool:
         if not set(expected.columns).issubset(set(actual.columns)):
             return False
 
@@ -39,7 +41,7 @@ class AccuracyMetric(BaseMetric):
         )
         return all(merged["_merge"] == "both")
 
-    def count_partial_matches(
+    def _count_partial_matches(
         self, expected: pd.DataFrame, actual: pd.DataFrame
     ) -> int:
         intersection = set(expected.columns).intersection(set(actual.columns))
@@ -84,6 +86,40 @@ class AccuracyMetric(BaseMetric):
         sorted_columns = sorted(df.columns)
         return df[sorted_columns].sort_values(by=sorted_columns)
 
+    async def _check_sql_semantics(self, expected_sql: str, actual_sql: str):
+        _system_prompt = (
+            "### TASK ### \n"
+            + "You are a great data anlyst, please carefully check the semantics of two given SQLs if they are the same. \n"
+            + "The output should be a JSON format with the following schema: \n"
+            + "{ \n"
+            + '   "reasoning": <REASONING_STRING> \n'
+            + '   "same": <BOOL> \n'
+            + "}"
+        )
+
+        _user_prompt = (
+            "### QUESTION ### \n"
+            + f"Expected SQL: {expected_sql} \n"
+            + f"Actual SQL: {actual_sql} \n"
+            + "\n"
+            + "Please think step by step"
+        )
+
+        response = await self._openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _system_prompt},
+                {"role": "user", "content": _user_prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        print(
+            f"response of _check_sql_semantics: {response.choices[0].message.content}"
+        )
+
+        return 1 if orjson.loads(response.choices[0].message.content)["same"] else 0
+
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
         try:
             rewritten_expected_output = self._rewrite_sql(test_case.expected_output)
@@ -93,14 +129,23 @@ class AccuracyMetric(BaseMetric):
             print(f"expected columns: {set(expected_dataset.columns)}")
             print(f"actual columns: {set(actual_dataset.columns)}")
 
-            if expected_dataset.equals(actual_dataset) or self.is_subset(
+            if expected_dataset.equals(actual_dataset) or self._is_subset(
                 expected_dataset, actual_dataset
             ):
                 self.success = True
                 self.score = 1
                 return self.score
 
-            self.score = self.count_partial_matches(expected_dataset, actual_dataset)
+            self.score = self._count_partial_matches(expected_dataset, actual_dataset)
+            # use llm to check sql semantics
+            if self.score == 0:
+                print(f"before _check_sql_semantics: {self.score}")
+                print(f"expected sql: {rewritten_expected_output}")
+                print(f"actual sql: {test_case.actual_output}")
+                self.score = await self._check_sql_semantics(
+                    rewritten_expected_output, test_case.actual_output
+                )
+                print(f"after _check_sql_semantics: {self.score}")
         except Exception as e:
             self.error = f"Error occurred while evaluating the metric: {e}"
             traceback.print_exc()
