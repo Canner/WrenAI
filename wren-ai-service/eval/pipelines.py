@@ -11,18 +11,17 @@ from haystack import Document
 from langfuse.decorators import langfuse_context, observe
 from tqdm.asyncio import tqdm_asyncio
 
-from eval.metrics.spider.exact_match import ExactMatchAccuracy
-from eval.metrics.spider.exec_match import ExecutionAccuracy
-
 sys.path.append(f"{Path().parent.resolve()}")
 
-from eval.metrics.column import (
+from eval.metrics import (
     AccuracyMetric,
     AccuracyMultiCandidateMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
+    ExactMatchAccuracy,
+    ExecutionAccuracy,
     FaithfulnessMetric,
 )
 from eval.utils import (
