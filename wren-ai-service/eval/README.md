@@ -58,7 +58,7 @@ The evaluation process is used to assess the prediction results of the Wren AI s
 just eval <prediction-result>
 ```
 
-Note: If you would like to enable semantics comparison between SQLs by LLM in order to improve the accuracy metric, please add `--semantics` to the end of the command like following:
+Note: If you would like to enable semantics comparison between SQLs by LLM in order to improve the accuracy metric, please fill in Open AI API key in `.env` file in `wren-ai-service/eval` and add `--semantics` to the end of the command like following:
 
 ```cli
 just eval <prediction-result> --semantics
