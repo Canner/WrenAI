@@ -92,7 +92,11 @@ Instructions: {{ instructions }}
 {% endif %}
 
 {% if samples %}
-Samples: {{ samples }}
+### SAMPLES ###
+{% for sample in samples %}
+Question: {{sample.question}}
+SQL: {{sample.sql}}
+{% endfor %}
 {% endif %}
 
 Let's think step by step.
