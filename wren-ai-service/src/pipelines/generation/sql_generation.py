@@ -64,11 +64,13 @@ Proceed in a similar manner for the other queries.
     {{ document }}
 {% endfor %}
 
+{% if exclude %}
 ### EXCLUDED STATEMETS ###
 Ensure that the following excluded statements are not used in the generated queries to maintain variety and avoid repetition.
 {% for doc in exclude %}
     {{ doc.statement }}
 {% endfor %}
+{% endif %}
 
 {{ alert }}
 
@@ -89,6 +91,10 @@ User's Question: {{ query }}
 Instructions: {{ instructions }}
 {% endif %}
 
+{% if samples %}
+Samples: {{ samples }}
+{% endif %}
+
 Let's think step by step.
 """
 
@@ -103,6 +109,7 @@ def prompt(
     alert: str,
     prompt_builder: PromptBuilder,
     configurations: AskConfigurations | None = None,
+    samples: List[Dict] | None = None,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
@@ -110,12 +117,15 @@ def prompt(
         f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
     )
     logger.debug(f"configurations: {configurations}")
+    if samples:
+        logger.debug(f"samples: {samples}")
     return prompt_builder.run(
         query=query,
         documents=documents,
         exclude=exclude,
         alert=alert,
         instructions=construct_instructions(configurations),
+        samples=samples,
     )
 
 
@@ -172,6 +182,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        samples: List[Dict] | None = None,
         project_id: str | None = None,
         configurations: AskConfigurations | None = None,
     ) -> None:
@@ -186,6 +197,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
+                "samples": samples,
                 "project_id": project_id,
                 "configurations": configurations,
                 **self._components,
@@ -202,6 +214,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        samples: List[Dict] | None = None,
         project_id: str | None = None,
         configurations: AskConfigurations | None = None,
     ):
@@ -212,6 +225,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
+                "samples": samples,
                 "project_id": project_id,
                 "configurations": configurations,
                 **self._components,

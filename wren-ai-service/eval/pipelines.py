@@ -138,6 +138,7 @@ class Eval:
             "expected_output": query["sql"],
             "retrieval_context": [],
             "context": query["context"],
+            "samples": query.get("samples", []),
             "type": "execution",
         }
 
@@ -250,6 +251,7 @@ class GenerationPipeline(Eval):
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
+            samples=prediction["samples"],
             exclude=[],
         )
 
@@ -329,6 +331,7 @@ class AskPipeline(Eval):
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
+            samples=prediction["samples"],
             exclude=[],
         )
 
