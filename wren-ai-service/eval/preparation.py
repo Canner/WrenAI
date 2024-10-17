@@ -220,8 +220,10 @@ def get_mdls_and_question_sql_pairs_by_common_db(mdl_by_db, question_sql_pairs_b
     }
 
 
-def get_next_few_items_circular(items: list, i: int, few: int = 3):
+def get_next_few_items_circular(items: list, i: int, few: int = 5):
     list_length = len(items)
+    if list_length < few + 1:
+        few = list_length - 1
     return [items[(i + j) % list_length] for j in range(1, few + 1)]
 
 
