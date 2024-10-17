@@ -21,6 +21,10 @@ from src import utils
 def formatter(prediction: dict, meta: dict) -> dict:
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
     context = [str(context) for context in prediction["context"]]
+    enable_spider_metrics = "spider" in meta.get("evaluation_dataset", "").lower()
+    enable_rewrite = any(
+        dataset in meta.get("evaluation_dataset", "").lower() for dataset in ["spider"]
+    )
 
     return {
         "input": prediction["input"],
@@ -32,10 +36,8 @@ def formatter(prediction: dict, meta: dict) -> dict:
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
             "catalog": meta.get("catalog", None),
-            "enable_rewrite": any(
-                dataset in meta.get("evaluation_dataset", "").lower()
-                for dataset in ["spider"]
-            ),
+            "enable_spider_metrics": enable_spider_metrics,
+            "enable_rewrite": enable_rewrite,
         },
     }
 
