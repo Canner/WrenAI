@@ -91,8 +91,10 @@ The final answer must be the JSON format like following:
 {% if samples %}
 ### SAMPLES ###
 {% for sample in samples %}
-Question: {{sample.question}}
-SQL: {{sample.sql}}
+Question:
+{{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
