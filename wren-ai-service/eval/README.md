@@ -17,15 +17,15 @@ The dataset curation process is used to prepare the evaluation dataset for the W
 
 ## Eval Dataset Preparation(If using Spider 1.0 dataset)
 
+```cli
+just prep
+```
+
 This command will do two things:
 1. download Spider 1.0 dataset in `wren-ai-service/tools/dev/spider1.0`; and there are two folders inside: database and spider_data
     - database: it contains test data. It's downloaded from [this repo](https://github.com/taoyds/test-suite-sql-eval).
     - spider_data: it contains table schema, ground truths(question sql pairs), etc. For more information, please refer to [this repo](https://github.com/taoyds/spider).
 2. prepare evaluation dataset and put them in `wren-ai-service/eval/dataset`. File name of eval dataset for Spider would look like this: `spider_<db_name>_eval_dataset.toml`
-
-```cli
-just prep
-```
 
 ## Evaluation Dataset Schema
 
