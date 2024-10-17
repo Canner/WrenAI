@@ -44,8 +44,14 @@ def parse_args() -> Tuple[str]:
         type=str,
         help="Eval the prediction result in the outputs/predictions directory",
     )
-    args = parser.parse_args()
-    return f"outputs/predictions/{args.file}"
+    parser.add_argument(
+        "--semantics",
+        "-S",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Whether use the LLM(OpenAI's gpt-4o-mini) to help check semantics of sqls to improve accuracy metrics",
+    )
+    return parser.parse_args()
 
 
 class Evaluator:
@@ -122,17 +128,19 @@ class Evaluator:
 
 
 if __name__ == "__main__":
-    path = parse_args()
+    args = parse_args()
 
     dotenv.load_dotenv()
     utils.load_env_vars()
 
-    predicted_file = parse_toml(path)
+    predicted_file = parse_toml(f"outputs/predictions/{args.file}")
     meta = predicted_file["meta"]
     predictions = predicted_file["predictions"]
 
     dataset = parse_toml(meta["evaluation_dataset"])
-    metrics = pipelines.metrics_initiator(meta["pipeline"], dataset["mdl"])
+    metrics = pipelines.metrics_initiator(
+        meta["pipeline"], dataset["mdl"], args.semantics
+    )
 
     evaluator = Evaluator(**metrics)
     evaluator.eval(meta, predictions)

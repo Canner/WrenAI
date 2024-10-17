@@ -273,10 +273,12 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, accuracy_config: dict) -> dict:
+    def mertics(
+        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
+    ) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(accuracy_config),
+                AccuracyMetric(accuracy_config, enable_semantics_comparison),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
                 ExactMatchAccuracy(),
@@ -353,10 +355,12 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, accuracy_config: dict) -> dict:
+    def mertics(
+        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
+    ) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(accuracy_config),
+                AccuracyMetric(accuracy_config, enable_semantics_comparison),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
                 ContextualRecallMetric(config),
@@ -387,7 +391,9 @@ def init(
             raise ValueError(f"Invalid pipeline name: {name}")
 
 
-def metrics_initiator(pipeline: str, mdl: dict) -> dict:
+def metrics_initiator(
+    pipeline: str, mdl: dict, enable_semantics_comparison: bool = True
+) -> dict:
     # todo: refactor configs
     config = engine_config(mdl)
     if os.getenv("DATA_SOURCE") == "bigquery":
@@ -414,6 +420,10 @@ def metrics_initiator(pipeline: str, mdl: dict) -> dict:
         case "retrieval":
             return RetrievalPipeline.mertics(config)
         case "generation":
-            return GenerationPipeline.mertics(config, accuracy_config)
+            return GenerationPipeline.mertics(
+                config, accuracy_config, enable_semantics_comparison
+            )
         case "ask":
-            return AskPipeline.mertics(config, accuracy_config)
+            return AskPipeline.mertics(
+                config, accuracy_config, enable_semantics_comparison
+            )

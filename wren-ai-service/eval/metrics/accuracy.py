@@ -12,11 +12,13 @@ from eval.utils import get_data_from_wren_engine, get_openai_client
 
 
 class AccuracyMetric(BaseMetric):
-    def __init__(self, engine_config: dict):
+    def __init__(self, engine_config: dict, enable_semantics_comparison: bool):
         self.threshold = 0
         self.score = 0
         self._engine_config = engine_config
-        self._openai_client = get_openai_client()
+        self._enable_semantics_comparison = enable_semantics_comparison
+        if self._enable_semantics_comparison:
+            self._openai_client = get_openai_client()
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
@@ -138,7 +140,7 @@ class AccuracyMetric(BaseMetric):
 
             self.score = self._count_partial_matches(expected_dataset, actual_dataset)
             # use llm to check sql semantics
-            if self.score == 0:
+            if self.score == 0 and self._enable_semantics_comparison:
                 print(f"before _check_sql_semantics: {self.score}")
                 print(f"expected sql: {rewritten_expected_output}")
                 print(f"actual sql: {test_case.actual_output}")
