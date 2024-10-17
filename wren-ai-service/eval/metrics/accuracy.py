@@ -65,9 +65,15 @@ class AccuracyMetric(BaseMetric):
             return 0
 
     def _rewrite_sql(self, sql: str) -> str:
+        # Pattern to match double quotes after WHERE clause, including multiple occurrences
         pattern = r'(WHERE\s+.*?)(")(.+?)(")(.*)$'
         replacement = r"\1'\3'\5"
-        sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE | re.DOTALL)
+
+        # Apply the replacement repeatedly until no more changes
+        new_sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE | re.DOTALL)
+        while new_sql != sql:
+            sql = new_sql
+            new_sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE | re.DOTALL)
 
         return sql
 
