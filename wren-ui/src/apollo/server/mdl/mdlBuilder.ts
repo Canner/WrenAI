@@ -9,9 +9,12 @@ import {
 } from '../repositories';
 import { Manifest, ModelMDL, TableReference } from './type';
 import { getLogger } from '@server/utils';
+import { getConfig } from '@server/config';
 
 const logger = getLogger('MDLBuilder');
 logger.level = 'debug';
+
+const config = getConfig();
 
 export interface MDLBuilderBuildFromOptions {
   project: Project;
@@ -105,7 +108,11 @@ export class MDLBuilder implements IMDLBuilder {
         columns: [],
         tableReference,
         // can only have one of refSql or tableReference
-        refSql: tableReference ? null : model.refSql,
+        refSql: this.useRustWrenEngine()
+          ? null
+          : tableReference
+            ? null
+            : model.refSql,
         cached: model.cached,
         refreshTime: model.refreshTime,
         properties: {
@@ -363,6 +370,7 @@ export class MDLBuilder implements IMDLBuilder {
     currentModel?: ModelMDL,
   ): string {
     if (!column.isCalculated) {
+      // columns existed in the data source.
       // Provide original column name in expression to MDL if referenceName has converted.
       if (column.sourceColumnName !== column.referenceName) {
         return `"${column.sourceColumnName}"`;
@@ -427,5 +435,9 @@ export class MDLBuilder implements IMDLBuilder {
       schema: modelProps.schema || null,
       table: modelProps.table,
     };
+  }
+
+  private useRustWrenEngine(): boolean {
+    return !!config.experimentalEngineRustVersion;
   }
 }
