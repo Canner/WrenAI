@@ -73,6 +73,9 @@ Ensure that the following excluded statements are not used in the generated quer
 {% endif %}
 
 {{ alert }}
+{% if instructions %}
+{{ instructions }}
+{% endif %}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
@@ -85,12 +88,6 @@ The final answer must be the JSON format like following:
     ]
 }
 
-### QUESTION ###
-User's Question: {{ query }}
-{% if instructions %}
-Instructions: {{ instructions }}
-{% endif %}
-
 {% if samples %}
 ### SAMPLES ###
 {% for sample in samples %}
@@ -98,6 +95,9 @@ Question: {{sample.question}}
 SQL: {{sample.sql}}
 {% endfor %}
 {% endif %}
+
+### QUESTION ###
+User's Question: {{ query }}
 
 Let's think step by step.
 """
