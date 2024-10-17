@@ -124,7 +124,12 @@ class AccuracyMetric(BaseMetric):
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
         try:
-            rewritten_expected_output = self._rewrite_sql(test_case.expected_output)
+            enable_rewrite = test_case.additional_metadata.get("enable_rewrite", False)
+            rewritten_expected_output = test_case.expected_output
+
+            if enable_rewrite:
+                rewritten_expected_output = self._rewrite_sql(test_case.expected_output)
+
             expected_dataset = await self._retrieve_data(rewritten_expected_output)
             actual_dataset = await self._retrieve_data(test_case.actual_output)
 

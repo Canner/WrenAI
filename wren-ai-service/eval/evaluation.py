@@ -32,6 +32,10 @@ def formatter(prediction: dict, meta: dict) -> dict:
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
             "catalog": meta.get("catalog", None),
+            "enable_rewrite": any(
+                dataset in meta.get("evaluation_dataset", "").lower()
+                for dataset in ["spider"]
+            ),
         },
     }
 
