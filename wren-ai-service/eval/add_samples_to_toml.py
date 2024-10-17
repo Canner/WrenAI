@@ -17,16 +17,13 @@ if __name__ == "__main__":
             doc = tomlkit.parse(f.read())
 
         # get the list of question-sql pairs for generating sample values
-        ground_truth_list = []
-
-        for element in doc["eval_dataset"]:
-            ground_truth_list.append(
-                {"question": element["question"], "sql": element["sql"]}
-            )
+        ground_truth_list = [
+            {"question": element["question"], "sql": element["sql"]}
+            for element in doc["eval_dataset"]
+        ]
 
         # utilize utils.get_next_few_items_circular, put n samples in the eval dataset
         new_dataset = []
-
         for i, element in enumerate(doc["eval_dataset"]):
             samples = get_next_few_items_circular(ground_truth_list, i)
             element["samples"] = samples
