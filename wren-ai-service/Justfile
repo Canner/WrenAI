@@ -16,7 +16,7 @@ prep:
 predict dataset pipeline='ask':
     @poetry run python -u eval/prediction.py --file {{dataset}} --pipeline {{pipeline}}
 
-eval prediction_result semantics='--semantics':
+eval prediction_result semantics='--no-semantics':
     @poetry run python -u eval/evaluation.py --file {{prediction_result}} {{semantics}}
 
 demo:
