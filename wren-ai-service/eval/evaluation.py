@@ -53,7 +53,7 @@ def parse_args() -> Tuple[str]:
     parser.add_argument(
         "--semantics",
         "-S",
-        default=True,
+        default=False,
         action=argparse.BooleanOptionalAction,
         help="Whether use the LLM(OpenAI's gpt-4o-mini) to help check semantics of sqls to improve accuracy metrics",
     )
