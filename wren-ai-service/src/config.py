@@ -1,8 +1,9 @@
 import logging
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -39,30 +40,21 @@ class Settings(BaseSettings):
         """,
     )
 
-    # provider api keys
-    openai_api_key: str = ""
-    azure_openai_api_key: str = ""
-    qdrant_api_key: str = ""
-
     # langfuse config
     langfuse_host: str = Field(default="https://cloud.langfuse.com")
     langfuse_enable: bool = Field(default=True)
-    langfuse_secret_key: str = ""
-    langfuse_public_key: str = ""
 
     # debug config
     enable_timer: bool = Field(default=False)
     logging_level: str = Field(default="INFO")
     development: bool = Field(default=False)
 
-    # override from .env.dev file
-    model_config = SettingsConfigDict(env_file=".env.dev", extra="allow")
-
     # this is used to store the config like type: llm, embedder, etc. and we will process them later
     config_path: str = Field(default="config.yaml")
     _components: list[dict]
 
     def __init__(self):
+        load_dotenv(".env.dev", override=True)
         super().__init__()
         raw = self.config_loader()
         self.override(raw)

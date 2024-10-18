@@ -195,7 +195,7 @@ class AsyncDocumentEmbedder(AzureOpenAIDocumentEmbedder):
 class AzureOpenAIEmbedderProvider(EmbedderProvider):
     def __init__(
         self,
-        api_key: Secret = Secret.from_env_var("EMBEDDER_AZURE_OPENAI_API_KEY"),
+        api_key: Secret = Secret.from_env_var("AZURE_OPENAI_API_KEY"),
         api_base: str = os.getenv("EMBEDDER_AZURE_OPENAI_API_BASE"),
         api_version: str = os.getenv("EMBEDDER_AZURE_OPENAI_VERSION"),
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,

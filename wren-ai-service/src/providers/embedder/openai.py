@@ -183,7 +183,7 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
 class OpenAIEmbedderProvider(EmbedderProvider):
     def __init__(
         self,
-        api_key: str = os.getenv("EMBEDDER_OPENAI_API_KEY"),
+        api_key: str = os.getenv("OPENAI_API_KEY"),
         api_base: str = os.getenv("EMBEDDER_OPENAI_API_BASE")
         or EMBEDDER_OPENAI_API_BASE,
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
