@@ -366,13 +366,13 @@ export class IbisAdaptor implements IIbisAdaptor {
     if (!config.experimentalEngineRustVersion) {
       return 'v2';
     }
-    return [
+    const useV3 = [
       IBIS_API_TYPE.QUERY,
       IBIS_API_TYPE.DRY_RUN,
       IBIS_API_TYPE.DRY_PLAN,
       IBIS_API_TYPE.VALIDATION,
-    ].includes(apiType)
-      ? 'v3'
-      : 'v2';
+    ].includes(apiType);
+    if (useV3) logger.debug('Using ibis v3 api');
+    return useV3 ? 'v3' : 'v2';
   }
 }
