@@ -9,7 +9,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.routers import relationship_recommendation, semantics_description, asking
+from src.web.v1.routers import relationship_recommendation, semantics_description, asking,semantics_preparations,ask_details,sql_expansions,sql_answers,sql_regenerations,sql_explanations
 
 router = APIRouter()
 router.include_router(semantics_description.router)
