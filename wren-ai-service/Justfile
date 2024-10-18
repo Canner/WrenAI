@@ -1,11 +1,25 @@
-init-config:
-	@cp tools/config/config.example.yaml config.yaml
+init dev='false':
+	@if [ ! -f config.yaml ]; then \
+		echo "config.yaml does not exist. Creating from example..."; \
+		cp tools/config/config.example.yaml config.yaml; \
+	else \
+		echo "config.yaml already exists. Skipping creation."; \
+	fi 
+
+	@if [ {{dev}} = "true" ]; then \
+		if [ ! -f .env.dev ]; then \
+				echo "env.dev does not exist. Creating from example..."; \
+				cp tools/config/.env.dev.example .env.dev; \
+		else \
+			echo "env.dev already exists. Skipping creation."; \
+		fi \
+	fi
 
 up: prepare-wren-engine
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env up -d
 
 down:
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example down
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env down
 
 start:
 	poetry run python -m src.__main__
