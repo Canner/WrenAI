@@ -27,7 +27,7 @@ setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
 async def lifespan(app: FastAPI):
     # startup events
 
-    pipe_components = generate_components()
+    pipe_components = generate_components(settings._components)
     app.state.service_container = create_service_container(pipe_components, settings)
     app.state.service_metadata = create_service_metadata(pipe_components)
     init_langfuse()

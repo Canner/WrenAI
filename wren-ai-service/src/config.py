@@ -60,13 +60,15 @@ class Settings(BaseSettings):
 
     # this is used to store the config like type: llm, embedder, etc. and we will process them later
     config_path: str = Field(default="config.yaml")
-    _configs: list[dict]
+    _components: list[dict]
 
     def __init__(self):
         super().__init__()
         raw = self.config_loader()
         self.override(raw)
-        self._configs = raw
+        self._components = [
+            component for component in raw if "settings" not in component
+        ]
 
     def config_loader(self):
         try:
@@ -85,7 +87,7 @@ class Settings(BaseSettings):
 
         for doc in raw:
             if "settings" in doc:
-                override_settings = doc.pop("settings")
+                override_settings = doc["settings"]
                 break
 
         for key, value in override_settings.items():
