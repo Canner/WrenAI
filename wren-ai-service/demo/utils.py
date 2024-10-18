@@ -314,6 +314,17 @@ def show_asks_details_results(query: str):
                 )
             )
 
+            st.markdown("### Chart")
+            chart_schema = generate_chart(
+                data=get_data_from_wren_engine(
+                    st.session_state["chosen_query_result"]["sql"],
+                    st.session_state["dataset_type"],
+                    st.session_state["mdl_json"],
+                )
+            )
+            st.json(chart_schema)
+            st.vega_lite_chart(chart_schema)
+
         st.markdown("---")
         st.button(
             label="SQL Explanation",
@@ -835,6 +846,40 @@ def sql_regeneration(sql_regeneration_data: dict):
             icon="🚨",
         )
         return None
+
+
+def generate_chart(data: pd.DataFrame):
+    chart_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
+        json={
+            "data": orjson.loads(data.to_json(orient="columns")),
+        },
+    )
+
+    assert chart_response.status_code == 200
+    query_id = chart_response.json()["query_id"]
+    charts_status = None
+
+    while not charts_status or (
+        charts_status != "finished"
+        and charts_status != "failed"
+        and charts_status != "stopped"
+    ):
+        charts_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/charts/{query_id}/result"
+        )
+        assert charts_status_response.status_code == 200
+        charts_status = charts_status_response.json()["status"]
+        st.toast(f"The query processing status: {charts_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if charts_status == "finished":
+        return charts_status_response.json()["response"]
+    elif charts_status == "failed":
+        st.error(
+            f'An error occurred while generating the chart: {charts_status_response.json()['error']}',
+            icon="🚨",
+        )
 
 
 @st.dialog(

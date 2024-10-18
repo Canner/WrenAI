@@ -7,6 +7,7 @@ import toml
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
+    chart_generation,
     followup_sql_generation,
     relationship_recommendation,
     semantics_description,
@@ -23,6 +24,7 @@ from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
+from src.web.v1.services.chart import ChartService
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 from src.web.v1.services.semantics_description import SemanticsDescription
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
@@ -40,6 +42,7 @@ class ServiceContainer:
     semantics_description: SemanticsDescription
     semantics_preparation_service: SemanticsPreparationService
     ask_service: AskService
+    chart_service: ChartService
     sql_answer_service: SqlAnswerService
     sql_expansion_service: SqlExpansionService
     ask_details_service: AskDetailsService
@@ -99,6 +102,14 @@ def create_service_container(
                 ),
                 "sql_summary": sql_summary.SQLSummary(
                     **pipe_components["sql_summary"],
+                ),
+            },
+            **query_cache,
+        ),
+        chart_service=ChartService(
+            pipelines={
+                "chart_generation": chart_generation.ChartGeneration(
+                    **pipe_components["chart_generation"],
                 ),
             },
             **query_cache,
