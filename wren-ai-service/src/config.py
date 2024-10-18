@@ -30,8 +30,14 @@ class Settings(BaseSettings):
     table_column_retrieval_size: int = Field(default=1000)
 
     # service config
-    query_cache_maxsize: int = Field(default=1000)
     query_cache_ttl: int = Field(default=3600)
+    query_cache_maxsize: int = Field(
+        default=1_000_000,
+        comment="""
+        the maxsize is a necessary parameter to init cache, but we don't want to expose it to the user
+        so we set it to 1_000_000, which is a large number
+        """,
+    )
 
     # provider api keys
     openai_api_key: str = ""
