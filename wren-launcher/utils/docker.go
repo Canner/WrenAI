@@ -73,6 +73,10 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	reg = regexp.MustCompile(`EXPERIMENTAL_ENGINE_RUST_VERSION=(.*)`)
 	str = reg.ReplaceAllString(str, "EXPERIMENTAL_ENGINE_RUST_VERSION="+fmt.Sprintf("%t", config.IsExperimentalEngineRustVersion()))
 
+	// replace PLATFORM
+	reg = regexp.MustCompile(`PLATFORM=(.*)`)
+	str = reg.ReplaceAllString(str, "PLATFORM="+fmt.Sprintf("%s", config.GetPlatform()))
+
 	return str
 }
 
