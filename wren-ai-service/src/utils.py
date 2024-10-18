@@ -36,12 +36,11 @@ class CustomFormatter(logging.Formatter):
 
 def setup_custom_logger(name, level_str: str):
     level_str = level_str.upper()
-    level = logging.INFO
 
-    if level_str in logging._nameToLevel:
-        level = logging._nameToLevel[level_str]
-    else:
+    if level_str not in logging._nameToLevel:
         raise ValueError(f"Invalid logging level: {level_str}")
+
+    level = logging._nameToLevel[level_str]
 
     handler = logging.StreamHandler()
     handler.setFormatter(CustomFormatter())
