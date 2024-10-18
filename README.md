@@ -260,14 +260,21 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/hpatel292-seneca">
+                    <img src="https://avatars.githubusercontent.com/u/100322816?v=4" width="100;" alt="hpatel292-seneca"/>
+                    <br />
+                    <sub><b>Harshil Patel</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
                 <a href="https://github.com/RoacherM">
                     <img src="https://avatars.githubusercontent.com/u/33534878?v=4" width="100;" alt="RoacherM"/>
                     <br />
                     <sub><b>RoacherM</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/Innovatorcloudy">
                     <img src="https://avatars.githubusercontent.com/u/183274513?v=4" width="100;" alt="Innovatorcloudy"/>
@@ -280,6 +287,13 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <img src="https://avatars.githubusercontent.com/u/126577697?v=4" width="100;" alt="NishantRana07"/>
                     <br />
                     <sub><b>Nishant Rana</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/saai-syvendra">
+                    <img src="https://avatars.githubusercontent.com/u/157691467?v=4" width="100;" alt="saai-syvendra"/>
+                    <br />
+                    <sub><b>Saai Syvendra</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -296,6 +310,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>yb-sid</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/Prototype4988">
                     <img src="https://avatars.githubusercontent.com/u/55426963?v=4" width="100;" alt="Prototype4988"/>
