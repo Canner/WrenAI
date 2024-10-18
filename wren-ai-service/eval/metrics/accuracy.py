@@ -12,7 +12,7 @@ from eval.utils import get_data_from_wren_engine, get_openai_client
 
 
 class AccuracyMetric(BaseMetric):
-    def __init__(self, engine_config: dict, enable_semantics_comparison: bool):
+    def __init__(self, engine_config: dict, enable_semantics_comparison: bool = False):
         self.threshold = 0
         self.score = 0
         self._engine_config = engine_config
