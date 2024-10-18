@@ -21,7 +21,7 @@ class SemanticsDescription:
 
     class Resource(BaseModel):
         class Error(BaseModel):
-            code: Literal["OTHERS"]
+            code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
             message: str
 
         id: str
@@ -40,11 +40,16 @@ class SemanticsDescription:
             maxsize=maxsize, ttl=ttl
         )
 
-    def _handle_exception(self, request: Input, error_message: str):
+    def _handle_exception(
+        self,
+        request: Input,
+        error_message: str,
+        code: str = "OTHERS",
+    ):
         self[request.id] = self.Resource(
             id=request.id,
             status="failed",
-            error=self.Resource.Error(code="OTHERS", message=error_message),
+            error=self.Resource.Error(code=code, message=error_message),
         )
         logger.error(error_message)
 
@@ -68,7 +73,11 @@ class SemanticsDescription:
                 id=request.id, status="finished", response=resp.get("normalize")
             )
         except orjson.JSONDecodeError as e:
-            self._handle_exception(request, f"Failed to parse MDL: {str(e)}")
+            self._handle_exception(
+                request,
+                f"Failed to parse MDL: {str(e)}",
+                code="MDL_PARSE_ERROR",
+            )
         except Exception as e:
             self._handle_exception(
                 request,
@@ -86,7 +95,7 @@ class SemanticsDescription:
             return self.Resource(
                 id=id,
                 status="failed",
-                error=self.Resource.Error(code="OTHERS", message=message),
+                error=self.Resource.Error(code="RESOURCE_NOT_FOUND", message=message),
             )
 
         return response

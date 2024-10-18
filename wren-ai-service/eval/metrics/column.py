@@ -1,4 +1,5 @@
 import asyncio
+import re
 import traceback
 
 import pandas as pd
@@ -63,15 +64,24 @@ class AccuracyMetric(BaseMetric):
         else:
             return 0
 
+    def _rewrite_sql(self, sql: str) -> str:
+        pattern = r'(WHERE\s+.*?)(")(.+?)(")(.*)$'
+        replacement = r"\1'\3'\5"
+        sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE | re.DOTALL)
+
+        return sql
+
     async def _retrieve_data(self, sql: str) -> pd.DataFrame:
         response = await get_data_from_wren_engine(sql=sql, **self._engine_config)
+
         df = pd.DataFrame(**response)
         sorted_columns = sorted(df.columns)
         return df[sorted_columns].sort_values(by=sorted_columns)
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
         try:
-            expected_dataset = await self._retrieve_data(test_case.expected_output)
+            rewritten_expected_output = self._rewrite_sql(test_case.expected_output)
+            expected_dataset = await self._retrieve_data(rewritten_expected_output)
             actual_dataset = await self._retrieve_data(test_case.actual_output)
 
             print(f"expected columns: {set(expected_dataset.columns)}")

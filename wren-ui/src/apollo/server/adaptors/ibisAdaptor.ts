@@ -7,6 +7,7 @@ import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
 import { toDockerHost } from '@server/utils';
 import {
+  CompactColumn,
   CompactTable,
   DEFAULT_PREVIEW_LIMIT,
   RecommendConstraint,
@@ -240,7 +241,8 @@ export class IbisAdaptor implements IIbisAdaptor {
         `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/tables`,
         body,
       );
-      return res.data;
+
+      return this.transformDescriptionToProperties(res.data);
     } catch (e) {
       logger.debug(`Got error when getting table: ${e.response.data}`);
 
@@ -316,5 +318,38 @@ export class IbisAdaptor implements IIbisAdaptor {
       logger.debug(`Host replaced with docker host`);
     }
     return connectionInfo;
+  }
+
+  private transformDescriptionToProperties(
+    tables: CompactTable[],
+  ): CompactTable[] {
+    const handleColumnProperties = (column: CompactColumn): CompactColumn => {
+      const properties = column?.properties || {};
+      if (column.description) {
+        properties.description = column.description;
+      }
+      const nestedColumns = column.nestedColumns?.map((nc) => {
+        return handleColumnProperties(nc);
+      });
+      return { ...column, properties, nestedColumns };
+    };
+
+    return tables.map((table) => {
+      try {
+        const properties = table?.properties || {};
+        if (table.description) {
+          properties.description = table.description;
+        }
+        if (table.columns) {
+          const transformedColumns = table.columns.map((column) =>
+            handleColumnProperties(column),
+          );
+          table.columns = transformedColumns;
+        }
+        return { ...table, properties };
+      } catch (e) {
+        console.log('e', e);
+      }
+    });
   }
 }

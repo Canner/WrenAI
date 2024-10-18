@@ -61,7 +61,7 @@ async def test_generate_semantics_description_with_invalid_mdl(
     assert response.id == "test_id"
     assert response.status == "failed"
     assert response.response is None
-    assert response.error.code == "OTHERS"
+    assert response.error.code == "MDL_PARSE_ERROR"
     assert "Failed to parse MDL" in response.error.message
 
 
@@ -119,5 +119,5 @@ def test_get_non_existent_semantics_description_result(
     assert result.id == "non_existent_id"
     assert result.status == "failed"
     assert result.response is None
-    assert result.error.code == "OTHERS"
+    assert result.error.code == "RESOURCE_NOT_FOUND"
     assert "not found" in result.error.message

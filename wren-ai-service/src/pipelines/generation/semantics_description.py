@@ -20,10 +20,14 @@ logger = logging.getLogger("wren-ai-service")
 ## Start of Pipeline
 @observe(capture_input=False)
 def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
+    def remove_relation_columns(columns: list[dict]) -> list[dict]:
+        # remove columns that have a relationship property
+        return [column for column in columns if "relationship" not in column]
+
     def extract(model: dict) -> dict:
         return {
             "name": model["name"],
-            "columns": model["columns"],
+            "columns": remove_relation_columns(model["columns"]),
             "properties": model["properties"],
         }
 
