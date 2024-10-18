@@ -19,22 +19,51 @@ from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationStatusRequest,
     SemanticsPreparationStatusResponse,
 )
-"""
-Router for handling semantics preparations requests and retrieving results.
 
-This router provides endpoints for initiating a semantics preparation operation
-and retrieving its results. It uses background tasks to process the
-semantics preparation requests asynchronously.
+
+"""
+Semantics Preparation Router
+
+This router handles endpoints related to initiating and retrieving the status of semantics preparation processes.
 
 Endpoints:
-- POST /semantics-preparations: Initiate a semantics preparation operation
-- GET /semantics-preparations/{mdl_hash}/status: Retrieve the status of a semantics preparation operation
+1. POST /semantics-preparations
+   - Initiates the semantics preparation process asynchronously.
+   - Request body: SemanticsPreparationRequest
+     {
+       "mdl": "model_data_string",                # String representing the model data to be indexed
+       "mdl_hash": "unique_hash",                 # Unique identifier for the model (hash or ID)
+       "project_id": "optional_project_id",       # Optional project identifier
+       "user_id": "optional_user_id"              # Optional user identifier
+     }
+   - Response: SemanticsPreparationResponse
+     {
+       "mdl_hash": "unique_hash"                  # Unique identifier for tracking the preparation process
+     }
 
-The router depends on the ServiceContainer and ServiceMetadata, which are
-injected using FastAPI's dependency injection system.
+2. GET /semantics-preparations/{mdl_hash}/status
+   - Retrieves the current status of the semantics preparation for a given model.
+   - Path parameter: mdl_hash (str)
+   - Response: SemanticsPreparationStatusResponse
+     {
+       "status": "indexing" | "finished" | "failed",  # Current status of the preparation process
+       "error": {                                    # Present only if status is "failed"
+         "code": "OTHERS",
+         "message": "Detailed error message"
+       }
+     }
 
+The semantics preparation process involves indexing the model data and is performed asynchronously.
+The POST endpoint starts the process and returns a unique identifier (`mdl_hash`),
+which can be used to track the status of the preparation through the GET endpoint.
 
+Usage:
+1. Send a POST request to initiate the preparation process.
+2. Use the `mdl_hash` returned by the POST request to check the preparation status via the GET endpoint.
+
+Note: The preparation process is handled in the background using FastAPI's BackgroundTasks.
 """
+
 
 @router.post("/semantics-preparations")
 async def prepare_semantics(
