@@ -358,6 +358,6 @@ def construct_instructions(configurations: AskConfigurations | None):
     instructions = ""
     if configurations:
         if configurations.fiscal_year:
-            instructions += f"For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
+            instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
 
     return instructions

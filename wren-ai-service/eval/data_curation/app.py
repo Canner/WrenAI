@@ -16,7 +16,6 @@ from utils import (
     WREN_IBIS_ENDPOINT,
     get_contexts_from_sqls,
     get_data_from_wren_engine_with_sqls,
-    get_openai_client,
     get_question_sql_pairs,
     is_sql_valid,
     prettify_sql,
@@ -25,6 +24,7 @@ from utils import (
 from eval.utils import (
     get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
+    get_openai_client,
     prepare_duckdb_init_sql,
     prepare_duckdb_session_sql,
 )
