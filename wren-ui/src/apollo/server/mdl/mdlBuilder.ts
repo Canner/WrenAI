@@ -368,7 +368,7 @@ export class MDLBuilder implements IMDLBuilder {
 
   protected getColumnExpression(
     column: ModelColumn,
-    currentModel?: ModelMDL,
+    currentModel?: Partial<ModelMDL>,
   ): string {
     if (!column.isCalculated) {
       // columns existed in the data source.
