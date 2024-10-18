@@ -3,9 +3,6 @@ import os
 from collections.abc import Mapping
 from typing import Tuple
 
-import yaml
-from yaml.loader import SafeLoader
-
 from src.core.engine import Engine, EngineConfig
 from src.core.pipeline import PipelineComponent
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
@@ -20,26 +17,61 @@ def provider_factory(
     return loader.get_provider(config.get("provider"))(**config)
 
 
-def load_config(path: str = "config.yaml") -> list[dict]:
-    if not os.path.exists(path):
-        return []
+def llm_processor(entry: dict) -> dict:
+    """
+    Process the LLM configuration entry.
 
-    with open(path, "r") as f:
-        return list(yaml.load_all(f, Loader=SafeLoader))
+    This function takes a dictionary containing LLM configuration and processes it
+    into a standardized format. The input dictionary is expected to have the following structure:
 
-
-def process_llm(entry: dict) -> dict:
-    others = {
-        k: v
-        for k, v in entry.items()
-        if k not in ["type", "provider", "api_key", "models"]
+    {
+        "type": "llm",
+        "provider": "openai_llm",
+        "models": [
+            {
+                "model": "gpt-4o-mini",
+                "kwargs": {
+                    "temperature": 0,
+                    "n": 1,
+                    "max_tokens": 4096,
+                    "response_format": {"type": "json_object"}
+                }
+            }
+        ],
+        "api_base": "https://api.openai.com/v1"
     }
+
+    The function processes this input and returns a dictionary with the following structure:
+
+    {
+        "openai_llm.gpt-4o-mini": {
+            "provider": "openai_llm",
+            "model": "gpt-4o-mini",
+            "kwargs": {
+                "temperature": 0,
+                "n": 1,
+                "max_tokens": 4096,
+                "response_format": {"type": "json_object"}
+            },
+            "api_base": "https://api.openai.com/v1"
+        }
+    }
+
+    Args:
+        entry (dict): The input LLM configuration dictionary.
+
+    Returns:
+        dict: A processed dictionary with standardized LLM configuration.
+
+    Note:
+        The function does not handle the `api_key` field. It is to be handled by the provider itself.
+    """
+    others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
     for model in entry["models"]:
         model_name = f"{entry['provider']}.{model['model']}"
         returned[model_name] = {
             "provider": entry["provider"],
-            "api_key": entry["api_key"],
             "model": model["model"],
             "kwargs": model["kwargs"],
             **others,
@@ -47,18 +79,49 @@ def process_llm(entry: dict) -> dict:
     return returned
 
 
-def process_embedder(entry: dict) -> dict:
-    others = {
-        k: v
-        for k, v in entry.items()
-        if k not in ["type", "provider", "api_key", "models"]
+def embedder_processor(entry: dict) -> dict:
+    """
+    Process the embedder configuration entry.
+
+    This function takes a dictionary containing embedder configuration and processes it
+    into a standardized format. The input dictionary is expected to have the following structure:
+
+    {
+        "type": "embedder",
+        "provider": "openai_embedder",
+        "models": [
+            {
+                "model": "text-embedding-ada-002",
+                "dimension": 1536
+            }
+        ]
     }
+
+    The function processes this input and returns a dictionary with the following structure:
+
+    {
+        "openai_embedder.text-embedding-ada-002": {
+            "provider": "openai_embedder",
+            "model": "text-embedding-ada-002",
+            "dimension": 1536
+        }
+    }
+
+    Args:
+        entry (dict): The input embedder configuration dictionary.
+
+    Returns:
+        dict: A processed dictionary with standardized embedder configuration.
+
+    Note:
+        The function does not handle the `api_key` field. It is to be handled by the provider itself.
+    """
+    others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
     for model in entry["models"]:
-        model_name = f"{entry['provider']}.{model['model']}"
-        returned[model_name] = {
+        identifier = f"{entry['provider']}.{model['model']}"
+        returned[identifier] = {
             "provider": entry["provider"],
-            "api_key": entry["api_key"],
             "model": model["model"],
             "dimension": model["dimension"],
             **others,
@@ -67,15 +130,120 @@ def process_embedder(entry: dict) -> dict:
     return returned
 
 
-def process_document_store(entry: dict) -> dict:
+def document_store_processor(entry: dict) -> dict:
+    """
+    Process the document store configuration entry.
+
+    This function takes a dictionary containing document store configuration and processes it
+    into a standardized format. The input dictionary is expected to have the following structure:
+
+    {
+        "type": "document_store",
+        "provider": "qdrant",
+        "kwargs": {
+            "host": "localhost",
+            "port": 6333
+        }
+    }
+
+    The function processes this input and returns a dictionary with the following structure:
+
+    {
+        "qdrant": {
+            "provider": "qdrant",
+            "kwargs": {
+                "host": "localhost",
+                "port": 6333
+            }
+        }
+    }
+
+    Args:
+        entry (dict): The input document store configuration dictionary.
+
+    Returns:
+        dict: A processed dictionary with standardized document store configuration.
+
+    Note:
+        The function does not handle the `api_key` field. It is to be handled by the provider itself.
+    """
     return {entry["provider"]: {k: v for k, v in entry.items() if k not in ["type"]}}
 
 
-def process_engine(entry: dict) -> dict:
+def engine_processor(entry: dict) -> dict:
+    """
+    Process the engine configuration entry.
+
+    This function takes a dictionary containing engine configuration and processes it
+    into a standardized format. The input dictionary is expected to have the following structure:
+
+    {
+        "type": "engine",
+        "provider": "wren_ui",
+        "kwargs": {
+            "host": "localhost",
+            "port": 8000
+        }
+    }
+
+    The function processes this input and returns a dictionary with the following structure:
+
+    {
+        "wren_ui": {
+            "provider": "wren_ui",
+            "kwargs": {
+                "host": "localhost",
+                "port": 8000
+            }
+        }
+    }
+
+    Args:
+        entry (dict): The input engine configuration dictionary.
+
+    Returns:
+        dict: A processed dictionary with standardized engine configuration.
+    """
     return {entry["provider"]: {k: v for k, v in entry.items() if k not in ["type"]}}
 
 
-def process_pipeline(entry: dict) -> dict:
+def pipeline_processor(entry: dict) -> dict:
+    """
+    Process the pipeline configuration entry.
+
+    This function takes a dictionary containing pipeline configuration and processes it
+    into a standardized format. The input dictionary is expected to have the following structure:
+
+    {
+        "type": "pipeline",
+        "pipes": [
+            {
+                "name": "indexing",
+                "llm": "openai_llm.gpt-4o-mini",
+                "embedder": "openai_embedder.text-embedding-3-large",
+                "document_store": "qdrant",
+                "engine": "wren_ui"
+            }
+        ]
+    }
+
+    The function processes this input and returns a dictionary with the following structure:
+
+    {
+        "indexing": {
+            "llm": "openai_llm.gpt-4o-mini",
+            "embedder": "openai_embedder.text-embedding-3-large",
+            "document_store": "qdrant",
+            "engine": "wren_ui",
+        }
+    }
+
+    Args:
+        entry (dict): The input pipeline configuration dictionary.
+
+    Returns:
+        dict: A processed dictionary with standardized pipeline configuration.
+    """
     return {
         pipe["name"]: {
             "llm": pipe.get("llm"),
@@ -87,7 +255,16 @@ def process_pipeline(entry: dict) -> dict:
     }
 
 
-def convert_data(config: list[dict]) -> dict:
+_TYPE_TO_PROCESSOR = {
+    "llm": llm_processor,
+    "embedder": embedder_processor,
+    "document_store": document_store_processor,
+    "engine": engine_processor,
+    "pipeline": pipeline_processor,
+}
+
+
+def transform(config: list[dict]) -> dict:
     returned = {
         "embedder": {},
         "llm": {},
@@ -96,17 +273,9 @@ def convert_data(config: list[dict]) -> dict:
         "pipeline": {},
     }
 
-    type_to_processor = {
-        "llm": process_llm,
-        "embedder": process_embedder,
-        "document_store": process_document_store,
-        "engine": process_engine,
-        "pipeline": process_pipeline,
-    }
-
     for entry in config:
         type = entry["type"]
-        processor = type_to_processor.get(type)
+        processor = _TYPE_TO_PROCESSOR.get(type)
         if not processor:
             logger.error(f"Unknown type: {type}")
             raise ValueError(f"Unknown type: {type}")
@@ -156,28 +325,17 @@ class Wrapper(Mapping):
         return len(self.value)
 
 
-def generate_components() -> dict[str, PipelineComponent]:
-    raw = load_config()
-    if not raw:
-        # if no config, initialize the providers from the environment variables
-        return Wrapper()
-
-    config = convert_data(raw)
+def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
     loader.import_mods()
 
-    providers = {
-        "embedder": config.get("embedder", {}),
-        "llm": config.get("llm", {}),
-        "document_store": config.get("document_store", {}),
-        "engine": config.get("engine", {}),
-    }
+    transformed = transform(configs)
 
     instantiated_providers = {
-        category: {
+        type: {
             identifier: provider_factory(config)
             for identifier, config in configs.items()
         }
-        for category, configs in providers.items()
+        for type, configs in transformed.items()
     }
 
     def get(type: str, components: dict):
@@ -193,5 +351,12 @@ def generate_components() -> dict[str, PipelineComponent]:
 
     return {
         pipe_name: componentize(components)
-        for pipe_name, components in config.get("pipeline", {}).items()
+        for pipe_name, components in configs.get("pipeline", {}).items()
     }
+
+
+# todo: remove
+if __name__ == "__main__":
+    from src.config import settings
+
+    generate_components(settings._components)
