@@ -13,7 +13,7 @@ test.describe('Test HR sample dataset', () => {
 
   test('Select HR dataset and check suggested questions', async ({ page }) => {
     await page.goto('/setup/connection');
-    await page.getByRole('button', { name: 'HR' }).click();
+    await page.getByRole('button', { name: 'Human Resource' }).click();
     await expect(page).toHaveURL('/home', { timeout: 60000 });
     for (const suggestedQuestion of suggestedQuestions) {
       await expect(page.getByText(suggestedQuestion.question)).toBeVisible();
