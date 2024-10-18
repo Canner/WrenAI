@@ -15,6 +15,7 @@ from eval.utils import (
     get_contexts_from_sql,
     get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
+    get_next_few_items_circular,
     prepare_duckdb_init_sql,
     prepare_duckdb_session_sql,
 )
@@ -162,7 +163,7 @@ def build_mdl_by_db(destination_path: Path):
         destination_path / "spider_data/tables.json", "db_id"
     )
 
-    # build mdl for each database by checking the tables.json in spider_data
+    # build mdl for each database by checking the test_tables.json in spider_data
     mdl_by_db = {}
     for database in databases:
         if tables_info := tables_by_db.get(database):
@@ -232,7 +233,6 @@ if __name__ == "__main__":
     )
 
     print("Creating eval dataset...")
-
     # create duckdb connection in wren engine
     # https://duckdb.org/docs/guides/database_integration/sqlite.html
     prepare_duckdb_session_sql(WREN_ENGINE_API_URL)
@@ -242,7 +242,7 @@ if __name__ == "__main__":
         print(f"Database: {db}")
         prepare_duckdb_init_sql(WREN_ENGINE_API_URL, db)
 
-        for ground_truth in values["ground_truth"]:
+        for i, ground_truth in enumerate(values["ground_truth"]):
             context = asyncio.run(
                 get_contexts_from_sql(
                     ground_truth["sql"],
@@ -261,6 +261,9 @@ if __name__ == "__main__":
                         "context": context,
                         "document": get_documents_given_contexts(
                             [context], values["mdl"]
+                        ),
+                        "samples": get_next_few_items_circular(
+                            values["ground_truth"], i
                         ),
                     }
                 )
