@@ -30,18 +30,7 @@ async def lifespan(app: FastAPI):
     # startup events
 
     pipe_components = generate_components()
-    app.state.service_container = create_service_container(
-        pipe_components,
-        column_indexing_batch_size=settings.column_indexing_batch_size,
-        table_retrieval_size=settings.table_retrieval_size,
-        table_column_retrieval_size=settings.table_column_retrieval_size,
-        query_cache={
-            # the maxsize is a necessary parameter to init cache, but we don't want to expose it to the user
-            # so we set it to 1_000_000, which is a large number
-            "maxsize": 1_000_000,
-            "ttl": settings.query_cache_ttl,
-        },
-    )
+    app.state.service_container = create_service_container(pipe_components, settings)
     app.state.service_metadata = create_service_metadata(pipe_components)
     init_langfuse()
 
@@ -73,7 +62,7 @@ if settings.development:
 
 
 @app.exception_handler(Exception)
-async def exception_handler(request, exc: Exception):
+async def exception_handler(_, exc: Exception):
     return ORJSONResponse(
         status_code=500,
         content={"detail": str(exc)},
@@ -81,7 +70,7 @@ async def exception_handler(request, exc: Exception):
 
 
 @app.exception_handler(RequestValidationError)
-async def request_exception_handler(request, exc: Exception):
+async def request_exception_handler(_, exc: Exception):
     return ORJSONResponse(
         status_code=400,
         content={"detail": str(exc)},
