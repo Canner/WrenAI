@@ -113,7 +113,7 @@ export class MDLBuilder implements IMDLBuilder {
           : tableReference
             ? null
             : model.refSql,
-        cached: model.cached,
+        cached: model.cached ? true : false,
         refreshTime: model.refreshTime,
         properties: {
           displayName: model.displayName,
@@ -213,8 +213,8 @@ export class MDLBuilder implements IMDLBuilder {
         model.columns.push({
           name: column.referenceName,
           type: column.type,
-          isCalculated: column.isCalculated,
-          notNull: column.notNull,
+          isCalculated: column.isCalculated ? true : false,
+          notNull: column.notNull ? true : false,
           expression,
           properties: properties,
         });
@@ -249,7 +249,7 @@ export class MDLBuilder implements IMDLBuilder {
           type: column.type,
           isCalculated: true,
           expression,
-          notNull: column.notNull,
+          notNull: column.notNull ? true : false,
           properties: JSON.parse(column.properties),
         };
         model.columns.push(columnValue);
@@ -281,7 +281,7 @@ export class MDLBuilder implements IMDLBuilder {
       type: calculatedField.type,
       isCalculated: true,
       expression,
-      notNull: calculatedField.notNull,
+      notNull: calculatedField.notNull ? true : false,
       properties: JSON.parse(calculatedField.properties),
     };
     model.columns.push(columnValue);
