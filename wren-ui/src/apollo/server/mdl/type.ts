@@ -70,10 +70,10 @@ export interface ViewMDL {
 export interface Manifest {
   catalog?: string; // eg: "test-catalog"
   schema?: string; // eg: "test-schema"
-  models?: ModelMDL[];
-  relationships?: RelationMDL[];
-  enumDefinitions?: EnumDefinition[];
-  views?: ViewMDL[];
+  models?: Partial<ModelMDL>[]; // use partial since Rust version doesn't support null values, we need to remove all the null values
+  relationships?: Partial<RelationMDL>[]; // use partial since Rust version doesn't support null values, we need to remove all the null values
+  enumDefinitions?: Partial<EnumDefinition>[]; // use partial since Rust version doesn't support null values, we need to remove all the null values
+  views?: Partial<ViewMDL>[]; // use partial since Rust version doesn't support null values, we need to remove all the null values
 }
 
 export interface TableReference {

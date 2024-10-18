@@ -136,17 +136,17 @@ func Launch() {
 	}()
 
 	// Setup a channel to receive a signal
-    done := make(chan os.Signal, 1)
-	
+	done := make(chan os.Signal, 1)
+
 	signal.Notify(done, os.Interrupt)
 
-    // Fire off a goroutine to loop until that channel receives a signal.
-    // When a signal is received simply exit the program
-    go func() {
-        for _ = range done {
-            os.Exit(0)
-        }
-    }()
+	// Fire off a goroutine to loop until that channel receives a signal.
+	// When a signal is received simply exit the program
+	go func() {
+		for range done {
+			os.Exit(0)
+		}
+	}()
 	// print Wren AI header
 	fmt.Println(strings.Repeat("=", 55))
 	myFigure := figure.NewFigure("WrenAI", "", true)
@@ -156,6 +156,18 @@ func Launch() {
 	// prepare a project directory
 	pterm.Info.Println("Preparing project directory")
 	projectDir := prepareProjectDir()
+
+	// get platform
+	platform := config.GetPlatform()
+	if platform != "linux/amd64" && platform != "linux/arm64" {
+		pterm.Error.Println("Invalid platform, valid values are: linux/amd64, linux/arm64")
+		os.Exit(1)
+	}
+	pterm.Info.Println("Platform: ", platform)
+
+	// get experimental engine rust version
+	experimentalEngineRustVersion := config.IsExperimentalEngineRustVersion()
+	pterm.Info.Println("Use Experimental Rust Engine: ", experimentalEngineRustVersion)
 
 	// ask for LLM provider
 	pterm.Print("\n")
