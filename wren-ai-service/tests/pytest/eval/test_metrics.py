@@ -34,6 +34,7 @@ def test_case():
         expected_output="select foo, boo from t",
         context=["t.foo", "t.boo"],
         retrieval_context=["t.foo", "t.boo"],
+        additional_metadata={},
     )
 
 
