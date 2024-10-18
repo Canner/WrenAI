@@ -146,6 +146,7 @@ class AccuracyMetric(BaseMetric):
             self.score = self._count_partial_matches(expected_dataset, actual_dataset)
             # use llm to check sql semantics
             if self.score == 0 and self._enable_semantics_comparison:
+                # TODO: we may need to upload the sql semantics result to langfuse
                 print(f"before _check_sql_semantics: {self.score}")
                 print(f"expected sql: {rewritten_expected_output}")
                 print(f"actual sql: {test_case.actual_output}")
