@@ -19,19 +19,56 @@ from src.web.v1.services.sql_explanation import (
 router = APIRouter()
 
 """
-Router for handling SQL explanation requests and retrieving results.
+SQL Explanations Router
 
-This router provides endpoints for initiating an SQL explanation operation
-and retrieving its results. It uses background tasks to process the
-SQL explanation requests asynchronously.
+This router handles endpoints related to generating and retrieving SQL explanations.
 
 Endpoints:
-- POST /sql-explanations: Initiate an SQL explanation operation
-- GET /sql-explanations/{query_id}/result: Retrieve the result of an SQL explanation operation
+1. POST /sql-explanations
+   - Initiates a new SQL explanation request.
+   - Request body: SQLExplanationRequest
+     {
+       "question": "What does this SQL query do?",            # User's question regarding the SQL query
+       "steps_with_analysis_results": [                       # List of analysis results for each step in the SQL query
+         {
+           "sql": "SELECT * FROM table",                     # The SQL statement being analyzed
+           "summary": "Retrieves all records from the table.", # A brief summary of the SQL statement
+           "sql_analysis_results": []                          # Analysis results for the SQL statement
+         }
+       ],
+       "mdl_hash": "hash_value",                             # Optional hash for the model used
+       "thread_id": "thread-123",                            # Optional identifier for the thread
+       "project_id": "project-456",                          # Optional identifier for the project
+       "user_id": "user-789"                                 # Optional identifier for the user
+     }
+   - Response: SQLExplanationResponse
+     {
+       "query_id": "unique-uuid"                             # Unique identifier for the SQL explanation request
+     }
 
-The router depends on the ServiceContainer and ServiceMetadata, which are
-injected using FastAPI's dependency injection system.
+2. GET /sql-explanations/{query_id}/result
+   - Retrieves the status and result of an SQL explanation request.
+   - Path parameter: query_id (str)
+   - Response: SQLExplanationResultResponse
+     {
+       "status": "understanding" | "generating" | "finished" | "failed",  # Current status of the SQL explanation
+       "response": [                                                     # Present only if status is "finished"
+         [
+           {
+             "column_name": "col1",
+             "description": "Unique identifier for each record in the example model."
+           }
+         ]
+       ],
+       "error": {                                                       # Present only if status is "failed"
+         "code": "OTHERS",
+         "message": "Error description"
+       }
+     }
+
+The SQL explanation generation is an asynchronous process. The POST endpoint initiates the explanation process and returns immediately with a query ID. The GET endpoint can then be used to check the status and retrieve the result when it’s ready.
 """
+
 
 @router.post("/sql-explanations")
 async def sql_explanation(

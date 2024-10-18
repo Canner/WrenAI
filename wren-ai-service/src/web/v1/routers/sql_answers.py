@@ -20,18 +20,52 @@ from src.web.v1.services.sql_answer import (
 )
 
 """
-Router for handling SQL answer requests and retrieving results.
+SQL Answers Router
 
-This router provides endpoints for initiating an SQL answer operation
-and retrieving its results. It uses background tasks to process the
-SQL answer requests asynchronously.
+This router handles endpoints related to initiating SQL answer operations and retrieving their results.
 
 Endpoints:
-- POST /sql-answers: Initiate an SQL answer operation
-- GET /sql-answers/{query_id}/result: Retrieve the result of an SQL answer operation
+1. POST /sql-answers
+   - Initiates an SQL answer operation
+   - Request body: SqlAnswerRequest
+     {
+       "query": "SELECT * FROM table_name WHERE condition",  # SQL query to be processed
+       "sql": "SELECT * FROM table_name WHERE condition",      # Actual SQL statement
+       "sql_summary": "Brief description of the SQL query",    # Summary of the SQL statement
+       "thread_id": "unique-thread-id",                        # Optional thread identifier for tracking
+       "user_id": "user-id"                                   # Optional user identifier for tracking
+     }
+   - Response: SqlAnswerResponse
+     {
+       "query_id": "unique-uuid"                              # Unique identifier for the initiated SQL operation
+     }
 
-The router depends on the ServiceContainer and ServiceMetadata, which are
-injected using FastAPI's dependency injection system.
+2. GET /sql-answers/{query_id}/result
+   - Retrieves the status and result of an SQL answer operation
+   - Path parameter: query_id (str)
+   - Response: SqlAnswerResultResponse
+     {
+       "query_id": "unique-uuid",                             # Unique identifier of the SQL answer operation
+       "status": "understanding" | "processing" | "finished" | "failed",
+       "response": {                                          # Present only if status is "finished"
+         "answer": "Result of the SQL query execution.",     # The answer from the SQL operation
+         "reasoning": "Explanation of how the answer was derived." # Explanation of the result
+       },
+       "error": {                                             # Present only if status is "failed"
+         "code": "OTHERS",
+         "message": "Error description"
+       }
+     }
+
+The SQL answer generation is an asynchronous process. The POST endpoint
+initiates the operation and returns immediately with a query ID. The GET endpoint can
+then be used to check the status and retrieve the result when it's ready.
+
+Usage:
+1. Send a POST request to start the SQL answer operation.
+2. Use the returned query ID to poll the GET endpoint until the status is "finished" or "failed".
+
+Note: The actual SQL processing is performed in the background using FastAPI's BackgroundTasks.
 """
 
 

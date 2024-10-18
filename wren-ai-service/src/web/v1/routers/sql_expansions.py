@@ -21,19 +21,71 @@ from src.web.v1.services.sql_expansion import (
 router = APIRouter()
 
 """
-Router for handling SQL expansion requests and retrieving results.
+SQL Expansion Router
 
-This router provides endpoints for initiating an SQL expansion operation
-and retrieving its results. It uses background tasks to process the
-SQL expansion requests asynchronously.
+This router handles endpoints related to SQL expansion operations.
 
 Endpoints:
-- POST /sql-expansions: Initiate an SQL expansion operation
-- GET /sql-expansions/{query_id}/result: Retrieve the result of an SQL expansion operation
+1. POST /sql-expansions
+   - Initiates an SQL expansion operation
+   - Request body: SqlExpansionRequest
+     {
+       "query_id": "unique-query-id",           # Unique identifier for the query
+       "query": "SELECT * FROM table;",         # SQL query to be expanded
+       "history": { ... },                       # Historical context for the query
+       "project_id": "project-identifier",      # Identifier for the project
+       "mdl_hash": "hash-of-model",              # Hash of the model (if applicable)
+       "thread_id": "thread-identifier",        # Identifier for the thread (if applicable)
+       "user_id": "user-identifier"             # Identifier for the user making the request
+     }
+   - Response: SqlExpansionResponse
+     {
+       "query_id": "unique-query-id"            # Unique identifier for the generated SQL expansion
+     }
 
-The router depends on the ServiceContainer and ServiceMetadata, which are
-injected using FastAPI's dependency injection system.
+2. PATCH /sql-expansions/{query_id}
+   - Stops an ongoing SQL expansion operation
+   - Path parameter: query_id (str)
+   - Request body: StopSqlExpansionRequest
+     {
+       "status": "stopped"                      # Status indicating the operation should be stopped
+     }
+   - Response: StopSqlExpansionResponse
+     {
+       "query_id": "unique-query-id"            # Unique identifier for the stopped operation
+     }
+
+3. GET /sql-expansions/{query_id}/result
+   - Retrieves the result of an SQL expansion operation
+   - Path parameter: query_id (str)
+   - Response: SqlExpansionResultResponse
+     {
+       "status": "understanding" | "searching" | "generating" | "finished" | "failed" | "stopped",
+       "response": {                             # Present only if status is "finished"
+         "description": "Contextual summary of the expansion process.",
+         "steps": [                              # List of generated SQL steps
+           {
+             "sql": "SELECT ...",                # Expanded SQL query
+             "summary": "Summary of the SQL query.", # Summary of what the query does
+             "cte_name": "Common Table Expression name if applicable"
+           }
+         ]
+       },
+       "error": {                                # Present only if status is "failed"
+         "code": "OTHERS",
+         "message": "Error description"
+       }
+     }
+
+The SQL expansion process is asynchronous. The POST endpoint initiates the process and returns immediately with a query ID. The GET endpoint can be used to check the status and retrieve the result when it's ready.
+
+Usage:
+1. Send a POST request to start the SQL expansion process.
+2. Use the returned query ID to poll the GET endpoint until the status is "finished" or "failed".
+
+Note: The actual SQL expansion is performed in the background using FastAPI's BackgroundTasks.
 """
+
 
 @router.post("/sql-expansions")
 async def sql_expansion(

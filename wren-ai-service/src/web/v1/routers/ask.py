@@ -21,71 +21,57 @@ from src.web.v1.services.ask import (
 
 router = APIRouter()
 
-"""Ask Router
+"""
+Ask Router
 
-This router handles the endpoints related to the ask functionality.
+This router manages the endpoints related to submitting, stopping, and retrieving the results of SQL queries.
 
 Endpoints:
-- POST /asks: Initiates a new ask request
-  Input: AskRequest
-  Output: AskResponse
-    {
-        "query_id": "uuid-string"
-    }
+1. **POST /asks**
+   - Submits a new query for processing.
+   - **Request Body**:
+     - `query`: The SQL query or natural language query to be processed.
+     - `project_id`: (Optional) Identifier for the project to fetch relevant data.
+     - `mdl_hash`: (Optional) Hash or ID related to the model to be used for the query.
+     - `thread_id`: (Optional) Thread identifier for the query.
+     - `user_id`: (Optional) User identifier.
+     - `history`: (Optional) Query history (summary and SQL steps).
+     - `configurations`: (Optional) Configurations such as fiscal year.
+   - **Response**:
+     - `query_id`: A unique identifier (UUID) for tracking the query.
 
-- PATCH /asks/{query_id}: Stops an ongoing ask request
-  Input: StopAskRequest
-  Output: StopAskResponse
-    {
-        "query_id": "uuid-string"
-    }
+2. **PATCH /asks/{query_id}**
+   - Stops an ongoing query.
+   - **Path Parameter**:
+     - `query_id`: The unique identifier of the query to be stopped.
+   - **Request Body**:
+     - `status`: Must be set to `"stopped"`.
+   - **Response**:
+     - `query_id`: The unique identifier of the stopped query.
 
-- GET /asks/{query_id}/result: Retrieves the result of an ask request
-  Input: query_id in path
-  Output: AskResultResponse
-    {
-        "status": "string",
-        "result": {
-            // Result details (not specified in the provided code)
-        }
-    }
+3. **GET /asks/{query_id}/result**
+   - Retrieves the status and result of a submitted query.
+   - **Path Parameter**:
+     - `query_id`: The unique identifier of the query.
+   - **Response**:
+     - `status`: The current status of the query (`"understanding"`, `"searching"`, `"generating"`, `"finished"`, `"failed"`, or `"stopped"`).
+     - `response`: (Optional) A list of SQL results, each containing:
+       - `sql`: The generated SQL statement.
+       - `summary`: A summary of the SQL statement.
+       - `type`: The type of result (`"llm"` or `"view"`).
+       - `viewId`: (Optional) The ID of the view, if applicable.
+     - `error`: (Optional) Error information if the query failed, including:
+       - `code`: The error code (e.g., `"NO_RELEVANT_DATA"`, `"NO_RELEVANT_SQL"`, `"OTHERS"`).
+       - `message`: A detailed error message.
 
-Usage:
-1. To start a new ask request:
-   POST /asks
-   Request body: AskRequest
+Process:
+1. Use the POST endpoint to submit a new query. This returns a `query_id` to track the query.
+2. To stop an ongoing query, use the PATCH endpoint with the `query_id`.
+3. Use the GET endpoint to check the query status or retrieve the result once the query is processed.
 
-2. To stop an ongoing ask request:
-   PATCH /asks/{query_id}
-   Request body: StopAskRequest
-
-3. To get the result of an ask request:
-   GET /asks/{query_id}/result
-
-The ask process is asynchronous. The POST request initiates the process and returns
-a query_id. Use this query_id to check the status and retrieve the result using
-the GET endpoint.
-
-Request Models:
-- AskRequest: Contains the necessary information to initiate an ask request
-- StopAskRequest: Contains information to stop an ongoing ask request
-- AskResultRequest: Contains the query_id to retrieve the ask result
-
-Response Models:
-- AskResponse: Contains the query_id of the initiated ask request
-- StopAskResponse: Contains the query_id of the stopped ask request
-- AskResultResponse: Contains the status and result of the ask request
-
-Dependencies:
-- ServiceContainer: Provides access to the ask service
-- ServiceMetadata: Provides metadata for the service
-
-Note:
-- The initial status of a new ask request is set to "understanding".
-- The actual processing of the ask request is performed in the background.
-- The GET endpoint retrieves the current status and result of the ask request,
-  which may change over time as the background task progresses.
+Note: The query processing is asynchronous, and status updates can be polled via the GET endpoint.
 """
+
 
 @router.post("/asks")
 async def ask(
