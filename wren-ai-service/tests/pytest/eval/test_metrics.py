@@ -7,7 +7,7 @@ from aioresponses import aioresponses
 from deepeval.test_case import LLMTestCase
 
 sys.path.append(f"{Path().parent.resolve()}")
-from eval.metrics.column import (
+from eval.metrics import (
     AccuracyMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
