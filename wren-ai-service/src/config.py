@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env.dev", extra="allow")
 
     # this is used to store the config like type: llm, embedder, etc. and we will process them later
+    config_path: str = Field(default="config.yaml")
     _configs: list[dict]
 
     def __init__(self):
@@ -61,12 +62,12 @@ class Settings(BaseSettings):
         self.override(raw)
         self._configs = raw
 
-    def config_loader(self, file_path: str = "config.yaml"):
+    def config_loader(self):
         try:
-            with open(file_path, "r") as file:
+            with open(self.config_path, "r") as file:
                 return list(yaml.load_all(file, Loader=yaml.SafeLoader))
         except FileNotFoundError:
-            message = f"Warning: Configuration file {file_path} not found. Using default settings."
+            message = f"Warning: Configuration file {self.config_path} not found. Using default settings."
             logger.exception(message)
             return []
         except yaml.YAMLError as e:
