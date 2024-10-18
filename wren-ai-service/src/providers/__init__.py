@@ -1,6 +1,7 @@
 import logging
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Tuple
 
 from src.core.engine import Engine, EngineConfig
@@ -14,6 +15,7 @@ logger = logging.getLogger("wren-ai-service")
 def provider_factory(
     config: dict = {},
 ) -> LLMProvider | EmbedderProvider | DocumentStoreProvider | Engine:
+    logger.info(f"initializing provider: {config.get('provider')}")
     return loader.get_provider(config.get("provider"))(**config)
 
 
@@ -264,7 +266,13 @@ _TYPE_TO_PROCESSOR = {
 }
 
 
-def transform(config: list[dict]) -> dict:
+@dataclass
+class Configuration:
+    providers: dict
+    pipelines: dict
+
+
+def transform(config: list[dict]) -> Configuration:
     returned = {
         "embedder": {},
         "llm": {},
@@ -283,12 +291,16 @@ def transform(config: list[dict]) -> dict:
         converted = processor(entry)
         returned[type].update(converted)
 
-    return returned
+    return Configuration(
+        providers={k: v for k, v in returned.items() if k != "pipeline"},
+        pipelines=returned["pipeline"],
+    )
 
 
 def init_providers(
     engine_config: EngineConfig,
 ) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
+    # DEPRECATED: use generate_components instead
     logger.info("Initializing providers...")
     loader.import_mods()
 
@@ -305,6 +317,7 @@ def init_providers(
 
 
 class Wrapper(Mapping):
+    # DEPRECATED: use generate_components instead
     def __init__(self):
         self.value = PipelineComponent(
             *init_providers(
@@ -355,14 +368,14 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
 
     loader.import_mods()
 
-    transformed = transform(configs)
+    config = transform(configs)
 
     instantiated_providers = {
         type: {
             identifier: provider_factory(config)
             for identifier, config in configs.items()
         }
-        for type, configs in transformed.items()
+        for type, configs in config.providers.items()
     }
 
     def get(type: str, components: dict):
@@ -379,12 +392,5 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
 
     return {
         pipe_name: componentize(components)
-        for pipe_name, components in configs.get("pipeline", {}).items()
+        for pipe_name, components in config.pipelines.items()
     }
-
-
-# todo: remove
-if __name__ == "__main__":
-    from src.config import settings
-
-    generate_components(settings._components)
