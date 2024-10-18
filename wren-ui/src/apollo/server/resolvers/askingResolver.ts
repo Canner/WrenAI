@@ -182,6 +182,7 @@ export class AskingResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
     // telemetry
   }
