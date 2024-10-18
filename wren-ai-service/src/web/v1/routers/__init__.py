@@ -9,12 +9,12 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.routers import relationship_recommendation, semantics_description, asks,semantics_preparations,ask_details,sql_expansions,sql_answers,sql_regenerations,sql_explanations
+from src.web.v1.routers import relationship_recommendation, semantics_description, ask,semantics_preparations,ask_details,sql_expansions,sql_answers,sql_regenerations,sql_explanations
 
 router = APIRouter()
 router.include_router(semantics_description.router)
 router.include_router(relationship_recommendation.router)
-router.include_router(asks.router)
+router.include_router(ask.router)
 router.include_router(ask_details.router)
 router.include_router(semantics_preparations.router)
 router.include_router(sql_expansions.router)
