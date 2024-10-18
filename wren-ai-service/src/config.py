@@ -94,3 +94,6 @@ class Settings(BaseSettings):
             else:
                 message = f"Warning: Unknown configuration key '{key}' in YAML file."
                 logger.warning(message)
+
+
+settings = Settings()
