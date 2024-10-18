@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -117,9 +118,9 @@ def init_langfuse():
 
     langfuse_context.configure(
         enabled=settings.langfuse_enable,
-        public_key=settings.langfuse_public_key,
-        secret_key=settings.langfuse_secret_key,
         host=settings.langfuse_host,
+        public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+        secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
     )
 
     logger.info(f"LANGFUSE_ENABLE: {settings.langfuse_enable}")

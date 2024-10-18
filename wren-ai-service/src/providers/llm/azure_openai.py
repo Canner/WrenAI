@@ -120,7 +120,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
 class AzureOpenAILLMProvider(LLMProvider):
     def __init__(
         self,
-        api_key: Secret = Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
+        api_key: Secret = Secret.from_env_var("AZURE_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_AZURE_OPENAI_API_BASE"),
         api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
