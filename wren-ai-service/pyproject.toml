@@ -50,6 +50,7 @@ ipykernel = "==6.29.5"
 itables = "==2.2.1"
 gdown = "==5.2.0"
 nltk = "==3.9.1"
+dspy-ai = "==2.4.13"
 
 [tool.poetry.group.demo.dependencies]
 requests = "==2.32.2"
