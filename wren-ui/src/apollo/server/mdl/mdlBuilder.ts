@@ -84,6 +84,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.addRelation();
     this.addCalculatedField();
     this.addView();
+    this.postProcessManifest();
     return this.getManifest();
   }
 
@@ -436,7 +437,42 @@ export class MDLBuilder implements IMDLBuilder {
       table: modelProps.table,
     };
   }
-
+  private postProcessManifest() {
+    if (this.useRustWrenEngine()) {
+      // 1. remove all the key that the value is null
+      this.manifest.models = this.manifest.models?.map((model) => {
+        model.columns.map((column) => {
+          column.properties = pickBy(
+            column.properties,
+            (value) => value !== null,
+          );
+          return column;
+        });
+        return pickBy(model, (value) => value !== null);
+      });
+      this.manifest.views = this.manifest.views?.map((view) => {
+        return pickBy(view, (value) => value !== null);
+      });
+      this.manifest.relationships = this.manifest.relationships?.map(
+        (relationship) => {
+          return pickBy(relationship, (value) => value !== null);
+        },
+      );
+      this.manifest.enumDefinitions = this.manifest.enumDefinitions?.map(
+        (enumDefinition) => {
+          return pickBy(enumDefinition, (value) => value !== null);
+        },
+      );
+      // 2. remove expression if it's empty string
+      this.manifest.models?.forEach((model) => {
+        model.columns?.forEach((column) => {
+          if (column.expression === '') {
+            delete column.expression;
+          }
+        });
+      });
+    }
+  }
   private useRustWrenEngine(): boolean {
     return !!config.experimentalEngineRustVersion;
   }
