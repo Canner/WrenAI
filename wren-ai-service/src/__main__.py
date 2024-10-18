@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
 from langfuse.decorators import langfuse_context
 
-from src.config import Settings
+from src.config import settings
 from src.globals import (
     create_service_container,
     create_service_metadata,
@@ -18,8 +18,6 @@ from src.utils import (
     setup_custom_logger,
 )
 from src.web.v1 import routers
-
-settings = Settings()
 
 setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
 
