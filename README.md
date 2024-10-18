@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a aria-label="Follow us" href="https://x.com/getwrenai">
+  <a aria-label="Follow us on X" href="https://x.com/getwrenai">
     <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
   </a>
   <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
@@ -32,7 +32,7 @@
 
 [Hacktoberfest 2024](https://hacktoberfest.com/) is here, and we're inviting developers of all levels to join our open-source community. Together, we'll build Wren AI as a friendly community for all. 
 
-👉 Learn how to [win Wren AI Exclusive Swag Pack & Holopin From Digital Ocean Rewards](https://getwren.ai/wren-ai-hacktoberfest-2024)!
+👉 Learn how to [win a Wren AI Exclusive Swag Pack & Holopin from DigitalOcean Rewards](https://getwren.ai/wren-ai-hacktoberfest-2024)!
 
 [![image](https://github.com/user-attachments/assets/9048d701-a97b-4c6b-b3ed-fc636201f234)](https://getwren.ai/wren-ai-hacktoberfest-2024)
 
@@ -74,7 +74,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 
 ### 4. Self-Learning Feedback Loop (Coming Soon)
 
-  > The AI self-learning feedback loop refines SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantics enhancement, and query frequency.
+  > The AI self-learning feedback loop refines SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantic enhancements, and query frequency.
 
 ## 🤔 Why Wren AI?
 
@@ -96,7 +96,7 @@ We focus on providing an open, secure, and reliable SQL AI Agent for everyone.
 
 Wren AI consists of three core services:
 
-- ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources within Wren AI's framework.
+- ***[Wren UI](https://github.com/Canner/WrenAI/tree/main/wren-ui):*** An intuitive user interface for asking questions, defining data relationships, and integrating data sources.
 
 - ***[Wren AI Service](https://github.com/Canner/WrenAI/tree/main/wren-ai-service):*** Processes queries using a vector database for context retrieval, guiding LLMs to produce precise SQL outputs.
 
@@ -128,4 +128,182 @@ Want to contribute to Wren AI? Check out our [Contribution Guidelines](https://g
 - Welcome to our [Discord server](https://discord.gg/5DvshJqG8Z) to give us feedback!
 - If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
 
-Do note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+
+## 🎉 Our Contributors
+<!-- Do not manually edit this section! It should get updated using the Github action -->
+<!-- readme: contributors -start -->
+<table>
+	<tbody>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/cyyeh">
+                    <img src="https://avatars.githubusercontent.com/u/11023068?v=4" width="100;" alt="cyyeh"/>
+                    <br />
+                    <sub><b>cyyeh</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/onlyjackfrost">
+                    <img src="https://avatars.githubusercontent.com/u/38731840?v=4" width="100;" alt="onlyjackfrost"/>
+                    <br />
+                    <sub><b>onlyjackfrost</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/wwwy3y3">
+                    <img src="https://avatars.githubusercontent.com/u/1208829?v=4" width="100;" alt="wwwy3y3"/>
+                    <br />
+                    <sub><b>wwwy3y3</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/andreashimin">
+                    <img src="https://avatars.githubusercontent.com/u/9657305?v=4" width="100;" alt="andreashimin"/>
+                    <br />
+                    <sub><b>andreashimin</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/paopa">
+                    <img src="https://avatars.githubusercontent.com/u/52045032?v=4" width="100;" alt="paopa"/>
+                    <br />
+                    <sub><b>paopa</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/fredalai">
+                    <img src="https://avatars.githubusercontent.com/u/42527625?v=4" width="100;" alt="fredalai"/>
+                    <br />
+                    <sub><b>fredalai</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/chilijung">
+                    <img src="https://avatars.githubusercontent.com/u/1216029?v=4" width="100;" alt="chilijung"/>
+                    <br />
+                    <sub><b>chilijung</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/imAsterSun">
+                    <img src="https://avatars.githubusercontent.com/u/61279528?v=4" width="100;" alt="imAsterSun"/>
+                    <br />
+                    <sub><b>imAsterSun</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/qdrddr">
+                    <img src="https://avatars.githubusercontent.com/u/564658?v=4" width="100;" alt="qdrddr"/>
+                    <br />
+                    <sub><b>qdrddr</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/kushal34712">
+                    <img src="https://avatars.githubusercontent.com/u/98145879?v=4" width="100;" alt="kushal34712"/>
+                    <br />
+                    <sub><b>kushal34712</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/goldmedal">
+                    <img src="https://avatars.githubusercontent.com/u/6974913?v=4" width="100;" alt="goldmedal"/>
+                    <br />
+                    <sub><b>goldmedal</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/eltociear">
+                    <img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="100;" alt="eltociear"/>
+                    <br />
+                    <sub><b>eltociear</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/himanshu634">
+                    <img src="https://avatars.githubusercontent.com/u/61757460?v=4" width="100;" alt="himanshu634"/>
+                    <br />
+                    <sub><b>himanshu634</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/AryanK1511">
+                    <img src="https://avatars.githubusercontent.com/u/101019909?v=4" width="100;" alt="AryanK1511"/>
+                    <br />
+                    <sub><b>AryanK1511</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/kpman">
+                    <img src="https://avatars.githubusercontent.com/u/2382594?v=4" width="100;" alt="kpman"/>
+                    <br />
+                    <sub><b>kpman</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/grieve54706">
+                    <img src="https://avatars.githubusercontent.com/u/8724385?v=4" width="100;" alt="grieve54706"/>
+                    <br />
+                    <sub><b>grieve54706</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/RoacherM">
+                    <img src="https://avatars.githubusercontent.com/u/33534878?v=4" width="100;" alt="RoacherM"/>
+                    <br />
+                    <sub><b>RoacherM</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Innovatorcloudy">
+                    <img src="https://avatars.githubusercontent.com/u/183274513?v=4" width="100;" alt="Innovatorcloudy"/>
+                    <br />
+                    <sub><b>Innovatorcloudy</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/NishantRana07">
+                    <img src="https://avatars.githubusercontent.com/u/126577697?v=4" width="100;" alt="NishantRana07"/>
+                    <br />
+                    <sub><b>Nishant Rana</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/sahil9001">
+                    <img src="https://avatars.githubusercontent.com/u/32628578?v=4" width="100;" alt="sahil9001"/>
+                    <br />
+                    <sub><b>sahil9001</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/yb-sid">
+                    <img src="https://avatars.githubusercontent.com/u/129207298?v=4" width="100;" alt="yb-sid"/>
+                    <br />
+                    <sub><b>yb-sid</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Prototype4988">
+                    <img src="https://avatars.githubusercontent.com/u/55426963?v=4" width="100;" alt="Prototype4988"/>
+                    <br />
+                    <sub><b>Prototype4988</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/iamawanishmaurya">
+                    <img src="https://avatars.githubusercontent.com/u/65104100?v=4" width="100;" alt="iamawanishmaurya"/>
+                    <br />
+                    <sub><b>iamawanishmaurya</b></sub>
+                </a>
+            </td>
+		</tr>
+	<tbody>
+</table>
+<!-- readme: contributors -end -->
