@@ -326,6 +326,33 @@ class Wrapper(Mapping):
 
 
 def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
+    """
+    Generate pipeline components from configuration.
+
+    This function takes a list of configuration dictionaries and generates pipeline components
+    based on the provided configurations. The configurations are processed into a standardized
+    format and then instantiated into actual provider objects.
+
+    Args:
+    configs (list[dict]): A list of configuration dictionaries.
+
+    Returns:
+        dict: A dictionary of pipeline components.
+
+    Note:
+        instantiated_providers example:
+        {
+            "embedder": {
+                "openai_embedder.text-embedding-3-large": <EmbedderProvider>
+            },
+            "llm": {
+                "openai_llm.gpt-4o-mini": <LLMProvider>
+            },
+            ...
+        }
+
+    """
+
     loader.import_mods()
 
     transformed = transform(configs)
@@ -339,7 +366,8 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
     }
 
     def get(type: str, components: dict):
-        return instantiated_providers[type].get(components.get(type))
+        identifier = components.get(type)
+        return instantiated_providers[type].get(identifier)
 
     def componentize(components: dict):
         return PipelineComponent(
