@@ -10,6 +10,7 @@ wren-ai-service/src/eval/wren-engine/etc/archived
 wren-ai-service/src/eval/data
 wren-ai-service/**/outputs/
 wren-ai-service/**/spider/
+!wren-ai-service/**/metrics/spider/
 !wren-ai-service/tests/data
 !wren-ai-service/src/eval/data/book_2*.json
 !wren-ai-service/src/eval/data/baseball_1*.json

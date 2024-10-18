@@ -37,7 +37,7 @@ async def test_recommend_invalid_mdl(relationship_recommendation_service):
 
     assert response.id == "test_id"
     assert response.status == "failed"
-    assert response.error.code == "OTHERS"
+    assert response.error.code == "MDL_PARSE_ERROR"
     assert "Failed to parse MDL" in response.error.message
 
 
@@ -80,7 +80,7 @@ def test_getitem_not_found(relationship_recommendation_service):
 
     assert response.id == "non_existent_id"
     assert response.status == "failed"
-    assert response.error.code == "OTHERS"
+    assert response.error.code == "RESOURCE_NOT_FOUND"
     assert "not found" in response.error.message
 
 

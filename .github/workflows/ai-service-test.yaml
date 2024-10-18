@@ -28,7 +28,7 @@ defaults:
 jobs:
   pytest:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ci/ai-service') || github.event_name == 'push' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

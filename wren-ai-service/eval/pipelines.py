@@ -13,13 +13,15 @@ from tqdm.asyncio import tqdm_asyncio
 
 sys.path.append(f"{Path().parent.resolve()}")
 
-from eval.metrics.column import (
+from eval.metrics import (
     AccuracyMetric,
     AccuracyMultiCandidateMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
+    ExactMatchAccuracy,
+    ExecutionAccuracy,
     FaithfulnessMetric,
 )
 from eval.utils import (
@@ -135,6 +137,7 @@ class Eval:
             "expected_output": query["sql"],
             "retrieval_context": [],
             "context": query["context"],
+            "samples": query.get("samples", []),
             "type": "execution",
         }
 
@@ -247,6 +250,7 @@ class GenerationPipeline(Eval):
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
+            samples=prediction["samples"],
             exclude=[],
         )
 
@@ -269,12 +273,16 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+    def mertics(
+        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
+    ) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(ibis_engine_config),
+                AccuracyMetric(accuracy_config, enable_semantics_comparison),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
+                ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -324,6 +332,7 @@ class AskPipeline(Eval):
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
+            samples=prediction["samples"],
             exclude=[],
         )
 
@@ -346,15 +355,19 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(config: dict, ibis_engine_config: dict) -> dict:
+    def mertics(
+        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
+    ) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(ibis_engine_config),
+                AccuracyMetric(accuracy_config, enable_semantics_comparison),
                 AnswerRelevancyMetric(config),
                 FaithfulnessMetric(config),
                 ContextualRecallMetric(config),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
+                ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -378,27 +391,39 @@ def init(
             raise ValueError(f"Invalid pipeline name: {name}")
 
 
-def metrics_initiator(pipeline: str, mdl: dict) -> dict:
+def metrics_initiator(
+    pipeline: str, mdl: dict, enable_semantics_comparison: bool = True
+) -> dict:
+    # todo: refactor configs
     config = engine_config(mdl)
-    ibis_engine_config = {
-        "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
-        "data_source": "bigquery",
-        "mdl_json": mdl,
-        "connection_info": {
-            "project_id": os.getenv("bigquery.project-id"),
-            "dataset_id": os.getenv("bigquery.dataset-id"),
-            "credentials": os.getenv("bigquery.credentials-key"),
-        },
-        "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
-        if os.getenv("WREN_IBIS_TIMEOUT")
-        else 10,
-        "limit": 10,
-    }
+    if os.getenv("DATA_SOURCE") == "bigquery":
+        accuracy_config = {
+            "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
+            "data_source": "bigquery",
+            "mdl_json": mdl,
+            "connection_info": {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
+            },
+            "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
+            if os.getenv("WREN_IBIS_TIMEOUT")
+            else 10,
+            "limit": 10,
+        }
+
+    if os.getenv("DATA_SOURCE") == "duckdb":
+        accuracy_config = config
+        accuracy_config["connection_info"] = None
 
     match pipeline:
         case "retrieval":
             return RetrievalPipeline.mertics(config)
         case "generation":
-            return GenerationPipeline.mertics(config, ibis_engine_config)
+            return GenerationPipeline.mertics(
+                config, accuracy_config, enable_semantics_comparison
+            )
         case "ask":
-            return AskPipeline.mertics(config, ibis_engine_config)
+            return AskPipeline.mertics(
+                config, accuracy_config, enable_semantics_comparison
+            )

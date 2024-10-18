@@ -15,6 +15,25 @@ The dataset curation process is used to prepare the evaluation dataset for the W
 - copy `.env.example` to `.env` and fill in the environment variables
 - execute the command under the `wren-ai-service` folder: `just curate_eval_data`
 
+## Eval Dataset Preparation(If using Spider 1.0 dataset)
+
+```cli
+just prep
+```
+
+This command will do two things:
+1. download Spider 1.0 dataset in `wren-ai-service/tools/dev/spider1.0`; and there are two folders inside: database and spider_data
+    - database: it contains test data. It's downloaded from [this repo](https://github.com/taoyds/test-suite-sql-eval).
+    - spider_data: it contains table schema, ground truths(question sql pairs), etc. For more information, please refer to [this repo](https://github.com/taoyds/spider).
+2. prepare evaluation dataset and put them in `wren-ai-service/eval/dataset`. File name of eval dataset for Spider would look like this: `spider_<db_name>_eval_dataset.toml`
+
+## Evaluation Dataset Schema
+
+- dataset_id(UUID)
+- date
+- mdl
+- eval dataset
+
 ## Prediction Process
 
 The prediction process is used to produce the results of the evaluation data using the Wren AI service. It will create traces and a session on Langfuse to make the results available to the user. You can use the following command to predict the evaluation dataset under the `eval/dataset` directory:
@@ -37,6 +56,12 @@ The evaluation process is used to assess the prediction results of the Wren AI s
 
 ```cli
 just eval <prediction-result>
+```
+
+Note: If you would like to enable semantics comparison between SQLs by LLM in order to improve the accuracy metric, please fill in Open AI API key in `.env` file in `wren-ai-service/eval` and add `--semantics` to the end of the command like following:
+
+```cli
+just eval <prediction-result> --semantics
 ```
 
 The evaluation results will be presented on Langfuse as follows:

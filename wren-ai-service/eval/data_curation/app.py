@@ -12,14 +12,21 @@ from openai import AsyncClient
 from streamlit_tags import st_tags
 from utils import (
     DATA_SOURCES,
+    WREN_ENGINE_ENDPOINT,
+    WREN_IBIS_ENDPOINT,
     get_contexts_from_sqls,
     get_data_from_wren_engine_with_sqls,
-    get_documents_given_contexts,
-    get_eval_dataset_in_toml_string,
-    get_openai_client,
     get_question_sql_pairs,
     is_sql_valid,
     prettify_sql,
+)
+
+from eval.utils import (
+    get_documents_given_contexts,
+    get_eval_dataset_in_toml_string,
+    get_openai_client,
+    prepare_duckdb_init_sql,
+    prepare_duckdb_session_sql,
 )
 
 st.set_page_config(layout="wide")
@@ -101,11 +108,17 @@ def on_click_setup_uploaded_file():
             uploaded_file.getvalue().decode("utf-8")
         )
 
-        st.session_state["connection_info"] = {
-            "project_id": os.getenv("bigquery.project-id"),
-            "dataset_id": os.getenv("bigquery.dataset-id"),
-            "credentials": os.getenv("bigquery.credentials-key"),
-        }
+        if data_source == "bigquery":
+            st.session_state["connection_info"] = {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
+            }
+        elif data_source == "duckdb":
+            prepare_duckdb_session_sql(WREN_ENGINE_ENDPOINT)
+            prepare_duckdb_init_sql(
+                WREN_ENGINE_ENDPOINT, st.session_state["mdl_json"]["catalog"]
+            )
     else:
         st.session_state["data_source"] = None
         st.session_state["mdl_json"] = None
@@ -126,6 +139,9 @@ def on_change_sql(i: int, key: str):
             st.session_state["data_source"],
             st.session_state["mdl_json"],
             st.session_state["connection_info"],
+            WREN_ENGINE_ENDPOINT
+            if st.session_state["data_source"] == "duckdb"
+            else WREN_IBIS_ENDPOINT,
         )
     )
     if valid:
@@ -388,6 +404,9 @@ if st.session_state["mdl_json"] is not None:
                             st.session_state["data_source"],
                             st.session_state["mdl_json"],
                             st.session_state["connection_info"],
+                            WREN_ENGINE_ENDPOINT
+                            if st.session_state["data_source"] == "duckdb"
+                            else WREN_IBIS_ENDPOINT,
                         )
                     )[0]
                     st.dataframe(
