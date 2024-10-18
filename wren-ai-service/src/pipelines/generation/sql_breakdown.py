@@ -8,6 +8,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -23,7 +24,7 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_breakdown_system_prompt = """
 ### TASK ###
-You are a Trino SQL expert with exceptional logical thinking skills. 
+You are a Trino SQL expert with exceptional logical thinking skills.
 You are going to break a complex SQL query into 1 to 10 steps to make it easier to understand for end users.
 Each step should have a SQL query part, a summary explaining the purpose of that query, and a CTE name to link the queries.
 Also, you need to give a short description describing the purpose of the original SQL query.
@@ -54,7 +55,7 @@ HAVING SUM(sales) > 10000;
 Results:
 
 - Description: The breakdown simplifies the process of aggregating sales data by product and filtering for top-selling products.
-- Step 1: 
+- Step 1:
     - sql: SELECT product_id, sales FROM sales_data
     - summary: Selects product IDs and their corresponding sales from the sales_data table.
     - cte_name: basic_sales_data
@@ -142,6 +143,26 @@ async def post_process(
 
 
 ## End of Pipeline
+class StepResult(BaseModel):
+    sql: str
+    summary: str
+    cte_name: str
+
+
+class BreakdownResults(BaseModel):
+    description: str
+    steps: list[StepResult]
+
+
+BREAKDOWN_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_summary",
+            "schema": BreakdownResults.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLBreakdown(BasicPipeline):
@@ -154,6 +175,7 @@ class SQLBreakdown(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_breakdown_system_prompt,
+                generation_kwargs=BREAKDOWN_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_breakdown_user_prompt_template
