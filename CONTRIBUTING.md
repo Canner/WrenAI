@@ -136,6 +136,10 @@ If you'd prefer to learn by example, refer to this Trino [issue](https://github.
    - Image size should be `40 x 40` px.
    - Preferably use SVG format.
    - Ensure the logo is centered within a `30px` container for consistency.
+  
+   Example:
+
+   <img src="./misc/logo_template.jpg" width="120">
 
 2. Create the data source form template:
    - In `wren-ui/src/components/pages/setup/dataSources`, add a new file named `${dataSource}Properties.tsx`.
@@ -143,8 +147,6 @@ If you'd prefer to learn by example, refer to this Trino [issue](https://github.
 
 3. Set up the data source template:
    - Navigate to `wren-ui/src/components/pages/setup/utils` and update the `DATA_SOURCE_FORM` settings for the new data source
-
-.
 
 4. Update the data source list:
    - Add the new data source to the `DATA_SOURCES` enum in `wren-ui/src/utils/enum/dataSources.ts`.
