@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -104,6 +105,7 @@ User's Question: {{ query }}
 
 Let's think step by step.
 """
+# Current Time: {{ current_time }}
 
 
 ## Start of Pipeline
@@ -133,6 +135,7 @@ def prompt(
         alert=alert,
         instructions=construct_instructions(configurations),
         samples=samples,
+        current_time=datetime.now(),
     )
 
 

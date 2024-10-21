@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -117,6 +118,7 @@ The final answer must be the JSON format like following:
 Previous SQL Summary: {{ history.summary }}
 Previous SQL Query: {{ history.sql }}
 User's Follow-up Question: {{ query }}
+Current Time: {{ current_time }}
 
 {% if instructions %}
 Instructions: {{ instructions }}
@@ -147,6 +149,7 @@ def prompt(
         history=history,
         alert=alert,
         instructions=construct_instructions(configurations),
+        current_time=datetime.now(),
     )
 
 
