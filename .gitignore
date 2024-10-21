@@ -26,7 +26,8 @@ wren-ai-service/demo/poetry.lock
 wren-ai-service/demo/custom_dataset
 wren-ai-service/demo/.env
 wren-ai-service/tools/dev/etc/**
-wren-ai-service/.deepeval-cache.json
+.deepeval-cache.json
+docker/config.yaml
 
 # python
 .python-version
