@@ -188,13 +188,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/MGomaa435">
-                    <img src="https://avatars.githubusercontent.com/u/79599759?v=4" width="100;" alt="MGomaa435"/>
-                    <br />
-                    <sub><b>Mohamed Gomaa</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/imAsterSun">
                     <img src="https://avatars.githubusercontent.com/u/61279528?v=4" width="100;" alt="imAsterSun"/>
                     <br />
@@ -222,8 +215,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>kushal34712</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/goldmedal">
                     <img src="https://avatars.githubusercontent.com/u/6974913?v=4" width="100;" alt="goldmedal"/>
@@ -231,6 +222,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>goldmedal</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/eltociear">
                     <img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="100;" alt="eltociear"/>
@@ -266,8 +259,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>grieve54706</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/hpatel292-seneca">
                     <img src="https://avatars.githubusercontent.com/u/100322816?v=4" width="100;" alt="hpatel292-seneca"/>
@@ -275,6 +266,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>Harshil Patel</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/RoacherM">
                     <img src="https://avatars.githubusercontent.com/u/33534878?v=4" width="100;" alt="RoacherM"/>
@@ -287,6 +280,13 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <img src="https://avatars.githubusercontent.com/u/183274513?v=4" width="100;" alt="Innovatorcloudy"/>
                     <br />
                     <sub><b>Innovatorcloudy</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/MGomaa435">
+                    <img src="https://avatars.githubusercontent.com/u/79599759?v=4" width="100;" alt="MGomaa435"/>
+                    <br />
+                    <sub><b>Mohamed Gomaa</b></sub>
                 </a>
             </td>
             <td align="center">
