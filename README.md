@@ -246,6 +246,13 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/Spirizeon">
+                    <img src="https://avatars.githubusercontent.com/u/123345456?v=4" width="100;" alt="Spirizeon"/>
+                    <br />
+                    <sub><b>Ayush Dutta</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/kpman">
                     <img src="https://avatars.githubusercontent.com/u/2382594?v=4" width="100;" alt="kpman"/>
                     <br />
@@ -259,6 +266,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>grieve54706</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/hpatel292-seneca">
                     <img src="https://avatars.githubusercontent.com/u/100322816?v=4" width="100;" alt="hpatel292-seneca"/>
@@ -266,8 +275,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>Harshil Patel</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/RoacherM">
                     <img src="https://avatars.githubusercontent.com/u/33534878?v=4" width="100;" alt="RoacherM"/>
@@ -303,6 +310,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>Saai Syvendra</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/sahil9001">
                     <img src="https://avatars.githubusercontent.com/u/32628578?v=4" width="100;" alt="sahil9001"/>
@@ -310,8 +319,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>sahil9001</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/yb-sid">
                     <img src="https://avatars.githubusercontent.com/u/129207298?v=4" width="100;" alt="yb-sid"/>
