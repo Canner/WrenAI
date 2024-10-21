@@ -248,17 +248,12 @@ class AskService:
                         configurations=ask_request.configurations,
                     )
 
-                valid_generation_results = []
-                valid_sql_summary_results = []
                 if sql_valid_results := text_to_sql_generation_results["post_process"][
                     "valid_generation_results"
                 ]:
-                    valid_generation_results += sql_valid_results
-
-                if valid_generation_results:
                     valid_sql_summary_results = (
                         await self._add_summary_to_sql_candidates(
-                            valid_generation_results,
+                            sql_valid_results,
                             ask_request.query,
                             ask_request.configurations.language,
                         )
@@ -283,10 +278,9 @@ class AskService:
                         invalid_generation_results=failed_dry_run_results,
                         project_id=ask_request.project_id,
                     )
-                    valid_generation_results = sql_correction_results["post_process"][
-                        "valid_generation_results"
-                    ]
-                    if valid_generation_results:
+                    if valid_generation_results := sql_correction_results[
+                        "post_process"
+                    ]["valid_generation_results"]:
                         valid_sql_summary_results = (
                             await self._add_summary_to_sql_candidates(
                                 valid_generation_results,
@@ -298,16 +292,17 @@ class AskService:
                             AskResult(**result) for result in valid_sql_summary_results
                         ]
 
-                        # only return top 3 results, thus remove the rest
-                        if len(api_results) > 3:
-                            del api_results[3:]
+                if api_results:
+                    # only return top 3 results, thus remove the rest
+                    if len(api_results) > 3:
+                        del api_results[3:]
 
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            response=api_results,
-                        )
-
-                if not api_results:
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        response=api_results,
+                    )
+                    results["ask_result"] = api_results
+                else:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
                     )
@@ -319,9 +314,7 @@ class AskService:
                         ),
                     )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-                    return results
 
-                results["ask_result"] = api_results
                 return results
         except Exception as e:
             logger.exception(f"ask pipeline - OTHERS: {e}")
