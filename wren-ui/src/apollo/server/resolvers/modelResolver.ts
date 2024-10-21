@@ -389,11 +389,14 @@ export class ModelResolver {
 
     // create nested columns
     const nestedColumnValues = compactColumns.flatMap((compactColumn) => {
-      const column = columns.find((c) => c.sourceColumnName === column.name);
+      const column = columns.find(
+        (c) => c.sourceColumnName === compactColumn.name,
+      );
+      if (!column) return [];
       return handleNestedColumns(compactColumn, {
         modelId: column.modelId,
         columnId: column.id,
-        sourceColumnName: column.name,
+        sourceColumnName: column.sourceColumnName,
       });
     });
     await ctx.modelNestedColumnRepository.createMany(nestedColumnValues);
@@ -473,6 +476,9 @@ export class ModelResolver {
           type: column.type || 'string',
           notNull: column.notNull,
           isPk: primaryKey === column.name,
+          properties: column.properties
+            ? JSON.stringify(column.properties)
+            : null,
         } as Partial<ModelColumn>;
         return columnValue;
       });
