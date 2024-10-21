@@ -22,6 +22,7 @@ export interface IConfig {
   generationModel?: string;
 
   // ibis server
+  experimentalEngineRustVersion?: boolean;
   ibisServerEndpoint: string;
 
   // encryption
@@ -64,6 +65,7 @@ const defaultConfig = {
   wrenAIEndpoint: 'http://localhost:5555',
 
   // ibis server
+  experimentalEngineRustVersion: false,
   ibisServerEndpoint: 'http://127.0.0.1:8000',
 
   // encryption
@@ -101,6 +103,8 @@ const config = {
   generationModel: process.env.GENERATION_MODEL,
 
   // ibis server
+  experimentalEngineRustVersion:
+    process.env.EXPERIMENTAL_ENGINE_RUST_VERSION === 'true',
   ibisServerEndpoint: process.env.IBIS_SERVER_ENDPOINT,
 
   // encryption
