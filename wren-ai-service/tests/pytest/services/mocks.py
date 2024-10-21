@@ -60,5 +60,6 @@ class SQLSummaryMock(sql_summary.SQLSummary):
         self,
         query: str,
         sqls: list[str],
+        language: str,
     ):
         return {"post_process": {"sql_summary_results": self._results}}

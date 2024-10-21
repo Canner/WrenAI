@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -47,6 +48,7 @@ Database Schema:
 {% endfor %}
 
 User's input: {{query}}
+Current Time: {{ current_time }}
 """
 
 
@@ -62,7 +64,9 @@ def prompt(
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
     logger.debug(f"history: {history}")
-    return prompt_builder.run(query=query, documents=documents, sql=history.sql)
+    return prompt_builder.run(
+        query=query, documents=documents, sql=history.sql, current_time=datetime.now()
+    )
 
 
 @async_timer
