@@ -16,7 +16,7 @@ class ExactMatchAccuracy(BaseMetric):
     ):
         self.threshold = 0
         self.score = 0
-        self.kmaps = build_foreign_key_map_from_json(kmap_path)
+        self.kmap_path = kmap_path
 
         self.db_dir = db_dir
 
@@ -28,11 +28,12 @@ class ExactMatchAccuracy(BaseMetric):
             self.success = True
             return 0
 
+        kmaps = build_foreign_key_map_from_json(self.kmap_path)
         db_name = test_case.additional_metadata["catalog"]
         db = os.path.join(self.db_dir, db_name, db_name + ".sqlite")
         schema = Schema(get_schema(db))
-        gold_sql = tokenize(test_case.expected_output, schema, self.kmaps[db_name])
-        pred_sql = tokenize(test_case.actual_output, schema, self.kmaps[db_name])
+        gold_sql = tokenize(test_case.expected_output, schema, kmaps[db_name])
+        pred_sql = tokenize(test_case.actual_output, schema, kmaps[db_name])
 
         evaluator = Evaluator()
         self.score = evaluator.eval_exact_match(pred_sql, gold_sql)
