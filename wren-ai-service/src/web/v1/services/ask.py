@@ -124,6 +124,20 @@ class AskService:
             filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
         )
 
+    async def _add_summary_to_sql_candidates(
+        self, sqls: list[str], query: str, language: str
+    ):
+        sql_summary_results = await self._pipelines["sql_summary"].run(
+            query=query,
+            sqls=sqls,
+            language=language,
+        )
+        valid_sql_summary_results = sql_summary_results["post_process"][
+            "sql_summary_results"
+        ]
+        # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
+        return remove_sql_summary_duplicates(valid_sql_summary_results)
+
     @async_timer
     @observe(name="Ask Question")
     @trace_metadata
@@ -195,6 +209,24 @@ class AskService:
                     "formatted_output", {}
                 ).get("documents", [])[:1]
 
+                api_results = []
+                if historical_question_result:
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": result.get("statement"),
+                                "summary": result.get("summary"),
+                                "type": "view",
+                                "viewId": result.get("viewId"),
+                            }
+                        )
+                        for result in historical_question_result
+                    ]
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="generating",
+                        response=api_results,
+                    )
+
                 if ask_request.history:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_sql_generation"
@@ -217,10 +249,27 @@ class AskService:
                     )
 
                 valid_generation_results = []
+                valid_sql_summary_results = []
                 if sql_valid_results := text_to_sql_generation_results["post_process"][
                     "valid_generation_results"
                 ]:
                     valid_generation_results += sql_valid_results
+
+                if valid_generation_results:
+                    valid_sql_summary_results = (
+                        await self._add_summary_to_sql_candidates(
+                            valid_generation_results,
+                            ask_request.query,
+                            ask_request.configurations.language,
+                        )
+                    )
+                    api_results += [
+                        AskResult(**result) for result in valid_sql_summary_results
+                    ]
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="generating",
+                        response=api_results,
+                    )
 
                 if failed_dry_run_results := self._get_failed_dry_run_results(
                     text_to_sql_generation_results["post_process"][
@@ -234,26 +283,31 @@ class AskService:
                         invalid_generation_results=failed_dry_run_results,
                         project_id=ask_request.project_id,
                     )
-                    valid_generation_results += sql_correction_results["post_process"][
+                    valid_generation_results = sql_correction_results["post_process"][
                         "valid_generation_results"
                     ]
+                    if valid_generation_results:
+                        valid_sql_summary_results = (
+                            await self._add_summary_to_sql_candidates(
+                                valid_generation_results,
+                                ask_request.query,
+                                ask_request.configurations.language,
+                            )
+                        )
+                        api_results += [
+                            AskResult(**result) for result in valid_sql_summary_results
+                        ]
 
-                valid_sql_summary_results = []
-                if valid_generation_results:
-                    sql_summary_results = await self._pipelines["sql_summary"].run(
-                        query=ask_request.query,
-                        sqls=valid_generation_results,
-                        language=ask_request.configurations.language,
-                    )
-                    valid_sql_summary_results = sql_summary_results["post_process"][
-                        "sql_summary_results"
-                    ]
-                    # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
-                    valid_sql_summary_results = remove_sql_summary_duplicates(
-                        valid_sql_summary_results
-                    )
+                        # only return top 3 results, thus remove the rest
+                        if len(api_results) > 3:
+                            del api_results[3:]
 
-                if not valid_sql_summary_results and not historical_question_result:
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            response=api_results,
+                        )
+
+                if not api_results:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
                     )
@@ -266,27 +320,6 @@ class AskService:
                     )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                     return results
-
-                api_results = [
-                    AskResult(
-                        **{
-                            "sql": result.get("statement"),
-                            "summary": result.get("summary"),
-                            "type": "view",
-                            "viewId": result.get("viewId"),
-                        }
-                    )
-                    for result in historical_question_result
-                ] + [AskResult(**result) for result in valid_sql_summary_results]
-
-                # only return top 3 results, thus remove the rest
-                if len(api_results) > 3:
-                    del api_results[3:]
-
-                self._ask_results[query_id] = AskResultResponse(
-                    status="finished",
-                    response=api_results,
-                )
 
                 results["ask_result"] = api_results
                 return results
