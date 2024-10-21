@@ -1,4 +1,4 @@
-import { Form, Input } from 'antd';
+import { Form, Input, Switch } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 
@@ -87,6 +87,13 @@ export default function SQLServerProperties(props: Props) {
         ]}
       >
         <Input placeholder="SQL Server database name" disabled={isEditMode} />
+      </Form.Item>
+      <Form.Item
+        label="Enable Trust Server Certificate"
+        name="trustServerCertificate"
+        valuePropName="checked"
+      >
+        <Switch />
       </Form.Item>
     </>
   );

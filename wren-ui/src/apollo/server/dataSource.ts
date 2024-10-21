@@ -123,9 +123,18 @@ const dataSource = {
         DataSourceName.MSSQL,
         connectionInfo,
       );
-      const { host, port, database, user, password } =
+      const { host, port, database, user, password, trustServerCertificate } =
         decryptedConnectionInfo as MS_SQL_CONNECTION_INFO;
-      return { host, port, database, user, password };
+      return {
+        host,
+        port,
+        database,
+        user,
+        password,
+        kwargs: {
+          TrustServerCertificate: trustServerCertificate,
+        },
+      };
     },
   } as IDataSourceConnectionInfo<
     MS_SQL_CONNECTION_INFO,
