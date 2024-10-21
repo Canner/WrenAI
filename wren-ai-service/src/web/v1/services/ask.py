@@ -24,6 +24,7 @@ class AskConfigurations(BaseModel):
         end: str
 
     fiscal_year: Optional[FiscalYear] = None
+    language: str = "English"
 
 
 # POST /v1/asks
@@ -38,7 +39,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[AskHistory] = None
-    configurations: Optional[AskConfigurations] = None
+    configurations: AskConfigurations = AskConfigurations(language="English")
 
     @property
     def query_id(self) -> str:
@@ -242,6 +243,7 @@ class AskService:
                     sql_summary_results = await self._pipelines["sql_summary"].run(
                         query=ask_request.query,
                         sqls=valid_generation_results,
+                        language=ask_request.configurations.language,
                     )
                     valid_sql_summary_results = sql_summary_results["post_process"][
                         "sql_summary_results"
