@@ -150,6 +150,8 @@ class AzureOpenAILLMProvider(LLMProvider):
     def get_generator(
         self,
         system_prompt: Optional[str] = None,
+        # it is expected to only pass the response format only, others will be merged from the model parameters.
+        generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
         logger.info(
             f"Creating Azure OpenAI generator with model kwargs: {self._model_kwargs}"
@@ -160,6 +162,6 @@ class AzureOpenAILLMProvider(LLMProvider):
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,
-            generation_kwargs=self._model_kwargs,
+            generation_kwargs={**generation_kwargs, **self._model_kwargs},
             timeout=self._timeout,
         )
