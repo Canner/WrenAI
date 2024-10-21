@@ -38,6 +38,7 @@ export interface MS_SQL_CONNECTION_INFO {
   user: string;
   password: string;
   database: string;
+  trustServerCertificate: boolean;
 }
 
 export interface CLICK_HOUSE_CONNECTION_INFO {
