@@ -209,12 +209,21 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/saai-syvendra">
+                    <img src="https://avatars.githubusercontent.com/u/157691467?v=4" width="100;" alt="saai-syvendra"/>
+                    <br />
+                    <sub><b>Saai Syvendra</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/kushal34712">
                     <img src="https://avatars.githubusercontent.com/u/98145879?v=4" width="100;" alt="kushal34712"/>
                     <br />
                     <sub><b>kushal34712</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/goldmedal">
                     <img src="https://avatars.githubusercontent.com/u/6974913?v=4" width="100;" alt="goldmedal"/>
@@ -222,8 +231,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>goldmedal</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/eltociear">
                     <img src="https://avatars.githubusercontent.com/u/22633385?v=4" width="100;" alt="eltociear"/>
@@ -246,12 +253,21 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/Spirizeon">
+                    <img src="https://avatars.githubusercontent.com/u/123345456?v=4" width="100;" alt="Spirizeon"/>
+                    <br />
+                    <sub><b>Ayush Dutta</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/kpman">
                     <img src="https://avatars.githubusercontent.com/u/2382594?v=4" width="100;" alt="kpman"/>
                     <br />
                     <sub><b>kpman</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/grieve54706">
                     <img src="https://avatars.githubusercontent.com/u/8724385?v=4" width="100;" alt="grieve54706"/>
@@ -266,8 +282,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>Harshil Patel</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/RoacherM">
                     <img src="https://avatars.githubusercontent.com/u/33534878?v=4" width="100;" alt="RoacherM"/>
@@ -296,13 +310,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>Nishant Rana</b></sub>
                 </a>
             </td>
-            <td align="center">
-                <a href="https://github.com/saai-syvendra">
-                    <img src="https://avatars.githubusercontent.com/u/157691467?v=4" width="100;" alt="saai-syvendra"/>
-                    <br />
-                    <sub><b>Saai Syvendra</b></sub>
-                </a>
-            </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/sahil9001">
                     <img src="https://avatars.githubusercontent.com/u/32628578?v=4" width="100;" alt="sahil9001"/>
@@ -310,8 +319,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>sahil9001</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/yb-sid">
                     <img src="https://avatars.githubusercontent.com/u/129207298?v=4" width="100;" alt="yb-sid"/>
