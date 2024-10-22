@@ -258,9 +258,11 @@ class AskService:
                             ask_request.configurations.language,
                         )
                     )
-                    api_results += [
-                        AskResult(**result) for result in valid_sql_summary_results
-                    ]
+                    api_results = (
+                        api_results
+                        + [AskResult(**result) for result in valid_sql_summary_results]
+                    )[3:]
+
                     self._ask_results[query_id] = AskResultResponse(
                         status="generating",
                         response=api_results,
@@ -288,15 +290,15 @@ class AskService:
                                 ask_request.configurations.language,
                             )
                         )
-                        api_results += [
-                            AskResult(**result) for result in valid_sql_summary_results
-                        ]
+                        api_results = (
+                            api_results
+                            + [
+                                AskResult(**result)
+                                for result in valid_sql_summary_results
+                            ]
+                        )[3:]
 
                 if api_results:
-                    # only return top 3 results, thus remove the rest
-                    if len(api_results) > 3:
-                        del api_results[3:]
-
                     self._ask_results[query_id] = AskResultResponse(
                         status="finished",
                         response=api_results,
