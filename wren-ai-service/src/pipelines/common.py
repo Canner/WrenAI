@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
@@ -361,3 +362,7 @@ def construct_instructions(configurations: AskConfigurations | None):
             instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
 
     return instructions
+
+
+def show_current_time():
+    return f'{time.strftime('%Y-%m-%d %A')}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday
