@@ -12,6 +12,29 @@ models:
 api_base: https://api.openai.com/v1
 
 ---
+type: llm
+provider: azure_openai_llm
+models:
+  - model: gpt-4o
+    kwargs:
+      {
+        "temperature": 0,
+        "n": 1,
+        "max_tokens": 4096,
+        "response_format": { "type": "json_object" },
+      }
+api_base: https://<your-endpoint>.openai.azure.com/
+api_version: "2024-05-13"
+
+---
+type: llm
+provider: ollama
+models:
+  - model: phi3:latest
+    kwargs: { "temperature": 0 }
+timeout: 120
+
+---
 type: embedder
 provider: openai_embedder
 models:
@@ -21,9 +44,42 @@ api_base: https://api.openai.com/v1
 timeout: 120
 
 ---
+type: embedder
+provider: azure_openai_embedder
+models:
+  - model: text-embedding-3-small
+    dimension: 256
+api_base: https://<your-endpoint>.openai.azure.com/
+api_version: "2024-05-13"
+timeout: 120
+
+---
+type: embedder
+provider: ollama
+models:
+  - model: nomic-embed-text:latest
+    dimension: 768
+url: http://localhost:11434
+timeout: 120
+
+---
 type: engine
 provider: wren_ui
 endpoint: http://localhost:3000
+
+---
+type: engine
+provider: wren_ibis
+endpoint: http://localhost:8000
+source: bigquery
+manifest: "" # base64 encoded string of the MDL
+connection_info: "" # base64 encoded string of the connection info
+
+---
+type: engine
+provider: wren_engine
+endpoint: http://localhost:8080
+manifest: ""
 
 ---
 type: document_store
