@@ -102,10 +102,10 @@ SQL:
 
 ### QUESTION ###
 User's Question: {{ query }}
+Current Time: {{ current_time }}
 
 Let's think step by step.
 """
-# Current Time: {{ current_time }}
 
 
 ## Start of Pipeline
