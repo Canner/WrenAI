@@ -96,7 +96,7 @@ class SemanticResult(BaseModel):
     models: list[SemanticModel]
 
 
-SEMANTIC_MODEL_KWARGS = {
+SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -182,7 +182,8 @@ class SemanticsDescription(BasicPipeline):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(
-                system_prompt=system_prompt, generation_kwargs=SEMANTIC_MODEL_KWARGS
+                system_prompt=system_prompt,
+                generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
             ),
         }
         self._final = "normalize"

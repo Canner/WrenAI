@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -47,6 +48,7 @@ Database Schema:
 {% endfor %}
 
 User's input: {{query}}
+Current Time: {{ current_time }}
 """
 
 
@@ -62,7 +64,9 @@ def prompt(
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
     logger.debug(f"history: {history}")
-    return prompt_builder.run(query=query, documents=documents, sql=history.sql)
+    return prompt_builder.run(
+        query=query, documents=documents, sql=history.sql, current_time=datetime.now()
+    )
 
 
 @async_timer
@@ -98,7 +102,7 @@ class ExpansionResults(BaseModel):
     results: list[ExpandedResult]
 
 
-EXPANSION_MODEL_KWARGS = {
+SQL_EXPANSION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -119,7 +123,7 @@ class SQLExpansion(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_expansion_system_prompt,
-                generation_kwargs=EXPANSION_MODEL_KWARGS,
+                generation_kwargs=SQL_EXPANSION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_expansion_user_prompt_template
