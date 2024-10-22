@@ -141,4 +141,4 @@ The configuration file (`config.yaml`) is structured into several sections, each
 
    This section defines various service settings including host, port, indexing and retrieval parameters, cache settings, Langfuse configuration, logging level, and development mode.
 
-This configuration file allows for detailed customization of the AI service components, pipelines, and overall behavior. It provides a centralized place to manage complex configurations while keeping sensitive information separate (managed through environment variables). See [Full Configuration File](../tools/config/config.example.yaml) for a complete example.
+This configuration file allows for detailed customization of the AI service components, pipelines, and overall behavior. It provides a centralized place to manage complex configurations while keeping sensitive information separate (managed through environment variables). See [Full Configuration File](../tools/config/config.full.yaml) for a complete example.
