@@ -5,7 +5,7 @@ import uuid
 import orjson
 from fastapi.testclient import TestClient
 
-os.environ["CONFIG_PATH"] = "tests/pytest/data/config.test.yaml"
+os.environ["CONFIG_PATH"] = "tests/data/config.test.yaml"
 from src.__main__ import app
 
 GLOBAL_DATA = {
