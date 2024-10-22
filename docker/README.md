@@ -1,7 +1,7 @@
 ## Service
 * `wren-engine`: the engine service. check out example here: [wren-engine
 /example](https://github.com/Canner/wren-engine/tree/main/example)
-* `wren-ai-service`: the AI service. check out example here: [wren-ai-service docker-compose example](https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml)
+* `wren-ai-service`: the AI service.
 * `qdrant`: the vector store ai service is using.
 * `wren-ui`: the UI service.
 * `bootstrap`: put required files to volume for engine service.
