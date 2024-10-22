@@ -125,15 +125,16 @@ const dataSource = {
       );
       const { host, port, database, user, password, trustServerCertificate } =
         decryptedConnectionInfo as MS_SQL_CONNECTION_INFO;
+
       return {
         host,
         port,
         database,
         user,
         password,
-        kwargs: {
-          TrustServerCertificate: trustServerCertificate,
-        },
+        ...(trustServerCertificate && {
+          kwargs: { trustServerCertificate: 'YES' },
+        }),
       };
     },
   } as IDataSourceConnectionInfo<
