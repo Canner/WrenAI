@@ -57,7 +57,7 @@ const DynamicComponent = ({
   refetch: () => void;
   closeModal: () => void;
 }) => {
-  const { dataSource } = data || {};
+  const { dataSource, language } = data || {};
   return (
     {
       [SETTINGS.DATA_SOURCE]: (
@@ -69,7 +69,7 @@ const DynamicComponent = ({
           closeModal={closeModal}
         />
       ),
-      [SETTINGS.PROJECT]: <ProjectSettings />,
+      [SETTINGS.PROJECT]: <ProjectSettings data={{ language }} />,
     }[menu] || null
   );
 };

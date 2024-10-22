@@ -200,6 +200,7 @@ export type DetailedModel = {
 
 export type DetailedNestedColumn = {
   __typename?: 'DetailedNestedColumn';
+  columnPath: Array<Scalars['String']>;
   displayName: Scalars['String'];
   id: Scalars['Int'];
   properties?: Maybe<Scalars['JSON']>;
@@ -366,6 +367,7 @@ export type FieldInfo = {
   expression?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
   isCalculated: Scalars['Boolean'];
+  nestedColumns?: Maybe<Array<NestedFieldInfo>>;
   notNull: Scalars['Boolean'];
   properties?: Maybe<Scalars['JSON']>;
   referenceName: Scalars['String'];
@@ -437,6 +439,7 @@ export type Mutation = {
   startSampleDataset: Scalars['JSON'];
   triggerDataSourceDetection: Scalars['Boolean'];
   updateCalculatedField: Scalars['JSON'];
+  updateCurrentProject: Scalars['Boolean'];
   updateDataSource: DataSource;
   updateModel: Scalars['JSON'];
   updateModelMetadata: Scalars['Boolean'];
@@ -570,6 +573,11 @@ export type MutationUpdateCalculatedFieldArgs = {
 };
 
 
+export type MutationUpdateCurrentProjectArgs = {
+  data: UpdateCurrentProjectInput;
+};
+
+
 export type MutationUpdateDataSourceArgs = {
   data: UpdateDataSourceInput;
 };
@@ -614,6 +622,17 @@ export type MutationValidateViewArgs = {
   data: ValidateViewInput;
 };
 
+export type NestedFieldInfo = {
+  __typename?: 'NestedFieldInfo';
+  columnPath: Array<Scalars['String']>;
+  displayName: Scalars['String'];
+  id: Scalars['Int'];
+  properties: Scalars['JSON'];
+  referenceName: Scalars['String'];
+  sourceColumnName: Scalars['String'];
+  type: Scalars['String'];
+};
+
 export enum NodeType {
   CALCULATED_FIELD = 'CALCULATED_FIELD',
   FIELD = 'FIELD',
@@ -652,6 +671,19 @@ export type PreviewViewDataInput = {
   id: Scalars['Int'];
   limit?: InputMaybe<Scalars['Int']>;
 };
+
+export enum ProjectLanguage {
+  DE = 'DE',
+  EN = 'EN',
+  ES = 'ES',
+  FR = 'FR',
+  JA = 'JA',
+  KO = 'KO',
+  PT = 'PT',
+  RU = 'RU',
+  ZH_CN = 'ZH_CN',
+  ZH_TW = 'ZH_TW'
+}
 
 export type Query = {
   __typename?: 'Query';
@@ -799,6 +831,7 @@ export enum SchemaChangeType {
 export type Settings = {
   __typename?: 'Settings';
   dataSource: DataSource;
+  language: ProjectLanguage;
   productVersion: Scalars['String'];
 };
 
@@ -887,6 +920,10 @@ export type UpdateColumnMetadataInput = {
   description?: InputMaybe<Scalars['String']>;
   displayName?: InputMaybe<Scalars['String']>;
   id: Scalars['Int'];
+};
+
+export type UpdateCurrentProjectInput = {
+  language: ProjectLanguage;
 };
 
 export type UpdateDataSourceInput = {
