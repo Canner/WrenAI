@@ -102,7 +102,7 @@ class ExpansionResults(BaseModel):
     results: list[ExpandedResult]
 
 
-EXPANSION_MODEL_KWARGS = {
+SQL_EXPANSION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -123,7 +123,7 @@ class SQLExpansion(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_expansion_system_prompt,
-                generation_kwargs=EXPANSION_MODEL_KWARGS,
+                generation_kwargs=SQL_EXPANSION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_expansion_user_prompt_template

@@ -156,7 +156,7 @@ class BreakdownResults(BaseModel):
     steps: list[StepResult]
 
 
-BREAKDOWN_MODEL_KWARGS = {
+SQL_BREAKDOWN_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -177,7 +177,7 @@ class SQLBreakdown(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_breakdown_system_prompt,
-                generation_kwargs=BREAKDOWN_MODEL_KWARGS,
+                generation_kwargs=SQL_BREAKDOWN_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_breakdown_user_prompt_template

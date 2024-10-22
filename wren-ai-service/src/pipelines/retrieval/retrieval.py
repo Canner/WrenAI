@@ -317,7 +317,7 @@ class RetrievalResults(BaseModel):
     results: list[MatchingTable]
 
 
-Retrieval_MODEL_KWARGS = {
+RETRIEVAL_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -350,7 +350,7 @@ class Retrieval(BasicPipeline):
             ),
             "table_columns_selection_generator": llm_provider.get_generator(
                 system_prompt=table_columns_selection_system_prompt,
-                generation_kwargs=Retrieval_MODEL_KWARGS,
+                generation_kwargs=RETRIEVAL_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template

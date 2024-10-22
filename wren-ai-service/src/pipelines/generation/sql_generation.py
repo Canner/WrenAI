@@ -168,7 +168,7 @@ class GenerationResults(BaseModel):
     results: list[SQLResult]
 
 
-GENERATION_MODEL_KWARGS = {
+SQL_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -189,7 +189,7 @@ class SQLGeneration(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
-                generation_kwargs=GENERATION_MODEL_KWARGS,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_user_prompt_template
