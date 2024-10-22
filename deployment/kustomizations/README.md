@@ -98,4 +98,4 @@ kubectl get pods -n cert-manager
 ```
 
 # GitOps Patches
-In the [patches](deployment/kustomizations/patches) folder you can find usefull kustomization examples files if you wish to use existing official kustomization directly from this repo as a base kustomization layer and only customize some values. It can be usefull for you GitOps workflow and can be used in conjunction with FlexCD or ArgoCD.
+In the [patches](./patches) folder you can find usefull kustomization examples files if you wish to use existing official kustomization directly from this repo as a base kustomization layer and only customize some values. It can be usefull for you GitOps workflow and can be used in conjunction with FlexCD or ArgoCD.
