@@ -151,7 +151,7 @@ ibis-server:
 ```
 Then refer to the README.md or CONTRIBUTION.md file the module for starting the module from the source code. 
 
-eg: refer to the [ai-service README](https://github.com/Canner/WrenAI-saas/blob/main/wren-ai-service/README.md#start-the-service-for-development) to start the ai-service from the source code.
+eg: refer to the [ai-service README](https://github.com/Canner/WrenAI/blob/main/wren-ai-service/README.md#start-the-service-for-development) to start the ai-service from the source code.
 
 
 
