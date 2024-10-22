@@ -246,68 +246,24 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/AryanK1511">
-                    <img src="https://avatars.githubusercontent.com/u/101019909?v=4" width="100;" alt="AryanK1511"/>
+                <a href="https://github.com/iamawanishmaurya">
+                    <img src="https://avatars.githubusercontent.com/u/65104100?v=4" width="100;" alt="iamawanishmaurya"/>
                     <br />
-                    <sub><b>AryanK1511</b></sub>
+                    <sub><b>iamawanishmaurya</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/Spirizeon">
-                    <img src="https://avatars.githubusercontent.com/u/123345456?v=4" width="100;" alt="Spirizeon"/>
+                <a href="https://github.com/Prototype4988">
+                    <img src="https://avatars.githubusercontent.com/u/55426963?v=4" width="100;" alt="Prototype4988"/>
                     <br />
-                    <sub><b>Ayush Dutta</b></sub>
+                    <sub><b>Prototype4988</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/kpman">
-                    <img src="https://avatars.githubusercontent.com/u/2382594?v=4" width="100;" alt="kpman"/>
+                <a href="https://github.com/yb-sid">
+                    <img src="https://avatars.githubusercontent.com/u/129207298?v=4" width="100;" alt="yb-sid"/>
                     <br />
-                    <sub><b>kpman</b></sub>
-                </a>
-            </td>
-		</tr>
-		<tr>
-            <td align="center">
-                <a href="https://github.com/grieve54706">
-                    <img src="https://avatars.githubusercontent.com/u/8724385?v=4" width="100;" alt="grieve54706"/>
-                    <br />
-                    <sub><b>grieve54706</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/hpatel292-seneca">
-                    <img src="https://avatars.githubusercontent.com/u/100322816?v=4" width="100;" alt="hpatel292-seneca"/>
-                    <br />
-                    <sub><b>Harshil Patel</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/RoacherM">
-                    <img src="https://avatars.githubusercontent.com/u/33534878?v=4" width="100;" alt="RoacherM"/>
-                    <br />
-                    <sub><b>RoacherM</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/Innovatorcloudy">
-                    <img src="https://avatars.githubusercontent.com/u/183274513?v=4" width="100;" alt="Innovatorcloudy"/>
-                    <br />
-                    <sub><b>Innovatorcloudy</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/MGomaa435">
-                    <img src="https://avatars.githubusercontent.com/u/79599759?v=4" width="100;" alt="MGomaa435"/>
-                    <br />
-                    <sub><b>Mohamed Gomaa</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/NishantRana07">
-                    <img src="https://avatars.githubusercontent.com/u/126577697?v=4" width="100;" alt="NishantRana07"/>
-                    <br />
-                    <sub><b>Nishant Rana</b></sub>
+                    <sub><b>yb-sid</b></sub>
                 </a>
             </td>
 		</tr>
@@ -320,24 +276,75 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/yb-sid">
-                    <img src="https://avatars.githubusercontent.com/u/129207298?v=4" width="100;" alt="yb-sid"/>
+                <a href="https://github.com/vil02">
+                    <img src="https://avatars.githubusercontent.com/u/65706193?v=4" width="100;" alt="vil02"/>
                     <br />
-                    <sub><b>yb-sid</b></sub>
+                    <sub><b>Piotr Idzik</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/Prototype4988">
-                    <img src="https://avatars.githubusercontent.com/u/55426963?v=4" width="100;" alt="Prototype4988"/>
+                <a href="https://github.com/NishantRana07">
+                    <img src="https://avatars.githubusercontent.com/u/126577697?v=4" width="100;" alt="NishantRana07"/>
                     <br />
-                    <sub><b>Prototype4988</b></sub>
+                    <sub><b>Nishant Rana</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/iamawanishmaurya">
-                    <img src="https://avatars.githubusercontent.com/u/65104100?v=4" width="100;" alt="iamawanishmaurya"/>
+                <a href="https://github.com/MGomaa435">
+                    <img src="https://avatars.githubusercontent.com/u/79599759?v=4" width="100;" alt="MGomaa435"/>
                     <br />
-                    <sub><b>iamawanishmaurya</b></sub>
+                    <sub><b>Mohamed Gomaa</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Innovatorcloudy">
+                    <img src="https://avatars.githubusercontent.com/u/183274513?v=4" width="100;" alt="Innovatorcloudy"/>
+                    <br />
+                    <sub><b>Innovatorcloudy</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/RoacherM">
+                    <img src="https://avatars.githubusercontent.com/u/33534878?v=4" width="100;" alt="RoacherM"/>
+                    <br />
+                    <sub><b>RoacherM</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/hpatel292-seneca">
+                    <img src="https://avatars.githubusercontent.com/u/100322816?v=4" width="100;" alt="hpatel292-seneca"/>
+                    <br />
+                    <sub><b>Harshil Patel</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/grieve54706">
+                    <img src="https://avatars.githubusercontent.com/u/8724385?v=4" width="100;" alt="grieve54706"/>
+                    <br />
+                    <sub><b>grieve54706</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/kpman">
+                    <img src="https://avatars.githubusercontent.com/u/2382594?v=4" width="100;" alt="kpman"/>
+                    <br />
+                    <sub><b>kpman</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Spirizeon">
+                    <img src="https://avatars.githubusercontent.com/u/123345456?v=4" width="100;" alt="Spirizeon"/>
+                    <br />
+                    <sub><b>Ayush Dutta</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/AryanK1511">
+                    <img src="https://avatars.githubusercontent.com/u/101019909?v=4" width="100;" alt="AryanK1511"/>
+                    <br />
+                    <sub><b>AryanK1511</b></sub>
                 </a>
             </td>
 		</tr>
