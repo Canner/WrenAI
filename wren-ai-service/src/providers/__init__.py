@@ -319,6 +319,9 @@ def init_providers(
 class Wrapper(Mapping):
     # DEPRECATED: use generate_components instead
     def __init__(self):
+        from src.utils import load_env_vars
+
+        load_env_vars()
         self.value = PipelineComponent(
             *init_providers(
                 engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
@@ -367,6 +370,10 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
     """
 
     loader.import_mods()
+
+    if not configs:
+        # This is a temporary solution to allow for the old config format, and will be removed in the future
+        return Wrapper()
 
     config = transform(configs)
 
