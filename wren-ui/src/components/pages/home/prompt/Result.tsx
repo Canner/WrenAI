@@ -1,6 +1,6 @@
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
 import Link from 'next/link';
-import { Row, Col, Button, Popover } from 'antd';
+import { Row, Col, Button, Popover, Skeleton } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE, Path } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
@@ -17,7 +17,9 @@ import ViewSQLModal from '@/components/pages/home/prompt/ViewSQLModal';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import useModalAction from '@/hooks/useModalAction';
-import useAskProcessState from '@/hooks/useAskProcessState';
+import useAskProcessState, {
+  getIsProcessing,
+} from '@/hooks/useAskProcessState';
 import { AskingTask } from '@/apollo/client/graphql/__types__';
 
 const StyledResult = styled.div`
@@ -47,6 +49,24 @@ const MarkedResultBlock = styled.div`
   padding-top: 8px;
 `;
 
+const StyledSkeleton = styled(Skeleton)`
+  margin-bottom: 22px;
+  .ant-skeleton-title {
+    height: 14px;
+    margin-top: 4px;
+
+    + .ant-skeleton-paragraph {
+      margin-top: 20px;
+      li {
+        height: 14px;
+        + li {
+          margin-top: 8px;
+        }
+      }
+    }
+  }
+`;
+
 interface Props {
   processState: ReturnType<typeof useAskProcessState>;
   data: AskingTask['candidates'];
@@ -54,10 +74,34 @@ interface Props {
   onSelect: (payload: { sql: string; summary: string }) => void;
   onClose: () => void;
   onStop: () => void;
+  loading?: boolean;
 }
 
-const ResultTemplate = ({ index, summary, sql, view, onSelect, onShowSQL }) => {
+const ResultSkeleton = () => (
+  <div className="border border-gray-5 rounded px-3 pt-3 ">
+    <StyledSkeleton active paragraph={{ rows: 3 }} />
+  </div>
+);
+
+const ResultTemplate = ({
+  index,
+  summary,
+  sql,
+  view,
+  loading,
+  onSelect,
+  onShowSQL,
+}) => {
   const isViewSaved = !!view;
+
+  if (loading) {
+    return (
+      <Col span={8}>
+        <ResultSkeleton />
+      </Col>
+    );
+  }
+
   return (
     <Col span={8}>
       <ResultBlock
@@ -114,24 +158,67 @@ const ResultTemplate = ({ index, summary, sql, view, onSelect, onShowSQL }) => {
   );
 };
 const ResultColumnIterator = makeIterable(ResultTemplate);
+const CandidateResults = (props: Props) => {
+  const { data = [], loading, onSelect } = props;
+
+  // Remain showing 3 results when in loading mode,
+  // If no data, provide loading property to result template to show skeleton
+  const results = useMemo(() => {
+    return loading
+      ? Array.from({ length: 3 }).map((_, index) => {
+          return data[index] || { loading };
+        })
+      : data;
+  }, [data]);
+
+  const viewSQLModal = useModalAction();
+
+  const showSQL = (event, payload: { sql: string; summary: string }) => {
+    viewSQLModal.openModal(payload);
+    event.stopPropagation();
+  };
+
+  const selectResult = (payload: { sql: string; summary: string }) => {
+    onSelect && onSelect(payload);
+  };
+
+  return (
+    <>
+      <Row gutter={[12, 12]}>
+        <ResultColumnIterator
+          data={results}
+          onShowSQL={showSQL}
+          onSelect={selectResult}
+        />
+      </Row>
+      <ViewSQLModal {...viewSQLModal.state} onClose={viewSQLModal.closeModal} />
+    </>
+  );
+};
 
 const makeProcessing = (text: string) => (props: Props) => {
-  const { onStop } = props;
+  const { onStop, processState } = props;
   return (
-    <div className="d-flex justify-space-between">
-      <span>
-        <LoadingOutlined className="mr-2 geekblue-6 text-lg" spin />
-        {text}
-      </span>
-      <Button
-        className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
-        type="text"
-        size="small"
-        onClick={onStop}
-      >
-        <StopOutlined className="-mr-1" />
-        Stop
-      </Button>
+    <div>
+      <div className="d-flex justify-space-between mb-3">
+        <span>
+          <LoadingOutlined className="mr-2 geekblue-6 text-lg" spin />
+          {text}
+        </span>
+        <Button
+          className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
+          type="text"
+          size="small"
+          onClick={onStop}
+        >
+          <StopOutlined className="-mr-1" />
+          Stop
+        </Button>
+      </div>
+      <CandidateResults
+        {...props}
+        loading={getIsProcessing(processState.currentState)}
+      />
     </div>
   );
 };
@@ -181,19 +268,9 @@ const NoResult = makeProcessingError({
 
 const Understanding = makeProcessing('Understanding question');
 const Searching = makeProcessing('Searching data');
+const Generating = makeProcessing('Generating result(s)');
 const Finished = (props: Props) => {
-  const { data, onClose, onSelect } = props;
-
-  const viewSQLModal = useModalAction();
-
-  const showSQL = (event, payload: { sql: string; summary: string }) => {
-    viewSQLModal.openModal(payload);
-    event.stopPropagation();
-  };
-
-  const selectResult = (payload: { sql: string; summary: string }) => {
-    onSelect && onSelect(payload);
-  };
+  const { data, onClose } = props;
 
   if (data.length === 0) return <NoResult {...props} />;
 
@@ -214,14 +291,7 @@ const Finished = (props: Props) => {
           Close
         </Button>
       </div>
-      <Row gutter={[12, 12]}>
-        <ResultColumnIterator
-          data={data}
-          onShowSQL={showSQL}
-          onSelect={selectResult}
-        />
-      </Row>
-      <ViewSQLModal {...viewSQLModal.state} onClose={viewSQLModal.closeModal} />
+      <CandidateResults {...props} />
     </div>
   );
 };
@@ -231,8 +301,7 @@ const getProcessStateComponent = (state: PROCESS_STATE) => {
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
       [PROCESS_STATE.SEARCHING]: Searching,
-      // generating no need to change UI
-      [PROCESS_STATE.GENERATING]: Searching,
+      [PROCESS_STATE.GENERATING]: Generating,
       [PROCESS_STATE.FINISHED]: Finished,
       [PROCESS_STATE.FAILED]: Failed,
     }[state] || null

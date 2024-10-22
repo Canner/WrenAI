@@ -83,6 +83,7 @@ export interface Project {
   schema: string; // Schema name
   sampleDataset: string; // Sample dataset name
   connectionInfo: WREN_AI_CONNECTION_INFO;
+  language?: string; // Project language
 }
 
 export interface IProjectRepository extends IBasicRepository<Project> {
