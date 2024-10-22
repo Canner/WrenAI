@@ -108,3 +108,5 @@ pipes:
   - name: relationship_recommendation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
+  - name: chart_generation
+    llm: openai_llm.gpt-4o-mini
