@@ -32,9 +32,13 @@ export interface Task {
   id: string;
 }
 
+export interface AskingPayload {
+  threadId?: number;
+  language: string;
+}
+
 export interface AskingTaskInput {
   question: string;
-  threadId?: number;
 }
 
 export interface AskingDetailTaskInput {
@@ -48,14 +52,20 @@ export interface IAskingService {
   /**
    * Asking task.
    */
-  createAskingTask(input: AskingTaskInput): Promise<Task>;
+  createAskingTask(
+    input: AskingTaskInput,
+    payload: Pick<AskingPayload, 'threadId' | 'language'>,
+  ): Promise<Task>;
   cancelAskingTask(taskId: string): Promise<void>;
   getAskingTask(taskId: string): Promise<AskResult>;
 
   /**
    * Asking detail task.
    */
-  createThread(input: AskingDetailTaskInput): Promise<Thread>;
+  createThread(
+    input: AskingDetailTaskInput,
+    payload: Pick<AskingPayload, 'language'>,
+  ): Promise<Thread>;
   updateThread(
     threadId: number,
     input: Partial<AskingDetailTaskInput>,
@@ -63,8 +73,8 @@ export interface IAskingService {
   deleteThread(threadId: number): Promise<void>;
   listThreads(): Promise<Thread[]>;
   createThreadResponse(
-    threadId: number,
     input: AskingDetailTaskInput,
+    payload: Pick<AskingPayload, 'threadId' | 'language'>,
   ): Promise<ThreadResponse>;
   getResponsesWithThread(
     threadId: number,
@@ -313,19 +323,24 @@ export class AskingService implements IAskingService {
   /**
    * Asking task.
    */
-  public async createAskingTask(input: AskingTaskInput): Promise<Task> {
+  public async createAskingTask(
+    input: AskingTaskInput,
+    payload: Pick<AskingPayload, 'threadId' | 'language'>,
+  ): Promise<Task> {
+    const { threadId, language } = payload;
     const deployId = await this.getDeployId();
 
     // if it's a follow-up question, then the input will have a threadId
     // then use the threadId to get the sql, summary and get the steps of last thread response
     // construct it into AskHistory and pass to ask
-    const history: AskHistory = input.threadId
-      ? await this.getHistory(input.threadId)
+    const history: AskHistory = threadId
+      ? await this.getHistory(threadId)
       : null;
     const response = await this.wrenAIAdaptor.ask({
       query: input.question,
       history,
       deployId,
+      configurations: { language },
     });
     return {
       id: response.queryId,
@@ -356,7 +371,11 @@ export class AskingService implements IAskingService {
    * 2. create a thread and the first thread response
    * 3. put the task into background tracker
    */
-  public async createThread(input: AskingDetailTaskInput): Promise<Thread> {
+  public async createThread(
+    input: AskingDetailTaskInput,
+    payload: Pick<AskingPayload, 'language'>,
+  ): Promise<Thread> {
+    const { language } = payload;
     // if input contains a viewId, simply create a thread from saved properties of the view
     if (input.viewId) {
       return this.createThreadFromView(input.viewId);
@@ -367,6 +386,7 @@ export class AskingService implements IAskingService {
       query: input.question,
       sql: input.sql,
       summary: input.summary,
+      configurations: { language },
     });
 
     // 2. create a thread and the first thread response
@@ -417,9 +437,10 @@ export class AskingService implements IAskingService {
   }
 
   public async createThreadResponse(
-    threadId: number,
     input: AskingDetailTaskInput,
+    payload: AskingPayload,
   ): Promise<ThreadResponse> {
+    const { threadId, language } = payload;
     const thread = await this.threadRepository.findOneBy({
       id: threadId,
     });
@@ -445,6 +466,7 @@ export class AskingService implements IAskingService {
       query: input.question,
       sql: input.sql,
       summary: input.summary,
+      configurations: { language },
     });
 
     // 2. create a thread and the first thread response
