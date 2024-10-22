@@ -261,7 +261,7 @@ class AskService:
                     api_results = (
                         api_results
                         + [AskResult(**result) for result in valid_sql_summary_results]
-                    )[3:]
+                    )[:3]
 
                     self._ask_results[query_id] = AskResultResponse(
                         status="generating",
@@ -296,7 +296,7 @@ class AskService:
                                 AskResult(**result)
                                 for result in valid_sql_summary_results
                             ]
-                        )[3:]
+                        )[:3]
 
                 if api_results:
                     self._ask_results[query_id] = AskResultResponse(
