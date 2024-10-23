@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
-from src.web.v1.services.sql_explanation import StepWithAnalysisResult
+from src.web.v1.services.sql_explanation import StepWithAnalysisResults
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -106,6 +106,12 @@ Please generate the output with the following JSON format depending on the type 
 """
 
 sql_explanation_user_prompt_template = """
+### TASK ###
+
+Given the SQL query analysis and other related information, {{ explanation_hint }}
+
+### INPUT ###
+
 Question: {{ question }}
 SQL query: {{ sql }}
 SQL query summary: {{ sql_summary }}
@@ -155,7 +161,9 @@ def _compose_sql_expression_of_groupby_type(
     ]
 
 
-def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
+def _compose_sql_expression_of_relation_type(
+    relation: Dict, cte_names: List[str]
+) -> List[str]:
     def _is_subquery_or_has_subquery_child(relation):
         if relation["type"] == "SUBQUERY":
             return True
@@ -167,11 +175,14 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
                 return True
         return False
 
-    def _collect_relations(relation, result, top_level: bool = True):
+    def _collect_relations(relation, result, cte_names, top_level: bool = True):
         if _is_subquery_or_has_subquery_child(relation):
             return
 
         if relation["type"] == "TABLE" and top_level:
+            if relation["tableName"] in cte_names:
+                return
+
             result.append(
                 {
                     "values": {
@@ -186,11 +197,12 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
                 {
                     "values": {
                         "type": relation["type"],
-                        "criteria": relation["criteria"],
+                        "criteria": relation["criteria"]["expression"],
                         "exprSources": [
                             {
                                 "expression": expr_source["expression"],
                                 "sourceDataset": expr_source["sourceDataset"],
+                                "sourceColumn": expr_source["sourceColumn"],
                             }
                             for expr_source in relation["exprSources"]
                         ],
@@ -198,45 +210,65 @@ def _compose_sql_expression_of_relation_type(relation: Dict) -> List[str]:
                     "id": relation.get("id", ""),
                 }
             )
-            _collect_relations(relation["left"], result, top_level=False)
-            _collect_relations(relation["right"], result, top_level=False)
+            _collect_relations(relation["left"], cte_names, result, top_level=False)
+            _collect_relations(relation["right"], cte_names, result, top_level=False)
 
     results = []
-    print(f"relation: {relation}")
-    _collect_relations(relation, results)
+    _collect_relations(relation, results, cte_names)
     return results
 
 
-def _compose_sql_expression_of_select_type(select_items: List[Dict]) -> Dict:
+def _compose_sql_expression_of_select_type(
+    select_items: List[Dict], selected_data_sources: List[List[Dict]]
+) -> Dict:
+    def _is_select_item_existed_in_selected_data_sources(
+        select_item, selected_data_sources
+    ):
+        for selected_data_source in selected_data_sources:
+            for data_source in selected_data_source:
+                if (
+                    "exprSources" in select_item
+                    and select_item["exprSources"]
+                    and select_item["exprSources"][0]["sourceDataset"]
+                    == data_source["sourceDataset"]
+                    and select_item["exprSources"][0]["sourceColumn"]
+                    == data_source["sourceColumn"]
+                ):
+                    return True
+        return False
+
     result = {
         "withFunctionCallOrMathematicalOperation": [],
         "withoutFunctionCallOrMathematicalOperation": [],
     }
 
     for select_item in select_items:
-        if (
-            select_item["properties"]["includeFunctionCall"] == "true"
-            or select_item["properties"]["includeMathematicalOperation"] == "true"
+        if not _is_select_item_existed_in_selected_data_sources(
+            select_item, selected_data_sources
         ):
-            result["withFunctionCallOrMathematicalOperation"].append(
-                {
-                    "values": {
-                        "alias": select_item["alias"],
-                        "expression": select_item["expression"],
-                    },
-                    "id": select_item.get("id", ""),
-                }
-            )
-        else:
-            result["withoutFunctionCallOrMathematicalOperation"].append(
-                {
-                    "values": {
-                        "alias": select_item["alias"],
-                        "expression": select_item["expression"],
-                    },
-                    "id": select_item.get("id", ""),
-                }
-            )
+            if (
+                select_item["properties"]["includeFunctionCall"] == "true"
+                or select_item["properties"]["includeMathematicalOperation"] == "true"
+            ):
+                result["withFunctionCallOrMathematicalOperation"].append(
+                    {
+                        "values": {
+                            "alias": select_item["alias"],
+                            "expression": select_item["expression"],
+                        },
+                        "id": select_item.get("id", ""),
+                    }
+                )
+            else:
+                result["withoutFunctionCallOrMathematicalOperation"].append(
+                    {
+                        "values": {
+                            "alias": select_item["alias"],
+                            "expression": select_item["expression"],
+                        },
+                        "id": select_item.get("id", ""),
+                    }
+                )
 
     return result
 
@@ -249,6 +281,20 @@ def _compose_sql_expression_of_sortings_type(sortings: List[Dict]) -> List[str]:
         }
         for sorting in sortings
     ]
+
+
+def get_sql_explanation_prompt_given_analysis_type(sql_analysis_type: str) -> str:
+    if sql_analysis_type == "filter":
+        return "Explain the filter condition in the SQL query."
+    elif sql_analysis_type == "groupByKeys":
+        return "Explain the group by keys in the SQL query."
+    elif sql_analysis_type == "relation":
+        return "Explain the relation in the SQL query."
+    elif sql_analysis_type == "selectItems":
+        return "Explain the select items in the SQL query."
+    elif sql_analysis_type == "sortings":
+        return "Explain the sortings in the SQL query."
+    return ""
 
 
 def _extract_to_str(data):
@@ -267,6 +313,8 @@ class SQLAnalysisPreprocessor:
     )
     def run(
         self,
+        cte_names: List[str],
+        selected_data_sources: List[List[Dict]],
         sql_analysis_results: List[Dict],
     ) -> Dict[str, List[Dict]]:
         preprocessed_sql_analysis_results = []
@@ -293,7 +341,8 @@ class SQLAnalysisPreprocessor:
                     preprocessed_sql_analysis_result[
                         "relation"
                     ] = _compose_sql_expression_of_relation_type(
-                        sql_analysis_result["relation"]
+                        sql_analysis_result["relation"],
+                        cte_names,
                     )
                 else:
                     preprocessed_sql_analysis_result["relation"] = []
@@ -301,7 +350,7 @@ class SQLAnalysisPreprocessor:
                     preprocessed_sql_analysis_result[
                         "selectItems"
                     ] = _compose_sql_expression_of_select_type(
-                        sql_analysis_result["selectItems"]
+                        sql_analysis_result["selectItems"], selected_data_sources
                     )
                 else:
                     preprocessed_sql_analysis_result["selectItems"] = {
@@ -417,12 +466,12 @@ class SQLExplanationGenerationPostProcessor:
                                 },
                             }
                             for select_item, sql_explanation in zip(
-                                preprocessed_sql_analysis_results["selectItems"][
-                                    "withFunctionCallOrMathematicalOperation"
-                                ],
-                                sql_explanation_results["selectItems"][
-                                    "withFunctionCallOrMathematicalOperation"
-                                ],
+                                preprocessed_sql_analysis_results.get(
+                                    "selectItems", {}
+                                ).get("withFunctionCallOrMathematicalOperation", []),
+                                sql_explanation_results.get("selectItems", {}).get(
+                                    "withFunctionCallOrMathematicalOperation", []
+                                ),
                             )
                         ] + [
                             {
@@ -435,12 +484,12 @@ class SQLExplanationGenerationPostProcessor:
                                 },
                             }
                             for select_item, sql_explanation in zip(
-                                preprocessed_sql_analysis_results["selectItems"][
-                                    "withoutFunctionCallOrMathematicalOperation"
-                                ],
-                                sql_explanation_results["selectItems"][
-                                    "withoutFunctionCallOrMathematicalOperation"
-                                ],
+                                preprocessed_sql_analysis_results.get(
+                                    "selectItems", {}
+                                ).get("withoutFunctionCallOrMathematicalOperation", []),
+                                sql_explanation_results.get("selectItems", {}).get(
+                                    "withoutFunctionCallOrMathematicalOperation", []
+                                ),
                             )
                         ]
 
@@ -475,12 +524,15 @@ class SQLExplanationGenerationPostProcessor:
 @timer
 @observe(capture_input=False)
 def preprocess(
-    sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
+    selected_data_sources: List[List[dict]],
+    sql_analysis_results: List[dict],
+    cte_names: List[str],
+    pre_processor: SQLAnalysisPreprocessor,
 ) -> dict:
     logger.debug(
         f"sql_analysis_results: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return pre_processor.run(sql_analysis_results)
+    return pre_processor.run(cte_names, selected_data_sources, sql_analysis_results)
 
 
 @timer
@@ -499,12 +551,14 @@ def prompts(
     )
     logger.debug(f"sql_summary: {sql_summary}")
 
+    sql_analysis_types = []
     preprocessed_sql_analysis_results_with_values = []
     for preprocessed_sql_analysis_result in preprocess[
         "preprocessed_sql_analysis_results"
     ]:
         for key, value in preprocessed_sql_analysis_result.items():
             if value:
+                sql_analysis_types.append(key)
                 if key != "selectItems":
                     if isinstance(value, list):
                         preprocessed_sql_analysis_results_with_values.append(
@@ -543,9 +597,14 @@ def prompts(
             question=question,
             sql=sql,
             sql_analysis_result=sql_analysis_result,
+            explanation_hint=get_sql_explanation_prompt_given_analysis_type(
+                sql_analysis_type
+            ),
             sql_summary=sql_summary,
         )
-        for sql_analysis_result in preprocessed_sql_analysis_results_with_values
+        for sql_analysis_type, sql_analysis_result in zip(
+            sql_analysis_types, preprocessed_sql_analysis_results_with_values
+        )
     ]
 
 
@@ -643,7 +702,9 @@ class SQLExplanation(BasicPipeline):
     def visualize(
         self,
         question: str,
-        step_with_analysis_results: StepWithAnalysisResult,
+        cte_names: List[str],
+        selected_data_sources: List[List[dict]],
+        step_with_analysis_results: StepWithAnalysisResults,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -654,6 +715,8 @@ class SQLExplanation(BasicPipeline):
             output_file_path=f"{destination}/sql_explanation.dot",
             inputs={
                 "question": question,
+                "cte_names": cte_names,
+                "selected_data_sources": selected_data_sources,
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
@@ -668,7 +731,9 @@ class SQLExplanation(BasicPipeline):
     async def run(
         self,
         question: str,
-        step_with_analysis_results: StepWithAnalysisResult,
+        cte_names: List[str],
+        selected_data_sources: List[List[dict]],
+        step_with_analysis_results: StepWithAnalysisResults,
     ):
         logger.info("SQL Explanation Generation pipeline is running...")
 
@@ -676,6 +741,8 @@ class SQLExplanation(BasicPipeline):
             ["post_process"],
             inputs={
                 "question": question,
+                "cte_names": cte_names,
+                "selected_data_sources": selected_data_sources,
                 "sql": step_with_analysis_results.sql,
                 "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
                 "sql_summary": step_with_analysis_results.summary,
@@ -702,18 +769,22 @@ if __name__ == "__main__":
 
     pipeline.visualize(
         "this is a test question",
-        StepWithAnalysisResult(
+        ["xxx"],
+        StepWithAnalysisResults(
             sql="xxx",
             summary="xxx",
+            cte_name="xxx",
             sql_analysis_results=[],
         ),
     )
     async_validate(
         lambda: pipeline.run(
             "this is a test question",
-            StepWithAnalysisResult(
+            ["xxx"],
+            StepWithAnalysisResults(
                 sql="xxx",
                 summary="xxx",
+                cte_name="xxx",
                 sql_analysis_results=[],
             ),
         )
