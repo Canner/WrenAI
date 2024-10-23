@@ -52,9 +52,12 @@ export default function useAskPrompt(threadId?: number) {
     }
   };
 
+  const stopPolling = () => askingTaskResult.stopPolling();
+
   return {
     data,
     onStop,
     onSubmit,
+    stopPolling,
   };
 }
