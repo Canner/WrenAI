@@ -135,7 +135,7 @@ export class ProjectRepository
     }
     const snakeCaseData = mapKeys(data, (_value, key) => snakeCase(key));
     const formattedData = mapValues(snakeCaseData, (value, key) => {
-      if (key === 'connectionInfo') {
+      if (key === 'connection_info') {
         return JSON.stringify(value);
       }
       return value;
