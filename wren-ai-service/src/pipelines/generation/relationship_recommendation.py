@@ -57,9 +57,11 @@ def validated(normalized: dict, engine: Engine) -> dict:
 ## End of Pipeline
 class ModelRelationship(BaseModel):
     name: str
-    models: list[str]
-    joinType: str
-    condition: str
+    fromModel: str
+    fromColumn: str
+    type: str
+    toModel: str
+    toColumn: str
     reason: str
 
 
@@ -80,39 +82,28 @@ system_prompt = """
 You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them. For each relationship, provide the following details:
 
 - **name**: A descriptive name for the relationship.
-- **models**: A list of involved model names.
-- **joinType**: The type of join, which can be ONE_TO_MANY, MANY_TO_MANY, or MANY_TO_ONE.
-- **condition**: The SQL condition that defines how the models are related.
+- **fromModel**: The name of the source model.
+- **fromColumn**: The column in the source model that forms the relationship.
+- **type**: The type of relationship, which can be ONE_TO_MANY, MANY_TO_MANY, or MANY_TO_ONE.
+- **toModel**: The name of the target model.
+- **toColumn**: The column in the target model that forms the relationship.
+- **reason**: The reason for recommending this relationship.
 
 Output all relationships in the following JSON structure:
 
-```json
 {
     "relationships": [
         {
             "name": "<name for the relationship>",
-            "models": [
-                "<model_name>",
-                "<model_name>"
-            ],
-            "joinType": "<join type>",
-            "condition": "<join condition to join the above models>",
-            "reason": "<the reason for recommending the relationship>"
-        },
-        {
-            "name": "<name for the relationship>",
-            "models": [
-                "<model_name>",
-                "<model_name>",
-                "<model_name>"
-            ],
-            "joinType": "<join type>",
-            "condition": "<join condition to join the above models>",
-            "reason": "<the reason for recommending the relationship>"
+            "fromModel": "<model_name>",
+            "fromColumn": "<column_name>",
+            "type": "<relationship_type>",
+            "toModel": "<model_name>",
+            "toColumn": "<column_name>"
         }
+        ...
     ]
 }
-
 """
 
 user_prompt_template = """
