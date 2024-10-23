@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -8,6 +9,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -116,6 +118,7 @@ The final answer must be the JSON format like following:
 Previous SQL Summary: {{ history.summary }}
 Previous SQL Query: {{ history.sql }}
 User's Follow-up Question: {{ query }}
+Current Time: {{ current_time }}
 
 {% if instructions %}
 Instructions: {{ instructions }}
@@ -146,6 +149,7 @@ def prompt(
         history=history,
         alert=alert,
         instructions=construct_instructions(configurations),
+        current_time=datetime.now(),
     )
 
 
@@ -174,6 +178,25 @@ async def post_process(
 ## End of Pipeline
 
 
+class SQLResult(BaseModel):
+    sql: str
+
+
+class GenerationResults(BaseModel):
+    results: list[SQLResult]
+
+
+FOLLOWUP_SQL_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_results",
+            "schema": GenerationResults.model_json_schema(),
+        },
+    }
+}
+
+
 class FollowUpSQLGeneration(BasicPipeline):
     def __init__(
         self,
@@ -183,7 +206,8 @@ class FollowUpSQLGeneration(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt
+                system_prompt=sql_generation_system_prompt,
+                generation_kwargs=FOLLOWUP_SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=text_to_sql_with_followup_user_prompt_template

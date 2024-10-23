@@ -50,6 +50,7 @@ export enum OnboardingStatusEnum {
 export class ProjectResolver {
   constructor() {
     this.getSettings = this.getSettings.bind(this);
+    this.updateCurrentProject = this.updateCurrentProject.bind(this);
     this.resetCurrentProject = this.resetCurrentProject.bind(this);
     this.saveDataSource = this.saveDataSource.bind(this);
     this.updateDataSource = this.updateDataSource.bind(this);
@@ -80,7 +81,21 @@ export class ProjectResolver {
         } as DataSourceProperties,
         sampleDataset: project.sampleDataset,
       },
+      language: project.language,
     };
+  }
+
+  public async updateCurrentProject(
+    _root: any,
+    arg: { data: { language: string } },
+    ctx: IContext,
+  ) {
+    const { language } = arg.data;
+    const project = await ctx.projectService.getCurrentProject();
+    await ctx.projectRepository.updateOne(project.id, {
+      language,
+    });
+    return true;
   }
 
   public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {

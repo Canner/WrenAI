@@ -21,7 +21,8 @@ class ExecutionAccuracy(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        if test_case.additional_metadata["catalog"] is None:
+        if not test_case.additional_metadata["enable_spider_metrics"]:
+            self.success = True
             return 0
 
         db_name = test_case.additional_metadata["catalog"]

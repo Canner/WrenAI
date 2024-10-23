@@ -33,15 +33,6 @@ TIMEOUT_SECONDS = 60
 ddl_converter = DDLConverter()
 
 
-def get_openai_client(
-    api_key: str = os.getenv("OPENAI_API_KEY"), timeout: float = TIMEOUT_SECONDS
-) -> AsyncClient:
-    return AsyncClient(
-        api_key=api_key,
-        timeout=timeout,
-    )
-
-
 async def is_sql_valid(
     sql: str,
     data_source: str,

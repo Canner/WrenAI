@@ -10,7 +10,11 @@ import orjson
 import requests
 import sqlglot
 import tomlkit
+from dotenv import load_dotenv
+from openai import AsyncClient
 from tomlkit import parse
+
+load_dotenv(".env", override=True)
 
 
 def add_quotes(sql: str) -> Tuple[str, bool]:
@@ -524,3 +528,19 @@ def prepare_duckdb_init_sql(api_endpoint: str, db: str):
     )
 
     assert response.status_code == 200, response.text
+
+
+def get_next_few_items_circular(items: list, i: int, few: int = 5):
+    list_length = len(items)
+    if list_length < few + 1:
+        few = list_length - 1
+    return [items[(i + j) % list_length] for j in range(1, few + 1)]
+
+
+def get_openai_client(
+    api_key: str = os.getenv("OPENAI_API_KEY"), timeout: float = 60
+) -> AsyncClient:
+    return AsyncClient(
+        api_key=api_key,
+        timeout=timeout,
+    )

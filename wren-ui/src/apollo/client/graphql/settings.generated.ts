@@ -6,12 +6,19 @@ const defaultOptions = {} as const;
 export type GetSettingsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type GetSettingsQuery = { __typename?: 'Query', settings: { __typename?: 'Settings', productVersion: string, dataSource: { __typename?: 'DataSource', type: Types.DataSourceName, properties: any, sampleDataset?: Types.SampleDatasetName | null } } };
+export type GetSettingsQuery = { __typename?: 'Query', settings: { __typename?: 'Settings', productVersion: string, language: Types.ProjectLanguage, dataSource: { __typename?: 'DataSource', type: Types.DataSourceName, properties: any, sampleDataset?: Types.SampleDatasetName | null } } };
 
 export type ResetCurrentProjectMutationVariables = Types.Exact<{ [key: string]: never; }>;
 
 
 export type ResetCurrentProjectMutation = { __typename?: 'Mutation', resetCurrentProject: boolean };
+
+export type UpdateCurrentProjectMutationVariables = Types.Exact<{
+  data: Types.UpdateCurrentProjectInput;
+}>;
+
+
+export type UpdateCurrentProjectMutation = { __typename?: 'Mutation', updateCurrentProject: boolean };
 
 
 export const GetSettingsDocument = gql`
@@ -23,6 +30,7 @@ export const GetSettingsDocument = gql`
       properties
       sampleDataset
     }
+    language
   }
 }
     `;
@@ -83,3 +91,34 @@ export function useResetCurrentProjectMutation(baseOptions?: Apollo.MutationHook
 export type ResetCurrentProjectMutationHookResult = ReturnType<typeof useResetCurrentProjectMutation>;
 export type ResetCurrentProjectMutationResult = Apollo.MutationResult<ResetCurrentProjectMutation>;
 export type ResetCurrentProjectMutationOptions = Apollo.BaseMutationOptions<ResetCurrentProjectMutation, ResetCurrentProjectMutationVariables>;
+export const UpdateCurrentProjectDocument = gql`
+    mutation UpdateCurrentProject($data: UpdateCurrentProjectInput!) {
+  updateCurrentProject(data: $data)
+}
+    `;
+export type UpdateCurrentProjectMutationFn = Apollo.MutationFunction<UpdateCurrentProjectMutation, UpdateCurrentProjectMutationVariables>;
+
+/**
+ * __useUpdateCurrentProjectMutation__
+ *
+ * To run a mutation, you first call `useUpdateCurrentProjectMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateCurrentProjectMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateCurrentProjectMutation, { data, loading, error }] = useUpdateCurrentProjectMutation({
+ *   variables: {
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useUpdateCurrentProjectMutation(baseOptions?: Apollo.MutationHookOptions<UpdateCurrentProjectMutation, UpdateCurrentProjectMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UpdateCurrentProjectMutation, UpdateCurrentProjectMutationVariables>(UpdateCurrentProjectDocument, options);
+      }
+export type UpdateCurrentProjectMutationHookResult = ReturnType<typeof useUpdateCurrentProjectMutation>;
+export type UpdateCurrentProjectMutationResult = Apollo.MutationResult<UpdateCurrentProjectMutation>;
+export type UpdateCurrentProjectMutationOptions = Apollo.BaseMutationOptions<UpdateCurrentProjectMutation, UpdateCurrentProjectMutationVariables>;

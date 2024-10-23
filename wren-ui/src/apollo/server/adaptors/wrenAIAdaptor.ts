@@ -27,7 +27,20 @@ enum WrenAISystemStatus {
   FAILED = 'FAILED',
 }
 
-export interface deployData {
+export enum WrenAILanguage {
+  EN = 'English',
+  ES = 'Spanish',
+  FR = 'French',
+  ZH_TW = 'Traditional Chinese',
+  ZH_CN = 'Simplified Chinese',
+  DE = 'German',
+  PT = 'Portuguese',
+  RU = 'Russian',
+  JA = 'Japanese',
+  KO = 'Korean',
+}
+
+export interface DeployData {
   manifest: Manifest;
   hash: string;
 }
@@ -45,10 +58,15 @@ export interface AskHistory {
   steps: Array<AskStep>;
 }
 
+export interface AskConfigurations {
+  language: string;
+}
+
 export interface AskInput {
   query: string;
   deployId: string;
   history?: AskHistory;
+  configurations?: AskConfigurations;
 }
 
 export interface AsyncQueryResponse {
@@ -81,6 +99,7 @@ export interface AskDetailInput {
   query: string;
   sql: string;
   summary: string;
+  configurations?: AskConfigurations;
 }
 
 export type AskDetailResult = AskResponse<
@@ -109,7 +128,7 @@ const getAISerciceError = (error: any) => {
 };
 
 export interface IWrenAIAdaptor {
-  deploy(deployData: deployData): Promise<WrenAIDeployResponse>;
+  deploy(deployData: DeployData): Promise<WrenAIDeployResponse>;
 
   /**
    * Ask AI service a question.
@@ -149,6 +168,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         query: input.query,
         id: input.deployId,
         history: this.transfromHistoryInput(input.history),
+        configurations: input.configurations,
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
@@ -223,7 +243,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }
   }
 
-  public async deploy(deployData: deployData): Promise<WrenAIDeployResponse> {
+  public async deploy(deployData: DeployData): Promise<WrenAIDeployResponse> {
     const { manifest, hash } = deployData;
     try {
       const res = await axios.post(

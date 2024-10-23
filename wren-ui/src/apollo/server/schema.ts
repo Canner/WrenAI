@@ -53,6 +53,19 @@ export const typeDefs = gql`
     MODIFIED_COLUMNS
   }
 
+  enum ProjectLanguage {
+    EN
+    ES
+    FR
+    ZH_TW
+    ZH_CN
+    DE
+    PT
+    RU
+    JA
+    KO
+  }
+
   type DataSource {
     type: DataSourceName!
     properties: JSON!
@@ -635,9 +648,14 @@ export const typeDefs = gql`
     properties: JSON!
   }
 
+  input UpdateCurrentProjectInput {
+    language: ProjectLanguage!
+  }
+
   type Settings {
     productVersion: String!
     dataSource: DataSource!
+    language: ProjectLanguage!
   }
 
   type GetMDLResult {
@@ -791,6 +809,7 @@ export const typeDefs = gql`
 
     # Settings
     resetCurrentProject: Boolean!
+    updateCurrentProject(data: UpdateCurrentProjectInput!): Boolean!
     updateDataSource(data: UpdateDataSourceInput!): DataSource!
 
     # preview

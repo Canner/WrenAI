@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -8,6 +9,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -70,13 +72,18 @@ Proceed in a similar manner for the other queries.
     {{ document }}
 {% endfor %}
 
+{% if exclude %}
 ### EXCLUDED STATEMETS ###
 Ensure that the following excluded statements are not used in the generated queries to maintain variety and avoid repetition.
 {% for doc in exclude %}
     {{ doc.statement }}
 {% endfor %}
+{% endif %}
 
 {{ alert }}
+{% if instructions %}
+{{ instructions }}
+{% endif %}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be the JSON format like following:
@@ -89,11 +96,19 @@ The final answer must be the JSON format like following:
     ]
 }
 
+{% if samples %}
+### SAMPLES ###
+{% for sample in samples %}
+Question:
+{{sample.question}}
+SQL:
+{{sample.sql}}
+{% endfor %}
+{% endif %}
+
 ### QUESTION ###
 User's Question: {{ query }}
-{% if instructions %}
-Instructions: {{ instructions }}
-{% endif %}
+Current Time: {{ current_time }}
 
 Let's think step by step.
 """
@@ -109,6 +124,7 @@ def prompt(
     alert: str,
     prompt_builder: PromptBuilder,
     configurations: AskConfigurations | None = None,
+    samples: List[Dict] | None = None,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
@@ -116,12 +132,16 @@ def prompt(
         f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
     )
     logger.debug(f"configurations: {configurations}")
+    if samples:
+        logger.debug(f"samples: {samples}")
     result_dict = prompt_builder.run(
         query=query,
         documents=documents,
         exclude=exclude,
         alert=alert,
         instructions=construct_instructions(configurations),
+        samples=samples,
+        current_time=datetime.now(),
     )
     context = []
     for doc in documents:
@@ -175,6 +195,7 @@ async def generate_sql(prompt: dict, generator: Any) -> dict:
         for item in result:
           if isinstance(item, tuple):
             if len(item) == 3:
+              # remove prefix and suffix ```json`
               cleaned_string = "".join(item[1].get('answer').split('\n')[1:-1]).strip()
               answers = cleaned_string # orjson.loads(cleaned_string)
     return {"replies":[answers]}
@@ -194,6 +215,23 @@ async def post_process(
 
 
 ## End of Pipeline
+class SQLResult(BaseModel):
+    sql: str
+
+
+class GenerationResults(BaseModel):
+    results: list[SQLResult]
+
+
+SQL_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_results",
+            "schema": GenerationResults.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLGeneration(BasicPipeline):
@@ -205,7 +243,8 @@ class SQLGeneration(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt
+                system_prompt=sql_generation_system_prompt,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_user_prompt_template
@@ -226,6 +265,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        samples: List[Dict] | None = None,
         project_id: str | None = None,
         configurations: AskConfigurations | None = None,
     ) -> None:
@@ -240,6 +280,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
+                "samples": samples,
                 "project_id": project_id,
                 "configurations": configurations,
                 **self._components,
@@ -256,6 +297,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        samples: List[Dict] | None = None,
         project_id: str | None = None,
         configurations: AskConfigurations | None = None,
     ):
@@ -266,6 +308,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
+                "samples": samples,
                 "project_id": project_id,
                 "configurations": configurations,
                 **self._components,

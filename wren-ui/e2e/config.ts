@@ -41,6 +41,22 @@ const defaultTestConfig = {
     password: 'sqlserver-password',
     database: 'sqlserver-database',
   },
+  trino: {
+    host: "trino-host",
+    port: "8081",
+    catalog: "trino-catalog",
+    schema: "trino-schema",
+    username: "trino-username",
+    password: "trino-password"
+  },
+  clickhouse: {
+    host: 'clickhouse-host',
+    port: '8443',
+    username: 'clickhouse-username',
+    password: 'clickhouse-password',
+    database: 'clickhouse-database',
+    ssl: false,
+  },
 };
 
 let userTestConfig = {};
