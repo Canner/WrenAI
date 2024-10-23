@@ -1,10 +1,11 @@
 ## Service
-* `wren-engine`: the engine service. check out example here: [wren-engine
-/example](https://github.com/Canner/wren-engine/tree/main/example)
-* `wren-ai-service`: the AI service.
-* `qdrant`: the vector store ai service is using.
-* `wren-ui`: the UI service.
-* `bootstrap`: put required files to volume for engine service.
+
+- `wren-engine`: the engine service. check out example here: [wren-engine
+  /example](https://github.com/Canner/wren-engine/tree/main/example)
+- `wren-ai-service`: the AI service.
+- `qdrant`: the vector store ai service is using.
+- `wren-ui`: the UI service.
+- `bootstrap`: put required files to volume for engine service.
 
 ## Volume
 
@@ -19,7 +20,8 @@ Path structure as following:
 - `config.yaml`
 
 ## Network
-* Check out [Network drivers overview](https://docs.docker.com/engine/network/drivers/) to learn more about `bridge` network driver.
+
+- Check out [Network drivers overview](https://docs.docker.com/engine/network/drivers/) to learn more about `bridge` network driver.
 
 ## How to start with OpenAI
 
