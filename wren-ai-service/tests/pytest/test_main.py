@@ -3,10 +3,19 @@ import os
 import uuid
 
 import orjson
+import pytest
 from fastapi.testclient import TestClient
 
-os.environ["CONFIG_PATH"] = "tests/data/config.test.yaml"
-from src.__main__ import app
+
+@pytest.fixture(scope="module", autouse=True)
+def app():
+    os.environ["CONFIG_PATH"] = "tests/data/config.test.yaml"
+    from src.__main__ import app
+
+    yield app
+    # Clean up (if necessary)
+    del os.environ["CONFIG_PATH"]
+
 
 GLOBAL_DATA = {
     "semantics_preperation_id": str(uuid.uuid4()),
@@ -14,7 +23,7 @@ GLOBAL_DATA = {
 }
 
 
-def test_semantics_preparations():
+def test_semantics_preparations(app):
     with TestClient(app) as client:
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
 
@@ -46,7 +55,7 @@ def test_semantics_preparations():
         assert status == "finished"
 
 
-def test_asks_with_successful_query():
+def test_asks_with_successful_query(app):
     with TestClient(app) as client:
         semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
 
@@ -79,7 +88,7 @@ def test_asks_with_successful_query():
         #     assert r["summary"] is not None and r["summary"] != ""
 
 
-def test_stop_asks():
+def test_stop_asks(app):
     with TestClient(app) as client:
         query_id = GLOBAL_DATA["query_id"]
 
@@ -101,7 +110,7 @@ def test_stop_asks():
         assert response.json()["status"] == "stopped"
 
 
-def test_ask_details():
+def test_ask_details(app):
     with TestClient(app) as client:
         response = client.post(
             url="/v1/ask-details",
@@ -134,7 +143,7 @@ def test_ask_details():
                 assert step["cte_name"] == ""
 
 
-def test_sql_regenerations():
+def test_sql_regenerations(app):
     with TestClient(app) as client:
         response = client.post(
             url="/v1/sql-regenerations",
@@ -224,7 +233,7 @@ LIMIT 1
         assert response.json()["status"] == "finished" or "failed"
 
 
-def test_web_error_handler():
+def test_web_error_handler(app):
     with TestClient(app) as client:
         response = client.post(
             url="/v1/asks",
