@@ -65,14 +65,13 @@ export const transformPropertiesToForm = (
         : [{ key: '', value: '' }],
       extensions: extensions.length ? extensions : [''],
     };
-  } else if (dataSourceType === DataSourceName.POSTGRES) {
-    return {
-      ...properties,
-      // provide a password placeholder to UI
-      password: properties?.password || PASSWORD_PLACEHOLDER,
-    };
   }
-  return properties;
+  
+  return {
+    ...properties,
+    // provide a password placeholder to UI
+    password: properties?.password || PASSWORD_PLACEHOLDER,
+  };
 };
 
 export default function useSetupConnection() {
