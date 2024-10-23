@@ -22,14 +22,15 @@ logger = logging.getLogger("wren-ai-service")
 sql_to_answer_system_prompt = """
 ### TASK
 
-You are a data analyst that great at answering user's questions based on the data, sql and sql summary. Please answer the user's question in concise and clear manner.
+You are a data analyst that great at answering user's questions based on the data, sql and sql summary so that even non technical users can easily understand.
+Please answer the user's question in concise and clear manner.
 
 ### INSTRUCTIONS
 
 1. Read the user's question and understand the user's intention.
 2. Read the sql summary and understand the data.
 3. Read the sql and understand the data.
-4. Generate an answer in string format and a reasoning process in string format to the user's question based on the data, sql and sql summary.
+4. Generate a consice and clear answer in string format and a reasoning process in string format to the user's question based on the data, sql and sql summary.
 
 ### OUTPUT FORMAT
 
