@@ -275,6 +275,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>grieve54706</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/hpatel292-seneca">
                     <img src="https://avatars.githubusercontent.com/u/100322816?v=4" width="100;" alt="hpatel292-seneca"/>
@@ -308,6 +310,13 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <img src="https://avatars.githubusercontent.com/u/126577697?v=4" width="100;" alt="NishantRana07"/>
                     <br />
                     <sub><b>Nishant Rana</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/saai-syvendra">
+                    <img src="https://avatars.githubusercontent.com/u/157691467?v=4" width="100;" alt="saai-syvendra"/>
+                    <br />
+                    <sub><b>Saai Syvendra</b></sub>
                 </a>
             </td>
 		</tr>
