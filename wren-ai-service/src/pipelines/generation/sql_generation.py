@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+from litellm import CompletionTokensDetails
 import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
@@ -201,6 +202,11 @@ async def generate_sql(prompt: dict, generator: Any) -> dict:
     return {"replies":[answers]}
 
 
+def default_serializer(obj: Any) -> Any:
+    if isinstance(obj, CompletionTokensDetails):
+        return f"<special>{str(obj)}"
+
+
 @async_timer
 @observe(capture_input=False)
 async def post_process(
@@ -209,7 +215,7 @@ async def post_process(
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
-        f"generate_sql: {orjson.dumps(generate_sql, option=orjson.OPT_INDENT_2).decode()}"
+        f"generate_sql: {orjson.dumps(generate_sql, option=orjson.OPT_INDENT_2, default=default_serializer).decode()}"
     )
     return await post_processor.run(generate_sql.get("replies"), project_id=project_id)
 
