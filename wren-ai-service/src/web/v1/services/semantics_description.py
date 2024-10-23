@@ -25,7 +25,7 @@ class SemanticsDescription:
             message: str
 
         id: str
-        status: Literal["generating", "finished", "failed"] = None
+        status: Literal["generating", "finished", "failed"] = "generating"
         response: Optional[dict] = None
         error: Optional[Error] = None
 
@@ -42,54 +42,60 @@ class SemanticsDescription:
 
     def _handle_exception(
         self,
-        request: Input,
+        input: Input,
         error_message: str,
         code: str = "OTHERS",
-    ):
-        self[request.id] = self.Resource(
-            id=request.id,
+    ) -> Resource:
+        resource = self.Resource(
+            id=input.id,
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
         )
+        self._cache[input.id] = resource
         logger.error(error_message)
+        return resource
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
-    async def generate(self, request: Input, **kwargs) -> Resource:
+    async def generate(self, input: Input, **kwargs) -> Resource:
         logger.info("Generate Semantics Description pipeline is running...")
 
-        try:
-            mdl_dict = orjson.loads(request.mdl)
+        resource = self.Resource(id=input.id, status="generating")
+        self._cache[input.id] = resource
 
-            input = {
-                "user_prompt": request.user_prompt,
-                "selected_models": request.selected_models,
+        try:
+            mdl_dict = orjson.loads(input.mdl)
+
+            pipeline_input = {
+                "user_prompt": input.user_prompt,
+                "selected_models": input.selected_models,
                 "mdl": mdl_dict,
             }
 
-            resp = await self._pipelines["semantics_description"].run(**input)
+            resp = await self._pipelines["semantics_description"].run(**pipeline_input)
 
-            self[request.id] = self.Resource(
-                id=request.id, status="finished", response=resp.get("normalize")
-            )
+            resource.status = "finished"
+            resource.response = resp.get("normalize")
+            self._cache[input.id] = resource
+
         except orjson.JSONDecodeError as e:
-            self._handle_exception(
-                request,
+            resource = self._handle_exception(
+                input,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
             )
         except Exception as e:
-            self._handle_exception(
-                request,
+            resource = self._handle_exception(
+                input,
                 f"An error occurred during semantics description generation: {str(e)}",
             )
 
-        return self[request.id]
+        return resource
 
-    def __getitem__(self, id: str) -> Resource:
-        response = self._cache.get(id)
+    def get_resource(self, id: str) -> Resource:
+        resource = self._cache.get(id)
 
-        if response is None:
+        if resource is None:
             message = f"Semantics Description Resource with ID '{id}' not found."
             logger.exception(message)
             return self.Resource(
@@ -98,7 +104,4 @@ class SemanticsDescription:
                 error=self.Resource.Error(code="RESOURCE_NOT_FOUND", message=message),
             )
 
-        return response
-
-    def __setitem__(self, id: str, value: Resource):
-        self._cache[id] = value
+        return resource

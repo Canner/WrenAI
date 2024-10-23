@@ -53,39 +53,43 @@ class RelationshipRecommendation:
 
     @observe(name="Generate Relationship Recommendation")
     @trace_metadata
-    async def recommend(self, request: Input, **kwargs) -> Resource:
+    async def recommend(self, input: Input, **kwargs) -> Resource:
         logger.info("Generate Relationship Recommendation pipeline is running...")
 
-        try:
-            mdl_dict = orjson.loads(request.mdl)
+        resource = self.Resource(id=input.id, status="generating")
+        self._cache[input.id] = resource
 
-            input = {
+        try:
+            mdl_dict = orjson.loads(input.mdl)
+
+            pipeline_input = {
                 "mdl": mdl_dict,
             }
 
-            resp = await self._pipelines["relationship_recommendation"].run(**input)
+            resp = await self._pipelines["relationship_recommendation"].run(**pipeline_input)
 
-            self._cache[request.id] = self.Resource(
-                id=request.id, status="finished", response=resp.get("validated")
-            )
+            resource.status = "finished"
+            resource.response = resp.get("validated")
+            self._cache[input.id] = resource
+
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                request,
+                input,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
             )
         except Exception as e:
             self._handle_exception(
-                request,
+                input,
                 f"An error occurred during relationship recommendation generation: {str(e)}",
             )
 
-        return self._cache[request.id]
+        return self._cache[input.id]
 
-    def __getitem__(self, id: str) -> Resource:
-        response = self._cache.get(id)
+    def get_resource(self, id: str) -> Resource:
+        resource = self._cache.get(id)
 
-        if response is None:
+        if resource is None:
             message = f"Relationship Recommendation Resource with ID '{id}' not found."
             logger.exception(message)
             return self.Resource(
@@ -94,7 +98,4 @@ class RelationshipRecommendation:
                 error=self.Resource.Error(code="RESOURCE_NOT_FOUND", message=message),
             )
 
-        return response
-
-    def __setitem__(self, id: str, value: Resource):
-        self._cache[id] = value
+        return resource
