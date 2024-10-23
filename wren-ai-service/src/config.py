@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     across different environments and deployment scenarios.
     """
 
-    host: str = Field(default="127.0.0.1", env="WREN_AI_SERVICE_HOST")
-    port: int = Field(default=5556, env="WREN_AI_SERVICE_PORT")
+    host: str = Field(default="127.0.0.1", alias="WREN_AI_SERVICE_HOST")
+    port: int = Field(default=5556, alias="WREN_AI_SERVICE_PORT")
 
     # indexing and retrieval config
     column_indexing_batch_size: int = Field(default=50)
@@ -68,7 +68,7 @@ class Settings(BaseSettings):
                 return list(yaml.load_all(file, Loader=yaml.SafeLoader))
         except FileNotFoundError:
             message = f"Warning: Configuration file {self.config_path} not found. Using default settings."
-            logger.exception(message)
+            logger.warning(message)
             return []
         except yaml.YAMLError as e:
             logger.exception(f"Error parsing YAML file: {e}")

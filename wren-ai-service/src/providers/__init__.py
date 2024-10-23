@@ -371,8 +371,15 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
 
     loader.import_mods()
 
+    # DEPRECATED: remove this fallback in the future
     if not configs:
-        # This is a temporary solution to allow for the old config format, and will be removed in the future
+        message = """
+        Warning: No configuration provided. Falling back to environment variables for settings.
+        This is a legacy approach and will be deprecated soon. Please refer to the README for
+        instructions on migrating to the new configuration format. It is strongly recommended
+        to update your configuration to ensure future compatibility and take advantage of new features.
+        """
+        logger.warning(message)
         return Wrapper()
 
     config = transform(configs)
