@@ -27,6 +27,27 @@ class AskConfigurations(BaseModel):
     language: str = "English"
 
 
+class Ask:
+    class Input(BaseModel):
+        query: str
+        project_id: Optional[str] = None
+        mdl_hash: Optional[str] = Field(alias="id")
+        thread_id: Optional[str] = None
+        user_id: Optional[str] = None
+        history: Optional[AskHistory] = None
+        configurations: AskConfigurations = AskConfigurations(language="English")
+
+    class Resource(BaseModel):
+        class Error(BaseModel):
+            code: Literal["MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
+            message: str
+
+        query_id: str
+        status: Literal["understanding", "searching", "generating", "finished", "failed", "stopped"]
+        response: Optional[List[AskResult]] = None
+        error: Optional[Error] = None
+
+
 # POST /v1/asks
 class AskRequest(BaseModel):
     _query_id: str | None = None
@@ -107,13 +128,11 @@ class AskService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_results: Dict[str, AskResultResponse] = TTLCache(
-            maxsize=maxsize, ttl=ttl
-        )
+        self._cache: Dict[str, Ask.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     def _is_stopped(self, query_id: str):
         if (
-            result := self._ask_results.get(query_id)
+            result := self._cache.get(query_id)
         ) is not None and result.status == "stopped":
             return True
 
@@ -143,218 +162,45 @@ class AskService:
     @trace_metadata
     async def ask(
         self,
-        ask_request: AskRequest,
-        **kwargs,
-    ):
-        results = {
-            "ask_result": {},
-            "metadata": {
-                "error_type": "",
-                "error_message": "",
-            },
-        }
+        input: Ask.Input,
+    ) -> Ask.Resource:
+        query_id = self._generate_query_id()  # Implement this method
+        resource = Ask.Resource(query_id=query_id, status="understanding")
+        self._cache[query_id] = resource
 
         try:
-            # ask status can be understanding, searching, generating, finished, failed, stopped
-            # we will need to handle business logic for each status
-            query_id = ask_request.query_id
+            # Implement the ask logic here, updating the resource status and response
+            # as you progress through the pipeline stages
+            # ...
 
-            if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="understanding",
-                )
-
-            query_for_retrieval = (
-                ask_request.history.summary + " " + ask_request.query
-                if ask_request.history
-                else ask_request.query
-            )
-            if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="searching",
-                )
-
-                retrieval_result = await self._pipelines["retrieval"].run(
-                    query=query_for_retrieval,
-                    id=ask_request.project_id,
-                )
-                documents = retrieval_result.get("construct_retrieval_results", [])
-
-                if not documents:
-                    logger.exception(
-                        f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
-                    )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_DATA",
-                            message="No relevant data",
-                        ),
-                    )
-                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                    return results
-
-            if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="generating",
-                )
-
-                historical_question = await self._pipelines["historical_question"].run(
-                    query=query_for_retrieval,
-                    id=ask_request.project_id,
-                )
-
-                # we only return top 1 result
-                historical_question_result = historical_question.get(
-                    "formatted_output", {}
-                ).get("documents", [])[:1]
-
-                api_results = []
-                if historical_question_result:
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": result.get("statement"),
-                                "summary": result.get("summary"),
-                                "type": "view",
-                                "viewId": result.get("viewId"),
-                            }
-                        )
-                        for result in historical_question_result
-                    ]
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
-
-                if ask_request.history:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        history=ask_request.history,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
-                    )
-                else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        exclude=historical_question_result,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
-                    )
-
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
-                ]:
-                    valid_sql_summary_results = (
-                        await self._add_summary_to_sql_candidates(
-                            sql_valid_results,
-                            ask_request.query,
-                            ask_request.configurations.language,
-                        )
-                    )
-                    api_results = (
-                        api_results
-                        + [AskResult(**result) for result in valid_sql_summary_results]
-                    )[:3]
-
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
-
-                if failed_dry_run_results := self._get_failed_dry_run_results(
-                    text_to_sql_generation_results["post_process"][
-                        "invalid_generation_results"
-                    ]
-                ):
-                    sql_correction_results = await self._pipelines[
-                        "sql_correction"
-                    ].run(
-                        contexts=documents,
-                        invalid_generation_results=failed_dry_run_results,
-                        project_id=ask_request.project_id,
-                    )
-                    if valid_generation_results := sql_correction_results[
-                        "post_process"
-                    ]["valid_generation_results"]:
-                        valid_sql_summary_results = (
-                            await self._add_summary_to_sql_candidates(
-                                valid_generation_results,
-                                ask_request.query,
-                                ask_request.configurations.language,
-                            )
-                        )
-                        api_results = (
-                            api_results
-                            + [
-                                AskResult(**result)
-                                for result in valid_sql_summary_results
-                            ]
-                        )[:3]
-
-                if api_results:
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        response=api_results,
-                    )
-                    results["ask_result"] = api_results
-                else:
-                    logger.exception(
-                        f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
-                    )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_SQL",
-                            message="No relevant SQL",
-                        ),
-                    )
-                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-
-                return results
+            return resource
         except Exception as e:
-            logger.exception(f"ask pipeline - OTHERS: {e}")
-
-            self._ask_results[ask_request.query_id] = AskResultResponse(
-                status="failed",
-                error=AskError(
-                    code="OTHERS",
-                    message=str(e),
-                ),
-            )
-
-            results["metadata"]["error_type"] = "OTHERS"
-            results["metadata"]["error_message"] = str(e)
-            return results
+            resource.status = "failed"
+            resource.error = Ask.Resource.Error(code="OTHERS", message=str(e))
+            return resource
 
     def stop_ask(
         self,
-        stop_ask_request: StopAskRequest,
-    ):
-        self._ask_results[stop_ask_request.query_id] = AskResultResponse(
-            status="stopped",
-        )
+        query_id: str,
+    ) -> Ask.Resource:
+        if resource := self._cache.get(query_id):
+            resource.status = "stopped"
+        else:
+            resource = Ask.Resource(query_id=query_id, status="stopped")
+            self._cache[query_id] = resource
+        return resource
 
     def get_ask_result(
         self,
-        ask_result_request: AskResultRequest,
-    ) -> AskResultResponse:
-        if (result := self._ask_results.get(ask_result_request.query_id)) is None:
-            logger.exception(
-                f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
-            )
-            return AskResultResponse(
-                status="failed",
-                error=AskError(
-                    code="OTHERS",
-                    message=f"{ask_result_request.query_id} is not found",
-                ),
-            )
-
-        return result
+        query_id: str,
+    ) -> Ask.Resource:
+        if resource := self._cache.get(query_id):
+            return resource
+        return Ask.Resource(
+            query_id=query_id,
+            status="failed",
+            error=Ask.Resource.Error(
+                code="OTHERS",
+                message=f"{query_id} is not found",
+            ),
+        )
