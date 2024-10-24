@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+from litellm import CompletionTokensDetails
 import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
@@ -22,6 +23,12 @@ from src.pipelines.common import (
 )
 from src.utils import async_timer, timer
 from src.web.v1.services.ask import AskConfigurations
+import dspy
+import dspy.evaluate
+import dspy.teleprompt
+import os
+import json
+from eval.dspy_modules.ask_generation import AskGenerationV1
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -128,7 +135,7 @@ def prompt(
     logger.debug(f"configurations: {configurations}")
     if samples:
         logger.debug(f"samples: {samples}")
-    return prompt_builder.run(
+    result_dict = prompt_builder.run(
         query=query,
         documents=documents,
         exclude=exclude,
@@ -137,13 +144,67 @@ def prompt(
         samples=samples,
         current_time=datetime.now(),
     )
+    context = []
+    for doc in documents:
+        context.append(str(doc))
+    result_dict['context'] = context
+    result_dict['question'] = query
+    return result_dict
+
+# Validation logic: check that the predicted answer is correct.
+# Also check that the retrieved context does actually contain that answer.
+def validate_context_and_answer(example: dspy.Example, pred : dspy.Example) -> bool:
+    answer_EM = dspy.evaluate.answer_exact_match(example, pred)
+    answer_PM = dspy.evaluate.answer_passage_match(example, pred)
+    return answer_EM and answer_PM
+
+def configure_llm_provider(llm: str, api_key: str) -> None:
+    dspy.settings.configure(lm=dspy.OpenAI(model=llm, api_key=api_key,max_tokens=4096))
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-    return await generator.run(prompt=prompt.get("prompt"))
+    optimized_path = os.getenv("DSPY_OPTIMAZED_MODEL", "")
+    if not optimized_path:
+      logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
+      return await generator.run(prompt=prompt.get("prompt"))
+    else:
+      # use dspy to evaluate
+      configure_llm_provider(
+          os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
+      )
+      inputset = [dspy.Example(
+                  context=str(prompt["context"]),
+                  question=str(prompt["question"]),
+                  answer=""
+              ).with_inputs("question", "context")]
+      evaluator = dspy.evaluate.Evaluate(
+              devset=inputset,
+              metric=validate_context_and_answer,
+              display_progress=True,
+              display_table=True,
+              return_outputs=True,
+          )
+      module = AskGenerationV1()
+      module.load(optimized_path)
+      results = evaluator(module, metric=validate_context_and_answer)
+
+    answers = None
+    for result in results:
+      if isinstance(result, list):
+        for item in result:
+          if isinstance(item, tuple):
+            if len(item) == 3:
+              # remove prefix and suffix ```json`
+              cleaned_string = "".join(item[1].get('answer').split('\n')[1:-1]).strip()
+              answers = cleaned_string # orjson.loads(cleaned_string)
+    return {"replies":[answers]}
+
+
+def default_serializer(obj: Any) -> Any:
+    if isinstance(obj, CompletionTokensDetails):
+        return f"<special>{str(obj)}"
 
 
 @async_timer
@@ -154,7 +215,7 @@ async def post_process(
     project_id: str | None = None,
 ) -> dict:
     logger.debug(
-        f"generate_sql: {orjson.dumps(generate_sql, option=orjson.OPT_INDENT_2).decode()}"
+        f"generate_sql: {orjson.dumps(generate_sql, option=orjson.OPT_INDENT_2, default=default_serializer).decode()}"
     )
     return await post_processor.run(generate_sql.get("replies"), project_id=project_id)
 
