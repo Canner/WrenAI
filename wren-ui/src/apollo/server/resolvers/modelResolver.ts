@@ -97,6 +97,7 @@ export class ModelResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
   }
 
@@ -118,6 +119,7 @@ export class ModelResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
   }
 
@@ -148,6 +150,7 @@ export class ModelResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
   }
 
@@ -182,6 +185,7 @@ export class ModelResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
   }
 
@@ -331,6 +335,7 @@ export class ModelResolver {
         error.extensions?.service,
         false,
       );
+      throw error;
     }
   }
 
@@ -424,6 +429,7 @@ export class ModelResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
   }
 
@@ -589,6 +595,7 @@ export class ModelResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
   }
 

@@ -136,11 +136,20 @@ export interface IbisQueryResponse {
   dtypes: Record<string, string>;
 }
 
+enum IBIS_API_TYPE {
+  QUERY = 'QUERY',
+  DRY_RUN = 'DRY_RUN',
+  DRY_PLAN = 'DRY_PLAN',
+  METADATA = 'METADATA',
+  VALIDATION = 'VALIDATION',
+  ANALYSIS = 'ANALYSIS',
+}
+
 export class IbisAdaptor implements IIbisAdaptor {
-  private ibisServerBaseUrl: string;
+  private ibisServerEndpoint: string;
 
   constructor({ ibisServerEndpoint }: { ibisServerEndpoint: string }) {
-    this.ibisServerBaseUrl = `${ibisServerEndpoint}/v2/connector`;
+    this.ibisServerEndpoint = ibisServerEndpoint;
   }
   public async getNativeSql(options: IbisDryPlanOptions): Promise<string> {
     const { dataSource, mdl, sql } = options;
@@ -150,7 +159,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     try {
       const res = await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/dry-plan`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_PLAN)}/connector/${dataSourceUrlMap[dataSource]}/dry-plan`,
         body,
       );
       return res.data;
@@ -177,7 +186,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     try {
       const res = await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.QUERY)}/connector/${dataSourceUrlMap[dataSource]}/query`,
         body,
         {
           params: {
@@ -212,7 +221,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Dry run sql from ibis with body:`);
     try {
       await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_RUN)}/connector/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
         body,
       );
       logger.debug(`Ibis server Dry run success`);
@@ -238,7 +247,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting tables from ibis`);
       const res: AxiosResponse<CompactTable[]> = await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/tables`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/tables`,
         body,
       );
 
@@ -266,7 +275,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting constraint from ibis`);
       const res: AxiosResponse<RecommendConstraint[]> = await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
         body,
       );
       return res.data;
@@ -298,7 +307,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Run validation rule "${validationRule}" with ibis`);
       await axios.post(
-        `${this.ibisServerBaseUrl}/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.VALIDATION)}/connector/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
         body,
       );
       return { valid: true, message: null };
@@ -351,5 +360,19 @@ export class IbisAdaptor implements IIbisAdaptor {
         console.log('e', e);
       }
     });
+  }
+
+  private getIbisApiVersion(apiType: IBIS_API_TYPE) {
+    if (!config.experimentalEngineRustVersion) {
+      return 'v2';
+    }
+    const useV3 = [
+      IBIS_API_TYPE.QUERY,
+      IBIS_API_TYPE.DRY_RUN,
+      IBIS_API_TYPE.DRY_PLAN,
+      IBIS_API_TYPE.VALIDATION,
+    ].includes(apiType);
+    if (useV3) logger.debug('Using ibis v3 api');
+    return useV3 ? 'v3' : 'v2';
   }
 }

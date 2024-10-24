@@ -128,6 +128,7 @@ export class ProjectResolver {
         err.extensions?.service,
         false,
       );
+      throw err;
     }
 
     return true;

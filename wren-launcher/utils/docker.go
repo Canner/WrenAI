@@ -9,6 +9,7 @@ import (
 	"path"
 	"regexp"
 
+	"github.com/Canner/WrenAI/wren-launcher/config"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/flags"
 	cmdCompose "github.com/docker/compose/v2/cmd/compose"
@@ -67,6 +68,14 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	// replace TELEMETRY_ENABLED
 	reg = regexp.MustCompile(`TELEMETRY_ENABLED=(.*)`)
 	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryEnabled))
+
+	// replace EXPERIMENTAL_ENGINE_RUST_VERSION
+	reg = regexp.MustCompile(`EXPERIMENTAL_ENGINE_RUST_VERSION=(.*)`)
+	str = reg.ReplaceAllString(str, "EXPERIMENTAL_ENGINE_RUST_VERSION="+fmt.Sprintf("%t", config.IsExperimentalEngineRustVersion()))
+
+	// replace PLATFORM
+	reg = regexp.MustCompile(`PLATFORM=(.*)`)
+	str = reg.ReplaceAllString(str, "PLATFORM="+fmt.Sprintf("%s", config.GetPlatform()))
 
 	return str
 }
