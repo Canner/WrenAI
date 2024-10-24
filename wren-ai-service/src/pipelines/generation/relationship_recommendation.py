@@ -19,17 +19,30 @@ logger = logging.getLogger("wren-ai-service")
 
 
 ## Start of Pipeline
+@observe(capture_input=False)
+def cleaned_models(mdl: dict) -> dict:
+    def column_filter(columns: list[dict]) -> list[dict]:
+        return [column for column in columns if "relationship" not in column]
+
+    return [
+        {**model, "columns": column_filter(model["columns"])} for model in mdl["models"]
+    ]
+
+
+@observe(capture_input=False)
 def prompt(
-    mdl: dict,
+    cleaned_models: dict,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(models=mdl["models"])
+    return prompt_builder.run(models=cleaned_models)
 
 
+@observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@observe(capture_input=False)
 def normalized(generate: dict) -> dict:
     def wrapper(text: str) -> str:
         text = text.replace("\n", " ")
@@ -79,7 +92,7 @@ RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS = {
     }
 }
 system_prompt = """
-You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them. For each relationship, provide the following details:
+You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them, but only if there are clear and beneficial relationships to recommend. For each valid relationship, provide the following details:
 
 - **name**: A descriptive name for the relationship.
 - **fromModel**: The name of the source model.
@@ -88,6 +101,11 @@ You are an expert in database schema design and relationship recommendation. Giv
 - **toModel**: The name of the target model.
 - **toColumn**: The column in the target model that forms the relationship.
 - **reason**: The reason for recommending this relationship.
+
+Important guidelines:
+1. Do not recommend relationships within the same model (fromModel and toModel must be different).
+2. Only suggest relationships if there is a clear and beneficial reason to do so.
+3. If there are no good relationships to recommend or if there are fewer than two models, return an empty list of relationships.
 
 Output all relationships in the following JSON structure:
 
@@ -104,6 +122,12 @@ Output all relationships in the following JSON structure:
         }
         ...
     ]
+}
+
+If no relationships are recommended, return:
+
+{
+    "relationships": []
 }
 """
 
