@@ -1,6 +1,6 @@
 
 
-<p align="center">
+<p align="center" id="top">
   <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
@@ -358,3 +358,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
 	<tbody>
 </table>
 <!-- readme: contributors -end -->
+
+
+<p align="right">
+  <a href="#top">⬆️ Back to Top</a>
+</p>
