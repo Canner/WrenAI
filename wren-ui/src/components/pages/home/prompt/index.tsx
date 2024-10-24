@@ -33,6 +33,7 @@ interface Props {
 interface Attributes {
   setValue: (value: string) => void;
   submit: () => void;
+  close: () => void;
 }
 
 const PromptStyle = styled.div`
@@ -140,6 +141,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     () => ({
       setValue: (value: string) => setInputValue(value),
       submit: submitAsk,
+      close: closeResult,
     }),
     [question, isProcessing, setInputValue],
   );

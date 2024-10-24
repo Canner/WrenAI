@@ -9,6 +9,7 @@ export const GET_SETTINGS = gql`
         properties
         sampleDataset
       }
+      language
     }
   }
 `;
@@ -16,5 +17,11 @@ export const GET_SETTINGS = gql`
 export const RESET_CURRENT_PROJECT = gql`
   mutation ResetCurrentProject {
     resetCurrentProject
+  }
+`;
+
+export const UPDATE_CURRENT_PROJECT = gql`
+  mutation UpdateCurrentProject($data: UpdateCurrentProjectInput!) {
+    updateCurrentProject(data: $data)
   }
 `;

@@ -1,4 +1,8 @@
-import { WrenAIError, AskResultStatus } from '../adaptors/wrenAIAdaptor';
+import {
+  WrenAIError,
+  WrenAILanguage,
+  AskResultStatus,
+} from '../adaptors/wrenAIAdaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
   DetailStep,
@@ -79,11 +83,13 @@ export class AskingResolver {
     ctx: IContext,
   ): Promise<Task> {
     const { question, threadId } = args.data;
+    const project = await ctx.projectService.getCurrentProject();
 
     const askingService = ctx.askingService;
-    const task = await askingService.createAskingTask({
-      question,
+    const data = { question };
+    const task = await askingService.createAskingTask(data, {
       threadId,
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
     return task;
   }
@@ -162,16 +168,14 @@ export class AskingResolver {
     },
     ctx: IContext,
   ): Promise<Thread> {
-    const { question, sql, summary, viewId } = args.data;
+    const { data } = args;
 
+    const project = await ctx.projectService.getCurrentProject();
     const askingService = ctx.askingService;
     const eventName = TelemetryEvent.HOME_CREATE_THREAD;
     try {
-      const thread = await askingService.createThread({
-        question,
-        sql,
-        summary,
-        viewId,
+      const thread = await askingService.createThread(data, {
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       });
       ctx.telemetry.sendEvent(eventName, {});
       return thread;
@@ -295,10 +299,14 @@ export class AskingResolver {
   ): Promise<ThreadResponse> {
     const { threadId, data } = args;
 
+    const project = await ctx.projectService.getCurrentProject();
     const askingService = ctx.askingService;
     const eventName = TelemetryEvent.HOME_ASK_FOLLOWUP_QUESTION;
     try {
-      const response = await askingService.createThreadResponse(threadId, data);
+      const response = await askingService.createThreadResponse(data, {
+        threadId,
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+      });
       ctx.telemetry.sendEvent(eventName, { data });
       return response;
     } catch (err: any) {

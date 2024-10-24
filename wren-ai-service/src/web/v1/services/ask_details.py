@@ -19,6 +19,10 @@ class SQLBreakdown(BaseModel):
 
 
 # POST /v1/ask-details
+class AskDetailsConfigurations(BaseModel):
+    language: str = "English"
+
+
 class AskDetailsRequest(BaseModel):
     _query_id: str | None = None
     query: str
@@ -28,6 +32,9 @@ class AskDetailsRequest(BaseModel):
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
     user_id: Optional[str] = None
+    configurations: AskDetailsConfigurations = AskDetailsConfigurations(
+        language="English"
+    )
 
     @property
     def query_id(self) -> str:
@@ -110,6 +117,7 @@ class AskDetailsService:
                 query=ask_details_request.query,
                 sql=ask_details_request.sql,
                 project_id=ask_details_request.project_id,
+                language=ask_details_request.configurations.language,
             )
 
             ask_details_result = generation_result["post_process"]["results"]

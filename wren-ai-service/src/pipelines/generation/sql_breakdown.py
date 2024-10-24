@@ -8,6 +8,7 @@ from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -23,11 +24,11 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_breakdown_system_prompt = """
 ### TASK ###
-You are a Trino SQL expert with exceptional logical thinking skills. 
+You are a Trino SQL expert with exceptional logical thinking skills.
 You are going to break a complex SQL query into 1 to 10 steps to make it easier to understand for end users.
 Each step should have a SQL query part, a summary explaining the purpose of that query, and a CTE name to link the queries.
 Also, you need to give a short description describing the purpose of the original SQL query.
-Description and summary in each step MUST BE in the same language as the user's question.
+Description and summary in each step MUST BE in the same language as user specified.
 
 ### SQL QUERY BREAKDOWN INSTRUCTIONS ###
 - YOU MUST BREAK DOWN any SQL query into small steps if there is JOIN operations or sub-queries.
@@ -38,7 +39,7 @@ Description and summary in each step MUST BE in the same language as the user's 
 - MUST USE alias from the original SQL query.
 
 ### SUMMARY AND DESCRIPTION INSTRUCTIONS ###
-- SUMMARY AND DESCRIPTION MUST USE the same language as the user's question
+- SUMMARY AND DESCRIPTION MUST BE the same language as the user speficied.
 - SUMMARY AND DESCRIPTION MUST BE human-readable and easy to understand.
 - SUMMARY AND DESCRIPTION MUST BE concise and to the point.
 
@@ -54,7 +55,7 @@ HAVING SUM(sales) > 10000;
 Results:
 
 - Description: The breakdown simplifies the process of aggregating sales data by product and filtering for top-selling products.
-- Step 1: 
+- Step 1:
     - sql: SELECT product_id, sales FROM sales_data
     - summary: Selects product IDs and their corresponding sales from the sales_data table.
     - cte_name: basic_sales_data
@@ -84,16 +85,16 @@ Results:
 The final answer must be a valid JSON format as following:
 
 {
-    "description": <SHORT_SQL_QUERY_DESCRIPTION_USING_SAME_LANGUAGE_USER_QUESTION_USING>,
+    "description": <SHORT_SQL_QUERY_DESCRIPTION_STRING>,
     "steps: [
         {
             "sql": <SQL_QUERY_STRING_1>,
-            "summary": <SUMMARY_STRING_USING_SAME_LANGUAGE_USER_QUESTION_USING_1>,
+            "summary": <SUMMARY_STRING_1>,
             "cte_name": <CTE_NAME_STRING_1>
         },
         {
             "sql": <SQL_QUERY_STRING_2>,
-            "summary": <SUMMARY_STRING_USING_SAME_LANGUAGE_USER_QUESTION_USING_2>,
+            "summary": <SUMMARY_STRING_2>,
             "cte_name": <CTE_NAME_STRING_2>
         },
         ...
@@ -105,6 +106,7 @@ sql_breakdown_user_prompt_template = """
 ### INPUT ###
 User's Question: {{ query }}
 SQL query: {{ sql }}
+Language: {{ language }}
 
 Let's think step by step.
 """
@@ -113,10 +115,11 @@ Let's think step by step.
 ## Start of Pipeline
 @timer
 @observe(capture_input=False)
-def prompt(query: str, sql: str, prompt_builder: PromptBuilder) -> dict:
+def prompt(query: str, sql: str, language: str, prompt_builder: PromptBuilder) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
-    return prompt_builder.run(query=query, sql=sql)
+    logger.debug(f"language: {language}")
+    return prompt_builder.run(query=query, sql=sql, language=language)
 
 
 @async_timer
@@ -142,6 +145,26 @@ async def post_process(
 
 
 ## End of Pipeline
+class StepResult(BaseModel):
+    sql: str
+    summary: str
+    cte_name: str
+
+
+class BreakdownResults(BaseModel):
+    description: str
+    steps: list[StepResult]
+
+
+SQL_BREAKDOWN_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_summary",
+            "schema": BreakdownResults.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLBreakdown(BasicPipeline):
@@ -154,6 +177,7 @@ class SQLBreakdown(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_breakdown_system_prompt,
+                generation_kwargs=SQL_BREAKDOWN_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_breakdown_user_prompt_template
@@ -165,7 +189,9 @@ class SQLBreakdown(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, query: str, sql: str, project_id: str | None = None) -> None:
+    def visualize(
+        self, query: str, sql: str, language: str, project_id: str | None = None
+    ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -177,6 +203,7 @@ class SQLBreakdown(BasicPipeline):
                 "query": query,
                 "sql": sql,
                 "project_id": project_id,
+                "language": language,
                 **self._components,
             },
             show_legend=True,
@@ -185,7 +212,9 @@ class SQLBreakdown(BasicPipeline):
 
     @async_timer
     @observe(name="SQL Breakdown Generation")
-    async def run(self, query: str, sql: str, project_id: str | None = None) -> dict:
+    async def run(
+        self, query: str, sql: str, language: str, project_id: str | None = None
+    ) -> dict:
         logger.info("SQL Breakdown Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
@@ -193,6 +222,7 @@ class SQLBreakdown(BasicPipeline):
                 "query": query,
                 "sql": sql,
                 "project_id": project_id,
+                "language": language,
                 **self._components,
             },
         )

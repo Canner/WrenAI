@@ -10,6 +10,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -159,6 +160,22 @@ def post_process(
 ## End of Pipeline
 
 
+class AnswerResults(BaseModel):
+    reasoning: str
+    answer: str
+
+
+SQL_ANSWER_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_summary",
+            "schema": AnswerResults.model_json_schema(),
+        },
+    }
+}
+
+
 class SQLAnswer(BasicPipeline):
     def __init__(
         self,
@@ -172,7 +189,8 @@ class SQLAnswer(BasicPipeline):
                 template=sql_to_answer_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=sql_to_answer_system_prompt
+                system_prompt=sql_to_answer_system_prompt,
+                generation_kwargs=SQL_ANSWER_MODEL_KWARGS,
             ),
             "post_processor": SQLAnswerGenerationPostProcessor(),
         }

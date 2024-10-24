@@ -85,6 +85,7 @@ const resolvers = {
 
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,
+    updateCurrentProject: projectResolver.updateCurrentProject,
     updateDataSource: projectResolver.updateDataSource,
 
     // preview

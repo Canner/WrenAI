@@ -9,6 +9,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -19,14 +20,14 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_summary_system_prompt = """
 ### TASK ###
-You are a great data analyst. You are now given a task to summarize a list SQL queries in a human-readable format where each summary should be within 10-20 words using the same language as the user's question.
+You are a great data analyst. You are now given a task to summarize a list SQL queries in a human-readable format where each summary should be within 10-20 words.
 You will be given a list of SQL queries and a user's question.
 
 ### INSTRUCTIONS ###
-- SQL query summary must be in the same language as the user's question.
 - SQL query summary must be within 10-20 words.
 - SQL query summary must be human-readable and easy to understand.
 - SQL query summary must be concise and to the point.
+- SQL query summary must be in the same language user specified.
 
 ### OUTPUT FORMAT ###
 Please return the result in the following JSON format:
@@ -34,13 +35,13 @@ Please return the result in the following JSON format:
 {
     "sql_summary_results": [
         {
-            "summary": <SQL_QUERY_SUMMARY_USING_SAME_LANGUAGE_USER_QUESTION_USING_1>
+            "summary": <SQL_QUERY_SUMMARY_STRING_1>
         },
         {
-            "summary": <SQL_QUERY_SUMMARY_USING_SAME_LANGUAGE_USER_QUESTION_USING_2>
+            "summary": <SQL_QUERY_SUMMARY_STRING_2>
         },
         {
-            "summary": <SQL_QUERY_SUMMARY_USING_SAME_LANGUAGE_USER_QUESTION_USING_3>
+            "summary": <SQL_QUERY_SUMMARY_STRING_3>
         },
         ...
     ]
@@ -50,6 +51,7 @@ Please return the result in the following JSON format:
 sql_summary_user_prompt_template = """
 User's Question: {{query}}
 SQLs: {{sqls}}
+Language: {{language}}
 
 Please think step by step.
 """
@@ -84,14 +86,17 @@ class SQLSummaryPostProcessor:
 def prompt(
     query: str,
     sqls: List[str],
+    language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sqls: {sqls}")
+    logger.debug(f"language: {language}")
 
     return prompt_builder.run(
         query=query,
         sqls=sqls,
+        language=language,
     )
 
 
@@ -115,6 +120,23 @@ def post_process(
 
 
 ## End of Pipeline
+class SummaryResult(BaseModel):
+    summary: str
+
+
+class SummaryResults(BaseModel):
+    sql_summary_results: list[SummaryResult]
+
+
+SQL_SUMMARY_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_summary",
+            "schema": SummaryResults.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLSummary(BasicPipeline):
@@ -125,7 +147,8 @@ class SQLSummary(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_summary_system_prompt
+                system_prompt=sql_summary_system_prompt,
+                generation_kwargs=SQL_SUMMARY_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(template=sql_summary_user_prompt_template),
             "post_processor": SQLSummaryPostProcessor(),
@@ -139,6 +162,7 @@ class SQLSummary(BasicPipeline):
         self,
         query: str,
         sqls: List[str],
+        language: str,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -150,6 +174,7 @@ class SQLSummary(BasicPipeline):
             inputs={
                 "query": query,
                 "sqls": sqls,
+                "language": language,
                 **self._components,
             },
             show_legend=True,
@@ -162,6 +187,7 @@ class SQLSummary(BasicPipeline):
         self,
         query: str,
         sqls: List[str],
+        language: str,
     ):
         logger.info("SQL Summary pipeline is running...")
         return await self._pipe.execute(
@@ -169,6 +195,7 @@ class SQLSummary(BasicPipeline):
             inputs={
                 "query": query,
                 "sqls": sqls,
+                "language": language,
                 **self._components,
             },
         )

@@ -14,6 +14,10 @@ logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-expansions
+class SqlExpansionConfigurations(BaseModel):
+    language: str = "English"
+
+
 class SqlExpansionRequest(BaseModel):
     _query_id: str | None = None
     query: str
@@ -23,6 +27,9 @@ class SqlExpansionRequest(BaseModel):
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
+    configurations: SqlExpansionConfigurations = SqlExpansionConfigurations(
+        language="English"
+    )
 
     @property
     def query_id(self) -> str:
@@ -192,6 +199,7 @@ class SqlExpansionService:
                     sql_summary_results = await self._pipelines["sql_summary"].run(
                         query=sql_expansion_request.query,
                         sqls=valid_generation_results,
+                        language=sql_expansion_request.configurations.language,
                     )
                     valid_sql_summary_results = sql_summary_results["post_process"][
                         "sql_summary_results"
