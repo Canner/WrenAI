@@ -63,7 +63,7 @@ export const transformPropertiesToForm = (
       extensions: extensions.length ? extensions : [''],
     };
   }
-  
+
   return {
     ...properties,
     // provide a password placeholder to UI
