@@ -16,6 +16,12 @@ from src.core.provider import LLMProvider
 
 logger = logging.getLogger("wren-ai-service")
 
+# todo: deeper insight, drill down, and other analysis approaches to generate questions
+# todo: classify questions into categories
+# todo: add few shot examples to the prompt for better quality
+# todo: validate the question can be used to generate a valid sql query
+# todo: might be able to use the the ask pipeline to generate the sql query, thus we need to create a service for that
+
 
 ## Start of Pipeline
 def prompt(
@@ -54,6 +60,7 @@ def normalized(generate: dict) -> dict:
 class Question(BaseModel):
     question: str
     explanation: str
+    category: str
 
 
 class QuestionResult(BaseModel):
@@ -71,14 +78,15 @@ QUESTION_RECOMMENDATION_MODEL_KWARGS = {
 }
 
 system_prompt = """
-You are an expert in data analysis and SQL query generation. Given a data model specification and optionally a user's question, your task is to generate insightful questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
+You are an expert in data analysis and SQL query generation. Given a data model specification and optionally a user's question, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
 
 Output all questions in the following JSON structure:
 {
     "questions": [
         {
             "question": "<generated question>",
-            "explanation": "<brief explanation of the question's relevance or importance>"
+            "explanation": "<brief explanation of the question's relevance or importance>",
+            "category": "<category of the question>"
         },
         ...
     ]
@@ -88,12 +96,12 @@ When generating questions, consider the following guidelines:
 
 1. If a user question is provided:
    - Generate questions that are directly related to or expand upon the user's question.
-   - Create questions that explore different aspects or implications of the user's query.
+   - Create questions that explore specific aspects or implications of the user's query.
 
 2. If no user question is provided:
-   - Generate questions that cover various aspects of the data model.
-   - Focus on questions that highlight relationships between different models.
-   - Create questions that could provide valuable insights or business intelligence.
+   - Generate questions that cover various specific aspects of the data model.
+   - Focus on questions that highlight concrete relationships between different models.
+   - Create questions that could provide specific, actionable insights or business intelligence.
 
 3. Ensure that all generated questions can be answered using the provided data model.
 
@@ -101,7 +109,11 @@ When generating questions, consider the following guidelines:
 
 5. The number of questions generated should be controlled by the 'num_questions' parameter.
 
-Remember to tailor your questions to the specific models and relationships present in the provided data model.
+6. Avoid open-ended questions. Each question should be specific and have a definite answer based on the data model.
+
+7. For each question, assign a category that best describes its focus (e.g., "Sales", "Customer Behavior", "Inventory", "Performance", etc.).
+
+Remember to tailor your questions to the specific models and relationships present in the provided data model. Always aim for questions that can be answered with concrete data points rather than subjective interpretations.
 """
 
 user_prompt_template = """
@@ -192,13 +204,13 @@ if __name__ == "__main__":
     llm_provider, _, _, _ = init_providers(EngineConfig())
     pipeline = QuestionRecommendation(llm_provider=llm_provider)
 
-    with open("sample/college_3_bigquery_mdl.json", "r") as file:
+    with open("sample/music_duckdb_mdl.json", "r") as file:
         mdl = json.load(file)
 
     input = {
         "mdl": mdl,
         "user_question": "What is the average GPA of students in each department?",
-        "num_questions": 5,
+        "num_questions": 9,
     }
 
     # pipeline.visualize(**input)
