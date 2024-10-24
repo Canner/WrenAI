@@ -6,26 +6,89 @@ Please read the [documentation](https://docs.getwren.ai/oss/concept/wren_ai_serv
 
 ## Setup for Local Development
 
-### Environment Setup
+### Prerequisites
 
-- Python 3.12.\*, recommended to use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage the Python versions
-- install `poetry` with version 1.8.3: `curl -sSL https://install.python-poetry.org | python3 - --version 1.8.3`
-- execute `poetry install` to install the dependencies
-- copy `.env.dev.example` file to `.env.dev` and fill in the environment variables
-- [for development] execute `poetry run pre-commit install` to install the pre-commit hooks and `poetry run pre-commit run --all-files` to run the pre-commit checks at the first time to check if everything is set up correctly
-- [for development] install [Just](https://github.com/casey/just?tab=readme-ov-file#packages)
-- [for development] to run the tests, execute `just test`
+1. **Python**: Install Python 3.12.\*
 
-### Start the service for development
+   - Recommended: Use [`pyenv`](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) to manage Python versions
 
-The following commands can quickly start the service for development:
+2. **Poetry**: Install Poetry 1.8.3
 
-- `just up` to start needed containers
-- `just start` to start the service 
-    - go to `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT`(default is http://localhost:5556) to see the API 
-    documentation and try them.
-    - go to `http://WREN_UI_HOST:WREN_UI_PORT`(default is http://localhost:3000) to interact interact from the UI
-- `just down` to stop the needed containers
+   ```bash
+   curl -sSL https://install.python-poetry.org | python3 - --version 1.8.3
+   ```
+
+3. **Just**: Install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) command runner (version 1.36 or higher)
+
+### Step-by-Step Setup
+
+1. **Install Dependencies**:
+
+   ```bash
+   poetry install
+   ```
+
+2. **Generate Configuration Files**:
+
+   ```bash
+   just init
+   ```
+
+   This creates both `.env.dev` and `config.yaml`. Use `just init --non-dev` to generate only `config.yaml`.
+
+3. **Configure Environment**:
+
+   - Edit `.env.dev` to set environment variables
+   - Modify `config.yaml` to configure components, pipelines, and other settings
+   - Refer to [AI Service Configuration](./docs/configuration.md) for detailed setup instructions
+
+4. **Set Up Development Environment** (optional):
+
+   - Install pre-commit hooks:
+
+     ```bash
+     poetry run pre-commit install
+     ```
+
+   - Run initial pre-commit checks:
+
+     ```bash
+     poetry run pre-commit run --all-files
+     ```
+
+5. **Run Tests** (optional):
+
+   ```bash
+   just test
+   ```
+
+### Starting the Service
+
+1. **Start Required Containers**:
+
+   ```bash
+   just up
+   ```
+
+2. **Launch the AI Service**:
+
+   ```bash
+   just start
+   ```
+
+3. **Access the Service**:
+
+   - API Documentation: `http://WREN_AI_SERVICE_HOST:WREN_AI_SERVICE_PORT` (default: <http://localhost:5556>)
+   - User Interface: `http://WREN_UI_HOST:WREN_UI_PORT` (default: <http://localhost:3000>)
+
+4. **Stop the Service**:
+   When finished, stop the containers:
+
+   ```bash
+   just down
+   ```
+
+This setup ensures a consistent development environment and helps maintain code quality through pre-commit hooks and tests. Follow these steps to get started with local development of the Wren AI Service.
 
 ## Others
 
@@ -46,7 +109,7 @@ For a comprehensive understanding of how to evaluate the pipelines, please refer
   - in wren-ai-service folder, run `just up` to start the docker containers
   - in wren-ai-service folder, run `just start` to start the ai service
   - run `just load-test`
-  - check reports in /outputs/locust folder, there are 3 files with filename **locust_report_{test_timestamp}**:
+  - check reports in /outputs/locust folder, there are 3 files with filename **locust*report*{test_timestamp}**:
     - .json: test report in json format, including info like llm provider, version
     - .html: test report in html format, showing tables and charts
     - .log: test log

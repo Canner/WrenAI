@@ -1,8 +1,30 @@
+GREEN := "\u{001b}[32m"
+YELLOW := "\u{001b}[33m"
+RESET := "\u{001b}[0m"
+
+## todo: consider to support --override flag to override existing files
+init dev='--dev':
+	@if [ ! -f config.yaml ]; then \
+		echo "{{GREEN}}config.yaml does not exist. Creating from example...{{RESET}}"; \
+		cp tools/config/config.example.yaml config.yaml; \
+	else \
+		echo "{{YELLOW}}config.yaml already exists. Skipping creation.{{RESET}}"; \
+	fi 
+
+	@if [ {{dev}} = "--dev" ] || [ {{dev}} != "--non-dev" ]; then \
+		if [ ! -f .env.dev ]; then \
+				echo "{{GREEN}}env.dev does not exist. Creating from example...{{RESET}}"; \
+				cp tools/config/.env.dev.example .env.dev; \
+		else \
+			echo "{{YELLOW}}env.dev already exists. Skipping creation.{{RESET}}"; \
+		fi \
+	fi
+
 up: prepare-wren-engine
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example up -d
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env up -d
 
 down:
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env.example down
+	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env down
 
 start:
 	poetry run python -m src.__main__
