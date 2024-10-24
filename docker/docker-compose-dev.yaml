@@ -55,8 +55,9 @@ services:
     networks:
       - wren
     volumes:
-      - .:/app/data
+      - data:/app/data
     depends_on:
+      - bootstrap
       - qdrant
 
   ibis-server:
