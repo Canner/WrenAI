@@ -31,19 +31,16 @@ export const transformFormToProperties = (
       configurations,
       extensions: properties.extensions.filter((i) => i),
     };
-  } else if (dataSourceType === DataSourceName.POSTGRES) {
-    return {
-      ...properties,
-      // remove password placeholder if user doesn't change the password
-      password:
-        properties?.password === PASSWORD_PLACEHOLDER
-          ? undefined
-          : properties?.password,
-      ssl: properties?.ssl,
-    };
   }
 
-  return properties;
+  return {
+    ...properties,
+    // remove password placeholder if user doesn't change the password
+    password:
+      properties?.password === PASSWORD_PLACEHOLDER
+        ? undefined
+        : properties?.password,
+  };
 };
 
 export const transformPropertiesToForm = (
@@ -65,14 +62,13 @@ export const transformPropertiesToForm = (
         : [{ key: '', value: '' }],
       extensions: extensions.length ? extensions : [''],
     };
-  } else if (dataSourceType === DataSourceName.POSTGRES) {
-    return {
-      ...properties,
-      // provide a password placeholder to UI
-      password: properties?.password || PASSWORD_PLACEHOLDER,
-    };
   }
-  return properties;
+  
+  return {
+    ...properties,
+    // provide a password placeholder to UI
+    password: properties?.password || PASSWORD_PLACEHOLDER,
+  };
 };
 
 export default function useSetupConnection() {

@@ -1,6 +1,6 @@
 import { ComponentRef, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
-import Image from 'next/image';
+import { Logo } from '@/components/Logo';
 import { Path } from '@/utils/enum';
 import { nextTick } from '@/utils/time';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -41,6 +41,7 @@ export default function Home() {
 
   const onSelect = async (payload) => {
     try {
+      askPrompt.stopPolling();
       const response = await createThread({ variables: { data: payload } });
       router.push(Path.Home + `/${response.data.createThread.id}`);
     } catch (error) {
@@ -54,13 +55,7 @@ export default function Home() {
         className="d-flex align-center justify-center flex-column"
         style={{ height: '100%' }}
       >
-        <Image
-          src="/images/logo.svg"
-          width="41"
-          height="48"
-          alt="logo"
-          style={{ opacity: 0.6 }}
-        />
+        <Logo size={48} color="var(--gray-8)" />
         <div className="text-md text-medium gray-8 mt-3">
           Know more about your data
         </div>
