@@ -17,7 +17,6 @@ from src.core.provider import LLMProvider
 logger = logging.getLogger("wren-ai-service")
 
 # todo: deeper insight, drill down, and other analysis approaches to generate questions
-# todo: classify questions into categories
 # todo: add few shot examples to the prompt for better quality
 # todo: validate the question can be used to generate a valid sql query
 # todo: might be able to use the the ask pipeline to generate the sql query, thus we need to create a service for that
@@ -28,10 +27,14 @@ def prompt(
     mdl: dict,
     user_question: str,
     num_questions: int,
+    num_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
-        models=mdl["models"], user_question=user_question, num_questions=num_questions
+        models=mdl["models"],
+        user_question=user_question,
+        num_questions=num_questions,
+        num_categories=num_categories,
     )
 
 
@@ -78,7 +81,7 @@ QUESTION_RECOMMENDATION_MODEL_KWARGS = {
 }
 
 system_prompt = """
-You are an expert in data analysis and SQL query generation. Given a data model specification and optionally a user's question, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
+You are an expert in data analysis and SQL query generation. Given a data model specification, optionally a user's question, and a specified number of question categories, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
 
 Output all questions in the following JSON structure:
 {
@@ -107,13 +110,13 @@ When generating questions, consider the following guidelines:
 
 4. Provide a mix of simple and complex questions to cater to different levels of data analysis.
 
-5. The number of questions generated should be controlled by the 'num_questions' parameter.
+5. The number of questions for each category generated should be exactly equal to the 'num_questions' parameter divided by the 'num_categories' parameter.
 
 6. Avoid open-ended questions. Each question should be specific and have a definite answer based on the data model.
 
-7. For each question, assign a category that best describes its focus (e.g., "Sales", "Customer Behavior", "Inventory", "Performance", etc.).
+7. The number of question categories should be exactly equal to the 'num_categories' parameter. Assign each question to one of these categories.
 
-Remember to tailor your questions to the specific models and relationships present in the provided data model. Always aim for questions that can be answered with concrete data points rather than subjective interpretations.
+Remember to tailor your questions to the specific models and relationships present in the provided data model. Always aim for questions that can be answered with concrete data points rather than subjective interpretations. Balance the distribution of questions across the specified number of categories while strictly adhering to the total number of questions requested.
 """
 
 user_prompt_template = """
@@ -124,7 +127,7 @@ Data Model Specification:
 User's Question: {{user_question}}
 {% endif %}
 
-Please generate {{num_questions}} insightful questions based on the provided data model{% if user_question %} and the user's question{% endif %}.
+Please generate {{num_questions}} insightful questions for {{num_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
 """
 
 
@@ -177,6 +180,7 @@ class QuestionRecommendation(BasicPipeline):
         mdl: dict,
         user_question: str = "",
         num_questions: int = 5,
+        num_categories: int = 1,
     ) -> dict:
         logger.info("Question Recommendation pipeline is running...")
         return await self._pipe.execute(
@@ -185,6 +189,7 @@ class QuestionRecommendation(BasicPipeline):
                 "mdl": mdl,
                 "user_question": user_question,
                 "num_questions": num_questions,
+                "num_categories": num_categories,
                 **self._components,
             },
         )
@@ -204,13 +209,14 @@ if __name__ == "__main__":
     llm_provider, _, _, _ = init_providers(EngineConfig())
     pipeline = QuestionRecommendation(llm_provider=llm_provider)
 
-    with open("sample/music_duckdb_mdl.json", "r") as file:
+    with open("sample/college_3_bigquery_mdl.json", "r") as file:
         mdl = json.load(file)
 
     input = {
         "mdl": mdl,
         "user_question": "What is the average GPA of students in each department?",
-        "num_questions": 9,
+        "num_questions": 3,
+        "num_categories": 2,
     }
 
     # pipeline.visualize(**input)
