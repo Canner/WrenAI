@@ -55,6 +55,10 @@ export enum TelemetryEvent {
   // settings event
   SETTING_RESET_PROJECT = 'setting_reset_project',
 
+  // ibis event
+  IBIS_DRY_RUN = 'ibis_dry_run',
+  IBIS_QUERY = 'ibis_query',
+
   // Default error
   GRAPHQL_ERROR = 'graphql_error',
 }
