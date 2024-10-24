@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,7 @@ def prompt(
         user_question=user_question,
         num_questions=num_questions,
         num_categories=num_categories,
+        current_date=datetime.now(),
     )
 
 
@@ -108,6 +110,7 @@ When generating questions, consider the following guidelines:
    - Generate questions that are directly related to or expand upon the user's question.
    - Create questions that explore specific aspects or implications of the user's query.
    - Use the above techniques to generate deeper insights related to the user's question.
+   - Consider adding time-based filters or durations to the questions, such as "in the last month", "over the past year", or "compared to the previous quarter".
 
 3. If no user question is provided:
    - Generate questions that cover various specific aspects of the data model.
@@ -126,7 +129,9 @@ When generating questions, consider the following guidelines:
 
 9. When appropriate, include questions that combine multiple data analysis techniques to provide more comprehensive insights.
 
-Remember to tailor your questions to the specific models and relationships present in the provided data model. Always aim for questions that can be answered with concrete data points rather than subjective interpretations. Balance the distribution of questions across the specified number of categories while strictly adhering to the total number of questions requested. Strive to generate questions that offer diverse and deep insights into the data, encouraging a thorough exploration of the dataset using various data analysis techniques.
+10. If applicable, incorporate time-based analysis in your questions, such as trends over time, comparisons between different time periods, or filtering data for specific time ranges.
+
+Remember to tailor your questions to the specific models and relationships present in the provided data model. Always aim for questions that can be answered with concrete data points rather than subjective interpretations. Balance the distribution of questions across the specified number of categories while strictly adhering to the total number of questions requested. Strive to generate questions that offer diverse and deep insights into the data, encouraging a thorough exploration of the dataset using various data analysis techniques and time-based perspectives when relevant.
 """
 
 user_prompt_template = """
@@ -136,6 +141,8 @@ Data Model Specification:
 {% if user_question %}
 User's Question: {{user_question}}
 {% endif %}
+
+Current Date: {{current_date}}
 
 Please generate {{num_questions}} insightful questions for {{num_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
 """
@@ -166,6 +173,7 @@ class QuestionRecommendation(BasicPipeline):
         mdl: dict,
         user_question: str = "",
         num_questions: int = 5,
+        num_categories: int = 1,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -178,7 +186,7 @@ class QuestionRecommendation(BasicPipeline):
                 "mdl": mdl,
                 "user_question": user_question,
                 "num_questions": num_questions,
-                **self._components,
+                "num_categories": num_categories,
             },
             show_legend=True,
             orient="LR",
