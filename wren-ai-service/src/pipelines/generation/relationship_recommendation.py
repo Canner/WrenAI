@@ -94,12 +94,13 @@ Output all relationships in the following JSON structure:
 {
     "relationships": [
         {
-            "name": "<name for the relationship>",
+            "name": "<name_for_the_relationship>",
             "fromModel": "<model_name>",
             "fromColumn": "<column_name>",
             "type": "<relationship_type>",
             "toModel": "<model_name>",
-            "toColumn": "<column_name>"
+            "toColumn": "<column_name>",
+            "reason": "<reason_for_this_relationship>"
         }
         ...
     ]
