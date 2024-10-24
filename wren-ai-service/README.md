@@ -18,7 +18,7 @@ Please read the [documentation](https://docs.getwren.ai/oss/concept/wren_ai_serv
    curl -sSL https://install.python-poetry.org | python3 - --version 1.8.3
    ```
 
-3. **Just**: Install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) command runner
+3. **Just**: Install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) command runner (version 1.36 or higher)
 
 ### Step-by-Step Setup
 
