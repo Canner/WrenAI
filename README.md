@@ -225,6 +225,13 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
 		</tr>
 		<tr>
             <td align="center">
+                <a href="https://github.com/vil02">
+                    <img src="https://avatars.githubusercontent.com/u/65706193?v=4" width="100;" alt="vil02"/>
+                    <br />
+                    <sub><b>Piotr Idzik</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/kushal34712">
                     <img src="https://avatars.githubusercontent.com/u/98145879?v=4" width="100;" alt="kushal34712"/>
                     <br />
@@ -259,6 +266,8 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>iamawanishmaurya</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/Prototype4988">
                     <img src="https://avatars.githubusercontent.com/u/55426963?v=4" width="100;" alt="Prototype4988"/>
@@ -266,8 +275,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <sub><b>Prototype4988</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/yb-sid">
                     <img src="https://avatars.githubusercontent.com/u/129207298?v=4" width="100;" alt="yb-sid"/>
@@ -280,13 +287,6 @@ Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren
                     <img src="https://avatars.githubusercontent.com/u/32628578?v=4" width="100;" alt="sahil9001"/>
                     <br />
                     <sub><b>sahil9001</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/vil02">
-                    <img src="https://avatars.githubusercontent.com/u/65706193?v=4" width="100;" alt="vil02"/>
-                    <br />
-                    <sub><b>Piotr Idzik</b></sub>
                 </a>
             </td>
             <td align="center">
