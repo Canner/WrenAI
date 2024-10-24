@@ -2,7 +2,8 @@ GREEN := "\u{001b}[32m"
 YELLOW := "\u{001b}[33m"
 RESET := "\u{001b}[0m"
 
-init dev='false':
+## todo: consider to support --override flag to override existing files
+init dev='--dev':
 	@if [ ! -f config.yaml ]; then \
 		echo "{{GREEN}}config.yaml does not exist. Creating from example...{{RESET}}"; \
 		cp tools/config/config.example.yaml config.yaml; \
@@ -10,7 +11,7 @@ init dev='false':
 		echo "{{YELLOW}}config.yaml already exists. Skipping creation.{{RESET}}"; \
 	fi 
 
-	@if [ {{dev}} = "true" ]; then \
+	@if [ {{dev}} = "--dev" ] || [ {{dev}} != "--non-dev" ]; then \
 		if [ ! -f .env.dev ]; then \
 				echo "{{GREEN}}env.dev does not exist. Creating from example...{{RESET}}"; \
 				cp tools/config/.env.dev.example .env.dev; \

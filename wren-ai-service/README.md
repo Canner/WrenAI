@@ -31,10 +31,10 @@ Please read the [documentation](https://docs.getwren.ai/oss/concept/wren_ai_serv
 2. **Generate Configuration Files**:
 
    ```bash
-   just init true
+   just init
    ```
 
-   This creates both `.env.dev` and `config.yaml`. Use `just init` without `true` to generate only `config.yaml`.
+   This creates both `.env.dev` and `config.yaml`. Use `just init --non-dev` to generate only `config.yaml`.
 
 3. **Configure Environment**:
 
