@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { ComponentRef, useEffect, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
@@ -18,6 +18,7 @@ import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 
 export default function HomeThread() {
+  const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
   const router = useRouter();
   const params = useParams();
   const homeSidebar = useHomeSidebar();
@@ -80,6 +81,13 @@ export default function HomeThread() {
     [threadResponse],
   );
 
+  // stop all requests when change thread
+  useEffect(() => {
+    askPrompt.stopPolling();
+    threadResponseResult.stopPolling();
+    $prompt.current?.close();
+  }, [threadId]);
+
   useEffect(() => {
     const unfinishedRespose = (thread?.responses || []).find(
       (response) => !getIsFinished(response.status),
@@ -96,6 +104,7 @@ export default function HomeThread() {
 
   const onSelect = async (payload) => {
     try {
+      askPrompt.stopPolling();
       const response = await createThreadResponse({
         variables: { threadId: thread.id, data: payload },
       });
@@ -115,6 +124,7 @@ export default function HomeThread() {
       />
       <div className="py-12" />
       <Prompt
+        ref={$prompt}
         data={askPrompt.data}
         onSubmit={askPrompt.onSubmit}
         onStop={askPrompt.onStop}

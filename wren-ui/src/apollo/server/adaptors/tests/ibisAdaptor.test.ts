@@ -29,6 +29,7 @@ describe('IbisAdaptor', () => {
     database: 'my-database',
     user: 'my-user',
     password: 'my-password',
+    trustServerCertificate: false,
   };
 
   const mockMySQLConnectionInfo: MYSQL_CONNECTION_INFO = {
