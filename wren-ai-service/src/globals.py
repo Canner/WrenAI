@@ -8,6 +8,7 @@ from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
     followup_sql_generation,
+    question_recommendation,
     relationship_recommendation,
     semantics_description,
     sql_answer,
@@ -160,6 +161,14 @@ def create_service_container(
             pipelines={
                 "relationship_recommendation": relationship_recommendation.RelationshipRecommendation(
                     **pipe_components["relationship_recommendation"],
+                )
+            },
+            **query_cache,
+        ),
+        question_recommendation=QuestionRecommendation(
+            pipelines={
+                "question_recommendation": question_recommendation.QuestionRecommendation(
+                    **pipe_components["question_recommendation"],
                 )
             },
             **query_cache,

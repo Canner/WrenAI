@@ -25,14 +25,16 @@ logger = logging.getLogger("wren-ai-service")
 ## Start of Pipeline
 def prompt(
     mdl: dict,
-    user_question: str,
+    previous_questions: list[str],
+    language: str,
     num_questions: int,
     num_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
         models=mdl["models"],
-        user_question=user_question,
+        previous_questions=previous_questions,
+        language=language,
         num_questions=num_questions,
         num_categories=num_categories,
         current_date=datetime.now(),
@@ -138,11 +140,12 @@ user_prompt_template = """
 Data Model Specification:
 {{models}}
 
-{% if user_question %}
-User's Question: {{user_question}}
+{% if previous_questions %}
+Previous Questions: {{previous_questions}}
 {% endif %}
 
 Current Date: {{current_date}}
+Language: {{language}}
 
 Please generate {{num_questions}} insightful questions for {{num_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
 """
@@ -171,7 +174,8 @@ class QuestionRecommendation(BasicPipeline):
     def visualize(
         self,
         mdl: dict,
-        user_question: str = "",
+        previous_questions: list[str] = [],
+        language: str = "English",
         num_questions: int = 5,
         num_categories: int = 1,
     ) -> None:
@@ -184,7 +188,8 @@ class QuestionRecommendation(BasicPipeline):
             output_file_path=f"{destination}/question_recommendation.dot",
             inputs={
                 "mdl": mdl,
-                "user_question": user_question,
+                "previous_questions": previous_questions,
+                "language": language,
                 "num_questions": num_questions,
                 "num_categories": num_categories,
             },
@@ -196,7 +201,8 @@ class QuestionRecommendation(BasicPipeline):
     async def run(
         self,
         mdl: dict,
-        user_question: str = "",
+        previous_questions: list[str] = [],
+        language: str = "English",
         num_questions: int = 5,
         num_categories: int = 1,
     ) -> dict:
@@ -205,7 +211,8 @@ class QuestionRecommendation(BasicPipeline):
             [self._final],
             inputs={
                 "mdl": mdl,
-                "user_question": user_question,
+                "previous_questions": previous_questions,
+                "language": language,
                 "num_questions": num_questions,
                 "num_categories": num_categories,
                 **self._components,
@@ -232,7 +239,8 @@ if __name__ == "__main__":
 
     input = {
         "mdl": mdl,
-        "user_question": "What is the average GPA of students in each department?",
+        "previous_questions": [],
+        "language": "English",
         "num_questions": 5,
         "num_categories": 2,
     }
