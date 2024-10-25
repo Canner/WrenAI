@@ -64,8 +64,8 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 
 class PostRequest(BaseModel):
     mdl: str
-    previous_questions: Optional[list[str]] = None
-    language: Optional[str] = None
+    previous_questions: list[str] = []
+    language: str = "English"
 
 
 class PostResponse(BaseModel):

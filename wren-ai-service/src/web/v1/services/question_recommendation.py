@@ -16,8 +16,8 @@ class QuestionRecommendation:
     class Input(BaseModel):
         id: str
         mdl: str
-        previous_questions: Optional[list[str]] = None
-        language: Optional[str] = "English"
+        previous_questions: list[str] = []
+        language: str = "English"
 
     class Resource(BaseModel):
         class Error(BaseModel):
