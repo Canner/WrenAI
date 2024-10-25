@@ -23,6 +23,7 @@ logger = logging.getLogger("wren-ai-service")
 
 
 ## Start of Pipeline
+@observe(capture_input=False)
 def prompt(
     mdl: dict,
     previous_questions: list[str],
@@ -41,10 +42,12 @@ def prompt(
     )
 
 
+@observe(capture_input=False, as_type="generation")
 async def generate(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@observe(capture_input=False)
 def normalized(generate: dict) -> dict:
     def wrapper(text: str) -> list:
         text = text.replace("\n", " ")
