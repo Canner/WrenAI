@@ -1,0 +1,23 @@
+{{- if .Values.service.api.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.service.api.name }}
+  labels:
+    app: wren-api
+    release: {{ .Release.Name }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    heritage: "{{ .Release.Service }}"
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+      app: wren-api
+      release: {{ .Release.Name }}
+  ports:
+  - name: {{ .Values.service.api.name }}
+    targetPort: {{ .Values.service.api.targetPort }}
+    port: {{ .Values.service.api.port }}
+    protocol: TCP
+  type: {{ .Values.service.api.type }}
+{{- end }}

@@ -1,0 +1,27 @@
+{{- if .Values.service.engine.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.service.engine.name }}
+  labels:
+    app: wren-engine
+    release: {{ .Release.Name }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    heritage: "{{ .Release.Service }}"
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+      app: wren-engine
+      release: {{ .Release.Name }}
+  ports:
+  - name: {{ .Values.service.engine.name }}
+    targetPort: {{ .Values.service.engine.targetPort }}
+    port: {{ .Values.service.engine.port }}
+    protocol: TCP
+  - name: {{ .Values.service.enginebase.name }}
+    targetPort: {{ .Values.service.enginebase.targetPort }}
+    port: {{ .Values.service.enginebase.port }}
+    protocol: TCP
+  type: {{ .Values.service.engine.type }}
+{{- end }}

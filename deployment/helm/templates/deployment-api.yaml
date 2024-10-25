@@ -1,0 +1,88 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "application.fullname" . }}-api
+  labels: {{- include "application.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.application.api.replicas }}
+  selector:
+    matchLabels:
+      app: wren-api
+  strategy: {{ toYaml .Values.strategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        app: wren-api
+        release: {{ .Release.Name }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        heritage: "{{ .Release.Service }}"
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- range $dotenv := .Values.secrets.dotenv }}
+        checksum/secret-{{ $dotenv.name }}: {{ (tpl ($.Files.Glob $dotenv.path).AsSecrets $ ) | sha256sum }}
+        {{- end }}
+        {{- range $dotenv := .Values.configMaps.dotenv }}
+        checksum/config-{{ $dotenv.name }}: {{ (tpl ($.Files.Glob $dotenv.path).AsConfig $ ) | sha256sum }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ default (include "application.fullname" .) .Values.serviceAccount.name }}
+      {{- with .Values.initContainers }}
+      initContainers: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      runtimeClassName: nvidia
+      containers:
+        - name: {{ default .Values.application.api.containerName  }}
+          image: {{ .Values.application.api.image.repository }}:{{ .Values.application.api.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.application.api.image.pullPolicy }}
+          {{- with .Values.application.api.ports }}
+          ports: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          
+          {{- with .Values.application.api.command }}
+          command: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.application.api.args }}
+          args: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources.api }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.env }}
+          env: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom: {{- toYaml . | nindent 12 }}
+          {{- end }}
+   
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            httpGet:
+              path: {{ .httpGet.path }}
+              port: {{ .httpGet.port }}
+              scheme: {{ .httpGet.scheme }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            successThreshold: {{ .successThreshold }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            httpGet:
+              path: {{ .httpGet.path }}
+              port: {{ .httpGet.port }}
+              scheme: {{ .httpGet.scheme }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            successThreshold: {{ .successThreshold }}
+            failureThreshold: {{ .failureThreshold }}
+          {{- end }}
+ 
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
