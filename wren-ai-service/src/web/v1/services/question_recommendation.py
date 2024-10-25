@@ -55,38 +55,38 @@ class QuestionRecommendation:
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
-    async def recommend(self, input: Input, **kwargs) -> Resource:
+    async def recommend(self, request: Input, **kwargs) -> Resource:
         logger.info("Generate Question Recommendation pipeline is running...")
 
         try:
-            mdl_dict = orjson.loads(input.mdl)
+            mdl_dict = orjson.loads(request.mdl)
 
             input = {
                 "mdl": mdl_dict,
-                "previous_questions": input.previous_questions,
-                "language": input.language,
+                "previous_questions": request.previous_questions,
+                "language": request.language,
             }
 
             resp = await self._pipelines["question_recommendation"].run(**input)
 
             # todo: validate the question can be answered by the ask pipeline
 
-            self._cache[input.id] = self.Resource(
-                id=input.id, status="finished", response=resp.get("normalized")
+            self._cache[request.id] = self.Resource(
+                id=request.id, status="finished", response=resp.get("normalized")
             )
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                input,
+                request,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
             )
         except Exception as e:
             self._handle_exception(
-                input,
+                request,
                 f"An error occurred during question recommendation generation: {str(e)}",
             )
 
-        return self._cache[input.id]
+        return self._cache[request.id]
 
     def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)
