@@ -19,17 +19,30 @@ logger = logging.getLogger("wren-ai-service")
 
 
 ## Start of Pipeline
+@observe(capture_input=False)
+def cleaned_models(mdl: dict) -> dict:
+    def column_filter(columns: list[dict]) -> list[dict]:
+        return [column for column in columns if "relationship" not in column]
+
+    return [
+        {**model, "columns": column_filter(model["columns"])} for model in mdl["models"]
+    ]
+
+
+@observe(capture_input=False)
 def prompt(
-    mdl: dict,
+    cleaned_models: dict,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(models=mdl["models"])
+    return prompt_builder.run(models=cleaned_models)
 
 
+@observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
+@observe(capture_input=False)
 def normalized(generate: dict) -> dict:
     def wrapper(text: str) -> str:
         text = text.replace("\n", " ")
@@ -57,9 +70,11 @@ def validated(normalized: dict, engine: Engine) -> dict:
 ## End of Pipeline
 class ModelRelationship(BaseModel):
     name: str
-    models: list[str]
-    joinType: str
-    condition: str
+    fromModel: str
+    fromColumn: str
+    type: str
+    toModel: str
+    toColumn: str
     reason: str
 
 
@@ -77,42 +92,43 @@ RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS = {
     }
 }
 system_prompt = """
-You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them. For each relationship, provide the following details:
+You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them, but only if there are clear and beneficial relationships to recommend. For each valid relationship, provide the following details:
 
 - **name**: A descriptive name for the relationship.
-- **models**: A list of involved model names.
-- **joinType**: The type of join, which can be ONE_TO_MANY, MANY_TO_MANY, or MANY_TO_ONE.
-- **condition**: The SQL condition that defines how the models are related.
+- **fromModel**: The name of the source model.
+- **fromColumn**: The column in the source model that forms the relationship.
+- **type**: The type of relationship, which can be ONE_TO_MANY, MANY_TO_MANY, or MANY_TO_ONE.
+- **toModel**: The name of the target model.
+- **toColumn**: The column in the target model that forms the relationship.
+- **reason**: The reason for recommending this relationship.
+
+Important guidelines:
+1. Do not recommend relationships within the same model (fromModel and toModel must be different).
+2. Only suggest relationships if there is a clear and beneficial reason to do so.
+3. If there are no good relationships to recommend or if there are fewer than two models, return an empty list of relationships.
 
 Output all relationships in the following JSON structure:
 
-```json
 {
     "relationships": [
         {
-            "name": "<name for the relationship>",
-            "models": [
-                "<model_name>",
-                "<model_name>"
-            ],
-            "joinType": "<join type>",
-            "condition": "<join condition to join the above models>",
-            "reason": "<the reason for recommending the relationship>"
-        },
-        {
-            "name": "<name for the relationship>",
-            "models": [
-                "<model_name>",
-                "<model_name>",
-                "<model_name>"
-            ],
-            "joinType": "<join type>",
-            "condition": "<join condition to join the above models>",
-            "reason": "<the reason for recommending the relationship>"
+            "name": "<name_for_the_relationship>",
+            "fromModel": "<model_name>",
+            "fromColumn": "<column_name>",
+            "type": "<relationship_type>",
+            "toModel": "<model_name>",
+            "toColumn": "<column_name>",
+            "reason": "<reason_for_this_relationship>"
         }
+        ...
     ]
 }
 
+If no relationships are recommended, return:
+
+{
+    "relationships": []
+}
 """
 
 user_prompt_template = """

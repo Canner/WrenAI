@@ -41,6 +41,7 @@ export default function Home() {
 
   const onSelect = async (payload) => {
     try {
+      askPrompt.stopPolling();
       const response = await createThread({ variables: { data: payload } });
       router.push(Path.Home + `/${response.data.createThread.id}`);
     } catch (error) {
