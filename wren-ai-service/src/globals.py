@@ -23,6 +23,7 @@ from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
+from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 from src.web.v1.services.semantics_description import SemanticsDescription
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
@@ -36,13 +37,14 @@ logger = logging.getLogger("wren-ai-service")
 
 @dataclass
 class ServiceContainer:
+    ask_service: AskService
+    ask_details_service: AskDetailsService
+    question_recommendation: QuestionRecommendation
     relationship_recommendation: RelationshipRecommendation
     semantics_description: SemanticsDescription
     semantics_preparation_service: SemanticsPreparationService
-    ask_service: AskService
     sql_answer_service: SqlAnswerService
     sql_expansion_service: SqlExpansionService
-    ask_details_service: AskDetailsService
     sql_explanation_service: SQLExplanationService
     sql_regeneration_service: SQLRegenerationService
 
