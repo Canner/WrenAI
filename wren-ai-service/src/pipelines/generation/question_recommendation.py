@@ -135,6 +135,7 @@ When generating questions, consider the following guidelines:
 Remember to tailor your questions to the specific models and relationships present in the provided data model. Always aim for questions that can be answered with concrete data points rather than subjective interpretations. Balance the distribution of questions across the specified number of categories while strictly adhering to the total number of questions requested. Strive to generate questions that offer diverse and deep insights into the data, encouraging a thorough exploration of the dataset using various data analysis techniques and time-based perspectives when relevant.
 """
 
+# todo: fix Language is None, we expected default is English
 user_prompt_template = """
 Data Model Specification:
 {{models}}
