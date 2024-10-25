@@ -17,10 +17,6 @@ from src.core.provider import LLMProvider
 
 logger = logging.getLogger("wren-ai-service")
 
-# todo: add few shot examples to the prompt for better quality
-# todo: validate the question can be used to generate a valid sql query
-# todo: might be able to use the the ask pipeline to generate the sql query, thus we need to create a service for that
-
 
 ## Start of Pipeline
 @observe(capture_input=False)
