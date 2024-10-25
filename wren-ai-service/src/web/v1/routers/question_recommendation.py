@@ -25,11 +25,13 @@ Endpoints:
    - Generates new question recommendations
    - Request body: PostRequest
      {
-       "mdl": "{ ... }",                         # JSON string of the MDL (Model Definition Language)
+       "mdl": "{ ... }",                                 # JSON string of the MDL (Model Definition Language)
+       "previous_questions": ["question1", "question2"], # Optional list of previous questions
+       "language": "English"                             # Optional language, defaults to "English"
      }
    - Response: PostResponse
      {
-       "id": "unique-uuid"                       # Unique identifier for the generated recommendations
+       "id": "unique-uuid"                               # Unique identifier for the generated recommendations
      }
 
 2. GET /question-recommendations/{id}
@@ -62,7 +64,8 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 
 class PostRequest(BaseModel):
     mdl: str
-    language: Optional[str] = "English"
+    previous_questions: Optional[list[str]] = None
+    language: Optional[str] = None
 
 
 class PostResponse(BaseModel):
@@ -86,6 +89,8 @@ async def recommend(
     input = QuestionRecommendation.Input(
         id=id,
         mdl=request.mdl,
+        previous_questions=request.previous_questions,
+        language=request.language,
     )
 
     background_tasks.add_task(
