@@ -61,7 +61,7 @@ jobs:
       - name: Update Wren-UI version
         run: |
           version=${{ github.event.inputs.version }}
-          sed -i '' 's/"version": "[^"]*"/"version": "'"$version"'"/' package.json
+          sed -i 's/"version": "[^"]*"/"version": "'"$version"'"/' package.json
           git add package.json
           git commit -m "update wren-ui version to $version"
           git push
