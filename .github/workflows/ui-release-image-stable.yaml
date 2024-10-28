@@ -34,7 +34,7 @@ jobs:
         id: changelog
         run: |
           echo "Generating change log..."
-          PREVIOUS_VERSION=release/wren-ui/$(cd wren-ui && yarn version --json | grep '"data"' | sed -E 's/.*"Current version: ([^"]+)".*/\1/')
+          PREVIOUS_VERSION=release/ui/$(cd wren-ui && yarn version --json | grep '"data"' | sed -E 's/.*"Current version: ([^"]+)".*/\1/')
           echo "Previous version: $PREVIOUS_VERSION"
           echo "================ change log ================"
           CHANGE_LOG=$(git log --pretty=format:"%s" $PREVIOUS_VERSION..HEAD | grep wren-ui)
@@ -65,8 +65,8 @@ jobs:
           git add ./wren-ui/package.json
           git commit -m "update wren-ui version to $version"
           git push
-          git tag -a "release/wren-ui/$version" -m "${{ env.CHANGE_LOG }}"
-          git push origin "release/wren-ui/$version"
+          git tag -a "release/ui/$version" -m "${{ env.CHANGE_LOG }}"
+          git push origin "release/ui/$version"
   build-image:
     needs: tag-ui-version
     runs-on: ubuntu-latest
