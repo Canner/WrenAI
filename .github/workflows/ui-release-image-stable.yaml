@@ -13,7 +13,62 @@ defaults:
     working-directory: wren-ui
 
 jobs:
+  tag-ui-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          fetch-depth: 0
+      - name: Set up Git
+        run: |
+          git config --global user.name "wren-ai[bot]"
+          git config --global user.email "dev@cannerdata.com"
+      - name: Generate and Save Change Log
+        id: changelog
+        run: |
+          echo "Generating change log..."
+          PREVIOUS_VERSION=release/ui/$(cd wren-ui && yarn version --json | grep '"data"' | sed -E 's/.*"Current version: ([^"]+)".*/\1/')
+          echo "Previous version: $PREVIOUS_VERSION"
+          echo "================ change log ================"
+          CHANGE_LOG=$(git log --pretty=format:"%s" $PREVIOUS_VERSION..HEAD | grep wren-ui)
+          echo "================ change log ================"
+
+          # Separate the change log into categories
+          FEATURES=$(echo "$CHANGE_LOG" | grep "^feat" | sed 's/^/- /')
+          FIXES_AND_CHORES=$(echo "$CHANGE_LOG" | grep -E "^(fix|chore)" | sed 's/^/- /')
+
+          # Create the full change log
+          FULL_CHANGE_LOG="\nChangelog for the version\n"
+          if [ -n "$FEATURES" ]; then
+            FULL_CHANGE_LOG+="\nFeature and Enhancement\n$FEATURES"
+          fi
+          if [ -n "$FIXES_AND_CHORES" ]; then
+            FULL_CHANGE_LOG+="\n\nFixes and Chores\n$FIXES_AND_CHORES"
+          fi
+
+          {
+            echo "CHANGE_LOG<<EOF"
+            echo -e "$FULL_CHANGE_LOG"
+            echo EOF
+          } >> $GITHUB_ENV
+      - name: Update Wren-UI version
+        run: |
+          version=${{ github.event.inputs.version }}
+          sed -i '' 's/"version": "[^"]*"/"version": "'"$version"'"/' ./wren-ui/package.json
+          git add ./wren-ui/package.json
+          git commit -m "update wren-ui version to $version"
+          git push
+          git tag -a "release/ui/$version" -m "${{ env.CHANGE_LOG }}"
+          git push origin "release/ui/$version"
   build-image:
+    needs: tag-ui-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
