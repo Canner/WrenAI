@@ -23,9 +23,13 @@ class AskConfigurations(BaseModel):
         start: str
         end: str
 
+    class Timezone(BaseModel):
+        locale: str
+        utc_offest: str
+
     fiscal_year: Optional[FiscalYear] = None
     language: str = "English"
-    timezone: str = "Asia/Taipei"
+    timezone: Timezone = Timezone(locale="Asia/Taipei", utc_offset="+8:00")
 
 
 # POST /v1/asks
