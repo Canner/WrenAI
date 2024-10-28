@@ -16,7 +16,7 @@ logger = logging.getLogger("wren-ai-service")
 # POST /v1/sql-expansions
 class SqlExpansionConfigurations(BaseModel):
     language: str = "English"
-    timezone: str = ""  # time-zone:utf-offset-in-hours
+    timezone: str = "Asia/Taipei"
 
 
 class SqlExpansionRequest(BaseModel):

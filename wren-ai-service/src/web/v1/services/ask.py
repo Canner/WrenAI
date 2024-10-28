@@ -25,7 +25,7 @@ class AskConfigurations(BaseModel):
 
     fiscal_year: Optional[FiscalYear] = None
     language: str = "English"
-    timezone: str = ""  # time-zone:utf-offset-in-hours
+    timezone: str = "Asia/Taipei"
 
 
 # POST /v1/asks
