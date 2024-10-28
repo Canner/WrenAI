@@ -59,7 +59,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
         )
 
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
+    @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(
         self,
         prompt: str,

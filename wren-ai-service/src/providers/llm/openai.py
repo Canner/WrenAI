@@ -85,7 +85,7 @@ class AsyncGenerator(OpenAIGenerator):
         return getattr(self.client, name)
 
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
+    @backoff.on_exception(backoff.expo, openai.OpenAIError, max_time=60.0, max_tries=3)
     async def run(
         self, prompt: str, generation_kwargs: Optional[Dict[str, Any]] = None
     ):
