@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
       - name: Set up Git
         run: |
-          git config --global user.name "wren-ui[bot]"
+          git config --global user.name "wren-ai[bot]"
           git config --global user.email "dev@cannerdata.com"
       - name: Generate and Save Change Log
         id: changelog
