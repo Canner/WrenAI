@@ -149,7 +149,7 @@ def prompt(
         history=history,
         alert=alert,
         instructions=construct_instructions(configurations),
-        current_time=show_current_time(),
+        current_time=show_current_time(configurations.timezone),
     )
 
 

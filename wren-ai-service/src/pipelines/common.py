@@ -1,11 +1,12 @@
 import asyncio
 import logging
-import time
+from datetime import datetime
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 import orjson
+import pytz
 from haystack import component
 
 from src.core.engine import (
@@ -364,5 +365,11 @@ def construct_instructions(configurations: AskConfigurations | None):
     return instructions
 
 
-def show_current_time():
-    return f'{time.strftime('%Y-%m-%d %A')}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday
+def show_current_time(timezone: AskConfigurations.Timezone):
+    # Get the current time in the specified timezone
+    tz = pytz.timezone(
+        timezone.name
+    )  # Assuming timezone.name contains the timezone string
+    current_time = datetime.now(tz)
+
+    return f'{current_time.strftime("%Y-%m-%d %A")}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday
