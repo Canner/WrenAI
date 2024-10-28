@@ -25,7 +25,7 @@ class AskConfigurations(BaseModel):
 
     class Timezone(BaseModel):
         locale: str
-        utc_offest: str
+        utc_offset: str
 
     fiscal_year: Optional[FiscalYear] = None
     language: str = "English"
