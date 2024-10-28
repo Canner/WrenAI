@@ -29,7 +29,7 @@ class WrenUI(Engine):
         session: aiohttp.ClientSession,
         project_id: str | None = None,
         dry_run: bool = True,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         data = {
@@ -86,7 +86,7 @@ class WrenIbis(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         dry_run: bool = True,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         api_endpoint = f"{self._endpoint}/v2/connector/{self._source}/query"
@@ -138,7 +138,7 @@ class WrenEngine(Engine):
             "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
         },
         dry_run: bool = True,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         api_endpoint = (
