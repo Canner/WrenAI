@@ -32,7 +32,7 @@ Path structure as following:
 
 ## How to start with custom LLM
 
-To start with a custom LLM, the process is similar to starting with OpenAI. The main difference is that you need to modify the `config.yaml` file to configure your custom LLM instead of using the default OpenAI settings. You can find this file inside the `data` volume. After modifying the file, you can restart the services by running `docker-compose --env-file .env.local up -d`.
+To start with a custom LLM, the process is similar to starting with OpenAI. The main difference is that you need to modify the `config.yaml` file to configure your custom LLM instead of using the default OpenAI settings. You can find this file inside the `wrenai_data` volume. After modifying the file, you can restart the services by running `docker-compose --env-file .env.local up -d`.
 
 For detailed information on how to modify the configuration for different LLM providers and models, please refer to the [AI Service Configuration](../wren-ai-service/docs/configuration.md). This guide provides comprehensive instructions on setting up various LLM providers, embedders, and other components of the AI service.
 
