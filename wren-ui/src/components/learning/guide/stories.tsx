@@ -3,19 +3,49 @@ import { ModelIcon } from '@/utils/icons';
 import { renderToString } from 'react-dom/server';
 import { DriverObj, DriverPopoverDOM, LEARNING } from './utils';
 import { Path } from '@/utils/enum';
+import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
+import { TEMPLATE_OPTIONS as SAMPLE_DATASET_INFO } from '@/components/pages/setup/utils';
 
-export const makeStories =
-  (...args: [DriverObj, NextRouter]) =>
-  (id: string) => {
+export const makeStoriesPlayer =
+  (...args: [DriverObj, NextRouter, SampleDatasetName]) =>
+  (id: string, onDone: () => void) => {
     const action =
       {
-        [LEARNING.DATA_MODELING_GUIDE]: () => playDataModelingGuide(...args),
+        [LEARNING.DATA_MODELING_GUIDE]: () =>
+          playDataModelingGuide(...args, onDone),
       }[id] || null;
     return action && action();
   };
 
-const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
-  if ($driver === null) return;
+const calculatePopoverInset = (popoverDom: DriverPopoverDOM) => {
+  const wrapper = popoverDom.wrapper;
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  // Calculate center position
+  const left = (viewportWidth - wrapperRect.width) / 2;
+  const top = (viewportHeight - wrapperRect.height) / 2;
+  return `${top}px auto auto ${left}px`;
+};
+
+const resetPopoverStyle = (popoverDom: DriverPopoverDOM, width: number) => {
+  const wrapper = popoverDom.wrapper;
+  wrapper.style.maxWidth = 'none';
+  wrapper.style.width = `${width}px`;
+};
+
+const playDataModelingGuide = (
+  $driver: DriverObj,
+  router: NextRouter,
+  sampleDataset: SampleDatasetName,
+  onDone: () => void,
+) => {
+  if ($driver === null) {
+    console.error('Driver object is not initialized.');
+    return;
+  }
+  const isSampleDataset = !!sampleDataset;
+  const sampleDatasetInfo = SAMPLE_DATASET_INFO[sampleDataset];
   $driver.setSteps([
     {
       popover: {
@@ -24,8 +54,8 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
             <div className="-mx-4">
               <img
                 className="mb-4"
-                src="/images/learning/edit-model.jpg"
-                alt="edit-model"
+                src="/images/learning/data-modeling.jpg"
+                alt="ata-modeling-guide"
               />
             </div>
             Data modeling guide
@@ -36,23 +66,32 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
             Improve the accuracy of AI predictions by leveraging modeling.
             <br />
             <br />
-            {/* TODO: add sample dataset judgement */}
-            We use{' '}
-            <a
-              href="https://docs.getwren.ai/cloud/getting_started/sample_data/ecommerce"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              E-commerce Dataset
-            </a>{' '}
-            to present the guide. To know more, Please visit About the
-            E-commerce Dataset.
+            {isSampleDataset ? (
+              <>
+                We use {sampleDatasetInfo.label} Dataset to present the guide.
+                To know more, please visit{' '}
+                <a
+                  href={sampleDatasetInfo.guide}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  about the {sampleDatasetInfo.label} Dataset.
+                </a>
+              </>
+            ) : null}
           </>,
         ),
         showButtons: ['next', 'close'],
         onPopoverRender: (popoverDom: DriverPopoverDOM) => {
-          popoverDom.wrapper.style.maxWidth = 'none';
-          popoverDom.wrapper.style.width = '720px';
+          resetPopoverStyle(popoverDom, 720);
+          // Image onload problem cause popover not center initially.
+          popoverDom.wrapper.querySelector('img').onload = () => {
+            popoverDom.wrapper.style.inset = calculatePopoverInset(popoverDom);
+          };
+        },
+        onCloseClick: () => {
+          $driver.destroy();
+          window.sessionStorage.setItem('skipDataModelingGuide', '1');
         },
       },
     },
@@ -80,7 +119,7 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
             <div className="-mx-4">
               <img
                 className="mb-2"
-                src="/images/learning/edit-model.jpg"
+                src="/images/learning/edit-model.gif"
                 alt="edit-model"
               />
             </div>
@@ -100,7 +139,6 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
             <div className="-mx-4">
               <img
                 className="mb-2"
-                width="480"
                 src="/images/learning/edit-metadata.gif"
                 alt="edit-metadata"
               />
@@ -114,6 +152,9 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
             and columns.
           </>,
         ),
+        onPopoverRender: (popoverDom: DriverPopoverDOM) => {
+          resetPopoverStyle(popoverDom, 360);
+        },
       },
     },
     {
@@ -121,13 +162,11 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
       popover: {
         title: renderToString(
           <>
-            <div className="-mx-4">
-              <img
-                className="mb-2"
-                src="/images/learning/edit-model.jpg"
-                alt="edit-model"
-              />
-            </div>
+            <img
+              className="mb-2"
+              src="/images/learning/deploy-modeling.jpg"
+              alt="deploy-modeling"
+            />
             Deploy modeling
           </>,
         ),
@@ -143,8 +182,8 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
             <div className="-mx-4">
               <img
                 className="mb-2"
-                src="/images/learning/edit-model.jpg"
-                alt="edit-model"
+                src="/images/learning/ask-question.jpg"
+                alt="ask-question"
               />
             </div>
             Ask questions
@@ -157,13 +196,17 @@ const playDataModelingGuide = ($driver: DriverObj, router: NextRouter) => {
           </>,
         ),
         onPopoverRender: (popoverDom: DriverPopoverDOM) => {
-          popoverDom.wrapper.style.maxWidth = 'none';
-          popoverDom.wrapper.style.width = '720px';
+          resetPopoverStyle(popoverDom, 720);
+          // Image onload problem cause popover not center initially.
+          popoverDom.wrapper.querySelector('img').onload = () => {
+            popoverDom.wrapper.style.inset = calculatePopoverInset(popoverDom);
+          };
         },
         doneBtnText: 'Go to Home',
         onNextClick: () => {
           router.push(Path.Home);
           $driver.destroy();
+          onDone && onDone();
         },
       },
     },

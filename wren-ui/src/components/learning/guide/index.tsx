@@ -1,26 +1,32 @@
 import { driver } from 'driver.js';
 import { useRouter } from 'next/router';
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from 'react';
 import { DriverObj } from './utils';
-import { makeStories } from './stories';
+import { makeStoriesPlayer } from './stories';
+import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 
 import 'driver.js/dist/driver.css';
 
 interface Props {}
 
 interface Attributes {
-  play: (value: string) => void;
+  play: (id: string, onDone: () => void) => void;
 }
 
 export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
   const router = useRouter();
   const $driver = useRef<DriverObj>(null);
-  useImperativeHandle(ref, () => ({ play: playStoryWithId }), [
-    $driver.current,
-    router,
-  ]);
 
-  const playStoryWithId = makeStories($driver.current, router);
+  const { data: settingsResult } = useGetSettingsQuery();
+  const sampleDataset = useMemo(() => {
+    return settingsResult?.settings?.dataSource.sampleDataset;
+  }, [settingsResult?.settings]);
 
   useEffect(() => {
     if ($driver.current !== null) return;
@@ -34,8 +40,20 @@ export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
     });
     return () => {
       $driver.current.destroy();
+      $driver.current = null;
     };
   }, []);
+
+  const play = (id: string, onDone: () => void) => {
+    const playStoryWithId = makeStoriesPlayer(
+      $driver.current,
+      router,
+      sampleDataset,
+    );
+    playStoryWithId(id, onDone);
+  };
+
+  useImperativeHandle(ref, () => ({ play }), [$driver.current, router]);
 
   return null;
 });

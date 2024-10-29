@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { sortBy } from 'lodash';
 import styled from 'styled-components';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import RightOutlined from '@ant-design/icons/RightOutlined';
@@ -7,6 +8,11 @@ import LearningGuide from '@/components/learning/guide';
 import { LEARNING } from './guide/utils';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
+import {
+  useLearningRecordQuery,
+  useSaveLearningRecordMutation,
+} from '@/apollo/client/graphql/learning.generated';
+import { nextTick } from '@/utils/time';
 
 const Progress = styled.div<{ total: number; current: number }>`
   display: block;
@@ -22,6 +28,7 @@ const Progress = styled.div<{ total: number; current: number }>`
     width: ${({ total, current }) => `${(current / total) * 100}%`};
     height: 100%;
     background: linear-gradient(to left, #75eaff, #6150e0);
+    transition: width 0.3s;
   }
 `;
 
@@ -90,6 +97,7 @@ const ListTemplate = (props: IterableComponent<LearningConfig>) => {
 const ListIterator = makeIterable(ListTemplate);
 
 interface LearningConfig {
+  id: LEARNING;
   title: string;
   onClick?: () => void;
   href?: string;
@@ -97,27 +105,39 @@ interface LearningConfig {
 }
 
 // TODO: get finished status from API
-const getData = ($guide) =>
+const getData = ($guide, saveRecord) =>
   [
     {
+      id: LEARNING.DATA_MODELING_GUIDE,
       title: 'Data modeling guide',
-      onClick: () => $guide?.current?.play(LEARNING.DATA_MODELING_GUIDE),
+      onClick: () =>
+        $guide?.current?.play(LEARNING.DATA_MODELING_GUIDE, () =>
+          saveRecord(LEARNING.DATA_MODELING_GUIDE),
+        ),
     },
     {
+      id: LEARNING.CREATING_MODEL,
       title: 'Creating a model',
-      href: 'https://docs.getwren.ai/cloud/guide/modeling/models',
+      href: 'https://docs.getwren.ai/oss/guide/modeling/models',
+      onClick: () => saveRecord(LEARNING.CREATING_MODEL),
     },
     {
+      id: LEARNING.CREATING_VIEW,
       title: 'Creating a view',
-      href: 'https://docs.getwren.ai/cloud/guide/modeling/views',
+      href: 'https://docs.getwren.ai/oss/guide/modeling/views',
+      onClick: () => saveRecord(LEARNING.CREATING_VIEW),
     },
     {
+      id: LEARNING.WORKING_RELATIONSHIP,
       title: 'Working on relationship',
-      href: 'https://docs.getwren.ai/cloud/guide/modeling/relationships',
+      href: 'https://docs.getwren.ai/oss/guide/modeling/relationships',
+      onClick: () => saveRecord(LEARNING.WORKING_RELATIONSHIP),
     },
     {
+      id: LEARNING.CONNECT_OTHER_DATA_SOURCES,
       title: 'Connect to other data sources',
-      href: 'https://docs.getwren.ai/cloud/guide/connect/overview',
+      href: 'https://docs.getwren.ai/oss/guide/connect/overview',
+      onClick: () => saveRecord(LEARNING.CONNECT_OTHER_DATA_SOURCES),
     },
   ] as LearningConfig[];
 
@@ -131,12 +151,33 @@ export default function SidebarSection(_props: Props) {
   const [active, setActive] = useState(true);
   const $guide = useRef<any>(null);
   const $collapseBlock = useRef<HTMLDivElement>(null);
-  const data = getData($guide);
 
-  const total = useMemo(() => data.length, [data]);
+  const { data: learningRecordResult } = useLearningRecordQuery();
+
+  const [saveLearningRecord] = useSaveLearningRecordMutation({
+    refetchQueries: ['LearningRecord'],
+  });
+
+  const saveRecord = (path: LEARNING) => {
+    saveLearningRecord({ variables: { data: { path } } });
+  };
+
+  const stories = useMemo(() => {
+    const learningData = getData($guide, saveRecord);
+    const record = learningRecordResult?.learningRecord.paths || [];
+    return sortBy(
+      learningData.map((story) => ({
+        ...story,
+        finished: record.includes(story.id),
+      })),
+      'finished',
+    );
+  }, [learningRecordResult?.learningRecord]);
+
+  const total = useMemo(() => stories.length, [stories]);
   const current = useMemo(
-    () => data.filter((item) => item.finished).length,
-    [data],
+    () => stories.filter((item) => item?.finished).length,
+    [stories],
   );
 
   const collapseBlock = (isActive: boolean) => {
@@ -147,6 +188,26 @@ export default function SidebarSection(_props: Props) {
         : '0px';
     }
   };
+
+  useEffect(() => {
+    const learningRecord = learningRecordResult?.learningRecord;
+    if (learningRecord) {
+      setActive(learningRecord.paths.length !== stories.length);
+
+      // play the data modeling guide if it's not finished
+      if (!learningRecord.paths.includes(LEARNING.DATA_MODELING_GUIDE)) {
+        nextTick(1000).then(() => {
+          const isSkipBefore = !!window.sessionStorage.getItem(
+            'skipDataModelingGuide',
+          );
+          if (isSkipBefore) return;
+          $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, () =>
+            saveRecord(LEARNING.DATA_MODELING_GUIDE),
+          );
+        });
+      }
+    }
+  }, [learningRecordResult?.learningRecord]);
 
   useEffect(() => {
     collapseBlock(active);
@@ -177,7 +238,7 @@ export default function SidebarSection(_props: Props) {
           />
         </div>
         <CollapseBlock ref={$collapseBlock}>
-          <ListIterator data={data} />
+          <ListIterator data={stories} />
           <div className="px-4 py-2 d-flex align-center">
             <Progress total={total} current={current} />
             <span className="text-xs gray-6 text-nowrap pl-2">
