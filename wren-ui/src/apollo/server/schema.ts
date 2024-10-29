@@ -707,6 +707,15 @@ export const typeDefs = gql`
     type: SchemaChangeType!
   }
 
+  # Learning
+  type LearningRecord {
+    paths: [String!]!
+  }
+
+  input SaveLearningRecordInput {
+    path: String!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -738,6 +747,9 @@ export const typeDefs = gql`
 
     # System
     getMDL(hash: String!): GetMDLResult!
+
+    # Learning
+    learningRecord: LearningRecord!
   }
 
   type Mutation {
@@ -814,5 +826,8 @@ export const typeDefs = gql`
 
     # preview
     previewSql(data: PreviewSQLDataInput): JSON!
+
+    # Learning
+    saveLearningRecord(data: SaveLearningRecordInput!): LearningRecord!
   }
 `;

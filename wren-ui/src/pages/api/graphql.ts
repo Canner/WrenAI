@@ -11,6 +11,7 @@ import {
   ProjectRepository,
   RelationRepository,
   ViewRepository,
+  LearningRepository,
 } from '@server/repositories';
 import { bootstrapKnex } from '../../apollo/server/utils/knex';
 import { GraphQLError } from 'graphql';
@@ -73,6 +74,7 @@ const bootstrapServer = async () => {
   const threadResponseRepository = new ThreadResponseRepository(knex);
   const viewRepository = new ViewRepository(knex);
   const schemaChangeRepository = new SchemaChangeRepository(knex);
+  const learningRepository = new LearningRepository(knex);
 
   const wrenEngineAdaptor = new WrenEngineAdaptor({
     wrenEngineEndpoint: serverConfig.wrenEngineEndpoint,
@@ -198,6 +200,7 @@ const bootstrapServer = async () => {
       viewRepository,
       deployRepository: deployLogRepository,
       schemaChangeRepository,
+      learningRepository,
     }),
   });
   await apolloServer.start();
