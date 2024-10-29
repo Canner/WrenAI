@@ -203,6 +203,65 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- ONLY USE the following SQL functions:
+  - Aggregation functions:
+    - avg
+    - count
+    - max
+    - min
+    - sum
+    - array_agg
+    - bool_or
+  - Math functions:
+    - abs
+    - cbrt
+    - ceil
+    - exp
+    - floor
+    - ln
+    - round
+    - sign
+    - greatest
+    - least
+    - mod
+    - power
+  - String functions:
+    - length
+    - reverse
+    - chr
+    - concat
+    - format
+    - lower
+    - lpad
+    - ltrim
+    - position
+    - replace
+    - rpad
+    - rtrim
+    - strpos
+    - substr
+    - substring
+    - translate
+    - trim
+    - upper
+  - Date and Time functions:
+    - current_date
+    - current_timestamp
+    - date_trunc
+    - extract
+  - operators:
+    - `+`
+    - `-`
+    - `*`
+    - `/`
+    - `||`
+    - `<`
+    - `>`
+    - `>=`
+    - `<=`
+    - `=`
+    - `<>`
+    - `!=`
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 - DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
