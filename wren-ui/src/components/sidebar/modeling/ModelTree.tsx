@@ -116,6 +116,7 @@ export default function ModelTree(props: Props) {
         key: 'add-model',
         icon: () => (
           <PlusSquareOutlined
+            data-guideid="add-model"
             data-testid="add-model"
             onClick={() => onOpenModelDrawer()}
           />
