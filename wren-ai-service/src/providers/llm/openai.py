@@ -194,6 +194,10 @@ class OpenAILLMProvider(LLMProvider):
             model=self._generation_model,
             system_prompt=system_prompt,
             # merge model args with the shared args related to response_format
-            generation_kwargs={**generation_kwargs, **self._model_kwargs},
+            generation_kwargs=(
+                {**generation_kwargs, **self._model_kwargs}
+                if generation_kwargs
+                else self._model_kwargs
+            ),
             timeout=self._timeout,
         )

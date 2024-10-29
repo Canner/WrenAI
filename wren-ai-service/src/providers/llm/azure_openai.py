@@ -162,6 +162,10 @@ class AzureOpenAILLMProvider(LLMProvider):
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,
-            generation_kwargs={**generation_kwargs, **self._model_kwargs},
+            generation_kwargs=(
+                {**generation_kwargs, **self._model_kwargs}
+                if generation_kwargs
+                else self._model_kwargs
+            ),
             timeout=self._timeout,
         )
