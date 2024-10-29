@@ -7,8 +7,8 @@ import { Path } from '@/utils/enum';
 const redirectRoute = {
   [OnboardingStatus.DATASOURCE_SAVED]: Path.OnboardingModels,
   [OnboardingStatus.NOT_STARTED]: Path.OnboardingConnection,
-  [OnboardingStatus.ONBOARDING_FINISHED]: Path.Home,
-  [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Home,
+  [OnboardingStatus.ONBOARDING_FINISHED]: Path.Modeling,
+  [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Modeling,
 };
 
 export const useWithOnboarding = () => {
@@ -33,7 +33,7 @@ export const useWithOnboarding = () => {
       const pathname = router.pathname;
 
       // redirect to new path if onboarding is not completed
-      if (newPath && newPath !== Path.Home) {
+      if (newPath && newPath !== Path.Modeling) {
         // do not redirect if the new path and router pathname are the same
         if (newPath === pathname) {
           return;
