@@ -136,8 +136,8 @@ def prompt(
     documents: List[str],
     history: AskHistory,
     alert: str,
+    configurations: AskConfigurations,
     prompt_builder: PromptBuilder,
-    configurations: AskConfigurations | None = None,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
@@ -228,8 +228,8 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        configurations: AskConfigurations,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -258,8 +258,8 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        configurations: AskConfigurations,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
         return await self._pipe.execute(

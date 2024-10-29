@@ -210,9 +210,9 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        configurations: AskConfigurations,
         samples: List[Dict] | None = None,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -242,9 +242,9 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        configurations: AskConfigurations,
         samples: List[Dict] | None = None,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(
