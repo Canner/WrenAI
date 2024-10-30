@@ -162,6 +162,8 @@ async def test_ask_with_successful_query(
 def _ask_service_ttl_mock(query: str):
     return AskService(
         {
+            "intent_classification": "",
+            "data_assistance": "",
             "retrieval": RetrievalMock(
                 [
                     f"mock document 1 for {query}",
