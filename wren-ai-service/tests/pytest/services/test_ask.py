@@ -7,7 +7,12 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.generation import sql_correction, sql_generation
+from src.pipelines.generation import (
+    data_assistance,
+    intent_classification,
+    sql_correction,
+    sql_generation,
+)
 from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.providers import init_providers
@@ -37,6 +42,14 @@ def ask_service():
 
     return AskService(
         {
+            "intent_classification": intent_classification.IntentClassification(
+                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
+            "data_assistance": data_assistance.DataAssistance(
+                llm_provider=llm_provider,
+            ),
             "retrieval": retrieval.Retrieval(
                 llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
