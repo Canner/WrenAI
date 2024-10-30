@@ -21,7 +21,6 @@ export class LearningResolver {
     ctx: IContext,
   ): Promise<any> {
     const result = await ctx.learningRepository.findAll();
-    console.log(result);
     return { paths: result[0]?.paths || [] };
   }
 
