@@ -23,11 +23,10 @@ from src.pipelines.common import (
 )
 from src.utils import async_timer, timer
 from src.web.v1.services.ask import AskConfigurations
-import dspy
-import dspy.evaluate
-import dspy.teleprompt
+
 import os
-import json
+import dspy
+
 from eval.dspy_modules.ask_generation import AskGenerationV1
 
 logger = logging.getLogger("wren-ai-service")
@@ -151,12 +150,6 @@ def prompt(
     result_dict['question'] = query
     return result_dict
 
-# Validation logic: check that the predicted answer is correct.
-# Also check that the retrieved context does actually contain that answer.
-def validate_context_and_answer(example: dspy.Example, pred : dspy.Example) -> bool:
-    answer_EM = dspy.evaluate.answer_exact_match(example, pred)
-    answer_PM = dspy.evaluate.answer_passage_match(example, pred)
-    return answer_EM and answer_PM
 
 def configure_llm_provider(llm: str, api_key: str) -> None:
     dspy.settings.configure(lm=dspy.OpenAI(model=llm, api_key=api_key,max_tokens=4096))
@@ -164,42 +157,13 @@ def configure_llm_provider(llm: str, api_key: str) -> None:
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generate_sql(prompt: dict, generator: Any) -> dict:
-    optimized_path = os.getenv("DSPY_OPTIMAZED_MODEL", "")
-    if not optimized_path:
+async def generate_sql(prompt: dict, generator: Any, dspy_module: Any) -> dict:
+    if not dspy_module:
       logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
       return await generator.run(prompt=prompt.get("prompt"))
     else:
-      # use dspy to evaluate
-      configure_llm_provider(
-          os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
-      )
-      inputset = [dspy.Example(
-                  context=str(prompt["context"]),
-                  question=str(prompt["question"]),
-                  answer=""
-              ).with_inputs("question", "context")]
-      evaluator = dspy.evaluate.Evaluate(
-              devset=inputset,
-              metric=validate_context_and_answer,
-              display_progress=True,
-              display_table=True,
-              return_outputs=True,
-          )
-      module = AskGenerationV1()
-      module.load(optimized_path)
-      results = evaluator(module, metric=validate_context_and_answer)
-
-    answers = None
-    for result in results:
-      if isinstance(result, list):
-        for item in result:
-          if isinstance(item, tuple):
-            if len(item) == 3:
-              # remove prefix and suffix ```json`
-              cleaned_string = "".join(item[1].get('answer').split('\n')[1:-1]).strip()
-              answers = cleaned_string # orjson.loads(cleaned_string)
-    return {"replies":[answers]}
+      prediction = dspy_module(question=prompt["question"].as_string(), context=prompt["context"][0])
+      return {"replies":[prediction.answer] }
 
 
 def default_serializer(obj: Any) -> Any:
@@ -239,7 +203,6 @@ SQL_GENERATION_MODEL_KWARGS = {
     }
 }
 
-
 class SQLGeneration(BasicPipeline):
     def __init__(
         self,
@@ -247,6 +210,15 @@ class SQLGeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
+        self.dspy_module = None
+        optimized_path = os.getenv("DSPY_OPTIMAZED_MODEL", "")
+        if not optimized_path:
+          # use dspy to evaluate
+          configure_llm_provider(
+              os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
+          )
+          self.dspy_module = AskGenerationV1()
+          self.dspy_module.load(optimized_path)
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
@@ -256,6 +228,7 @@ class SQLGeneration(BasicPipeline):
                 template=sql_generation_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
+            "dspy_module": self.dspy_module
         }
 
         self._configs = {
