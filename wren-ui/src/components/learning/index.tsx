@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ComponentRef,
+  MutableRefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { sortBy } from 'lodash';
 import styled from 'styled-components';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
@@ -78,7 +85,7 @@ const ListTemplate = (props: IterableComponent<LearningConfig>) => {
   const { title, onClick, href, finished } = props;
   const as = href ? 'a' : 'div';
   const hrefAttrs = href
-    ? ({ href, target: '_blank', rel: 'noopener noreferrer' } as any)
+    ? { href, target: '_blank', rel: 'noopener noreferrer' }
     : {};
   return (
     <List
@@ -104,8 +111,10 @@ interface LearningConfig {
   finished?: boolean;
 }
 
-// TODO: get finished status from API
-const getData = ($guide, saveRecord) =>
+const getData = (
+  $guide: MutableRefObject<ComponentRef<typeof LearningGuide>>,
+  saveRecord: (id: LEARNING) => void,
+) =>
   [
     {
       id: LEARNING.DATA_MODELING_GUIDE,
@@ -149,7 +158,7 @@ interface Props {}
 export default function SidebarSection(_props: Props) {
   const router = useRouter();
   const [active, setActive] = useState(true);
-  const $guide = useRef<any>(null);
+  const $guide = useRef<ComponentRef<typeof LearningGuide>>(null);
   const $collapseBlock = useRef<HTMLDivElement>(null);
 
   const { data: learningRecordResult } = useLearningRecordQuery();

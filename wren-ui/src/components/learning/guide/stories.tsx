@@ -63,7 +63,17 @@ const playDataModelingGuide = (
         ),
         description: renderToString(
           <>
-            Improve the accuracy of AI predictions by leveraging modeling.
+            Data modeling adds a logical layer over your original data schema,
+            organizing relationships, semantics, and calculations. This helps AI
+            align with business logic, retrieve precise data, and generate
+            meaningful insights.{' '}
+            <a
+              href="https://docs.getwren.ai/oss/guide/modeling/overview"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              More details
+            </a>
             <br />
             <br />
             {isSampleDataset ? (
