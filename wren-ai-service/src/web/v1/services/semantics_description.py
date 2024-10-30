@@ -56,7 +56,7 @@ class SemanticsDescription:
         logger.error(error_message)
 
     def _chunking(
-        self, mdl_dict: dict, request: Input, chunk_size: int = 10
+        self, mdl_dict: dict, request: Input, chunk_size: int = 1
     ) -> list[dict]:
         template = {
             "user_prompt": request.user_prompt,
@@ -75,7 +75,7 @@ class SemanticsDescription:
 
         current = self[request_id]
         current.response = current.response or {}
-        current.response.update(resp)
+        current.response.update(resp.get("normalize"))
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
