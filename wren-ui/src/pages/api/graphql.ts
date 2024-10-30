@@ -106,6 +106,7 @@ const bootstrapServer = async () => {
   const queryService = new QueryService({
     ibisAdaptor,
     wrenEngineAdaptor,
+    telemetry,
   });
   const modelService = new ModelService({
     projectService,
