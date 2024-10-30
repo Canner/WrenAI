@@ -1,61 +1,38 @@
 import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
-
 from cachetools import TTLCache
 from haystack import Pipeline
 from pydantic import BaseModel
-
 from src.utils import async_timer
 
 logger = logging.getLogger("wren-ai-service")
 
-
-# POST /v1/sql-explanations
-class StepWithAnalysisResult(BaseModel):
-    sql: str
-    summary: str
-    sql_analysis_results: List[Dict]
-
-
 class SQLExplanationRequest(BaseModel):
-    _query_id: str | None = None
-    question: str
-    steps_with_analysis_results: List[StepWithAnalysisResult]
-    mdl_hash: Optional[str] = None
-    thread_id: Optional[str] = None
-    project_id: Optional[str] = None
-    user_id: Optional[str] = None
+    class Input(BaseModel):
+        question: str
+        steps_with_analysis_results: List[
+            Dict[
+                "step_sql": str,
+                "step_summary": str,
+                "step_sql_analysis_results": List[Dict]
+            ]
+        ]
+        mdl_hash: Optional[str] = None
+        thread_id: Optional[str] = None
+        project_id: Optional[str] = None
+        user_id: Optional[str] = None
 
-    @property
-    def query_id(self) -> str:
-        return self._query_id
+    class Resource(BaseModel):
+        class Error(BaseModel):
+            code: Literal["OTHERS"]
+            message: str
 
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
+        query_id: str
+        status: Literal["understanding", "generating", "finished", "failed"] = None
+        response: Optional[List[List[Dict]]] = None
+        error: Optional[Error] = None
 
-
-class SQLExplanationResponse(BaseModel):
-    query_id: str
-
-
-# GET /v1/sql-explanations/{query_id}/result
-class SQLExplanationResultRequest(BaseModel):
-    query_id: str
-
-
-class SQLExplanationResultResponse(BaseModel):
-    class SQLExplanationResultError(BaseModel):
-        code: Literal["OTHERS"]
-        message: str
-
-    status: Literal["understanding", "generating", "finished", "failed"]
-    response: Optional[List[List[Dict]]] = None
-    error: Optional[SQLExplanationResultError] = None
-
-
-class SQLExplanationService:
     def __init__(
         self,
         pipelines: Dict[str, Pipeline],
@@ -63,42 +40,32 @@ class SQLExplanationService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._sql_explanation_results: Dict[
-            str, SQLExplanationResultResponse
-        ] = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._cache: Dict[str, SQLExplanationRequest.Resource] = TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
 
     @async_timer
-    async def sql_explanation(
-        self,
-        sql_explanation_request: SQLExplanationRequest,
-        **kwargs,
-    ):
+    async def generate(self, request: Input, **kwargs) -> Resource:
         try:
-            query_id = sql_explanation_request.query_id
-
-            self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
-                status="understanding",
+            self[request.query_id] = self.Resource(
+                query_id=request.query_id,
+                status="understanding"
             )
 
-            self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
-                status="generating",
+            self[request.query_id] = self.Resource(
+                query_id=request.query_id,
+                status="generating"
             )
 
-            async def _task(
-                question: str,
-                step_with_analysis_results: StepWithAnalysisResult,
-            ):
+            async def _task(question: str, step_with_analysis_results: Dict):
                 return await self._pipelines["sql_explanation"].run(
                     question=question,
-                    step_with_analysis_results=step_with_analysis_results,
+                    step_with_analysis_results=step_with_analysis_results
                 )
 
             tasks = [
-                _task(
-                    sql_explanation_request.question,
-                    step_with_analysis_results,
-                )
-                for step_with_analysis_results in sql_explanation_request.steps_with_analysis_results
+                _task(request.question, step)
+                for step in request.steps_with_analysis_results
             ]
             generation_results = await asyncio.gather(*tasks)
 
@@ -108,39 +75,47 @@ class SQLExplanationService:
             ]
 
             if sql_explanation_results:
-                self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                self[request.query_id] = self.Resource(
+                    query_id=request.query_id,
                     status="finished",
-                    response=sql_explanation_results,
+                    response=sql_explanation_results
                 )
             else:
-                self._sql_explanation_results[query_id] = SQLExplanationResultResponse(
+                self[request.query_id] = self.Resource(
+                    query_id=request.query_id,
                     status="failed",
-                    error=SQLExplanationResultResponse.SQLExplanationResultError(
+                    error=self.Resource.Error(
                         code="OTHERS",
-                        message="No SQL explanation is found",
-                    ),
+                        message="No SQL explanation is found"
+                    )
                 )
         except Exception as e:
-            logger.exception(
-                f"sql explanation pipeline - Failed to provide SQL explanation: {e}"
-            )
-            self._sql_explanation_results[
-                sql_explanation_request.query_id
-            ] = SQLExplanationResultResponse(
+            logger.exception(f"sql explanation pipeline - Failed to provide SQL explanation: {e}")
+            self[request.query_id] = self.Resource(
+                query_id=request.query_id,
                 status="failed",
-                error=SQLExplanationResultResponse.SQLExplanationResultError(
+                error=self.Resource.Error(
                     code="OTHERS",
-                    message=str(e),
-                ),
+                    message=str(e)
+                )
             )
 
-    def get_sql_explanation_result(
-        self, sql_explanation_result_request: SQLExplanationResultRequest
-    ) -> SQLExplanationResultResponse:
-        if sql_explanation_result_request.query_id not in self._sql_explanation_results:
-            return SQLExplanationResultResponse(
+        return self[request.query_id]
+
+    def __getitem__(self, query_id: str) -> Resource:
+        response = self._cache.get(query_id)
+        if response is None:
+            message = f"SQL Explanation Resource with ID '{query_id}' not found."
+            logger.exception(message)
+            return self.Resource(
+                query_id=query_id,
                 status="failed",
-                error=f"{sql_explanation_result_request.query_id} is not found",
+                error=self.Resource.Error(
+                    code="OTHERS",
+                    message=message
+                )
             )
+        return response
 
-        return self._sql_explanation_results[sql_explanation_result_request.query_id]
+    def __setitem__(self, query_id: str, value: Resource):
+        self._cache[query_id] = value

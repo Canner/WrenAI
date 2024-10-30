@@ -12,94 +12,59 @@ from src.web.v1.services.ask_details import SQLBreakdown
 logger = logging.getLogger("wren-ai-service")
 
 
-class AskHistory(BaseModel):
-    sql: str
-    summary: str
-    steps: List[SQLBreakdown]
+class Ask:
+    class Input(BaseModel):
+        class FiscalYear(BaseModel):
+            start: str
+            end: str
 
+        class History(BaseModel):
+            sql: str
+            summary: str
+            steps: List[SQLBreakdown]
 
-class AskConfigurations(BaseModel):
-    class FiscalYear(BaseModel):
-        start: str
-        end: str
+        class Configurations(BaseModel):
+            fiscal_year: Optional[FiscalYear] = None
+            language: str = "English"
 
-    fiscal_year: Optional[FiscalYear] = None
-    language: str = "English"
+        id: str
+        query: str
+        project_id: Optional[str] = None
+        mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
+        thread_id: Optional[str] = None
+        user_id: Optional[str] = None
+        history: Optional[History] = None
+        configurations: Configurations = Configurations(language="English")
 
+    class Resource(BaseModel):
+        class Error(BaseModel):
+            code: Literal[
+                "MISLEADING_QUERY",
+                "NO_RELEVANT_DATA",
+                "NO_RELEVANT_SQL",
+                "OTHERS",
+                "RESOURCE_NOT_FOUND"
+            ]
+            message: str
 
-# POST /v1/asks
-class AskRequest(BaseModel):
-    _query_id: str | None = None
-    query: str
-    # for identifying which collection to access from vectordb
-    project_id: Optional[str] = None
-    # don't recommend to use id as a field name, but it's used in the older version of API spec
-    # so we need to support as a choice, and will remove it in the future
-    mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
-    thread_id: Optional[str] = None
-    user_id: Optional[str] = None
-    history: Optional[AskHistory] = None
-    configurations: AskConfigurations = AskConfigurations(language="English")
+        class Result(BaseModel):
+            sql: str
+            summary: str
+            type: Literal["llm", "view"] = "llm"
+            viewId: Optional[str] = None
 
-    @property
-    def query_id(self) -> str:
-        return self._query_id
+        id: str
+        status: Literal[
+            "understanding",
+            "searching",
+            "generating",
+            "finished",
+            "failed",
+            "stopped"
+        ]
+        response: Optional[List[Result]] = None
+        error: Optional[Error] = None
 
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
-
-
-class AskResponse(BaseModel):
-    query_id: str
-
-
-# PATCH /v1/asks/{query_id}
-class StopAskRequest(BaseModel):
-    _query_id: str | None = None
-    status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
-
-
-class StopAskResponse(BaseModel):
-    query_id: str
-
-
-# GET /v1/asks/{query_id}/result
-class AskResult(BaseModel):
-    sql: str
-    summary: str
-    type: Literal["llm", "view"] = "llm"
-    viewId: Optional[str] = None
-
-
-class AskError(BaseModel):
-    code: Literal[
-        "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
-    ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
-    message: str
-
-
-class AskResultRequest(BaseModel):
-    query_id: str
-
-
-class AskResultResponse(BaseModel):
-    status: Literal[
-        "understanding", "searching", "generating", "finished", "failed", "stopped"
-    ]
-    response: Optional[List[AskResult]] = None
-    error: Optional[AskError] = None
-
-
-class AskService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
@@ -107,254 +72,207 @@ class AskService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_results: Dict[str, AskResultResponse] = TTLCache(
-            maxsize=maxsize, ttl=ttl
+        self._cache: Dict[str, Ask.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
+
+    def _handle_exception(
+        self,
+        input: Input,
+        error_message: str,
+        code: str = "OTHERS",
+    ):
+        self._cache[input.id] = self.Resource(
+            id=input.id,
+            status="failed",
+            error=self.Resource.Error(code=code, message=error_message),
+        )
+        logger.error(error_message)
+
+    def _update_status(self, id: str, status: str, response: Optional[List[Resource.Result]] = None):
+        self._cache[id] = self.Resource(
+            id=id,
+            status=status,
+            response=response,
         )
 
-    def _is_stopped(self, query_id: str):
-        if (
-            result := self._ask_results.get(query_id)
-        ) is not None and result.status == "stopped":
+    def _is_stopped(self, id: str) -> bool:
+        if (result := self._cache.get(id)) is not None and result.status == "stopped":
             return True
-
         return False
-
-    def _get_failed_dry_run_results(self, invalid_generation_results: list[dict]):
-        return list(
-            filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
-        )
 
     async def _add_summary_to_sql_candidates(
         self, sqls: list[str], query: str, language: str
-    ):
+    ) -> list[dict]:
         sql_summary_results = await self._pipelines["sql_summary"].run(
             query=query,
             sqls=sqls,
             language=language,
         )
-        valid_sql_summary_results = sql_summary_results["post_process"][
-            "sql_summary_results"
-        ]
-        # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
-        return remove_sql_summary_duplicates(valid_sql_summary_results)
+        valid_results = sql_summary_results["post_process"]["sql_summary_results"]
+        return remove_sql_summary_duplicates(valid_results)
+
+    def _get_failed_dry_run_results(self, invalid_generation_results: list[dict]) -> list[dict]:
+        return list(
+            filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
+        )
 
     @async_timer
     @observe(name="Ask Question")
     @trace_metadata
-    async def ask(
-        self,
-        ask_request: AskRequest,
-        **kwargs,
-    ):
+    async def generate(self, request: Input, **kwargs) -> Dict:
+        logger.info("Ask pipeline is running...")
         results = {
             "ask_result": {},
-            "metadata": {
-                "error_type": "",
-                "error_message": "",
-            },
+            "metadata": {"error_type": "", "error_message": ""},
         }
 
         try:
-            # ask status can be understanding, searching, generating, finished, failed, stopped
-            # we will need to handle business logic for each status
-            query_id = ask_request.query_id
+            if not self._is_stopped(request.id):
+                # Understanding phase
+                self._update_status(request.id, "understanding")
 
-            if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="understanding",
+                # Prepare query for retrieval
+                query_for_retrieval = (
+                    f"{request.history.summary} {request.query}"
+                    if request.history
+                    else request.query
                 )
 
-            query_for_retrieval = (
-                ask_request.history.summary + " " + ask_request.query
-                if ask_request.history
-                else ask_request.query
-            )
-            if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="searching",
-                )
-
+                # Searching phase
+                self._update_status(request.id, "searching")
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=query_for_retrieval,
-                    id=ask_request.project_id,
+                    id=request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
 
                 if not documents:
-                    logger.exception(
-                        f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
-                    )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_DATA",
-                            message="No relevant data",
-                        ),
+                    self._handle_exception(
+                        request,
+                        "No relevant data",
+                        code="NO_RELEVANT_DATA"
                     )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     return results
 
-            if not self._is_stopped(query_id):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="generating",
-                )
+                # Generating phase
+                self._update_status(request.id, "generating")
 
+                # Historical question processing
                 historical_question = await self._pipelines["historical_question"].run(
                     query=query_for_retrieval,
-                    id=ask_request.project_id,
+                    id=request.project_id,
                 )
-
-                # we only return top 1 result
-                historical_question_result = historical_question.get(
-                    "formatted_output", {}
-                ).get("documents", [])[:1]
+                historical_results = historical_question.get("formatted_output", {}).get("documents", [])[:1]
 
                 api_results = []
-                if historical_question_result:
+                if historical_results:
                     api_results = [
-                        AskResult(
-                            **{
-                                "sql": result.get("statement"),
-                                "summary": result.get("summary"),
-                                "type": "view",
-                                "viewId": result.get("viewId"),
-                            }
+                        self.Resource.Result(
+                            sql=result.get("statement"),
+                            summary=result.get("summary"),
+                            type="view",
+                            viewId=result.get("viewId"),
                         )
-                        for result in historical_question_result
+                        for result in historical_results
                     ]
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
+                    self._update_status(request.id, "generating", api_results)
 
-                if ask_request.history:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=ask_request.query,
+                # SQL Generation
+                if request.history:
+                    generation_results = await self._pipelines["followup_sql_generation"].run(
+                        query=request.query,
                         contexts=documents,
-                        history=ask_request.history,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
+                        history=request.history,
+                        project_id=request.project_id,
+                        configurations=request.configurations,
                     )
                 else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=ask_request.query,
+                    generation_results = await self._pipelines["sql_generation"].run(
+                        query=request.query,
                         contexts=documents,
-                        exclude=historical_question_result,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
+                        exclude=historical_results,
+                        project_id=request.project_id,
+                        configurations=request.configurations,
                     )
 
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
-                ]:
-                    valid_sql_summary_results = (
-                        await self._add_summary_to_sql_candidates(
-                            sql_valid_results,
-                            ask_request.query,
-                            ask_request.configurations.language,
-                        )
+                # Process valid results
+                if sql_valid_results := generation_results["post_process"]["valid_generation_results"]:
+                    valid_summaries = await self._add_summary_to_sql_candidates(
+                        sql_valid_results,
+                        request.query,
+                        request.configurations.language,
                     )
                     api_results = (
-                        api_results
-                        + [AskResult(**result) for result in valid_sql_summary_results]
+                        api_results + 
+                        [self.Resource.Result(**result) for result in valid_summaries]
                     )[:3]
+                    self._update_status(request.id, "generating", api_results)
 
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
-
-                if failed_dry_run_results := self._get_failed_dry_run_results(
-                    text_to_sql_generation_results["post_process"][
-                        "invalid_generation_results"
-                    ]
+                # Process failed dry runs
+                if failed_dry_runs := self._get_failed_dry_run_results(
+                    generation_results["post_process"]["invalid_generation_results"]
                 ):
-                    sql_correction_results = await self._pipelines[
-                        "sql_correction"
-                    ].run(
+                    correction_results = await self._pipelines["sql_correction"].run(
                         contexts=documents,
-                        invalid_generation_results=failed_dry_run_results,
-                        project_id=ask_request.project_id,
+                        invalid_generation_results=failed_dry_runs,
+                        project_id=request.project_id,
                     )
-                    if valid_generation_results := sql_correction_results[
-                        "post_process"
-                    ]["valid_generation_results"]:
-                        valid_sql_summary_results = (
-                            await self._add_summary_to_sql_candidates(
-                                valid_generation_results,
-                                ask_request.query,
-                                ask_request.configurations.language,
-                            )
+                    
+                    if valid_corrections := correction_results["post_process"]["valid_generation_results"]:
+                        valid_summaries = await self._add_summary_to_sql_candidates(
+                            valid_corrections,
+                            request.query,
+                            request.configurations.language,
                         )
                         api_results = (
-                            api_results
-                            + [
-                                AskResult(**result)
-                                for result in valid_sql_summary_results
-                            ]
+                            api_results +
+                            [self.Resource.Result(**result) for result in valid_summaries]
                         )[:3]
 
+                # Finalize results
                 if api_results:
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        response=api_results,
-                    )
+                    self._update_status(request.id, "finished", api_results)
                     results["ask_result"] = api_results
                 else:
-                    logger.exception(
-                        f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
-                    )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_SQL",
-                            message="No relevant SQL",
-                        ),
+                    self._handle_exception(
+                        request,
+                        "No relevant SQL",
+                        code="NO_RELEVANT_SQL"
                     )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
 
                 return results
+
         except Exception as e:
-            logger.exception(f"ask pipeline - OTHERS: {e}")
-
-            self._ask_results[ask_request.query_id] = AskResultResponse(
-                status="failed",
-                error=AskError(
-                    code="OTHERS",
-                    message=str(e),
-                ),
+            self._handle_exception(
+                request,
+                f"An error occurred during Ask generation: {str(e)}",
             )
-
-            results["metadata"]["error_type"] = "OTHERS"
-            results["metadata"]["error_message"] = str(e)
+            results["metadata"].update({
+                "error_type": "OTHERS",
+                "error_message": str(e),
+            })
             return results
 
-    def stop_ask(
-        self,
-        stop_ask_request: StopAskRequest,
-    ):
-        self._ask_results[stop_ask_request.query_id] = AskResultResponse(
-            status="stopped",
-        )
+    def stop(self, id: str):
+        self._update_status(id, "stopped")
 
-    def get_ask_result(
-        self,
-        ask_result_request: AskResultRequest,
-    ) -> AskResultResponse:
-        if (result := self._ask_results.get(ask_result_request.query_id)) is None:
-            logger.exception(
-                f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
-            )
-            return AskResultResponse(
+    def __getitem__(self, id: str) -> Resource:
+        response = self._cache.get(id)
+
+        if response is None:
+            message = f"Ask Resource with ID '{id}' not found."
+            logger.exception(message)
+            return self.Resource(
+                id=id,
                 status="failed",
-                error=AskError(
-                    code="OTHERS",
-                    message=f"{ask_result_request.query_id} is not found",
+                error=self.Resource.Error(
+                    code="RESOURCE_NOT_FOUND",
+                    message=message,
                 ),
             )
 
-        return result
+        return response
+
+    def __setitem__(self, id: str, value: Resource):
+        self._cache[id] = value

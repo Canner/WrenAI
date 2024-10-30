@@ -18,57 +18,35 @@ class SQLBreakdown(BaseModel):
     cte_name: str
 
 
-# POST /v1/ask-details
-class AskDetailsConfigurations(BaseModel):
-    language: str = "English"
+class AskDetails:
+    class Input(BaseModel):
+        class Configurations(BaseModel):
+            language: str = "English"
 
+        id: str
+        query: str
+        sql: str
+        summary: str
+        mdl_hash: Optional[str] = None
+        thread_id: Optional[str] = None
+        project_id: Optional[str] = None
+        user_id: Optional[str] = None
+        configurations: Configurations = Configurations(language="English")
 
-class AskDetailsRequest(BaseModel):
-    _query_id: str | None = None
-    query: str
-    sql: str
-    summary: str
-    mdl_hash: Optional[str] = None
-    thread_id: Optional[str] = None
-    project_id: Optional[str] = None
-    user_id: Optional[str] = None
-    configurations: AskDetailsConfigurations = AskDetailsConfigurations(
-        language="English"
-    )
+    class Resource(BaseModel):
+        class Error(BaseModel):
+            code: Literal["NO_RELEVANT_SQL", "OTHERS", "RESOURCE_NOT_FOUND"]
+            message: str
 
-    @property
-    def query_id(self) -> str:
-        return self._query_id
+        class Details(BaseModel):
+            description: str
+            steps: List[SQLBreakdown]
 
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
+        id: str
+        status: Literal["understanding", "searching", "generating", "finished", "failed"]
+        response: Optional[Details] = None
+        error: Optional[Error] = None
 
-
-class AskDetailsResponse(BaseModel):
-    query_id: str
-
-
-# GET /v1/ask-details/{query_id}/result
-class AskDetailsResultRequest(BaseModel):
-    query_id: str
-
-
-class AskDetailsResultResponse(BaseModel):
-    class AskDetailsResponseDetails(BaseModel):
-        description: str
-        steps: List[SQLBreakdown]
-
-    class AskDetailsError(BaseModel):
-        code: Literal["NO_RELEVANT_SQL", "OTHERS"]
-        message: str
-
-    status: Literal["understanding", "searching", "generating", "finished", "failed"]
-    response: Optional[AskDetailsResponseDetails] = None
-    error: Optional[AskDetailsError] = None
-
-
-class AskDetailsService:
     def __init__(
         self,
         pipelines: Dict[str, Pipeline],
@@ -76,106 +54,100 @@ class AskDetailsService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._ask_details_results: Dict[str, AskDetailsResultResponse] = TTLCache(
+        self._cache: Dict[str, AskDetails.Resource] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
 
-    @async_timer
-    @observe(name="Ask Details(Breakdown SQL)")
-    @trace_metadata
-    async def ask_details(
+    def _handle_exception(
         self,
-        ask_details_request: AskDetailsRequest,
-        **kwargs,
+        input: Input,
+        error_message: str,
+        code: str = "OTHERS",
     ):
-        results = {
-            "ask_details_result": {},
-            "metadata": {
-                "error_type": "",
-                "error_message": "",
-            },
-        }
+        self._cache[input.id] = self.Resource(
+            id=input.id,
+            status="failed",
+            error=self.Resource.Error(code=code, message=error_message),
+        )
+        logger.error(error_message)
+
+    @async_timer
+    @observe(name="Ask Details (Breakdown SQL)")
+    @trace_metadata
+    async def generate(self, request: Input, **kwargs) -> Dict:
+        logger.info("Ask Details pipeline is running...")
 
         try:
-            # ask details status can be understanding, searching, generating, finished, stopped
-            # we will need to handle business logic for each status
-            query_id = ask_details_request.query_id
-
-            self._ask_details_results[query_id] = AskDetailsResultResponse(
-                status="understanding",
-            )
-
-            self._ask_details_results[query_id] = AskDetailsResultResponse(
-                status="searching",
-            )
-
-            self._ask_details_results[query_id] = AskDetailsResultResponse(
-                status="generating",
-            )
+            # Update status through the pipeline stages
+            for status in ["understanding", "searching", "generating"]:
+                self._cache[request.id] = self.Resource(
+                    id=request.id,
+                    status=status,
+                )
 
             generation_result = await self._pipelines["sql_breakdown"].run(
-                query=ask_details_request.query,
-                sql=ask_details_request.sql,
-                project_id=ask_details_request.project_id,
-                language=ask_details_request.configurations.language,
+                query=request.query,
+                sql=request.sql,
+                project_id=request.project_id,
+                language=request.configurations.language,
             )
 
             ask_details_result = generation_result["post_process"]["results"]
 
             if not ask_details_result["steps"]:
-                quoted_sql, no_error = add_quotes(ask_details_request.sql)
+                quoted_sql, no_error = add_quotes(request.sql)
                 ask_details_result["steps"] = [
                     {
-                        "sql": quoted_sql if no_error else ask_details_request.sql,
-                        "summary": ask_details_request.summary,
+                        "sql": quoted_sql if no_error else request.sql,
+                        "summary": request.summary,
                         "cte_name": "",
                     }
                 ]
-                results["metadata"]["error_type"] = "SQL_BREAKDOWN_FAILED"
 
-            self._ask_details_results[query_id] = AskDetailsResultResponse(
+            self._cache[request.id] = self.Resource(
+                id=request.id,
                 status="finished",
-                response=AskDetailsResultResponse.AskDetailsResponseDetails(
-                    **ask_details_result
-                ),
+                response=self.Resource.Details(**ask_details_result),
             )
 
-            results["ask_details_result"] = ask_details_result
+            return {
+                "ask_details_result": ask_details_result,
+                "metadata": {
+                    "error_type": "SQL_BREAKDOWN_FAILED" if not ask_details_result["steps"] else "",
+                    "error_message": "",
+                },
+            }
 
-            return results
         except Exception as e:
-            logger.exception(f"ask-details pipeline - OTHERS: {e}")
+            self._handle_exception(
+                request,
+                f"An error occurred during Ask Details generation: {str(e)}",
+            )
+            
+            return {
+                "ask_details_result": {},
+                "metadata": {
+                    "error_type": "OTHERS",
+                    "error_message": str(e),
+                },
+            }
 
-            self._ask_details_results[
-                ask_details_request.query_id
-            ] = AskDetailsResultResponse(
+    def __getitem__(self, id: str) -> Resource:
+        response = self._cache.get(id)
+
+        if response is None:
+            message = f"Ask Details Resource with ID '{id}' not found."
+            logger.exception(message)
+            return self.Resource(
+                id=id,
                 status="failed",
-                error=AskDetailsResultResponse.AskDetailsError(
-                    code="OTHERS",
-                    message=str(e),
+                error=self.Resource.Error(
+                    code="RESOURCE_NOT_FOUND",
+                    message=message,
                 ),
             )
 
-            results["metadata"]["error_type"] = "OTHERS"
-            results["metadata"]["error_message"] = str(e)
-            return results
+        return response
 
-    def get_ask_details_result(
-        self,
-        ask_details_result_request: AskDetailsResultRequest,
-    ) -> AskDetailsResultResponse:
-        if (
-            result := self._ask_details_results.get(ask_details_result_request.query_id)
-        ) is None:
-            logger.exception(
-                f"ask-details pipeline - OTHERS: {ask_details_result_request.query_id} is not found"
-            )
-            return AskDetailsResultResponse(
-                status="failed",
-                error=AskDetailsResultResponse.AskDetailsError(
-                    code="OTHERS",
-                    message=f"{ask_details_result_request.query_id} is not found",
-                ),
-            )
-
-        return result
+    def __setitem__(self, id: str, value: Resource):
+        self._cache[id] = value

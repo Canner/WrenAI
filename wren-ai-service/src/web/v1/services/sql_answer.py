@@ -1,54 +1,31 @@
 import logging
 from typing import Dict, Literal, Optional
-
 from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import BaseModel
-
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
+class SQLAnswerRequest(BaseModel):
+    class Input(BaseModel):
+        query: str
+        sql: str
+        sql_summary: str
+        thread_id: Optional[str] = None
+        user_id: Optional[str] = None
 
-# POST /v1/sql-answers
-class SqlAnswerRequest(BaseModel):
-    _query_id: str | None = None
-    query: str
-    sql: str
-    sql_summary: str
-    thread_id: Optional[str] = None
-    user_id: Optional[str] = None
+    class Resource(BaseModel):
+        class Error(BaseModel):
+            code: Literal["OTHERS"]
+            message: str
 
-    @property
-    def query_id(self) -> str:
-        return self._query_id
+        query_id: str
+        status: Literal["understanding", "processing", "finished", "failed"] = None
+        response: Optional[str] = None
+        error: Optional[Error] = None
 
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
-
-
-class SqlAnswerResponse(BaseModel):
-    query_id: str
-
-
-# GET /v1/sql-answers/{query_id}/result
-class SqlAnswerResultRequest(BaseModel):
-    query_id: str
-
-
-class SqlAnswerResultResponse(BaseModel):
-    class SqlAnswerError(BaseModel):
-        code: Literal["OTHERS"]
-        message: str
-
-    status: Literal["understanding", "processing", "finished", "failed"]
-    response: Optional[str] = None
-    error: Optional[SqlAnswerError] = None
-
-
-class SqlAnswerService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
@@ -56,101 +33,75 @@ class SqlAnswerService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._sql_answer_results: Dict[str, SqlAnswerResultResponse] = TTLCache(
+        self._cache: Dict[str, SQLAnswerRequest.Resource] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
 
     @async_timer
     @observe(name="SQL Answer")
     @trace_metadata
-    async def sql_answer(
-        self,
-        sql_answer_request: SqlAnswerRequest,
-        **kwargs,
-    ):
-        results = {
-            "sql_answer_result": {},
-            "metadata": {
-                "error": {
-                    "type": "",
-                    "message": "",
-                }
-            },
-        }
-
+    async def generate(self, request: Input, **kwargs) -> Resource:
         try:
-            query_id = sql_answer_request.query_id
-
-            self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="understanding",
+            self[request.query_id] = self.Resource(
+                query_id=request.query_id,
+                status="understanding"
             )
 
-            self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="processing",
+            self[request.query_id] = self.Resource(
+                query_id=request.query_id,
+                status="processing"
             )
 
             data = await self._pipelines["sql_answer"].run(
-                query=sql_answer_request.query,
-                sql=sql_answer_request.sql,
-                sql_summary=sql_answer_request.sql_summary,
-                project_id=sql_answer_request.thread_id,
+                query=request.query,
+                sql=request.sql,
+                sql_summary=request.sql_summary,
+                project_id=request.thread_id,
             )
             api_results = data["post_process"]["results"]
             if answer := api_results["answer"]:
-                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
+                self[request.query_id] = self.Resource(
+                    query_id=request.query_id,
                     status="finished",
-                    response=answer,
+                    response=answer
                 )
             else:
-                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
+                self[request.query_id] = self.Resource(
+                    query_id=request.query_id,
                     status="failed",
-                    error=SqlAnswerResultResponse.SqlAnswerError(
+                    error=self.Resource.Error(
                         code="OTHERS",
-                        message=api_results["error"],
-                    ),
+                        message=api_results["error"]
+                    )
                 )
 
-                results["metadata"]["error_type"] = "OTHERS"
-                results["metadata"]["error_message"] = api_results["error"]
-
-            results["sql_answer_result"] = {
-                "answer": api_results["answer"],
-                "reasoning": api_results["reasoning"],
-            }
-            return results
         except Exception as e:
             logger.exception(f"sql answer pipeline - OTHERS: {e}")
-
-            self._sql_answer_results[
-                sql_answer_request.query_id
-            ] = SqlAnswerResultResponse(
+            self[request.query_id] = self.Resource(
+                query_id=request.query_id,
                 status="failed",
-                error=SqlAnswerResultResponse.SqlAnswerError(
+                error=self.Resource.Error(
                     code="OTHERS",
-                    message=str(e),
-                ),
+                    message=str(e)
+                )
             )
 
-            results["metadata"]["error_type"] = "OTHERS"
-            results["metadata"]["error_message"] = str(e)
-            return results
+        return self[request.query_id]
 
-    def get_sql_answer_result(
-        self,
-        sql_answer_result_request: SqlAnswerResultRequest,
-    ) -> SqlAnswerResultResponse:
-        if (
-            result := self._sql_answer_results.get(sql_answer_result_request.query_id)
-        ) is None:
-            logger.exception(
-                f"sql answer pipeline - OTHERS: {sql_answer_result_request.query_id} is not found"
-            )
-            return SqlAnswerResultResponse(
+    def __getitem__(self, query_id: str) -> Resource:
+        response = self._cache.get(query_id)
+        if response is None:
+            message = f"SQL Answer Resource with ID '{query_id}' not found."
+            logger.exception(message)
+            return self.Resource(
+                query_id=query_id,
                 status="failed",
-                error=SqlAnswerResultResponse.SqlAnswerError(
+                error=self.Resource.Error(
                     code="OTHERS",
-                    message=f"{sql_answer_result_request.query_id} is not found",
-                ),
+                    message=message
+                )
             )
+        return response
 
-        return result
+    def __setitem__(self, query_id: str, value: Resource):
+        self._cache[query_id] = value
