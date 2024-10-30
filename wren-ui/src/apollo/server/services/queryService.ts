@@ -28,8 +28,8 @@ export interface ColumnMetadata {
 export interface PreviewDataResponse {
   correlationId?: string;
   processTime?: string;
-  columns: ColumnMetadata[];
-  data: any[][];
+  columns?: ColumnMetadata[];
+  data?: any[][];
 }
 
 export interface DescribeStatementResponse {
@@ -117,8 +117,7 @@ export class QueryService implements IQueryService {
       this.checkDataSourceIsSupported(dataSource);
       logger.debug('Use ibis adaptor to preview');
       if (dryRun) {
-        await this.ibisDryRun(sql, dataSource, connectionInfo, mdl);
-        return true;
+        return await this.ibisDryRun(sql, dataSource, connectionInfo, mdl);
       } else {
         return await this.ibisQuery(sql, dataSource, connectionInfo, mdl, limit);
       }
@@ -178,7 +177,7 @@ export class QueryService implements IQueryService {
     dataSource: DataSourceName,
     connectionInfo: any,
     mdl: Manifest
-  ) {
+  ): Promise<PreviewDataResponse> {
     const event = TelemetryEvent.IBIS_DRY_RUN;
     try {
       const res = await this.ibisAdaptor.dryRun(sql, {
@@ -187,6 +186,9 @@ export class QueryService implements IQueryService {
         mdl,
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
+      return {
+        correlationId: res.correlationId,
+      }
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, { dataSource, sql });
       throw err;
@@ -209,7 +211,11 @@ export class QueryService implements IQueryService {
         limit,
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
-      return this.transformDataType(res);
+      const data = this.transformDataType(res);
+      return { 
+        correlationId: res.correlationId,
+        ...data
+      };
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, { dataSource, sql });
       throw err;

@@ -49,11 +49,16 @@ class WrenUI(Engine):
         ) as response:
             res = await response.json()
             if data := res.get("data"):
-                return True, data, None
+                return True, data, {
+                    "correlation_id": res.get("correlationId"),
+                }
             return (
                 False,
                 None,
-                res.get("errors", [{}])[0].get("message", "Unknown error"),
+                {
+                    "error_message": res.get("errors", [{}])[0].get("message", "Unknown error"),
+                    "correlation_id": res.get("extensions", {}).get("other", {}).get("correlationId"),
+                }
             )
 
 

@@ -88,14 +88,14 @@ class SQLBreakdownGenPostProcessor:
         project_id: str | None = None,
     ):
         async with aiohttp.ClientSession() as session:
-            status, _, error = await self._engine.execute_sql(
+            status, _, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
             )
 
         if not status:
-            logger.exception(f"SQL is not executable: {error}")
+            logger.exception(f"SQL is not executable: {addition["error_message"]}")
 
         return status
 
@@ -151,7 +151,7 @@ class SQLGenPostProcessor:
             quoted_sql, no_error = add_quotes(result["sql"])
 
             if no_error:
-                status, _, error = await self._engine.execute_sql(
+                status, _, addition = await self._engine.execute_sql(
                     quoted_sql, session, project_id=project_id
                 )
 
@@ -159,6 +159,7 @@ class SQLGenPostProcessor:
                     valid_generation_results.append(
                         {
                             "sql": quoted_sql,
+                            "correlation_id": addition["correlation_id"],
                         }
                     )
                 else:
@@ -166,7 +167,8 @@ class SQLGenPostProcessor:
                         {
                             "sql": quoted_sql,
                             "type": "DRY_RUN",
-                            "error": error,
+                            "error": addition["error_message"],
+                            "correlation_id": addition["correlation_id"],
                         }
                     )
             else:
