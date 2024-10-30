@@ -9,6 +9,7 @@ import (
 	"path"
 	"regexp"
 
+	"github.com/Canner/WrenAI/wren-launcher/config"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/flags"
 	cmdCompose "github.com/docker/compose/v2/cmd/compose"
@@ -22,7 +23,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION        string = "0.9.0"
+	WREN_PRODUCT_VERSION        string = "0.9.1"
 	DOCKER_COMPOSE_YAML_URL     string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_LLM_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.llm.yaml"
 	DOCKER_COMPOSE_ENV_URL      string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
@@ -67,6 +68,14 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	// replace TELEMETRY_ENABLED
 	reg = regexp.MustCompile(`TELEMETRY_ENABLED=(.*)`)
 	str = reg.ReplaceAllString(str, "TELEMETRY_ENABLED="+fmt.Sprintf("%t", telemetryEnabled))
+
+	// replace EXPERIMENTAL_ENGINE_RUST_VERSION
+	reg = regexp.MustCompile(`EXPERIMENTAL_ENGINE_RUST_VERSION=(.*)`)
+	str = reg.ReplaceAllString(str, "EXPERIMENTAL_ENGINE_RUST_VERSION="+fmt.Sprintf("%t", config.IsExperimentalEngineRustVersion()))
+
+	// replace PLATFORM
+	reg = regexp.MustCompile(`PLATFORM=(.*)`)
+	str = reg.ReplaceAllString(str, "PLATFORM="+fmt.Sprintf("%s", config.GetPlatform()))
 
 	return str
 }

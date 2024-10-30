@@ -8,6 +8,7 @@ import {
   IProjectRepository,
   IRelationRepository,
   IViewRepository,
+  ILearningRepository,
 } from '../repositories';
 import { ISchemaChangeRepository } from '../repositories/schemaChangeRepository';
 import { IDeployLogRepository } from '../repositories/deployLogRepository';
@@ -47,4 +48,5 @@ export interface IContext {
   viewRepository: IViewRepository;
   deployRepository: IDeployLogRepository;
   schemaChangeRepository: ISchemaChangeRepository;
+  learningRepository: ILearningRepository;
 }

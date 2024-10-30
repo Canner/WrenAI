@@ -19,6 +19,7 @@ const makeActionButton = (icon: React.ReactNode) => (props: Props) => {
     className,
     marginLeft,
     marginRight,
+    ...restProps
   } = props;
   const click = (event) => {
     onClick && onClick(event);
@@ -42,6 +43,7 @@ const makeActionButton = (icon: React.ReactNode) => (props: Props) => {
       onMouseLeave={mouseLeave}
       type="text"
       size="small"
+      {...restProps}
     />
   );
 };

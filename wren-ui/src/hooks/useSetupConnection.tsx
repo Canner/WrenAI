@@ -92,7 +92,7 @@ export default function useSetupConnection() {
   const [startSampleDatasetMutation, { loading: startSampleDatasetLoading }] =
     useStartSampleDatasetMutation({
       onError: (error) => console.error(error),
-      onCompleted: () => router.push(Path.Home),
+      onCompleted: () => router.push(Path.Modeling),
     });
 
   useEffect(() => {

@@ -77,9 +77,11 @@ class AsyncGenerator(OpenAIGenerator):
             self._vertexai_creds.refresh(auth_req)
 
             if not self._vertexai_creds.valid:
+                logger.error("Vertex AI token can't be refreshed")
                 raise RuntimeError("Unable to refresh auth")
 
             self.client.api_key = self._vertexai_creds.token
+            logger.info("Vertex AI token is refreshed")
         return getattr(self.client, name)
 
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])

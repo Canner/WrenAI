@@ -83,7 +83,7 @@ export const shortMessages = {
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'No relevant data',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
-  [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Ibis server error',
+  [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Data connection error',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
   [GeneralErrorCodes.SESSION_PROPS_ERROR]: 'Invalid session properties',
   [GeneralErrorCodes.CONNECTION_REFUSED]: 'Connection refused',

@@ -54,9 +54,10 @@ Step 5. Run the development server:
 # Execute this if you start wren-engine and ibis-server via docker
 # Linux or MacOS
 export OTHER_SERVICE_USING_DOCKER=true
+export EXPERIMENTAL_ENGINE_RUST_VERSION=false # set to true if you want to use the experimental Rust version of the Wren Engine
 # Windows
 SET OTHER_SERVICE_USING_DOCKER=true
-
+SET EXPERIMENTAL_ENGINE_RUST_VERSION=false # set to true if you want to use the experimental Rust version of the Wren Engine
 
 # Run the development server
 yarn dev
@@ -151,7 +152,7 @@ ibis-server:
 ```
 Then refer to the README.md or CONTRIBUTION.md file the module for starting the module from the source code. 
 
-eg: refer to the [ai-service README](https://github.com/Canner/WrenAI-saas/blob/main/wren-ai-service/README.md#start-the-service-for-development) to start the ai-service from the source code.
+eg: refer to the [ai-service README](https://github.com/Canner/WrenAI/blob/main/wren-ai-service/README.md#start-the-service-for-development) to start the ai-service from the source code.
 
 
 

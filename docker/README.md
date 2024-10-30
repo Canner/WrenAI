@@ -20,8 +20,9 @@ Path structure as following:
 
 ## How to start with OpenAI
 1. copy `.env.example` to `.env.local` and modify the OpenAI API key.
-2. start all services: `docker-compose --env-file .env.local up -d`.
-3. stop all services: `docker-compose --env-file .env.local down`.
+2. (optional) if your port 3000 is occupied, you can modify the `HOST_PORT` in `.env.local`.
+3. start all services: `docker-compose --env-file .env.local up -d`.
+4. stop all services: `docker-compose --env-file .env.local down`.
 
 ## How to start with custom LLM
 1. copy `.env.example` to `.env.local` and modify the OpenAI API key.
