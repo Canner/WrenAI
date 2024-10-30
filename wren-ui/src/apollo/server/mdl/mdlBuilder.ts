@@ -9,9 +9,12 @@ import {
 } from '../repositories';
 import { Manifest, ModelMDL, TableReference } from './type';
 import { getLogger } from '@server/utils';
+import { getConfig } from '@server/config';
 
 const logger = getLogger('MDLBuilder');
 logger.level = 'debug';
+
+const config = getConfig();
 
 export interface MDLBuilderBuildFromOptions {
   project: Project;
@@ -81,6 +84,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.addRelation();
     this.addCalculatedField();
     this.addView();
+    this.postProcessManifest();
     return this.getManifest();
   }
 
@@ -105,8 +109,12 @@ export class MDLBuilder implements IMDLBuilder {
         columns: [],
         tableReference,
         // can only have one of refSql or tableReference
-        refSql: tableReference ? null : model.refSql,
-        cached: model.cached,
+        refSql: this.useRustWrenEngine()
+          ? null
+          : tableReference
+            ? null
+            : model.refSql,
+        cached: model.cached ? true : false,
         refreshTime: model.refreshTime,
         properties: {
           displayName: model.displayName,
@@ -206,8 +214,8 @@ export class MDLBuilder implements IMDLBuilder {
         model.columns.push({
           name: column.referenceName,
           type: column.type,
-          isCalculated: column.isCalculated,
-          notNull: column.notNull,
+          isCalculated: column.isCalculated ? true : false,
+          notNull: column.notNull ? true : false,
           expression,
           properties: properties,
         });
@@ -242,7 +250,7 @@ export class MDLBuilder implements IMDLBuilder {
           type: column.type,
           isCalculated: true,
           expression,
-          notNull: column.notNull,
+          notNull: column.notNull ? true : false,
           properties: JSON.parse(column.properties),
         };
         model.columns.push(columnValue);
@@ -274,7 +282,7 @@ export class MDLBuilder implements IMDLBuilder {
       type: calculatedField.type,
       isCalculated: true,
       expression,
-      notNull: calculatedField.notNull,
+      notNull: calculatedField.notNull ? true : false,
       properties: JSON.parse(calculatedField.properties),
     };
     model.columns.push(columnValue);
@@ -360,9 +368,10 @@ export class MDLBuilder implements IMDLBuilder {
 
   protected getColumnExpression(
     column: ModelColumn,
-    currentModel?: ModelMDL,
+    currentModel?: Partial<ModelMDL>,
   ): string {
     if (!column.isCalculated) {
+      // columns existed in the data source.
       // Provide original column name in expression to MDL if referenceName has converted.
       if (column.sourceColumnName !== column.referenceName) {
         return `"${column.sourceColumnName}"`;
@@ -427,5 +436,44 @@ export class MDLBuilder implements IMDLBuilder {
       schema: modelProps.schema || null,
       table: modelProps.table,
     };
+  }
+  private postProcessManifest() {
+    if (this.useRustWrenEngine()) {
+      // 1. remove all the key that the value is null
+      this.manifest.models = this.manifest.models?.map((model) => {
+        model.columns.map((column) => {
+          column.properties = pickBy(
+            column.properties,
+            (value) => value !== null,
+          );
+          return column;
+        });
+        return pickBy(model, (value) => value !== null);
+      });
+      this.manifest.views = this.manifest.views?.map((view) => {
+        return pickBy(view, (value) => value !== null);
+      });
+      this.manifest.relationships = this.manifest.relationships?.map(
+        (relationship) => {
+          return pickBy(relationship, (value) => value !== null);
+        },
+      );
+      this.manifest.enumDefinitions = this.manifest.enumDefinitions?.map(
+        (enumDefinition) => {
+          return pickBy(enumDefinition, (value) => value !== null);
+        },
+      );
+      // 2. remove expression if it's empty string
+      this.manifest.models?.forEach((model) => {
+        model.columns?.forEach((column) => {
+          if (column.expression === '') {
+            delete column.expression;
+          }
+        });
+      });
+    }
+  }
+  private useRustWrenEngine(): boolean {
+    return !!config.experimentalEngineRustVersion;
   }
 }

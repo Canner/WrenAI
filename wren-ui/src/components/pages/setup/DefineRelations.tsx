@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { omit } from 'lodash';
-import { Button, Col, Popconfirm, Row, Space, Spin, Typography } from 'antd';
+import {
+  Button,
+  Col,
+  Popconfirm,
+  Row,
+  Space,
+  Spin,
+  Typography,
+  Alert,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
@@ -162,8 +171,19 @@ export default function DefineRelations(props: Props) {
     defaultValue?: RelationsDataType;
   }>(null);
 
+  const [showNoRecommendationAlert, setShowNoRecommendationAlert] =
+    useState<boolean>(false);
+
   useEffect(() => {
     setRelations(recommendRelations);
+
+    const recommendRelationsValues = Object.values(recommendRelations);
+    if (recommendRelationsValues.length === 0) return;
+
+    const allEmpty = recommendRelationsValues.every(
+      (value) => value.length === 0,
+    );
+    setShowNoRecommendationAlert(allEmpty);
   }, [recommendRelations]);
 
   const relationModal = useModalAction();
@@ -259,6 +279,15 @@ export default function DefineRelations(props: Props) {
         suggested relationships based on primary and foreign keys defined in
         your data source. The relationships are then added to data models.
       </Text>
+      {showNoRecommendationAlert && (
+        <Alert
+          message="No recommended relationships"
+          description="No relationships are recommended because no primary or foreign keys were detected."
+          type="info"
+          showIcon
+          className="my-6"
+        />
+      )}
       <div className="my-6 text-center">
         {Object.entries(relations).map(
           ([modelReferenceName, relations = []], index) => (
@@ -299,6 +328,7 @@ export default function DefineRelations(props: Props) {
             onClick={submit}
             className="adm-onboarding-btn"
             loading={submitting}
+            disabled={fetching}
             data-ph-capture="true"
             data-ph-capture-attribute-name="cta_finish_define_relationship"
           >

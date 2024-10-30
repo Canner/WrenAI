@@ -25,7 +25,7 @@ class SemanticsDescription:
             message: str
 
         id: str
-        status: Literal["generating", "finished", "failed"] = None
+        status: Literal["generating", "finished", "failed"] = "generating"
         response: Optional[dict] = None
         error: Optional[Error] = None
 
