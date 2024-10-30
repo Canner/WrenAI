@@ -203,52 +203,52 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- ONLY USE the following SQL functions:
+- ONLY USE the following SQL functions when generating answers:
   - Aggregation functions:
-    - avg
-    - count
-    - max
-    - min
-    - sum
-    - array_agg
-    - bool_or
+    - AVG
+    - COUNT
+    - MAX
+    - MIN
+    - SUM
+    - ARRAY_AGG
+    - BOOL_OR
   - Math functions:
-    - abs
-    - cbrt
-    - ceil
-    - exp
-    - floor
-    - ln
-    - round
-    - sign
-    - greatest
-    - least
-    - mod
-    - power
+    - ABS
+    - CBRT
+    - CEIL
+    - EXP
+    - FLOOR
+    - LN
+    - ROUND
+    - SIGN
+    - GREATEST
+    - LEAST
+    - MOD
+    - POWER
   - String functions:
-    - length
-    - reverse
-    - chr
-    - concat
-    - format
-    - lower
-    - lpad
-    - ltrim
-    - position
-    - replace
-    - rpad
-    - rtrim
-    - strpos
-    - substr
-    - substring
-    - translate
-    - trim
-    - upper
+    - LENGTH
+    - REVERSE
+    - CHR
+    - CONCAT
+    - FORMAT
+    - LOWER
+    - LPAD
+    - LTRIM
+    - POSITION
+    - REPLACE
+    - RPAD
+    - RTRIM
+    - STRPOS
+    - SUBSTR
+    - SUBSTRING
+    - TRANSLATE
+    - TRIM
+    - UPPER
   - Date and Time functions:
-    - current_date
-    - current_timestamp
-    - date_trunc
-    - extract
+    - CURRENT_DATE
+    - CURRENT_TIMESTAMP
+    - DATE_TRUNC
+    - EXTRACT
   - operators:
     - `+`
     - `-`
