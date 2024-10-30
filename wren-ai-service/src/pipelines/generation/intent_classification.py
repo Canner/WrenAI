@@ -132,7 +132,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
             else:
                 db_schemas[document.meta["name"]] = {
                     **content,
-                    "columns": db_schemas[document.meta["name"]]["columns"],
+                    "columns": db_schemas[document.meta["name"]].get("columns", []),
                 }
         elif content["type"] == "TABLE_COLUMNS":
             if document.meta["name"] not in db_schemas:
