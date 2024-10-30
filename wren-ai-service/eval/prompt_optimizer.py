@@ -45,6 +45,13 @@ def parse_args() -> Tuple[str]:
 
     return parser.parse_args()
 
+optimizer_parameters = {
+    "evaluator": None,
+    "metrics": None,
+    "meta": None,
+    "predictions": None
+}
+
 
 def configure_llm_provider(llm: str, api_key: str):
     dspy.settings.configure(lm=dspy.OpenAI(model=llm, api_key=api_key,max_tokens=4096))
@@ -55,7 +62,7 @@ def clean_sql(sql: str) -> str:
 
 
 def prepare_dataset(path: str, train_ratio: float = 0.5):
-    eval_dataset = parse_toml(path)["eval_dataset"]
+    eval_dataset = parse_toml(f"eval/dataset/{path}")["eval_dataset"]
 
     dspy_dataset = []
     for data in eval_dataset:
@@ -76,10 +83,23 @@ def prepare_dataset(path: str, train_ratio: float = 0.5):
 # Validation logic: check that the predicted answer is correct.
 # Also check that the retrieved context does actually contain that answer.
 def validate_context_and_answer(example, pred, trace=None):
-    answer_EM = dspy.evaluate.answer_exact_match(example, pred)
-    answer_PM = dspy.evaluate.answer_passage_match(example, pred)
-    return answer_EM and answer_PM
-
+    if optimizer_parameters["predictions"] is None:
+        answer_EM = dspy.evaluate.answer_exact_match(example, pred)
+        answer_PM = dspy.evaluate.answer_passage_match(example, pred)
+        return answer_EM and answer_PM
+    else:
+      prediction = optimizer_parameters["predictions"][0]
+      prediction.input = example.question
+      prediction.expected_output = example.answer
+      prediction.context = example.context
+      prediction["type"] = "shallow"
+      prediction.actual_output = pred.answer
+      # reuse the first predict result to optimize the dspy module
+      optimizer_parameters["evaluator"].eval(optimizer_parameters["meta"], [prediction])
+      sum_score = 0
+      for metric in optimizer_parameters["metrics"].get("metrics"):
+        sum_score += metric.score
+      return sum_score
 
 def optimize(
     module: dspy.Module,
@@ -89,6 +109,21 @@ def optimize(
 ):
     optimizer = optimizer(metric=metric)
     return optimizer.compile(module(), trainset=trainset)
+
+
+def build_optimizing_module(trainset):
+    module = optimize(
+            AskGenerationV1,
+            dspy.teleprompt.BootstrapFewShot,
+            trainset=trainset,
+            metric=validate_context_and_answer,
+        )
+    path = f"eval/optimized/{AskGenerationV1.__name__}_optimized_{datetime.now().strftime("%Y_%m_%d_%H%M%S")}.json"
+    directory = os.path.dirname(path)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)
+    module.save(path)
+    return module
 
 
 if __name__ == "__main__":
@@ -109,19 +144,9 @@ if __name__ == "__main__":
 
     if optimized_program_file:
         module = AskGenerationV1()
-        module.load(f"/home/teddy/github/text2sql/WrenAI/wren-ai-service/{optimized_program_file}")
+        module.load(f"eval/optimized/{optimized_program_file}")
     elif should_optimize:
-        module = optimize(
-            AskGenerationV1,
-            dspy.teleprompt.BootstrapFewShot,
-            trainset=trainset,
-            metric=validate_context_and_answer,
-        )
-        path = f"eval/optimized/{AskGenerationV1.__name__}_optimized_{datetime.now().strftime("%Y_%m_%d_%H%M%S")}.json"
-        directory = os.path.dirname(path)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory)
-        module.save(path)
+        module = build_optimizing_module(trainset)
     else:
         module = AskGenerationV1()
 
