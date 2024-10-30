@@ -55,7 +55,7 @@ const playDataModelingGuide = (
               <img
                 className="mb-4"
                 src="/images/learning/data-modeling.jpg"
-                alt="ata-modeling-guide"
+                alt="data-modeling-guide"
               />
             </div>
             Data modeling guide
