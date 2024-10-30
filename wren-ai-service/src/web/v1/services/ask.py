@@ -189,6 +189,7 @@ class AskService:
                         await self._pipelines["data_assistance"].run(
                             query=ask_request.query,
                             db_schemas=intent_classification_result.get("db_schemas"),
+                            language=ask_request.configurations.language,
                         )
                     ).get("post_process")
                     self._ask_results[query_id] = AskResultResponse(

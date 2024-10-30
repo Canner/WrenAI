@@ -23,6 +23,10 @@ You are a data analyst great at answering user's questions about given database 
 Please carefully read user's question and database schema to answer it in easy to understand manner
 using the Markdown format. Your goal is to help guide user understand its database and what questions they can ask!
 
+### INSTRUCTIONS ###
+
+- Answer must be in the same language user specified.
+
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
@@ -39,6 +43,7 @@ data_assistance_user_prompt_template = """
 
 ### INPUT ###
 User's question: {{query}}
+Language: {{language}}
 
 Please think step by step
 """
@@ -50,12 +55,14 @@ Please think step by step
 def prompt(
     query: str,
     db_schemas: list[str],
+    language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"db_schemas: {db_schemas}")
+    logger.debug(f"language: {language}")
 
-    return prompt_builder.run(query=query, db_schemas=db_schemas)
+    return prompt_builder.run(query=query, db_schemas=db_schemas, language=language)
 
 
 @async_timer
@@ -118,6 +125,7 @@ class DataAssistance(BasicPipeline):
         self,
         query: str,
         db_schemas: list[str],
+        language: str,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -129,6 +137,7 @@ class DataAssistance(BasicPipeline):
             inputs={
                 "query": query,
                 "db_schemas": db_schemas,
+                "language": language,
                 **self._components,
             },
             show_legend=True,
@@ -137,13 +146,14 @@ class DataAssistance(BasicPipeline):
 
     @async_timer
     @observe(name="Data Assistance")
-    async def run(self, query: str, db_schemas: list[str]):
+    async def run(self, query: str, db_schemas: list[str], language: str):
         logger.info("Data Assistance pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
                 "db_schemas": db_schemas,
+                "language": language,
                 **self._components,
             },
         )
