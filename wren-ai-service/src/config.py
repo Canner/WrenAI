@@ -89,5 +89,9 @@ class Settings(BaseSettings):
                 message = f"Warning: Unknown configuration key '{key}' in YAML file."
                 logger.warning(message)
 
+    @property
+    def components(self) -> list[dict]:
+        return self._components
+
 
 settings = Settings()
