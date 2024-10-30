@@ -26,12 +26,12 @@ You are a great detective, who is great at intent classification. Now you need t
 and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. Please read user's question and
 database's schema carefully to make the classification correct. Please analyze the question for each condition(MISLEADING_QUERY, TEXT_TO_SQL, GENERAL) in order one by one
 
-- MISLEADING_QUERY: if user's question is irrelevant to the given database schema.
-For example, if the given database schema is related to e-commerce, but user asked "how are you"
 - TEXT_TO_SQL: if user's question is related to the given database schema and specific enough that you think
 it can be answered using the database schema
-- GENERAL: if user's question is related to the given database schema; however, it's too general.
+- GENERAL: if user's question is related to the given database schema or user wants you to help guide ask proper questions; however, it's too general.
 For example, user might asked "what is the dataset about?", "tell me more about dataset", "what can Wren AI do"
+- MISLEADING_QUERY: if user's question is irrelevant to the given database schema.
+For example, if the given database schema is related to e-commerce, but user asked "how are you"
 
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
