@@ -30,10 +30,7 @@ class SqlExpansionRequest(BaseModel):
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
-    configurations: Optional[SqlExpansionConfigurations] = SqlExpansionConfigurations(
-        language="English",
-        timezone=AskConfigurations.Timezone(name="Asia/Taipei", utc_offset="+8:00"),
-    )
+    configurations: Optional[SqlExpansionConfigurations] = SqlExpansionConfigurations()
 
     @property
     def query_id(self) -> str:

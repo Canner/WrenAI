@@ -44,10 +44,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[AskHistory] = None
-    configurations: Optional[AskConfigurations] = AskConfigurations(
-        language="English",
-        timezone=AskConfigurations.Timezone(name="Asia/Taipei", utc_offset="+8:00"),
-    )
+    configurations: Optional[AskConfigurations] = AskConfigurations()
 
     @property
     def query_id(self) -> str:

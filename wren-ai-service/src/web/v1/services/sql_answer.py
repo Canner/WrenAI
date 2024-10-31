@@ -23,9 +23,7 @@ class SqlAnswerRequest(BaseModel):
     sql_summary: str
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
-    configurations: Optional[SqlAnswerConfigurations] = SqlAnswerConfigurations(
-        language="English",
-    )
+    configurations: Optional[SqlAnswerConfigurations] = SqlAnswerConfigurations()
 
     @property
     def query_id(self) -> str:
