@@ -227,81 +227,67 @@ class AskService:
                         )
                         for result in historical_question_result
                     ]
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
-
-                if ask_request.history:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        history=ask_request.history,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
-                    )
                 else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        exclude=historical_question_result,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
-                    )
-
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
-                ]:
-                    valid_sql_summary_results = (
-                        await self._add_summary_to_sql_candidates(
-                            sql_valid_results,
-                            ask_request.query,
-                            ask_request.configurations.language,
+                    if ask_request.history:
+                        text_to_sql_generation_results = await self._pipelines[
+                            "followup_sql_generation"
+                        ].run(
+                            query=ask_request.query,
+                            contexts=documents,
+                            history=ask_request.history,
+                            project_id=ask_request.project_id,
+                            configurations=ask_request.configurations,
                         )
-                    )
-                    api_results = (
-                        api_results
-                        + [AskResult(**result) for result in valid_sql_summary_results]
-                    )[:3]
+                    else:
+                        text_to_sql_generation_results = await self._pipelines[
+                            "sql_generation"
+                        ].run(
+                            query=ask_request.query,
+                            contexts=documents,
+                            exclude=historical_question_result,
+                            project_id=ask_request.project_id,
+                            configurations=ask_request.configurations,
+                        )
 
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
-
-                if failed_dry_run_results := self._get_failed_dry_run_results(
-                    text_to_sql_generation_results["post_process"][
-                        "invalid_generation_results"
-                    ]
-                ):
-                    sql_correction_results = await self._pipelines[
-                        "sql_correction"
-                    ].run(
-                        contexts=documents,
-                        invalid_generation_results=failed_dry_run_results,
-                        project_id=ask_request.project_id,
-                    )
-                    if valid_generation_results := sql_correction_results[
+                    if sql_valid_results := text_to_sql_generation_results[
                         "post_process"
                     ]["valid_generation_results"]:
                         valid_sql_summary_results = (
                             await self._add_summary_to_sql_candidates(
-                                valid_generation_results,
+                                sql_valid_results,
                                 ask_request.query,
                                 ask_request.configurations.language,
                             )
                         )
-                        api_results = (
-                            api_results
-                            + [
+                        api_results = [
+                            AskResult(**result) for result in valid_sql_summary_results
+                        ][:1]
+                    elif failed_dry_run_results := self._get_failed_dry_run_results(
+                        text_to_sql_generation_results["post_process"][
+                            "invalid_generation_results"
+                        ]
+                    ):
+                        sql_correction_results = await self._pipelines[
+                            "sql_correction"
+                        ].run(
+                            contexts=documents,
+                            invalid_generation_results=failed_dry_run_results,
+                            project_id=ask_request.project_id,
+                        )
+                        if valid_generation_results := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_results"]:
+                            valid_sql_summary_results = (
+                                await self._add_summary_to_sql_candidates(
+                                    valid_generation_results,
+                                    ask_request.query,
+                                    ask_request.configurations.language,
+                                )
+                            )
+                            api_results = [
                                 AskResult(**result)
                                 for result in valid_sql_summary_results
-                            ]
-                        )[:3]
+                            ][:1]
 
                 if api_results:
                     self._ask_results[query_id] = AskResultResponse(
