@@ -118,12 +118,16 @@ class SQLGenPostProcessor:
     ) -> dict:
         try:
             if isinstance(replies[0], dict):
-                cleaned_generation_result = [
-                    orjson.loads(clean_generation_result(reply["replies"][0]))[
-                        "results"
-                    ][0]
-                    for reply in replies
-                ]
+                cleaned_generation_result = []
+                for reply in replies:
+                    try:
+                        cleaned_generation_result.append(
+                            orjson.loads(clean_generation_result(reply["replies"][0]))[
+                                "results"
+                            ][0]
+                        )
+                    except Exception as e:
+                        logger.exception(f"Error in SQLGenPostProcessor: {e}")
             else:
                 cleaned_generation_result = orjson.loads(
                     clean_generation_result(replies[0])

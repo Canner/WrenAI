@@ -210,7 +210,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations,
+        configurations: AskConfigurations = AskConfigurations(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ) -> None:
@@ -242,7 +242,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations,
+        configurations: AskConfigurations = AskConfigurations(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
