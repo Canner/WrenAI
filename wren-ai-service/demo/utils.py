@@ -663,6 +663,9 @@ def ask(query: str, query_history: Optional[dict] = None):
             "query": query,
             "id": st.session_state["deployment_id"],
             "history": query_history,
+            "configurations": {
+                "language": st.session_state["language"],
+            },
         },
     )
 
@@ -703,6 +706,9 @@ def get_sql_answer(
             "query": query,
             "sql": sql,
             "sql_summary": sql_summary,
+            "configurations": {
+                "language": st.session_state["language"],
+            },
         },
     )
 

@@ -1,6 +1,5 @@
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -18,6 +17,7 @@ from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
+    show_current_time,
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
@@ -136,8 +136,8 @@ def prompt(
     documents: List[str],
     history: AskHistory,
     alert: str,
+    configurations: AskConfigurations,
     prompt_builder: PromptBuilder,
-    configurations: AskConfigurations | None = None,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
@@ -149,7 +149,7 @@ def prompt(
         history=history,
         alert=alert,
         instructions=construct_instructions(configurations),
-        current_time=datetime.now(),
+        current_time=show_current_time(configurations.timezone),
     )
 
 
@@ -228,8 +228,8 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        configurations: AskConfigurations,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -258,8 +258,8 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        configurations: AskConfigurations,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
         return await self._pipe.execute(

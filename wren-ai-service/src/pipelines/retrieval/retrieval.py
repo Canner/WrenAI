@@ -213,7 +213,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
             else:
                 db_schemas[document.meta["name"]] = {
                     **content,
-                    "columns": db_schemas[document.meta["name"]]["columns"],
+                    "columns": db_schemas[document.meta["name"]].get("columns", []),
                 }
         elif content["type"] == "TABLE_COLUMNS":
             if document.meta["name"] not in db_schemas:
@@ -401,7 +401,8 @@ if __name__ == "__main__":
 
     from src.core.engine import EngineConfig
     from src.core.pipeline import async_validate
-    from src.providers import init_langfuse, init_providers, load_env_vars
+    from src.providers import init_providers
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
     init_langfuse()

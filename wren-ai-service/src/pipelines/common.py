@@ -1,10 +1,12 @@
 import asyncio
 import logging
+from datetime import datetime
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 import orjson
+import pytz
 from haystack import component
 
 from src.core.engine import (
@@ -111,13 +113,21 @@ class SQLGenPostProcessor:
     )
     async def run(
         self,
-        replies: List[str],
+        replies: List[str] | List[List[str]],
         project_id: str | None = None,
     ) -> dict:
         try:
-            cleaned_generation_result = orjson.loads(
-                clean_generation_result(replies[0])
-            )["results"]
+            if isinstance(replies[0], dict):
+                cleaned_generation_result = [
+                    orjson.loads(clean_generation_result(reply["replies"][0]))[
+                        "results"
+                    ][0]
+                    for reply in replies
+                ]
+            else:
+                cleaned_generation_result = orjson.loads(
+                    clean_generation_result(replies[0])
+                )["results"]
 
             if isinstance(cleaned_generation_result, dict):
                 cleaned_generation_result = [cleaned_generation_result]
@@ -361,3 +371,13 @@ def construct_instructions(configurations: AskConfigurations | None):
             instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
 
     return instructions
+
+
+def show_current_time(timezone: AskConfigurations.Timezone):
+    # Get the current time in the specified timezone
+    tz = pytz.timezone(
+        timezone.name
+    )  # Assuming timezone.name contains the timezone string
+    current_time = datetime.now(tz)
+
+    return f'{current_time.strftime("%Y-%m-%d %A")}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday

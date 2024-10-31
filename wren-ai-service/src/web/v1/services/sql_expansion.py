@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, remove_sql_summary_duplicates, trace_metadata
-from src.web.v1.services.ask import AskError, AskHistory
+from src.web.v1.services.ask import AskConfigurations, AskError, AskHistory
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
@@ -15,7 +15,10 @@ logger = logging.getLogger("wren-ai-service")
 
 # POST /v1/sql-expansions
 class SqlExpansionConfigurations(BaseModel):
-    language: str = "English"
+    language: Optional[str] = "English"
+    timezone: Optional[AskConfigurations.Timezone] = AskConfigurations.Timezone(
+        name="Asia/Taipei", utc_offset="+8:00"
+    )
 
 
 class SqlExpansionRequest(BaseModel):
@@ -27,9 +30,7 @@ class SqlExpansionRequest(BaseModel):
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
-    configurations: SqlExpansionConfigurations = SqlExpansionConfigurations(
-        language="English"
-    )
+    configurations: Optional[SqlExpansionConfigurations] = SqlExpansionConfigurations()
 
     @property
     def query_id(self) -> str:
@@ -170,6 +171,7 @@ class SqlExpansionService:
                     contexts=documents,
                     history=sql_expansion_request.history,
                     project_id=sql_expansion_request.project_id,
+                    timezone=sql_expansion_request.configurations.timezone,
                 )
 
                 valid_generation_results = []
