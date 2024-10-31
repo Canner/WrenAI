@@ -169,7 +169,15 @@ def create_service_container(
             pipelines={
                 "question_recommendation": question_recommendation.QuestionRecommendation(
                     **pipe_components["question_recommendation"],
-                )
+                ),
+                "retrieval": retrieval.Retrieval(
+                    **pipe_components["retrieval"],
+                    table_retrieval_size=table_retrieval_size,
+                    table_column_retrieval_size=table_column_retrieval_size,
+                ),
+                "sql_generation": sql_generation.SQLGeneration(
+                    **pipe_components["sql_generation"],
+                ),
             },
             **query_cache,
         ),

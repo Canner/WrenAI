@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
+from src.web.v1.services.ask import AskConfigurations
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -53,6 +54,24 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
+    async def _validate_question(self, candidate: dict) -> bool:
+        print(f"Question: {candidate}")
+        retrieval_result = await self._pipelines["retrieval"].run(
+            query=candidate["question"],
+            # id=ask_request.project_id,
+        )
+        documents = retrieval_result.get("construct_retrieval_results", [])
+        generated_sql = await self._pipelines["sql_generation"].run(
+            query=candidate["question"],
+            contexts=documents,
+            exclude=[],
+            configurations=AskConfigurations(),
+        )
+        valid_sql = generated_sql["post_process"]["valid_generation_results"]
+        print(valid_sql)
+
+        return True if valid_sql else False
+
     @observe(name="Generate Question Recommendation")
     @trace_metadata
     async def recommend(self, request: Input, **kwargs) -> Resource:
@@ -68,11 +87,18 @@ class QuestionRecommendation:
             }
 
             resp = await self._pipelines["question_recommendation"].run(**input)
+            questions = resp.get("normalized", {}).get("questions", [])
 
-            # todo: validate the question can be answered by the ask pipeline
+            validated_questions = [
+                question
+                for question in questions
+                if await self._validate_question(question)
+            ]
 
             self._cache[request.id] = self.Resource(
-                id=request.id, status="finished", response=resp.get("normalized")
+                id=request.id,
+                status="finished",
+                response={"questions": validated_questions},
             )
         except orjson.JSONDecodeError as e:
             self._handle_exception(
