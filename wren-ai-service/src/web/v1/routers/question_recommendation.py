@@ -28,6 +28,7 @@ Endpoints:
        "mdl": "{ ... }",                                 # JSON string of the MDL (Model Definition Language)
        "previous_questions": ["question1", "question2"], # Optional list of previous questions
        "language": "English"                             # Optional language, defaults to "English"
+       "project_id": "project-id"                        # Optional project ID
      }
    - Response: PostResponse
      {
@@ -66,6 +67,7 @@ class PostRequest(BaseModel):
     mdl: str
     previous_questions: list[str] = []
     language: str = "English"
+    project_id: Optional[str] = None
 
 
 class PostResponse(BaseModel):
@@ -91,6 +93,7 @@ async def recommend(
         mdl=request.mdl,
         previous_questions=request.previous_questions,
         language=request.language,
+        project_id=request.project_id,
     )
 
     background_tasks.add_task(
