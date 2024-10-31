@@ -102,6 +102,7 @@ async def exception_handler(request, exc: Exception):
 
 @app.exception_handler(RequestValidationError)
 async def request_exception_handler(request, exc: Exception):
+    print(str(exc))
     return ORJSONResponse(
         status_code=400,
         content={"detail": str(exc)},
