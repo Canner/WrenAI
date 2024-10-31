@@ -25,11 +25,9 @@ export interface ColumnMetadata {
   type: string;
 }
 
-export interface PreviewDataResponse {
-  correlationId?: string;
-  processTime?: string;
-  columns?: ColumnMetadata[];
-  data?: any[][];
+export interface PreviewDataResponse extends IbisResponse {
+  columns: ColumnMetadata[];
+  data: any[][];
 }
 
 export interface DescribeStatementResponse {
@@ -60,7 +58,7 @@ export interface IQueryService {
   preview(
     sql: string,
     options: PreviewOptions,
-  ): Promise<PreviewDataResponse | boolean>;
+  ): Promise<IbisResponse| PreviewDataResponse | boolean>;
 
   describeStatement(
     sql: string,
@@ -97,7 +95,7 @@ export class QueryService implements IQueryService {
   public async preview(
     sql: string,
     options: PreviewOptions,
-  ): Promise<PreviewDataResponse | boolean> {
+  ): Promise<IbisResponse | PreviewDataResponse | boolean> {
     const { project, manifest: mdl, limit, dryRun } = options;
     const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
@@ -177,7 +175,7 @@ export class QueryService implements IQueryService {
     dataSource: DataSourceName,
     connectionInfo: any,
     mdl: Manifest
-  ): Promise<PreviewDataResponse> {
+  ): Promise<IbisResponse> {
     const event = TelemetryEvent.IBIS_DRY_RUN;
     try {
       const res = await this.ibisAdaptor.dryRun(sql, {
