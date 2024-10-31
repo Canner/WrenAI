@@ -19,6 +19,7 @@ class QuestionRecommendation:
         mdl: str
         previous_questions: list[str] = []
         language: str = "English"
+        project_id: Optional[str] = None
 
     class Resource(BaseModel):
         class Error(BaseModel):
@@ -54,11 +55,15 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
-    async def _validate_question(self, candidate: dict) -> bool:
+    async def _validate_question(
+        self,
+        candidate: dict,
+        project_id: Optional[str] = None,
+    ) -> bool:
         print(f"Question: {candidate}")
         retrieval_result = await self._pipelines["retrieval"].run(
             query=candidate["question"],
-            # id=ask_request.project_id,
+            id=project_id,
         )
         documents = retrieval_result.get("construct_retrieval_results", [])
         generated_sql = await self._pipelines["sql_generation"].run(
@@ -68,7 +73,7 @@ class QuestionRecommendation:
             configurations=AskConfigurations(),
         )
         valid_sql = generated_sql["post_process"]["valid_generation_results"]
-        print(valid_sql)
+        logger.debug(f"Valid SQL: {valid_sql}")
 
         return True if valid_sql else False
 
@@ -92,7 +97,7 @@ class QuestionRecommendation:
             validated_questions = [
                 question
                 for question in questions
-                if await self._validate_question(question)
+                if await self._validate_question(question, request.project_id)
             ]
 
             self._cache[request.id] = self.Resource(
