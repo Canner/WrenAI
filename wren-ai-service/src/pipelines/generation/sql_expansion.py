@@ -172,7 +172,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        timezone: AskConfigurations.Timezone,
+        timezone: AskConfigurations.Timezone = AskConfigurations().timezone,
         project_id: str | None = None,
     ):
         logger.info("Sql Expansion Generation pipeline is running...")

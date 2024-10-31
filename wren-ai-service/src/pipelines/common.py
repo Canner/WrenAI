@@ -118,12 +118,16 @@ class SQLGenPostProcessor:
     ) -> dict:
         try:
             if isinstance(replies[0], dict):
-                cleaned_generation_result = [
-                    orjson.loads(clean_generation_result(reply["replies"][0]))[
-                        "results"
-                    ][0]
-                    for reply in replies
-                ]
+                cleaned_generation_result = []
+                for reply in replies:
+                    try:
+                        cleaned_generation_result.append(
+                            orjson.loads(clean_generation_result(reply["replies"][0]))[
+                                "results"
+                            ][0]
+                        )
+                    except Exception as e:
+                        logger.exception(f"Error in SQLGenPostProcessor: {e}")
             else:
                 cleaned_generation_result = orjson.loads(
                     clean_generation_result(replies[0])
@@ -203,6 +207,64 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- ONLY USE the following SQL functions when generating answers:
+  - Aggregation functions:
+    - AVG
+    - COUNT
+    - MAX
+    - MIN
+    - SUM
+    - ARRAY_AGG
+    - BOOL_OR
+  - Math functions:
+    - ABS
+    - CBRT
+    - CEIL
+    - EXP
+    - FLOOR
+    - LN
+    - ROUND
+    - SIGN
+    - GREATEST
+    - LEAST
+    - MOD
+    - POWER
+  - String functions:
+    - LENGTH
+    - REVERSE
+    - CHR
+    - CONCAT
+    - FORMAT
+    - LOWER
+    - LPAD
+    - LTRIM
+    - POSITION
+    - REPLACE
+    - RPAD
+    - RTRIM
+    - STRPOS
+    - SUBSTR
+    - SUBSTRING
+    - TRANSLATE
+    - TRIM
+    - UPPER
+  - Date and Time functions:
+    - CURRENT_DATE
+    - DATE_TRUNC
+    - EXTRACT
+  - operators:
+    - `+`
+    - `-`
+    - `*`
+    - `/`
+    - `||`
+    - `<`
+    - `>`
+    - `>=`
+    - `<=`
+    - `=`
+    - `<>`
+    - `!=`
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 - DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!

@@ -228,7 +228,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        configurations: AskConfigurations,
+        configurations: AskConfigurations = AskConfigurations(),
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -258,7 +258,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        configurations: AskConfigurations,
+        configurations: AskConfigurations = AskConfigurations(),
         project_id: str | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
