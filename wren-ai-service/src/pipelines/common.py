@@ -113,13 +113,21 @@ class SQLGenPostProcessor:
     )
     async def run(
         self,
-        replies: List[str],
+        replies: List[str] | List[List[str]],
         project_id: str | None = None,
     ) -> dict:
         try:
-            cleaned_generation_result = orjson.loads(
-                clean_generation_result(replies[0])
-            )["results"]
+            if isinstance(replies[0], dict):
+                cleaned_generation_result = [
+                    orjson.loads(clean_generation_result(reply["replies"][0]))[
+                        "results"
+                    ][0]
+                    for reply in replies
+                ]
+            else:
+                cleaned_generation_result = orjson.loads(
+                    clean_generation_result(replies[0])
+                )["results"]
 
             if isinstance(cleaned_generation_result, dict):
                 cleaned_generation_result = [cleaned_generation_result]

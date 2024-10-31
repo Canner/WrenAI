@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from pathlib import Path
@@ -28,8 +29,8 @@ sql_correction_user_prompt_template = """
 You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### TASK ###
-Now you are given a list of syntactically incorrect Trino SQL queries and related error messages.
-With given database schema, please think step by step to correct these wrong Trino SQL quries.
+Now you are given syntactically incorrect Trino SQL query and related error message.
+With given database schema, please think step by step to correct the wrong Trino SQL query.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -41,19 +42,15 @@ The final answer must be a list of corrected SQL quries and its original corresp
 
 {
     "results": [
-        {"sql": <CORRECTED_SQL_QUERY_STRING_1>, "summary": <ORIGINAL_SUMMARY_STRING_1>},
-        {"sql": <CORRECTED_SQL_QUERY_STRING_2>, "summary": <ORIGINAL_SUMMARY_STRING_2>}
+        {"sql": <CORRECTED_SQL_QUERY_STRING>, "summary": <ORIGINAL_SUMMARY_STRING>},
     ]
 }
 
 {{ alert }}
 
 ### QUESTION ###
-{% for invalid_generation_result in invalid_generation_results %}
-    sql: {{ invalid_generation_result.sql }}
-    summary: {{ invalid_generation_result.summary }}
-    error: {{ invalid_generation_result.error }}
-{% endfor %}
+SQL: {{ invalid_generation_result.sql }}
+Error Message: {{ invalid_generation_result.error }}
 
 Let's think step by step.
 """
@@ -62,45 +59,55 @@ Let's think step by step.
 ## Start of Pipeline
 @timer
 @observe(capture_input=False)
-def prompt(
+def prompts(
     documents: List[Document],
     invalid_generation_results: List[Dict],
     alert: str,
     prompt_builder: PromptBuilder,
-) -> dict:
+) -> list[dict]:
     logger.debug(
         f"documents: {orjson.dumps(documents, option=orjson.OPT_INDENT_2).decode()}"
     )
     logger.debug(
         f"invalid_generation_results: {orjson.dumps(invalid_generation_results, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return prompt_builder.run(
-        documents=documents,
-        invalid_generation_results=invalid_generation_results,
-        alert=alert,
-    )
+    return [
+        prompt_builder.run(
+            documents=documents,
+            invalid_generation_result=invalid_generation_result,
+            alert=alert,
+        )
+        for invalid_generation_result in invalid_generation_results
+    ]
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_correction(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-    return await generator.run(prompt=prompt.get("prompt"))
+async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[dict]:
+    logger.debug(
+        f"prompts: {orjson.dumps(prompts, option=orjson.OPT_INDENT_2).decode()}"
+    )
+
+    tasks = []
+    for prompt in prompts:
+        task = asyncio.ensure_future(generator.run(prompt=prompt.get("prompt")))
+        tasks.append(task)
+
+    return await asyncio.gather(*tasks)
 
 
 @async_timer
 @observe(capture_input=False)
 async def post_process(
-    generate_sql_correction: dict,
+    generate_sql_corrections: list[dict],
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
-) -> dict:
+) -> list[dict]:
     logger.debug(
-        f"generate_sql_correction: {orjson.dumps(generate_sql_correction, option=orjson.OPT_INDENT_2).decode()}"
+        f"generate_sql_corrections: {orjson.dumps(generate_sql_corrections, option=orjson.OPT_INDENT_2).decode()}"
     )
-    return await post_processor.run(
-        generate_sql_correction.get("replies"), project_id=project_id
-    )
+
+    return await post_processor.run(generate_sql_corrections, project_id=project_id)
 
 
 ## End of Pipeline
