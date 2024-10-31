@@ -221,5 +221,6 @@ const playDataModelingGuide = (
       },
     },
   ]);
+  events.dispatch(events.EVENT_NAME.GO_TO_FIRST_MODEL);
   $driver.drive();
 };
