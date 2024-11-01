@@ -7,6 +7,7 @@ import uuid
 import aiohttp
 import orjson
 import requests
+import toml
 
 from demo.utils import _get_connection_info, _replace_wren_engine_env_variables
 
@@ -24,11 +25,11 @@ def test_load_mdl_and_questions():
         with open("tests/data/hubspot/mdl.json", "r") as f:
             mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
-        with open("tests/data/hubspot/questions.json", "r") as f:
-            questions = json.load(f)["questions"]
+        data = toml.load("tests/data/hubspot/eval_dataset.toml")
+        questions = [item["question"] for item in data.get("eval_dataset", [])]
     except FileNotFoundError:
         raise Exception(
-            "tests/data/hubspot/mdl.json or tests/data/hubspot/questions.json not found"
+            "tests/data/hubspot/mdl.json or tests/data/hubspot/eval_dataset.toml not found"
         )
 
     return mdl_str, questions
