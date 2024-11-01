@@ -20,6 +20,7 @@ import {
   Refresh,
   Pageview,
   Explore,
+  Translate,
 } from '@styled-icons/material-outlined';
 import FieldBinaryOutlined from '@ant-design/icons/FieldBinaryOutlined';
 import MonitorOutlined from '@ant-design/icons/MonitorOutlined';
@@ -107,5 +108,9 @@ export const DiscordIcon = styled(Discord)`
 `;
 
 export const GithubIcon = styled(Github)`
+  height: 1em;
+`;
+
+export const TranslateIcon = styled(Translate)`
   height: 1em;
 `;
