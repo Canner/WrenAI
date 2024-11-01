@@ -7,7 +7,7 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import { DriverObj } from './utils';
+import { Dispatcher, DriverObj } from './utils';
 import { makeStoriesPlayer } from './stories';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 
@@ -16,7 +16,7 @@ import 'driver.js/dist/driver.css';
 interface Props {}
 
 interface Attributes {
-  play: (id: string, onDone: () => void) => void;
+  play: (id: string, dispatcher: Dispatcher) => void;
 }
 
 export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
@@ -24,36 +24,36 @@ export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
   const $driver = useRef<DriverObj>(null);
 
   const { data: settingsResult } = useGetSettingsQuery();
-  const sampleDataset = useMemo(() => {
-    return settingsResult?.settings?.dataSource.sampleDataset;
+  const storyPayload = useMemo(() => {
+    return {
+      sampleDataset: settingsResult?.settings?.dataSource.sampleDataset,
+      language: settingsResult?.settings?.language,
+    };
   }, [settingsResult?.settings]);
 
   useEffect(() => {
     if ($driver.current !== null) return;
-    $driver.current = driver({
-      progressText: '{{current}} / {{total}}',
-      showProgress: true,
-      nextBtnText: 'Next',
-      prevBtnText: 'Previous',
-      showButtons: ['next'],
-      allowClose: false,
-    });
+    $driver.current = driver();
     return () => {
       $driver.current.destroy();
       $driver.current = null;
     };
   }, []);
 
-  const play = (id: string, onDone: () => void) => {
+  const play = (id: string, dispatcher: Dispatcher) => {
     const playStoryWithId = makeStoriesPlayer(
       $driver.current,
       router,
-      sampleDataset,
+      storyPayload,
     );
-    playStoryWithId(id, onDone);
+    playStoryWithId(id, dispatcher);
   };
 
-  useImperativeHandle(ref, () => ({ play }), [$driver.current, router]);
+  useImperativeHandle(ref, () => ({ play }), [
+    $driver.current,
+    storyPayload,
+    router,
+  ]);
 
   return null;
 });
