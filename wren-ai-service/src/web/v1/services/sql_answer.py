@@ -11,6 +11,10 @@ from src.utils import async_timer, trace_metadata
 logger = logging.getLogger("wren-ai-service")
 
 
+class SqlAnswerConfigurations(BaseModel):
+    language: str = "English"
+
+
 # POST /v1/sql-answers
 class SqlAnswerRequest(BaseModel):
     _query_id: str | None = None
@@ -19,6 +23,7 @@ class SqlAnswerRequest(BaseModel):
     sql_summary: str
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
+    configurations: Optional[SqlAnswerConfigurations] = SqlAnswerConfigurations()
 
     @property
     def query_id(self) -> str:
@@ -94,6 +99,7 @@ class SqlAnswerService:
                 sql=sql_answer_request.sql,
                 sql_summary=sql_answer_request.sql_summary,
                 project_id=sql_answer_request.thread_id,
+                language=sql_answer_request.configurations.language,
             )
             api_results = data["post_process"]["results"]
             if answer := api_results["answer"]:

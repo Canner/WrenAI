@@ -32,7 +32,7 @@ def add_quotes(sql: str) -> Tuple[str, bool]:
         return sql, False
 
 
-def get_connection_info(data_source: str):
+def _get_connection_info(data_source: str):
     if data_source == "bigquery":
         return {
             "project_id": os.getenv("bigquery.project-id"),
@@ -77,7 +77,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
         _replace_wren_engine_env_variables("wren_engine", {"manifest": MANIFEST})
     else:
         WREN_IBIS_CONNECTION_INFO = base64.b64encode(
-            orjson.dumps(get_connection_info(dataset_type))
+            orjson.dumps(_get_connection_info(dataset_type))
         ).decode()
 
         _replace_wren_engine_env_variables(
@@ -145,7 +145,7 @@ def get_data_from_wren_engine(
             json={
                 "sql": quoted_sql,
                 "manifestStr": base64.b64encode(orjson.dumps(manifest)).decode(),
-                "connectionInfo": get_connection_info(dataset_type),
+                "connectionInfo": _get_connection_info(dataset_type),
                 "limit": 100,
             },
         )
@@ -663,6 +663,9 @@ def ask(query: str, query_history: Optional[dict] = None):
             "query": query,
             "id": st.session_state["deployment_id"],
             "history": query_history,
+            "configurations": {
+                "language": st.session_state["language"],
+            },
         },
     )
 
@@ -703,6 +706,9 @@ def get_sql_answer(
             "query": query,
             "sql": sql,
             "sql_summary": sql_summary,
+            "configurations": {
+                "language": st.session_state["language"],
+            },
         },
     )
 

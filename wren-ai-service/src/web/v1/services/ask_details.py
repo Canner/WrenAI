@@ -32,9 +32,7 @@ class AskDetailsRequest(BaseModel):
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
     user_id: Optional[str] = None
-    configurations: AskDetailsConfigurations = AskDetailsConfigurations(
-        language="English"
-    )
+    configurations: AskDetailsConfigurations = AskDetailsConfigurations()
 
     @property
     def query_id(self) -> str:

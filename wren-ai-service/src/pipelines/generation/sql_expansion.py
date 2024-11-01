@@ -1,6 +1,5 @@
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -14,9 +13,9 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import SQLGenPostProcessor
+from src.pipelines.common import SQLGenPostProcessor, show_current_time
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskHistory
+from src.web.v1.services.ask import AskConfigurations, AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -59,13 +58,17 @@ def prompt(
     query: str,
     documents: List[str],
     history: AskHistory,
+    timezone: AskConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
     logger.debug(f"history: {history}")
     return prompt_builder.run(
-        query=query, documents=documents, sql=history.sql, current_time=datetime.now()
+        query=query,
+        documents=documents,
+        sql=history.sql,
+        current_time=show_current_time(timezone),
     )
 
 
@@ -140,6 +143,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        timezone: AskConfigurations.Timezone,
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -154,6 +158,7 @@ class SQLExpansion(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
+                "timezone": timezone,
                 **self._components,
             },
             show_legend=True,
@@ -167,6 +172,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        timezone: AskConfigurations.Timezone = AskConfigurations().timezone,
         project_id: str | None = None,
     ):
         logger.info("Sql Expansion Generation pipeline is running...")
@@ -177,6 +183,7 @@ class SQLExpansion(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
+                "timezone": timezone,
                 **self._components,
             },
         )

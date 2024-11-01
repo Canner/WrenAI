@@ -31,7 +31,7 @@ Endpoints:
    - Request body: SqlExpansionRequest
      {
        "query_id": "unique-query-id",           # Unique identifier for the query
-       "query": "SELECT * FROM table;",         # SQL query to be expanded
+       "query": "user's quest to modify sql result",
        "history": { ... },                       # Historical context for the query
        "project_id": "project-identifier",      # Identifier for the project
        "mdl_hash": "hash-of-model",              # Hash of the model (if applicable)

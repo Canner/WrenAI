@@ -9,15 +9,14 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-
-router = APIRouter()
-
 from src.web.v1.services.sql_answer import (
     SqlAnswerRequest,
     SqlAnswerResponse,
     SqlAnswerResultRequest,
     SqlAnswerResultResponse,
 )
+
+router = APIRouter()
 
 """
 SQL Answers Router
@@ -29,7 +28,7 @@ Endpoints:
    - Initiates an SQL answer operation
    - Request body: SqlAnswerRequest
      {
-       "query": "SELECT * FROM table_name WHERE condition",  # SQL query to be processed
+       "query": "user's question",
        "sql": "SELECT * FROM table_name WHERE condition",      # Actual SQL statement
        "sql_summary": "Brief description of the SQL query",    # Summary of the SQL statement
        "thread_id": "unique-thread-id",                        # Optional thread identifier for tracking
@@ -100,4 +99,3 @@ async def get_sql_answer_result(
     return service_container.sql_answer_service.get_sql_answer_result(
         SqlAnswerResultRequest(query_id=query_id)
     )
-
