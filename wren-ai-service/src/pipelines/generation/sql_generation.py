@@ -1,6 +1,5 @@
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -19,6 +18,7 @@ from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
+    show_current_time,
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
@@ -141,7 +141,7 @@ def prompt(
         alert=alert,
         instructions=construct_instructions(configurations),
         samples=samples,
-        current_time=datetime.now(),
+        current_time=show_current_time(configurations.timezone),
     )
     context = []
     for doc in documents:
@@ -244,9 +244,9 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        configurations: AskConfigurations = AskConfigurations(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -276,9 +276,9 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
+        configurations: AskConfigurations = AskConfigurations(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(

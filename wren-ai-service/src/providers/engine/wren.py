@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import logging
 import os
@@ -28,6 +29,7 @@ class WrenUI(Engine):
         session: aiohttp.ClientSession,
         project_id: str | None = None,
         dry_run: bool = True,
+        timeout: float = 30.0,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         data = {
@@ -40,21 +42,25 @@ class WrenUI(Engine):
         else:
             data["limit"] = 500
 
-        async with session.post(
-            f"{self._endpoint}/api/graphql",
-            json={
-                "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
-                "variables": {"data": data},
-            },
-        ) as response:
-            res = await response.json()
-            if data := res.get("data"):
-                return True, data, None
-            return (
-                False,
-                None,
-                res.get("errors", [{}])[0].get("message", "Unknown error"),
-            )
+        try:
+            async with session.post(
+                f"{self._endpoint}/api/graphql",
+                json={
+                    "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
+                    "variables": {"data": data},
+                },
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                res = await response.json()
+                if data := res.get("data"):
+                    return True, data, None
+                return (
+                    False,
+                    None,
+                    res.get("errors", [{}])[0].get("message", "Unknown error"),
+                )
+        except asyncio.TimeoutError:
+            return False, None, f"Request timed out: {timeout} seconds"
 
 
 @provider("wren_ibis")
@@ -80,6 +86,7 @@ class WrenIbis(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         dry_run: bool = True,
+        timeout: float = 30.0,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         api_endpoint = f"{self._endpoint}/v2/connector/{self._source}/query"
@@ -88,25 +95,29 @@ class WrenIbis(Engine):
         else:
             api_endpoint += "?limit=500"
 
-        async with session.post(
-            api_endpoint,
-            json={
-                "sql": remove_limit_statement(sql),
-                "manifestStr": self._manifest,
-                "connectionInfo": self._connection_info,
-            },
-        ) as response:
-            if dry_run:
-                res = await response.text()
-            else:
-                res = await response.json()
+        try:
+            async with session.post(
+                api_endpoint,
+                json={
+                    "sql": remove_limit_statement(sql),
+                    "manifestStr": self._manifest,
+                    "connectionInfo": self._connection_info,
+                },
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                if dry_run:
+                    res = await response.text()
+                else:
+                    res = await response.json()
 
-            if response.status == 204:
-                return True, None, None
-            if response.status == 200:
-                return True, res, None
+                if response.status == 204:
+                    return True, None, None
+                if response.status == 200:
+                    return True, res, None
 
-            return False, None, res
+                return False, None, res
+        except asyncio.TimeoutError:
+            return False, None, f"Request timed out: {timeout} seconds"
 
 
 @provider("wren_engine")
@@ -127,6 +138,7 @@ class WrenEngine(Engine):
             "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
         },
         dry_run: bool = True,
+        timeout: float = 30.0,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         api_endpoint = (
@@ -135,18 +147,24 @@ class WrenEngine(Engine):
             else f"{self._endpoint}/v1/mdl/preview"
         )
 
-        async with session.get(
-            api_endpoint,
-            json={
-                "manifest": orjson.loads(base64.b64decode(properties.get("manifest")))
-                if properties.get("manifest")
-                else {},
-                "sql": remove_limit_statement(sql),
-                "limit": 1 if dry_run else 500,
-            },
-        ) as response:
-            res = await response.json()
-            if response.status == 200:
-                return True, res, None
+        try:
+            async with session.get(
+                api_endpoint,
+                json={
+                    "manifest": orjson.loads(
+                        base64.b64decode(properties.get("manifest"))
+                    )
+                    if properties.get("manifest")
+                    else {},
+                    "sql": remove_limit_statement(sql),
+                    "limit": 1 if dry_run else 500,
+                },
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                res = await response.json()
+                if response.status == 200:
+                    return True, res, None
 
-            return False, None, res
+                return False, None, res
+        except asyncio.TimeoutError:
+            return False, None, f"Request timed out: {timeout} seconds"

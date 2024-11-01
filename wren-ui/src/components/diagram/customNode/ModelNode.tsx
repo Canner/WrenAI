@@ -64,6 +64,7 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
     <StyledNode
       onClick={onNodeClick}
       data-testid={`diagram__model-node__${data.originalData.displayName}`}
+      data-guideid={`model-${data.index}`}
     >
       <NodeHeader className="dragHandle">
         <span className="adm-model-header">
@@ -75,7 +76,11 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         <span>
           <CachedIcon originalData={data.originalData} />
           <ModelDropdown data={data.originalData} onMoreClick={onMoreClick}>
-            <MoreButton className="gray-1" marginRight={-4} />
+            <MoreButton
+              className="gray-1"
+              marginRight={-4}
+              data-guideid={`edit-model-${data.index}`}
+            />
           </ModelDropdown>
         </span>
 

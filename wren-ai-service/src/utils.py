@@ -147,6 +147,8 @@ def trace_metadata(func):
             metadata["mdl_hash"] = request.mdl_hash
         if hasattr(request, "user_id"):
             metadata["user_id"] = request.user_id
+        if hasattr(request, "query"):
+            metadata["query"] = request.query
 
         return metadata
 
@@ -172,6 +174,7 @@ def trace_metadata(func):
             **addition,
             "mdl_hash": metadata.get("mdl_hash"),
             "project_id": metadata.get("project_id"),
+            "query": metadata.get("query"),
         }
         langfuse_context.update_current_trace(
             user_id=metadata.get("user_id"),

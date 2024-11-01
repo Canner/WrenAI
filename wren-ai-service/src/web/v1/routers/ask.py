@@ -9,7 +9,6 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-
 from src.web.v1.services.ask import (
     AskRequest,
     AskResponse,
@@ -30,7 +29,7 @@ Endpoints:
 1. **POST /asks**
    - Submits a new query for processing.
    - **Request Body**:
-     - `query`: The SQL query or natural language query to be processed.
+     - `query`: The natural language query to be processed.
      - `project_id`: (Optional) Identifier for the project to fetch relevant data.
      - `mdl_hash`: (Optional) Hash or ID related to the model to be used for the query.
      - `thread_id`: (Optional) Thread identifier for the query.
@@ -93,6 +92,7 @@ async def ask(
     )
     return AskResponse(query_id=query_id)
 
+
 @router.patch("/asks/{query_id}")
 async def stop_ask(
     query_id: str,
@@ -116,5 +116,3 @@ async def get_ask_result(
     return service_container.ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
-
-

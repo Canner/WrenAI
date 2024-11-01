@@ -17,12 +17,12 @@ export default function useSetupRelations() {
   });
   const autoGenerateRelation = data?.autoGenerateRelation;
 
-  const onRedirectToHomePage = () => router.push(Path.Home);
+  const onRedirectToModelingPage = () => router.push(Path.Modeling);
 
   const [saveRelationsMutation, { loading: submitting }] =
     useSaveRelationsMutation({
       onError: (error) => console.error(error),
-      onCompleted: () => onRedirectToHomePage(),
+      onCompleted: () => onRedirectToModelingPage(),
     });
 
   const submitReleations = async (
@@ -48,7 +48,7 @@ export default function useSetupRelations() {
 
     // redirect to the home page if there is no relationship data needs to be saved
     if (relations.length === 0) {
-      onRedirectToHomePage();
+      onRedirectToModelingPage();
       return;
     }
 
@@ -109,6 +109,6 @@ export default function useSetupRelations() {
     recommendRelationsResult,
     onBack,
     onNext,
-    onSkip: onRedirectToHomePage,
+    onSkip: onRedirectToModelingPage,
   };
 }

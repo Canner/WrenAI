@@ -1,10 +1,12 @@
 import asyncio
 import logging
+from datetime import datetime
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 import orjson
+import pytz
 from haystack import component
 
 from src.core.engine import (
@@ -111,13 +113,25 @@ class SQLGenPostProcessor:
     )
     async def run(
         self,
-        replies: List[str],
+        replies: List[str] | List[List[str]],
         project_id: str | None = None,
     ) -> dict:
         try:
-            cleaned_generation_result = orjson.loads(
-                clean_generation_result(replies[0])
-            )["results"]
+            if isinstance(replies[0], dict):
+                cleaned_generation_result = []
+                for reply in replies:
+                    try:
+                        cleaned_generation_result.append(
+                            orjson.loads(clean_generation_result(reply["replies"][0]))[
+                                "results"
+                            ][0]
+                        )
+                    except Exception as e:
+                        logger.exception(f"Error in SQLGenPostProcessor: {e}")
+            else:
+                cleaned_generation_result = orjson.loads(
+                    clean_generation_result(replies[0])
+                )["results"]
 
             if isinstance(cleaned_generation_result, dict):
                 cleaned_generation_result = [cleaned_generation_result]
@@ -193,6 +207,64 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- ONLY USE the following SQL functions when generating answers:
+  - Aggregation functions:
+    - AVG
+    - COUNT
+    - MAX
+    - MIN
+    - SUM
+    - ARRAY_AGG
+    - BOOL_OR
+  - Math functions:
+    - ABS
+    - CBRT
+    - CEIL
+    - EXP
+    - FLOOR
+    - LN
+    - ROUND
+    - SIGN
+    - GREATEST
+    - LEAST
+    - MOD
+    - POWER
+  - String functions:
+    - LENGTH
+    - REVERSE
+    - CHR
+    - CONCAT
+    - FORMAT
+    - LOWER
+    - LPAD
+    - LTRIM
+    - POSITION
+    - REPLACE
+    - RPAD
+    - RTRIM
+    - STRPOS
+    - SUBSTR
+    - SUBSTRING
+    - TRANSLATE
+    - TRIM
+    - UPPER
+  - Date and Time functions:
+    - CURRENT_DATE
+    - DATE_TRUNC
+    - EXTRACT
+  - operators:
+    - `+`
+    - `-`
+    - `*`
+    - `/`
+    - `||`
+    - `<`
+    - `>`
+    - `>=`
+    - `<=`
+    - `=`
+    - `<>`
+    - `!=`
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 - DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
@@ -361,3 +433,13 @@ def construct_instructions(configurations: AskConfigurations | None):
             instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
 
     return instructions
+
+
+def show_current_time(timezone: AskConfigurations.Timezone):
+    # Get the current time in the specified timezone
+    tz = pytz.timezone(
+        timezone.name
+    )  # Assuming timezone.name contains the timezone string
+    current_time = datetime.now(tz)
+
+    return f'{current_time.strftime("%Y-%m-%d %A")}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday

@@ -1,3 +1,4 @@
+export * from './learningRepository';
 export * from './modelRepository';
 export * from './projectRepository';
 export * from './modelColumnRepository';

@@ -190,7 +190,11 @@ class SQLBreakdown(BasicPipeline):
         )
 
     def visualize(
-        self, query: str, sql: str, language: str, project_id: str | None = None
+        self,
+        query: str,
+        sql: str,
+        language: str = "English",
+        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -213,7 +217,11 @@ class SQLBreakdown(BasicPipeline):
     @async_timer
     @observe(name="SQL Breakdown Generation")
     async def run(
-        self, query: str, sql: str, language: str, project_id: str | None = None
+        self,
+        query: str,
+        sql: str,
+        language: str = "English",
+        project_id: str | None = None,
     ) -> dict:
         logger.info("SQL Breakdown Generation pipeline is running...")
         return await self._pipe.execute(

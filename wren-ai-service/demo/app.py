@@ -56,10 +56,16 @@ if "sql_user_corrections_by_step" not in st.session_state:
     st.session_state["sql_user_corrections_by_step"] = []
 if "sql_regeneration_results" not in st.session_state:
     st.session_state["sql_regeneration_results"] = None
+if "language" not in st.session_state:
+    st.session_state["language"] = "English"
 
 
 def onchange_demo_dataset():
     st.session_state["chosen_dataset"] = st.session_state["choose_demo_dataset"]
+
+
+def onchange_language():
+    st.session_state["language"] = st.session_state["language_selectbox"]
 
 
 with st.sidebar:
@@ -78,6 +84,25 @@ with st.sidebar:
         ],
         index=0,
         on_change=onchange_demo_dataset,
+    )
+
+    st.selectbox(
+        "Language",
+        key="language_selectbox",
+        options=[
+            "English",
+            "Spanish",
+            "French",
+            "TraditionalChinese",
+            "SimplifiedChinese",
+            "German",
+            "Portuguese",
+            "Russian",
+            "Japanese",
+            "Korean",
+        ],
+        index=0,
+        on_change=onchange_language,
     )
 
     if uploaded_file is not None:

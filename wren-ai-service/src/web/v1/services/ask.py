@@ -23,8 +23,13 @@ class AskConfigurations(BaseModel):
         start: str
         end: str
 
+    class Timezone(BaseModel):
+        name: str
+        utc_offset: str
+
     fiscal_year: Optional[FiscalYear] = None
-    language: str = "English"
+    language: Optional[str] = "English"
+    timezone: Optional[Timezone] = Timezone(name="Asia/Taipei", utc_offset="+8:00")
 
 
 # POST /v1/asks
@@ -39,7 +44,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[AskHistory] = None
-    configurations: AskConfigurations = AskConfigurations(language="English")
+    configurations: Optional[AskConfigurations] = AskConfigurations()
 
     @property
     def query_id(self) -> str:

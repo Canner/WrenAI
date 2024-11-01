@@ -59,7 +59,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
         )
 
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
+    @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(
         self,
         prompt: str,
@@ -162,6 +162,10 @@ class AzureOpenAILLMProvider(LLMProvider):
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,
-            generation_kwargs={**generation_kwargs, **self._model_kwargs},
+            generation_kwargs=(
+                {**generation_kwargs, **self._model_kwargs}
+                if generation_kwargs
+                else self._model_kwargs
+            ),
             timeout=self._timeout,
         )
