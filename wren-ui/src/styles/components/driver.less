@@ -1,0 +1,65 @@
+body {
+  .driver-popover {
+    background-color: @gray-10;
+    color: white;
+    box-shadow: none;
+    border-radius: 10px;
+    padding: 16px 0;
+
+    .driver-popover-close-btn {
+      color: @gray-7;
+      &:hover {
+        color: @gray-1;
+      }
+    }
+  }
+
+  .driver-popover-title,
+  .driver-popover-description,
+  .driver-popover-footer {
+    padding: 0 16px;
+  }
+
+  .driver-popover-title {
+    img {
+      display: block;
+      width: 100%;
+    }
+
+    &[style*=block] +.driver-popover-description {
+      margin-top: 8px;
+    }
+  }
+
+  .driver-popover-description {
+    color: @gray-5;
+  }
+
+  .driver-popover-arrow-side-left {
+    border-left-color: @gray-10;
+  }
+  .driver-popover-arrow-side-right {
+    border-right-color: @gray-10;
+  }
+  .driver-popover-arrow-side-top {
+    border-top-color: @gray-10;
+  }
+  .driver-popover-arrow-side-bottom {
+    border-bottom-color: @gray-10;
+  }
+
+  .driver-popover-progress-text {
+    color: @gray-7;
+  }
+
+  .driver-popover-footer button {
+    font-size: @font-size-base;
+    border-radius: 4px;
+    border: none;
+    min-width: 76px;
+    text-align: center;
+    + button {
+      margin-left: 8px;
+    }
+  }
+}

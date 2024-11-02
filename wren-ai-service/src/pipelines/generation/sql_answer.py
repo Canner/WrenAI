@@ -32,6 +32,7 @@ Please answer the user's question in concise and clear manner in Markdown format
 3. Read the sql and understand the data.
 4. Generate a consice and clear answer in string format and a reasoning process in string format to the user's question based on the data, sql and sql summary.
 5. If answer is in list format, only list top few examples, and tell users there are more results omitted.
+6. Answer must be in the same language user specified.
 
 ### OUTPUT FORMAT
 
@@ -49,7 +50,7 @@ User's question: {{ query }}
 SQL: {{ sql }}
 SQL summary: {{ sql_summary }}
 Data: {{ sql_data }}
-
+Language: {{ language }}
 Please think step by step and answer the user's question.
 """
 
@@ -127,15 +128,20 @@ def prompt(
     sql: str,
     sql_summary: str,
     execute_sql: dict,
+    language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
     logger.debug(f"sql_summary: {sql_summary}")
     logger.debug(f"sql data: {execute_sql}")
-
+    logger.debug(f"language: {language}")
     return prompt_builder.run(
-        query=query, sql=sql, sql_summary=sql_summary, sql_data=execute_sql["results"]
+        query=query,
+        sql=sql,
+        sql_summary=sql_summary,
+        sql_data=execute_sql["results"],
+        language=language,
     )
 
 
@@ -202,7 +208,12 @@ class SQLAnswer(BasicPipeline):
         )
 
     def visualize(
-        self, query: str, sql: str, sql_summary: str, project_id: str | None = None
+        self,
+        query: str,
+        sql: str,
+        sql_summary: str,
+        language: str,
+        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -215,6 +226,7 @@ class SQLAnswer(BasicPipeline):
                 "query": query,
                 "sql": sql,
                 "sql_summary": sql_summary,
+                "language": language,
                 "project_id": project_id,
                 **self._components,
             },
@@ -225,7 +237,12 @@ class SQLAnswer(BasicPipeline):
     @async_timer
     @observe(name="SQL Answer Generation")
     async def run(
-        self, query: str, sql: str, sql_summary: str, project_id: str | None = None
+        self,
+        query: str,
+        sql: str,
+        sql_summary: str,
+        language: str,
+        project_id: str | None = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
@@ -234,6 +251,7 @@ class SQLAnswer(BasicPipeline):
                 "query": query,
                 "sql": sql,
                 "sql_summary": sql_summary,
+                "language": language,
                 "project_id": project_id,
                 **self._components,
             },
@@ -257,9 +275,11 @@ if __name__ == "__main__":
         engine=engine,
     )
 
-    pipeline.visualize("query", "SELECT * FROM table_name", "sql summary")
+    pipeline.visualize("query", "SELECT * FROM table_name", "sql summary", "English")
     async_validate(
-        lambda: pipeline.run("query", "SELECT * FROM table_name", "sql summary")
+        lambda: pipeline.run(
+            "query", "SELECT * FROM table_name", "sql summary", "English"
+        )
     )
 
     langfuse_context.flush()

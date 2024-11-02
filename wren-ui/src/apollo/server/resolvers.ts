@@ -3,12 +3,14 @@ import { ProjectResolver } from './resolvers/projectResolver';
 import { ModelResolver } from './resolvers/modelResolver';
 import { AskingResolver } from './resolvers/askingResolver';
 import { DiagramResolver } from './resolvers/diagramResolver';
+import { LearningResolver } from './resolvers/learningResolver';
 import { convertColumnType } from '@server/utils';
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
 const askingResolver = new AskingResolver();
 const diagramResolver = new DiagramResolver();
+const learningResolver = new LearningResolver();
 
 const resolvers = {
   JSON: GraphQLJSON,
@@ -39,6 +41,9 @@ const resolvers = {
     // Settings
     settings: projectResolver.getSettings,
     getMDL: modelResolver.getMDL,
+
+    // Learning
+    learningRecord: learningResolver.getLearningRecord,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -90,6 +95,9 @@ const resolvers = {
 
     // preview
     previewSql: modelResolver.previewSql,
+
+    // Learning
+    saveLearningRecord: learningResolver.saveLearningRecord,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

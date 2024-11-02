@@ -51,7 +51,7 @@ class AsyncTextEmbedder(OpenAITextEmbedder):
         )
 
     @component.output_types(embedding=List[float], meta=Dict[str, Any])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
+    @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(self, text: str):
         if not isinstance(text, str):
             raise TypeError(

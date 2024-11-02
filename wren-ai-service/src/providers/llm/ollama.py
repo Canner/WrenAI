@@ -158,7 +158,11 @@ class OllamaLLMProvider(LLMProvider):
         return AsyncGenerator(
             model=self._generation_model,
             url=f"{self._url}/api/generate",
-            generation_kwargs={**generation_kwargs, **self._model_kwargs},
+            generation_kwargs=(
+                {**generation_kwargs, **self._model_kwargs}
+                if generation_kwargs
+                else self._model_kwargs
+            ),
             system_prompt=system_prompt,
             timeout=self._timeout,
         )

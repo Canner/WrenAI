@@ -44,6 +44,7 @@ import {
   useDeleteRelationshipMutation,
   useUpdateRelationshipMutation,
 } from '@/apollo/client/graphql/relationship.generated';
+import * as events from '@/utils/events';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -248,6 +249,22 @@ export default function Modeling() {
       metadataDrawer.updateState(currentNodeData);
     }
   }, [diagramData]);
+
+  // register event listener for global
+  useEffect(() => {
+    events.subscribe(events.EVENT_NAME.GO_TO_FIRST_MODEL, goToFirstModel);
+    return () => {
+      events.unsubscribe(events.EVENT_NAME.GO_TO_FIRST_MODEL, goToFirstModel);
+    };
+  }, []);
+
+  const goToFirstModel = () => {
+    if (diagramRef.current) {
+      const { getNodes } = diagramRef.current;
+      const node = getNodes()[0];
+      node?.id && onSelect([node.id]);
+    }
+  };
 
   const onSelect = (selectKeys) => {
     if (diagramRef.current) {

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { IbisAdaptor, ValidationRules } from '../ibisAdaptor';
+import { DryRunResponse, IbisAdaptor, IbisQueryOptions, IbisQueryResponse, ValidationRules } from '../ibisAdaptor';
 import { DataSourceName } from '../../types';
 import { Manifest } from '../../mdl/type';
 import {
@@ -387,5 +387,129 @@ describe('IbisAdaptor', () => {
         parameters,
       },
     );
+  });
+
+  it('should get data, correlationId and processTime', async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        columns: [],
+        data: [],
+        dtypes: {},
+      },
+      headers: {
+        "X-Correlation-ID": '123',
+        "X-Process-Time": '1s',
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const res: IbisQueryResponse = await ibisAdaptor.query(
+      "SELECT * FROM test_table",
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+        limit: 10,
+      } as IbisQueryOptions,
+    );
+    
+    expect(res.data).toEqual([]);
+    expect(res.correlationId).toEqual('123');
+    expect(res.processTime).toEqual('1s');
+  });
+
+  it('should throw an exception with correlationId and processTime when query fails', async () => {
+    mockedAxios.post.mockRejectedValue({
+      response: {
+        data: "Error message",
+        headers: {
+          "X-Correlation-ID": '123',
+          "X-Process-Time": '1s',
+        },
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.query(
+        "SELECT * FROM test_table",
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+          limit: 10,
+        }
+      )
+    ).rejects.toMatchObject({
+      message: "Error message",
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should get data, correlationId and processTime when dry run succeeds', async () => {
+    mockedAxios.post.mockResolvedValue({
+      headers: {
+        "X-Correlation-ID": '123',
+        "X-Process-Time": '1s',
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const res: DryRunResponse = await ibisAdaptor.dryRun(
+      "SELECT * FROM test_table",
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      } as IbisQueryOptions,
+    );
+    
+    expect(res.correlationId).toEqual('123');
+    expect(res.processTime).toEqual('1s');
+  });
+
+  it('should throw an exception with correlationId and processTime when dry run fails', async () => {
+    mockedAxios.post.mockRejectedValue({
+      response: {
+        data: "Error message",
+        headers: {
+          "X-Correlation-ID": '123',
+          "X-Process-Time": '1s',
+        },
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.dryRun(
+        "SELECT * FROM test_table",
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+        }
+      )
+    ).rejects.toMatchObject({
+      message: "Error message",
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
   });
 });
