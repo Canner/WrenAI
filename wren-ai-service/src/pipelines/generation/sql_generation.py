@@ -212,7 +212,7 @@ class SQLGeneration(BasicPipeline):
     ):
         self.dspy_module = None
         optimized_path = os.getenv("DSPY_OPTIMAZED_MODEL", "")
-        if not optimized_path:
+        if optimized_path:
           # use dspy to evaluate
           configure_llm_provider(
               os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
