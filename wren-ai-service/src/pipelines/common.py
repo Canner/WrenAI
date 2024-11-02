@@ -90,14 +90,14 @@ class SQLBreakdownGenPostProcessor:
         project_id: str | None = None,
     ):
         async with aiohttp.ClientSession() as session:
-            status, _, error = await self._engine.execute_sql(
+            status, _, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
             )
 
         if not status:
-            logger.exception(f"SQL is not executable: {error}")
+            logger.exception(f"SQL is not executable: {addition["error_message"]}")
 
         return status
 
@@ -165,7 +165,7 @@ class SQLGenPostProcessor:
             quoted_sql, no_error = add_quotes(result["sql"])
 
             if no_error:
-                status, _, error = await self._engine.execute_sql(
+                status, _, addition = await self._engine.execute_sql(
                     quoted_sql, session, project_id=project_id
                 )
 
@@ -173,6 +173,7 @@ class SQLGenPostProcessor:
                     valid_generation_results.append(
                         {
                             "sql": quoted_sql,
+                            "correlation_id": addition["correlation_id"],
                         }
                     )
                 else:
@@ -180,7 +181,8 @@ class SQLGenPostProcessor:
                         {
                             "sql": quoted_sql,
                             "type": "DRY_RUN",
-                            "error": error,
+                            "error": addition["error_message"],
+                            "correlation_id": addition["correlation_id"],
                         }
                     )
             else:
@@ -268,6 +270,7 @@ TEXT_TO_SQL_RULES = """
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
 - DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
+- DON'T USE "COUNT(*) FILTER(WHERE <condition>)"
 - ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
