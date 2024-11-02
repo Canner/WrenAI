@@ -181,8 +181,8 @@ class SQLGenPostProcessor:
                         {
                             "sql": quoted_sql,
                             "type": "DRY_RUN",
-                            "error": addition["error_message"],
-                            "correlation_id": addition["correlation_id"],
+                            "error": addition.get("error_message", ""),
+                            "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
             else:
