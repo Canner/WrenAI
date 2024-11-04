@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
+from src.web.v1.services import MetadataTraceable
 from src.web.v1.services.ask import AskConfigurations
 
 logger = logging.getLogger("wren-ai-service")
@@ -22,7 +23,7 @@ class QuestionRecommendation:
         language: str = "English"
         project_id: Optional[str] = None
 
-    class Resource(BaseModel):
+    class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
             code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
             message: str
@@ -31,20 +32,6 @@ class QuestionRecommendation:
         status: Literal["generating", "finished", "failed"] = "generating"
         response: Optional[dict] = None
         error: Optional[Error] = None
-
-        def with_metadata(self) -> dict:
-            return {
-                "resource": self,
-                "metadata": {
-                    **self._error_metadata(),
-                },
-            }
-
-        def _error_metadata(self):
-            return {
-                "error_type": self.error and self.error.code,
-                "error_message": self.error and self.error.message,
-            }
 
     def __init__(
         self,
