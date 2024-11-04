@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
@@ -92,10 +93,17 @@ class QuestionRecommendation:
             resp = await self._pipelines["question_recommendation"].run(**input)
             questions = resp.get("normalized", {}).get("questions", [])
 
+            validation_tasks = [
+                self._validate_question(question, request.project_id)
+                for question in questions
+            ]
+
+            validation_results = await asyncio.gather(*validation_tasks)
+
             validated_questions = [
                 question
-                for question in questions
-                if await self._validate_question(question, request.project_id)
+                for question, is_valid in zip(questions, validation_results)
+                if is_valid
             ]
 
             self._cache[request.id] = self.Resource(
