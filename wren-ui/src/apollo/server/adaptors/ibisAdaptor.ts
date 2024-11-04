@@ -141,8 +141,7 @@ export interface IbisQueryResponse extends IbisResponse {
   dtypes: Record<string, string>;
 }
 
-export interface DryRunResponse extends IbisResponse {
-}
+export interface DryRunResponse extends IbisResponse {}
 
 enum IBIS_API_TYPE {
   QUERY = 'QUERY',
