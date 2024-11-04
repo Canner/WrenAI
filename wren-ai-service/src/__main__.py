@@ -35,7 +35,7 @@ setup_custom_logger(
 async def lifespan(app: FastAPI):
     # startup events
 
-    pipe_components = generate_components()
+    pipe_components = generate_components(force_deploy=os.getenv("SHOULD_FORCE_DEPLOY"))
     app.state.service_container = create_service_container(
         pipe_components,
         column_indexing_batch_size=(
