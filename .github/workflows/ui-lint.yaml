@@ -6,6 +6,8 @@ name: Wren-UI Lint
 on:
   pull_request:
     types: [ labeled, synchronize ]
+    paths:
+      - 'wren-ui/src/**'
 
 permissions:
   contents: read
@@ -47,6 +49,19 @@ jobs:
         run: yarn list
       - name: Install Node.js dependencies
         run: yarn install
-      - name: Run lint
-        run: yarn lint
+      - name: Run lint and fix
+        run: yarn next lint --fix
+      - name: Commit lint fixes
+        if: always()
+        run: |
+          git config --global user.name "wren-ai[bot]"
+          git config --global user.email "dev@cannerdata.com"
+          git add .
+          git diff --staged --quiet || git commit -m "chore: auto-fix lint issues"
+      - name: Push changes
+        if: always()
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.head_ref }}
           
