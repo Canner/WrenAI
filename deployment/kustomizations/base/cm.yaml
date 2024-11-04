@@ -15,8 +15,8 @@ data:
   #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
   WREN_PRODUCT_VERSION: "0.10.0-rc.1"
   WREN_ENGINE_VERSION: "0.11.2"
-  WREN_AI_SERVICE_VERSION: "0.9.2"
-  WREN_UI_VERSION: "0.15.1"
+  WREN_AI_SERVICE_VERSION: "0.10.0"
+  WREN_UI_VERSION: "0.16.0"
 
   # LLM and Embedder Configurations
   LLM_PROVIDER: "openai_llm"
