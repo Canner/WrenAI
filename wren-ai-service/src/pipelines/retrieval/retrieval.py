@@ -32,6 +32,7 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 4. If a "." is included in columns, put the name before the first dot into chosen columns.
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
+7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
