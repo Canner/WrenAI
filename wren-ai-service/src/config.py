@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     enable_timer: bool = Field(default=False)
     logging_level: str = Field(default="INFO")
     development: bool = Field(default=False)
+    should_force_deploy: bool = Field(default=False)
 
     # this is used to store the config like type: llm, embedder, etc. and we will process them later
     config_path: str = Field(default="config.yaml")
