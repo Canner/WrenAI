@@ -2,6 +2,7 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi.responses import StreamingResponse
 
 from src.globals import (
     ServiceContainer,
@@ -116,3 +117,18 @@ async def get_ask_result(
     return service_container.ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
+
+
+@router.get("/asks/streaming-result")
+async def get_ask_streaming_result(
+    query_id: str,
+    service_container: ServiceContainer = Depends(get_service_container),
+):
+    import asyncio
+
+    async def event_generator():
+        for i in range(10):
+            yield f"data: Hello, world! {i}\n\n"
+            await asyncio.sleep(1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
