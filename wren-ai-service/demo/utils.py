@@ -722,12 +722,11 @@ def display_general_response(query_id: str):
     general_response_data = ""
     placeholder = st.empty()
 
-    while True:
-        for event in client.events():
-            general_response_data += event.data
-            placeholder.markdown(general_response_data)
+    for event in client.events():
+        general_response_data += event.data
+        placeholder.markdown(general_response_data)
 
-        print(f"general_response_data: {general_response_data}")
+    print(f"general_response_data: {general_response_data}")
 
 
 def get_sql_answer(
