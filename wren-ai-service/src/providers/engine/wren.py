@@ -185,7 +185,11 @@ class WrenEngine(Engine):
                 },
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
-                res = await response.json()
+                if dry_run:
+                    res = await response.text()
+                else:
+                    res = await response.json()
+
                 if response.status == 200:
                     return (
                         True,
