@@ -46,7 +46,7 @@ Endpoints:
          "questions": [...]                      # List of question recommendations
        },
        "error": {                                # Present only if status is "failed"
-         "code": "OTHERS",
+         "code": "OTHERS" | "MDL_PARSE_ERROR" | "RESOURCE_NOT_FOUND",
          "message": "Error description"
        }
      }
