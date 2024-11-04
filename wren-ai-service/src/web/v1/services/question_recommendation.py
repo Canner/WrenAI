@@ -32,6 +32,20 @@ class QuestionRecommendation:
         response: Optional[dict] = None
         error: Optional[Error] = None
 
+        def with_metadata(self) -> dict:
+            return {
+                "resource": self,
+                "metadata": {
+                    **self._error_metadata(),
+                },
+            }
+
+        def _error_metadata(self):
+            return {
+                "error_type": self.error and self.error.code,
+                "error_message": self.error and self.error.message,
+            }
+
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
@@ -123,7 +137,7 @@ class QuestionRecommendation:
                 f"An error occurred during question recommendation generation: {str(e)}",
             )
 
-        return self._cache[request.id]
+        return self._cache[request.id].with_metadata()
 
     def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)
