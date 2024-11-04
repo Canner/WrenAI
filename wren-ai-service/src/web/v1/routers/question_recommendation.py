@@ -28,8 +28,15 @@ Endpoints:
      {
        "mdl": "{ ... }",                                 # JSON string of the MDL (Model Definition Language)
        "previous_questions": ["question1", "question2"], # Optional list of previous questions
-       "language": "English"                             # Optional language, defaults to "English"
-       "project_id": "project-id"                        # Optional project ID
+       "project_id": "project-id",                       # Optional project ID
+       "max_questions": 5,                               # Optional max number of questions to generate, defaults to 5
+       "max_categories": 3,                              # Optional max number of categories, defaults to 3
+       "configuration": {                                # Optional configuration settings
+         "language": "English",                         # Optional language, defaults to "English"
+         "timezone": {                                  # Optional timezone settings
+           "name": "Asia/Taipei",                       # Timezone name, defaults to "Asia/Taipei"
+         }
+       }
      }
    - Response: PostResponse
      {
