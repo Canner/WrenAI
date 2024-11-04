@@ -20,6 +20,8 @@ import {
   useSaveLearningRecordMutation,
 } from '@/apollo/client/graphql/learning.generated';
 import { nextTick } from '@/utils/time';
+import { ProjectLanguage } from '@/apollo/client/graphql/__types__';
+import { useUpdateCurrentProjectMutation } from '@/apollo/client/graphql/settings.generated';
 
 const Progress = styled.div<{ total: number; current: number }>`
   display: block;
@@ -78,6 +80,7 @@ const List = styled.div<{ finished: boolean }>`
     transition: background-color 0.3s;
     background-color: var(--gray-4);
     color: ${({ finished }) => (finished ? 'var(--gray-6)' : 'var(--gray-8)')};
+    text-decoration: ${({ finished }) => (finished ? 'line-through' : 'none')};
   }
 `;
 
@@ -113,15 +116,23 @@ interface LearningConfig {
 
 const getData = (
   $guide: MutableRefObject<ComponentRef<typeof LearningGuide>>,
-  saveRecord: (id: LEARNING) => void,
-) =>
-  [
+  pathname: string,
+  saveRecord: (id: LEARNING) => Promise<void>,
+  saveLanguage: (value: ProjectLanguage) => Promise<void>,
+) => {
+  const getDispatcher = (id: LEARNING) => ({
+    onDone: () => saveRecord(id),
+    onSaveLanguage: saveLanguage,
+  });
+
+  const modeling = [
     {
       id: LEARNING.DATA_MODELING_GUIDE,
       title: 'Data modeling guide',
       onClick: () =>
-        $guide?.current?.play(LEARNING.DATA_MODELING_GUIDE, () =>
-          saveRecord(LEARNING.DATA_MODELING_GUIDE),
+        $guide?.current?.play(
+          LEARNING.DATA_MODELING_GUIDE,
+          getDispatcher(LEARNING.DATA_MODELING_GUIDE),
         ),
     },
     {
@@ -150,8 +161,40 @@ const getData = (
     },
   ] as LearningConfig[];
 
+  const home = [
+    {
+      id: LEARNING.SWITCH_PROJECT_LANGUAGE,
+      title: 'Switch the language',
+      onClick: () =>
+        $guide?.current?.play(
+          LEARNING.SWITCH_PROJECT_LANGUAGE,
+          getDispatcher(LEARNING.SWITCH_PROJECT_LANGUAGE),
+        ),
+    },
+    {
+      id: LEARNING.SHARE_RESULTS,
+      title: 'Export to Excel/Sheets',
+      href: 'https://docs.getwren.ai/oss/guide/integrations/excel-add-in',
+      onClick: () => saveRecord(LEARNING.SHARE_RESULTS),
+    },
+    {
+      id: LEARNING.VIEW_FULL_SQL,
+      title: 'View full SQL',
+      href: 'https://docs.getwren.ai/oss/guide/home/answer#view-sqlview-full-sql',
+      onClick: () => saveRecord(LEARNING.VIEW_FULL_SQL),
+    },
+  ];
+
+  if (pathname.startsWith(Path.Modeling)) {
+    return modeling;
+  } else if (pathname.startsWith(Path.Home)) {
+    return home;
+  }
+  return [];
+};
+
 const isLearningAccessible = (pathname: string) =>
-  pathname.startsWith(Path.Modeling);
+  pathname.startsWith(Path.Modeling) || pathname.startsWith(Path.Home);
 
 interface Props {}
 
@@ -167,12 +210,25 @@ export default function SidebarSection(_props: Props) {
     refetchQueries: ['LearningRecord'],
   });
 
-  const saveRecord = (path: LEARNING) => {
-    saveLearningRecord({ variables: { data: { path } } });
+  const [updateCurrentProject] = useUpdateCurrentProjectMutation({
+    refetchQueries: ['GetSettings'],
+  });
+
+  const saveRecord = async (path: LEARNING) => {
+    await saveLearningRecord({ variables: { data: { path } } });
+  };
+
+  const saveLanguage = async (value: ProjectLanguage) => {
+    await updateCurrentProject({ variables: { data: { language: value } } });
   };
 
   const stories = useMemo(() => {
-    const learningData = getData($guide, saveRecord);
+    const learningData = getData(
+      $guide,
+      router.pathname,
+      saveRecord,
+      saveLanguage,
+    );
     const record = learningRecordResult?.learningRecord.paths || [];
     return sortBy(
       learningData.map((story) => ({
@@ -201,18 +257,39 @@ export default function SidebarSection(_props: Props) {
   useEffect(() => {
     const learningRecord = learningRecordResult?.learningRecord;
     if (learningRecord) {
-      setActive(learningRecord.paths.length !== stories.length);
+      setActive(
+        stories.some((item) => !learningRecord.paths.includes(item.id)),
+      );
 
       // play the data modeling guide if it's not finished
-      if (!learningRecord.paths.includes(LEARNING.DATA_MODELING_GUIDE)) {
+      if (
+        router.pathname === Path.Modeling &&
+        !learningRecord.paths.includes(LEARNING.DATA_MODELING_GUIDE)
+      ) {
         nextTick(1000).then(() => {
           const isSkipBefore = !!window.sessionStorage.getItem(
             'skipDataModelingGuide',
           );
           if (isSkipBefore) return;
-          $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, () =>
-            saveRecord(LEARNING.DATA_MODELING_GUIDE),
+          $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, {
+            onDone: () => saveRecord(LEARNING.DATA_MODELING_GUIDE),
+          });
+        });
+      }
+
+      if (
+        router.pathname === Path.Home &&
+        !learningRecord.paths.includes(LEARNING.SWITCH_PROJECT_LANGUAGE)
+      ) {
+        nextTick(1000).then(() => {
+          const isSkipBefore = !!window.sessionStorage.getItem(
+            'skipSwitchProjectLanguageGuide',
           );
+          if (isSkipBefore) return;
+          $guide.current?.play(LEARNING.SWITCH_PROJECT_LANGUAGE, {
+            onDone: () => saveRecord(LEARNING.SWITCH_PROJECT_LANGUAGE),
+            onSaveLanguage: saveLanguage,
+          });
         });
       }
     }

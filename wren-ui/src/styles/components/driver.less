@@ -20,9 +20,15 @@ body {
     padding: 0 16px;
   }
 
-  .driver-popover-title img {
-    display: block;
-    width: 100%;
+  .driver-popover-title {
+    img {
+      display: block;
+      width: 100%;
+    }
+
+    &[style*=block] +.driver-popover-description {
+      margin-top: 8px;
+    }
   }
 
   .driver-popover-description {

@@ -10,10 +10,7 @@ import {
 } from '../adaptors/ibisAdaptor';
 import { getLogger } from '@server/utils';
 import { Project } from '../repositories';
-import {
-  PostHogTelemetry,
-  TelemetryEvent,
-} from '../telemetry/telemetry';
+import { PostHogTelemetry, TelemetryEvent } from '../telemetry/telemetry';
 
 const logger = getLogger('QueryService');
 logger.level = 'debug';
@@ -25,9 +22,7 @@ export interface ColumnMetadata {
   type: string;
 }
 
-export interface PreviewDataResponse {
-  correlationId?: string;
-  processTime?: string;
+export interface PreviewDataResponse extends IbisResponse {
   columns: ColumnMetadata[];
   data: any[][];
 }
@@ -60,7 +55,7 @@ export interface IQueryService {
   preview(
     sql: string,
     options: PreviewOptions,
-  ): Promise<PreviewDataResponse | boolean>;
+  ): Promise<IbisResponse | PreviewDataResponse | boolean>;
 
   describeStatement(
     sql: string,
@@ -97,7 +92,7 @@ export class QueryService implements IQueryService {
   public async preview(
     sql: string,
     options: PreviewOptions,
-  ): Promise<PreviewDataResponse | boolean> {
+  ): Promise<IbisResponse | PreviewDataResponse | boolean> {
     const { project, manifest: mdl, limit, dryRun } = options;
     const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
@@ -117,14 +112,19 @@ export class QueryService implements IQueryService {
       this.checkDataSourceIsSupported(dataSource);
       logger.debug('Use ibis adaptor to preview');
       if (dryRun) {
-        await this.ibisDryRun(sql, dataSource, connectionInfo, mdl);
-        return true;
+        return await this.ibisDryRun(sql, dataSource, connectionInfo, mdl);
       } else {
-        return await this.ibisQuery(sql, dataSource, connectionInfo, mdl, limit);
+        return await this.ibisQuery(
+          sql,
+          dataSource,
+          connectionInfo,
+          mdl,
+          limit,
+        );
       }
     }
   }
-  
+
   public async describeStatement(
     sql: string,
     options: PreviewOptions,
@@ -177,8 +177,8 @@ export class QueryService implements IQueryService {
     sql: string,
     dataSource: DataSourceName,
     connectionInfo: any,
-    mdl: Manifest
-  ) {
+    mdl: Manifest,
+  ): Promise<IbisResponse> {
     const event = TelemetryEvent.IBIS_DRY_RUN;
     try {
       const res = await this.ibisAdaptor.dryRun(sql, {
@@ -187,6 +187,9 @@ export class QueryService implements IQueryService {
         mdl,
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
+      return {
+        correlationId: res.correlationId,
+      };
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, { dataSource, sql });
       throw err;
@@ -198,7 +201,7 @@ export class QueryService implements IQueryService {
     dataSource: DataSourceName,
     connectionInfo: any,
     mdl: Manifest,
-    limit: number
+    limit: number,
   ): Promise<PreviewDataResponse> {
     const event = TelemetryEvent.IBIS_QUERY;
     try {
@@ -209,7 +212,11 @@ export class QueryService implements IQueryService {
         limit,
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
-      return this.transformDataType(res);
+      const data = this.transformDataType(res);
+      return {
+        correlationId: res.correlationId,
+        ...data,
+      };
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, { dataSource, sql });
       throw err;
@@ -241,22 +248,30 @@ export class QueryService implements IQueryService {
     } as PreviewDataResponse;
   }
 
-  private sendIbisEvent(event: TelemetryEvent, res: IbisResponse, others: Record<string, any>) {
+  private sendIbisEvent(
+    event: TelemetryEvent,
+    res: IbisResponse,
+    others: Record<string, any>,
+  ) {
     this.telemetry.sendEvent(event, {
       correlationId: res.correlationId,
       processTime: res.processTime,
       ...others,
     });
   }
-  
-  private sendIbisFailedEvent(event: TelemetryEvent, err: any, others: Record<string, any>) {
+
+  private sendIbisFailedEvent(
+    event: TelemetryEvent,
+    err: any,
+    others: Record<string, any>,
+  ) {
     this.telemetry.sendEvent(
       event,
-      { 
+      {
         correlationId: err.extensions.other.correlationId,
         processTime: err.extensions.other.processTime,
         error: err.message,
-        ...others
+        ...others,
       },
       err.extensions?.service,
       false,
