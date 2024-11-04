@@ -37,7 +37,6 @@ Please return the result in the following JSON format:
         {
             "summary": <SQL_QUERY_SUMMARY_STRING>
         }
-        ...
     ]
 }
 """
