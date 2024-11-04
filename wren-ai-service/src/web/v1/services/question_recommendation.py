@@ -83,10 +83,8 @@ class QuestionRecommendation:
         logger.info("Generate Question Recommendation pipeline is running...")
 
         try:
-            mdl_dict = orjson.loads(request.mdl)
-
             input = {
-                "mdl": mdl_dict,
+                "mdl": orjson.loads(request.mdl),
                 "previous_questions": request.previous_questions,
                 "language": request.language,
             }
