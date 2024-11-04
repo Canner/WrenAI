@@ -24,17 +24,18 @@ def prompt(
     mdl: dict,
     previous_questions: list[str],
     language: str,
-    num_questions: int,
-    num_categories: int,
+    current_date: str,
+    max_questions: int,
+    max_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
         models=mdl["models"],
         previous_questions=previous_questions,
         language=language,
-        num_questions=num_questions,
-        num_categories=num_categories,
-        current_date=datetime.now(),
+        current_date=current_date,
+        max_questions=max_questions,
+        max_categories=max_categories,
     )
 
 
@@ -146,7 +147,7 @@ Previous Questions: {{previous_questions}}
 Current Date: {{current_date}}
 Language: {{language}}
 
-Please generate {{num_questions}} insightful questions for {{num_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
+Please generate {{max_questions}} insightful questions for {{max_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
 """
 
 
@@ -175,8 +176,9 @@ class QuestionRecommendation(BasicPipeline):
         mdl: dict,
         previous_questions: list[str] = [],
         language: str = "English",
-        num_questions: int = 5,
-        num_categories: int = 1,
+        current_date: str = datetime.now(),
+        max_questions: int = 5,
+        max_categories: int = 3,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -189,8 +191,9 @@ class QuestionRecommendation(BasicPipeline):
                 "mdl": mdl,
                 "previous_questions": previous_questions,
                 "language": language,
-                "num_questions": num_questions,
-                "num_categories": num_categories,
+                "current_date": current_date,
+                "max_questions": max_questions,
+                "max_categories": max_categories,
             },
             show_legend=True,
             orient="LR",
@@ -202,8 +205,9 @@ class QuestionRecommendation(BasicPipeline):
         mdl: dict,
         previous_questions: list[str] = [],
         language: str = "English",
-        num_questions: int = 5,
-        num_categories: int = 1,
+        current_date: str = datetime.now(),
+        max_questions: int = 5,
+        max_categories: int = 3,
     ) -> dict:
         logger.info("Question Recommendation pipeline is running...")
         return await self._pipe.execute(
@@ -212,8 +216,9 @@ class QuestionRecommendation(BasicPipeline):
                 "mdl": mdl,
                 "previous_questions": previous_questions,
                 "language": language,
-                "num_questions": num_questions,
-                "num_categories": num_categories,
+                "current_date": current_date,
+                "max_questions": max_questions,
+                "max_categories": max_categories,
                 **self._components,
             },
         )

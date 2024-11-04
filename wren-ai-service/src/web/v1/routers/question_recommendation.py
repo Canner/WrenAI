@@ -11,6 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
+from src.web.v1.services import Configuration
 from src.web.v1.services.question_recommendation import QuestionRecommendation
 
 router = APIRouter()
@@ -66,8 +67,10 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 class PostRequest(BaseModel):
     mdl: str
     previous_questions: list[str] = []
-    language: str = "English"
     project_id: Optional[str] = None
+    max_questions: Optional[int] = 5
+    max_categories: Optional[int] = 3
+    configuration: Optional[Configuration] = Configuration()
 
 
 class PostResponse(BaseModel):
@@ -92,8 +95,10 @@ async def recommend(
         id=id,
         mdl=request.mdl,
         previous_questions=request.previous_questions,
-        language=request.language,
         project_id=request.project_id,
+        max_questions=request.max_questions,
+        max_categories=request.max_categories,
+        configuration=request.configuration,
     )
 
     background_tasks.add_task(

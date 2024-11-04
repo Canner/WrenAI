@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import MetadataTraceable
+from src.web.v1.services import Configuration, MetadataTraceable
 from src.web.v1.services.ask import AskConfigurations
 
 logger = logging.getLogger("wren-ai-service")
@@ -20,8 +20,10 @@ class QuestionRecommendation:
         id: str
         mdl: str
         previous_questions: list[str] = []
-        language: str = "English"
         project_id: Optional[str] = None
+        max_questions: Optional[int] = 5
+        max_categories: Optional[int] = 3
+        configuration: Optional[Configuration] = Configuration()
 
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
@@ -88,7 +90,10 @@ class QuestionRecommendation:
             input = {
                 "mdl": orjson.loads(request.mdl),
                 "previous_questions": request.previous_questions,
-                "language": request.language,
+                "language": request.configuration.language,
+                "current_date": request.configuration.show_current_time(),
+                "max_questions": request.max_questions,
+                "max_categories": request.max_categories,
             }
 
             resp = await self._pipelines["question_recommendation"].run(**input)
