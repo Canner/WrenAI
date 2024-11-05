@@ -32,7 +32,8 @@ async def test_generate_semantics_description(
         mdl='{"models": [{"name": "model1", "columns": []}]}',
     )
 
-    response = await semantics_description_service.generate(request)
+    await semantics_description_service.generate(request)
+    response = semantics_description_service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "finished"
@@ -56,7 +57,8 @@ async def test_generate_semantics_description_with_invalid_mdl(
         mdl="invalid_json",
     )
 
-    response = await semantics_description_service.generate(request)
+    await semantics_description_service.generate(request)
+    response = semantics_description_service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "failed"
@@ -80,7 +82,8 @@ async def test_generate_semantics_description_with_exception(
         "semantics_description"
     ].run.side_effect = Exception("Test exception")
 
-    response = await semantics_description_service.generate(request)
+    await semantics_description_service.generate(request)
+    response = semantics_description_service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "failed"

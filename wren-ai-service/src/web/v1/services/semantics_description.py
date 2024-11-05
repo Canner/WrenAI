@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
+from src.web.v1.services import MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -19,7 +20,7 @@ class SemanticsDescription:
         user_prompt: str
         mdl: str
 
-    class Resource(BaseModel):
+    class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
             code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
             message: str
@@ -84,7 +85,7 @@ class SemanticsDescription:
                 f"An error occurred during semantics description generation: {str(e)}",
             )
 
-        return self[request.id]
+        return self[request.id].with_metadata()
 
     def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)

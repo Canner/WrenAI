@@ -40,7 +40,7 @@ Endpoints:
        "id": "unique-uuid",                      # Unique identifier of the recommendation
        "status": "generating" | "finished" | "failed",
        "response": {                             # Present only if status is "finished"
-         "recommendations": [...]                # List of relationship recommendations
+         "relationships": [...]                  # List of relationship recommendations
        },
        "error": {                                # Present only if status is "failed"
          "code": "OTHERS",
