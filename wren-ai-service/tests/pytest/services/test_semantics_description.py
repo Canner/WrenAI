@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock
 
 import orjson
@@ -206,3 +207,47 @@ async def test_batch_processing_partial_failure(
     assert response.status == "failed"
     assert response.error.code == "OTHERS"
     assert "Failed processing model2" in response.error.message
+
+
+@pytest.mark.asyncio
+async def test_concurrent_updates_no_race_condition(
+    service: SemanticsDescription,
+):
+    test_id = "concurrent_test"
+    service[test_id] = SemanticsDescription.Resource(id=test_id)
+
+    request = SemanticsDescription.Input(
+        id=test_id,
+        user_prompt="Test concurrent updates",
+        selected_models=["model1", "model2", "model3", "model4", "model5"],
+        mdl='{"models": [{"name": "model1"}, {"name": "model2"}, {"name": "model3"}, {"name": "model4"}, {"name": "model5"}]}',
+    )
+
+    # Mock pipeline responses with delays to simulate concurrent execution
+    async def delayed_response(model_num, delay=0.1):
+        await asyncio.sleep(delay)  # Add delay to increase chance of race condition
+        return {
+            "normalize": {
+                f"model{model_num}": {"description": f"Description {model_num}"}
+            }
+        }
+
+    service._pipelines["semantics_description"].run.side_effect = [
+        await delayed_response(1),
+        await delayed_response(2),
+        await delayed_response(3),
+        await delayed_response(4),
+        await delayed_response(5),
+    ]
+
+    # Generate response which will process chunks concurrently
+    response = await service.generate(request)
+
+    assert response.status == "finished"
+    assert response.response is not None
+    assert len(response.response) == 5
+    assert all(f"model{i}" in response.response for i in range(1, 6))
+    assert all(
+        response.response[f"model{i}"]["description"] == f"Description {i}"
+        for i in range(1, 6)
+    )
