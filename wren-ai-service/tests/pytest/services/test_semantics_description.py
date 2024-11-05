@@ -146,7 +146,8 @@ async def test_batch_processing_with_multiple_models(
         {"normalize": {"model3": {"description": "Description 3"}}},
     ]
 
-    response = await service.generate(request)
+    await service.generate(request)
+    response = service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "finished"
@@ -201,7 +202,8 @@ async def test_batch_processing_partial_failure(
         Exception("Failed processing model2"),
     ]
 
-    response = await service.generate(request)
+    await service.generate(request)
+    response = service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "failed"
@@ -241,7 +243,8 @@ async def test_concurrent_updates_no_race_condition(
     ]
 
     # Generate response which will process chunks concurrently
-    response = await service.generate(request)
+    await service.generate(request)
+    response = service[request.id]
 
     assert response.status == "finished"
     assert response.response is not None
