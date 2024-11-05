@@ -75,6 +75,8 @@ pipes:
   - name: relationship_recommendation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
+  - name: question_recommendation
+    llm: openai_llm.gpt-4o-mini
 
 ---
 settings:
