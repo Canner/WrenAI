@@ -723,7 +723,7 @@ def display_general_response(query_id: str):
     placeholder = st.empty()
 
     for event in client.events():
-        general_response_data += event.data
+        general_response_data += f"{event.data}"
         placeholder.markdown(general_response_data)
 
     print(f"general_response_data: {general_response_data}")
