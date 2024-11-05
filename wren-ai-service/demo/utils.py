@@ -719,14 +719,13 @@ def display_general_response(query_id: str):
     response = with_requests(url, headers)
     client = sseclient.SSEClient(response)
 
-    general_response_data = ""
+    markdown_content = ""
     placeholder = st.empty()
 
     for event in client.events():
-        general_response_data += f"{event.data}"
-        placeholder.markdown(general_response_data)
-
-    print(f"general_response_data: {general_response_data}")
+        print(f"data: {event.data}")
+        markdown_content += orjson.loads(event.data)["message"]
+        placeholder.markdown(markdown_content)
 
 
 def get_sql_answer(

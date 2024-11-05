@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, List, Literal, Optional
 
+import orjson
 from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
@@ -108,6 +109,19 @@ class AskResultResponse(BaseModel):
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
     _data_assistance_task: Optional[asyncio.Task] = None
+
+
+class SSEEvent(BaseModel):
+    class SSEEventMessage(BaseModel):
+        message: str
+
+        def to_dict(self):
+            return {"message": self.message}
+
+    data: SSEEventMessage
+
+    def serialize(self):
+        return f"data: {orjson.dumps(self.data.to_dict()).decode()}\n\n"
 
 
 class AskService:
@@ -389,7 +403,6 @@ class AskService:
         self,
         query_id: str,
     ):
-        data = ""
         if (
             self._ask_results.get(query_id)
             and self._ask_results.get(query_id).type == "GENERAL"
@@ -397,7 +410,7 @@ class AskService:
             async for chunk in self._pipelines["data_assistance"].get_streaming_results(
                 query_id
             ):
-                data += chunk
-                yield f"data: {chunk}\n\n"
-
-        print(f"data: {data}")
+                event = SSEEvent(
+                    data=SSEEvent.SSEEventMessage(message=chunk),
+                )
+                yield event.serialize()
