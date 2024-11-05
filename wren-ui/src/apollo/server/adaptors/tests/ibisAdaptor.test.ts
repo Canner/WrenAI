@@ -141,7 +141,17 @@ describe('IbisAdaptor', () => {
       mockMSSQLConnectionInfo,
     );
     const expectConnectionInfo = Object.entries(mockMSSQLConnectionInfo).reduce(
-      (acc, [key, value]) => ((acc[snakeCase(key)] = value), acc),
+      (acc, [key, value]) => {
+        if (key === 'trustServerCertificate') {
+          if (value) {
+            acc['kwargs'] = { trustServerCertificate: 'YES' };
+            return acc;
+          }
+        } else {
+          acc[snakeCase(key)] = value;
+        }
+        return acc;
+      },
       {},
     );
 
@@ -242,7 +252,7 @@ describe('IbisAdaptor', () => {
     const { username, catalog, host, password, port, schema, ssl } =
       mockTrinoConnectionInfo;
     const expectConnectionInfo = {
-      connectionUrl: `jdbc:trino://${host}:${port}/${catalog}/${schema}?user=${username}&password=${password}`,
+      connectionUrl: `trino://${username}:${password}@${host}:${port}/${catalog}/${schema}`,
     };
 
     if (ssl) expectConnectionInfo.connectionUrl += '&SSL=true';
