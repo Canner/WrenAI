@@ -40,7 +40,7 @@ describe('QueryService', () => {
       dryRun: true,
     });
 
-    expect(res).toBe(true);
+    expect(res).toEqual({ correlationId: '123' });
     expect(mockTelemetry.records).toHaveLength(1);
     expect(mockTelemetry.records[0]).toEqual({
       event: TelemetryEvent.IBIS_DRY_RUN,
