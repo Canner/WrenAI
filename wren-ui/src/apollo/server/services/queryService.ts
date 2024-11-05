@@ -10,10 +10,7 @@ import {
 } from '../adaptors/ibisAdaptor';
 import { getLogger } from '@server/utils';
 import { Project } from '../repositories';
-import {
-  PostHogTelemetry,
-  TelemetryEvent,
-} from '../telemetry/telemetry';
+import { PostHogTelemetry, TelemetryEvent } from '../telemetry/telemetry';
 
 const logger = getLogger('QueryService');
 logger.level = 'debug';
@@ -58,7 +55,7 @@ export interface IQueryService {
   preview(
     sql: string,
     options: PreviewOptions,
-  ): Promise<IbisResponse| PreviewDataResponse | boolean>;
+  ): Promise<IbisResponse | PreviewDataResponse | boolean>;
 
   describeStatement(
     sql: string,
@@ -117,11 +114,17 @@ export class QueryService implements IQueryService {
       if (dryRun) {
         return await this.ibisDryRun(sql, dataSource, connectionInfo, mdl);
       } else {
-        return await this.ibisQuery(sql, dataSource, connectionInfo, mdl, limit);
+        return await this.ibisQuery(
+          sql,
+          dataSource,
+          connectionInfo,
+          mdl,
+          limit,
+        );
       }
     }
   }
-  
+
   public async describeStatement(
     sql: string,
     options: PreviewOptions,
@@ -174,7 +177,7 @@ export class QueryService implements IQueryService {
     sql: string,
     dataSource: DataSourceName,
     connectionInfo: any,
-    mdl: Manifest
+    mdl: Manifest,
   ): Promise<IbisResponse> {
     const event = TelemetryEvent.IBIS_DRY_RUN;
     try {
@@ -186,7 +189,7 @@ export class QueryService implements IQueryService {
       this.sendIbisEvent(event, res, { dataSource, sql });
       return {
         correlationId: res.correlationId,
-      }
+      };
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, { dataSource, sql });
       throw err;
@@ -198,7 +201,7 @@ export class QueryService implements IQueryService {
     dataSource: DataSourceName,
     connectionInfo: any,
     mdl: Manifest,
-    limit: number
+    limit: number,
   ): Promise<PreviewDataResponse> {
     const event = TelemetryEvent.IBIS_QUERY;
     try {
@@ -210,9 +213,9 @@ export class QueryService implements IQueryService {
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
       const data = this.transformDataType(res);
-      return { 
+      return {
         correlationId: res.correlationId,
-        ...data
+        ...data,
       };
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, { dataSource, sql });
@@ -245,22 +248,30 @@ export class QueryService implements IQueryService {
     } as PreviewDataResponse;
   }
 
-  private sendIbisEvent(event: TelemetryEvent, res: IbisResponse, others: Record<string, any>) {
+  private sendIbisEvent(
+    event: TelemetryEvent,
+    res: IbisResponse,
+    others: Record<string, any>,
+  ) {
     this.telemetry.sendEvent(event, {
       correlationId: res.correlationId,
       processTime: res.processTime,
       ...others,
     });
   }
-  
-  private sendIbisFailedEvent(event: TelemetryEvent, err: any, others: Record<string, any>) {
+
+  private sendIbisFailedEvent(
+    event: TelemetryEvent,
+    err: any,
+    others: Record<string, any>,
+  ) {
     this.telemetry.sendEvent(
       event,
-      { 
+      {
         correlationId: err.extensions.other.correlationId,
         processTime: err.extensions.other.processTime,
         error: err.message,
-        ...others
+        ...others,
       },
       err.extensions?.service,
       false,

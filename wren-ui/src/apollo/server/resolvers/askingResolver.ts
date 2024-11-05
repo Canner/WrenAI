@@ -91,6 +91,10 @@ export class AskingResolver {
       threadId,
       language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
+    ctx.telemetry.sendEvent(TelemetryEvent.HOME_ASK_CANDIDATE, {
+      question,
+      taskId: task.id,
+    });
     return task;
   }
 
@@ -118,6 +122,7 @@ export class AskingResolver {
     const eventName = TelemetryEvent.HOME_ASK_CANDIDATE;
     if (askResult.status === AskResultStatus.FINISHED) {
       ctx.telemetry.sendEvent(eventName, {
+        taskId,
         status: askResult.status,
         candidates: askResult.response,
       });
@@ -126,6 +131,7 @@ export class AskingResolver {
       ctx.telemetry.sendEvent(
         eventName,
         {
+          taskId,
           status: askResult.status,
           error: askResult.error,
         },

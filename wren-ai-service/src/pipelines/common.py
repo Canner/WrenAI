@@ -97,7 +97,9 @@ class SQLBreakdownGenPostProcessor:
             )
 
         if not status:
-            logger.exception(f"SQL is not executable: {addition["error_message"]}")
+            logger.exception(
+                f"SQL is not executable: {addition.get('error_message', '')}"
+            )
 
         return status
 
@@ -173,7 +175,7 @@ class SQLGenPostProcessor:
                     valid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "correlation_id": addition["correlation_id"],
+                            "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
                 else:
