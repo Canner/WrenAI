@@ -64,7 +64,6 @@ class QuestionRecommendation:
         candidate: dict,
         project_id: Optional[str] = None,
     ) -> bool:
-        print(f"Question: {candidate}")
         retrieval_result = await self._pipelines["retrieval"].run(
             query=candidate["question"],
             id=project_id,
