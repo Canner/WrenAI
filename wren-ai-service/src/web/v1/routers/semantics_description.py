@@ -41,28 +41,28 @@ Endpoints:
      {
        "id": "unique-uuid",                      # Unique identifier of the description
        "status": "generating" | "finished" | "failed",
-       "response": {                             # Present only if status is "finished"
-         "model1": {
+       "response": [                             # Present only if status is "finished" or "generating"
+         {
            "name": "model1",
            "columns": [
-              {
-                 "name": "col1",
-                 "description": "Unique identifier for each record in the example model."
-              }
+             {
+               "name": "col1", 
+               "description": "Unique identifier for each record in the example model."
+             }
            ],
            "description": "This model is used for analysis purposes, capturing key attributes of records."
          },
-         "model2": {
-           "name": "model2",
+         {
+           "name": "model2", 
            "columns": [
-              {
-                 "name": "col1",
-                 "description": "Unique identifier for each record in the example model."
-              }
+             {
+               "name": "col1",
+               "description": "Unique identifier for each record in the example model."
+             }
            ],
            "description": "This model is used for analysis purposes, capturing key attributes of records."
          }
-       },
+       ],
        "error": {                                # Present only if status is "failed"
          "code": "OTHERS",
          "message": "Error description"

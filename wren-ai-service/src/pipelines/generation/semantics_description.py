@@ -64,7 +64,7 @@ def normalize(generate: dict) -> dict:
             return text_dict
         except orjson.JSONDecodeError as e:
             logger.error(f"Error decoding JSON: {e}")
-            return {}  # Return an empty dictionary if JSON decoding fails
+            return {"models": []}  # Return an empty list if JSON decoding fails
 
     logger.debug(
         f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
