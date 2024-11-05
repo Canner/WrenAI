@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
 
+import orjson
 import pytest
 
 from src.web.v1.services.semantics_description import SemanticsDescription
@@ -123,3 +124,85 @@ def test_get_non_existent_semantics_description_result(
     assert result.response is None
     assert result.error.code == "RESOURCE_NOT_FOUND"
     assert "not found" in result.error.message
+
+
+@pytest.mark.asyncio
+async def test_batch_processing_with_multiple_models(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.Input(
+        id="test_id",
+        user_prompt="Describe the models",
+        selected_models=["model1", "model2", "model3"],
+        mdl='{"models": [{"name": "model1"}, {"name": "model2"}, {"name": "model3"}]}',
+    )
+
+    # Mock pipeline responses for each chunk
+    service._pipelines["semantics_description"].run.side_effect = [
+        {"normalize": {"model1": {"description": "Description 1"}}},
+        {"normalize": {"model2": {"description": "Description 2"}}},
+        {"normalize": {"model3": {"description": "Description 3"}}},
+    ]
+
+    response = await service.generate(request)
+
+    assert response.id == "test_id"
+    assert response.status == "finished"
+    assert response.response == {
+        "model1": {"description": "Description 1"},
+        "model2": {"description": "Description 2"},
+        "model3": {"description": "Description 3"},
+    }
+
+    chunks = service._chunking(orjson.loads(request.mdl), request)
+    assert len(chunks) == 3  # Default chunk_size=1
+    assert all("user_prompt" in chunk for chunk in chunks)
+    assert all("mdl" in chunk for chunk in chunks)
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1]
+
+
+def test_batch_processing_with_custom_chunk_size(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.Input(
+        id="test_id",
+        user_prompt="Describe the models",
+        selected_models=["model1", "model2", "model3", "model4"],
+        mdl='{"models": [{"name": "model1"}, {"name": "model2"}, {"name": "model3"}, {"name": "model4"}]}',
+    )
+
+    # Test chunking with custom chunk size
+    chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
+
+    assert len(chunks) == 2  # Should create 2 chunks with size 2
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [2, 2]
+    assert chunks[0]["selected_models"] == ["model1", "model2"]
+    assert chunks[1]["selected_models"] == ["model3", "model4"]
+
+
+@pytest.mark.asyncio
+async def test_batch_processing_partial_failure(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.Input(
+        id="test_id",
+        user_prompt="Describe the models",
+        selected_models=["model1", "model2"],
+        mdl='{"models": [{"name": "model1"}, {"name": "model2"}]}',
+    )
+
+    # Mock first chunk succeeds, second chunk fails
+    service._pipelines["semantics_description"].run.side_effect = [
+        {"normalize": {"model1": {"description": "Description 1"}}},
+        Exception("Failed processing model2"),
+    ]
+
+    response = await service.generate(request)
+
+    assert response.id == "test_id"
+    assert response.status == "failed"
+    assert response.error.code == "OTHERS"
+    assert "Failed processing model2" in response.error.message
