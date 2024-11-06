@@ -606,9 +606,29 @@ export class ProjectResolver {
   }
 
   private async deploy(ctx: IContext) {
-    const { id } = await ctx.projectService.getCurrentProject();
+    const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, id);
+    const deployRes = await ctx.deployService.deploy(manifest, project.id);
+
+    // generate recommendation questions after deploy
+    const recommendQuestionResult =
+      await ctx.wrenAIAdaptor.generateRecommendationQuestions({
+        manifest,
+        projectId: project.id.toString(),
+        maxCategories: 3,
+        maxQuestions: 9,
+        configuration: {
+          language: project.language,
+        },
+      });
+    const updatedProject = await ctx.projectRepository.updateOne(project.id, {
+      queryId: recommendQuestionResult.queryId,
+    });
+    const tasks = ctx.recommendQuestionBackgroundTracker.getTasks();
+    if (!tasks[project.id]) {
+      ctx.recommendQuestionBackgroundTracker.addTask(updatedProject);
+    }
+    return deployRes;
   }
 
   private buildRelationInput(

@@ -26,6 +26,7 @@ import {
   AskingService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
+import { RecommendQuestionBackgroundTracker } from './apollo/server/backgrounds';
 
 export const serverConfig = getConfig();
 
@@ -92,6 +93,14 @@ export const initComponents = () => {
     queryService,
   });
 
+  // background trackers
+  const recommendQuestionBackgroundTracker =
+    new RecommendQuestionBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      projectRepository,
+    });
+
   return {
     knex,
     telemetry,
@@ -120,6 +129,9 @@ export const initComponents = () => {
     queryService,
     deployService,
     askingService,
+
+    // background trackers
+    recommendQuestionBackgroundTracker,
   };
 };
 
