@@ -120,6 +120,43 @@ export type AskResult = AskResponse<
   AskResultStatus
 >;
 
+export enum RecommendationQuestionStatus {
+  GENERATING = 'GENERATING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+}
+
+export type RecommendationQuestionsInput = {
+  // JSON string of the MDL (Model Definition Language)
+  manifest: Manifest;
+  // Optional list of previous questions
+  previousQuestions?: string[];
+  // Optional project ID
+  projectId?: string;
+  // Optional max number of questions to generate (default: 5)
+  maxQuestions?: number;
+  // Optional max number of categories (default: 3)
+  maxCategories?: number;
+  // Optional configuration settings
+  configuration?: {
+    // Optional language (default: "English")
+    language?: string;
+  };
+};
+
+export type RecommendationQuestion = {
+  question: string;
+  explanation: string;
+  category: string; // category for the question
+};
+
+export type RecommendationQuestionsResult = AskResponse<
+  {
+    questions: RecommendationQuestion[];
+  },
+  RecommendationQuestionStatus
+>;
+
 const getAISerciceError = (error: any) => {
   const { data } = error.response || {};
   return data?.detail
@@ -148,6 +185,16 @@ export interface IWrenAIAdaptor {
    */
   generateAskDetail(input: AskDetailInput): Promise<AsyncQueryResponse>;
   getAskDetailResult(queryId: string): Promise<AskDetailResult>;
+
+  /**
+   * Generate recommendation questions
+   */
+  generateRecommendationQuestions(
+    input: RecommendationQuestionsInput,
+  ): Promise<AsyncQueryResponse>;
+  getRecommendationQuestionsResult(
+    queryId: string,
+  ): Promise<RecommendationQuestionsResult>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -275,6 +322,46 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }
   }
 
+  public async generateRecommendationQuestions(
+    input: RecommendationQuestionsInput,
+  ): Promise<AsyncQueryResponse> {
+    const body = {
+      mdl: JSON.stringify(input.manifest),
+      previous_questions: input.previousQuestions,
+      project_id: input.projectId,
+      max_questions: input.maxQuestions,
+      max_categories: input.maxCategories,
+      configuration: input.configuration,
+    };
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/question-recommendations`,
+        body,
+      );
+      return { queryId: res.data.id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when generating recommendation questions: ${getAISerciceError(err)}`,
+      );
+      throw err;
+    }
+  }
+  public async getRecommendationQuestionsResult(
+    queryId: string,
+  ): Promise<RecommendationQuestionsResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/question-recommendations/${queryId}/result`,
+      );
+      return this.transformRecommendationQuestionsResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting recommendation questions result: ${getAISerciceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
   private async waitDeployFinished(deployId: string): Promise<boolean> {
     let deploySuccess = false;
     // timeout after 30 seconds
@@ -332,6 +419,17 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       status,
       error,
       response: candidates,
+    };
+  }
+
+  private transformRecommendationQuestionsResult(
+    body: any,
+  ): RecommendationQuestionsResult {
+    const { status, error } = this.transformStatusAndError(body);
+    return {
+      ...body,
+      status,
+      error,
     };
   }
 
