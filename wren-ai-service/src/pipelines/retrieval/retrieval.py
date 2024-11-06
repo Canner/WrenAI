@@ -419,6 +419,7 @@ class Retrieval(BasicPipeline):
         # for the first time, we need to load the encodings
         _model = llm_provider.get_model()
         if _model == "gpt-4o-mini" or _model == "gpt-4o":
+            allow_using_db_schemas_without_pruning = True
             _encoding = tiktoken.get_encoding("o200k_base")
         else:
             _encoding = tiktoken.get_encoding("cl100k_base")
