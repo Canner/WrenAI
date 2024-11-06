@@ -287,7 +287,7 @@ TEXT_TO_SQL_RULES = """
 
     SQL
     SELECT ApprovedTimestamp AS _timestamp FROM orders AS _orders;
-- DON'T USE '.' in column/table alias.
+- DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 """
 
 
