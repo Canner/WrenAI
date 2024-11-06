@@ -31,6 +31,7 @@ Also, you need to give a short description describing the purpose of the origina
 Description and summary in each step MUST BE in the same language as user specified.
 
 ### SQL QUERY BREAKDOWN INSTRUCTIONS ###
+- SQL BREAKDOWN MUST BE 1 to 3 steps only.
 - YOU MUST BREAK DOWN any SQL query into small steps if there is JOIN operations or sub-queries.
 - ONLY USE the tables and columns mentioned in the original sql query.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
