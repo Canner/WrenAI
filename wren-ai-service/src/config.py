@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     column_indexing_batch_size: int = Field(default=50)
     table_retrieval_size: int = Field(default=10)
     table_column_retrieval_size: int = Field(default=1000)
+    allow_using_db_schemas_without_pruning: bool = Field(default=False)
 
     # service config
     query_cache_ttl: int = Field(default=3600)

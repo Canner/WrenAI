@@ -18,11 +18,11 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
-GENERATION_MODEL = "gpt-4-turbo"
+GENERATION_MODEL = "gpt-4o-mini"
 GENERATION_MODEL_KWARGS = {
     "temperature": 0,
     "n": 1,
-    "max_tokens": 1000,
+    "max_tokens": 4096,
     "response_format": {"type": "json_object"},
 }
 
@@ -32,7 +32,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
     def __init__(
         self,
         api_key: Secret = Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
-        model: str = "gpt-4-turbo",
+        model: str = "gpt-4o-mini",
         api_base: str = os.getenv("LLM_AZURE_OPENAI_API_BASE"),
         api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,

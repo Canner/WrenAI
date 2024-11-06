@@ -134,9 +134,11 @@ data:
       column_indexing_batch_size: 50
       table_retrieval_size: 10
       table_column_retrieval_size: 1000
+      allow_using_db_schemas_without_pruning: true
       query_cache_maxsize: 1000
       query_cache_ttl: 3600
       langfuse_host: https://cloud.langfuse.com
-      langfuse_enable: false
+      langfuse_enable: true
       enable_timer: false
+      logging_level: INFO
       development: false
