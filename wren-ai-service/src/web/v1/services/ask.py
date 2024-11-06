@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
 
@@ -272,28 +273,44 @@ class AskService:
                             "invalid_generation_results"
                         ]
                     ):
-                        sql_correction_results = await self._pipelines[
-                            "sql_correction"
-                        ].run(
+                        # Run sql_correction and _add_summary_to_sql_candidates concurrently
+                        sql_correction_task = self._pipelines["sql_correction"].run(
                             contexts=documents,
                             invalid_generation_results=failed_dry_run_results,
                             project_id=ask_request.project_id,
                         )
+                        valid_sql_summary_task = self._add_summary_to_sql_candidates(
+                            [
+                                {
+                                    "sql": failed_dry_run_results[0]["sql"],
+                                }
+                            ],
+                            ask_request.query,
+                            ask_request.configurations.language,
+                        )
+
+                        (
+                            sql_correction_results,
+                            valid_sql_summary_results,
+                        ) = await asyncio.gather(
+                            sql_correction_task, valid_sql_summary_task
+                        )
+
                         if valid_generation_results := sql_correction_results[
                             "post_process"
                         ]["valid_generation_results"]:
-                            valid_sql_summary_results = (
-                                await self._add_summary_to_sql_candidates(
-                                    valid_generation_results,
-                                    ask_request.query,
-                                    ask_request.configurations.language,
-                                )
-                            )
                             api_results = [
-                                AskResult(**result)
-                                for result in valid_sql_summary_results
+                                AskResult(
+                                    **{
+                                        "sql": valid_generation_result.get("sql"),
+                                        "summary": sql_summary_result.get("summary"),
+                                        "type": "llm",
+                                    }
+                                )
+                                for sql_summary_result, valid_generation_result in zip(
+                                    valid_sql_summary_results, valid_generation_results
+                                )
                             ][:1]
-
                 if api_results:
                     self._ask_results[query_id] = AskResultResponse(
                         status="finished",
