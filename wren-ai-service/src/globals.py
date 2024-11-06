@@ -62,6 +62,7 @@ def create_service_container(
     table_retrieval_size: Optional[int] = 10,
     table_column_retrieval_size: Optional[int] = 1000,
     query_cache: Optional[dict] = {},
+    allow_using_db_schemas_without_pruning: Optional[bool] = False,
 ) -> ServiceContainer:
     return ServiceContainer(
         semantics_description=SemanticsDescription(
@@ -87,6 +88,7 @@ def create_service_container(
                     **pipe_components["retrieval"],
                     table_retrieval_size=table_retrieval_size,
                     table_column_retrieval_size=table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=allow_using_db_schemas_without_pruning,
                 ),
                 "historical_question": historical_question.HistoricalQuestion(
                     **pipe_components["historical_question"],

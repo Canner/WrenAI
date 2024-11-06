@@ -238,6 +238,7 @@ def check_using_db_schemas_without_pruning(
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
     encoding: tiktoken.Encoding,
+    allow_using_db_schemas_without_pruning: bool,
 ) -> dict:
     retrieval_results = []
 
@@ -258,7 +259,7 @@ def check_using_db_schemas_without_pruning(
             retrieval_results.append(_build_view_ddl(content))
 
     _token_count = len(encoding.encode(" ".join(retrieval_results)))
-    if _token_count > 100_000:
+    if _token_count > 100_000 or not allow_using_db_schemas_without_pruning:
         return {
             "db_schemas": [],
             "tokens": _token_count,
@@ -393,6 +394,7 @@ class Retrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: Optional[int] = 10,
         table_column_retrieval_size: Optional[int] = 1000,
+        allow_using_db_schemas_without_pruning: Optional[bool] = False,
         **kwargs,
     ):
         self._components = {
@@ -423,6 +425,7 @@ class Retrieval(BasicPipeline):
 
         self._configs = {
             "encoding": _encoding,
+            "allow_using_db_schemas_without_pruning": allow_using_db_schemas_without_pruning,
         }
 
         super().__init__(

@@ -58,6 +58,9 @@ async def lifespan(app: FastAPI):
             "maxsize": 1_000_000,
             "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
         },
+        allow_using_db_schemas_without_pruning=bool(
+            os.getenv("ALLOW_USING_DB_SCHEMAS_WITHOUT_PRUNING", False)
+        ),
     )
     app.state.service_metadata = create_service_metadata(pipe_components)
     init_langfuse()
