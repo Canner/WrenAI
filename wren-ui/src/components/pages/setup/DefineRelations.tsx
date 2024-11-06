@@ -361,6 +361,7 @@ export default function DefineRelations(props: Props) {
             : undefined
         }
         relations={relations}
+        isRecommendMode={Boolean(selectedRelation?.defaultValue)}
       />
     </div>
   );

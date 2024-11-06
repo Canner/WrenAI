@@ -37,6 +37,7 @@ type Props = ModalAction<RelationFieldValue, RelationFormValues> & {
   model: string;
   loading?: boolean;
   relations: SelectedRecommendRelations;
+  isRecommendMode?: boolean;
 };
 
 export default function RelationModal(props: Props) {
@@ -49,6 +50,7 @@ export default function RelationModal(props: Props) {
     relations,
     visible,
     formMode,
+    isRecommendMode,
   } = props;
   const [form] = Form.useForm();
 
@@ -113,7 +115,7 @@ export default function RelationModal(props: Props) {
           rules={[
             ({ getFieldValue }) => ({
               validator: createRelationshipFromFieldValidator(
-                isUpdateMode,
+                isUpdateMode || isRecommendMode,
                 relations,
                 getFieldValue,
               ),
@@ -136,7 +138,7 @@ export default function RelationModal(props: Props) {
           rules={[
             ({ getFieldValue }) => ({
               validator: createRelationshipToFieldValidator(
-                isUpdateMode,
+                isUpdateMode || isRecommendMode,
                 relations,
                 getFieldValue,
               ),
