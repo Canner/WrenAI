@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import orjson
+import tiktoken
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
@@ -176,7 +177,7 @@ async def dbschema_retrieval(
         content = ast.literal_eval(table.content)
         table_names.append(content["name"])
 
-    logger.info(f"dbschema_retrieval with table_names: {table_names}")
+    logger.debug(f"dbschema_retrieval with table_names: {table_names}")
 
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
@@ -233,17 +234,65 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
 
 @timer
 @observe(capture_input=False)
-def prompt(
-    query: str, construct_db_schemas: list[dict], prompt_builder: PromptBuilder
+def check_using_db_schemas_without_pruning(
+    construct_db_schemas: list[dict],
+    dbschema_retrieval: list[Document],
+    encoding: tiktoken.Encoding,
+    allow_using_db_schemas_without_pruning: bool,
 ) -> dict:
-    logger.info(f"db_schemas: {construct_db_schemas}")
+    retrieval_results = []
 
-    db_schemas = [
-        _build_table_ddl(construct_db_schema)
-        for construct_db_schema in construct_db_schemas
-    ]
+    for table_schema in construct_db_schemas:
+        if table_schema["type"] == "TABLE":
+            retrieval_results.append(
+                _build_table_ddl(
+                    table_schema,
+                )
+            )
 
-    return prompt_builder.run(question=query, db_schemas=db_schemas)
+    for document in dbschema_retrieval:
+        content = ast.literal_eval(document.content)
+
+        if content["type"] == "METRIC":
+            retrieval_results.append(_build_metric_ddl(content))
+        elif content["type"] == "VIEW":
+            retrieval_results.append(_build_view_ddl(content))
+
+    _token_count = len(encoding.encode(" ".join(retrieval_results)))
+    if _token_count > 100_000 or not allow_using_db_schemas_without_pruning:
+        return {
+            "db_schemas": [],
+            "tokens": _token_count,
+        }
+
+    return {
+        "db_schemas": retrieval_results,
+        "tokens": _token_count,
+    }
+
+
+@timer
+@observe(capture_input=False)
+def prompt(
+    query: str,
+    construct_db_schemas: list[dict],
+    prompt_builder: PromptBuilder,
+    check_using_db_schemas_without_pruning: dict,
+) -> dict:
+    logger.debug(f"db_schemas: {construct_db_schemas}")
+
+    if not check_using_db_schemas_without_pruning["db_schemas"]:
+        logger.info(
+            "db_schemas token count is greater than 100,000, so we will prune columns"
+        )
+        db_schemas = [
+            _build_table_ddl(construct_db_schema)
+            for construct_db_schema in construct_db_schemas
+        ]
+
+        return prompt_builder.run(question=query, db_schemas=db_schemas)
+    else:
+        return {}
 
 
 @async_timer
@@ -252,52 +301,60 @@ async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any
 ) -> dict:
     logger.debug(f"prompt: {prompt}")
-    return await table_columns_selection_generator.run(prompt=prompt.get("prompt"))
+
+    if prompt:
+        return await table_columns_selection_generator.run(prompt=prompt.get("prompt"))
+    else:
+        return {}
 
 
 @timer
 @observe()
 def construct_retrieval_results(
+    check_using_db_schemas_without_pruning: dict,
     filter_columns_in_tables: dict,
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
 ) -> list[str]:
-    columns_and_tables_needed = orjson.loads(filter_columns_in_tables["replies"][0])[
-        "results"
-    ]
-    logger.info(f"columns_and_tables_needed: {columns_and_tables_needed}")
+    if filter_columns_in_tables:
+        columns_and_tables_needed = orjson.loads(
+            filter_columns_in_tables["replies"][0]
+        )["results"]
+        logger.debug(f"columns_and_tables_needed: {columns_and_tables_needed}")
 
-    # we need to change the below code to match the new schema of structured output
-    # the objective of this loop is to change the structure of JSON to match the needed format
-    reformated_json = {}
-    for table in columns_and_tables_needed:
-        reformated_json[table["table_name"]] = table["table_contents"]
-    columns_and_tables_needed = reformated_json
-    tables = set(columns_and_tables_needed.keys())
-    retrieval_results = []
+        # we need to change the below code to match the new schema of structured output
+        # the objective of this loop is to change the structure of JSON to match the needed format
+        reformated_json = {}
+        for table in columns_and_tables_needed:
+            reformated_json[table["table_name"]] = table["table_contents"]
+        columns_and_tables_needed = reformated_json
+        tables = set(columns_and_tables_needed.keys())
+        retrieval_results = []
 
-    for table_schema in construct_db_schemas:
-        if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-            retrieval_results.append(
-                _build_table_ddl(
-                    table_schema,
-                    columns=set(
-                        columns_and_tables_needed[table_schema["name"]]["columns"]
-                    ),
-                    tables=tables,
+        for table_schema in construct_db_schemas:
+            if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
+                retrieval_results.append(
+                    _build_table_ddl(
+                        table_schema,
+                        columns=set(
+                            columns_and_tables_needed[table_schema["name"]]["columns"]
+                        ),
+                        tables=tables,
+                    )
                 )
-            )
 
-    for document in dbschema_retrieval:
-        if document.meta["name"] in columns_and_tables_needed:
-            content = ast.literal_eval(document.content)
+        for document in dbschema_retrieval:
+            if document.meta["name"] in columns_and_tables_needed:
+                content = ast.literal_eval(document.content)
 
-            if content["type"] == "METRIC":
-                retrieval_results.append(_build_metric_ddl(content))
-            elif content["type"] == "VIEW":
-                retrieval_results.append(_build_view_ddl(content))
+                if content["type"] == "METRIC":
+                    retrieval_results.append(_build_metric_ddl(content))
+                elif content["type"] == "VIEW":
+                    retrieval_results.append(_build_view_ddl(content))
+    else:
+        retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
 
-    logger.info(f"retrieval_results: {retrieval_results}")
+    logger.debug(f"retrieval_results: {retrieval_results}")
 
     return retrieval_results
 
@@ -337,6 +394,7 @@ class Retrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: Optional[int] = 10,
         table_column_retrieval_size: Optional[int] = 1000,
+        allow_using_db_schemas_without_pruning: Optional[bool] = False,
         **kwargs,
     ):
         self._components = {
@@ -356,6 +414,19 @@ class Retrieval(BasicPipeline):
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template
             ),
+        }
+
+        # for the first time, we need to load the encodings
+        _model = llm_provider.get_model()
+        if _model == "gpt-4o-mini" or _model == "gpt-4o":
+            allow_using_db_schemas_without_pruning = True
+            _encoding = tiktoken.get_encoding("o200k_base")
+        else:
+            _encoding = tiktoken.get_encoding("cl100k_base")
+
+        self._configs = {
+            "encoding": _encoding,
+            "allow_using_db_schemas_without_pruning": allow_using_db_schemas_without_pruning,
         }
 
         super().__init__(
@@ -378,6 +449,7 @@ class Retrieval(BasicPipeline):
                 "query": query,
                 "id": id or "",
                 **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -393,6 +465,7 @@ class Retrieval(BasicPipeline):
                 "query": query,
                 "id": id or "",
                 **self._components,
+                **self._configs,
             },
         )
 
