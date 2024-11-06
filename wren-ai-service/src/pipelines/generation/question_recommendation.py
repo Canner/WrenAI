@@ -147,7 +147,7 @@ Previous Questions: {{previous_questions}}
 Current Date: {{current_date}}
 Language: {{language}}
 
-Please generate {{max_questions}} insightful questions for {{max_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
+Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
 """
 
 
@@ -245,8 +245,8 @@ if __name__ == "__main__":
         "mdl": mdl,
         "previous_questions": [],
         "language": "English",
-        "num_questions": 5,
-        "num_categories": 2,
+        "max_questions": 5,
+        "max_categories": 2,
     }
 
     # pipeline.visualize(**input)
