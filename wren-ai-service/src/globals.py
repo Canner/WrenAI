@@ -60,7 +60,7 @@ def create_service_container(
     pipe_components: dict[str, PipelineComponent],
     column_indexing_batch_size: Optional[int] = 50,
     table_retrieval_size: Optional[int] = 10,
-    table_column_retrieval_size: Optional[int] = 1000,
+    table_column_retrieval_size: Optional[int] = 100,
     query_cache: Optional[dict] = {},
     allow_using_db_schemas_without_pruning: Optional[bool] = False,
 ) -> ServiceContainer:

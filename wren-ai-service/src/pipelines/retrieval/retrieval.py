@@ -393,7 +393,7 @@ class Retrieval(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: Optional[int] = 10,
-        table_column_retrieval_size: Optional[int] = 1000,
+        table_column_retrieval_size: Optional[int] = 100,
         allow_using_db_schemas_without_pruning: Optional[bool] = False,
         **kwargs,
     ):
