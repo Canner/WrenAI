@@ -46,12 +46,16 @@ const bootstrapServer = async () => {
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
+    wrenAIAdaptor,
 
     // services
     projectService,
     queryService,
     askingService,
     deployService,
+
+    // background trackers
+    recommendQuestionBackgroundTracker,
   } = components;
 
   const mdlService = new MDLService({
@@ -74,7 +78,10 @@ const bootstrapServer = async () => {
   });
 
   // initialize services
-  await askingService.initialize();
+  await Promise.all([
+    askingService.initialize(),
+    recommendQuestionBackgroundTracker.initialize(),
+  ]);
 
   const apolloServer: ApolloServer = new ApolloServer({
     typeDefs,
@@ -121,7 +128,7 @@ const bootstrapServer = async () => {
       // adaptor
       wrenEngineAdaptor,
       ibisServerAdaptor: ibisAdaptor,
-
+      wrenAIAdaptor,
       // services
       projectService,
       modelService,
@@ -140,6 +147,9 @@ const bootstrapServer = async () => {
       deployRepository: deployLogRepository,
       schemaChangeRepository,
       learningRepository,
+
+      // background trackers
+      recommendQuestionBackgroundTracker,
     }),
   });
   await apolloServer.start();
