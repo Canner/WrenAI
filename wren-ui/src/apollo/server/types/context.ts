@@ -21,6 +21,8 @@ import {
   IProjectService,
 } from '../services';
 import { ITelemetry } from '../telemetry/telemetry';
+import { RecommendQuestionBackgroundTracker } from '../backgrounds';
+import { IWrenAIAdaptor } from '../adaptors';
 
 export interface IContext {
   config: IConfig;
@@ -30,6 +32,7 @@ export interface IContext {
   // adaptor
   wrenEngineAdaptor: IWrenEngineAdaptor;
   ibisServerAdaptor: IIbisAdaptor;
+  wrenAIAdaptor: IWrenAIAdaptor;
 
   // services
   projectService: IProjectService;
@@ -49,4 +52,7 @@ export interface IContext {
   deployRepository: IDeployLogRepository;
   schemaChangeRepository: ISchemaChangeRepository;
   learningRepository: ILearningRepository;
+
+  // background trackers
+  recommendQuestionBackgroundTracker: RecommendQuestionBackgroundTracker;
 }

@@ -3,11 +3,12 @@ import { WrenService } from '../telemetry/telemetry';
 
 export enum GeneralErrorCodes {
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
-
   // AI service errors
   MISLEADING_QUERY = 'MISLEADING_QUERY',
   NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
   NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
+  RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
+  MDL_PARSE_ERROR = 'MDL_PARSE_ERROR',
 
   // Exception error for AI service (e.g., network connection error)
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
