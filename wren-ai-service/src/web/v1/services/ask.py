@@ -195,13 +195,14 @@ class AskService:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
                     )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_DATA",
-                            message="No relevant data",
-                        ),
-                    )
+                    if not self._is_stopped(query_id):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            error=AskError(
+                                code="NO_RELEVANT_DATA",
+                                message="No relevant data",
+                            ),
+                        )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     return results
 
@@ -311,26 +312,29 @@ class AskService:
                                     valid_sql_summary_results, valid_generation_results
                                 )
                             ][:1]
+
                 if api_results:
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        response=api_results,
-                    )
+                    if not self._is_stopped(query_id):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            response=api_results,
+                        )
                     results["ask_result"] = api_results
                 else:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
                     )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_SQL",
-                            message="No relevant SQL",
-                        ),
-                    )
+                    if not self._is_stopped(query_id):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            error=AskError(
+                                code="NO_RELEVANT_SQL",
+                                message="No relevant SQL",
+                            ),
+                        )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
 
-                return results
+            return results
         except Exception as e:
             logger.exception(f"ask pipeline - OTHERS: {e}")
 
