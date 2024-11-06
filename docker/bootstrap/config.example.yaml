@@ -31,6 +31,7 @@ provider: qdrant
 location: http://qdrant:6333
 embedding_model_dim: 3072
 timeout: 120
+recreate_index: true
 
 ---
 type: pipeline
@@ -90,4 +91,3 @@ settings:
   enable_timer: false
   logging_level: INFO
   development: false
-  should_force_deploy: true

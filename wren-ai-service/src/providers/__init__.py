@@ -142,10 +142,10 @@ def document_store_processor(entry: dict) -> dict:
     {
         "type": "document_store",
         "provider": "qdrant",
-        "kwargs": {
-            "host": "localhost",
-            "port": 6333
-        }
+        "location": "http://localhost:6333",
+        "embedding_model_dim": 3072,
+        "timeout": 120,
+        "recreate_index": False,
     }
 
     The function processes this input and returns a dictionary with the following structure:
@@ -153,10 +153,10 @@ def document_store_processor(entry: dict) -> dict:
     {
         "qdrant": {
             "provider": "qdrant",
-            "kwargs": {
-                "host": "localhost",
-                "port": 6333
-            }
+            "location": "http://localhost:6333",
+            "embedding_model_dim": 3072,
+            "timeout": 120,
+            "recreate_index": False,
         }
     }
 
@@ -317,26 +317,15 @@ def init_providers(
 
 
 class Wrapper(Mapping):
-    def __init__(
-        self,
-        force_deploy: bool = False,
-    ):
+    def __init__(self):
         from src.utils import load_env_vars
 
         load_env_vars()
 
-        (
-            llm_provider,
-            embedder_provider,
-            document_store_provider,
-            engine,
-        ) = init_providers(EngineConfig(provider=os.getenv("ENGINE", "wren_ui")))
-
-        if force_deploy:
-            reset_document_store(document_store_provider)
-
         self.value = PipelineComponent(
-            llm_provider, embedder_provider, document_store_provider, engine
+            *init_providers(
+                engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
+            )
         )
 
     def __getitem__(self, key):
@@ -352,19 +341,7 @@ class Wrapper(Mapping):
         return len(self.value)
 
 
-def reset_document_store(document_store_provider: DocumentStoreProvider):
-    document_store_provider.get_store(recreate_index=True)
-    document_store_provider.get_store(
-        dataset_name="table_descriptions", recreate_index=True
-    )
-    document_store_provider.get_store(
-        dataset_name="view_questions", recreate_index=True
-    )
-
-
-def generate_components(
-    configs: list[dict], force_deploy: bool = False
-) -> dict[str, PipelineComponent]:
+def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
     """
     Generate pipeline components from configuration.
 
@@ -374,7 +351,6 @@ def generate_components(
 
     Args:
         configs (list[dict]): A list of configuration dictionaries.
-        force_deploy (Optional[bool]): Whether to force the reset of the document store.
 
     Returns:
         dict: A dictionary of pipeline components.
@@ -403,12 +379,9 @@ def generate_components(
         to update your configuration to ensure future compatibility and take advantage of new features.
         """
         logger.warning(message)
-        return Wrapper(force_deploy=force_deploy)
+        return Wrapper()
 
     config = transform(configs)
-
-    if force_deploy:
-        reset_document_store(provider_factory(config.providers["document_store"]))
 
     instantiated_providers = {
         type: {
