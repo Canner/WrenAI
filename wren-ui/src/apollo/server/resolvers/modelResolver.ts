@@ -221,9 +221,34 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const { id } = await ctx.projectService.getCurrentProject();
+    const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, id, args.force);
+    const deployRes = await ctx.deployService.deploy(
+      manifest,
+      project.id,
+      args.force,
+    );
+    const recommendQuestionResult =
+      await ctx.wrenAIAdaptor.generateRecommendationQuestions({
+        manifest,
+        projectId: project.id.toString(),
+        maxCategories: 3,
+        maxQuestions: 9,
+        configuration: {
+          language: project.language,
+        },
+      });
+    const updatedProject = await ctx.projectRepository.updateOne(project.id, {
+      queryId: recommendQuestionResult.queryId,
+      questionsStatus: null,
+      questions: null,
+      questionsError: null,
+    });
+    const tasks = ctx.recommendQuestionBackgroundTracker.getTasks();
+    if (!tasks[project.id]) {
+      ctx.recommendQuestionBackgroundTracker.addTask(updatedProject);
+    }
+    return deployRes;
   }
 
   public async getMDL(_root: any, args: { hash: string }, ctx: IContext) {
