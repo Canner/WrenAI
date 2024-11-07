@@ -90,7 +90,7 @@ class DataAssistanceResult(BaseModel):
 
 
 class AskError(BaseModel):
-    code: Literal["MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
+    code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
     message: str
 
 
@@ -108,6 +108,7 @@ class AskResultResponse(BaseModel):
         "failed",
         "stopped",
     ]
+    type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     response: Optional[List[AskResult] | DataAssistanceResult] = None
     error: Optional[AskError] = None
 
@@ -148,6 +149,7 @@ class AskService:
         results = {
             "ask_result": {},
             "metadata": {
+                "type": "",
                 "error_type": "",
                 "error_message": "",
             },
@@ -175,14 +177,10 @@ class AskService:
                         f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
                     )
                     self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="MISLEADING_QUERY",
-                            message="Sorry, it seems the question you asked is irrelevant to the data source connected. "
-                            + "You could ask 'tell me more about the dataset' to learn more about the dataset",
-                        ),
+                        status="finished",
+                        type="MISLEADING_QUERY",
                     )
-                    results["metadata"]["error_type"] = "MISLEADING_QUERY"
+                    results["metadata"]["type"] = "MISLEADING_QUERY"
                     return results
                 elif intent == "GENERAL":
                     data_assistance_result = (
@@ -194,9 +192,11 @@ class AskService:
                     ).get("post_process")
                     self._ask_results[query_id] = AskResultResponse(
                         status="finished",
+                        type="GENERAL",
                         response=DataAssistanceResult(message=data_assistance_result),
                     )
                     results["ask_result"] = data_assistance_result
+                    results["metadata"]["type"] = "GENERAL"
                     return results
 
             query_for_retrieval = (
@@ -222,12 +222,14 @@ class AskService:
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
+                            type="TEXT_TO_SQL",
                             error=AskError(
                                 code="NO_RELEVANT_DATA",
                                 message="No relevant data",
                             ),
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
             if not self._is_stopped(query_id):
@@ -324,9 +326,11 @@ class AskService:
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="finished",
+                            type="TEXT_TO_SQL",
                             response=api_results,
                         )
                     results["ask_result"] = api_results
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
                 else:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
@@ -334,12 +338,14 @@ class AskService:
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
+                            type="TEXT_TO_SQL",
                             error=AskError(
                                 code="NO_RELEVANT_SQL",
                                 message="No relevant SQL",
                             ),
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
 
             return results
         except Exception as e:
@@ -347,6 +353,7 @@ class AskService:
 
             self._ask_results[ask_request.query_id] = AskResultResponse(
                 status="failed",
+                type="TEXT_TO_SQL",
                 error=AskError(
                     code="OTHERS",
                     message=str(e),
@@ -355,6 +362,7 @@ class AskService:
 
             results["metadata"]["error_type"] = "OTHERS"
             results["metadata"]["error_message"] = str(e)
+            results["metadata"]["type"] = "TEXT_TO_SQL"
             return results
 
     def stop_ask(
@@ -375,6 +383,7 @@ class AskService:
             )
             return AskResultResponse(
                 status="failed",
+                type="TEXT_TO_SQL",
                 error=AskError(
                     code="OTHERS",
                     message=f"{ask_result_request.query_id} is not found",
