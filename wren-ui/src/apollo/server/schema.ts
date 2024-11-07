@@ -541,6 +541,12 @@ export const typeDefs = gql`
     STOPPED
   }
 
+  enum AskingTaskType {
+    GENERAL
+    TEXT_TO_SQL
+    MISLEADING_QUERY
+  }
+
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
@@ -555,6 +561,7 @@ export const typeDefs = gql`
 
   type AskingTask {
     status: AskingTaskStatus!
+    type: AskingTaskType
     error: Error
     candidates: [ResultCandidate!]!
   }

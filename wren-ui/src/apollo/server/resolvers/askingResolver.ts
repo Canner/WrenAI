@@ -2,6 +2,7 @@ import {
   WrenAIError,
   WrenAILanguage,
   AskResultStatus,
+  AskResultType,
 } from '../adaptors/wrenAIAdaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
@@ -35,6 +36,7 @@ export interface Task {
 }
 
 export interface AskingTask {
+  type: AskResultType | null;
   status: AskResultStatus;
   candidates: Array<{
     sql: string;
@@ -196,6 +198,7 @@ export class AskingResolver {
     );
 
     return {
+      type: askResult.type,
       status: askResult.status,
       error: askResult.error,
       candidates,
