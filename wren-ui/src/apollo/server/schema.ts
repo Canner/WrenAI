@@ -566,6 +566,28 @@ export const typeDefs = gql`
     candidates: [ResultCandidate!]!
   }
 
+  input InstantRecommendedQuestionsInput {
+    previousQuestions: [String!]
+  }
+
+  enum RecommendedQuestionsTaskStatus {
+    GENERATING
+    FINISHED
+    FAILED
+  }
+
+  type ResultQuestion {
+    question: String!
+    category: String!
+    explanation: String!
+  }
+
+  type RecommendedQuestionsTask {
+    status: RecommendedQuestionsTaskStatus!
+    questions: [ResultQuestion!]!
+    error: Error
+  }
+
   # Thread
   input CreateThreadInput {
     question: String
@@ -773,6 +795,7 @@ export const typeDefs = gql`
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!
     nativeSql(responseId: Int!): String!
+    instantRecommendedQuestions(taskId: String!): RecommendedQuestionsTask!
 
     # Settings
     settings: Settings!
@@ -840,6 +863,9 @@ export const typeDefs = gql`
     # Ask
     createAskingTask(data: AskingTaskInput!): Task!
     cancelAskingTask(taskId: String!): Boolean!
+    createInstantRecommendedQuestions(
+      data: InstantRecommendedQuestionsInput!
+    ): Task!
 
     # Thread
     createThread(data: CreateThreadInput!): Thread!

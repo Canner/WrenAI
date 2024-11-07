@@ -27,6 +27,7 @@ const resolvers = {
     // Ask
     askingTask: askingResolver.getAskingTask,
     suggestedQuestions: askingResolver.getSuggestedQuestions,
+    instantRecommendedQuestions: askingResolver.getInstantRecommendedQuestions,
 
     // Thread
     thread: askingResolver.getThread,
@@ -79,6 +80,8 @@ const resolvers = {
     // Ask
     createAskingTask: askingResolver.createAskingTask,
     cancelAskingTask: askingResolver.cancelAskingTask,
+    createInstantRecommendedQuestions:
+      askingResolver.createInstantRecommendedQuestions,
 
     // Thread
     createThread: askingResolver.createThread,

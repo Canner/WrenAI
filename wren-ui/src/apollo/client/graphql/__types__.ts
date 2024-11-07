@@ -388,6 +388,10 @@ export type GetMdlResult = {
   mdl?: Maybe<Scalars['String']>;
 };
 
+export type InstantRecommendedQuestionsInput = {
+  previousQuestions?: InputMaybe<Array<Scalars['String']>>;
+};
+
 export type LearningRecord = {
   __typename?: 'LearningRecord';
   paths: Array<Scalars['String']>;
@@ -428,6 +432,7 @@ export type Mutation = {
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
+  createInstantRecommendedQuestions: Task;
   createModel: Scalars['JSON'];
   createRelation: Scalars['JSON'];
   createThread: Thread;
@@ -476,6 +481,11 @@ export type MutationCreateAskingTaskArgs = {
 
 export type MutationCreateCalculatedFieldArgs = {
   data: CreateCalculatedFieldInput;
+};
+
+
+export type MutationCreateInstantRecommendedQuestionsArgs = {
+  data: InstantRecommendedQuestionsInput;
 };
 
 
@@ -709,6 +719,7 @@ export type Query = {
   autoGenerateRelation: Array<RecommendRelations>;
   diagram: Diagram;
   getMDL: GetMdlResult;
+  instantRecommendedQuestions: RecommendedQuestionsTask;
   learningRecord: LearningRecord;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
@@ -734,6 +745,11 @@ export type QueryAskingTaskArgs = {
 
 export type QueryGetMdlArgs = {
   hash: Scalars['String'];
+};
+
+
+export type QueryInstantRecommendedQuestionsArgs = {
+  taskId: Scalars['String'];
 };
 
 
@@ -768,6 +784,19 @@ export type RecommendRelations = {
   referenceName: Scalars['String'];
   relations: Array<Maybe<Relation>>;
 };
+
+export type RecommendedQuestionsTask = {
+  __typename?: 'RecommendedQuestionsTask';
+  error?: Maybe<Error>;
+  questions: Array<ResultQuestion>;
+  status: RecommendedQuestionsTaskStatus;
+};
+
+export enum RecommendedQuestionsTaskStatus {
+  FAILED = 'FAILED',
+  FINISHED = 'FINISHED',
+  GENERATING = 'GENERATING'
+}
 
 export type Relation = {
   __typename?: 'Relation';
@@ -813,6 +842,13 @@ export enum ResultCandidateType {
   LLM = 'LLM',
   VIEW = 'VIEW'
 }
+
+export type ResultQuestion = {
+  __typename?: 'ResultQuestion';
+  category: Scalars['String'];
+  explanation: Scalars['String'];
+  question: Scalars['String'];
+};
 
 export type SampleDatasetInput = {
   name: SampleDatasetName;

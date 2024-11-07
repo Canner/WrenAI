@@ -31,6 +31,7 @@ interface Props {
   onSubmit: (value: string) => void;
   onStopPolling: () => void;
   onStopStreaming: () => void;
+  onStopRecommend: () => void;
   data: AskPromptData;
   loading: boolean;
 }
@@ -77,11 +78,24 @@ const convertAskingTaskToProcessState = (data: AskingTask) => {
 
 export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const $promptInput = useRef<HTMLTextAreaElement>(null);
-  const { data, loading, onSubmit, onStop, onSelect, onStopStreaming } = props;
+  const {
+    data,
+    loading,
+    onSubmit,
+    onStop,
+    onSelect,
+    onStopStreaming,
+    onStopRecommend,
+  } = props;
   const [inputValue, setInputValue] = useState('');
   const askProcessState = useAskProcessState();
 
-  const { originalQuestion, askingTask, askingStreamTask } = data;
+  const {
+    originalQuestion,
+    askingTask,
+    askingStreamTask,
+    recommendedQuestions,
+  } = data;
 
   const result = useMemo(
     () => ({
@@ -89,6 +103,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
       originalQuestion, // original question
       candidates: askingTask?.candidates || [], // for text to sql answer, only one candidate
       askingStreamTask, // for general answer
+      recommendedQuestions, // guiding user to ask
     }),
     [data],
   );
@@ -116,9 +131,11 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     }
   }, [error]);
 
-  const selectQuestion = (question: string) => {
-    setInputValue(question);
-    submitAsk();
+  const selectQuestion = async (value: string) => {
+    setInputValue(value);
+    onStopStreaming && onStopStreaming();
+    askProcessState.resetState();
+    onSubmit && (await onSubmit(value));
   };
 
   const selectResult = (payload) => {
@@ -138,6 +155,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     askProcessState.resetState();
     setInputValue('');
     onStopStreaming && onStopStreaming();
+    onStopRecommend && onStopRecommend();
   };
 
   const stopProcess = () => {

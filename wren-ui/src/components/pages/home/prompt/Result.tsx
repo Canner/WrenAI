@@ -13,7 +13,12 @@ import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import useAskProcessState from '@/hooks/useAskProcessState';
 import RecommendedQuestions from '@/components/pages/home/RecommendedQuestions';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
-import { AskingTask, AskingTaskType } from '@/apollo/client/graphql/__types__';
+import {
+  AskingTask,
+  AskingTaskType,
+  RecommendedQuestionsTask,
+  RecommendedQuestionsTaskStatus,
+} from '@/apollo/client/graphql/__types__';
 
 const StyledResult = styled.div`
   position: absolute;
@@ -33,6 +38,7 @@ interface Props {
     originalQuestion: string;
     candidates: AskingTask['candidates'];
     askingStreamTask: string;
+    recommendedQuestions: RecommendedQuestionsTask;
   };
   error?: any;
   onSelectResult: (payload: { sql: string; summary: string }) => void;
@@ -41,6 +47,20 @@ interface Props {
   onStop: () => void;
   loading?: boolean;
 }
+
+const getRecommendedQuestionProps = (data: RecommendedQuestionsTask) => {
+  if (!data) return { show: false };
+  const questions = (data?.questions || []).map((item) => item.question);
+  const loading = data?.status === RecommendedQuestionsTaskStatus.GENERATING;
+  return {
+    show: loading || questions.length > 0,
+    state: {
+      items: questions,
+      loading,
+      error: data?.error,
+    },
+  };
+};
 
 const makeProcessing = (text: string) => (props: Props) => {
   const { onStop } = props;
@@ -66,9 +86,14 @@ const makeProcessing = (text: string) => (props: Props) => {
 const makeProcessingError =
   (config: { icon: ReactNode; title?: string; description?: string }) =>
   (props: Props) => {
-    const { onClose, onSelectQuestion, error } = props;
+    const { onClose, onSelectQuestion, data, error } = props;
     const { message, shortMessage, stacktrace } = error || {};
     const hasStacktrace = !!stacktrace;
+
+    const recommendedQuestionProps = getRecommendedQuestionProps(
+      data?.recommendedQuestions,
+    );
+
     return (
       <div>
         <div className="d-flex justify-space-between text-medium mb-2">
@@ -91,15 +116,13 @@ const makeProcessingError =
           <ErrorCollapse className="mt-2" message={stacktrace.join('\n')} />
         )}
 
-        <RecommendedQuestions
-          className="mt-2"
-          items={[
-            'Top 10 customer with most order from global customer',
-            'Top 10 customer with most order from asia customer',
-            'Top 10 customer with most order from europe customer',
-          ]}
-          onSelect={onSelectQuestion}
-        />
+        {recommendedQuestionProps.show && (
+          <RecommendedQuestions
+            className="mt-2"
+            {...recommendedQuestionProps.state}
+            onSelect={onSelectQuestion}
+          />
+        )}
       </div>
     );
   };
@@ -140,7 +163,7 @@ const GeneralAnswer = (props: Props) => {
   const { onClose, onSelectQuestion, data, loading } = props;
   const $wrapper = useRef<HTMLDivElement>(null);
 
-  const { originalQuestion, askingStreamTask } = data;
+  const { originalQuestion, askingStreamTask, recommendedQuestions } = data;
   const isDone = askingStreamTask && !loading;
 
   const scrollBottom = () => {
@@ -158,6 +181,9 @@ const GeneralAnswer = (props: Props) => {
   useEffect(() => {
     if (isDone) scrollBottom();
   }, [isDone]);
+
+  const recommendedQuestionProps =
+    getRecommendedQuestionProps(recommendedQuestions);
 
   return (
     <div>
@@ -192,42 +218,22 @@ const GeneralAnswer = (props: Props) => {
         </div>
       </div>
 
-      <RecommendedQuestions
-        items={[
-          'Top 10 customer with most order from global customer',
-          'Top 10 customer with most order from asia customer',
-          'Top 10 customer with most order from europe customer',
-        ]}
-        onSelect={onSelectQuestion}
-      />
+      {recommendedQuestionProps.show && (
+        <RecommendedQuestions
+          {...recommendedQuestionProps.state}
+          onSelect={onSelectQuestion}
+        />
+      )}
     </div>
   );
 };
 
-const ClarificationNeeded = makeProcessingError({
+const MisleadingQuery = makeProcessingError({
   icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
   title: 'Clarification needed',
   description:
     "Could you please provide more details or specify the information you're seeking?",
 });
-
-const MisleadingQuery = (props: Props) => {
-  const { onClose, onSelectQuestion } = props;
-  return (
-    <>
-      <ClarificationNeeded {...props} onClose={onClose} />
-      <RecommendedQuestions
-        className="mt-3"
-        items={[
-          'Top 10 customer with most order from global customer',
-          'Top 10 customer with most order from asia customer',
-          'Top 10 customer with most order from europe customer',
-        ]}
-        onSelect={onSelectQuestion}
-      />
-    </>
-  );
-};
 
 const getGeneralAnswerStateComponent = (state: PROCESS_STATE) => {
   return (

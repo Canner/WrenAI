@@ -96,6 +96,20 @@ export type GetNativeSqlQueryVariables = Types.Exact<{
 
 export type GetNativeSqlQuery = { __typename?: 'Query', nativeSql: string };
 
+export type CreateInstantRecommendedQuestionsMutationVariables = Types.Exact<{
+  data: Types.InstantRecommendedQuestionsInput;
+}>;
+
+
+export type CreateInstantRecommendedQuestionsMutation = { __typename?: 'Mutation', createInstantRecommendedQuestions: { __typename?: 'Task', id: string } };
+
+export type InstantRecommendedQuestionsQueryVariables = Types.Exact<{
+  taskId: Types.Scalars['String'];
+}>;
+
+
+export type InstantRecommendedQuestionsQuery = { __typename?: 'Query', instantRecommendedQuestions: { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, explanation: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
   code
@@ -602,3 +616,79 @@ export function useGetNativeSqlLazyQuery(baseOptions?: Apollo.LazyQueryHookOptio
 export type GetNativeSqlQueryHookResult = ReturnType<typeof useGetNativeSqlQuery>;
 export type GetNativeSqlLazyQueryHookResult = ReturnType<typeof useGetNativeSqlLazyQuery>;
 export type GetNativeSqlQueryResult = Apollo.QueryResult<GetNativeSqlQuery, GetNativeSqlQueryVariables>;
+export const CreateInstantRecommendedQuestionsDocument = gql`
+    mutation CreateInstantRecommendedQuestions($data: InstantRecommendedQuestionsInput!) {
+  createInstantRecommendedQuestions(data: $data) {
+    id
+  }
+}
+    `;
+export type CreateInstantRecommendedQuestionsMutationFn = Apollo.MutationFunction<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>;
+
+/**
+ * __useCreateInstantRecommendedQuestionsMutation__
+ *
+ * To run a mutation, you first call `useCreateInstantRecommendedQuestionsMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateInstantRecommendedQuestionsMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createInstantRecommendedQuestionsMutation, { data, loading, error }] = useCreateInstantRecommendedQuestionsMutation({
+ *   variables: {
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useCreateInstantRecommendedQuestionsMutation(baseOptions?: Apollo.MutationHookOptions<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>(CreateInstantRecommendedQuestionsDocument, options);
+      }
+export type CreateInstantRecommendedQuestionsMutationHookResult = ReturnType<typeof useCreateInstantRecommendedQuestionsMutation>;
+export type CreateInstantRecommendedQuestionsMutationResult = Apollo.MutationResult<CreateInstantRecommendedQuestionsMutation>;
+export type CreateInstantRecommendedQuestionsMutationOptions = Apollo.BaseMutationOptions<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>;
+export const InstantRecommendedQuestionsDocument = gql`
+    query InstantRecommendedQuestions($taskId: String!) {
+  instantRecommendedQuestions(taskId: $taskId) {
+    status
+    questions {
+      question
+      category
+      explanation
+    }
+    error {
+      ...CommonError
+    }
+  }
+}
+    ${CommonErrorFragmentDoc}`;
+
+/**
+ * __useInstantRecommendedQuestionsQuery__
+ *
+ * To run a query within a React component, call `useInstantRecommendedQuestionsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useInstantRecommendedQuestionsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useInstantRecommendedQuestionsQuery({
+ *   variables: {
+ *      taskId: // value for 'taskId'
+ *   },
+ * });
+ */
+export function useInstantRecommendedQuestionsQuery(baseOptions: Apollo.QueryHookOptions<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>(InstantRecommendedQuestionsDocument, options);
+      }
+export function useInstantRecommendedQuestionsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>(InstantRecommendedQuestionsDocument, options);
+        }
+export type InstantRecommendedQuestionsQueryHookResult = ReturnType<typeof useInstantRecommendedQuestionsQuery>;
+export type InstantRecommendedQuestionsLazyQueryHookResult = ReturnType<typeof useInstantRecommendedQuestionsLazyQuery>;
+export type InstantRecommendedQuestionsQueryResult = Apollo.QueryResult<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>;

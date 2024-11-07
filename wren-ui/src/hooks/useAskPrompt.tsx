@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AskingTask,
   AskingTaskStatus,
   AskingTaskType,
+  RecommendedQuestionsTask,
+  RecommendedQuestionsTaskStatus,
 } from '@/apollo/client/graphql/__types__';
 import {
   useAskingTaskLazyQuery,
   useCancelAskingTaskMutation,
   useCreateAskingTaskMutation,
+  useCreateInstantRecommendedQuestionsMutation,
+  useInstantRecommendedQuestionsLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import useAskingStreamTask from './useAskingStreamTask';
 
@@ -15,6 +19,7 @@ export interface AskPromptData {
   originalQuestion: string;
   askingTask?: AskingTask;
   askingStreamTask?: string;
+  recommendedQuestions?: RecommendedQuestionsTask;
 }
 
 export const getIsFinished = (status: AskingTaskStatus) =>
@@ -23,6 +28,20 @@ export const getIsFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.FAILED,
     AskingTaskStatus.STOPPED,
   ].includes(status);
+
+const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
+  [
+    RecommendedQuestionsTaskStatus.FINISHED,
+    RecommendedQuestionsTaskStatus.FAILED,
+  ].includes(status);
+
+const isNeedRecommendedQuestions = (askingTask: AskingTask) => {
+  return (
+    [AskingTaskType.GENERAL, AskingTaskType.MISLEADING_QUERY].includes(
+      askingTask?.type,
+    ) || askingTask?.status === AskingTaskStatus.FAILED
+  );
+};
 
 export default function useAskPrompt(threadId?: number) {
   const [originalQuestion, setOriginalQuestion] = useState<string | null>(null);
@@ -33,28 +52,60 @@ export default function useAskPrompt(threadId?: number) {
     pollInterval: 1000,
   });
   const [fetchAskingStreamTask, askingStreamTaskResult] = useAskingStreamTask();
+  const [createInstantRecommendedQuestions] =
+    useCreateInstantRecommendedQuestionsMutation();
+  const [fetchInstantRecommendedQuestions, instantRecommendedQuestionsResult] =
+    useInstantRecommendedQuestionsLazyQuery({
+      pollInterval: 1000,
+    });
 
   const askingTask = useMemo(
     () => askingTaskResult.data?.askingTask || null,
     [askingTaskResult.data],
   );
   const askingTaskType = useMemo(() => askingTask?.type, [askingTask?.type]);
-  const isFinished = useMemo(
-    () => getIsFinished(askingTask?.status),
-    [askingTask],
-  );
   const askingStreamTask = askingStreamTaskResult.data;
+  const recommendedQuestions = useMemo(
+    () =>
+      instantRecommendedQuestionsResult.data?.instantRecommendedQuestions ||
+      null,
+    [instantRecommendedQuestionsResult.data],
+  );
 
   const loading = askingStreamTaskResult.loading;
 
   const data = useMemo(
-    () => ({ originalQuestion, askingTask, askingStreamTask }),
-    [originalQuestion, askingTask, askingStreamTask],
+    () => ({
+      originalQuestion,
+      askingTask,
+      askingStreamTask,
+      recommendedQuestions,
+    }),
+    [originalQuestion, askingTask, askingStreamTask, recommendedQuestions],
   );
 
+  const startRecommendedQuestions = useCallback(async () => {
+    const response = await createInstantRecommendedQuestions({
+      variables: { data: { previousQuestions: [originalQuestion] } },
+    });
+    fetchInstantRecommendedQuestions({
+      variables: { taskId: response.data.createInstantRecommendedQuestions.id },
+    });
+  }, [originalQuestion]);
+
   useEffect(() => {
+    const isFinished = getIsFinished(askingTask?.status);
     if (isFinished) askingTaskResult.stopPolling();
-  }, [isFinished]);
+
+    if (isNeedRecommendedQuestions(askingTask)) {
+      startRecommendedQuestions();
+    }
+  }, [askingTask]);
+
+  useEffect(() => {
+    if (isRecommendedFinished(recommendedQuestions?.status))
+      instantRecommendedQuestionsResult.stopPolling();
+  }, [recommendedQuestions]);
 
   useEffect(() => {
     const taskId = createAskingTaskResult.data?.createAskingTask.id;
@@ -90,6 +141,8 @@ export default function useAskPrompt(threadId?: number) {
 
   const onStopStreaming = () => askingStreamTaskResult.reset();
 
+  const onStopRecommend = () => instantRecommendedQuestionsResult.stopPolling();
+
   return {
     data,
     loading,
@@ -97,5 +150,6 @@ export default function useAskPrompt(threadId?: number) {
     onSubmit,
     onStopPolling,
     onStopStreaming,
+    onStopRecommend,
   };
 }

@@ -3,6 +3,7 @@ import {
   IWrenAIAdaptor,
   AskResultStatus,
   AskHistory,
+  RecommendationQuestionsResult,
   RecommendationQuestionsInput,
   RecommendationQuestion,
   WrenAIError,
@@ -66,6 +67,10 @@ export interface ThreadRecommendQuestionResult {
   error?: WrenAIError;
 }
 
+export interface InstantRecommendedQuestionsInput {
+  previousQuestions?: string[];
+}
+
 export interface IAskingService {
   /**
    * Asking task.
@@ -103,13 +108,22 @@ export interface IAskingService {
     stepIndex?: number,
     limit?: number,
   ): Promise<PreviewDataResponse>;
-  deleteAllByProjectId(projectId: number): Promise<void>;
 
-  // recommendation questions
+  /**
+   * Recommendation questions
+   */
+  createInstantRecommendedQuestions(
+    input: InstantRecommendedQuestionsInput,
+  ): Promise<Task>;
+  getInstantRecommendedQuestions(
+    queryId: string,
+  ): Promise<RecommendationQuestionsResult>;
   generateThreadRecommendationQuestions(threadId: number): Promise<void>;
   getThreadRecommendationQuestions(
     threadId: number,
   ): Promise<ThreadRecommendQuestionResult>;
+
+  deleteAllByProjectId(projectId: number): Promise<void>;
 }
 
 /**
@@ -649,6 +663,31 @@ export class AskingService implements IAskingService {
       );
       throw err;
     }
+  }
+
+  public async createInstantRecommendedQuestions(
+    input: InstantRecommendedQuestionsInput,
+  ): Promise<Task> {
+    const project = await this.projectService.getCurrentProject();
+    const { manifest } = await this.deployService.getLastDeployment(project.id);
+
+    const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
+      manifest,
+      projectId: project.id.toString(),
+      previousQuestions: input.previousQuestions,
+      maxCategories: 3,
+      maxQuestions: 3,
+      configuration: { language: project.language },
+    });
+    return { id: response.queryId };
+  }
+
+  public async getInstantRecommendedQuestions(
+    queryId: string,
+  ): Promise<RecommendationQuestionsResult> {
+    const response =
+      await this.wrenAIAdaptor.getRecommendationQuestionsResult(queryId);
+    return response;
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {
