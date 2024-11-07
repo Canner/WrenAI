@@ -45,11 +45,11 @@ export class ProjectRecommendQuestionBackgroundTracker {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.projectRepository = projectRepository;
     this.intervalTime = 1000;
-    this.start();
 
     const logger = getLogger('PRQ Background Tracker');
     logger.level = 'debug';
     this.logger = logger;
+    this.start();
   }
 
   public start() {
@@ -186,11 +186,11 @@ export class ThreadRecommendQuestionBackgroundTracker {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadRepository = threadRepository;
     this.intervalTime = 1000;
-    this.start();
 
     const logger = getLogger('TRQ Background Tracker');
     logger.level = 'debug';
     this.logger = logger;
+    this.start();
   }
 
   public start() {
