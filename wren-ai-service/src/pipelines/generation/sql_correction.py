@@ -38,11 +38,11 @@ With given database schema, please think step by step to correct the wrong Trino
 {% endfor %}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a list of corrected SQL quries and its original corresponding summary in JSON format
+The final answer must be a list of corrected SQL quries in JSON format:
 
 {
     "results": [
-        {"sql": <CORRECTED_SQL_QUERY_STRING>, "summary": <ORIGINAL_SUMMARY_STRING>},
+        {"sql": <CORRECTED_SQL_QUERY_STRING>},
     ]
 }
 
@@ -115,7 +115,6 @@ async def post_process(
 
 class CorrectedSQLResult(BaseModel):
     sql: str
-    summary: str
 
 
 class CorrectedResults(BaseModel):
