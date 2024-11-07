@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
@@ -7,9 +7,13 @@ import StopOutlined from '@ant-design/icons/StopFilled';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import CloseCircleFilled from '@ant-design/icons/CloseCircleFilled';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
+import MessageOutlined from '@ant-design/icons/MessageOutlined';
 import ErrorCollapse from '@/components/ErrorCollapse';
+import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import useAskProcessState from '@/hooks/useAskProcessState';
-import { AskingTask } from '@/apollo/client/graphql/__types__';
+import RecommendedQuestions from '@/components/pages/home/RecommendedQuestions';
+import MarkdownBlock from '@/components/editor/MarkdownBlock';
+import { AskingTask, AskingTaskType } from '@/apollo/client/graphql/__types__';
 
 const StyledResult = styled.div`
   position: absolute;
@@ -24,9 +28,15 @@ const StyledResult = styled.div`
 
 interface Props {
   processState: ReturnType<typeof useAskProcessState>;
-  data: AskingTask['candidates'];
+  data: {
+    type: AskingTaskType;
+    originalQuestion: string;
+    candidates: AskingTask['candidates'];
+    askingStreamTask: string;
+  };
   error?: any;
-  onSelect: (payload: { sql: string; summary: string }) => void;
+  onSelectResult: (payload: { sql: string; summary: string }) => void;
+  onSelectQuestion: (question: string) => void;
   onClose: () => void;
   onStop: () => void;
   loading?: boolean;
@@ -100,20 +110,132 @@ const Understanding = makeProcessing('Understanding question');
 const Searching = makeProcessing('Searching data');
 const Generating = makeProcessing('Generating answer');
 const Finished = (props: Props) => {
-  const { data, onSelect } = props;
+  const { data, onSelectResult } = props;
+  // only one candidate
+  const { candidates } = data;
 
   useEffect(() => {
-    if (data.length) {
-      const [result] = data;
-      onSelect && onSelect({ sql: result.sql, summary: result.summary });
+    if (candidates.length) {
+      const [result] = candidates;
+      onSelectResult &&
+        onSelectResult({ sql: result.sql, summary: result.summary });
     }
   }, [data]);
 
-  if (data.length === 0) return <NoResult {...props} />;
+  if (candidates.length === 0) return <NoResult {...props} />;
   return null;
 };
 
-const getProcessStateComponent = (state: PROCESS_STATE) => {
+const GeneralAnswer = (props: Props) => {
+  const { onClose, onSelectQuestion, data, loading } = props;
+  const $wrapper = useRef<HTMLDivElement>(null);
+
+  const { originalQuestion, askingStreamTask } = data;
+  const isDone = askingStreamTask && !loading;
+
+  const scrollBottom = () => {
+    if ($wrapper.current) {
+      $wrapper.current.scrollTo({
+        top: $wrapper.current.scrollHeight,
+      });
+    }
+  };
+
+  useEffect(() => {
+    scrollBottom();
+  }, [askingStreamTask]);
+
+  useEffect(() => {
+    if (isDone) scrollBottom();
+  }, [isDone]);
+
+  return (
+    <div>
+      <div className="d-flex justify-space-between">
+        <div className="d-flex align-start">
+          <MessageOutlined className="mr-2 mt-1 geekblue-6" />
+          <b className="text-semi-bold">{originalQuestion}</b>
+        </div>
+        <Button
+          className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
+          type="text"
+          size="small"
+          onClick={onClose}
+        >
+          <CloseOutlined className="-mr-1" />
+          Close
+        </Button>
+      </div>
+      <div className="py-3">
+        <div
+          ref={$wrapper}
+          className="py-2 px-3"
+          style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}
+        >
+          <MarkdownBlock content={askingStreamTask} />
+          {isDone && (
+            <div className="gray-6">
+              <InfoCircleOutlined className="mr-2" />
+              For the most accurate semantics, please visit the modeling page.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <RecommendedQuestions
+        items={[
+          'Top 10 customer with most order from global customer',
+          'Top 10 customer with most order from asia customer',
+          'Top 10 customer with most order from europe customer',
+        ]}
+        onSelect={onSelectQuestion}
+      />
+    </div>
+  );
+};
+
+const ClarificationNeeded = makeProcessingError({
+  icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
+  title: 'Clarification needed',
+  description:
+    "Could you please provide more details or specify the information you're seeking?",
+});
+
+const MisleadingQuery = (props: Props) => {
+  const { onClose, onSelectQuestion } = props;
+  return (
+    <>
+      <ClarificationNeeded {...props} onClose={onClose} />
+      <RecommendedQuestions
+        className="mt-3"
+        items={[
+          'Top 10 customer with most order from global customer',
+          'Top 10 customer with most order from asia customer',
+          'Top 10 customer with most order from europe customer',
+        ]}
+        onSelect={onSelectQuestion}
+      />
+    </>
+  );
+};
+
+const getGeneralAnswerStateComponent = (state: PROCESS_STATE) => {
+  return (
+    {
+      [PROCESS_STATE.FINISHED]: GeneralAnswer,
+    }[state] || null
+  );
+};
+
+const getMisleadingQueryStateComponent = (state: PROCESS_STATE) => {
+  return (
+    {
+      [PROCESS_STATE.FINISHED]: MisleadingQuery,
+    }[state] || null
+  );
+};
+
+const getDefaultStateComponent = (state: PROCESS_STATE) => {
   return (
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
@@ -125,9 +247,19 @@ const getProcessStateComponent = (state: PROCESS_STATE) => {
   );
 };
 
-export default function PromptResult(props: Props) {
-  const { processState } = props;
+const makeProcessStateStrategy = (type: AskingTaskType) => {
+  // note that the asking task type only has value when the asking status was finished
+  // by default, we use the default state component (also the text to sql state component)
+  if (type === AskingTaskType.GENERAL) return getGeneralAnswerStateComponent;
+  if (type === AskingTaskType.MISLEADING_QUERY)
+    return getMisleadingQueryStateComponent;
+  return getDefaultStateComponent;
+};
 
+export default function PromptResult(props: Props) {
+  const { processState, data } = props;
+
+  const getProcessStateComponent = makeProcessStateStrategy(data?.type);
   const StateComponent = getProcessStateComponent(processState.currentState);
 
   if (StateComponent === null) return null;

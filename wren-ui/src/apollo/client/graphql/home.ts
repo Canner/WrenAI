@@ -48,6 +48,7 @@ export const ASKING_TASK = gql`
   query AskingTask($taskId: String!) {
     askingTask(taskId: $taskId) {
       status
+      type
       candidates {
         sql
         summary

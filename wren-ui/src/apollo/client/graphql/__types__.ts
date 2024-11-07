@@ -19,6 +19,7 @@ export type AskingTask = {
   candidates: Array<ResultCandidate>;
   error?: Maybe<Error>;
   status: AskingTaskStatus;
+  type?: Maybe<AskingTaskType>;
 };
 
 export type AskingTaskInput = {
@@ -33,6 +34,12 @@ export enum AskingTaskStatus {
   SEARCHING = 'SEARCHING',
   STOPPED = 'STOPPED',
   UNDERSTANDING = 'UNDERSTANDING'
+}
+
+export enum AskingTaskType {
+  GENERAL = 'GENERAL',
+  MISLEADING_QUERY = 'MISLEADING_QUERY',
+  TEXT_TO_SQL = 'TEXT_TO_SQL'
 }
 
 export type CalculatedFieldInput = {

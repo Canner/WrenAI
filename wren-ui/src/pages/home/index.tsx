@@ -41,7 +41,7 @@ export default function Home() {
 
   const onSelect = async (payload) => {
     try {
-      askPrompt.stopPolling();
+      askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
       router.push(Path.Home + `/${response.data.createThread.id}`);
     } catch (error) {
@@ -64,13 +64,7 @@ export default function Home() {
           <DemoPrompt demo={sampleQuestions} onSelect={onDemoSelect} />
         )}
       </div>
-      <Prompt
-        ref={$prompt}
-        data={askPrompt.data}
-        onSubmit={askPrompt.onSubmit}
-        onStop={askPrompt.onStop}
-        onSelect={onSelect}
-      />
+      <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
     </SiderLayout>
   );
 }

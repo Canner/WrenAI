@@ -83,10 +83,11 @@ export default function PromptThread(props: Props) {
   const divRef = useRef<HTMLDivElement>(null);
 
   const triggerScrollToBottom = () => {
-    const contentLayout = divRef.current.parentElement;
+    const contentLayout = divRef.current?.parentElement;
+    if (!contentLayout) return;
+
     const lastChild = divRef.current.lastElementChild as HTMLElement;
     const lastChildElement = lastChild.lastElementChild as HTMLElement;
-
     if (
       contentLayout.clientHeight <
       lastChild.offsetTop + lastChild.clientHeight
