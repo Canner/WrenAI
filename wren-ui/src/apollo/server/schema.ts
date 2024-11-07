@@ -717,6 +717,25 @@ export const typeDefs = gql`
     path: String!
   }
 
+  enum ThreadRecommendQuestionResultStatus {
+    NOT_STARTED
+    GENERATING
+    FINISHED
+    FAILED
+  }
+
+  type RecommendationQuestion {
+    question: String!
+    category: String!
+    explanation: String!
+  }
+
+  type ThreadRecommendQuestionResult {
+    status: ThreadRecommendQuestionResultStatus!
+    questions: [RecommendationQuestion!]!
+    error: Error
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -751,6 +770,10 @@ export const typeDefs = gql`
 
     # Learning
     learningRecord: LearningRecord!
+
+    getThreadRecommendationQuestions(
+      threadId: Int!
+    ): ThreadRecommendQuestionResult!
   }
 
   type Mutation {
@@ -830,5 +853,8 @@ export const typeDefs = gql`
 
     # Learning
     saveLearningRecord(data: SaveLearningRecordInput!): LearningRecord!
+
+    # Recommendation questions
+    generateThreadRecommendationQuestions(threadId: Int!): Boolean!
   }
 `;

@@ -106,7 +106,7 @@ const bootstrapServer = async () => {
           TelemetryEvent.GRAPHQL_ERROR,
           {
             originalErrorStack: originalError?.stack,
-            originalErrorMessage: originalError.message,
+            originalErrorMessage: originalError?.message,
             errorMessage: error.message,
           },
           error.extensions?.service,
