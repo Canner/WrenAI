@@ -9,6 +9,14 @@ models:
         "max_tokens": 4096,
         "response_format": { "type": "json_object" },
       }
+  - model: gpt-4o
+    kwargs:
+      {
+        "temperature": 0,
+        "n": 1,
+        "max_tokens": 4096,
+        "response_format": { "type": "json_object" },
+      }
 api_base: https://api.openai.com/v1
 timeout: 120
 
