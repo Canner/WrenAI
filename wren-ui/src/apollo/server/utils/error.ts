@@ -4,7 +4,6 @@ import { WrenService } from '../telemetry/telemetry';
 export enum GeneralErrorCodes {
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
   // AI service errors
-  MISLEADING_QUERY = 'MISLEADING_QUERY',
   NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
   NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
   RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
@@ -41,8 +40,6 @@ export const errorMessages = {
   [GeneralErrorCodes.INTERNAL_SERVER_ERROR]: 'Internal server error',
 
   // AI service errors
-  [GeneralErrorCodes.MISLEADING_QUERY]:
-    'The query provided is misleading and may not yield accurate results. Please refine your query.',
   [GeneralErrorCodes.NO_RELEVANT_DATA]:
     'No relevant data found for the given query. Please try a different query.',
   [GeneralErrorCodes.NO_RELEVANT_SQL]:
@@ -80,7 +77,6 @@ export const errorMessages = {
 
 export const shortMessages = {
   [GeneralErrorCodes.INTERNAL_SERVER_ERROR]: 'Internal server error',
-  [GeneralErrorCodes.MISLEADING_QUERY]: 'Misleading query',
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'No relevant data',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
