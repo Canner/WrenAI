@@ -43,6 +43,7 @@ export enum WrenAILanguage {
 export interface DeployData {
   manifest: Manifest;
   hash: string;
+  projectId: string;
 }
 
 // ask
@@ -291,11 +292,15 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   public async deploy(deployData: DeployData): Promise<WrenAIDeployResponse> {
-    const { manifest, hash } = deployData;
+    const { manifest, hash, projectId } = deployData;
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations`,
-        { mdl: JSON.stringify(manifest), id: hash },
+        {
+          mdl: JSON.stringify(manifest),
+          id: hash,
+          project_id: projectId.toString(),
+        },
       );
       const deployId = res.data.id;
       logger.debug(
@@ -333,6 +338,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       max_categories: input.maxCategories,
       configuration: input.configuration,
     };
+    logger.debug(
+      `Wren AI: Generating recommendation questions, body: ${JSON.stringify(body)}`,
+    );
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/question-recommendations`,
