@@ -10,6 +10,7 @@ models:
         "response_format": { "type": "json_object" },
       }
 api_base: https://api.openai.com/v1
+timeout: 120
 
 ---
 type: llm
@@ -25,6 +26,7 @@ models:
       }
 api_base: https://<your-endpoint>.openai.azure.com/
 api_version: "2024-05-13"
+timeout: 120
 
 ---
 type: llm

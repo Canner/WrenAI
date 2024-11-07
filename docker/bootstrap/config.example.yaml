@@ -10,6 +10,7 @@ models:
         "response_format": { "type": "json_object" },
       }
 api_base: https://api.openai.com/v1
+timeout: 120
 
 ---
 type: embedder
