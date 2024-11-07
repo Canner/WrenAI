@@ -1,7 +1,7 @@
 import { Knex } from 'knex';
 import { BaseRepository, IBasicRepository } from './baseRepository';
 
-export interface RecommendationQuestionResult {
+export interface ThreadRecommendationQuestionResult {
   question: string;
   explanation: string;
   category: string;
@@ -15,7 +15,7 @@ export interface Thread {
 
   // recommend question
   queryId?: string; // Query ID
-  questions?: RecommendationQuestionResult[]; // Recommended questions
+  questions?: ThreadRecommendationQuestionResult[]; // Recommended questions
   questionsStatus?: string; // Status of the recommended questions
   questionsError?: object; // Error of the recommended questions
 }

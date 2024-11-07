@@ -624,9 +624,9 @@ export class ProjectResolver {
     const updatedProject = await ctx.projectRepository.updateOne(project.id, {
       queryId: recommendQuestionResult.queryId,
     });
-    const tasks = ctx.recommendQuestionBackgroundTracker.getTasks();
+    const tasks = ctx.projectRecommendQuestionBackgroundTracker.getTasks();
     if (!tasks[project.id]) {
-      ctx.recommendQuestionBackgroundTracker.addTask(updatedProject);
+      ctx.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
     }
     return deployRes;
   }
