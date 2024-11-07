@@ -244,9 +244,11 @@ export class ModelResolver {
       questions: null,
       questionsError: null,
     });
-    const tasks = ctx.recommendQuestionBackgroundTracker.getTasks();
-    if (!tasks[project.id]) {
-      ctx.recommendQuestionBackgroundTracker.addTask(updatedProject);
+    const tasks = ctx.projectRecommendQuestionBackgroundTracker.getTasks();
+    const taskKey =
+      ctx.projectRecommendQuestionBackgroundTracker.taskKey(updatedProject);
+    if (!tasks[taskKey]) {
+      ctx.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
     }
     return deployRes;
   }
