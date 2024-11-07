@@ -66,7 +66,7 @@ const makeProcessing = (text: string) => (props: Props) => {
 const makeProcessingError =
   (config: { icon: ReactNode; title?: string; description?: string }) =>
   (props: Props) => {
-    const { onClose, error } = props;
+    const { onClose, onSelectQuestion, error } = props;
     const { message, shortMessage, stacktrace } = error || {};
     const hasStacktrace = !!stacktrace;
     return (
@@ -90,6 +90,16 @@ const makeProcessingError =
         {hasStacktrace && (
           <ErrorCollapse className="mt-2" message={stacktrace.join('\n')} />
         )}
+
+        <RecommendedQuestions
+          className="mt-2"
+          items={[
+            'Top 10 customer with most order from global customer',
+            'Top 10 customer with most order from asia customer',
+            'Top 10 customer with most order from europe customer',
+          ]}
+          onSelect={onSelectQuestion}
+        />
       </div>
     );
   };
