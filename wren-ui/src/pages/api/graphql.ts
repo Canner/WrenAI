@@ -8,7 +8,6 @@ import { GraphQLError } from 'graphql';
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { ModelService } from '@server/services/modelService';
-import { MDLService } from '@server/services/mdlService';
 import {
   defaultApolloErrorHandler,
   GeneralErrorCodes,
