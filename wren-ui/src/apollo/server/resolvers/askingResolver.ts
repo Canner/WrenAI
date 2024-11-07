@@ -12,7 +12,10 @@ import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
-import { constructCteSql } from '../services/askingService';
+import {
+  constructCteSql,
+  ThreadRecommendQuestionResult,
+} from '../services/askingService';
 import {
   SuggestedQuestion,
   SampleDatasetName,
@@ -61,6 +64,31 @@ export class AskingResolver {
     this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
+    this.generateThreadRecommendationQuestions =
+      this.generateThreadRecommendationQuestions.bind(this);
+    this.getThreadRecommendationQuestions =
+      this.getThreadRecommendationQuestions.bind(this);
+  }
+
+  public async generateThreadRecommendationQuestions(
+    _root: any,
+    args: { threadId: number },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { threadId } = args;
+    const askingService = ctx.askingService;
+    await askingService.generateThreadRecommendationQuestions(threadId);
+    return true;
+  }
+
+  public async getThreadRecommendationQuestions(
+    _root: any,
+    args: { threadId: number },
+    ctx: IContext,
+  ): Promise<ThreadRecommendQuestionResult> {
+    const { threadId } = args;
+    const askingService = ctx.askingService;
+    return askingService.getThreadRecommendationQuestions(threadId);
   }
 
   public async getSuggestedQuestions(

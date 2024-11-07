@@ -2,7 +2,6 @@ import { Knex } from 'knex';
 import { BaseRepository, IBasicRepository } from './baseRepository';
 import {
   camelCase,
-  Dictionary,
   isPlainObject,
   mapKeys,
   mapValues,
@@ -72,13 +71,10 @@ export class ThreadRepository
     }
     const transformedData = mapValues(data, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
-        if (typeof value === 'string') {
-          return value ? JSON.parse(value) : value;
-        } else {
-          return value;
-        }
+        return JSON.stringify(value);
+      } else {
+        return value;
       }
-      return value;
     });
     return mapKeys(transformedData, (_value, key) => snakeCase(key));
   };
