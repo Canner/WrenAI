@@ -41,14 +41,12 @@ export class ProjectRecommendQuestionBackgroundTracker {
     wrenAIAdaptor: IWrenAIAdaptor;
     projectRepository: IProjectRepository;
   }) {
+    this.logger = getLogger('PRQ Background Tracker');
+    this.logger.level = 'debug';
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.projectRepository = projectRepository;
     this.intervalTime = 1000;
-
-    const logger = getLogger('PRQ Background Tracker');
-    logger.level = 'debug';
-    this.logger = logger;
     this.start();
   }
 
@@ -182,14 +180,12 @@ export class ThreadRecommendQuestionBackgroundTracker {
     wrenAIAdaptor: IWrenAIAdaptor;
     threadRepository: IThreadRepository;
   }) {
+    this.logger = getLogger('TRQ Background Tracker');
+    this.logger.level = 'debug';
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadRepository = threadRepository;
     this.intervalTime = 1000;
-
-    const logger = getLogger('TRQ Background Tracker');
-    logger.level = 'debug';
-    this.logger = logger;
     this.start();
   }
 
@@ -290,7 +286,8 @@ export class ThreadRecommendQuestionBackgroundTracker {
     const threads = await this.threadRepository.findAll();
     for (const thread of threads) {
       if (
-        this.taskKey(thread) &&
+        !this.tasks[this.taskKey(thread)] &&
+        thread.queryId &&
         !isFinalized(thread.questionsStatus as RecommendationQuestionStatus)
       ) {
         this.addTask(thread);
