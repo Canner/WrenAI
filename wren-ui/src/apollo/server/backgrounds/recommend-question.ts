@@ -10,7 +10,6 @@ import {
   WrenService,
 } from '../telemetry/telemetry';
 import { getLogger } from '../utils/logger';
-import { GeneralErrorCodes } from '../utils/error';
 
 const logger = getLogger('recommend-question-background');
 logger.level = 'debug';
@@ -62,20 +61,11 @@ export class RecommendQuestionBackgroundTracker {
         this.runningJobs.add(project.id);
 
         // get the latest result from AI service
+
         const result =
           await this.wrenAIAdaptor.getRecommendationQuestionsResult(
             project.queryId,
           );
-
-        // error = RESOURCE_NOT_FOUND -> remove job
-        if (result.error.code === GeneralErrorCodes.RESOURCE_NOT_FOUND) {
-          logger.debug(
-            `${loggerPrefix}job ${project.id} not found pipeline in ai service, removing task`,
-          );
-          delete this.tasks[project.id];
-          this.runningJobs.delete(project.id);
-          return;
-        }
 
         // check if status change
         if (project.questionsStatus === result.status) {
@@ -86,14 +76,17 @@ export class RecommendQuestionBackgroundTracker {
         }
 
         // update database
-        logger.debug(
-          `${loggerPrefix}job ${project.id} status changed, updating`,
-        );
-        await this.projectRepository.updateOne(project.id, {
-          questionsStatus: result.status.toUpperCase(),
-          questions: result.response?.questions,
-          questionsError: result.error,
-        });
+        if (result.status !== project.questionsStatus) {
+          logger.debug(
+            `${loggerPrefix}job ${project.id} status changed to ${result.status}, updating`,
+          );
+          await this.projectRepository.updateOne(project.id, {
+            questionsStatus: result.status.toUpperCase(),
+            questions: result.response?.questions,
+            questionsError: result.error,
+          });
+          project.questionsStatus = result.status;
+        }
 
         // remove the task from tracker if it is finalized
         if (isFinalized(result.status)) {
