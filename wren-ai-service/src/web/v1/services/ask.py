@@ -85,10 +85,12 @@ class AskResult(BaseModel):
     viewId: Optional[str] = None
 
 
+class DataAssistanceResult(BaseModel):
+    message: str
+
+
 class AskError(BaseModel):
-    code: Literal[
-        "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
-    ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
+    code: Literal["MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
     message: str
 
 
@@ -106,7 +108,7 @@ class AskResultResponse(BaseModel):
         "failed",
         "stopped",
     ]
-    response: Optional[List[AskResult]] = None
+    response: Optional[List[AskResult] | DataAssistanceResult] = None
     error: Optional[AskError] = None
 
 
@@ -160,6 +162,41 @@ class AskService:
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
                 )
+
+                intent_classification_result = (
+                    await self._pipelines["intent_classification"].run(
+                        query=ask_request.query,
+                        id=ask_request.project_id,
+                    )
+                ).get("post_process", {})
+                intent = intent_classification_result.get("intent")
+                if intent == "MISLEADING_QUERY":
+                    logger.exception(
+                        f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
+                    )
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="failed",
+                        error=AskError(
+                            code="MISLEADING_QUERY",
+                            message="Sorry, it seems the question you asked is irrelevant to the data source connected. "
+                            + "You could ask 'tell me more about the dataset' to learn more about the dataset",
+                        ),
+                    )
+                    results["metadata"]["error_type"] = "MISLEADING_QUERY"
+                    return results
+                elif intent == "GENERAL":
+                    data_assistance_result = (
+                        await self._pipelines["data_assistance"].run(
+                            query=ask_request.query,
+                            db_schemas=intent_classification_result.get("db_schemas"),
+                        )
+                    ).get("post_process")
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        response=DataAssistanceResult(message=data_assistance_result),
+                    )
+                    results["ask_result"] = data_assistance_result
+                    return results
 
             query_for_retrieval = (
                 ask_request.history.summary + " " + ask_request.query

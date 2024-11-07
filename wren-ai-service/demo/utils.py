@@ -188,41 +188,44 @@ def show_asks_results():
     show_query_history()
 
     st.markdown("### Query Results")
-    asks_result_count = len(st.session_state["asks_results"])
-    ask_result_cols = st.columns(asks_result_count)
-    choose_result_n = [False] * asks_result_count
-    for i, ask_result_col in enumerate(ask_result_cols):
-        with ask_result_col:
-            st.markdown(f"Result {i+1}")
-            st.code(
-                body=sqlparse.format(
-                    st.session_state["asks_results"][i]["sql"],
-                    reindent=True,
-                    keyword_case="upper",
-                ),
-                language="sql",
-            )
-            st.markdown(st.session_state["asks_results"][i]["summary"])
-            choose_result_n[i] = st.button(f"Choose Result {i+1}")
+    if isinstance(st.session_state["asks_results"], list):
+        asks_result_count = len(st.session_state["asks_results"])
+        ask_result_cols = st.columns(asks_result_count)
+        choose_result_n = [False] * asks_result_count
+        for i, ask_result_col in enumerate(ask_result_cols):
+            with ask_result_col:
+                st.markdown(f"Result {i+1}")
+                st.code(
+                    body=sqlparse.format(
+                        st.session_state["asks_results"][i]["sql"],
+                        reindent=True,
+                        keyword_case="upper",
+                    ),
+                    language="sql",
+                )
+                st.markdown(st.session_state["asks_results"][i]["summary"])
+                choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
-    for i, choose_result in enumerate(choose_result_n):
-        if choose_result:
-            sql = st.session_state["asks_results"][i]["sql"]
-            summary = st.session_state["asks_results"][i]["summary"]
+        for i, choose_result in enumerate(choose_result_n):
+            if choose_result:
+                sql = st.session_state["asks_results"][i]["sql"]
+                summary = st.session_state["asks_results"][i]["summary"]
 
-            st.session_state["chosen_query_result"] = {
-                "index": i,
-                "query": st.session_state["query"],
-                "sql": sql,
-                "summary": summary,
-            }
+                st.session_state["chosen_query_result"] = {
+                    "index": i,
+                    "query": st.session_state["query"],
+                    "sql": sql,
+                    "summary": summary,
+                }
 
-            # reset relevant session_states
-            st.session_state["asks_details_result"] = None
-            st.session_state["preview_data_button_index"] = None
-            st.session_state["preview_sql"] = None
+                # reset relevant session_states
+                st.session_state["asks_details_result"] = None
+                st.session_state["preview_data_button_index"] = None
+                st.session_state["preview_sql"] = None
 
-            break
+                break
+    else:
+        st.markdown(st.session_state["asks_results"]["message"])
 
 
 def show_asks_details_results(query: str):
