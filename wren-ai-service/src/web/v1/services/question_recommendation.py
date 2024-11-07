@@ -131,7 +131,15 @@ class QuestionRecommendation:
             if status == "finished":
                 return self._cache[request.id].with_metadata()
 
-            categories = [question["category"] for question in invalid]
+            # Count questions per category in invalid questions
+            category_counts = {}
+            for question in invalid:
+                category = question["category"]
+                category_counts[category] = category_counts.get(category, 0) + 1
+
+            logger.debug(f"Invalid questions per category: {category_counts}")
+
+            categories = list(category_counts.keys())
             logger.info(
                 f"Request {request.id}: Regenerating {len(invalid)} questions for {categories}"
             )
@@ -140,9 +148,19 @@ class QuestionRecommendation:
                 {"categories": categories, **input}, request.project_id
             )
 
-            # todo: add valid question back but need to check which categories need how many canddiates
+            # Group valid questions by category
+            valid_by_category = {}
+            for question in valid:
+                category = question["category"]
+                valid_by_category.setdefault(category, []).append(question)
 
-            self._cache[request.id].response["questions"] += valid
+            questions_to_add = [
+                question
+                for category, questions in valid_by_category.items()
+                for question in questions[: category_counts[category]]
+            ]
+
+            self._cache[request.id].response["questions"] += questions_to_add
             self._cache[request.id].status = "finished"
 
         except orjson.JSONDecodeError as e:
