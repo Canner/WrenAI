@@ -44,6 +44,10 @@ const resolvers = {
 
     // Learning
     learningRecord: learningResolver.getLearningRecord,
+
+    // Recommendation questions
+    getThreadRecommendationQuestions:
+      askingResolver.getThreadRecommendationQuestions,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -98,6 +102,10 @@ const resolvers = {
 
     // Learning
     saveLearningRecord: learningResolver.saveLearningRecord,
+
+    // Recommendation questions
+    generateThreadRecommendationQuestions:
+      askingResolver.generateThreadRecommendationQuestions,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

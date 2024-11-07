@@ -27,6 +27,7 @@ import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
 import { ThreadRecommendQuestionBackgroundTracker } from '../backgrounds';
+import * as Errors from '@server/utils/error';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -105,12 +106,8 @@ export interface IAskingService {
   deleteAllByProjectId(projectId: number): Promise<void>;
 
   // recommendation questions
-  generateThreadRecommendationQuestions(
-    projectId: number,
-    threadId: number,
-  ): Promise<void>;
+  generateThreadRecommendationQuestions(threadId: number): Promise<void>;
   getThreadRecommendationQuestions(
-    projectId: number,
     threadId: number,
   ): Promise<ThreadRecommendQuestionResult>;
 }
@@ -361,7 +358,7 @@ export class AskingService implements IAskingService {
       res.status = ThreadRecommendQuestionResultStatus[thread.questionsStatus]
         ? ThreadRecommendQuestionResultStatus[thread.questionsStatus]
         : res.status;
-      res.questions = thread.questions;
+      res.questions = thread.questions || [];
       res.error = thread.questionsError as WrenAIError;
     }
     return res;
