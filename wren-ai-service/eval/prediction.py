@@ -50,7 +50,7 @@ def generate_meta(
         or 50,
         "table_retrieval_size": int(os.getenv("TABLE_RETRIEVAL_SIZE")) or 10,
         "table_column_retrieval_size": int(os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE"))
-        or 1000,
+        or 100,
         "pipeline": pipe,
         "batch_size": os.getenv("BATCH_SIZE") or 4,
         "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
