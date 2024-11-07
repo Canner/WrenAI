@@ -84,7 +84,7 @@ QUESTION_RECOMMENDATION_MODEL_KWARGS = {
 }
 
 system_prompt = """
-You are an expert in data analysis and SQL query generation. Given a data model specification, optionally a user's question, and a specified number of question categories, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
+You are an expert in data analysis and SQL query generation. Given a data model specification, optionally a user's question, and a list of categories, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
 
 Output all questions in the following JSON structure:
 {
@@ -100,40 +100,44 @@ Output all questions in the following JSON structure:
 
 When generating questions, consider the following guidelines:
 
-1. Whether a user question is provided or not:
-   - Incorporate diverse data analysis techniques such as:
-     a. Drill-down: Ask questions that delve into more detailed levels of data.
-     b. Roll-up: Generate questions that aggregate data to higher levels.
-     c. Slice and dice: Create questions that analyze data from different perspectives or dimensions.
-     d. Trend analysis: Formulate questions about patterns or changes over time.
-     e. Comparative analysis: Develop questions that compare different segments or categories.
+1. If categories are provided:
+   - Generate questions specifically for each provided category
+   - Ensure questions align well with the category's focus area
+   - Distribute questions evenly across all provided categories
+   - Make sure each question clearly relates to its assigned category
 
-2. If a user question is provided:
-   - Generate questions that are directly related to or expand upon the user's question.
-   - Create questions that explore specific aspects or implications of the user's query.
-   - Use the above techniques to generate deeper insights related to the user's question.
-   - Consider adding time-based filters or durations to the questions, such as "in the last month", "over the past year", or "compared to the previous quarter".
+2. For each category, incorporate diverse data analysis techniques such as:
+   a. Drill-down: Ask questions that delve into more detailed levels of data
+   b. Roll-up: Generate questions that aggregate data to higher levels
+   c. Slice and dice: Create questions that analyze data from different perspectives
+   d. Trend analysis: Formulate questions about patterns or changes over time
+   e. Comparative analysis: Develop questions that compare different segments
 
-3. If no user question is provided:
-   - Generate questions that cover various specific aspects of the data model.
-   - Focus on questions that highlight concrete relationships between different models.
-   - Create questions that could provide specific, actionable insights or business intelligence.
+3. If a user question is provided:
+   - Generate questions that are directly related to or expand upon the user's question
+   - Create questions that explore specific aspects or implications of the user's query
+   - Use the above techniques to generate deeper insights related to the user's question
+   - Consider adding time-based filters or durations to the questions
 
-4. Ensure that all generated questions can be answered using the provided data model.
+4. If no user question is provided:
+   - Generate questions that cover various specific aspects of the data model
+   - Focus on questions that highlight concrete relationships between different models
+   - Create questions that could provide specific, actionable insights
 
-5. Provide a mix of simple and complex questions to cater to different levels of data analysis, ranging from basic aggregations to multi-dimensional analyses.
+5. General guidelines for all questions:
+   - Ensure all questions can be answered using the provided data model
+   - Provide a mix of simple and complex questions
+   - Avoid open-ended questions - each should have a definite answer
+   - Include time-based analysis where relevant
+   - Focus on concrete data points rather than subjective interpretations
+   - Combine multiple analysis techniques when appropriate for deeper insights
 
-6. The number of questions for each category generated should be exactly equal to the 'num_questions' parameter divided by the 'num_categories' parameter.
-
-7. Avoid open-ended questions. Each question should be specific and have a definite answer based on the data model.
-
-8. The number of question categories should be exactly equal to the 'num_categories' parameter. Assign each question to one of these categories.
-
-9. When appropriate, include questions that combine multiple data analysis techniques to provide more comprehensive insights.
-
-10. If applicable, incorporate time-based analysis in your questions, such as trends over time, comparisons between different time periods, or filtering data for specific time ranges.
-
-Remember to tailor your questions to the specific models and relationships present in the provided data model. Always aim for questions that can be answered with concrete data points rather than subjective interpretations. Balance the distribution of questions across the specified number of categories while strictly adhering to the total number of questions requested. Strive to generate questions that offer diverse and deep insights into the data, encouraging a thorough exploration of the dataset using various data analysis techniques and time-based perspectives when relevant.
+Remember to:
+- Strictly use only the provided categories when they are given
+- Generate the exact number of questions requested per category
+- Ensure questions are specific and answerable from the data model
+- Balance complexity across questions while maintaining relevance to each category
+- Use time-based perspectives when they add value to the analysis
 """
 
 user_prompt_template = """
@@ -142,6 +146,10 @@ Data Model Specification:
 
 {% if previous_questions %}
 Previous Questions: {{previous_questions}}
+{% endif %}
+
+{% if categories %}
+Categories: {{categories}}
 {% endif %}
 
 Current Date: {{current_date}}
@@ -175,6 +183,7 @@ class QuestionRecommendation(BasicPipeline):
         self,
         mdl: dict,
         previous_questions: list[str] = [],
+        categories: list[str] = [],
         language: str = "English",
         current_date: str = datetime.now(),
         max_questions: int = 5,
@@ -190,6 +199,7 @@ class QuestionRecommendation(BasicPipeline):
             inputs={
                 "mdl": mdl,
                 "previous_questions": previous_questions,
+                "categories": categories,
                 "language": language,
                 "current_date": current_date,
                 "max_questions": max_questions,
@@ -204,6 +214,7 @@ class QuestionRecommendation(BasicPipeline):
         self,
         mdl: dict,
         previous_questions: list[str] = [],
+        categories: list[str] = [],
         language: str = "English",
         current_date: str = datetime.now(),
         max_questions: int = 5,
@@ -215,6 +226,7 @@ class QuestionRecommendation(BasicPipeline):
             inputs={
                 "mdl": mdl,
                 "previous_questions": previous_questions,
+                "categories": categories,
                 "language": language,
                 "current_date": current_date,
                 "max_questions": max_questions,
@@ -238,12 +250,13 @@ if __name__ == "__main__":
     llm_provider, _, _, _ = init_providers(EngineConfig())
     pipeline = QuestionRecommendation(llm_provider=llm_provider)
 
-    with open("sample/college_3_bigquery_mdl.json", "r") as file:
+    with open("sample/ecommerce_duckdb_mdl.json", "r") as file:
         mdl = json.load(file)
 
     input = {
         "mdl": mdl,
         "previous_questions": [],
+        "categories": ["Customer Insights", "Product Performance"],
         "language": "English",
         "max_questions": 5,
         "max_categories": 2,
