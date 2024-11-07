@@ -9,7 +9,6 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
     AskDetailsResponse,
@@ -105,4 +104,3 @@ async def get_ask_details_result(
     return service_container.ask_details_service.get_ask_details_result(
         AskDetailsResultRequest(query_id=query_id)
     )
-

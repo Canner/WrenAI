@@ -98,4 +98,3 @@ async def get_sql_explanation_result(
     return service_container.sql_explanation_service.get_sql_explanation_result(
         SQLExplanationResultRequest(query_id=query_id)
     )
-
