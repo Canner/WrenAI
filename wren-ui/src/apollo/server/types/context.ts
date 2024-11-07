@@ -21,7 +21,10 @@ import {
   IProjectService,
 } from '../services';
 import { ITelemetry } from '../telemetry/telemetry';
-import { RecommendQuestionBackgroundTracker } from '../backgrounds';
+import {
+  ProjectRecommendQuestionBackgroundTracker,
+  ThreadRecommendQuestionBackgroundTracker,
+} from '../backgrounds';
 import { IWrenAIAdaptor } from '../adaptors';
 
 export interface IContext {
@@ -54,5 +57,6 @@ export interface IContext {
   learningRepository: ILearningRepository;
 
   // background trackers
-  recommendQuestionBackgroundTracker: RecommendQuestionBackgroundTracker;
+  projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
+  threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
 }

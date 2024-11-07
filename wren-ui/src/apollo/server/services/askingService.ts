@@ -3,6 +3,10 @@ import {
   IWrenAIAdaptor,
   AskResultStatus,
   AskHistory,
+  RecommendationQuestionsInput,
+  RecommendationQuestionStatus,
+  RecommendationQuestion,
+  WrenAIError,
 } from '@server/adaptors/wrenAIAdaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -22,6 +26,8 @@ import {
 } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
+import { IMDLService } from './mdlService';
+import { ThreadRecommendQuestionBackgroundTracker } from '../backgrounds';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -46,6 +52,18 @@ export interface AskingDetailTaskInput {
   sql?: string;
   summary?: string;
   viewId?: number;
+}
+
+export enum ThreadRecommendQuestionResultStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  GENERATING = 'GENERATING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+}
+export interface ThreadRecommendQuestionResult {
+  status: ThreadRecommendQuestionResultStatus;
+  questions: RecommendationQuestion[];
+  error?: WrenAIError;
 }
 
 export interface IAskingService {
@@ -86,6 +104,16 @@ export interface IAskingService {
     limit?: number,
   ): Promise<PreviewDataResponse>;
   deleteAllByProjectId(projectId: number): Promise<void>;
+
+  // recommendation questions
+  generateThreadRecommendationQuestions(
+    projectId: number,
+    threadId: number,
+  ): Promise<void>;
+  getThreadRecommendationQuestions(
+    projectId: number,
+    threadId: number,
+  ): Promise<ThreadRecommendQuestionResult>;
 }
 
 /**
@@ -267,8 +295,10 @@ export class AskingService implements IAskingService {
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
   private backgroundTracker: BackgroundTracker;
+  private threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: PostHogTelemetry;
+  private mdlService: IMDLService;
 
   constructor({
     telemetry,
@@ -279,6 +309,7 @@ export class AskingService implements IAskingService {
     threadRepository,
     threadResponseRepository,
     queryService,
+    mdlService,
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
@@ -288,6 +319,7 @@ export class AskingService implements IAskingService {
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
     queryService: IQueryService;
+    mdlService: IMDLService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
@@ -302,6 +334,88 @@ export class AskingService implements IAskingService {
       wrenAIAdaptor,
       threadResponseRepository,
     });
+    this.threadRecommendQuestionBackgroundTracker =
+      new ThreadRecommendQuestionBackgroundTracker({
+        telemetry,
+        wrenAIAdaptor,
+        threadRepository,
+      });
+
+    this.mdlService = mdlService;
+  }
+
+  public async getThreadRecommendationQuestions(
+    threadId: number,
+  ): Promise<ThreadRecommendQuestionResult> {
+    const thread = await this.threadRepository.findOneBy({ id: threadId });
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    // handle not started
+    const res: ThreadRecommendQuestionResult = {
+      status: ThreadRecommendQuestionResultStatus.NOT_STARTED,
+      questions: [],
+      error: null,
+    };
+    if (thread.queryId && thread.questionsStatus) {
+      res.status = ThreadRecommendQuestionResultStatus[thread.questionsStatus]
+        ? ThreadRecommendQuestionResultStatus[thread.questionsStatus]
+        : res.status;
+      res.questions = thread.questions;
+      res.error = thread.questionsError as WrenAIError;
+    }
+    return res;
+  }
+
+  public async generateThreadRecommendationQuestions(
+    threadId: number,
+  ): Promise<void> {
+    const thread = await this.threadRepository.findOneBy({ id: threadId });
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    const tasks = this.threadRecommendQuestionBackgroundTracker.getTasks();
+    const taskKey =
+      this.threadRecommendQuestionBackgroundTracker.taskKey(thread);
+    if (tasks[taskKey]) {
+      logger.debug(
+        `thread "${threadId}" recommended questions are generating, skip the current request`,
+      );
+      return;
+    }
+
+    const project = await this.projectService.getCurrentProject();
+    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+
+    const threadResponses = await this.threadResponseRepository.findAllBy({
+      threadId,
+    });
+    const questions = threadResponses.map(({ question }) => question);
+    const recommendQuestionData: RecommendationQuestionsInput = {
+      manifest,
+      previousQuestions: questions,
+      projectId: project.id.toString(),
+      maxCategories: 3,
+      maxQuestions: 3,
+      configuration: {
+        language: project.language,
+      },
+    };
+
+    const result = await this.wrenAIAdaptor.generateRecommendationQuestions(
+      recommendQuestionData,
+    );
+    // reset thread recommended questions
+    const updatedThread = await this.threadRepository.updateOne(threadId, {
+      queryId: result.queryId,
+      questions: null,
+      questionsError: null,
+      questionsStatus: null,
+    });
+    this.threadRecommendQuestionBackgroundTracker.addTask(updatedThread);
+    return;
   }
 
   public async initialize() {
@@ -471,6 +585,7 @@ export class AskingService implements IAskingService {
 
     // 2. create a thread and the first thread response
     // in follow-up questions, we still need to save the summary
+    // insert question first, another API  all the asked questions to generate the next recommendation questions
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: response.queryId,
