@@ -24,9 +24,13 @@ import {
   ProjectService,
   DeployService,
   AskingService,
+  MDLService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
-import { RecommendQuestionBackgroundTracker } from './apollo/server/backgrounds';
+import {
+  ProjectRecommendQuestionBackgroundTracker,
+  ThreadRecommendQuestionBackgroundTracker,
+} from './apollo/server/backgrounds';
 
 export const serverConfig = getConfig();
 
@@ -82,6 +86,14 @@ export const initComponents = () => {
     deployLogRepository,
     telemetry,
   });
+  const mdlService = new MDLService({
+    projectRepository,
+    modelRepository,
+    modelColumnRepository,
+    modelNestedColumnRepository,
+    relationRepository,
+    viewRepository,
+  });
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
@@ -91,14 +103,21 @@ export const initComponents = () => {
     threadRepository,
     threadResponseRepository,
     queryService,
+    mdlService,
   });
 
   // background trackers
-  const recommendQuestionBackgroundTracker =
-    new RecommendQuestionBackgroundTracker({
+  const projectRecommendQuestionBackgroundTracker =
+    new ProjectRecommendQuestionBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
       projectRepository,
+    });
+  const threadRecommendQuestionBackgroundTracker =
+    new ThreadRecommendQuestionBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      threadRepository,
     });
 
   return {
@@ -129,9 +148,10 @@ export const initComponents = () => {
     queryService,
     deployService,
     askingService,
-
+    mdlService,
     // background trackers
-    recommendQuestionBackgroundTracker,
+    projectRecommendQuestionBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
   };
 };
 

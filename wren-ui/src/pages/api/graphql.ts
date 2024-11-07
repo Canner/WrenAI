@@ -53,19 +53,13 @@ const bootstrapServer = async () => {
     queryService,
     askingService,
     deployService,
+    mdlService,
 
     // background trackers
-    recommendQuestionBackgroundTracker,
+    projectRecommendQuestionBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
   } = components;
 
-  const mdlService = new MDLService({
-    projectRepository,
-    modelRepository,
-    modelColumnRepository,
-    modelNestedColumnRepository,
-    relationRepository,
-    viewRepository,
-  });
   const modelService = new ModelService({
     projectService,
     modelRepository,
@@ -80,7 +74,8 @@ const bootstrapServer = async () => {
   // initialize services
   await Promise.all([
     askingService.initialize(),
-    recommendQuestionBackgroundTracker.initialize(),
+    projectRecommendQuestionBackgroundTracker.initialize(),
+    threadRecommendQuestionBackgroundTracker.initialize(),
   ]);
 
   const apolloServer: ApolloServer = new ApolloServer({
@@ -149,7 +144,8 @@ const bootstrapServer = async () => {
       learningRepository,
 
       // background trackers
-      recommendQuestionBackgroundTracker,
+      projectRecommendQuestionBackgroundTracker,
+      threadRecommendQuestionBackgroundTracker,
     }),
   });
   await apolloServer.start();
