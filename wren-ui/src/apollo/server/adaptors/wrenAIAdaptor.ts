@@ -338,6 +338,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         `${this.wrenAIBaseEndpoint}/v1/question-recommendations`,
         body,
       );
+      logger.debug(
+        `Wren AI: Generating recommendation questions, queryId: ${res.data.id}`,
+      );
       return { queryId: res.data.id };
     } catch (err: any) {
       logger.debug(
@@ -351,7 +354,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   ): Promise<RecommendationQuestionsResult> {
     try {
       const res = await axios.get(
-        `${this.wrenAIBaseEndpoint}/v1/question-recommendations/${queryId}/result`,
+        `${this.wrenAIBaseEndpoint}/v1/question-recommendations/${queryId}`,
       );
       return this.transformRecommendationQuestionsResult(res.data);
     } catch (err: any) {
