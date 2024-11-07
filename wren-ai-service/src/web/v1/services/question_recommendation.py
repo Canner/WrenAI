@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Literal, Optional
+from typing import Dict, Literal, Optional, Tuple
 
 import orjson
 from cachetools import TTLCache
@@ -23,6 +23,7 @@ class QuestionRecommendation:
         project_id: Optional[str] = None
         max_questions: Optional[int] = 5
         max_categories: Optional[int] = 3
+        regenerate: Optional[bool] = False
         configuration: Optional[Configuration] = Configuration()
 
     class Resource(BaseModel, MetadataTraceable):
@@ -59,6 +60,7 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
+    @observe(name="Validate Question")
     async def _validate_question(
         self,
         candidate: dict,
@@ -80,10 +82,29 @@ class QuestionRecommendation:
 
         return True if valid_sql else False
 
+    async def _recommend(
+        self, input: dict, project_id: Optional[str] = None
+    ) -> Tuple[list, list]:
+        resp = await self._pipelines["question_recommendation"].run(**input)
+        questions = resp.get("normalized", {}).get("questions", [])
+
+        validation_tasks = [
+            self._validate_question(question, project_id) for question in questions
+        ]
+
+        results = await asyncio.gather(*validation_tasks)
+        zip_result = zip(questions, results)
+
+        valid = [q for q, is_valid in zip_result if is_valid]
+        invalid = [q for q, is_valid in zip_result if not is_valid]
+        return valid, invalid
+
     @observe(name="Generate Question Recommendation")
     @trace_metadata
     async def recommend(self, request: Input, **kwargs) -> Resource:
-        logger.info("Generate Question Recommendation pipeline is running...")
+        logger.info(
+            f"Request {request.id}: Generate Question Recommendation pipeline is running..."
+        )
 
         try:
             input = {
@@ -95,27 +116,35 @@ class QuestionRecommendation:
                 "max_categories": request.max_categories,
             }
 
-            resp = await self._pipelines["question_recommendation"].run(**input)
-            questions = resp.get("normalized", {}).get("questions", [])
+            valid, invalid = await self._recommend(input, request.project_id)
 
-            validation_tasks = [
-                self._validate_question(question, request.project_id)
-                for question in questions
-            ]
-
-            validation_results = await asyncio.gather(*validation_tasks)
-
-            validated_questions = [
-                question
-                for question, is_valid in zip(questions, validation_results)
-                if is_valid
-            ]
+            status = (
+                "generating" if len(invalid) > 0 and request.regenerate else "finished"
+            )
 
             self._cache[request.id] = self.Resource(
                 id=request.id,
-                status="finished",
-                response={"questions": validated_questions},
+                status=status,
+                response={"questions": valid},
             )
+
+            if status == "finished":
+                return self._cache[request.id].with_metadata()
+
+            categories = [question["category"] for question in invalid]
+            logger.info(
+                f"Request {request.id}: Regenerating {len(invalid)} questions for {categories}"
+            )
+
+            valid, invalid = await self._recommend(
+                {"categories": categories, **input}, request.project_id
+            )
+
+            # todo: add valid question back but need to check which categories need how many canddiates
+
+            self._cache[request.id].response["questions"] += valid
+            self._cache[request.id].status = "finished"
+
         except orjson.JSONDecodeError as e:
             self._handle_exception(
                 request,
