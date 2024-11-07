@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { RecommendationQuestionsInput, WrenAIAdaptor } from '../wrenAIAdaptor';
 import { RecommendationQuestionStatus } from '../wrenAIAdaptor';
-import { Manifest, ColumnMDL } from '../../mdl/type';
+import { Manifest } from '../../mdl/type';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;

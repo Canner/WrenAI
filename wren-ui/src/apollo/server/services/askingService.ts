@@ -4,7 +4,6 @@ import {
   AskResultStatus,
   AskHistory,
   RecommendationQuestionsInput,
-  RecommendationQuestionStatus,
   RecommendationQuestion,
   WrenAIError,
 } from '@server/adaptors/wrenAIAdaptor';
