@@ -29,6 +29,7 @@ from src.web.v1.services.semantics_preparation import (
 from tests.pytest.services.mocks import (
     GenerationMock,
     HistoricalQuestionMock,
+    IntentClassificationMock,
     RetrievalMock,
     SQLSummaryMock,
 )
@@ -162,7 +163,7 @@ async def test_ask_with_successful_query(
 def _ask_service_ttl_mock(query: str):
     return AskService(
         {
-            "intent_classification": "",
+            "intent_classification": IntentClassificationMock(),
             "data_assistance": "",
             "retrieval": RetrievalMock(
                 [
