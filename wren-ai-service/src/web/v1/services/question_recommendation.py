@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Callable, Dict, Literal, Optional
+from typing import Dict, Literal, Optional
 
 import orjson
 from cachetools import TTLCache
@@ -33,7 +33,7 @@ class QuestionRecommendation:
 
         id: str
         status: Literal["generating", "finished", "failed"] = "generating"
-        response: Optional[dict] = None
+        response: Optional[dict] = {"questions": {}}
         error: Optional[Error] = None
 
     def __init__(
@@ -60,21 +60,26 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
-    def _partial_update(self, request_id: str, candidate: dict, valid_sql: str):
+    def _partial_update(
+        self, request_id: str, candidate: dict, valid_sql: str, max_questions: int
+    ):
         current = self._cache[request_id]
-        current.response = current.response or {"questions": {}}
-        current.response["questions"].setdefault(candidate["category"], []).append(
-            {**candidate, "sql": valid_sql}
-        )
+        questions = current.response["questions"]
+        currnet_category = questions.setdefault(candidate["category"], [])
+
+        if len(currnet_category) >= max_questions:
+            return
+
+        currnet_category.append({**candidate, "sql": valid_sql})
 
     @observe(name="Validate Question")
     async def _validate_question(
         self,
         candidate: dict,
         request_id: str,
+        max_questions: int,
         project_id: Optional[str] = None,
-        hook: Optional[Callable] = lambda *_: None,
-    ) -> bool:
+    ):
         try:
             retrieval_result = await self._pipelines["retrieval"].run(
                 query=candidate["question"],
@@ -91,75 +96,87 @@ class QuestionRecommendation:
             post_process = generated_sql["post_process"]
 
             if len(post_process["valid_generation_results"]) == 0:
-                return False
+                return
 
             valid_sql = post_process["valid_generation_results"][0]["sql"]
             logger.debug(f"Request {request_id}: Valid SQL: {valid_sql}")
 
-            hook(request_id, candidate, valid_sql)
-
-            return True
+            self._partial_update(request_id, candidate, valid_sql, max_questions)
 
         except Exception as e:
             logger.error(f"Request {request_id}: Error validating question: {str(e)}")
 
-        return False
+    async def _recommend(self, request: dict, input: Input):
+        resp = await self._pipelines["question_recommendation"].run(**request)
+        questions = resp.get("normalized", {}).get("questions", [])
+        validation_tasks = [
+            self._validate_question(
+                question, input.id, input.max_questions, input.project_id
+            )
+            for question in questions
+        ]
+
+        await asyncio.gather(*validation_tasks, return_exceptions=True)
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
-    async def recommend(self, request: Input, **kwargs) -> Resource:
+    async def recommend(self, input: Input, **kwargs) -> Resource:
         logger.info(
-            f"Request {request.id}: Generate Question Recommendation pipeline is running..."
+            f"Request {input.id}: Generate Question Recommendation pipeline is running..."
         )
 
         try:
-            input = {
-                "mdl": orjson.loads(request.mdl),
-                "previous_questions": request.previous_questions,
-                "language": request.configuration.language,
-                "current_date": request.configuration.show_current_time(),
-                "max_questions": request.max_questions,
-                "max_categories": request.max_categories,
+            request = {
+                "mdl": orjson.loads(input.mdl),
+                "previous_questions": input.previous_questions,
+                "language": input.configuration.language,
+                "current_date": input.configuration.show_current_time(),
+                "max_questions": input.max_questions,
+                "max_categories": input.max_categories,
             }
 
-            resp = await self._pipelines["question_recommendation"].run(**input)
-            questions = resp.get("normalized", {}).get("questions", [])
+            await self._recommend(request, input)
 
-            validation_tasks = [
-                self._validate_question(
-                    question, request.id, request.project_id, self._partial_update
-                )
-                for question in questions
-            ]
+            resource = self._cache[input.id]
+            response = resource.response
 
-            results = await asyncio.gather(*validation_tasks, return_exceptions=True)
-            zip_result = list(zip(questions, results))
+            categories_count = {
+                category: input.max_questions - len(questions)
+                for category, questions in response["questions"].items()
+                if len(questions) < input.max_questions
+            }
+            categories = list(categories_count.keys())
+            need_regenerate = len(categories) > 0 and input.regenerate
 
-            invalid = [question for question, is_valid in zip_result if not is_valid]
-
-            resource = self._cache[request.id]
-            resource.status = (
-                "generating" if len(invalid) > 0 and request.regenerate else "finished"
-            )
+            resource.status = "generating" if need_regenerate else "finished"
 
             if resource.status == "finished":
                 return resource.with_metadata()
 
-            self._cache[request.id].status = "finished"
+            await self._recommend(
+                {
+                    **request,
+                    "categories": categories,
+                    "max_categories": len(categories),
+                },
+                input,
+            )
+
+            self._cache[input.id].status = "finished"
 
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                request,
+                input,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
             )
         except Exception as e:
             self._handle_exception(
-                request,
+                input,
                 f"An error occurred during question recommendation generation: {str(e)}",
             )
 
-        return self._cache[request.id].with_metadata()
+        return self._cache[input.id].with_metadata()
 
     def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)

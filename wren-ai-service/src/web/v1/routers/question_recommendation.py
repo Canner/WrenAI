@@ -135,17 +135,16 @@ async def get(
     resource = service_container.question_recommendation[id]
 
     def _formatter(response: dict) -> dict:
-        return {
-            "questions": [
-                question
-                for _, questions in response.get("questions", {}).items()
-                for question in questions
-            ]
-        }
+        questions = [
+            question
+            for _, questions in response["questions"].items()
+            for question in questions
+        ]
+        return {"questions": questions}
 
     return GetResponse(
         id=resource.id,
         status=resource.status,
-        response=resource.response and _formatter(resource.response),
+        response=_formatter(resource.response),
         error=resource.error and resource.error.model_dump(),
     )

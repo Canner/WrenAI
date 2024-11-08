@@ -186,6 +186,7 @@ class QuestionRecommendation(BasicPipeline):
         current_date: str = datetime.now(),
         max_questions: int = 5,
         max_categories: int = 3,
+        **_,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -217,6 +218,7 @@ class QuestionRecommendation(BasicPipeline):
         current_date: str = datetime.now(),
         max_questions: int = 5,
         max_categories: int = 3,
+        **_,
     ) -> dict:
         logger.info("Question Recommendation pipeline is running...")
         return await self._pipe.execute(
