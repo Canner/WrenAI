@@ -65,7 +65,6 @@ def normalized(generate: dict) -> dict:
 ## End of Pipeline
 class Question(BaseModel):
     question: str
-    explanation: str
     category: str
 
 
@@ -91,7 +90,6 @@ Output all questions in the following JSON structure:
     "questions": [
         {
             "question": "<generated question>",
-            "explanation": "<brief explanation of the question's relevance or importance>",
             "category": "<category of the question>"
         },
         ...
