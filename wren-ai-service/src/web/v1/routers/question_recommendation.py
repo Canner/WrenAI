@@ -77,6 +77,7 @@ class PostRequest(BaseModel):
     project_id: Optional[str] = None
     max_questions: Optional[int] = 5
     max_categories: Optional[int] = 3
+    regenerate: Optional[bool] = False
     configuration: Optional[Configuration] = Configuration()
 
 
@@ -105,6 +106,7 @@ async def recommend(
         project_id=request.project_id,
         max_questions=request.max_questions,
         max_categories=request.max_categories,
+        regenerate=request.regenerate,
         configuration=request.configuration,
     )
 
