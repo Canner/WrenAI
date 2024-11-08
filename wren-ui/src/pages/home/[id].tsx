@@ -96,6 +96,10 @@ export default function HomeThread() {
     if (unfinishedRespose) {
       fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
     }
+
+    // store thread questions for instant recommended questions
+    const questions = thread?.responses.flatMap((res) => res.question || [])
+    if(questions) askPrompt.onStoreThreadQuestions(questions);
   }, [thread]);
 
   useEffect(() => {

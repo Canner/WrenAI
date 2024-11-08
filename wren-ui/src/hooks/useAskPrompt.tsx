@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { uniq } from 'lodash';
 import {
   AskingTask,
   AskingTaskStatus,
@@ -44,7 +45,8 @@ const isNeedRecommendedQuestions = (askingTask: AskingTask) => {
 };
 
 export default function useAskPrompt(threadId?: number) {
-  const [originalQuestion, setOriginalQuestion] = useState<string | null>(null);
+  const [originalQuestion, setOriginalQuestion] = useState<string>('');
+  const [threadQuestions, setThreadQuestions] = useState<string[]>([]);
   const [createAskingTask, createAskingTaskResult] =
     useCreateAskingTaskMutation();
   const [cancelAskingTask] = useCancelAskingTaskMutation();
@@ -85,8 +87,13 @@ export default function useAskPrompt(threadId?: number) {
   );
 
   const startRecommendedQuestions = useCallback(async () => {
+    const previousQuestions = [
+      // slice the last 5 questions in threadQuestions
+      ...uniq(threadQuestions).slice(-5),
+      originalQuestion,
+    ];
     const response = await createInstantRecommendedQuestions({
-      variables: { data: { previousQuestions: [originalQuestion] } },
+      variables: { data: { previousQuestions } },
     });
     fetchInstantRecommendedQuestions({
       variables: { taskId: response.data.createInstantRecommendedQuestions.id },
@@ -143,6 +150,8 @@ export default function useAskPrompt(threadId?: number) {
 
   const onStopRecommend = () => instantRecommendedQuestionsResult.stopPolling();
 
+  const onStoreThreadQuestions = (questions: string[]) => setThreadQuestions(questions);
+
   return {
     data,
     loading,
@@ -151,5 +160,6 @@ export default function useAskPrompt(threadId?: number) {
     onStopPolling,
     onStopStreaming,
     onStopRecommend,
+    onStoreThreadQuestions,
   };
 }
