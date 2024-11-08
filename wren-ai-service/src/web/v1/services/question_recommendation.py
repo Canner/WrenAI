@@ -60,24 +60,13 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
-    def _partial_update(
-        self, request_id: str, candidate: dict, valid_sql: str, max_questions: int
-    ):
-        current = self._cache[request_id]
-        questions = current.response["questions"]
-        currnet_category = questions.setdefault(candidate["category"], [])
-
-        if len(currnet_category) >= max_questions:
-            return
-
-        currnet_category.append({**candidate, "sql": valid_sql})
-
     @observe(name="Validate Question")
     async def _validate_question(
         self,
         candidate: dict,
         request_id: str,
         max_questions: int,
+        max_categories: int,
         project_id: Optional[str] = None,
     ):
         try:
@@ -101,7 +90,19 @@ class QuestionRecommendation:
             valid_sql = post_process["valid_generation_results"][0]["sql"]
             logger.debug(f"Request {request_id}: Valid SQL: {valid_sql}")
 
-            self._partial_update(request_id, candidate, valid_sql, max_questions)
+            # Partial update the resource
+            current = self._cache[request_id]
+            questions = current.response["questions"]
+
+            if len(questions) >= max_categories:
+                return
+
+            currnet_category = questions.setdefault(candidate["category"], [])
+
+            if len(currnet_category) >= max_questions:
+                return
+
+            currnet_category.append({**candidate, "sql": valid_sql})
 
         except Exception as e:
             logger.error(f"Request {request_id}: Error validating question: {str(e)}")
@@ -111,7 +112,11 @@ class QuestionRecommendation:
         questions = resp.get("normalized", {}).get("questions", [])
         validation_tasks = [
             self._validate_question(
-                question, input.id, input.max_questions, input.project_id
+                question,
+                input.id,
+                input.max_questions,
+                input.max_categories,
+                input.project_id,
             )
             for question in questions
         ]
