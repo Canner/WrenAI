@@ -7,6 +7,7 @@ import toml
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
+    draft_candidate,
     followup_sql_generation,
     question_recommendation,
     relationship_recommendation,
@@ -24,6 +25,7 @@ from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
+from src.web.v1.services.draft_candidate import DraftCandidate
 from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 from src.web.v1.services.semantics_description import SemanticsDescription
@@ -40,6 +42,7 @@ logger = logging.getLogger("wren-ai-service")
 class ServiceContainer:
     ask_service: AskService
     ask_details_service: AskDetailsService
+    draft_candidate: DraftCandidate
     question_recommendation: QuestionRecommendation
     relationship_recommendation: RelationshipRecommendation
     semantics_description: SemanticsDescription
@@ -180,6 +183,14 @@ def create_service_container(
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],
                 ),
+            },
+            **query_cache,
+        ),
+        draft_candidate=DraftCandidate(
+            pipelines={
+                "draft_candidate": draft_candidate.DraftCandidate(
+                    **pipe_components["draft_candidate"],
+                )
             },
             **query_cache,
         ),
