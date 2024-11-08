@@ -3,14 +3,15 @@ import sys
 from pathlib import Path
 from typing import Tuple
 import os
-from prompt_optimizer import optimize, validate_context_and_answer, build_optimizing_module, optimizer_parameters, prepare_dataset, configure_llm_provider
-
 import dotenv
 from deepeval import evaluate
 from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
 from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
+
+from dspy_modules.prompt_optimizer import build_optimizing_module, optimizer_parameters, prepare_dataset, configure_llm_provider
+
 
 sys.path.append(f"{Path().parent.resolve()}")
 import traceback

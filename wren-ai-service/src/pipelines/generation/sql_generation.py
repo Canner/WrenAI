@@ -27,6 +27,7 @@ import os
 import dspy
 
 from eval.dspy_modules.ask_generation import AskGenerationV1
+from eval.dspy_modules.prompt_optimizer import configure_llm_provider
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -92,6 +93,7 @@ def prompt(
     prompt_builder: PromptBuilder,
     configurations: AskConfigurations | None = None,
     samples: List[Dict] | None = None,
+    dspy_module: dspy.Module = None
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
@@ -101,7 +103,18 @@ def prompt(
     logger.debug(f"configurations: {configurations}")
     if samples:
         logger.debug(f"samples: {samples}")
-    result_dict = prompt_builder.run(
+
+    if dspy_module:
+        # use dspy to predict, the input is question and context
+        context = []
+        dspy_inputs = {}
+        for doc in documents:
+            context.append(str(doc))
+        dspy_inputs['context'] = context
+        dspy_inputs['question'] = query
+        return dspy_inputs
+
+    return prompt_builder.run(
         query=query,
         documents=documents,
         exclude=exclude,
@@ -110,27 +123,18 @@ def prompt(
         samples=samples,
         current_time=show_current_time(configurations.timezone),
     )
-    context = []
-    for doc in documents:
-        context.append(str(doc))
-    result_dict['context'] = context
-    result_dict['question'] = query
-    return result_dict
-
-
-def configure_llm_provider(llm: str, api_key: str) -> None:
-    dspy.settings.configure(lm=dspy.OpenAI(model=llm, api_key=api_key,max_tokens=4096))
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generate_sql(prompt: dict, generator: Any, dspy_module: Any) -> dict:
-    if not dspy_module:
-      logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-      return await generator.run(prompt=prompt.get("prompt"))
-    else:
-      prediction = dspy_module(question=prompt["question"].as_string(), context=prompt["context"][0])
+async def generate_sql(prompt: dict, generator: Any, dspy_module: dspy.Module) -> dict:
+    if dspy_module:
+      # use dspy to predict, the input is question and context
+      prediction = dspy_module(question=prompt["question"].as_string(), context=" ".join(prompt["context"]))
       return {"replies":[prediction.answer] }
+
+    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
+    return await generator.run(prompt=prompt.get("prompt"))
 
 
 @async_timer

@@ -54,7 +54,7 @@ optimizer_parameters = {
 
 
 def configure_llm_provider(llm: str, api_key: str):
-    dspy.settings.configure(lm=dspy.OpenAI(model=llm, api_key=api_key,max_tokens=4096))
+    dspy.settings.configure(lm=dspy.LM(model=llm, api_key=api_key))
 
 
 def clean_sql(sql: str) -> str:
@@ -84,6 +84,7 @@ def prepare_dataset(path: str, train_ratio: float = 0.5):
 # Also check that the retrieved context does actually contain that answer.
 def validate_context_and_answer(example, pred, trace=None):
     if optimizer_parameters["predictions"] is None:
+        # if we don't have metric from eval module, we use the default metric
         answer_EM = dspy.evaluate.answer_exact_match(example, pred)
         answer_PM = dspy.evaluate.answer_passage_match(example, pred)
         return answer_EM and answer_PM
