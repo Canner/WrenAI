@@ -22,6 +22,7 @@ logger = logging.getLogger("wren-ai-service")
 def prompt(
     sql: str,
     question: str,
+    num_candidates: int,
     language: str,
     current_date: str,
     prompt_builder: PromptBuilder,
@@ -29,6 +30,7 @@ def prompt(
     return prompt_builder.run(
         sql=sql,
         question=question,
+        num_candidates=num_candidates,
         language=language,
         current_date=current_date,
     )
@@ -87,6 +89,8 @@ SQL Query:
 Question:
 {{question}}
 
+Number of Candidates: {{num_candidates}}
+
 Current Date: {{current_date}}
 Language: {{language}}
 """
@@ -116,6 +120,7 @@ class DraftCandidate(BasicPipeline):
         self,
         sql: str,
         question: str,
+        num_candidates: int,
         language: str = "English",
         current_date: str = datetime.now(),
     ) -> None:
@@ -129,6 +134,7 @@ class DraftCandidate(BasicPipeline):
             inputs={
                 "sql": sql,
                 "question": question,
+                "num_candidates": num_candidates,
                 "language": language,
                 "current_date": current_date,
             },
@@ -141,6 +147,7 @@ class DraftCandidate(BasicPipeline):
         self,
         sql: str,
         question: str,
+        num_candidates: int,
         language: str = "English",
         current_date: str = datetime.now(),
     ) -> dict:
@@ -150,6 +157,7 @@ class DraftCandidate(BasicPipeline):
             inputs={
                 "sql": sql,
                 "question": question,
+                "num_candidates": num_candidates,
                 "language": language,
                 "current_date": current_date,
                 **self._components,

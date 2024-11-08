@@ -17,6 +17,7 @@ class DraftCandidate:
         id: str
         sql: str
         question: str
+        num_candidates: int = 2
         project_id: Optional[str] = None
         configuration: Optional[Configuration] = Configuration()
 
@@ -63,6 +64,7 @@ class DraftCandidate:
             request = {
                 "sql": input.sql,
                 "question": input.question,
+                "num_candidates": input.num_candidates,
                 "language": input.configuration.language,
                 "current_date": input.configuration.show_current_time(),
             }
