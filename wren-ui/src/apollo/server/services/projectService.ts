@@ -11,6 +11,8 @@ import {
 } from './metadataService';
 import { DataSourceName } from '../types';
 import { encryptConnectionInfo } from '../dataSource';
+import { RecommendationQuestion, WrenAIError } from '../adaptors';
+import { RecommendQuestionResultStatus } from './askingService';
 
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
@@ -22,6 +24,11 @@ export interface ProjectData {
   connectionInfo: WREN_AI_CONNECTION_INFO;
 }
 
+export interface ProjectRecommendationQuestionsResult {
+  status: RecommendQuestionResultStatus;
+  questions: RecommendationQuestion[];
+  error: WrenAIError;
+}
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
   getGeneralConnectionInfo: (project: Project) => Record<string, any>;
@@ -41,6 +48,7 @@ export interface IProjectService {
     persistCredentialDir: string,
   ) => string;
   deleteProject: (projectId: number) => Promise<void>;
+  getProjectRecommendationQuestions: () => Promise<ProjectRecommendationQuestionsResult>;
 }
 
 export class ProjectService implements IProjectService {
@@ -56,6 +64,26 @@ export class ProjectService implements IProjectService {
   }) {
     this.projectRepository = projectRepository;
     this.metadataService = metadataService;
+  }
+
+  public async getProjectRecommendationQuestions() {
+    const project = await this.projectRepository.getCurrentProject();
+    if (!project) {
+      throw new Error(`Project not found`);
+    }
+    const result: ProjectRecommendationQuestionsResult = {
+      status: RecommendQuestionResultStatus.NOT_STARTED,
+      questions: [],
+      error: null,
+    };
+    if (project.queryId) {
+      result.status = project.questionsStatus
+        ? RecommendQuestionResultStatus[project.questionsStatus]
+        : result.status;
+      result.questions = project.questions || [];
+      result.error = project.questionsError as WrenAIError;
+    }
+    return result;
   }
 
   public async getCurrentProject() {
