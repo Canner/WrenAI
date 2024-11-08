@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Literal, Optional
+from typing import Callable, Dict, Literal, Optional
 
 import orjson
 from cachetools import TTLCache
@@ -60,12 +60,20 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
+    def _partial_update(self, request_id: str, candidate: dict, valid_sql: str):
+        current = self._cache[request_id]
+        current.response = current.response or {"questions": {}}
+        current.response["questions"].setdefault(candidate["category"], []).append(
+            {**candidate, "sql": valid_sql}
+        )
+
     @observe(name="Validate Question")
     async def _validate_question(
         self,
         candidate: dict,
         request_id: str,
         project_id: Optional[str] = None,
+        hook: Optional[Callable] = lambda *_: None,
     ) -> bool:
         try:
             retrieval_result = await self._pipelines["retrieval"].run(
@@ -79,17 +87,16 @@ class QuestionRecommendation:
                 exclude=[],
                 configurations=AskConfigurations(),
             )
-            valid_sql = generated_sql["post_process"]["valid_generation_results"][0][
-                "sql"
-            ]
+
+            post_process = generated_sql["post_process"]
+
+            if len(post_process["valid_generation_results"]) == 0:
+                return False
+
+            valid_sql = post_process["valid_generation_results"][0]["sql"]
             logger.debug(f"Request {request_id}: Valid SQL: {valid_sql}")
 
-            # partial update
-            current = self._cache[request_id]
-            current.response = current.response or {"questions": {}}
-            current.response["questions"].setdefault(candidate["category"], []).append(
-                {**candidate, "sql": valid_sql}
-            )
+            hook(request_id, candidate, valid_sql)
 
             return True
 
@@ -97,24 +104,6 @@ class QuestionRecommendation:
             logger.error(f"Request {request_id}: Error validating question: {str(e)}")
 
         return False
-
-    async def _recommend(
-        self,
-        input: dict,
-        request_id: str,
-        project_id: Optional[str] = None,
-    ) -> list:
-        resp = await self._pipelines["question_recommendation"].run(**input)
-        questions = resp.get("normalized", {}).get("questions", [])
-
-        validation_tasks = [
-            self._validate_question(question, request_id, project_id)
-            for question in questions
-        ]
-
-        results = await asyncio.gather(*validation_tasks, return_exceptions=True)
-
-        return list(zip(questions, results))
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
@@ -133,9 +122,20 @@ class QuestionRecommendation:
                 "max_categories": request.max_categories,
             }
 
-            results = await self._recommend(input, request.id, request.project_id)
+            resp = await self._pipelines["question_recommendation"].run(**input)
+            questions = resp.get("normalized", {}).get("questions", [])
 
-            invalid = [question for question, is_valid in results if not is_valid]
+            validation_tasks = [
+                self._validate_question(
+                    question, request.id, request.project_id, self._partial_update
+                )
+                for question in questions
+            ]
+
+            results = await asyncio.gather(*validation_tasks, return_exceptions=True)
+            zip_result = list(zip(questions, results))
+
+            invalid = [question for question, is_valid in zip_result if not is_valid]
 
             resource = self._cache[request.id]
             resource.status = (
@@ -145,36 +145,6 @@ class QuestionRecommendation:
             if resource.status == "finished":
                 return resource.with_metadata()
 
-            # Count questions per category in invalid questions
-            category_counts = {}
-            for question in invalid:
-                category = question["category"]
-                category_counts[category] = category_counts.get(category, 0) + 1
-
-            logger.debug(f"Invalid questions per category: {category_counts}")
-
-            categories = list(category_counts.keys())
-            logger.info(
-                f"Request {request.id}: Regenerating {len(invalid)} questions for {categories}"
-            )
-
-            valid, invalid = await self._recommend(
-                {"categories": categories, **input}, request.id, request.project_id
-            )
-
-            # Group valid questions by category
-            valid_by_category = {}
-            for question in valid:
-                category = question["category"]
-                valid_by_category.setdefault(category, []).append(question)
-
-            questions_to_add = [
-                question
-                for category, questions in valid_by_category.items()
-                for question in questions[: category_counts[category]]
-            ]
-
-            self._cache[request.id].response["questions"] += questions_to_add
             self._cache[request.id].status = "finished"
 
         except orjson.JSONDecodeError as e:
