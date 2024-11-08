@@ -125,10 +125,16 @@ if __name__ == "__main__":
     results = asyncio.run(ask_questions(questions, url, semantics_preperation_id))
     assert len(results) == len(questions)
 
+    final_results = []
     # count the number of results that are failed
     for question, result in zip(questions, results):
-        print(f"question: {question}")
-        print(json.dumps(result, indent=2))
+        final_results.append(
+            {
+                "question": question,
+                "result": result,
+            }
+        )
+    print(json.dumps(final_results, indent=2))
 
     failed_count = sum(1 for result in results if result["status"] == "failed")
     assert (
