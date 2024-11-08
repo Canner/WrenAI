@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Literal, Optional, Tuple
+from typing import Dict, Literal, Optional
 
 import orjson
 from cachetools import TTLCache
@@ -64,6 +64,7 @@ class QuestionRecommendation:
     async def _validate_question(
         self,
         candidate: dict,
+        request_id: str,
         project_id: Optional[str] = None,
     ) -> bool:
         try:
@@ -78,31 +79,40 @@ class QuestionRecommendation:
                 exclude=[],
                 configurations=AskConfigurations(),
             )
-            valid_sql = generated_sql["post_process"]["valid_generation_results"]
-            logger.debug(f"Valid SQL: {valid_sql}")
-        except Exception as e:
-            logger.error(f"Error validating question: {str(e)}")
-            return False
+            valid_sql = generated_sql["post_process"]["valid_generation_results"][0][
+                "sql"
+            ]
+            logger.debug(f"Request {request_id}: Valid SQL: {valid_sql}")
 
-        return True if valid_sql else False
+            # partial update
+            current = self._cache[request_id]
+            current.response = current.response or {"questions": []}
+            current.response["questions"] += [{**candidate, "sql": valid_sql}]
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Request {request_id}: Error validating question: {str(e)}")
+
+        return False
 
     async def _recommend(
-        self, input: dict, project_id: Optional[str] = None
-    ) -> Tuple[list, list]:
+        self,
+        input: dict,
+        request_id: str,
+        project_id: Optional[str] = None,
+    ) -> list:
         resp = await self._pipelines["question_recommendation"].run(**input)
         questions = resp.get("normalized", {}).get("questions", [])
 
         validation_tasks = [
-            self._validate_question(question, project_id) for question in questions
+            self._validate_question(question, request_id, project_id)
+            for question in questions
         ]
 
         results = await asyncio.gather(*validation_tasks, return_exceptions=True)
-        zip_result = list(zip(questions, results))
 
-        valid = [question for question, is_valid in zip_result if is_valid]
-        invalid = [question for question, is_valid in zip_result if not is_valid]
-
-        return valid, invalid
+        return list(zip(questions, results))
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
@@ -121,20 +131,17 @@ class QuestionRecommendation:
                 "max_categories": request.max_categories,
             }
 
-            valid, invalid = await self._recommend(input, request.project_id)
+            results = await self._recommend(input, request.id, request.project_id)
 
-            status = (
+            invalid = [question for question, is_valid in results if not is_valid]
+
+            resource = self._cache[request.id]
+            resource.status = (
                 "generating" if len(invalid) > 0 and request.regenerate else "finished"
             )
 
-            self._cache[request.id] = self.Resource(
-                id=request.id,
-                status=status,
-                response={"questions": valid},
-            )
-
-            if status == "finished":
-                return self._cache[request.id].with_metadata()
+            if resource.status == "finished":
+                return resource.with_metadata()
 
             # Count questions per category in invalid questions
             category_counts = {}
@@ -150,7 +157,7 @@ class QuestionRecommendation:
             )
 
             valid, invalid = await self._recommend(
-                {"categories": categories, **input}, request.project_id
+                {"categories": categories, **input}, request.id, request.project_id
             )
 
             # Group valid questions by category
