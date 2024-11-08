@@ -26,12 +26,14 @@ Endpoints:
    - Generates new draft candidates
    - Request body: PostRequest
      {
-       "mdl": "{ ... }",                                 # JSON string of the MDL (Model Definition Language)
+       "sql": "SELECT * FROM table",                     # SQL query string
+       "question": "What does this query do?",           # Question about the SQL query
+       "num_candidates": 2,                              # Optional number of candidates to generate (default: 2)
        "project_id": "project-id",                       # Optional project ID
        "configuration": {                                # Optional configuration settings
-         "language": "English",                         # Optional language, defaults to "English"
-         "timezone": {                                  # Optional timezone settings
-           "name": "Asia/Taipei",                       # Timezone name, defaults to "Asia/Taipei"
+         "language": "English",                          # Optional language, defaults to "English"
+         "timezone": {                                   # Optional timezone settings
+           "name": "Asia/Taipei",                        # Timezone name, defaults to "Asia/Taipei"
          }
        }
      }
@@ -45,13 +47,18 @@ Endpoints:
    - Path parameter: id (str)
    - Response: GetResponse
      {
-       "id": "unique-uuid",                      # Unique identifier of the candidates
-       "status": "generating" | "finished" | "failed",
-       "response": {                             # Present only if status is "finished"
-         "candidates": [...]                     # List of draft candidates
+       "id": "unique-uuid",                             # Unique identifier of the candidates
+       "status": "generating" | "finished" | "failed",  # Current status of generation
+       "response": {                                    # Present only if status is "finished"
+         "candidates": [                                # List of draft candidates
+           {
+             "sql": "SELECT ...",                      # SQL query variant
+             "summary": "This query..."                # Summary of what the query does
+           }
+         ]
        },
-       "error": {                                # Present only if status is "failed"
-         "code": "OTHERS" | "MDL_PARSE_ERROR" | "RESOURCE_NOT_FOUND",
+       "error": {                                      # Present only if status is "failed"
+         "code": "OTHERS" | "SQL_PARSE_ERROR" | "RESOURCE_NOT_FOUND",
          "message": "Error description"
        }
      }
