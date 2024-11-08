@@ -23,7 +23,7 @@ function getButtonsProps({
   isViewSQL: boolean;
   previewDataProps: { loading: boolean };
   onViewSQL: () => void;
-  onPreviewData: () => void;
+  onPreviewData: () => Promise<void>;
 }) {
   const previewDataButtonText = 'Prevew data';
   const viewSQLButtonText = isLastStep ? 'View full SQL' : 'View SQL';
@@ -72,10 +72,10 @@ export default function useAnswerStepContent({
   const onViewSQL = () =>
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.VIEW_SQL);
 
-  const onPreviewData = () => {
+  const onPreviewData = async () => {
     setCollapseContentType(COLLAPSE_CONTENT_TYPE.PREVIEW_DATA);
     nativeSQLResult.setNativeSQLMode(false);
-    previewData({
+    await previewData({
       variables: { where: { responseId: threadResponseId, stepIndex } },
     });
   };

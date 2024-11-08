@@ -12,11 +12,11 @@ interface Props {
   fullSql: string;
   isLastStep: boolean;
   isLastThreadResponse: boolean;
-  onTriggerScrollToBottom: () => void;
   sql: string;
   stepIndex: number;
   summary: string;
   threadResponseId: number;
+  onInitPreviewDone: () => void;
 }
 
 export default function StepContent(props: Props) {
@@ -24,11 +24,11 @@ export default function StepContent(props: Props) {
     fullSql,
     isLastStep,
     isLastThreadResponse,
-    onTriggerScrollToBottom,
     sql,
     stepIndex,
     summary,
     threadResponseId,
+    onInitPreviewDone,
   } = props;
 
   const { collapseContentProps, previewDataButtonProps, viewSQLButtonProps } =
@@ -44,9 +44,9 @@ export default function StepContent(props: Props) {
 
   const autoTriggerPreviewDataButton = async () => {
     await nextTick();
-    previewDataButtonProps.onClick();
-    await nextTick(1500);
-    onTriggerScrollToBottom();
+    await previewDataButtonProps.onClick();
+    await nextTick();
+    onInitPreviewDone();
   };
 
   // when is the last step of the last thread response, auto trigger preview data button

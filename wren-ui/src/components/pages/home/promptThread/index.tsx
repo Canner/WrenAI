@@ -33,16 +33,17 @@ const StyledPromptThread = styled.div`
 `;
 
 const AnswerResultTemplate = ({
-  index,
   id,
-  status,
-  question,
-  detail,
-  error,
-  onOpenSaveAsViewModal,
-  onTriggerScrollToBottom,
   data,
+  index,
+  error,
+  status,
+  detail,
   summary,
+  question,
+  // callbacks
+  onOpenSaveAsViewModal,
+  onInitPreviewDone,
 }) => {
   const lastResponseId = data[data.length - 1].id;
   const isLastThreadResponse = id === lastResponseId;
@@ -68,7 +69,7 @@ const AnswerResultTemplate = ({
           fullSql={detail?.sql}
           threadResponseId={id}
           onOpenSaveAsViewModal={onOpenSaveAsViewModal}
-          onTriggerScrollToBottom={onTriggerScrollToBottom}
+          onInitPreviewDone={onInitPreviewDone}
           isLastThreadResponse={isLastThreadResponse}
         />
       )}
@@ -83,17 +84,13 @@ export default function PromptThread(props: Props) {
   const divRef = useRef<HTMLDivElement>(null);
 
   const triggerScrollToBottom = () => {
-    const contentLayout = divRef.current.parentElement;
+    const contentLayout = divRef.current?.parentElement;
     const lastChild = divRef.current.lastElementChild as HTMLElement;
     const lastChildElement = lastChild.lastElementChild as HTMLElement;
 
-    if (
-      contentLayout.clientHeight <
-      lastChild.offsetTop + lastChild.clientHeight
-    ) {
+    if (contentLayout) {
       contentLayout.scrollTo({
         top: lastChildElement.offsetTop,
-        behavior: 'smooth',
       });
     }
   };
@@ -102,14 +99,18 @@ export default function PromptThread(props: Props) {
     if (divRef.current && data?.responses.length > 0) {
       triggerScrollToBottom();
     }
-  }, [divRef, data]);
+  }, [data]);
+
+  const onInitPreviewDone = () => {
+    triggerScrollToBottom();
+  };
 
   return (
     <StyledPromptThread className="mt-12" ref={divRef}>
       <AnswerResultIterator
         data={data?.responses || []}
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
-        onTriggerScrollToBottom={triggerScrollToBottom}
+        onInitPreviewDone={onInitPreviewDone}
       />
     </StyledPromptThread>
   );
