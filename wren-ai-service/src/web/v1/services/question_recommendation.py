@@ -66,19 +66,23 @@ class QuestionRecommendation:
         candidate: dict,
         project_id: Optional[str] = None,
     ) -> bool:
-        retrieval_result = await self._pipelines["retrieval"].run(
-            query=candidate["question"],
-            id=project_id,
-        )
-        documents = retrieval_result.get("construct_retrieval_results", [])
-        generated_sql = await self._pipelines["sql_generation"].run(
-            query=candidate["question"],
-            contexts=documents,
-            exclude=[],
-            configurations=AskConfigurations(),
-        )
-        valid_sql = generated_sql["post_process"]["valid_generation_results"]
-        logger.debug(f"Valid SQL: {valid_sql}")
+        try:
+            retrieval_result = await self._pipelines["retrieval"].run(
+                query=candidate["question"],
+                id=project_id,
+            )
+            documents = retrieval_result.get("construct_retrieval_results", [])
+            generated_sql = await self._pipelines["sql_generation"].run(
+                query=candidate["question"],
+                contexts=documents,
+                exclude=[],
+                configurations=AskConfigurations(),
+            )
+            valid_sql = generated_sql["post_process"]["valid_generation_results"]
+            logger.debug(f"Valid SQL: {valid_sql}")
+        except Exception as e:
+            logger.error(f"Error validating question: {str(e)}")
+            return False
 
         return True if valid_sql else False
 
@@ -92,11 +96,12 @@ class QuestionRecommendation:
             self._validate_question(question, project_id) for question in questions
         ]
 
-        results = await asyncio.gather(*validation_tasks)
-        zip_result = zip(questions, results)
+        results = await asyncio.gather(*validation_tasks, return_exceptions=True)
+        zip_result = list(zip(questions, results))
 
-        valid = [q for q, is_valid in zip_result if is_valid]
-        invalid = [q for q, is_valid in zip_result if not is_valid]
+        valid = [question for question, is_valid in zip_result if is_valid]
+        invalid = [question for question, is_valid in zip_result if not is_valid]
+
         return valid, invalid
 
     @observe(name="Generate Question Recommendation")
