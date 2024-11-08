@@ -716,7 +716,7 @@ export const typeDefs = gql`
     path: String!
   }
 
-  enum ThreadRecommendQuestionResultStatus {
+  enum RecommendQuestionResultStatus {
     NOT_STARTED
     GENERATING
     FINISHED
@@ -730,7 +730,13 @@ export const typeDefs = gql`
   }
 
   type ThreadRecommendQuestionResult {
-    status: ThreadRecommendQuestionResultStatus!
+    status: RecommendQuestionResultStatus!
+    questions: [RecommendationQuestion!]!
+    error: Error
+  }
+
+  type ProjectRecommendationQuestionsResult {
+    status: RecommendQuestionResultStatus!
     questions: [RecommendationQuestion!]!
     error: Error
   }
@@ -773,6 +779,7 @@ export const typeDefs = gql`
     getThreadRecommendationQuestions(
       threadId: Int!
     ): ThreadRecommendQuestionResult!
+    getProjectRecommendationQuestions: ProjectRecommendationQuestionsResult!
   }
 
   type Mutation {

@@ -63,6 +63,8 @@ export class ProjectResolver {
     this.triggerDataSourceDetection =
       this.triggerDataSourceDetection.bind(this);
     this.getSchemaChange = this.getSchemaChange.bind(this);
+    this.getProjectRecommendationQuestions =
+      this.getProjectRecommendationQuestions.bind(this);
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
@@ -85,6 +87,14 @@ export class ProjectResolver {
     };
   }
 
+  public async getProjectRecommendationQuestions(
+    _root: any,
+    _arg: any,
+    ctx: IContext,
+  ) {
+    return ctx.projectService.getProjectRecommendationQuestions();
+  }
+
   public async updateCurrentProject(
     _root: any,
     arg: { data: { language: string } },
@@ -105,7 +115,7 @@ export class ProjectResolver {
         maxCategories: 3,
         maxQuestions: 9,
         configuration: {
-          language: project.language,
+          language,
         },
       });
     const updatedProject = await ctx.projectRepository.updateOne(project.id, {

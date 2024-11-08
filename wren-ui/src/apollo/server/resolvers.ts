@@ -48,6 +48,8 @@ const resolvers = {
     // Recommendation questions
     getThreadRecommendationQuestions:
       askingResolver.getThreadRecommendationQuestions,
+    getProjectRecommendationQuestions:
+      projectResolver.getProjectRecommendationQuestions,
   },
   Mutation: {
     deploy: modelResolver.deploy,

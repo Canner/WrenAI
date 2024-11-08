@@ -27,7 +27,6 @@ import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
 import { ThreadRecommendQuestionBackgroundTracker } from '../backgrounds';
-import * as Errors from '@server/utils/error';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -54,14 +53,15 @@ export interface AskingDetailTaskInput {
   viewId?: number;
 }
 
-export enum ThreadRecommendQuestionResultStatus {
+export enum RecommendQuestionResultStatus {
   NOT_STARTED = 'NOT_STARTED',
   GENERATING = 'GENERATING',
   FINISHED = 'FINISHED',
   FAILED = 'FAILED',
 }
+
 export interface ThreadRecommendQuestionResult {
-  status: ThreadRecommendQuestionResultStatus;
+  status: RecommendQuestionResultStatus;
   questions: RecommendationQuestion[];
   error?: WrenAIError;
 }
@@ -350,13 +350,13 @@ export class AskingService implements IAskingService {
 
     // handle not started
     const res: ThreadRecommendQuestionResult = {
-      status: ThreadRecommendQuestionResultStatus.NOT_STARTED,
+      status: RecommendQuestionResultStatus.NOT_STARTED,
       questions: [],
       error: null,
     };
     if (thread.queryId && thread.questionsStatus) {
-      res.status = ThreadRecommendQuestionResultStatus[thread.questionsStatus]
-        ? ThreadRecommendQuestionResultStatus[thread.questionsStatus]
+      res.status = RecommendQuestionResultStatus[thread.questionsStatus]
+        ? RecommendQuestionResultStatus[thread.questionsStatus]
         : res.status;
       res.questions = thread.questions || [];
       res.error = thread.questionsError as WrenAIError;
