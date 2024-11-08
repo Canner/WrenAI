@@ -571,6 +571,7 @@ export const typeDefs = gql`
   }
 
   enum RecommendedQuestionsTaskStatus {
+    NOT_STARTED
     GENERATING
     FINISHED
     FAILED
@@ -745,31 +746,6 @@ export const typeDefs = gql`
     path: String!
   }
 
-  enum RecommendQuestionResultStatus {
-    NOT_STARTED
-    GENERATING
-    FINISHED
-    FAILED
-  }
-
-  type RecommendationQuestion {
-    question: String!
-    category: String!
-    sql: String!
-  }
-
-  type ThreadRecommendQuestionResult {
-    status: RecommendQuestionResultStatus!
-    questions: [RecommendationQuestion!]!
-    error: Error
-  }
-
-  type ProjectRecommendationQuestionsResult {
-    status: RecommendQuestionResultStatus!
-    questions: [RecommendationQuestion!]!
-    error: Error
-  }
-
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -795,7 +771,6 @@ export const typeDefs = gql`
     thread(threadId: Int!): DetailedThread!
     threadResponse(responseId: Int!): ThreadResponse!
     nativeSql(responseId: Int!): String!
-    instantRecommendedQuestions(taskId: String!): RecommendedQuestionsTask!
 
     # Settings
     settings: Settings!
@@ -806,10 +781,10 @@ export const typeDefs = gql`
     # Learning
     learningRecord: LearningRecord!
 
-    getThreadRecommendationQuestions(
-      threadId: Int!
-    ): ThreadRecommendQuestionResult!
-    getProjectRecommendationQuestions: ProjectRecommendationQuestionsResult!
+    # Recommendation questions
+    getThreadRecommendationQuestions(threadId: Int!): RecommendedQuestionsTask!
+    getProjectRecommendationQuestions: RecommendedQuestionsTask!
+    instantRecommendedQuestions(taskId: String!): RecommendedQuestionsTask!
   }
 
   type Mutation {
@@ -863,9 +838,6 @@ export const typeDefs = gql`
     # Ask
     createAskingTask(data: AskingTaskInput!): Task!
     cancelAskingTask(taskId: String!): Boolean!
-    createInstantRecommendedQuestions(
-      data: InstantRecommendedQuestionsInput!
-    ): Task!
 
     # Thread
     createThread(data: CreateThreadInput!): Thread!
@@ -896,5 +868,8 @@ export const typeDefs = gql`
     # Recommendation questions
     generateThreadRecommendationQuestions(threadId: Int!): Boolean!
     generateProjectRecommendationQuestions: Boolean!
+    createInstantRecommendedQuestions(
+      data: InstantRecommendedQuestionsInput!
+    ): Task!
   }
 `;

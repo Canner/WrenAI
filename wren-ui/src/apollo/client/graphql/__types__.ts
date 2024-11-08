@@ -444,6 +444,8 @@ export type Mutation = {
   deleteThread: Scalars['Boolean'];
   deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
+  generateProjectRecommendationQuestions: Scalars['Boolean'];
+  generateThreadRecommendationQuestions: Scalars['Boolean'];
   previewData: Scalars['JSON'];
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
@@ -542,6 +544,11 @@ export type MutationDeleteViewArgs = {
 
 export type MutationDeployArgs = {
   force?: InputMaybe<Scalars['Boolean']>;
+};
+
+
+export type MutationGenerateThreadRecommendationQuestionsArgs = {
+  threadId: Scalars['Int'];
 };
 
 
@@ -719,6 +726,8 @@ export type Query = {
   autoGenerateRelation: Array<RecommendRelations>;
   diagram: Diagram;
   getMDL: GetMdlResult;
+  getProjectRecommendationQuestions: RecommendedQuestionsTask;
+  getThreadRecommendationQuestions: RecommendedQuestionsTask;
   instantRecommendedQuestions: RecommendedQuestionsTask;
   learningRecord: LearningRecord;
   listDataSourceTables: Array<CompactTable>;
@@ -745,6 +754,11 @@ export type QueryAskingTaskArgs = {
 
 export type QueryGetMdlArgs = {
   hash: Scalars['String'];
+};
+
+
+export type QueryGetThreadRecommendationQuestionsArgs = {
+  threadId: Scalars['Int'];
 };
 
 
@@ -795,7 +809,8 @@ export type RecommendedQuestionsTask = {
 export enum RecommendedQuestionsTaskStatus {
   FAILED = 'FAILED',
   FINISHED = 'FINISHED',
-  GENERATING = 'GENERATING'
+  GENERATING = 'GENERATING',
+  NOT_STARTED = 'NOT_STARTED'
 }
 
 export type Relation = {
