@@ -3,41 +3,45 @@ import copy from 'copy-to-clipboard';
 import { message } from 'antd';
 import { COLLAPSE_CONTENT_TYPE } from '@/utils/enum';
 import useNativeSQL from '@/hooks/useNativeSQL';
-import {
-  usePreviewDataMutation,
-  PreviewDataMutationResult,
-} from '@/apollo/client/graphql/home.generated';
+import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 
 const getTextButton = (isActive: boolean) => ({
   type: 'text',
   className: `d-inline-flex align-center mr-2 ${isActive ? 'gray-9' : 'gray-6'}`,
 });
 
-function getButtonProps({
+function getButtonsProps({
   isLastStep,
   isPreviewData,
   isViewSQL,
+  previewDataProps,
   onViewSQL,
   onPreviewData,
-  previewDataProps,
+}: {
+  isLastStep: boolean;
+  isPreviewData: boolean;
+  isViewSQL: boolean;
+  previewDataProps: { loading: boolean };
+  onViewSQL: () => void;
+  onPreviewData: () => void;
 }) {
+  const previewDataButtonText = 'Prevew data';
+  const viewSQLButtonText = isLastStep ? 'View full SQL' : 'View SQL';
   const previewDataButtonProps = isLastStep
     ? { type: 'primary', className: 'mr-2' }
     : getTextButton(isPreviewData);
-
-  const [viewSQLButtonText, viewSQLButtonProps] = isLastStep
-    ? ['View Full SQL']
-    : ['View SQL', getTextButton(isViewSQL)];
+  const viewSQLButtonProps = isLastStep ? {} : getTextButton(isViewSQL);
 
   return {
-    viewSQLButtonText,
     viewSQLButtonProps: {
       ...viewSQLButtonProps,
+      children: viewSQLButtonText,
       onClick: onViewSQL,
     },
     previewDataButtonProps: {
       ...previewDataButtonProps,
-      ...previewDataProps,
+      children: previewDataButtonText,
+      loading: previewDataProps.loading,
       onClick: onPreviewData,
     },
   };
@@ -92,13 +96,10 @@ export default function useAnswerStepContent({
   };
 
   const isViewSQL = collapseContentType === COLLAPSE_CONTENT_TYPE.VIEW_SQL;
-
   const isPreviewData =
     collapseContentType === COLLAPSE_CONTENT_TYPE.PREVIEW_DATA;
-
   const previewDataLoading = previewDataResult.loading;
-
-  const buttonProps = getButtonProps({
+  const answerButtonsProps = getButtonsProps({
     isLastStep,
     isPreviewData,
     isViewSQL,
@@ -108,29 +109,25 @@ export default function useAnswerStepContent({
       loading: previewDataLoading,
     },
   });
+  const isViewFullSQL = isLastStep && isViewSQL;
+  const displayedSQL = isLastStep ? fullSql : sql;
 
   return {
+    ...answerButtonsProps,
     collapseContentProps: {
       isPreviewData,
-      onCloseCollapse,
-      onCopyFullSQL,
-      ...(isLastStep
-        ? {
-            isViewFullSQL: isViewSQL,
-            sql: fullSql,
-          }
-        : {
-            isViewSQL,
-            sql,
-          }),
+      isViewSQL,
+      isViewFullSQL,
+      sql: displayedSQL,
       previewDataResult: {
         error: previewDataResult.error,
         loading: previewDataLoading,
         previewData: previewDataResult?.data?.previewData,
-      } as unknown as PreviewDataMutationResult,
+      },
       nativeSQLResult,
+      onCopyFullSQL,
+      onCloseCollapse,
       onChangeNativeSQL,
     },
-    ...buttonProps,
   };
 }
