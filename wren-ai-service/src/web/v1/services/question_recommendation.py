@@ -86,8 +86,10 @@ class QuestionRecommendation:
 
             # partial update
             current = self._cache[request_id]
-            current.response = current.response or {"questions": []}
-            current.response["questions"] += [{**candidate, "sql": valid_sql}]
+            current.response = current.response or {"questions": {}}
+            current.response["questions"].setdefault(candidate["category"], []).append(
+                {**candidate, "sql": valid_sql}
+            )
 
             return True
 
