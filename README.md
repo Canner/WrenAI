@@ -87,7 +87,7 @@ Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_set
 
 ### 5. Easily Export and Visualize Your Data
 
-> Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as [Excel](https://docs.getwren.ai/oss/guide/integrations/excel-add-in) and [Google Sheets](https://docs.getwren.ai/oss/guide/integrations/google-add-on). This way, your insights remain accessible, allowing for further analysis using the tools you know best.
+> Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as [Excel](https://docs.getwren.ai/oss/guide/integrations/excel-add-in/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Google Sheets](https://docs.getwren.ai/oss/guide/integrations/google-add-on/?utm_source=github&utm_medium=content&utm_campaign=readme). This way, your insights remain accessible, allowing for further analysis using the tools you know best.
 
 <p align="center">
   <img src="./misc/wren-excel.png" width="700px">
