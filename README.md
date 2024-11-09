@@ -54,7 +54,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_settings#change-project-language?utm_source=github&utm_medium=content&utm_campaign=readme), such as English, German, Spanish, French, Japanese, Korean, Portuguese, Chinese, and more. Unlock valuable insights by asking your business questions to Wren AI. It goes beyond surface-level data analysis to reveal meaningful information and simplifies obtaining answers from lead scoring templates to customer segmentation.
 
 <p align="center">
-  <img src="./misc/wren-lang.png" width="700px">
+  <img src="./misc/wren-lang.png" style="max-width: 700px"/>
 </p>
 
 ### 2. Semantic Indexing with a Well-Crafted UI/UX
@@ -62,7 +62,7 @@ Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_set
 > Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture/?utm_source=github&utm_medium=content&utm_campaign=readme) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
 <p align="center">
-  <img src="./misc/wren-modeling.png" width="700px">
+  <img src="./misc/wren-modeling.png" style="max-width: 700px"/>
 </p>
 
 ### 3. Generate SQL Queries with Context
@@ -70,7 +70,7 @@ Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_set
 > With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/oss/engine/concept/what_is_mdl/?utm_source=github&utm_medium=content&utm_campaign=readme), reducing duplicate coding and simplifying data joins.
 
 <p align="center">
-  <img src="./misc/wren-context.png" width="700px">
+  <img src="./misc/wren-context.png" style="max-width: 700px"/>
 </p>
 
 ### 4. Get Insights without Writing Code
@@ -78,7 +78,7 @@ Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_set
 > When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
 
 <p align="center">
-  <img src="./misc/wren-insight.png" width="700px">
+  <img src="./misc/wren-insight.png" style="max-width: 700px"/>
 </p>
 
 ### 5. Easily Export and Visualize Your Data
@@ -86,7 +86,7 @@ Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_set
 > Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as [Excel](https://docs.getwren.ai/oss/guide/integrations/excel-add-in/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Google Sheets](https://docs.getwren.ai/oss/guide/integrations/google-add-on/?utm_source=github&utm_medium=content&utm_campaign=readme). This way, your insights remain accessible, allowing for further analysis using the tools you know best.
 
 <p align="center">
-  <img src="./misc/wren-excel.png" width="700px">
+  <img src="./misc/wren-excel.png" style="max-width: 700px"/>
 </p>
 
 ## 🤔 Why Wren AI?
