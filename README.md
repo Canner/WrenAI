@@ -89,10 +89,6 @@ Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_set
   <img src="./misc/wren-excel.png" width="700px">
 </p>
 
-<p align="center">
-  <img src="./misc/wren-excel.png" width="700px">
-</p>
-
 ## 🤔 Why Wren AI?
 
 We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
