@@ -93,7 +93,9 @@ Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_set
   <img src="./misc/wren-excel.png" width="700px">
 </p>
 
-<img src="./misc/wren-excel.png" width="600px">
+<p align="center">
+  <img src="./misc/wren-excel.png" width="700px">
+</p>
 
 ## 🤔 Why Wren AI?
 
