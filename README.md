@@ -49,21 +49,25 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 
 ## 🤖 SQL AI Agent on your data
 
-### 1. Indexing With Semantics
+### 1. Talk To Your Data In Any Language
+
+Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_settings#change-project-language), such as English, German, Spanish, French, Japanese, Korean, Portuguese, Chinese, and more. Unlock valuable insights by asking your business questions to Wren AI. It goes beyond surface-level data analysis to reveal meaningful information and simplifies obtaining answers from lead scoring templates to customer segmentation.
+
+### 2. Indexing With Semantics
 
 > Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
-### 2. Generate SQL Queries With Context
+### 3. Generate SQL Queries With Context
 
 > With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/oss/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
 
-### 3. Get Insights Without Writing Code
+### 4. Get Insights Without Writing Code
 
 > When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
 
-### 4. Self-Learning Feedback Loop (Coming Soon)
+### 5. Easily export and Visualize your data
 
-  > The AI self-learning feedback loop refines SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantic enhancements, and query frequency.
+> Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as Excel and Google Sheets. This way, your insights remain accessible, allowing for further analysis using the tools you know best.
 
 ## 🤔 Why Wren AI?
 
