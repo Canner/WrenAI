@@ -38,20 +38,16 @@
 
 https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
 
-👉 [Try with your data on Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
-
-👉 [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
+👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 
 ## 🎯 Our Vision & Mission
 
 Wren AI’s mission is to democratize data by bringing AI agents with SQL ability to any data source.
 
-🤩 [About our Vision](https://www.getwren.ai/post/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents/?utm_source=github&utm_medium=content&utm_campaign=readme)
+🤩 [Learn more about Wren AI and our Mission](https://docs.getwren.ai/oss/overview/introduction/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
-🙌 [About our Mission](https://www.getwren.ai/post/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it/?utm_source=github&utm_medium=content&utm_campaign=readme)
-
-## 🤖 A User-Centric, End-to-End Open-source SQL AI Agent
+## 🤖 A User-Centric, End-to-End Open-source SQL AI Agent - Text-to-SQL Total Solution
 
 ### 1. Talk to Your Data in Any Language
 
@@ -105,11 +101,11 @@ We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
 
 > Your sensitive information remains protected, with no risk of being trained to public LLMs, giving you secure, personalized insights while maintaining full control of your data.
 
-### 3. Open-Source
+### 3. Open-source End-to-end Solution
 
 > Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
 
-## 🤖 Wren AI Agentic Architecture
+## 🤖 Wren AI Text-to-SQL Agentic Architecture
 
 Wren AI consists of three core services:
 
