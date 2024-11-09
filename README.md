@@ -75,7 +75,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
 
 ### 4. Get Insights without Writing Code
 
-> When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
+> When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates the most relevant question for the user. You can also ask follow-up questions to get deeper insights.
 
 <p align="center">
   <img src="./misc/wren-insight.png" style="max-width: 700px"/>
