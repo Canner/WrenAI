@@ -198,8 +198,6 @@ class OpenAILLMProvider(LLMProvider):
                 f"Creating OpenAI API-compatible generator {self._generation_model} with model kwargs: {self._model_kwargs}"
             )
 
-        print("")
-
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,

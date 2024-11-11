@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
@@ -100,35 +101,16 @@ class SqlAnswerService:
                 status="generating",
             )
 
-            data = await self._pipelines["sql_answer"].run(
-                query=sql_answer_request.query,
-                sql=sql_answer_request.sql,
-                sql_summary=sql_answer_request.sql_summary,
-                sql_data=sql_data["execute_sql"],
-                language=sql_answer_request.configurations.language,
+            asyncio.create_task(
+                self._pipelines["sql_answer"].run(
+                    query=sql_answer_request.query,
+                    sql=sql_answer_request.sql,
+                    sql_summary=sql_answer_request.sql_summary,
+                    sql_data=sql_data["execute_sql"],
+                    language=sql_answer_request.configurations.language,
+                )
             )
-            api_results = data["post_process"]["results"]
-            if answer := api_results["answer"]:
-                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                    status="finished",
-                    response=answer,
-                )
-            else:
-                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                    status="failed",
-                    error=SqlAnswerResultResponse.SqlAnswerError(
-                        code="OTHERS",
-                        message=api_results["error"],
-                    ),
-                )
 
-                results["metadata"]["error_type"] = "OTHERS"
-                results["metadata"]["error_message"] = api_results["error"]
-
-            results["sql_answer_result"] = {
-                "answer": api_results["answer"],
-                "reasoning": api_results["reasoning"],
-            }
             return results
         except Exception as e:
             logger.exception(f"sql answer pipeline - OTHERS: {e}")

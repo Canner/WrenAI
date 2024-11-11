@@ -10,7 +10,6 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
@@ -36,12 +35,7 @@ Please answer the user's question in concise and clear manner in Markdown format
 
 ### OUTPUT FORMAT
 
-Return the output in the following JSON format:
-
-{
-    "reasoning": "<STRING>",
-    "answer": "<STRING_IN_MARKDOWN_FORMAT>",
-}
+Please provide your response in proper Markdown format.
 """
 
 sql_to_answer_user_prompt_template = """
@@ -51,6 +45,7 @@ SQL: {{ sql }}
 SQL summary: {{ sql_summary }}
 Data: {{ sql_data }}
 Language: {{ language }}
+
 Please think step by step and answer the user's question.
 """
 
@@ -100,7 +95,7 @@ def prompt(
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
     logger.debug(f"sql_summary: {sql_summary}")
-    logger.debug(f"sql data: {sql_data}")
+    logger.debug(f"sql data: {sql_data["results"]}")
     logger.debug(f"language: {language}")
     return prompt_builder.run(
         query=query,
@@ -119,35 +114,10 @@ async def generate_answer(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-@timer
-@observe(capture_input=False)
-def post_process(
-    generate_answer: dict, post_processor: SQLAnswerGenerationPostProcessor
-) -> dict:
-    logger.debug(
-        f"generate_answer: {orjson.dumps(generate_answer, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
-    return post_processor.run(generate_answer.get("replies"))
-
-
 ## End of Pipeline
 
 
-class AnswerResults(BaseModel):
-    reasoning: str
-    answer: str
-
-
-SQL_ANSWER_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_summary",
-            "schema": AnswerResults.model_json_schema(),
-        },
-    }
-}
+SQL_ANSWER_MODEL_KWARGS = {"response_format": {"type": "text"}}
 
 
 class SQLAnswer(BasicPipeline):
@@ -212,7 +182,7 @@ class SQLAnswer(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["post_process"],
+            ["generate_answer"],
             output_file_path=f"{destination}/sql_answer.dot",
             inputs={
                 "query": query,
@@ -238,7 +208,7 @@ class SQLAnswer(BasicPipeline):
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
-            ["post_process"],
+            ["generate_answer"],
             inputs={
                 "query": query,
                 "sql": sql,

@@ -727,6 +727,20 @@ def display_general_response(query_id: str):
         placeholder.markdown(markdown_content)
 
 
+def display_sql_answer(query_id: str):
+    url = f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/streaming-result"
+    headers = {"Accept": "text/event-stream"}
+    response = with_requests(url, headers)
+    client = sseclient.SSEClient(response)
+
+    markdown_content = ""
+    placeholder = st.empty()
+
+    for event in client.events():
+        markdown_content += orjson.loads(event.data)["message"]
+        placeholder.markdown(markdown_content)
+
+
 def get_sql_answer(
     query: str,
     sql: str,
@@ -749,7 +763,7 @@ def get_sql_answer(
     sql_answer_status = None
 
     while not sql_answer_status or (
-        sql_answer_status != "finished" and sql_answer_status != "failed"
+        sql_answer_status != "generating" and sql_answer_status != "failed"
     ):
         sql_answer_status_response = requests.get(
             f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/result"
@@ -759,8 +773,8 @@ def get_sql_answer(
         st.toast(f"The query processing status: {sql_answer_status}")
         time.sleep(POLLING_INTERVAL)
 
-    if sql_answer_status == "finished":
-        return sql_answer_status_response.json()["response"]
+    if sql_answer_status == "generating":
+        display_sql_answer(query_id)
     elif sql_answer_status == "failed":
         st.error(
             f'An error occurred while processing the query: {sql_answer_status_response.json()['error']}',
