@@ -388,13 +388,17 @@ export class AskingService implements IAskingService {
     const threadResponses = await this.threadResponseRepository.findAllBy({
       threadId,
     });
-    const questions = threadResponses.map(({ question }) => question);
+    // descending order and get the latest 5
+    const slicedThreadResponses = threadResponses
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 5);
+    const questions = slicedThreadResponses.map(({ question }) => question);
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
       previousQuestions: questions,
       projectId: project.id.toString(),
       maxCategories: 3,
-      maxQuestions: 3,
+      maxQuestions: 9,
       configuration: {
         language: project.language,
       },
