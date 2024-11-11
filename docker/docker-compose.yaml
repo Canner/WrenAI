@@ -66,10 +66,7 @@ services:
       CONFIG_PATH: /app/data/config.yaml
     networks:
       - wren
-    volumes:
-      - data:/app/data
     depends_on:
-      - bootstrap
       - qdrant
 
   qdrant:

@@ -28,9 +28,3 @@ if [ ! -f ${data_path}/mdl/sample.json ]; then
   echo "init mdl/sample.json"
   echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" >${data_path}/mdl/sample.json
 fi
-
-# copy config.yaml.example to config.yaml if not exists
-if [ ! -f ${data_path}/config.yaml ]; then
-  echo "init config.yaml"
-  cp /app/config.example.yaml ${data_path}/config.yaml
-fi
