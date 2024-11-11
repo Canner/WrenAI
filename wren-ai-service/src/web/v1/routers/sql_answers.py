@@ -80,7 +80,7 @@ async def sql_answer(
     service_container.sql_answer_service._sql_answer_results[
         query_id
     ] = SqlAnswerResultResponse(
-        status="understanding",
+        status="fetching",
     )
 
     background_tasks.add_task(

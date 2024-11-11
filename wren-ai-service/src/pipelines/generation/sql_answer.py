@@ -1,9 +1,8 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-import aiohttp
 import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
@@ -56,30 +55,6 @@ Please think step by step and answer the user's question.
 
 
 @component
-class DataFetcher:
-    def __init__(self, engine: Engine):
-        self._engine = engine
-
-    @component.output_types(
-        results=Optional[Dict[str, Any]],
-    )
-    async def run(
-        self,
-        sql: str,
-        project_id: str | None = None,
-    ):
-        async with aiohttp.ClientSession() as session:
-            _, data, _ = await self._engine.execute_sql(
-                sql,
-                session,
-                project_id=project_id,
-                dry_run=False,
-            )
-
-            return {"results": data}
-
-
-@component
 class SQLAnswerGenerationPostProcessor:
     @component.output_types(
         results=Dict[str, Any],
@@ -111,36 +86,26 @@ class SQLAnswerGenerationPostProcessor:
 
 
 ## Start of Pipeline
-@async_timer
-@observe(capture_input=False)
-async def execute_sql(
-    sql: str, data_fetcher: DataFetcher, project_id: str | None = None
-) -> dict:
-    logger.debug(f"Executing SQL: {sql}")
-
-    return await data_fetcher.run(sql=sql, project_id=project_id)
-
-
 @timer
 @observe(capture_input=False)
 def prompt(
     query: str,
     sql: str,
     sql_summary: str,
-    execute_sql: dict,
+    sql_data: dict,
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
     logger.debug(f"sql_summary: {sql_summary}")
-    logger.debug(f"sql data: {execute_sql}")
+    logger.debug(f"sql data: {sql_data}")
     logger.debug(f"language: {language}")
     return prompt_builder.run(
         query=query,
         sql=sql,
         sql_summary=sql_summary,
-        sql_data=execute_sql["results"],
+        sql_data=sql_data["results"],
         language=language,
     )
 
@@ -192,7 +157,6 @@ class SQLAnswer(BasicPipeline):
         **kwargs,
     ):
         self._components = {
-            "data_fetcher": DataFetcher(engine=engine),
             "prompt_builder": PromptBuilder(
                 template=sql_to_answer_user_prompt_template
             ),
@@ -212,8 +176,8 @@ class SQLAnswer(BasicPipeline):
         query: str,
         sql: str,
         sql_summary: str,
+        sql_data: dict,
         language: str,
-        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -226,8 +190,8 @@ class SQLAnswer(BasicPipeline):
                 "query": query,
                 "sql": sql,
                 "sql_summary": sql_summary,
+                "sql_data": sql_data,
                 "language": language,
-                "project_id": project_id,
                 **self._components,
             },
             show_legend=True,
@@ -241,8 +205,8 @@ class SQLAnswer(BasicPipeline):
         query: str,
         sql: str,
         sql_summary: str,
+        sql_data: dict,
         language: str,
-        project_id: str | None = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
@@ -251,8 +215,8 @@ class SQLAnswer(BasicPipeline):
                 "query": query,
                 "sql": sql,
                 "sql_summary": sql_summary,
+                "sql_data": sql_data,
                 "language": language,
-                "project_id": project_id,
                 **self._components,
             },
         )
@@ -275,10 +239,12 @@ if __name__ == "__main__":
         engine=engine,
     )
 
-    pipeline.visualize("query", "SELECT * FROM table_name", "sql summary", "English")
+    pipeline.visualize(
+        "query", "SELECT * FROM table_name", "sql summary", {}, "English"
+    )
     async_validate(
         lambda: pipeline.run(
-            "query", "SELECT * FROM table_name", "sql summary", "English"
+            "query", "SELECT * FROM table_name", "sql summary", {}, "English"
         )
     )
 

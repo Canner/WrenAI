@@ -48,7 +48,7 @@ class SqlAnswerResultResponse(BaseModel):
         code: Literal["OTHERS"]
         message: str
 
-    status: Literal["understanding", "processing", "finished", "failed"]
+    status: Literal["fetching", "generating", "finished", "failed"]
     response: Optional[str] = None
     error: Optional[SqlAnswerError] = None
 
@@ -87,18 +87,23 @@ class SqlAnswerService:
             query_id = sql_answer_request.query_id
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="understanding",
+                status="fetching",
+            )
+
+            sql_data = await self._pipelines["sql_executor"].run(
+                sql=sql_answer_request.sql,
+                project_id=sql_answer_request.thread_id,
             )
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="processing",
+                status="generating",
             )
 
             data = await self._pipelines["sql_answer"].run(
                 query=sql_answer_request.query,
                 sql=sql_answer_request.sql,
                 sql_summary=sql_answer_request.sql_summary,
-                project_id=sql_answer_request.thread_id,
+                sql_data=sql_data["execute_sql"],
                 language=sql_answer_request.configurations.language,
             )
             api_results = data["post_process"]["results"]
