@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from pathlib import Path
@@ -156,6 +157,7 @@ class SQLAnswer(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
+        self._user_queues = {}
         self._components = {
             "prompt_builder": PromptBuilder(
                 template=sql_to_answer_user_prompt_template
@@ -163,6 +165,7 @@ class SQLAnswer(BasicPipeline):
             "generator": llm_provider.get_generator(
                 system_prompt=sql_to_answer_system_prompt,
                 generation_kwargs=SQL_ANSWER_MODEL_KWARGS,
+                streaming_callback=self._streaming_callback,
             ),
             "post_processor": SQLAnswerGenerationPostProcessor(),
         }
@@ -170,6 +173,31 @@ class SQLAnswer(BasicPipeline):
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+    def _streaming_callback(self, chunk, query_id):
+        if query_id not in self._user_queues:
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
+        # Put the chunk content into the user's queue
+        asyncio.create_task(self._user_queues[query_id].put(chunk.content))
+        if chunk.meta.get("finish_reason") == "stop":
+            asyncio.create_task(self._user_queues[query_id].put("<DONE>"))
+
+    async def get_streaming_results(self, query_id):
+        if query_id not in self._user_queues:
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Ensure the user's queue exists
+        while True:
+            # Wait for an item from the user's queue
+            self._streaming_results = await self._user_queues[query_id].get()
+            if self._streaming_results == "<DONE>":  # Check for end-of-stream signal
+                del self._user_queues[query_id]
+                break
+            if self._streaming_results:  # Check if there are results to yield
+                yield self._streaming_results
+                self._streaming_results = ""  # Clear after yielding
 
     def visualize(
         self,

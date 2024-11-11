@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
+from src.web.v1.services import SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -165,3 +166,19 @@ class SqlAnswerService:
             )
 
         return result
+
+    async def get_sql_answer_streaming_result(
+        self,
+        query_id: str,
+    ):
+        if (
+            self._sql_answer_results.get(query_id)
+            and self._sql_answer_results.get(query_id).status == "generating"
+        ):
+            async for chunk in self._pipelines["sql_answer"].get_streaming_results(
+                query_id
+            ):
+                event = SSEEvent(
+                    data=SSEEvent.SSEEventMessage(message=chunk),
+                )
+                yield event.serialize()

@@ -2,6 +2,7 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi.responses import StreamingResponse
 
 from src.globals import (
     ServiceContainer,
@@ -40,7 +41,7 @@ Endpoints:
      }
 
 2. GET /sql-answers/{query_id}/result
-   - Retrieves the status and result of an SQL answer operation
+   - Retrieves the status and result of a SQL answer operation
    - Path parameter: query_id (str)
    - Response: SqlAnswerResultResponse
      {
@@ -55,6 +56,13 @@ Endpoints:
          "message": "Error description"
        }
      }
+
+3. **GET /sql-answers/{query_id}/streaming-result**
+   - Retrieves the streaming result of a SQL answer.
+   - **Path Parameter**:
+     - `query_id`: The unique identifier of the query.
+   - **Response**:
+     - Streaming response with the SQL answer.
 
 The SQL answer generation is an asynchronous process. The POST endpoint
 initiates the operation and returns immediately with a query ID. The GET endpoint can
@@ -98,4 +106,15 @@ async def get_sql_answer_result(
 ) -> SqlAnswerResultResponse:
     return service_container.sql_answer_service.get_sql_answer_result(
         SqlAnswerResultRequest(query_id=query_id)
+    )
+
+
+@router.get("/sql-answers/{query_id}/streaming-result")
+async def get_sql_answer_streaming_result(
+    query_id: str,
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> StreamingResponse:
+    return StreamingResponse(
+        service_container.sql_answer_service.get_sql_answer_streaming_result(query_id),
+        media_type="text/event-stream",
     )
