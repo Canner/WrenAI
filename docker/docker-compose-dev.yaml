@@ -52,6 +52,8 @@ services:
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
       CONFIG_PATH: /app/data/config.yaml
+    volumes:
+      - ./config.yaml:/app/data/config.yaml
     networks:
       - wren
     depends_on:
