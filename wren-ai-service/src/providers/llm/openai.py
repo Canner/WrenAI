@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import backoff
 import google.auth
 import google.auth.transport.requests
+import langfuse.openai
 import openai
 import orjson
 from haystack import component
@@ -118,7 +119,9 @@ class AsyncGenerator(OpenAIGenerator):
         )
 
         completions: List[ChatMessage] = []
-        if isinstance(completion, AsyncStream):
+        if isinstance(completion, AsyncStream) or isinstance(
+            completion, langfuse.openai.LangfuseResponseGeneratorAsync
+        ):
             num_responses = generation_kwargs.pop("n", 1)
             if num_responses > 1:
                 raise ValueError("Cannot stream multiple responses, please set n=1.")
@@ -133,7 +136,9 @@ class AsyncGenerator(OpenAIGenerator):
                         chunk_delta, query_id
                     )  # invoke callback with the chunk_delta
             completions = [self._connect_chunks(chunk, chunks)]
-        elif isinstance(completion, ChatCompletion):
+        elif isinstance(completion, ChatCompletion) or isinstance(
+            completion, langfuse.openai.LangfuseResponseGeneratorSync
+        ):
             completions = [
                 self._build_message(completion, choice) for choice in completion.choices
             ]

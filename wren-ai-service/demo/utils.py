@@ -723,7 +723,6 @@ def display_general_response(query_id: str):
     placeholder = st.empty()
 
     for event in client.events():
-        print(f"data: {event.data}")
         markdown_content += orjson.loads(event.data)["message"]
         placeholder.markdown(markdown_content)
 
