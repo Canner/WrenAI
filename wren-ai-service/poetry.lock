@@ -1150,13 +1150,13 @@ files = [
 
 [[package]]
 name = "dspy"
-version = "2.5.29"
+version = "2.5.26"
 description = "DSPy"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "dspy-2.5.29-py3-none-any.whl", hash = "sha256:208117e6f28eeae818db9db12d0b2dbf5b1331ce4f86dc1b258ef55c7d5d2e5a"},
-    {file = "dspy-2.5.29.tar.gz", hash = "sha256:848cfbf16eccdff56cf2646d9e8d403ab2981e9322576667a2e61d8f0a797a37"},
+    {file = "dspy-2.5.26-py3-none-any.whl", hash = "sha256:2361d0e1b2944e82395db77f9ba8c06b58036214a0464761b2012fa9752b4ecb"},
+    {file = "dspy-2.5.26.tar.gz", hash = "sha256:32b022b663b841fe9bf704044e4dbfed9bac6fae123ce0b2374ed5ace40a89e3"},
 ]
 
 [package.dependencies]
@@ -1166,7 +1166,7 @@ diskcache = "*"
 httpx = "*"
 joblib = ">=1.3,<2.0"
 json-repair = "*"
-litellm = "1.51.0"
+litellm = "<=1.49.1"
 magicattr = ">=0.1.6,<0.2.0"
 openai = "*"
 optuna = "*"
@@ -1181,7 +1181,6 @@ ujson = "*"
 [package.extras]
 chromadb = ["chromadb (>=0.4.14,<0.5.0)"]
 faiss-cpu = ["faiss-cpu", "sentence-transformers"]
-falkordb = ["async-timeout", "falkordb", "redis"]
 fastembed = ["fastembed"]
 google-vertex-ai = ["google-cloud-aiplatform (==1.43.0)"]
 groq = ["groq (>=0.8.0,<0.9.0)"]
@@ -1199,13 +1198,13 @@ weaviate = ["weaviate-client (>=4.6.5,<4.7.0)"]
 
 [[package]]
 name = "dspy-ai"
-version = "2.5.29"
+version = "2.5.26"
 description = "DSPy"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "dspy-ai-2.5.29.tar.gz", hash = "sha256:a4e8f58acd6ff95b5286908d0a7deb1b93eea40109ddf4bba932b048f1463783"},
-    {file = "dspy_ai-2.5.29-py3-none-any.whl", hash = "sha256:38aa5cf1edd79a3ad985f4d8556f1ec28fe64fad13a048bf0450bb5ad2599588"},
+    {file = "dspy-ai-2.5.26.tar.gz", hash = "sha256:64645606f144afeb56399be1b16000454f241f30de054a112a897bf9914b55fd"},
+    {file = "dspy_ai-2.5.26-py3-none-any.whl", hash = "sha256:2dcbfeedacf5d941d38b1e859ada1943d3ef7be8620ea06e8386b8c29657a586"},
 ]
 
 [package.dependencies]
@@ -2847,18 +2846,18 @@ typing-extensions = ">=4.7"
 
 [[package]]
 name = "langchain-openai"
-version = "0.2.6"
+version = "0.2.2"
 description = "An integration package connecting OpenAI and LangChain"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "langchain_openai-0.2.6-py3-none-any.whl", hash = "sha256:d56e4d9183bdd1a5fb5f3ed9d287f15108e01d631ded170dd330a566f2927b95"},
-    {file = "langchain_openai-0.2.6.tar.gz", hash = "sha256:7054e5f64498ad8e59d77cdc210103f5ea4f67258997edc48ae237298adeb316"},
+    {file = "langchain_openai-0.2.2-py3-none-any.whl", hash = "sha256:3a203228cb38e4711ebd8c0a3bd51854e447f1d017e8475b6467b07ce7dd3e88"},
+    {file = "langchain_openai-0.2.2.tar.gz", hash = "sha256:9ae8e2ec7d1ca84fd3bfa82186724528d68e1510a1dc9cdf617a7c669b7a7768"},
 ]
 
 [package.dependencies]
-langchain-core = ">=0.3.15,<0.4.0"
-openai = ">=1.54.0,<2.0.0"
+langchain-core = ">=0.3.9,<0.4.0"
+openai = ">=1.40.0,<2.0.0"
 tiktoken = ">=0.7,<1"
 
 [[package]]
@@ -2939,13 +2938,13 @@ testing = ["packaging", "pytest"]
 
 [[package]]
 name = "litellm"
-version = "1.51.0"
+version = "1.44.27"
 description = "Library to easily interface with LLM API providers"
 optional = false
 python-versions = "!=2.7.*,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,!=3.7.*,>=3.8"
 files = [
-    {file = "litellm-1.51.0-py3-none-any.whl", hash = "sha256:0b2c20d116834166c8440e5698d7d927dbcc78fcaa08ce0c5cbea2d0de55ec6c"},
-    {file = "litellm-1.51.0.tar.gz", hash = "sha256:8bf648677ee145a8fe5054a2e3f3a34895b9ab65a6015e4b94efca7ef406f466"},
+    {file = "litellm-1.44.27-py3-none-any.whl", hash = "sha256:88d514aba2041f7805632db343225f8a71230409a7ce3210911be5e6f6ec13b6"},
+    {file = "litellm-1.44.27.tar.gz", hash = "sha256:34f11d802a373465648defe619ae6e0dd72d524c0fa9fd11096da2669b134048"},
 ]
 
 [package.dependencies]
@@ -2954,7 +2953,7 @@ click = "*"
 importlib-metadata = ">=6.8.0"
 jinja2 = ">=3.1.2,<4.0.0"
 jsonschema = ">=4.22.0,<5.0.0"
-openai = ">=1.52.0"
+openai = ">=1.40.0"
 pydantic = ">=2.0.0,<3.0.0"
 python-dotenv = ">=0.2.0"
 requests = ">=2.31.0,<3.0.0"
@@ -3633,13 +3632,13 @@ requests = "*"
 
 [[package]]
 name = "openai"
-version = "1.54.3"
+version = "1.40.0"
 description = "The official Python library for the openai API"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.7.1"
 files = [
-    {file = "openai-1.54.3-py3-none-any.whl", hash = "sha256:f18dbaf09c50d70c4185b892a2a553f80681d1d866323a2da7f7be2f688615d5"},
-    {file = "openai-1.54.3.tar.gz", hash = "sha256:7511b74eeb894ac0b0253dc71f087a15d2e4d71d22d0088767205143d880cca6"},
+    {file = "openai-1.40.0-py3-none-any.whl", hash = "sha256:eb6909abaacd62ef28c275a5c175af29f607b40645b0a49d2856bbed62edb2e7"},
+    {file = "openai-1.40.0.tar.gz", hash = "sha256:1b7b316e27b2333b063ee62b6539b74267c7282498d9a02fc4ccb38a9c14336c"},
 ]
 
 [package.dependencies]
@@ -6975,4 +6974,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12.*, <4.0"
-content-hash = "3410ca7975145f9f6414802c35e997bb0b24b109e79768f099d4468cf52bc88c"
+content-hash = "99e58ef7e259a230a5d32c796b173936566aa8da5855fd0aa1abbdeafb33b95f"
