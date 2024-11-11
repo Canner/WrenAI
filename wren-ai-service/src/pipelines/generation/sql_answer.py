@@ -2,16 +2,14 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Optional
 
 import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
-from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 
-from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
@@ -29,7 +27,7 @@ Please answer the user's question in concise and clear manner in Markdown format
 1. Read the user's question and understand the user's intention.
 2. Read the sql summary and understand the data.
 3. Read the sql and understand the data.
-4. Generate a consice and clear answer in string format and a reasoning process in string format to the user's question based on the data, sql and sql summary.
+4. Generate a consice and clear answer in string format to the user's question based on the data, sql and sql summary.
 5. If answer is in list format, only list top few examples, and tell users there are more results omitted.
 6. Answer must be in the same language user specified.
 
@@ -48,37 +46,6 @@ Language: {{ language }}
 
 Please think step by step and answer the user's question.
 """
-
-
-@component
-class SQLAnswerGenerationPostProcessor:
-    @component.output_types(
-        results=Dict[str, Any],
-    )
-    def run(
-        self,
-        replies: str,
-    ):
-        try:
-            data = orjson.loads(replies[0])
-
-            return {
-                "results": {
-                    "answer": data["answer"],
-                    "reasoning": data["reasoning"],
-                    "error": "",
-                }
-            }
-        except Exception as e:
-            logger.exception(f"Error in SQLAnswerGenerationPostProcessor: {e}")
-
-            return {
-                "results": {
-                    "answer": "",
-                    "reasoning": "",
-                    "error": str(e),
-                }
-            }
 
 
 ## Start of Pipeline
@@ -108,10 +75,10 @@ def prompt(
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generate_answer(prompt: dict, generator: Any) -> dict:
+async def generate_answer(prompt: dict, generator: Any, query_id: str) -> dict:
     logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
 
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator.run(prompt=prompt.get("prompt"), query_id=query_id)
 
 
 ## End of Pipeline
@@ -124,7 +91,6 @@ class SQLAnswer(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
-        engine: Engine,
         **kwargs,
     ):
         self._user_queues = {}
@@ -137,7 +103,6 @@ class SQLAnswer(BasicPipeline):
                 generation_kwargs=SQL_ANSWER_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
-            "post_processor": SQLAnswerGenerationPostProcessor(),
         }
 
         super().__init__(
@@ -176,6 +141,7 @@ class SQLAnswer(BasicPipeline):
         sql_summary: str,
         sql_data: dict,
         language: str,
+        query_id: Optional[str] = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -190,6 +156,7 @@ class SQLAnswer(BasicPipeline):
                 "sql_summary": sql_summary,
                 "sql_data": sql_data,
                 "language": language,
+                "query_id": query_id,
                 **self._components,
             },
             show_legend=True,
@@ -205,6 +172,7 @@ class SQLAnswer(BasicPipeline):
         sql_summary: str,
         sql_data: dict,
         language: str,
+        query_id: Optional[str] = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
@@ -215,6 +183,7 @@ class SQLAnswer(BasicPipeline):
                 "sql_summary": sql_summary,
                 "sql_data": sql_data,
                 "language": language,
+                "query_id": query_id,
                 **self._components,
             },
         )
@@ -231,10 +200,9 @@ if __name__ == "__main__":
     load_env_vars()
     init_langfuse()
 
-    llm_provider, _, _, engine = init_providers(EngineConfig())
+    llm_provider, _, _, _ = init_providers(EngineConfig())
     pipeline = SQLAnswer(
         llm_provider=llm_provider,
-        engine=engine,
     )
 
     pipeline.visualize(

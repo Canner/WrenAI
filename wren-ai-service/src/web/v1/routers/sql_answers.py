@@ -114,6 +114,7 @@ async def get_sql_answer_streaming_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> StreamingResponse:
+    print("test")
     return StreamingResponse(
         service_container.sql_answer_service.get_sql_answer_streaming_result(query_id),
         media_type="text/event-stream",
