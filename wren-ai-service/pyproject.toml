@@ -31,7 +31,7 @@ cachetools = "==5.5.0"
 pyyaml = "==6.0.2"
 pydantic-settings = "==2.5.2"
 google-auth = "==2.35.0"
-dspy-ai = "==2.5.20"
+dspy-ai = "==2.5.29"
 tiktoken = "==0.8.0"
 
 [tool.poetry.group.dev.dependencies]

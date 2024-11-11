@@ -28,60 +28,84 @@
   </a>
 </p>
 
-> Wren AI is a **SQL AI Agent** for data teams to get results and insights faster by asking business questions without writing SQL.
+> Wren AI is an **open-source SQL AI Agent** that empowers data, product, and business teams to access insights through chat, built-in well designed intuitive UI and UX, integrating seamlessly with tools like Excel and Google Sheets.
 
-![wrenai_overview](./misc/wrenai_view.png)
+<p align="center">
+  <img src="./misc/wrenai_view.png">
+</p>
 
 ## 🕶 Try it yourself!
 
 https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
 
-👉 [Try with your data!](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme)
+👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 
 ## 🎯 Our Vision & Mission
 
 Wren AI’s mission is to democratize data by bringing AI agents with SQL ability to any data source.
 
-🤩 [About our Vision](https://www.getwren.ai/post/the-new-wave-of-composable-data-systems-and-the-interface-to-llm-agents)
+🤩 [Learn more about Wren AI and our Mission](https://docs.getwren.ai/oss/overview/introduction/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
-🙌 [About our Mission](https://www.getwren.ai/post/4-key-technical-challenges-using-rag-with-llms-to-query-database-text-to-sql-and-how-to-solve-it)
+## 🤖 A User-Centric, End-to-End Open-source SQL AI Agent - Text-to-SQL Total Solution
 
-## 🤖 SQL AI Agent on your data
+### 1. Talk to Your Data in Any Language
 
-### 1. Indexing With Semantics
+> Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_settings#change-project-language?utm_source=github&utm_medium=content&utm_campaign=readme), such as English, German, Spanish, French, Japanese, Korean, Portuguese, Chinese, and more. Unlock valuable insights by asking your business questions to Wren AI. It goes beyond surface-level data analysis to reveal meaningful information and simplifies obtaining answers from lead scoring templates to customer segmentation.
 
-> Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
+<p align="center">
+  <img src="./misc/wren-lang.png" style="max-width: 700px"/>
+</p>
 
-### 2. Generate SQL Queries With Context
+### 2. Semantic Indexing with a Well-Crafted UI/UX
 
-> With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/oss/engine/concept/what_is_mdl), reducing duplicate coding and simplifying data joins.
+> Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture/?utm_source=github&utm_medium=content&utm_campaign=readme) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
-### 3. Get Insights Without Writing Code
+<p align="center">
+  <img src="./misc/wren-modeling.png" style="max-width: 700px"/>
+</p>
 
-> When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates three relevant questions for the user to choose from. You can also ask follow-up questions to get deeper insights.
+### 3. Generate SQL Queries with Context
 
-### 4. Self-Learning Feedback Loop (Coming Soon)
+> With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/oss/engine/concept/what_is_mdl/?utm_source=github&utm_medium=content&utm_campaign=readme), reducing duplicate coding and simplifying data joins.
 
-  > The AI self-learning feedback loop refines SQL augmentation and generation by collecting data from various sources. These include user query history, revision intentions, feedback, schema patterns, semantic enhancements, and query frequency.
+<p align="center">
+  <img src="./misc/wren-context.png" style="max-width: 700px"/>
+</p>
+
+### 4. Get Insights without Writing Code
+
+> When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates the most relevant question for the user. You can also ask follow-up questions to get deeper insights.
+
+<p align="center">
+  <img src="./misc/wren-insight.png" style="max-width: 700px"/>
+</p>
+
+### 5. Easily Export and Visualize Your Data
+
+> Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as [Excel](https://docs.getwren.ai/oss/guide/integrations/excel-add-in/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Google Sheets](https://docs.getwren.ai/oss/guide/integrations/google-add-on/?utm_source=github&utm_medium=content&utm_campaign=readme). This way, your insights remain accessible, allowing for further analysis using the tools you know best.
+
+<p align="center">
+  <img src="./misc/wren-excel.png" style="max-width: 700px"/>
+</p>
 
 ## 🤔 Why Wren AI?
 
-We focus on providing an open, secure, and reliable SQL AI Agent for everyone.
+We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
 
 ### 1. Turnkey Solution
 
 > Wren AI makes it easy to onboard your data. Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
 
-### 2. Secure By Design
+### 2. Personalized answers without exposing data to LLM
 
-> Your database content will never be transmitted to the LLM. Only metadata, like schemas, documentation, and queries, will be used in semantic search.
+> Your sensitive information remains protected, with no risk of being trained to public LLMs, giving you secure, personalized insights while maintaining full control of your data.
 
-### 3. Open-Source
+### 3. Open-source End-to-end Solution
 
 > Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
 
-## 🤖 Wren AI Agentic Architecture
+## 🤖 Wren AI Text-to-SQL Agentic Architecture
 
 Wren AI consists of three core services:
 
@@ -91,11 +115,13 @@ Wren AI consists of three core services:
 
 - ***[Wren Engine](https://github.com/Canner/wren-engine):*** Serves as the semantic engine, mapping business terms to data sources, defining relationships, and incorporating predefined calculations and aggregations.
 
-![wrenai_works](./misc/how_wrenai_works.png)
+<p align="center">
+  <img src="./misc/how_wrenai_works.png" style="max-width: 1000px;">
+</p>
 
 ## ❤️ Knowledge Sharing From Wren AI
 
-Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog)
+Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 ## 🚀 Getting Started
 
