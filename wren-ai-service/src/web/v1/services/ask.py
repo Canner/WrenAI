@@ -85,10 +85,6 @@ class AskResult(BaseModel):
     viewId: Optional[str] = None
 
 
-class DataAssistanceResult(BaseModel):
-    message: str
-
-
 class AskError(BaseModel):
     code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
     message: str
@@ -109,8 +105,9 @@ class AskResultResponse(BaseModel):
         "stopped",
     ]
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
-    response: Optional[List[AskResult] | DataAssistanceResult] = None
+    response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
+    _data_assistance_task: Optional[asyncio.Task] = None
 
 
 class AskService:
@@ -173,9 +170,6 @@ class AskService:
                 ).get("post_process", {})
                 intent = intent_classification_result.get("intent")
                 if intent == "MISLEADING_QUERY":
-                    logger.exception(
-                        f"ask pipeline - MISLEADING_QUERY: {ask_request.query}"
-                    )
                     self._ask_results[query_id] = AskResultResponse(
                         status="finished",
                         type="MISLEADING_QUERY",
@@ -183,19 +177,18 @@ class AskService:
                     results["metadata"]["type"] = "MISLEADING_QUERY"
                     return results
                 elif intent == "GENERAL":
-                    data_assistance_result = (
-                        await self._pipelines["data_assistance"].run(
+                    asyncio.create_task(
+                        self._pipelines["data_assistance"].run(
                             query=ask_request.query,
                             db_schemas=intent_classification_result.get("db_schemas"),
                             language=ask_request.configurations.language,
+                            query_id=ask_request.query_id,
                         )
-                    ).get("post_process")
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        type="GENERAL",
-                        response=DataAssistanceResult(message=data_assistance_result),
                     )
-                    results["ask_result"] = data_assistance_result
+
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished", type="GENERAL"
+                    )
                     results["metadata"]["type"] = "GENERAL"
                     return results
 
@@ -391,3 +384,20 @@ class AskService:
             )
 
         return result
+
+    async def get_ask_streaming_result(
+        self,
+        query_id: str,
+    ):
+        data = ""
+        if (
+            self._ask_results.get(query_id)
+            and self._ask_results.get(query_id).type == "GENERAL"
+        ):
+            async for chunk in self._pipelines["data_assistance"].get_streaming_results(
+                query_id
+            ):
+                data += chunk
+                yield f"data: {chunk}\n\n"
+
+        print(f"data: {data}")

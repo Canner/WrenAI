@@ -1,7 +1,8 @@
+import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import orjson
 from hamilton import base
@@ -26,13 +27,10 @@ using the Markdown format. Your goal is to help guide user understand its databa
 ### INSTRUCTIONS ###
 
 - Answer must be in the same language user specified.
+- There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
 
 ### OUTPUT FORMAT ###
-Please provide your response as a JSON object, structured as follows:
-
-{
-    "results": <answer_in_markdown_string_format>
-}
+Please provide your response in proper Markdown format.
 """
 
 data_assistance_user_prompt_template = """
@@ -67,20 +65,10 @@ def prompt(
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def data_assistance(prompt: dict, generator: Any) -> dict:
+async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
     logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
 
-    return await generator.run(prompt=prompt.get("prompt"))
-
-
-@timer
-@observe(capture_input=False)
-def post_process(data_assistance: dict) -> str:
-    logger.debug(
-        f"data_assistance: {orjson.dumps(data_assistance, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
-    return orjson.loads(data_assistance.get("replies")[0])["results"]
+    return await generator.run(prompt=prompt.get("prompt"), query_id=query_id)
 
 
 ## End of Pipeline
@@ -90,15 +78,7 @@ class DataAssistanceResult(BaseModel):
     results: str
 
 
-DATA_ASSISTANCE_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "data_assistance",
-            "schema": DataAssistanceResult.model_json_schema(),
-        },
-    }
-}
+DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
 
 
 class DataAssistance(BasicPipeline):
@@ -107,10 +87,12 @@ class DataAssistance(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
+        self._user_queues = {}
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=data_assistance_system_prompt,
                 generation_kwargs=DATA_ASSISTANCE_MODEL_KWARGS,
+                streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(
                 template=data_assistance_user_prompt_template
@@ -121,23 +103,50 @@ class DataAssistance(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def _streaming_callback(self, chunk, query_id):
+        if query_id not in self._user_queues:
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
+        # Put the chunk content into the user's queue
+        asyncio.create_task(self._user_queues[query_id].put(chunk.content))
+        if chunk.meta.get("finish_reason") == "stop":
+            asyncio.create_task(self._user_queues[query_id].put("<DONE>"))
+
+    async def get_streaming_results(self, query_id):
+        if query_id not in self._user_queues:
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Ensure the user's queue exists
+        while True:
+            # Wait for an item from the user's queue
+            self._streaming_results = await self._user_queues[query_id].get()
+            if self._streaming_results == "<DONE>":  # Check for end-of-stream signal
+                del self._user_queues[query_id]
+                break
+            if self._streaming_results:  # Check if there are results to yield
+                yield self._streaming_results
+                self._streaming_results = ""  # Clear after yielding
+
     def visualize(
         self,
         query: str,
         db_schemas: list[str],
         language: str,
+        query_id: Optional[str] = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["post_process"],
+            ["data_assistance"],
             output_file_path=f"{destination}/data_assistance.dot",
             inputs={
                 "query": query,
                 "db_schemas": db_schemas,
                 "language": language,
+                "query_id": query_id or "",
                 **self._components,
             },
             show_legend=True,
@@ -146,14 +155,21 @@ class DataAssistance(BasicPipeline):
 
     @async_timer
     @observe(name="Data Assistance")
-    async def run(self, query: str, db_schemas: list[str], language: str):
+    async def run(
+        self,
+        query: str,
+        db_schemas: list[str],
+        language: str,
+        query_id: Optional[str] = None,
+    ):
         logger.info("Data Assistance pipeline is running...")
         return await self._pipe.execute(
-            ["post_process"],
+            ["data_assistance"],
             inputs={
                 "query": query,
                 "db_schemas": db_schemas,
                 "language": language,
+                "query_id": query_id or "",
                 **self._components,
             },
         )
@@ -175,7 +191,7 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    pipeline.visualize("this is a query", [])
-    async_validate(lambda: pipeline.run("this is a query", []))
+    pipeline.visualize("show me the dataset", [], "English")
+    async_validate(lambda: pipeline.run("show me the dataset", [], "English"))
 
     langfuse_context.flush()

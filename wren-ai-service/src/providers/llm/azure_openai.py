@@ -152,6 +152,7 @@ class AzureOpenAILLMProvider(LLMProvider):
         system_prompt: Optional[str] = None,
         # it is expected to only pass the response format only, others will be merged from the model parameters.
         generation_kwargs: Optional[Dict[str, Any]] = None,
+        streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
         logger.info(
             f"Creating Azure OpenAI generator with model kwargs: {self._model_kwargs}"
@@ -163,9 +164,10 @@ class AzureOpenAILLMProvider(LLMProvider):
             api_version=self._generation_api_version,
             system_prompt=system_prompt,
             generation_kwargs=(
-                {**generation_kwargs, **self._model_kwargs}
+                {**self._model_kwargs, **generation_kwargs}
                 if generation_kwargs
                 else self._model_kwargs
             ),
             timeout=self._timeout,
+            streaming_callback=streaming_callback,
         )

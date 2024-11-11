@@ -119,16 +119,12 @@ async def get_ask_result(
     )
 
 
-@router.get("/asks/streaming-result")
+@router.get("/asks/{query_id}/streaming-result")
 async def get_ask_streaming_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
-):
-    import asyncio
-
-    async def event_generator():
-        for i in range(10):
-            yield f"data: Hello, world! {i}\n\n"
-            await asyncio.sleep(1)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+) -> StreamingResponse:
+    return StreamingResponse(
+        service_container.ask_service.get_ask_streaming_result(query_id),
+        media_type="text/event-stream",
+    )
