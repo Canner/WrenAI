@@ -35,6 +35,7 @@ def clean_generation_result(result: str) -> str:
         _normalize_whitespace(result)
         .replace("\\n", " ")
         .replace("```sql", "")
+        .replace("```json", "")
         .replace('"""', "")
         .replace("'''", "")
         .replace("```", "")

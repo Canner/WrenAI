@@ -1,8 +1,10 @@
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+import dspy
 import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
@@ -10,6 +12,8 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
+from eval.dspy_modules.ask_generation import AskGenerationV1
+from eval.dspy_modules.prompt_optimizer import configure_llm_provider
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -87,15 +91,28 @@ def prompt(
     prompt_builder: PromptBuilder,
     configurations: AskConfigurations | None = None,
     samples: List[Dict] | None = None,
+    dspy_module: dspy.Module | None = None,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
+
+    if dspy_module:
+        # use dspy to predict, the input is question and context
+        context = []
+        dspy_inputs = {}
+        for doc in documents:
+            context.append(str(doc))
+        dspy_inputs["context"] = context
+        dspy_inputs["question"] = query
+        return dspy_inputs
+
     logger.debug(
         f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
     )
     logger.debug(f"configurations: {configurations}")
     if samples:
         logger.debug(f"samples: {samples}")
+
     return prompt_builder.run(
         query=query,
         documents=documents,
@@ -109,7 +126,16 @@ def prompt(
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generate_sql(prompt: dict, generator: Any) -> dict:
+async def generate_sql(
+    prompt: dict, generator: Any, dspy_module: dspy.Module | None = None
+) -> dict:
+    if dspy_module:
+        # use dspy to predict, the input is question and context
+        prediction = dspy_module(
+            question=prompt["question"].as_string(), context=" ".join(prompt["context"])
+        )
+        return {"replies": [prediction.answer]}
+
     logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
@@ -154,6 +180,14 @@ class SQLGeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
+        dspy_module = None
+        if optimized_path := os.getenv("DSPY_OPTIMAZED_MODEL", ""):
+            # use dspy to evaluate
+            configure_llm_provider(
+                os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
+            )
+            dspy_module = AskGenerationV1()
+            dspy_module.load(optimized_path)
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
@@ -163,6 +197,7 @@ class SQLGeneration(BasicPipeline):
                 template=sql_generation_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
+            "dspy_module": dspy_module,
         }
 
         self._configs = {
