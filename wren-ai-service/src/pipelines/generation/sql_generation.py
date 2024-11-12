@@ -26,8 +26,8 @@ from src.web.v1.services.ask import AskConfigurations
 import os
 import dspy
 
-from eval.dspy_modules.ask_generation import AskGenerationV1
-from eval.dspy_modules.prompt_optimizer import configure_llm_provider
+from dspy_modules.ask_generation import AskGenerationV1
+from dspy_modules.prompt_optimizer import configure_llm_provider
 
 logger = logging.getLogger("wren-ai-service")
 
