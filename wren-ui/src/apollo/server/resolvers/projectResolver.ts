@@ -107,7 +107,7 @@ export class ProjectResolver {
     });
 
     // update project recommendation questions
-    await ctx.projectService.generateProjectRecommendationQuestions(project.id);
+    await ctx.projectService.generateProjectRecommendationQuestions();
     return true;
   }
 
@@ -623,7 +623,7 @@ export class ProjectResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(manifest, project.id);
 
-    await ctx.projectService.generateProjectRecommendationQuestions(project.id);
+    await ctx.projectService.generateProjectRecommendationQuestions();
     return deployRes;
   }
 
