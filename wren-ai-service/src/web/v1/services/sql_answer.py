@@ -158,7 +158,6 @@ class SqlAnswerService:
             self._sql_answer_results.get(query_id)
             and self._sql_answer_results.get(query_id).status == "generating"
         ):
-            print("test2")
             async for chunk in self._pipelines["sql_answer"].get_streaming_results(
                 query_id
             ):
