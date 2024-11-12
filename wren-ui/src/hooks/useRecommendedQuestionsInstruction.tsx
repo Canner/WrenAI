@@ -33,6 +33,8 @@ export default function useRecommendedQuestionsInstruction() {
 
       if (recommendedQuestionsTask.questions.length === 0) {
         isRegenerate && setShowRetry(true);
+      } else {
+        setIsRegenerate(true);
       }
 
       setGenerating(false);
@@ -66,20 +68,34 @@ export default function useRecommendedQuestionsInstruction() {
     }
   };
 
-  const buttonProps = {
-    icon: showRetry ? (
-      <ReloadOutlined />
-    ) : (
-      <Icon component={CopilotSVG} className="geekblue-6" />
-    ),
-    loading: generating,
-    buttonText: generating
-      ? 'Generating questions'
-      : showRetry
-        ? 'Retry'
-        : 'What could I ask?',
-    onClick: onGetRecommendationQuestions,
-  };
+  const buttonProps = useMemo(() => {
+    const baseProps = {
+      loading: generating,
+      onClick: onGetRecommendationQuestions,
+    };
+
+    if (isRegenerate) {
+      return {
+        ...baseProps,
+        icon: <ReloadOutlined />,
+        children: 'Regenerate',
+      };
+    }
+
+    return {
+      ...baseProps,
+      icon: showRetry ? (
+        <ReloadOutlined />
+      ) : (
+        <Icon component={CopilotSVG} className="geekblue-6" />
+      ),
+      children: generating
+        ? 'Generating questions'
+        : showRetry
+          ? 'Retry'
+          : 'What could I ask?',
+    };
+  }, [generating, isRegenerate, showRetry]);
 
   return {
     recommendedQuestions,
