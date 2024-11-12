@@ -30,7 +30,7 @@ export const getIsFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.STOPPED,
   ].includes(status);
 
-const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
+export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
   [
     RecommendedQuestionsTaskStatus.FINISHED,
     RecommendedQuestionsTaskStatus.FAILED,
