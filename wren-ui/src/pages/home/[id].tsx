@@ -79,7 +79,7 @@ export default function HomeThread() {
 
   // stop all requests when change thread
   useEffect(() => {
-    askPrompt.stopPolling();
+    askPrompt.onStopPolling();
     threadResponseResult.stopPolling();
     $prompt.current?.close();
   }, [threadId]);
@@ -92,6 +92,10 @@ export default function HomeThread() {
     if (unfinishedRespose) {
       fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
     }
+
+    // store thread questions for instant recommended questions
+    const questions = thread?.responses.flatMap((res) => res.question || [])
+    if(questions) askPrompt.onStoreThreadQuestions(questions);
   }, [thread]);
 
   useEffect(() => {
@@ -100,7 +104,7 @@ export default function HomeThread() {
 
   const onSelect = async (payload) => {
     try {
-      askPrompt.stopPolling();
+      askPrompt.onStopPolling();
       const response = await createThreadResponse({
         variables: { threadId: thread.id, data: payload },
       });
@@ -119,13 +123,7 @@ export default function HomeThread() {
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
       />
       <div className="py-12" />
-      <Prompt
-        ref={$prompt}
-        data={askPrompt.data}
-        onSubmit={askPrompt.onSubmit}
-        onStop={askPrompt.onStop}
-        onSelect={onSelect}
-      />
+      <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
       <SaveAsViewModal
         {...saveAsViewModal.state}
         loading={creating}

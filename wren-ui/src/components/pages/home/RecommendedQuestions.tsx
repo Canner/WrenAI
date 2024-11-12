@@ -8,6 +8,12 @@ import { makeIterable } from '@/utils/iteration';
 interface Props {
   items: string[];
   loading?: boolean;
+  error?: {
+    shortMessage?: string;
+    code?: string;
+    message?: string;
+    stacktrace?: string[];
+  };
   className?: string;
   onSelect?: (question: string) => void;
 }

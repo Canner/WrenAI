@@ -2,6 +2,8 @@ import {
   WrenAIError,
   WrenAILanguage,
   AskResultStatus,
+  AskResultType,
+  RecommendationQuestionStatus,
 } from '../adaptors/wrenAIAdaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
@@ -35,6 +37,7 @@ export interface Task {
 }
 
 export interface AskingTask {
+  type: AskResultType | null;
   status: AskResultStatus;
   candidates: Array<{
     sql: string;
@@ -51,6 +54,16 @@ export interface DetailedThread {
   responses: ThreadResponse[];
 }
 
+export interface RecommendedQuestionsTask {
+  questions: {
+    question: string;
+    category: string;
+    explanation: string;
+  }[];
+  status: RecommendationQuestionStatus;
+  error: WrenAIError | null;
+}
+
 export class AskingResolver {
   constructor() {
     this.createAskingTask = this.createAskingTask.bind(this);
@@ -63,7 +76,12 @@ export class AskingResolver {
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
+    this.previewData = this.previewData.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
+    this.createInstantRecommendedQuestions =
+      this.createInstantRecommendedQuestions.bind(this);
+    this.getInstantRecommendedQuestions =
+      this.getInstantRecommendedQuestions.bind(this);
     this.generateThreadRecommendationQuestions =
       this.generateThreadRecommendationQuestions.bind(this);
     this.generateProjectRecommendationQuestions =
@@ -196,6 +214,7 @@ export class AskingResolver {
     );
 
     return {
+      type: askResult.type,
       status: askResult.status,
       error: askResult.error,
       candidates,
@@ -394,6 +413,31 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const data = await askingService.previewData(responseId, stepIndex, limit);
     return data;
+  }
+
+  public async createInstantRecommendedQuestions(
+    _root: any,
+    args: { data: { previousQuestions?: string[] } },
+    ctx: IContext,
+  ): Promise<Task> {
+    const { data } = args;
+    const askingService = ctx.askingService;
+    return askingService.createInstantRecommendedQuestions(data);
+  }
+
+  public async getInstantRecommendedQuestions(
+    _root: any,
+    args: { taskId: string },
+    ctx: IContext,
+  ): Promise<RecommendedQuestionsTask> {
+    const { taskId } = args;
+    const askingService = ctx.askingService;
+    const result = await askingService.getInstantRecommendedQuestions(taskId);
+    return {
+      questions: result.response?.questions || [],
+      status: result.status,
+      error: result.error,
+    };
   }
 
   /**
