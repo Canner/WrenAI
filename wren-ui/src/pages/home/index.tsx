@@ -13,6 +13,27 @@ import {
   useCreateThreadMutation,
 } from '@/apollo/client/graphql/home.generated';
 
+const SampleQuestionsInstruction = (props) => {
+  const { sampleQuestions, onSelect } = props;
+  const isSampleDataset = sampleQuestions.length > 0;
+
+  return (
+    <div
+      className="d-flex align-center justify-center flex-column"
+      style={{ height: '100%' }}
+    >
+      <Logo size={48} color="var(--gray-8)" />
+      <div className="text-md text-medium gray-8 mt-3">
+        Know more about your data
+      </div>
+
+      {isSampleDataset && (
+        <DemoPrompt demo={sampleQuestions} onSelect={onSelect} />
+      )}
+    </div>
+  );
+};
+
 export default function Home() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
   const router = useRouter();
@@ -31,9 +52,7 @@ export default function Home() {
     [suggestedQuestionsData],
   );
 
-  const isSampleDataset = sampleQuestions.length > 0;
-
-  const onDemoSelect = async ({ question }) => {
+  const onSelectQuestion = async ({ question }) => {
     $prompt.current.setValue(question);
     await nextTick();
     $prompt.current.submit();
@@ -51,19 +70,11 @@ export default function Home() {
 
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>
-      <div
-        className="d-flex align-center justify-center flex-column"
-        style={{ height: '100%' }}
-      >
-        <Logo size={48} color="var(--gray-8)" />
-        <div className="text-md text-medium gray-8 mt-3">
-          Know more about your data
-        </div>
+      <SampleQuestionsInstruction
+        sampleQuestions={sampleQuestions}
+        onSelect={onSelectQuestion}
+      />
 
-        {isSampleDataset && (
-          <DemoPrompt demo={sampleQuestions} onSelect={onDemoSelect} />
-        )}
-      </div>
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
     </SiderLayout>
   );
