@@ -58,7 +58,7 @@ export interface IProjectService {
   getProjectRecommendationQuestions: () => Promise<ProjectRecommendationQuestionsResult>;
 
   // recommend questions
-  generateProjectRecommendationQuestions: (projectId: number) => Promise<void>;
+  generateProjectRecommendationQuestions: () => Promise<void>;
 }
 
 export class ProjectService implements IProjectService {
@@ -92,12 +92,10 @@ export class ProjectService implements IProjectService {
       });
   }
 
-  public async generateProjectRecommendationQuestions(
-    projectId: number,
-  ): Promise<void> {
-    const project = await this.getProjectById(projectId);
+  public async generateProjectRecommendationQuestions(): Promise<void> {
+    const project = await this.getCurrentProject();
     if (!project) {
-      throw new Error(`Project ${projectId} not found`);
+      throw new Error(`Project not found`);
     }
     const { manifest } = await this.mdlService.makeCurrentModelMDL();
 
@@ -117,6 +115,10 @@ export class ProjectService implements IProjectService {
       this.projectRecommendQuestionBackgroundTracker.taskKey(updatedProject);
     if (!tasks[taskKey]) {
       this.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
+    } else {
+      logger.debug(
+        `Generate Project Recommendation Questions Task ${taskKey} already exists, skip adding`,
+      );
     }
   }
 
