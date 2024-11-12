@@ -77,8 +77,8 @@ export type WREN_AI_CONNECTION_INFO =
 
 export interface RecommendationQuestionResult {
   question: string;
-  explanation: string;
   category: string; // category for the question
+  sql: string; // validated sql for this question, can be used in generateAskDetail
 }
 
 export interface Project {

@@ -10,8 +10,8 @@ import {
 
 export interface ThreadRecommendationQuestionResult {
   question: string;
-  explanation: string;
   category: string;
+  sql: string;
 }
 
 export interface Thread {
