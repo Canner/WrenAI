@@ -213,8 +213,10 @@ TEXT_TO_SQL_RULES = """
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
-- DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
-- DON'T USE "COUNT(*) FILTER(WHERE <condition>)"
+- ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
+    - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
+    - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
+    - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
 - ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
@@ -273,6 +275,7 @@ TEXT_TO_SQL_RULES = """
     - UPPER
   - Date and Time functions:
     - CURRENT_DATE
+    - CURRENT_DATETIME
     - DATE_TRUNC
     - EXTRACT
   - operators:
