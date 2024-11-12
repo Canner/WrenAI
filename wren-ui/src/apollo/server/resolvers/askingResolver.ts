@@ -75,11 +75,10 @@ export class AskingResolver {
 
   public async generateProjectRecommendationQuestions(
     _root: any,
-    args: { projectId: number },
+    _args: any,
     ctx: IContext,
   ): Promise<boolean> {
-    const { projectId } = args;
-    await ctx.projectService.generateProjectRecommendationQuestions(projectId);
+    await ctx.projectService.generateProjectRecommendationQuestions();
     return true;
   }
 
