@@ -39,7 +39,14 @@ const StyledQuestion = styled(Row)`
   }
 `;
 
+const StyledSkeleton = styled(Skeleton)`
+  .ant-skeleton-title {
+    margin-top: 0;
+  }
+`;
+
 interface Props {
+  motion: boolean;
   loading: boolean;
   question: string;
   description: string;
@@ -61,6 +68,7 @@ interface Props {
 
 export default function AnswerResult(props: Props) {
   const {
+    motion,
     loading,
     question,
     description,
@@ -73,13 +81,15 @@ export default function AnswerResult(props: Props) {
     summary,
     view,
   } = props;
-
   const isViewSaved = !!view;
 
   const [ellipsis, setEllipsis] = useState(true);
+  const resultStyle = isLastThreadResponse
+    ? { minHeight: 'calc(100vh - (194px))' }
+    : null;
 
   return (
-    <div>
+    <div style={resultStyle}>
       <StyledQuestion wrap={false} onClick={() => setEllipsis(!ellipsis)}>
         <Col className="text-center" flex="96px">
           <QuestionCircleOutlined className="mr-2 gray-6" />
@@ -94,57 +104,59 @@ export default function AnswerResult(props: Props) {
       <Title className="mb-6 text-bold gray-10" level={3}>
         {summary}
       </Title>
-      <Skeleton active loading={loading}>
-        <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
-          <Text className="adm-answer-title px-2">
-            <CheckCircleFilled className="mr-2 green-6" />
-            Summary
-          </Text>
-          <div className="pl-7 pb-5">{description}</div>
-          {(answerResultSteps || []).map((step, index) => (
-            <StepContent
-              isLastStep={index === answerResultSteps.length - 1}
-              key={`${step.summary}-${index}`}
-              sql={step.sql}
-              fullSql={fullSql}
-              stepIndex={index}
-              summary={step.summary}
-              threadResponseId={threadResponseId}
-              onInitPreviewDone={onInitPreviewDone}
-              isLastThreadResponse={isLastThreadResponse}
-            />
-          ))}
-        </StyledAnswer>
-        {isViewSaved ? (
-          <div className="mt-2 gray-6 text-medium">
-            <FileDoneOutlined className="mr-2" />
-            Generated from saved view{' '}
-            <Link
-              className="gray-7"
-              href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
-              target="_blank"
-              rel="noreferrer noopener"
+      <StyledSkeleton active loading={loading}>
+        <div className={motion ? 'promptThread-answer' : ''}>
+          <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
+            <Text className="adm-answer-title px-2">
+              <CheckCircleFilled className="mr-2 green-6" />
+              Summary
+            </Text>
+            <div className="pl-7 pb-5">{description}</div>
+            {(answerResultSteps || []).map((step, index) => (
+              <StepContent
+                isLastStep={index === answerResultSteps.length - 1}
+                key={`${step.summary}-${index}`}
+                sql={step.sql}
+                fullSql={fullSql}
+                stepIndex={index}
+                summary={step.summary}
+                threadResponseId={threadResponseId}
+                onInitPreviewDone={onInitPreviewDone}
+                isLastThreadResponse={isLastThreadResponse}
+              />
+            ))}
+          </StyledAnswer>
+          {isViewSaved ? (
+            <div className="mt-2 gray-6 text-medium">
+              <FileDoneOutlined className="mr-2" />
+              Generated from saved view{' '}
+              <Link
+                className="gray-7"
+                href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {view.displayName}
+              </Link>
+            </div>
+          ) : (
+            <Button
+              className="mt-2 gray-6"
+              type="text"
+              size="small"
+              icon={<SaveOutlined />}
+              onClick={() =>
+                onOpenSaveAsViewModal({
+                  sql: fullSql,
+                  responseId: threadResponseId,
+                })
+              }
             >
-              {view.displayName}
-            </Link>
-          </div>
-        ) : (
-          <Button
-            className="mt-2 gray-6"
-            type="text"
-            size="small"
-            icon={<SaveOutlined />}
-            onClick={() =>
-              onOpenSaveAsViewModal({
-                sql: fullSql,
-                responseId: threadResponseId,
-              })
-            }
-          >
-            Save as View
-          </Button>
-        )}
-      </Skeleton>
+              Save as View
+            </Button>
+          )}
+        </div>
+      </StyledSkeleton>
     </div>
   );
 }
