@@ -4,7 +4,6 @@ import { WrenService } from '../telemetry/telemetry';
 export enum GeneralErrorCodes {
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
   // AI service errors
-  MISLEADING_QUERY = 'MISLEADING_QUERY',
   NO_RELEVANT_DATA = 'NO_RELEVANT_DATA',
   NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
   RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
@@ -41,12 +40,10 @@ export const errorMessages = {
   [GeneralErrorCodes.INTERNAL_SERVER_ERROR]: 'Internal server error',
 
   // AI service errors
-  [GeneralErrorCodes.MISLEADING_QUERY]:
-    'The query provided is misleading and may not yield accurate results. Please refine your query.',
   [GeneralErrorCodes.NO_RELEVANT_DATA]:
-    'No relevant data found for the given query. Please try a different query.',
+    'I can’t find the exact data you’re looking for, but feel free to ask about other available topics.',
   [GeneralErrorCodes.NO_RELEVANT_SQL]:
-    'No relevant SQL found for the given query. Please check your query and try again.',
+    "Could you please provide more details or specify the information you're seeking?",
 
   // Connector errors
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to data source',
@@ -80,9 +77,8 @@ export const errorMessages = {
 
 export const shortMessages = {
   [GeneralErrorCodes.INTERNAL_SERVER_ERROR]: 'Internal server error',
-  [GeneralErrorCodes.MISLEADING_QUERY]: 'Misleading query',
-  [GeneralErrorCodes.NO_RELEVANT_DATA]: 'No relevant data',
-  [GeneralErrorCodes.NO_RELEVANT_SQL]: 'No relevant SQL',
+  [GeneralErrorCodes.NO_RELEVANT_DATA]: 'Try a different query',
+  [GeneralErrorCodes.NO_RELEVANT_SQL]: 'Clarification needed',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
   [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Data connection error',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',

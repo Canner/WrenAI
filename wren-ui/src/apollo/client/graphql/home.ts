@@ -48,6 +48,7 @@ export const ASKING_TASK = gql`
   query AskingTask($taskId: String!) {
     askingTask(taskId: $taskId) {
       status
+      type
       candidates {
         sql
         summary
@@ -179,4 +180,31 @@ export const GET_NATIVE_SQL = gql`
   query GetNativeSQL($responseId: Int!) {
     nativeSql(responseId: $responseId)
   }
+`;
+
+export const CREATE_INSTANT_RECOMMENDED_QUESTIONS = gql`
+  mutation CreateInstantRecommendedQuestions(
+    $data: InstantRecommendedQuestionsInput!
+  ) {
+    createInstantRecommendedQuestions(data: $data) {
+      id
+    }
+  }
+`;
+
+export const INSTANT_RECOMMENDED_QUESTIONS = gql`
+  query InstantRecommendedQuestions($taskId: String!) {
+    instantRecommendedQuestions(taskId: $taskId) {
+      status
+      questions {
+        question
+        category
+        explanation
+      }
+      error {
+        ...CommonError
+      }
+    }
+  }
+  ${COMMON_ERROR}
 `;
