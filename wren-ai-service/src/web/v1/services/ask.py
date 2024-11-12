@@ -1,13 +1,14 @@
+import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
 
-import orjson
 from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
+from src.web.v1.services import SSEEvent
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
@@ -109,19 +110,6 @@ class AskResultResponse(BaseModel):
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
     _data_assistance_task: Optional[asyncio.Task] = None
-
-
-class SSEEvent(BaseModel):
-    class SSEEventMessage(BaseModel):
-        message: str
-
-        def to_dict(self):
-            return {"message": self.message}
-
-    data: SSEEventMessage
-
-    def serialize(self):
-        return f"data: {orjson.dumps(self.data.to_dict()).decode()}\n\n"
 
 
 class AskService:
