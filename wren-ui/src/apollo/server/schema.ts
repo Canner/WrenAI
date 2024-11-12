@@ -862,5 +862,6 @@ export const typeDefs = gql`
 
     # Recommendation questions
     generateThreadRecommendationQuestions(threadId: Int!): Boolean!
+    generateProjectRecommendationQuestions(projectId: Int!): Boolean!
   }
 `;

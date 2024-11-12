@@ -72,10 +72,6 @@ export const initComponents = () => {
     ibisAdaptor,
     wrenEngineAdaptor,
   });
-  const projectService = new ProjectService({
-    projectRepository,
-    metadataService,
-  });
   const queryService = new QueryService({
     ibisAdaptor,
     wrenEngineAdaptor,
@@ -93,6 +89,13 @@ export const initComponents = () => {
     modelNestedColumnRepository,
     relationRepository,
     viewRepository,
+  });
+  const projectService = new ProjectService({
+    projectRepository,
+    metadataService,
+    mdlService,
+    wrenAIAdaptor,
+    telemetry,
   });
   const askingService = new AskingService({
     telemetry,

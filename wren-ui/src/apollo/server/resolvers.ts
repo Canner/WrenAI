@@ -108,6 +108,8 @@ const resolvers = {
     // Recommendation questions
     generateThreadRecommendationQuestions:
       askingResolver.generateThreadRecommendationQuestions,
+    generateProjectRecommendationQuestions:
+      askingResolver.generateProjectRecommendationQuestions,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

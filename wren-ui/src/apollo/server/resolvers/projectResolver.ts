@@ -107,24 +107,7 @@ export class ProjectResolver {
     });
 
     // update project recommendation questions
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const recommendQuestionResult =
-      await ctx.wrenAIAdaptor.generateRecommendationQuestions({
-        manifest,
-        ...this.getProjectRecommendationQuestionsConfig(project),
-      });
-    const updatedProject = await ctx.projectRepository.updateOne(project.id, {
-      queryId: recommendQuestionResult.queryId,
-      questionsStatus: null,
-      questions: null,
-      questionsError: null,
-    });
-    const tasks = ctx.projectRecommendQuestionBackgroundTracker.getTasks();
-    const taskKey =
-      ctx.projectRecommendQuestionBackgroundTracker.taskKey(updatedProject);
-    if (!tasks[taskKey]) {
-      ctx.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
-    }
+    await ctx.projectService.generateProjectRecommendationQuestions(project.id);
     return true;
   }
 
@@ -640,19 +623,7 @@ export class ProjectResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(manifest, project.id);
 
-    // generate recommendation questions after deploy
-    const recommendQuestionResult =
-      await ctx.wrenAIAdaptor.generateRecommendationQuestions({
-        manifest,
-        ...this.getProjectRecommendationQuestionsConfig(project),
-      });
-    const updatedProject = await ctx.projectRepository.updateOne(project.id, {
-      queryId: recommendQuestionResult.queryId,
-    });
-    const tasks = ctx.projectRecommendQuestionBackgroundTracker.getTasks();
-    if (!tasks[project.id]) {
-      ctx.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
-    }
+    await ctx.projectService.generateProjectRecommendationQuestions(project.id);
     return deployRes;
   }
 
@@ -805,17 +776,5 @@ export class ProjectResolver {
       'wren.datasource.type': 'duckdb',
     };
     await ctx.wrenEngineAdaptor.patchConfig(config);
-  }
-
-  private async getProjectRecommendationQuestionsConfig(project: Project) {
-    return {
-      projectId: project.id.toString(),
-      maxCategories: 3,
-      maxQuestions: 9,
-      regenerate: true,
-      configuration: {
-        language: project.language,
-      },
-    };
   }
 }
