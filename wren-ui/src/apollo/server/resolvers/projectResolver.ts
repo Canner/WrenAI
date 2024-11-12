@@ -111,12 +111,7 @@ export class ProjectResolver {
     const recommendQuestionResult =
       await ctx.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,
-        projectId: project.id.toString(),
-        maxCategories: 3,
-        maxQuestions: 9,
-        configuration: {
-          language,
-        },
+        ...this.getProjectRecommendationQuestionsConfig(project),
       });
     const updatedProject = await ctx.projectRepository.updateOne(project.id, {
       queryId: recommendQuestionResult.queryId,
@@ -649,12 +644,7 @@ export class ProjectResolver {
     const recommendQuestionResult =
       await ctx.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,
-        projectId: project.id.toString(),
-        maxCategories: 3,
-        maxQuestions: 9,
-        configuration: {
-          language: project.language,
-        },
+        ...this.getProjectRecommendationQuestionsConfig(project),
       });
     const updatedProject = await ctx.projectRepository.updateOne(project.id, {
       queryId: recommendQuestionResult.queryId,
@@ -815,5 +805,17 @@ export class ProjectResolver {
       'wren.datasource.type': 'duckdb',
     };
     await ctx.wrenEngineAdaptor.patchConfig(config);
+  }
+
+  private async getProjectRecommendationQuestionsConfig(project: Project) {
+    return {
+      projectId: project.id.toString(),
+      maxCategories: 3,
+      maxQuestions: 9,
+      regenerate: true,
+      configuration: {
+        language: project.language,
+      },
+    };
   }
 }
