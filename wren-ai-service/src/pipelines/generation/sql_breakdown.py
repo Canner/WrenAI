@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.common import SQLBreakdownGenPostProcessor
+from src.pipelines.common import TEXT_TO_SQL_RULES, SQLBreakdownGenPostProcessor
 from src.utils import (
     async_timer,
     timer,
@@ -109,6 +109,8 @@ User's Question: {{ query }}
 SQL query: {{ sql }}
 Language: {{ language }}
 
+{{ text_to_sql_rules }}
+
 Let's think step by step.
 """
 
@@ -116,11 +118,20 @@ Let's think step by step.
 ## Start of Pipeline
 @timer
 @observe(capture_input=False)
-def prompt(query: str, sql: str, language: str, prompt_builder: PromptBuilder) -> dict:
+def prompt(
+    query: str,
+    sql: str,
+    language: str,
+    text_to_sql_rules: str,
+    prompt_builder: PromptBuilder,
+) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
     logger.debug(f"language: {language}")
-    return prompt_builder.run(query=query, sql=sql, language=language)
+    logger.debug(f"text_to_sql_rules: {text_to_sql_rules}")
+    return prompt_builder.run(
+        query=query, sql=sql, language=language, text_to_sql_rules=text_to_sql_rules
+    )
 
 
 @async_timer
@@ -186,6 +197,10 @@ class SQLBreakdown(BasicPipeline):
             "post_processor": SQLBreakdownGenPostProcessor(engine=engine),
         }
 
+        self._configs = {
+            "text_to_sql_rules": TEXT_TO_SQL_RULES,
+        }
+
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -210,6 +225,7 @@ class SQLBreakdown(BasicPipeline):
                 "project_id": project_id,
                 "language": language,
                 **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -233,6 +249,7 @@ class SQLBreakdown(BasicPipeline):
                 "project_id": project_id,
                 "language": language,
                 **self._components,
+                **self._configs,
             },
         )
 
