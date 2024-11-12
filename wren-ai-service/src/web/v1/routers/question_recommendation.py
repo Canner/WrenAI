@@ -31,10 +31,11 @@ Endpoints:
        "project_id": "project-id",                       # Optional project ID
        "max_questions": 5,                               # Optional max number of questions to generate, defaults to 5
        "max_categories": 3,                              # Optional max number of categories, defaults to 3
+       "regenerate": false,                              # Optional flag to force regeneration, defaults to false
        "configuration": {                                # Optional configuration settings
-         "language": "English",                         # Optional language, defaults to "English"
-         "timezone": {                                  # Optional timezone settings
-           "name": "Asia/Taipei",                       # Timezone name, defaults to "Asia/Taipei"
+         "language": "English",                          # Optional language, defaults to "English"
+         "timezone": {                                   # Optional timezone settings
+           "name": "Asia/Taipei",                        # Timezone name, defaults to "Asia/Taipei"
          }
        }
      }
