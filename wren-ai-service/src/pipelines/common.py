@@ -175,7 +175,7 @@ class SQLGenPostProcessor:
                     valid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "correlation_id": addition.get("correlation_id", "") if isinstance(addition, dict) else addition
+                            "correlation_id": addition.get("correlation_id", "")
                         }
                     )
                 else:
