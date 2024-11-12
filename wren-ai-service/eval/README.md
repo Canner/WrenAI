@@ -68,6 +68,58 @@ The evaluation results will be presented on Langfuse as follows:
 
 ![shallow_trace_example](../docs/imgs/shallow_trace_example.png)
 
+
+## How to use Dspy in Wren AI
+### Step 1: Generate evaluation dataset
+
+Please use eval.py and the spider2 v1 dataset to train an optimized dspy module (https://github.com/taoyds/spider/tree/master/evaluation_examples/examples)
+The `prediction_eval_ask_9df57d69-250c-4a10-b6a5-6595509fed6b_2024_10_23_132136.toml` is a predict dataset generated without dspy
+
+```
+wren-ai-service/eval/dspy_modules/prompt_optimizer.py --training-dataset spider_car_1_eval_dataset.toml --file prediction_eval_ask_9df57d69-250c-4a10-b6a5-6595509fed6b_2024_10_23_132136.toml
+```
+
+output: `eval/optimized/AskGenerationV1_optimized_2024_10_21_181426.json` This is the module 
+
+### Step 2: Use dspy in pipeline
+
+1. set an environment variable `DSPY_OPTIMAZED_MODEL` which is the trained dspy module above step
+
+```
+export DSPY_OPTIMAZED_MODEL=eval/optimized/AskGenerationV1_optimized_2024_10_21_181426.json
+```
+
+2. start predict pipeline and get the predicted result
+
+```
+just predict eval/dataset/spider_car_1_eval_dataset.toml
+```
+
+The output is genereated by Dspy
+
+```
+outputs/predictions/prediction_eval_ask_f5103405-09b2-448c-829d-cedd3c3b12d0_2024_10_22_184950.toml
+
+```
+
+### Step 3: (Optional)
+
+1. Start to evaluate the predicted result
+
+```
+just eval prediction_eval_ask_f5103405-09b2-448c-829d-cedd3c3b12d0_2024_10_22_184950.toml
+
+```
+
+2. Compare the two results with Dspy and without Dspy
+
+![image](https://github.com/user-attachments/assets/34ee0c25-dcdc-45b7-8cc0-cb2fe55211af)
+
+
+Notes:
+wren-ai-service/eval/dspy_modules/prompt_optimizer.py can be improved by incorporating additional training examples or use other modules in dspy
+
+
 ## Terms
 
 This section describes the terms used in the evaluation framework:
