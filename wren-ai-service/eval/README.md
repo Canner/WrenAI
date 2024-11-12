@@ -68,6 +68,65 @@ The evaluation results will be presented on Langfuse as follows:
 
 ![shallow_trace_example](../docs/imgs/shallow_trace_example.png)
 
+
+## How to use DSPy in Wren AI
+### Step 1: Generate optimized DSPy module
+
+1. Prepare a predict result and training dataset
+Generate a predict dataset without dspy. It's used to initialized evaluation pipeline (Metrics). Refer to https://github.com/Canner/WrenAI/blob/main/wren-ai-service/eval/README.md#eval-dataset-preparationif-using-spider-10-dataset
+
+```
+just predict <evaluation-dataset>
+```
+The output is a predict result. such as  `prediction_eval_ask_9df57d69-250c-4a10-b6a5-6595509fed6b_2024_10_23_132136.toml`
+
+2. Train an DSPy module.
+Using above predict result and training dataset to train a DSPy module.
+```
+wren-ai-service/eval/dspy_modules/prompt_optimizer.py --training-dataset spider_car_1_eval_dataset.toml --file prediction_eval_ask_9df57d69-250c-4a10-b6a5-6595509fed6b_2024_10_23_132136.toml
+```
+
+output: `eval/optimized/AskGenerationV1_optimized_2024_10_21_181426.json` This is the trained DSPy module 
+
+### Step 2: Use the optimized module in pipeline
+
+1. set an environment variable `DSPY_OPTIMAZED_MODEL` which is the trained dspy module above step
+
+```
+export DSPY_OPTIMAZED_MODEL=eval/optimized/AskGenerationV1_optimized_2024_10_21_181426.json
+```
+
+2. start predict pipeline and get the predicted result
+
+```
+just predict eval/dataset/spider_car_1_eval_dataset.toml
+```
+
+The output is genereated by DSPy
+
+```
+outputs/predictions/prediction_eval_ask_f5103405-09b2-448c-829d-cedd3c3b12d0_2024_10_22_184950.toml
+
+```
+
+### Step 3: (Optional)
+
+1. Evaluate the DSPy prodiction result
+
+```
+just eval prediction_eval_ask_f5103405-09b2-448c-829d-cedd3c3b12d0_2024_10_22_184950.toml
+
+```
+
+2. Compare the two results with DSPy and without DSPy
+
+![image](https://github.com/user-attachments/assets/34ee0c25-dcdc-45b7-8cc0-cb2fe55211af)
+
+
+Notes:
+wren-ai-service/eval/dspy_modules/prompt_optimizer.py can be improved by incorporating additional training examples or use other modules in dspy
+
+
 ## Terms
 
 This section describes the terms used in the evaluation framework:

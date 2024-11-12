@@ -183,8 +183,8 @@ class SQLGenPostProcessor:
                         {
                             "sql": quoted_sql,
                             "type": "DRY_RUN",
-                            "error": addition.get("error_message", ""),
-                            "correlation_id": addition.get("correlation_id", ""),
+                            "error": addition.get("error_message", "") if isinstance(addition, dict) else addition,
+                            "correlation_id": addition.get("correlation_id", "") if isinstance(addition, dict) else addition
                         }
                     )
             else:

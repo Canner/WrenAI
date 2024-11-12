@@ -13,8 +13,12 @@ import dspy.teleprompt
 
 sys.path.append(f"{Path().parent.resolve()}")
 import src.utils as utils
-from eval.dspy_modules.ask_generation import AskGenerationV1
-from eval.utils import parse_toml
+from dspy_modules.ask_generation import AskGenerationV1
+from tomlkit import parse
+
+def parse_toml(path: str) -> dict[str, any]:
+    with open(path) as file:
+        return parse(file.read())
 
 
 def parse_args() -> Tuple[str]:
@@ -62,7 +66,7 @@ def clean_sql(sql: str) -> str:
 
 
 def prepare_dataset(path: str, train_ratio: float = 0.5):
-    eval_dataset = parse_toml(f"eval/dataset/{path}")["eval_dataset"]
+    eval_dataset = parse_toml(f"{path}")["eval_dataset"]
 
     dspy_dataset = []
     for data in eval_dataset:
