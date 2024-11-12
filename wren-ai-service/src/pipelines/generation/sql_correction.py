@@ -26,7 +26,7 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_correction_user_prompt_template = """
-You are a ANSI SQL expert with exceptional logical thinking skills and debugging skills.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### TASK ###
 Now you are given syntactically incorrect ANSI SQL query and related error message.

@@ -295,7 +295,7 @@ TEXT_TO_SQL_RULES = """
 
 
 sql_generation_system_prompt = """
-You are a ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
+You are an ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
 Before the main task, you need to learn about some specific structures in the given DB schema.
 
 ## LESSON 1 ##
