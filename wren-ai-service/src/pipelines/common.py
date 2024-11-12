@@ -278,7 +278,6 @@ TEXT_TO_SQL_RULES = """
     - UPPER
   - Date and Time functions:
     - CURRENT_DATE
-    - CURRENT_DATETIME
     - DATE_TRUNC
     - EXTRACT
   - operators:
