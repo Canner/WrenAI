@@ -11,8 +11,15 @@ import {
 } from './metadataService';
 import { DataSourceName } from '../types';
 import { encryptConnectionInfo } from '../dataSource';
-import { RecommendationQuestion, WrenAIError } from '../adaptors';
+import {
+  IWrenAIAdaptor,
+  RecommendationQuestion,
+  WrenAIError,
+} from '../adaptors';
 import { RecommendQuestionResultStatus } from './askingService';
+import { IMDLService } from './mdlService';
+import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
+import { ITelemetry } from '../telemetry/telemetry';
 
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
@@ -49,21 +56,68 @@ export interface IProjectService {
   ) => string;
   deleteProject: (projectId: number) => Promise<void>;
   getProjectRecommendationQuestions: () => Promise<ProjectRecommendationQuestionsResult>;
+
+  // recommend questions
+  generateProjectRecommendationQuestions: (projectId: number) => Promise<void>;
 }
 
 export class ProjectService implements IProjectService {
   private projectRepository: IProjectRepository;
   private metadataService: IDataSourceMetadataService;
-
+  private mdlService: IMDLService;
+  private wrenAIAdaptor: IWrenAIAdaptor;
+  private projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
   constructor({
     projectRepository,
     metadataService,
+    mdlService,
+    wrenAIAdaptor,
+    telemetry,
   }: {
     projectRepository: IProjectRepository;
     metadataService: IDataSourceMetadataService;
+    mdlService: IMDLService;
+    wrenAIAdaptor: IWrenAIAdaptor;
+    telemetry: ITelemetry;
   }) {
     this.projectRepository = projectRepository;
     this.metadataService = metadataService;
+    this.mdlService = mdlService;
+    this.wrenAIAdaptor = wrenAIAdaptor;
+    this.projectRecommendQuestionBackgroundTracker =
+      new ProjectRecommendQuestionBackgroundTracker({
+        projectRepository,
+        telemetry,
+        wrenAIAdaptor,
+      });
+  }
+
+  public async generateProjectRecommendationQuestions(
+    projectId: number,
+  ): Promise<void> {
+    const project = await this.getProjectById(projectId);
+    if (!project) {
+      throw new Error(`Project ${projectId} not found`);
+    }
+    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+
+    const recommendQuestionResult =
+      await this.wrenAIAdaptor.generateRecommendationQuestions({
+        manifest,
+        ...this.getProjectRecommendationQuestionsConfig(project),
+      });
+    const updatedProject = await this.projectRepository.updateOne(project.id, {
+      queryId: recommendQuestionResult.queryId,
+      questionsStatus: null,
+      questions: null,
+      questionsError: null,
+    });
+    const tasks = this.projectRecommendQuestionBackgroundTracker.getTasks();
+    const taskKey =
+      this.projectRecommendQuestionBackgroundTracker.taskKey(updatedProject);
+    if (!tasks[taskKey]) {
+      this.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
+    }
   }
 
   public async getProjectRecommendationQuestions() {
@@ -172,5 +226,17 @@ export class ProjectService implements IProjectService {
       },
       {},
     );
+  }
+
+  private async getProjectRecommendationQuestionsConfig(project: Project) {
+    return {
+      projectId: project.id.toString(),
+      maxCategories: 3,
+      maxQuestions: 9,
+      regenerate: true,
+      configuration: {
+        language: project.language,
+      },
+    };
   }
 }

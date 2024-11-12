@@ -66,8 +66,21 @@ export class AskingResolver {
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
     this.generateThreadRecommendationQuestions =
       this.generateThreadRecommendationQuestions.bind(this);
+    this.generateProjectRecommendationQuestions =
+      this.generateProjectRecommendationQuestions.bind(this);
+
     this.getThreadRecommendationQuestions =
       this.getThreadRecommendationQuestions.bind(this);
+  }
+
+  public async generateProjectRecommendationQuestions(
+    _root: any,
+    args: { projectId: number },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { projectId } = args;
+    await ctx.projectService.generateProjectRecommendationQuestions(projectId);
+    return true;
   }
 
   public async generateThreadRecommendationQuestions(
