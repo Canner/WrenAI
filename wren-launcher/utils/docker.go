@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 
 	"github.com/Canner/WrenAI/wren-launcher/config"
 	"github.com/docker/cli/cli/command"
@@ -143,6 +144,24 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 	aiServiceConfigFile := path.Join(projectDir, "config.yaml")
 	pterm.Info.Println("Downloading config.yaml file to", aiServiceConfigFile)
 	err = downloadFile(aiServiceConfigFile, AI_SERVICE_CONFIG_URL)
+	if err != nil {
+		return err
+	}
+
+	// read the config.yaml file
+	configFileContent, err := os.ReadFile(aiServiceConfigFile)
+	if err != nil {
+		return err
+	}
+
+	// replace the generation model in config.yaml
+	configContent := string(configFileContent)
+	configContent = strings.ReplaceAll(configContent, "openai_llm.gpt-4o-mini", "openai_llm."+openaiGenerationModel)
+	// disable the langfuse for starting wren-ai from the launcher
+	configContent = strings.ReplaceAll(configContent, "langfuse_enable: true", "langfuse_enable: false")
+
+	// write back to config.yaml
+	err = os.WriteFile(aiServiceConfigFile, []byte(configContent), 0644)
 	if err != nil {
 		return err
 	}
