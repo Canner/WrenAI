@@ -5,7 +5,7 @@ import {
 } from '../adaptors/wrenAIAdaptor';
 import { IThreadRepository, Project, Thread } from '../repositories';
 import {
-  PostHogTelemetry,
+  ITelemetry,
   TelemetryEvent,
   WrenService,
 } from '../telemetry/telemetry';
@@ -29,7 +29,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private projectRepository: IProjectRepository;
   private runningJobs = new Set();
-  private telemetry: PostHogTelemetry;
+  private telemetry: ITelemetry;
   private logger: Logger;
 
   constructor({
@@ -37,7 +37,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
     wrenAIAdaptor,
     projectRepository,
   }: {
-    telemetry: PostHogTelemetry;
+    telemetry: ITelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     projectRepository: IProjectRepository;
   }) {
@@ -70,19 +70,25 @@ export class ProjectRecommendQuestionBackgroundTracker {
           );
 
         // check if status change
-        if (project.questionsStatus === result.status) {
+        if (
+          project.questionsStatus === result.status &&
+          result.response?.questions.length === (project.questions || []).length
+        ) {
           // mark the job as finished
           this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(project)} status not changed`,
+            `${loggerPrefix}job ${this.taskKey(project)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
           );
           this.runningJobs.delete(this.taskKey(project));
           return;
         }
 
         // update database
-        if (result.status !== project.questionsStatus) {
+        if (
+          result.status !== project.questionsStatus ||
+          result.response?.questions.length !== (project.questions || []).length
+        ) {
           this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(project)} status changed to ${result.status}, updating`,
+            `${loggerPrefix}job ${this.taskKey(project)} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
           );
           await this.projectRepository.updateOne(project.id, {
             questionsStatus: result.status.toUpperCase(),
@@ -90,6 +96,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
             questionsError: result.error,
           });
           project.questionsStatus = result.status;
+          project.questions = result.response?.questions;
         }
 
         // remove the task from tracker if it is finalized
@@ -168,7 +175,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadRepository: IThreadRepository;
   private runningJobs = new Set();
-  private telemetry: PostHogTelemetry;
+  private telemetry: ITelemetry;
   private logger: Logger;
 
   constructor({
@@ -176,7 +183,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
     wrenAIAdaptor,
     threadRepository,
   }: {
-    telemetry: PostHogTelemetry;
+    telemetry: ITelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     threadRepository: IThreadRepository;
   }) {
