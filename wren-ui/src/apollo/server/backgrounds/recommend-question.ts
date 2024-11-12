@@ -209,19 +209,25 @@ export class ThreadRecommendQuestionBackgroundTracker {
           );
 
         // check if status change
-        if (thread.questionsStatus === result.status) {
+        if (
+          thread.questionsStatus === result.status &&
+          result.response?.questions.length === (thread.questions || []).length
+        ) {
           // mark the job as finished
           this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(thread)} status not changed`,
+            `${loggerPrefix}job ${this.taskKey(thread)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
           );
           this.runningJobs.delete(this.taskKey(thread));
           return;
         }
 
         // update database
-        if (result.status !== thread.questionsStatus) {
+        if (
+          result.status !== thread.questionsStatus ||
+          result.response?.questions.length !== (thread.questions || []).length
+        ) {
           this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(thread)} status changed to ${result.status}, updating`,
+            `${loggerPrefix}job ${this.taskKey(thread)} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
           );
           await this.threadRepository.updateOne(thread.id, {
             questionsStatus: result.status.toUpperCase(),
@@ -229,6 +235,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
             questionsError: result.error,
           });
           thread.questionsStatus = result.status;
+          thread.questions = result.response?.questions;
         }
 
         // remove the task from tracker if it is finalized

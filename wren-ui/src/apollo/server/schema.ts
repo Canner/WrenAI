@@ -727,7 +727,7 @@ export const typeDefs = gql`
   type RecommendationQuestion {
     question: String!
     category: String!
-    explanation: String!
+    sql: String!
   }
 
   type ThreadRecommendQuestionResult {

@@ -138,6 +138,7 @@ export type RecommendationQuestionsInput = {
   maxQuestions?: number;
   // Optional max number of categories (default: 3)
   maxCategories?: number;
+  regenerate?: boolean; // Optional regenerate questions (default: false)
   // Optional configuration settings
   configuration?: {
     // Optional language (default: "English")
@@ -147,8 +148,8 @@ export type RecommendationQuestionsInput = {
 
 export type RecommendationQuestion = {
   question: string;
-  explanation: string;
   category: string; // category for the question
+  sql: string; // validated sql for this question, can be used in generateAskDetail
 };
 
 export type RecommendationQuestionsResult = AskResponse<
