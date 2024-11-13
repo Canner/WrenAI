@@ -161,6 +161,67 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 	return nil
 }
 
+func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
+	// Check if .env file does not exist
+	if _, err := os.Stat(newEnvFile); err != nil {
+		return envFileContent, nil
+	}
+
+	// File exists, read existing content
+	existingContent, err := os.ReadFile(newEnvFile)
+	if err != nil {
+		return "", err
+	}
+
+	// Split both contents into lines
+	existingLines := strings.Split(string(existingContent), "\n")
+	newLines := strings.Split(envFileContent, "\n")
+
+	// Create map of existing env vars
+	existingEnvVars := make(map[string]string)
+	for _, line := range existingLines {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				existingEnvVars[parts[0]] = parts[1]
+			}
+		}
+	}
+
+	// Merge with new content, preferring new values
+	for _, line := range newLines {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 && strings.TrimSpace(parts[1]) != "" {
+				existingEnvVars[parts[0]] = parts[1]
+			}
+		}
+	}
+
+	// Build merged content preserving comments and empty lines
+	var mergedLines []string
+	for _, line := range newLines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			mergedLines = append(mergedLines, line)
+		} else {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := parts[0]
+				if val, exists := existingEnvVars[key]; exists {
+					mergedLines = append(mergedLines, key+"="+val)
+				}
+			}
+		}
+	}
+
+	// Update envFileContent with merged content
+	envFileContent = strings.Join(mergedLines, "\n")
+	return envFileContent, nil
+}
+
 func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
@@ -201,6 +262,13 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		telemetryEnabled,
 	)
 	newEnvFile := getEnvFilePath(projectDir)
+
+	// merge the env file content with the existing env file
+	envFileContent, err = mergeEnvContent(newEnvFile, envFileContent)
+	if err != nil {
+		return err
+	}
+
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
 	if err != nil {
