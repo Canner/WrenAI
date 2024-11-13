@@ -211,7 +211,31 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- ONLY USE the following SQL functions when generating answers:
+- YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
+- ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
+    - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
+    - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
+    - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
+- If the user asks for a specific date, please give the date range in SQL query
+    - example: "What is the total revenue for the month of 2024-11-01?"
+    - answer: "SELECT SUM(PriceSum) FROM Revenue WHERE CAST(PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+- ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
+- USE THE VIEW TO SIMPLIFY THE QUERY.
+- DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
+- MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
+  - EXAMPLE
+    DATABASE SCHEMA
+    /* {"displayName":"_orders","description":"A model representing the orders data."} */
+    CREATE TABLE orders (
+      -- {"description":"A column that represents the timestamp when the order was approved.","alias":"_timestamp"}
+      ApprovedTimestamp TIMESTAMP
+    }
+
+    SQL
+    SELECT ApprovedTimestamp AS _timestamp FROM orders AS _orders;
+- DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
+- ONLY USE the following SQL functions if you need to when generating answers:
   - Aggregation functions:
     - AVG
     - COUNT
@@ -269,30 +293,11 @@ TEXT_TO_SQL_RULES = """
     - `=`
     - `<>`
     - `!=`
-- YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
-- DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
-- DON'T USE "COUNT(*) FILTER(WHERE <condition>)"
-- ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
-- USE THE VIEW TO SIMPLIFY THE QUERY.
-- DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
-  - EXAMPLE
-    DATABASE SCHEMA
-    /* {"displayName":"_orders","description":"A model representing the orders data."} */
-    CREATE TABLE orders (
-      -- {"description":"A column that represents the timestamp when the order was approved.","alias":"_timestamp"}
-      ApprovedTimestamp TIMESTAMP
-    }
-
-    SQL
-    SELECT ApprovedTimestamp AS _timestamp FROM orders AS _orders;
-- DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 """
 
 
 sql_generation_system_prompt = """
-You are a Trino SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
+You are an ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
 Before the main task, you need to learn about some specific structures in the given DB schema.
 
 ## LESSON 1 ##
