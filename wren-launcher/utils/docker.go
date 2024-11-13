@@ -131,37 +131,41 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
-	// download docker-compose file
-	composeFile := path.Join(projectDir, "docker-compose.yaml")
-	pterm.Info.Println("Downloading docker-compose file to", composeFile)
-	err := downloadFile(composeFile, DOCKER_COMPOSE_YAML_URL)
-	if err != nil {
-		return err
-	}
-
+func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error {
 	// download config.yaml file
-	aiServiceConfigFile := path.Join(projectDir, "config.yaml")
-	pterm.Info.Println("Downloading config.yaml file to", aiServiceConfigFile)
-	err = downloadFile(aiServiceConfigFile, AI_SERVICE_CONFIG_URL)
+	configPath := path.Join(projectDir, "config.yaml")
+	pterm.Info.Println("Downloading config.yaml file to", configPath)
+	err := downloadFile(configPath, AI_SERVICE_CONFIG_URL)
 	if err != nil {
 		return err
 	}
 
 	// read the config.yaml file
-	configFileContent, err := os.ReadFile(aiServiceConfigFile)
+	content, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
 
 	// replace the generation model in config.yaml
-	configContent := string(configFileContent)
-	configContent = strings.ReplaceAll(configContent, "openai_llm.gpt-4o-mini", "openai_llm."+openaiGenerationModel)
+	config := string(content)
+	config = strings.ReplaceAll(config, "openai_llm.gpt-4o-mini", "openai_llm."+generationModel)
 	// disable the langfuse for starting wren-ai from the launcher
-	configContent = strings.ReplaceAll(configContent, "langfuse_enable: true", "langfuse_enable: false")
+	config = strings.ReplaceAll(config, "langfuse_enable: true", "langfuse_enable: false")
 
 	// write back to config.yaml
-	err = os.WriteFile(aiServiceConfigFile, []byte(configContent), 0644)
+	err = os.WriteFile(configPath, []byte(config), 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
+	// download docker-compose file
+	composeFile := path.Join(projectDir, "docker-compose.yaml")
+	pterm.Info.Println("Downloading docker-compose file to", composeFile)
+	err := downloadFile(composeFile, DOCKER_COMPOSE_YAML_URL)
 	if err != nil {
 		return err
 	}

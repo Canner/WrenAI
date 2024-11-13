@@ -191,6 +191,12 @@ func Launch() {
 		if shouldReturn {
 			return
 		}
+
+		// prepare config.yaml file for OpenAI
+		err := utils.PrepareConfigFileForOpenAI(projectDir, openaiGenerationModel)
+		if err != nil {
+			panic(err)
+		}
 	} else {
 		// check if config.yaml file exists
 		err := isConfigFileValidForCustomLLM(projectDir)
