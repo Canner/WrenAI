@@ -10,6 +10,7 @@ import {
   DataSourceName,
   SampleDatasetName,
 } from '@/apollo/client/graphql/__types__';
+import { ONBOARDING_STATUS } from '@/apollo/client/graphql/onboarding';
 
 const PASSWORD_PLACEHOLDER = '************';
 
@@ -93,6 +94,8 @@ export default function useSetupConnection() {
     useStartSampleDatasetMutation({
       onError: (error) => console.error(error),
       onCompleted: () => router.push(Path.Modeling),
+      refetchQueries: [{ query: ONBOARDING_STATUS }],
+      awaitRefetchQueries: true,
     });
 
   useEffect(() => {

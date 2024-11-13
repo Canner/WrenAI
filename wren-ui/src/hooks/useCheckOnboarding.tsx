@@ -13,19 +13,9 @@ const redirectRoute = {
 
 export const useWithOnboarding = () => {
   const router = useRouter();
-  const { data, loading, refetch } = useOnboardingStatusQuery();
+  const { data, loading } = useOnboardingStatusQuery();
 
   const onboardingStatus = data?.onboardingStatus?.status;
-
-  useEffect(() => {
-    // do not refetch onboarding status when onboarding page
-    if (router.pathname.startsWith(Path.Onboarding)) {
-      return;
-    }
-
-    // refetch onboarding status when the route changes
-    refetch();
-  }, [router.pathname]);
 
   useEffect(() => {
     if (onboardingStatus) {
@@ -85,3 +75,14 @@ export const useWithOnboarding = () => {
     onboardingStatus,
   };
 };
+
+export default function useOnboardingStatus() {
+  const { data, loading, error, refetch } = useOnboardingStatusQuery();
+
+  return {
+    loading,
+    error,
+    refetch,
+    onboardingStatus: data?.onboardingStatus?.status,
+  };
+}
