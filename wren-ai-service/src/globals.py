@@ -8,6 +8,7 @@ from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
     followup_sql_generation,
+    question_recommendation,
     relationship_recommendation,
     semantics_description,
     sql_answer,
@@ -23,6 +24,7 @@ from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
+from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 from src.web.v1.services.semantics_description import SemanticsDescription
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
@@ -36,13 +38,14 @@ logger = logging.getLogger("wren-ai-service")
 
 @dataclass
 class ServiceContainer:
+    ask_service: AskService
+    ask_details_service: AskDetailsService
+    question_recommendation: QuestionRecommendation
     relationship_recommendation: RelationshipRecommendation
     semantics_description: SemanticsDescription
     semantics_preparation_service: SemanticsPreparationService
-    ask_service: AskService
     sql_answer_service: SqlAnswerService
     sql_expansion_service: SqlExpansionService
-    ask_details_service: AskDetailsService
     sql_explanation_service: SQLExplanationService
     sql_regeneration_service: SQLRegenerationService
 
@@ -57,8 +60,9 @@ def create_service_container(
     pipe_components: dict[str, PipelineComponent],
     column_indexing_batch_size: Optional[int] = 50,
     table_retrieval_size: Optional[int] = 10,
-    table_column_retrieval_size: Optional[int] = 1000,
+    table_column_retrieval_size: Optional[int] = 100,
     query_cache: Optional[dict] = {},
+    allow_using_db_schemas_without_pruning: Optional[bool] = False,
 ) -> ServiceContainer:
     return ServiceContainer(
         semantics_description=SemanticsDescription(
@@ -84,6 +88,7 @@ def create_service_container(
                     **pipe_components["retrieval"],
                     table_retrieval_size=table_retrieval_size,
                     table_column_retrieval_size=table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=allow_using_db_schemas_without_pruning,
                 ),
                 "historical_question": historical_question.HistoricalQuestion(
                     **pipe_components["historical_question"],
@@ -159,6 +164,22 @@ def create_service_container(
                 "relationship_recommendation": relationship_recommendation.RelationshipRecommendation(
                     **pipe_components["relationship_recommendation"],
                 )
+            },
+            **query_cache,
+        ),
+        question_recommendation=QuestionRecommendation(
+            pipelines={
+                "question_recommendation": question_recommendation.QuestionRecommendation(
+                    **pipe_components["question_recommendation"],
+                ),
+                "retrieval": retrieval.Retrieval(
+                    **pipe_components["retrieval"],
+                    table_retrieval_size=table_retrieval_size,
+                    table_column_retrieval_size=table_column_retrieval_size,
+                ),
+                "sql_generation": sql_generation.SQLGeneration(
+                    **pipe_components["sql_generation"],
+                ),
             },
             **query_cache,
         ),

@@ -7,25 +7,15 @@ import { Path } from '@/utils/enum';
 const redirectRoute = {
   [OnboardingStatus.DATASOURCE_SAVED]: Path.OnboardingModels,
   [OnboardingStatus.NOT_STARTED]: Path.OnboardingConnection,
-  [OnboardingStatus.ONBOARDING_FINISHED]: Path.Home,
-  [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Home,
+  [OnboardingStatus.ONBOARDING_FINISHED]: Path.Modeling,
+  [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Modeling,
 };
 
 export const useWithOnboarding = () => {
   const router = useRouter();
-  const { data, loading, refetch } = useOnboardingStatusQuery();
+  const { data, loading } = useOnboardingStatusQuery();
 
   const onboardingStatus = data?.onboardingStatus?.status;
-
-  useEffect(() => {
-    // do not refetch onboarding status when onboarding page
-    if (router.pathname.startsWith(Path.Onboarding)) {
-      return;
-    }
-
-    // refetch onboarding status when the route changes
-    refetch();
-  }, [router.pathname]);
 
   useEffect(() => {
     if (onboardingStatus) {
@@ -33,7 +23,7 @@ export const useWithOnboarding = () => {
       const pathname = router.pathname;
 
       // redirect to new path if onboarding is not completed
-      if (newPath && newPath !== Path.Home) {
+      if (newPath && newPath !== Path.Modeling) {
         // do not redirect if the new path and router pathname are the same
         if (newPath === pathname) {
           return;
@@ -85,3 +75,14 @@ export const useWithOnboarding = () => {
     onboardingStatus,
   };
 };
+
+export default function useOnboardingStatus() {
+  const { data, loading, error, refetch } = useOnboardingStatusQuery();
+
+  return {
+    loading,
+    error,
+    refetch,
+    onboardingStatus: data?.onboardingStatus?.status,
+  };
+}

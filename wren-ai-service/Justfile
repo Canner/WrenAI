@@ -23,7 +23,10 @@ demo:
 	poetry run streamlit run demo/app.py
 
 test test_args='': up && down
-	poetry run pytest -s {{test_args}}
+	poetry run pytest -s {{test_args}} --ignore tests/pytest/test_usecases.py
+
+test-usecases:
+	poetry run python -m tests.pytest.test_usecases
 
 load-test:
 	poetry run python -m tests.locust.locust_script

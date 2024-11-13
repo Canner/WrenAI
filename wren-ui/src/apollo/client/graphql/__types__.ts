@@ -381,6 +381,11 @@ export type GetMdlResult = {
   mdl?: Maybe<Scalars['String']>;
 };
 
+export type LearningRecord = {
+  __typename?: 'LearningRecord';
+  paths: Array<Scalars['String']>;
+};
+
 export type MdlModelSubmitInput = {
   columns: Array<Scalars['String']>;
   name: Scalars['String'];
@@ -434,6 +439,7 @@ export type Mutation = {
   resetCurrentProject: Scalars['Boolean'];
   resolveSchemaChange: Scalars['Boolean'];
   saveDataSource: DataSource;
+  saveLearningRecord: LearningRecord;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
   startSampleDataset: Scalars['JSON'];
@@ -549,6 +555,11 @@ export type MutationResolveSchemaChangeArgs = {
 
 export type MutationSaveDataSourceArgs = {
   data: DataSourceInput;
+};
+
+
+export type MutationSaveLearningRecordArgs = {
+  data: SaveLearningRecordInput;
 };
 
 
@@ -691,6 +702,7 @@ export type Query = {
   autoGenerateRelation: Array<RecommendRelations>;
   diagram: Diagram;
   getMDL: GetMdlResult;
+  learningRecord: LearningRecord;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
   listViews: Array<ViewInfo>;
@@ -805,6 +817,10 @@ export enum SampleDatasetName {
   MUSIC = 'MUSIC',
   NBA = 'NBA'
 }
+
+export type SaveLearningRecordInput = {
+  path: Scalars['String'];
+};
 
 export type SaveRelationInput = {
   relations: Array<InputMaybe<RelationInput>>;

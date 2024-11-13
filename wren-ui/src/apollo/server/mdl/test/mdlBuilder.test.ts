@@ -235,8 +235,8 @@ describe('MDLBuilder', () => {
               notNull: true,
               properties: {
                 displayName: 'event_params',
-                'nestedColumn.event_params.key.displayName': 'event_params.key',
-                'nestedColumn.event_params.key.description': 'bar',
+                'nestedDisplayName.event_params.key': 'event_params.key',
+                'nestedDescription.event_params.key': 'bar',
               },
             },
             {
@@ -490,8 +490,8 @@ describe('MDLBuilder', () => {
             notNull: true,
             properties: {
               displayName: 'event_params',
-              'nestedColumn.event_params.key.displayName': 'event_params.key',
-              'nestedColumn.event_params.key.description': 'bar',
+              'nestedDisplayName.event_params.key': 'event_params.key',
+              'nestedDescription.event_params.key': 'bar',
             },
           },
           {

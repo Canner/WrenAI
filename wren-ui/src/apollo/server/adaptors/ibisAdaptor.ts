@@ -110,7 +110,7 @@ export interface IIbisAdaptor {
     query: string,
     options: IbisQueryOptions,
   ) => Promise<IbisQueryResponse>;
-  dryRun: (query: string, options: IbisBaseOptions) => Promise<boolean>;
+  dryRun: (query: string, options: IbisBaseOptions) => Promise<DryRunResponse>;
   getTables: (
     dataSource: DataSourceName,
     connectionInfo: WREN_AI_CONNECTION_INFO,
@@ -130,11 +130,18 @@ export interface IIbisAdaptor {
   ) => Promise<ValidationResponse>;
 }
 
-export interface IbisQueryResponse {
+export interface IbisResponse {
+  correlationId?: string;
+  processTime?: string;
+}
+
+export interface IbisQueryResponse extends IbisResponse {
   columns: string[];
   data: any[];
   dtypes: Record<string, string>;
 }
+
+export interface DryRunResponse extends IbisResponse {}
 
 enum IBIS_API_TYPE {
   QUERY = 'QUERY',
@@ -194,14 +201,21 @@ export class IbisAdaptor implements IIbisAdaptor {
           },
         },
       );
-      const response = res.data;
-      return response;
+      return {
+        ...res.data,
+        correlationId: res.headers['X-Correlation-ID'],
+        processTime: res.headers['X-Process-Time'],
+      };
     } catch (e) {
       logger.debug(`Got error when querying ibis: ${e.response.data}`);
 
       throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
         customMessage: e.response.data || 'Error querying ibis server',
         originalError: e,
+        other: {
+          correlationId: e.response.headers['X-Correlation-ID'],
+          processTime: e.response.headers['X-Process-Time'],
+        },
       });
     }
   }
@@ -209,7 +223,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   public async dryRun(
     query: string,
     options: IbisQueryOptions,
-  ): Promise<boolean> {
+  ): Promise<DryRunResponse> {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
@@ -220,17 +234,24 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     logger.debug(`Dry run sql from ibis with body:`);
     try {
-      await axios.post(
+      const response = await axios.post(
         `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_RUN)}/connector/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
         body,
       );
       logger.debug(`Ibis server Dry run success`);
-      return true;
+      return {
+        correlationId: response.headers['X-Correlation-ID'],
+        processTime: response.headers['X-Process-Time'],
+      };
     } catch (err) {
       logger.info(`Got error when dry running ibis`);
       throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
         customMessage: err.response.data,
         originalError: err,
+        other: {
+          correlationId: err.response.headers['X-Correlation-ID'],
+          processTime: err.response.headers['X-Process-Time'],
+        },
       });
     }
   }

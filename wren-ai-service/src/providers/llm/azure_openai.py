@@ -18,11 +18,11 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
-GENERATION_MODEL = "gpt-4-turbo"
+GENERATION_MODEL = "gpt-4o-mini"
 GENERATION_MODEL_KWARGS = {
     "temperature": 0,
     "n": 1,
-    "max_tokens": 1000,
+    "max_tokens": 4096,
     "response_format": {"type": "json_object"},
 }
 
@@ -32,7 +32,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
     def __init__(
         self,
         api_key: Secret = Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
-        model: str = "gpt-4-turbo",
+        model: str = "gpt-4o-mini",
         api_base: str = os.getenv("LLM_AZURE_OPENAI_API_BASE"),
         api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
@@ -59,7 +59,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
         )
 
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
+    @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(
         self,
         prompt: str,
@@ -162,6 +162,10 @@ class AzureOpenAILLMProvider(LLMProvider):
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,
-            generation_kwargs={**generation_kwargs, **self._model_kwargs},
+            generation_kwargs=(
+                {**generation_kwargs, **self._model_kwargs}
+                if generation_kwargs
+                else self._model_kwargs
+            ),
             timeout=self._timeout,
         )

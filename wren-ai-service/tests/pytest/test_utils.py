@@ -66,6 +66,7 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
         thread_id = "mock-thread-id"
         mdl_hash = "mock-mdl-hash"
         user_id = "mock-user-id"
+        query = "mock-user-query"
 
     @utils.trace_metadata
     async def my_function(_: str, b: Request, **kwargs):
@@ -80,6 +81,7 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
         metadata={
             "mdl_hash": "mock-mdl-hash",
             "project_id": "mock-project-id",
+            "query": "mock-user-query",
             **service_metadata.pipes_metadata,
         },
     )

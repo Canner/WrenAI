@@ -35,15 +35,8 @@ Please return the result in the following JSON format:
 {
     "sql_summary_results": [
         {
-            "summary": <SQL_QUERY_SUMMARY_STRING_1>
-        },
-        {
-            "summary": <SQL_QUERY_SUMMARY_STRING_2>
-        },
-        {
-            "summary": <SQL_QUERY_SUMMARY_STRING_3>
-        },
-        ...
+            "summary": <SQL_QUERY_SUMMARY_STRING>
+        }
     ]
 }
 """

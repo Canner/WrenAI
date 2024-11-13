@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
 
@@ -23,8 +24,13 @@ class AskConfigurations(BaseModel):
         start: str
         end: str
 
+    class Timezone(BaseModel):
+        name: str
+        utc_offset: str
+
     fiscal_year: Optional[FiscalYear] = None
-    language: str = "English"
+    language: Optional[str] = "English"
+    timezone: Optional[Timezone] = Timezone(name="Asia/Taipei", utc_offset="+8:00")
 
 
 # POST /v1/asks
@@ -39,7 +45,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[AskHistory] = None
-    configurations: AskConfigurations = AskConfigurations(language="English")
+    configurations: Optional[AskConfigurations] = AskConfigurations()
 
     @property
     def query_id(self) -> str:
@@ -93,7 +99,12 @@ class AskResultRequest(BaseModel):
 
 class AskResultResponse(BaseModel):
     status: Literal[
-        "understanding", "searching", "generating", "finished", "failed", "stopped"
+        "understanding",
+        "searching",
+        "generating",
+        "finished",
+        "failed",
+        "stopped",
     ]
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
@@ -184,13 +195,14 @@ class AskService:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
                     )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_DATA",
-                            message="No relevant data",
-                        ),
-                    )
+                    if not self._is_stopped(query_id):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            error=AskError(
+                                code="NO_RELEVANT_DATA",
+                                message="No relevant data",
+                            ),
+                        )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     return results
 
@@ -222,102 +234,107 @@ class AskService:
                         )
                         for result in historical_question_result
                     ]
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
-
-                if ask_request.history:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        history=ask_request.history,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
-                    )
                 else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=ask_request.query,
-                        contexts=documents,
-                        exclude=historical_question_result,
-                        project_id=ask_request.project_id,
-                        configurations=ask_request.configurations,
-                    )
-
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
-                ]:
-                    valid_sql_summary_results = (
-                        await self._add_summary_to_sql_candidates(
-                            sql_valid_results,
-                            ask_request.query,
-                            ask_request.configurations.language,
+                    if ask_request.history:
+                        text_to_sql_generation_results = await self._pipelines[
+                            "followup_sql_generation"
+                        ].run(
+                            query=ask_request.query,
+                            contexts=documents,
+                            history=ask_request.history,
+                            project_id=ask_request.project_id,
+                            configurations=ask_request.configurations,
                         )
-                    )
-                    api_results = (
-                        api_results
-                        + [AskResult(**result) for result in valid_sql_summary_results]
-                    )[:3]
+                    else:
+                        text_to_sql_generation_results = await self._pipelines[
+                            "sql_generation"
+                        ].run(
+                            query=ask_request.query,
+                            contexts=documents,
+                            exclude=historical_question_result,
+                            project_id=ask_request.project_id,
+                            configurations=ask_request.configurations,
+                        )
 
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="generating",
-                        response=api_results,
-                    )
-
-                if failed_dry_run_results := self._get_failed_dry_run_results(
-                    text_to_sql_generation_results["post_process"][
-                        "invalid_generation_results"
-                    ]
-                ):
-                    sql_correction_results = await self._pipelines[
-                        "sql_correction"
-                    ].run(
-                        contexts=documents,
-                        invalid_generation_results=failed_dry_run_results,
-                        project_id=ask_request.project_id,
-                    )
-                    if valid_generation_results := sql_correction_results[
+                    if sql_valid_results := text_to_sql_generation_results[
                         "post_process"
                     ]["valid_generation_results"]:
                         valid_sql_summary_results = (
                             await self._add_summary_to_sql_candidates(
-                                valid_generation_results,
+                                sql_valid_results,
                                 ask_request.query,
                                 ask_request.configurations.language,
                             )
                         )
-                        api_results = (
-                            api_results
-                            + [
-                                AskResult(**result)
-                                for result in valid_sql_summary_results
-                            ]
-                        )[:3]
+                        api_results = [
+                            AskResult(**result) for result in valid_sql_summary_results
+                        ][:1]
+                    elif failed_dry_run_results := self._get_failed_dry_run_results(
+                        text_to_sql_generation_results["post_process"][
+                            "invalid_generation_results"
+                        ]
+                    ):
+                        # Run sql_correction and _add_summary_to_sql_candidates concurrently
+                        sql_correction_task = self._pipelines["sql_correction"].run(
+                            contexts=documents,
+                            invalid_generation_results=failed_dry_run_results,
+                            project_id=ask_request.project_id,
+                        )
+                        valid_sql_summary_task = self._add_summary_to_sql_candidates(
+                            [
+                                {
+                                    "sql": failed_dry_run_results[0]["sql"],
+                                }
+                            ],
+                            ask_request.query,
+                            ask_request.configurations.language,
+                        )
+
+                        (
+                            sql_correction_results,
+                            valid_sql_summary_results,
+                        ) = await asyncio.gather(
+                            sql_correction_task, valid_sql_summary_task
+                        )
+
+                        if valid_generation_results := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_results"]:
+                            api_results = [
+                                AskResult(
+                                    **{
+                                        "sql": valid_generation_result.get("sql"),
+                                        "summary": sql_summary_result.get("summary"),
+                                        "type": "llm",
+                                    }
+                                )
+                                for sql_summary_result, valid_generation_result in zip(
+                                    valid_sql_summary_results, valid_generation_results
+                                )
+                            ][:1]
 
                 if api_results:
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        response=api_results,
-                    )
+                    if not self._is_stopped(query_id):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            response=api_results,
+                        )
                     results["ask_result"] = api_results
                 else:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
                     )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_SQL",
-                            message="No relevant SQL",
-                        ),
-                    )
+                    if not self._is_stopped(query_id):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            error=AskError(
+                                code="NO_RELEVANT_SQL",
+                                message="No relevant SQL",
+                            ),
+                        )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
 
-                return results
+            return results
         except Exception as e:
             logger.exception(f"ask pipeline - OTHERS: {e}")
 

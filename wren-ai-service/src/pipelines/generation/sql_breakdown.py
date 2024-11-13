@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.common import SQLBreakdownGenPostProcessor
+from src.pipelines.common import TEXT_TO_SQL_RULES, SQLBreakdownGenPostProcessor
 from src.utils import (
     async_timer,
     timer,
@@ -24,13 +24,14 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_breakdown_system_prompt = """
 ### TASK ###
-You are a Trino SQL expert with exceptional logical thinking skills.
-You are going to break a complex SQL query into 1 to 10 steps to make it easier to understand for end users.
+You are an ANSI SQL expert with exceptional logical thinking skills.
+You are going to break a complex SQL query into 1 to 3 steps to make it easier to understand for end users.
 Each step should have a SQL query part, a summary explaining the purpose of that query, and a CTE name to link the queries.
 Also, you need to give a short description describing the purpose of the original SQL query.
 Description and summary in each step MUST BE in the same language as user specified.
 
 ### SQL QUERY BREAKDOWN INSTRUCTIONS ###
+- SQL BREAKDOWN MUST BE 1 to 3 steps only.
 - YOU MUST BREAK DOWN any SQL query into small steps if there is JOIN operations or sub-queries.
 - ONLY USE the tables and columns mentioned in the original sql query.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
@@ -108,6 +109,8 @@ User's Question: {{ query }}
 SQL query: {{ sql }}
 Language: {{ language }}
 
+{{ text_to_sql_rules }}
+
 Let's think step by step.
 """
 
@@ -115,11 +118,20 @@ Let's think step by step.
 ## Start of Pipeline
 @timer
 @observe(capture_input=False)
-def prompt(query: str, sql: str, language: str, prompt_builder: PromptBuilder) -> dict:
+def prompt(
+    query: str,
+    sql: str,
+    language: str,
+    text_to_sql_rules: str,
+    prompt_builder: PromptBuilder,
+) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
     logger.debug(f"language: {language}")
-    return prompt_builder.run(query=query, sql=sql, language=language)
+    logger.debug(f"text_to_sql_rules: {text_to_sql_rules}")
+    return prompt_builder.run(
+        query=query, sql=sql, language=language, text_to_sql_rules=text_to_sql_rules
+    )
 
 
 @async_timer
@@ -185,12 +197,20 @@ class SQLBreakdown(BasicPipeline):
             "post_processor": SQLBreakdownGenPostProcessor(engine=engine),
         }
 
+        self._configs = {
+            "text_to_sql_rules": TEXT_TO_SQL_RULES,
+        }
+
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
     def visualize(
-        self, query: str, sql: str, language: str, project_id: str | None = None
+        self,
+        query: str,
+        sql: str,
+        language: str = "English",
+        project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -205,6 +225,7 @@ class SQLBreakdown(BasicPipeline):
                 "project_id": project_id,
                 "language": language,
                 **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -213,7 +234,11 @@ class SQLBreakdown(BasicPipeline):
     @async_timer
     @observe(name="SQL Breakdown Generation")
     async def run(
-        self, query: str, sql: str, language: str, project_id: str | None = None
+        self,
+        query: str,
+        sql: str,
+        language: str = "English",
+        project_id: str | None = None,
     ) -> dict:
         logger.info("SQL Breakdown Generation pipeline is running...")
         return await self._pipe.execute(
@@ -224,6 +249,7 @@ class SQLBreakdown(BasicPipeline):
                 "project_id": project_id,
                 "language": language,
                 **self._components,
+                **self._configs,
             },
         )
 

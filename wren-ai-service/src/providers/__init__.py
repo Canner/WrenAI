@@ -136,11 +136,15 @@ def init_providers(
 
 
 class Wrapper(Mapping):
-    def __init__(self):
+    def __init__(
+        self,
+        llm_provider: LLMProvider,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        engine: Engine,
+    ):
         self.value = PipelineComponent(
-            *init_providers(
-                engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
-            )
+            llm_provider, embedder_provider, document_store_provider, engine
         )
 
     def __getitem__(self, key):
@@ -156,11 +160,31 @@ class Wrapper(Mapping):
         return len(self.value)
 
 
-def generate_components() -> dict[str, PipelineComponent]:
+def reset_document_store(document_store_provider: DocumentStoreProvider):
+    document_store_provider.get_store(recreate_index=True)
+    document_store_provider.get_store(
+        dataset_name="table_descriptions", recreate_index=True
+    )
+    document_store_provider.get_store(
+        dataset_name="view_questions", recreate_index=True
+    )
+
+
+def generate_components(force_deploy: bool = False) -> dict[str, PipelineComponent]:
     raw = load_config()
     if not raw:
+        (
+            llm_provider,
+            embedder_provider,
+            document_store_provider,
+            engine,
+        ) = init_providers(EngineConfig(provider=os.getenv("ENGINE", "wren_ui")))
+
+        if force_deploy:
+            reset_document_store(document_store_provider)
+
         # if no config, initialize the providers from the environment variables
-        return Wrapper()
+        return Wrapper(llm_provider, embedder_provider, document_store_provider, engine)
 
     config = convert_data(raw)
     loader.import_mods()
@@ -171,6 +195,9 @@ def generate_components() -> dict[str, PipelineComponent]:
         "document_store": config.get("document_store", {}),
         "engine": config.get("engine", {}),
     }
+
+    if force_deploy:
+        reset_document_store(provider_factory(providers["document_store"]))
 
     instantiated_providers = {
         category: {

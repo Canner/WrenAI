@@ -933,14 +933,13 @@ export class ModelResolver {
       ? await ctx.projectService.getProjectById(projectId)
       : await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.deployService.getLastDeployment(project.id);
-    const previewRes = await ctx.queryService.preview(sql, {
+    return await ctx.queryService.preview(sql, {
       project,
       limit: limit,
       modelingOnly: false,
       manifest,
       dryRun,
     });
-    return dryRun ? { dryRun: 'success' } : previewRes;
   }
 
   public async getNativeSql(

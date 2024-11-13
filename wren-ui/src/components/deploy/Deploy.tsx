@@ -86,6 +86,7 @@ export default function Deploy() {
         disabled={disabled}
         onClick={() => onDeploy()}
         size="small"
+        data-guideid="deploy-model"
       >
         Deploy
       </Button>

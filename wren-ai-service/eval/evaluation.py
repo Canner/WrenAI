@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Tuple
@@ -7,6 +8,12 @@ import dotenv
 from deepeval import evaluate
 from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
+from dspy_modules.prompt_optimizer import (
+    build_optimizing_module,
+    configure_llm_provider,
+    optimizer_parameters,
+    prepare_dataset,
+)
 from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
@@ -57,6 +64,12 @@ def parse_args() -> Tuple[str]:
         action=argparse.BooleanOptionalAction,
         help="Whether use the LLM(OpenAI's gpt-4o-mini) to help check semantics of sqls to improve accuracy metrics",
     )
+    parser.add_argument(
+        "--training-dataset",
+        "-T",
+        default=None,
+        help="Use the training dataset to build a dspy optimized module",
+    )
     return parser.parse_args()
 
 
@@ -94,7 +107,7 @@ class Evaluator:
                 name=name,
                 value=score,
                 comment=metric.reason or metric.error,
-                source="eval",
+                source="EVAL",
             )
 
             if name not in self._score_collector:
@@ -149,7 +162,18 @@ if __name__ == "__main__":
     )
 
     evaluator = Evaluator(**metrics)
-    evaluator.eval(meta, predictions)
+    if args.training_dataset:
+        optimizer_parameters["evaluator"] = evaluator
+        optimizer_parameters["metrics"] = metrics
+        optimizer_parameters["meta"] = meta
+        optimizer_parameters["predictions"] = predictions
+        configure_llm_provider(
+            os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
+        )
+        trainset, devset = prepare_dataset(args.training_dataset)
+        build_optimizing_module(trainset)
+    else:
+        evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
 

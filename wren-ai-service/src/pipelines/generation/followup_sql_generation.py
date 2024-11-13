@@ -1,6 +1,5 @@
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -18,6 +17,7 @@ from src.pipelines.common import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
+    show_current_time,
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
@@ -29,7 +29,7 @@ logger = logging.getLogger("wren-ai-service")
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
 Given the following user's follow-up question and previous SQL query and summary,
-generate at most 3 SQL queries in order to interpret the user's question in various plausible ways.
+generate one SQL query to best answer user's question.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -49,12 +49,6 @@ User's Question: How do I modify this to only show departments with more than 10
     "results": [
         {
             "sql": "SELECT department, COUNT() as employee_count FROM employees GROUP BY department HAVING COUNT() > 10"
-        },
-        {
-            "sql": "SELECT department FROM employees GROUP BY department HAVING COUNT() > 10"
-        },
-        {
-            "sql": "SELECT department, COUNT() as employee_count FROM employees WHERE department IN (SELECT department FROM employees GROUP BY department HAVING COUNT(*) > 10)"
         }
     ]
 }
@@ -70,12 +64,6 @@ User's Question: Can you adjust this to include the product name as well?
     "results": [
         {
             "sql": "SELECT products.name, SUM(sales.sales) as total_sales FROM sales JOIN products ON sales.product_id = products.id GROUP BY products.name"
-        },
-        {
-            "sql": "SELECT p.name, s.total_sales FROM (SELECT product_id, SUM(sales) as total_sales FROM sales GROUP BY product_id) s JOIN products p ON s.product_id = p.id"
-        },
-        {
-            "sql": "SELECT p.name, IFNULL(SUM(s.sales), 0) as total_sales FROM products p LEFT JOIN sales s ON p.id = s.product_id GROUP BY p.name"
         }
     ]
 }
@@ -91,12 +79,6 @@ User's Question: What if I want to see the employee names with the highest salar
     "results": [
         {
             "sql": "SELECT department_id, employee_name, salary FROM employees WHERE (department_id, salary) IN (SELECT department_id, MAX(salary) FROM employees GROUP BY department_id)"
-        },
-        {
-            "sql": "SELECT e.department_id, e.employee_name, e.salary FROM employees e INNER JOIN (SELECT department_id, MAX(salary) as max_salary FROM employees GROUP BY department_id) d ON e.department_id = d.department_id AND e.salary = d.max_salary"
-        },
-        {
-            "sql": "WITH MaxSalaries AS (SELECT department_id, MAX(salary) as max_salary FROM employees GROUP BY department_id) SELECT e.department_id, e.employee_name, e.salary FROM employees e JOIN MaxSalaries m ON e.department_id = m.department_id AND e.salary = m.max_salary"
         }
     ]
 }
@@ -106,9 +88,7 @@ The final answer must be the JSON format like following:
 
 {
     "results": [
-        {"sql": <SQL_QUERY_STRING_1>},
-        {"sql": <SQL_QUERY_STRING_2>},
-        {"sql": <SQL_QUERY_STRING_3>}
+        {"sql": <SQL_QUERY_STRING>}
     ]
 }
 
@@ -136,8 +116,8 @@ def prompt(
     documents: List[str],
     history: AskHistory,
     alert: str,
+    configurations: AskConfigurations,
     prompt_builder: PromptBuilder,
-    configurations: AskConfigurations | None = None,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"documents: {documents}")
@@ -149,7 +129,7 @@ def prompt(
         history=history,
         alert=alert,
         instructions=construct_instructions(configurations),
-        current_time=datetime.now(),
+        current_time=show_current_time(configurations.timezone),
     )
 
 
@@ -228,8 +208,8 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        configurations: AskConfigurations = AskConfigurations(),
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -258,8 +238,8 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
+        configurations: AskConfigurations = AskConfigurations(),
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
         return await self._pipe.execute(

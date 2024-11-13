@@ -118,10 +118,12 @@ export const TEMPLATE_OPTIONS = {
   [SampleDatasetName.ECOMMERCE]: {
     label: 'E-commerce',
     IconComponent: ShoppingCartOutlined,
+    guide: 'https://docs.getwren.ai/oss/getting_started/sample_data/ecommerce',
   },
   [SampleDatasetName.HR]: {
     label: 'Human Resource',
     IconComponent: IdCardOutlined,
+    guide: 'https://docs.getwren.ai/oss/getting_started/sample_data/hr',
   },
 };
 

@@ -1,10 +1,12 @@
 import asyncio
 import logging
+from datetime import datetime
 from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 import orjson
+import pytz
 from haystack import component
 
 from src.core.engine import (
@@ -88,14 +90,16 @@ class SQLBreakdownGenPostProcessor:
         project_id: str | None = None,
     ):
         async with aiohttp.ClientSession() as session:
-            status, _, error = await self._engine.execute_sql(
+            status, _, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
             )
 
         if not status:
-            logger.exception(f"SQL is not executable: {error}")
+            logger.exception(
+                f"SQL is not executable: {addition.get('error_message', '')}"
+            )
 
         return status
 
@@ -111,13 +115,25 @@ class SQLGenPostProcessor:
     )
     async def run(
         self,
-        replies: List[str],
+        replies: List[str] | List[List[str]],
         project_id: str | None = None,
     ) -> dict:
         try:
-            cleaned_generation_result = orjson.loads(
-                clean_generation_result(replies[0])
-            )["results"]
+            if isinstance(replies[0], dict):
+                cleaned_generation_result = []
+                for reply in replies:
+                    try:
+                        cleaned_generation_result.append(
+                            orjson.loads(clean_generation_result(reply["replies"][0]))[
+                                "results"
+                            ][0]
+                        )
+                    except Exception as e:
+                        logger.exception(f"Error in SQLGenPostProcessor: {e}")
+            else:
+                cleaned_generation_result = orjson.loads(
+                    clean_generation_result(replies[0])
+                )["results"]
 
             if isinstance(cleaned_generation_result, dict):
                 cleaned_generation_result = [cleaned_generation_result]
@@ -151,7 +167,7 @@ class SQLGenPostProcessor:
             quoted_sql, no_error = add_quotes(result["sql"])
 
             if no_error:
-                status, _, error = await self._engine.execute_sql(
+                status, _, addition = await self._engine.execute_sql(
                     quoted_sql, session, project_id=project_id
                 )
 
@@ -159,6 +175,7 @@ class SQLGenPostProcessor:
                     valid_generation_results.append(
                         {
                             "sql": quoted_sql,
+                            "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
                 else:
@@ -166,7 +183,8 @@ class SQLGenPostProcessor:
                         {
                             "sql": quoted_sql,
                             "type": "DRY_RUN",
-                            "error": error,
+                            "error": addition.get("error_message", ""),
+                            "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
             else:
@@ -194,8 +212,22 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
-- DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
+- ALWAYS QUALIFY column names with their table name or table alias to avoid ambiguity (e.g., orders.OrderId, o.OrderId)
+- YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
+    - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
+        - The user requests a pattern or partial match.
+        - The value is not specific enough to be a single, exact value.
+        - Wildcards (%) are needed to capture the pattern.
+    - Use "lower(<table_name>.<column_name>) = lower(<value>)" when:
+        - The user requests an exact, specific value.
+        - There is no ambiguity or pattern in the value.
+- ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
+    - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
+    - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
+    - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
+- If the user asks for a specific date, please give the date range in SQL query
+    - example: "What is the total revenue for the month of 2024-11-01?"
+    - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
 - ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
@@ -209,12 +241,71 @@ TEXT_TO_SQL_RULES = """
     }
 
     SQL
-    SELECT ApprovedTimestamp AS _timestamp FROM orders AS _orders;
+    SELECT _orders.ApprovedTimestamp AS _timestamp FROM orders AS _orders;
+- DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
+- ONLY USE the following SQL functions if you need to when generating answers:
+  - Aggregation functions:
+    - AVG
+    - COUNT
+    - MAX
+    - MIN
+    - SUM
+    - ARRAY_AGG
+    - BOOL_OR
+  - Math functions:
+    - ABS
+    - CBRT
+    - CEIL
+    - EXP
+    - FLOOR
+    - LN
+    - ROUND
+    - SIGN
+    - GREATEST
+    - LEAST
+    - MOD
+    - POWER
+  - String functions:
+    - LENGTH
+    - REVERSE
+    - CHR
+    - CONCAT
+    - FORMAT
+    - LOWER
+    - LPAD
+    - LTRIM
+    - POSITION
+    - REPLACE
+    - RPAD
+    - RTRIM
+    - STRPOS
+    - SUBSTR
+    - SUBSTRING
+    - TRANSLATE
+    - TRIM
+    - UPPER
+  - Date and Time functions:
+    - CURRENT_DATE
+    - DATE_TRUNC
+    - EXTRACT
+  - operators:
+    - `+`
+    - `-`
+    - `*`
+    - `/`
+    - `||`
+    - `<`
+    - `>`
+    - `>=`
+    - `<=`
+    - `=`
+    - `<>`
+    - `!=`
 """
 
 
 sql_generation_system_prompt = """
-You are a Trino SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
+You are an ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
 Before the main task, you need to learn about some specific structures in the given DB schema.
 
 ## LESSON 1 ##
@@ -361,3 +452,13 @@ def construct_instructions(configurations: AskConfigurations | None):
             instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
 
     return instructions
+
+
+def show_current_time(timezone: AskConfigurations.Timezone):
+    # Get the current time in the specified timezone
+    tz = pytz.timezone(
+        timezone.name
+    )  # Assuming timezone.name contains the timezone string
+    current_time = datetime.now(tz)
+
+    return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00

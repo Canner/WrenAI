@@ -21,7 +21,8 @@ async def test_recommend_success(relationship_recommendation_service, mock_pipel
     request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
     mock_pipeline.run.return_value = {"validated": {"test": "data"}}
 
-    response = await relationship_recommendation_service.recommend(request)
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "finished"
@@ -33,7 +34,8 @@ async def test_recommend_success(relationship_recommendation_service, mock_pipel
 async def test_recommend_invalid_mdl(relationship_recommendation_service):
     request = RelationshipRecommendation.Input(id="test_id", mdl="invalid_json")
 
-    response = await relationship_recommendation_service.recommend(request)
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "failed"
@@ -48,7 +50,8 @@ async def test_recommend_pipeline_error(
     request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
     mock_pipeline.run.side_effect = Exception("Pipeline error")
 
-    response = await relationship_recommendation_service.recommend(request)
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
 
     assert response.id == "test_id"
     assert response.status == "failed"

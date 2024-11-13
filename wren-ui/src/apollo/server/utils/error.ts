@@ -101,6 +101,7 @@ export const create = (
     customMessage?: string;
     originalError?: Error;
     service?: WrenService;
+    other?: any;
   },
 ): GraphQLError => {
   const { customMessage, originalError, service } = options || {};
@@ -124,6 +125,7 @@ export const create = (
       shortMessage:
         shortMessages[code] ||
         shortMessages[GeneralErrorCodes.INTERNAL_SERVER_ERROR],
+      other: options?.other,
     },
   });
 

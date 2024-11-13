@@ -24,9 +24,9 @@ interface Props {
     summary?: string;
     question?: string;
     viewId?: number;
-  }) => void;
+  }) => Promise<void>;
   onStop: () => void;
-  onSubmit: (value: string) => void;
+  onSubmit: (value: string) => Promise<void>;
   data?: AskingTask;
 }
 
@@ -97,17 +97,25 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     }
   }, [error]);
 
-  const selectResult = (payload) => {
+  const selectResult = async (payload) => {
     const isSavedViewCandidate = !!payload.viewId;
-    const data = isSavedViewCandidate
-      ? { viewId: payload.viewId }
-      : {
-          sql: payload.sql,
-          summary: payload.summary,
-          question,
-        };
-    onSelect && onSelect(data);
+
+    let data = null;
+    if (isSavedViewCandidate) {
+      data = { viewId: payload.viewId };
+    } else if (question) {
+      data = {
+        sql: payload.sql,
+        summary: payload.summary,
+        question,
+      };
+    }
+    if (!data) return;
+    // keep the state as generating after the result is selected
+    askProcessState.setState(PROCESS_STATE.GENERATING);
+    onSelect && (await onSelect(data));
     closeResult();
+    askProcessState.resetState();
   };
 
   const closeResult = () => {
@@ -132,7 +140,8 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
 
   const submitAsk = async () => {
     if (isProcessing || !question) return;
-    askProcessState.resetState();
+    // start the state as understanding when user submit question
+    askProcessState.setState(PROCESS_STATE.UNDERSTANDING);
     onSubmit && (await onSubmit(question));
   };
 

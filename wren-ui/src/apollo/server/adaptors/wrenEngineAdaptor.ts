@@ -40,7 +40,7 @@ export interface WrenEngineValidateResponse {
   status: WrenEngineValidateStatus;
 }
 
-export interface ValidationResponse {
+export interface WrenEngineValidationResponse {
   valid: boolean;
   message?: string;
 }
@@ -61,7 +61,7 @@ export interface DuckDBPrepareOptions {
 }
 
 // The response consists of an array containing columns. Each column contains a name and a type.
-export interface DryRunResponse {
+export interface WrenEngineDryRunResponse {
   name: string;
   type: string;
 }
@@ -89,11 +89,11 @@ export interface IWrenEngineAdaptor {
     manifest: Manifest,
     modelName: string,
     columnName: string,
-  ): Promise<ValidationResponse>;
+  ): Promise<WrenEngineValidationResponse>;
   dryRun(
     sql: string,
     options: WrenEngineDryRunOption,
-  ): Promise<DryRunResponse[]>;
+  ): Promise<WrenEngineDryRunResponse[]>;
 }
 
 export class WrenEngineAdaptor implements IWrenEngineAdaptor {
@@ -288,7 +288,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
   public async dryRun(
     sql: string,
     options: WrenEngineDryRunOption,
-  ): Promise<DryRunResponse[]> {
+  ): Promise<WrenEngineDryRunResponse[]> {
     try {
       const { manifest } = options;
       const body = {
@@ -299,7 +299,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
         `Dry run wren engine with body: ${JSON.stringify(sql, null, 2)}`,
       );
       const url = new URL(this.dryRunUrlPath, this.wrenEngineBaseEndpoint);
-      const res: AxiosResponse<DryRunResponse[]> = await axios({
+      const res: AxiosResponse<WrenEngineDryRunResponse[]> = await axios({
         method: 'get',
         url: url.href,
         data: body,
