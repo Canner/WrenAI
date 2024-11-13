@@ -4,20 +4,24 @@ import Icon from '@ant-design/icons';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { CopilotSVG } from '@/utils/svgs';
 import { isRecommendedFinished } from '@/hooks/useAskPrompt';
+import { ResultQuestion } from '@/apollo/client/graphql/__types__';
 import {
   useGetProjectRecommendationQuestionsLazyQuery,
   useGenerateProjectRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
 
-const getGroupedQuestions = (questions: any[]) => {
+const getGroupedQuestions = (questions: ResultQuestion[]) => {
   return orderBy(
     map(groupBy(questions, 'category'), (questions, category) => ({
       label: category,
-      questions: questions.map((q) => q.question),
+      questions: questions.slice(0, 3).map((q) => ({
+        question: q.question,
+        sql: q.sql,
+      })),
     })),
     (group) => group.questions.length,
     'desc', // Sort by the number of questions in descending order
-  );
+  ).slice(0, 3); // Limit categories to the top 3
 };
 
 export default function useRecommendedQuestionsInstruction() {

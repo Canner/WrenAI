@@ -4,15 +4,30 @@ import { Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
+import RecommendedQuestions, {
+  getRecommendedQuestionProps,
+} from '@/components/pages/home/RecommendedQuestions';
 import {
   DetailedThread,
+  RecommendedQuestionsTask,
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 import { getIsFinished } from '@/hooks/useAskPrompt';
 
 interface Props {
-  data: DetailedThread;
+  data: {
+    thread: DetailedThread;
+    recommendedQuestions: RecommendedQuestionsTask;
+    showRecommendedQuestions: boolean;
+  };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+  onSelectQuestion: ({
+    question,
+    sql,
+  }: {
+    question: string;
+    sql: string;
+  }) => void;
 }
 
 const StyledPromptThread = styled.div`
@@ -77,19 +92,19 @@ export default function PromptThread(props: Props) {
   const router = useRouter();
   const divRef = useRef<HTMLDivElement>(null);
   const motionResponsesRef = useRef<Record<number, boolean>>({});
-  const { data, onOpenSaveAsViewModal } = props;
+  const { data, onOpenSaveAsViewModal, onSelectQuestion } = props;
 
   const responses = useMemo(
     () =>
-      (data?.responses || []).map((response) => ({
+      (data.thread?.responses || []).map((response) => ({
         ...response,
         motion: motionResponsesRef.current[response.id],
       })),
-    [data?.responses],
+    [data.thread?.responses],
   );
 
   const triggerScrollToBottom = (behavior?: ScrollBehavior) => {
-    if ((data?.responses || []).length <= 1) return;
+    if ((data.thread?.responses || []).length <= 1) return;
     const contentLayout = divRef.current?.parentElement;
     const lastChild = divRef.current?.lastElementChild as HTMLElement;
     const lastChildElement = lastChild?.lastElementChild as HTMLElement;
@@ -109,7 +124,7 @@ export default function PromptThread(props: Props) {
   }, [router.query]);
 
   useEffect(() => {
-    motionResponsesRef.current = (data?.responses || []).reduce(
+    motionResponsesRef.current = (data.thread?.responses || []).reduce(
       (result, item) => {
         result[item.id] = !getIsFinished(item?.status);
         return result;
@@ -118,11 +133,16 @@ export default function PromptThread(props: Props) {
     );
     const lastResponseMotion = Object.values(motionResponsesRef.current).pop();
     triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
-  }, [data?.responses]);
+  }, [data.thread?.responses]);
 
   const onInitPreviewDone = () => {
     triggerScrollToBottom();
   };
+
+  const recommendedQuestionProps = getRecommendedQuestionProps(
+    data.recommendedQuestions,
+    data.showRecommendedQuestions,
+  );
 
   return (
     <StyledPromptThread className="mt-12" ref={divRef}>
@@ -131,6 +151,13 @@ export default function PromptThread(props: Props) {
         onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onInitPreviewDone={onInitPreviewDone}
       />
+      {recommendedQuestionProps.show && (
+        <RecommendedQuestions
+          className="mt-5 mb-4"
+          {...recommendedQuestionProps.state}
+          onSelect={onSelectQuestion}
+        />
+      )}
     </StyledPromptThread>
   );
 }

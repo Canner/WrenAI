@@ -14,6 +14,7 @@ import RecommendedQuestionsPrompt from '@/components/pages/home/prompt/Recommend
 import {
   useSuggestedQuestionsQuery,
   useCreateThreadMutation,
+  useGenerateThreadRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
 
 const { Text } = Typography;
@@ -94,6 +95,9 @@ export default function Home() {
     onCompleted: () => homeSidebar.refetch(),
   });
 
+  const [generateThreadRecommendationQuestions] =
+    useGenerateThreadRecommendationQuestionsMutation();
+
   const sampleQuestions = useMemo(
     () => suggestedQuestionsData?.suggestedQuestions.questions || [],
     [suggestedQuestionsData],
@@ -111,6 +115,9 @@ export default function Home() {
     try {
       askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
+      generateThreadRecommendationQuestions({
+        variables: { threadId: response.data.createThread.id },
+      });
       router.push(Path.Home + `/${response.data.createThread.id}`);
     } catch (error) {
       console.error(error);

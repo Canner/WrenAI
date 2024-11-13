@@ -72,7 +72,7 @@ export default function AnswerResult(props: Props) {
   const isViewSaved = !!view;
 
   const resultStyle = isLastThreadResponse
-    ? { minHeight: 'calc(100vh - (194px))' }
+    ? { minHeight: 'calc(100vh - (360px))' }
     : null;
 
   return (

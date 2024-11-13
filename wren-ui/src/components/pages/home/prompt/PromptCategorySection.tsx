@@ -21,13 +21,13 @@ const QuestionBlock = styled.div`
   }
 `;
 
-const QuestionsCol = ({ label, question, onSelect }) => {
+const QuestionsCol = ({ sql, question, onSelect }) => {
   return (
     <Col span={8}>
       <QuestionBlock
         className="bg-gray-2 border border-gray-3 rounded p-3 cursor-pointer"
         style={{ height: '100%' }}
-        onClick={() => onSelect({ label, question })}
+        onClick={() => onSelect({ sql, question })}
       >
         <EllipsisWrapper multipleLine={4} text={question} />
       </QuestionBlock>
@@ -52,11 +52,11 @@ export default function PromptCategorySection({
         <Row gutter={[16, 16]} className="mt-3">
           {category.questions
             .slice(0, isExpanded ? category.questions.length : 3)
-            .map((question, index) => (
+            .map((questionObj, index) => (
               <QuestionsCol
-                key={`${category.label}-${question}-${index}`}
-                label={category.label}
-                question={question}
+                key={`${category.label}-${questionObj.question}-${index}`}
+                question={questionObj.question}
+                sql={questionObj.sql}
                 onSelect={onSelect}
               />
             ))}
