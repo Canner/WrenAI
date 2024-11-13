@@ -460,4 +460,4 @@ def show_current_time(timezone: AskConfigurations.Timezone):
     )  # Assuming timezone.name contains the timezone string
     current_time = datetime.now(tz)
 
-    return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday 12:00:00
+    return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
