@@ -44,7 +44,7 @@ Ensure that the following excluded statements are not used in the generated quer
 {% endfor %}
 {% endif %}
 
-{{ alert }}
+{{ text_to_sql_rules }}
 {% if instructions %}
 {{ instructions }}
 {% endif %}
@@ -83,7 +83,7 @@ def prompt(
     query: str,
     documents: List[str],
     exclude: List[Dict],
-    alert: str,
+    text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
     configurations: AskConfigurations | None = None,
     samples: List[Dict] | None = None,
@@ -101,7 +101,7 @@ def prompt(
         query=query,
         documents=documents,
         exclude=exclude,
-        alert=alert,
+        text_to_sql_rules=text_to_sql_rules,
         instructions=construct_instructions(configurations),
         samples=samples,
         current_time=show_current_time(configurations.timezone),
@@ -170,7 +170,7 @@ class SQLGeneration(BasicPipeline):
         }
 
         self._configs = {
-            "alert": TEXT_TO_SQL_RULES,
+            "text_to_sql_rules": TEXT_TO_SQL_RULES,
         }
 
         super().__init__(

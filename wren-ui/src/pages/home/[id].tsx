@@ -30,11 +30,7 @@ export default function HomeThread() {
     onCompleted: () => message.success('Successfully created view.'),
   });
 
-  const {
-    data,
-    loading,
-    updateQuery: updateThreadQuery,
-  } = useThreadQuery({
+  const { data, updateQuery: updateThreadQuery } = useThreadQuery({
     variables: { threadId },
     fetchPolicy: 'cache-and-network',
     skip: threadId === null,
@@ -117,7 +113,7 @@ export default function HomeThread() {
   };
 
   return (
-    <SiderLayout loading={loading} sidebar={homeSidebar}>
+    <SiderLayout loading={false} sidebar={homeSidebar}>
       <PromptThread
         data={thread}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}

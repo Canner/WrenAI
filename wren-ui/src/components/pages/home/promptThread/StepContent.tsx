@@ -2,9 +2,7 @@ import { useEffect } from 'react';
 import { Button, ButtonProps, Col, Row, Typography } from 'antd';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { BinocularsIcon } from '@/utils/icons';
-import CollapseContent, {
-  Props as CollapseContentProps,
-} from '@/components/pages/home/promptThread/CollapseContent';
+import CollapseContent from '@/components/pages/home/promptThread/CollapseContent';
 import useAnswerStepContent from '@/hooks/useAnswerStepContent';
 import { nextTick } from '@/utils/time';
 
@@ -14,11 +12,11 @@ interface Props {
   fullSql: string;
   isLastStep: boolean;
   isLastThreadResponse: boolean;
-  onTriggerScrollToBottom: () => void;
   sql: string;
   stepIndex: number;
   summary: string;
   threadResponseId: number;
+  onInitPreviewDone: () => void;
 }
 
 export default function StepContent(props: Props) {
@@ -26,33 +24,29 @@ export default function StepContent(props: Props) {
     fullSql,
     isLastStep,
     isLastThreadResponse,
-    onTriggerScrollToBottom,
     sql,
     stepIndex,
     summary,
     threadResponseId,
+    onInitPreviewDone,
   } = props;
 
-  const {
-    collapseContentProps,
-    previewDataButtonProps,
-    viewSQLButtonProps,
-    viewSQLButtonText,
-  } = useAnswerStepContent({
-    fullSql,
-    isLastStep,
-    sql,
-    threadResponseId,
-    stepIndex,
-  });
+  const { collapseContentProps, previewDataButtonProps, viewSQLButtonProps } =
+    useAnswerStepContent({
+      fullSql,
+      isLastStep,
+      sql,
+      threadResponseId,
+      stepIndex,
+    });
 
   const stepNumber = stepIndex + 1;
 
   const autoTriggerPreviewDataButton = async () => {
     await nextTick();
-    previewDataButtonProps.onClick();
-    await nextTick(1500);
-    onTriggerScrollToBottom();
+    await previewDataButtonProps.onClick();
+    await nextTick();
+    onInitPreviewDone();
   };
 
   // when is the last step of the last thread response, auto trigger preview data button
@@ -89,9 +83,7 @@ export default function StepContent(props: Props) {
           data-ph-capture-attribute-name="cta_answer_preview_data"
           data-ph-capture-attribute-step={stepNumber}
           data-ph-capture-attribute-is_last_step={isLastStep}
-        >
-          Preview Data
-        </Button>
+        />
         <Button
           {...(viewSQLButtonProps as ButtonProps)}
           size="small"
@@ -100,14 +92,9 @@ export default function StepContent(props: Props) {
           data-ph-capture-attribute-name="cta_answer_view_sql"
           data-ph-capture-attribute-step={stepNumber}
           data-ph-capture-attribute-is_last_step={isLastStep}
-        >
-          {viewSQLButtonText}
-        </Button>
+        />
         <CollapseContent
-          {...(collapseContentProps as Omit<
-            CollapseContentProps,
-            'attributes'
-          >)}
+          {...collapseContentProps}
           key={`collapse-${stepNumber}`}
           attributes={{ stepNumber, isLastStep }}
         />

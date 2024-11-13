@@ -42,7 +42,6 @@ const Progress = styled.div<{ total: number; current: number }>`
 `;
 
 const CollapseBlock = styled.div`
-  transition: height 0.3s;
   overflow: hidden;
 `;
 
@@ -245,12 +244,14 @@ export default function SidebarSection(_props: Props) {
     [stories],
   );
 
-  const collapseBlock = (isActive: boolean) => {
+  const collapseBlock = async (isActive: boolean) => {
     if ($collapseBlock.current) {
       const blockHeight = $collapseBlock.current.scrollHeight;
       $collapseBlock.current.style.height = isActive
         ? `${blockHeight}px`
         : '0px';
+      await nextTick(300);
+      $collapseBlock.current.style.transition = 'height 0.3s';
     }
   };
 
