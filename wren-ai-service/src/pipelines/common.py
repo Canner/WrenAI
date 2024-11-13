@@ -212,7 +212,14 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
+- YOU MUST USE "lower(<column_name>) like lower(<value>)" function or "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
+    - Use "lower(<column_name>) LIKE lower(<value>)" when:
+        - The user requests a pattern or partial match.
+        - The value is not specific enough to be a single, exact value.
+        - Wildcards (%) are needed to capture the pattern.
+    - Use "lower(<column_name>) = lower(<value>)" when:
+        - The user requests an exact, specific value.
+        - There is no ambiguity or pattern in the value.
 - ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
     - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
     - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
@@ -453,4 +460,4 @@ def show_current_time(timezone: AskConfigurations.Timezone):
     )  # Assuming timezone.name contains the timezone string
     current_time = datetime.now(tz)
 
-    return f'{current_time.strftime("%Y-%m-%d %A")}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday
+    return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
