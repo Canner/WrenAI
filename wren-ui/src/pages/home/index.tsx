@@ -18,9 +18,7 @@ import {
 
 const { Text } = Typography;
 
-const SampleQuestionsInstruction = (props) => {
-  const { sampleQuestions, onSelect } = props;
-
+const Wrapper = ({ children }) => {
   return (
     <div
       className="d-flex align-center justify-center flex-column"
@@ -30,19 +28,33 @@ const SampleQuestionsInstruction = (props) => {
       <div className="text-md text-medium gray-8 mt-3">
         Know more about your data
       </div>
-
-      <DemoPrompt demo={sampleQuestions} onSelect={onSelect} />
+      {children}
     </div>
+  );
+};
+
+const SampleQuestionsInstruction = (props) => {
+  const { sampleQuestions, onSelect } = props;
+
+  return (
+    <Wrapper>
+      <DemoPrompt demo={sampleQuestions} onSelect={onSelect} />
+    </Wrapper>
   );
 };
 
 function RecommendedQuestionsInstruction(props) {
   const { onSelect } = props;
 
-  const { buttonProps, generating, recommendedQuestions, showRetry } =
-    useRecommendedQuestionsInstruction();
+  const {
+    buttonProps,
+    generating,
+    recommendedQuestions,
+    showRetry,
+    showRecommendedQuestionsPromptMode,
+  } = useRecommendedQuestionsInstruction();
 
-  return recommendedQuestions.length > 0 ? (
+  return showRecommendedQuestionsPromptMode ? (
     <div className="d-flex align-center flex-column pt-15">
       <RecommendedQuestionsPrompt
         recommendedQuestions={recommendedQuestions}
@@ -51,29 +63,21 @@ function RecommendedQuestionsInstruction(props) {
       />
     </div>
   ) : (
-    <div
-      className="d-flex align-center justify-center flex-column"
-      style={{ height: '100%' }}
-    >
-      <Logo size={48} color="var(--gray-8)" />
-      <div className="text-md text-medium gray-8 mt-3">
-        Know more about your data
-      </div>
-
+    <Wrapper>
       <Button className="mt-6" {...buttonProps} />
       {generating && (
         <Text className="mt-3 text-sm gray-6">
           Thinking of good questions for you... (about 1 minute)
         </Text>
       )}
-      {showRetry && (
+      {!generating && showRetry && (
         <Text className="mt-3 text-sm gray-6 text-center">
           We couldn't think of questions right now.
           <br />
           Let's try again later.
         </Text>
       )}
-    </div>
+    </Wrapper>
   );
 }
 
