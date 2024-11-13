@@ -243,6 +243,7 @@ TEXT_TO_SQL_RULES = """
     SQL
     SELECT _orders.ApprovedTimestamp AS _timestamp FROM orders AS _orders;
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
+- DON'T USE "FILTER(WHERE <condition>)" clause in the query.
 - ONLY USE the following SQL functions if you need to when generating answers:
   - Aggregation functions:
     - AVG
