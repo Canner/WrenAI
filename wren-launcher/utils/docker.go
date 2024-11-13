@@ -179,40 +179,44 @@ func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
 
 	// Create map of existing env vars
 	existingEnvVars := make(map[string]string)
+	// Helper function to parse env var line
+	parseEnvVar := func(line string) (string, string, bool) {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			return "", "", false
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			return "", "", false
+		}
+		return parts[0], parts[1], true
+	}
+
+	// Parse existing env vars
 	for _, line := range existingLines {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "#") {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				existingEnvVars[parts[0]] = parts[1]
-			}
+		if key, val, ok := parseEnvVar(line); ok {
+			existingEnvVars[key] = val
 		}
 	}
 
-	// Merge with new content, preferring new values
+	// Merge with new values
 	for _, line := range newLines {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "#") {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 && strings.TrimSpace(parts[1]) != "" {
-				existingEnvVars[parts[0]] = parts[1]
-			}
+		if key, val, ok := parseEnvVar(line); ok && val != "" {
+			existingEnvVars[key] = val
 		}
 	}
 
-	// Build merged content preserving comments and empty lines
+	// Build merged content
 	var mergedLines []string
 	for _, line := range newLines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			mergedLines = append(mergedLines, line)
-		} else {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				key := parts[0]
-				if val, exists := existingEnvVars[key]; exists {
-					mergedLines = append(mergedLines, key+"="+val)
-				}
+			continue
+		}
+		if key, _, ok := parseEnvVar(line); ok {
+			if val, exists := existingEnvVars[key]; exists {
+				mergedLines = append(mergedLines, key+"="+val)
 			}
 		}
 	}
