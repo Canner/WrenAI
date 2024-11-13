@@ -103,7 +103,7 @@ export default function PromptThread(props: Props) {
     [data?.responses],
   );
 
-  const triggerScrollToBottom = () => {
+  const triggerScrollToBottom = (behavior?: ScrollBehavior) => {
     if ((data?.responses || []).length <= 1) return;
     const contentLayout = divRef.current?.parentElement;
     const lastChild = divRef.current?.lastElementChild as HTMLElement;
@@ -112,6 +112,7 @@ export default function PromptThread(props: Props) {
     if (contentLayout && lastChildElement) {
       contentLayout.scrollTo({
         top: lastChildElement.offsetTop - dividerSpace,
+        behavior,
       });
     }
   };
@@ -130,7 +131,8 @@ export default function PromptThread(props: Props) {
       },
       {},
     );
-    triggerScrollToBottom();
+    const lastResponseMotion = Object.values(motionResponsesRef.current).pop();
+    triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
   }, [data?.responses]);
 
   const onInitPreviewDone = () => {
