@@ -157,7 +157,7 @@ def _ask_service_ttl_mock(query: str):
             ),
             "historical_question": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
-                valid=[{"sql": "select count(*) from books"}],
+                valid=["select count(*) from books"],
             ),
             "sql_summary": SQLSummaryMock(
                 results=[
