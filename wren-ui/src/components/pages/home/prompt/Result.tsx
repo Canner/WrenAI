@@ -32,24 +32,34 @@ interface Props {
   loading?: boolean;
 }
 
+const Wrapper = ({ children }) => {
+  return (
+    <StyledResult className="border border-gray-3 rounded p-4">
+      {children}
+    </StyledResult>
+  );
+};
+
 const makeProcessing = (text: string) => (props: Props) => {
   const { onStop } = props;
   return (
-    <div className="d-flex justify-space-between">
-      <span>
-        <LoadingOutlined className="mr-2 geekblue-6 text-lg" spin />
-        {text}
-      </span>
-      <Button
-        className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
-        type="text"
-        size="small"
-        onClick={onStop}
-      >
-        <StopOutlined className="-mr-1" />
-        Stop
-      </Button>
-    </div>
+    <Wrapper>
+      <div className="d-flex justify-space-between">
+        <span>
+          <LoadingOutlined className="mr-2 geekblue-6 text-lg" spin />
+          {text}
+        </span>
+        <Button
+          className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
+          type="text"
+          size="small"
+          onClick={onStop}
+        >
+          <StopOutlined className="-mr-1" />
+          Stop
+        </Button>
+      </div>
+    </Wrapper>
   );
 };
 
@@ -60,7 +70,7 @@ const makeProcessingError =
     const { message, shortMessage, stacktrace } = error || {};
     const hasStacktrace = !!stacktrace;
     return (
-      <div>
+      <Wrapper>
         <div className="d-flex justify-space-between text-medium mb-2">
           <div className="d-flex align-center">
             {config.icon}
@@ -80,7 +90,7 @@ const makeProcessingError =
         {hasStacktrace && (
           <ErrorCollapse className="mt-2" message={stacktrace.join('\n')} />
         )}
-      </div>
+      </Wrapper>
     );
   };
 
@@ -109,7 +119,12 @@ const Finished = (props: Props) => {
     }
   }, [data]);
 
-  if (data.length === 0) return <NoResult {...props} />;
+  if (data.length === 0)
+    return (
+      <Wrapper>
+        <NoResult {...props} />
+      </Wrapper>
+    );
   return null;
 };
 
@@ -132,9 +147,5 @@ export default function PromptResult(props: Props) {
 
   if (StateComponent === null) return null;
 
-  return (
-    <StyledResult className="border border-gray-3 rounded p-4">
-      <StateComponent {...props} />
-    </StyledResult>
-  );
+  return <StateComponent {...props} />;
 }
