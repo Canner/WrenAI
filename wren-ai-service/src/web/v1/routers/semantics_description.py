@@ -28,7 +28,10 @@ Endpoints:
      {
        "selected_models": ["model1", "model2"],  # List of model names to describe
        "user_prompt": "Describe these models",   # User's instruction for description
-       "mdl": "{ ... }"                          # JSON string of the MDL (Model Definition Language)
+       "mdl": "{ ... }",                         # JSON string of the MDL (Model Definition Language)
+       "configuration": {                        # Optional configuration settings
+         "language": "English"                   # Optional language, defaults to "English"
+       }
      }
    - Response: PostResponse
      {
