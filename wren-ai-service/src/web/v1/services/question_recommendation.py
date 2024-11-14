@@ -23,6 +23,7 @@ class QuestionRecommendation:
         project_id: Optional[str] = None
         max_questions: Optional[int] = 5
         max_categories: Optional[int] = 3
+        regenerate: Optional[bool] = False
         configuration: Optional[Configuration] = Configuration()
 
     class Resource(BaseModel, MetadataTraceable):
@@ -32,7 +33,7 @@ class QuestionRecommendation:
 
         id: str
         status: Literal["generating", "finished", "failed"] = "generating"
-        response: Optional[dict] = None
+        response: Optional[dict] = {"questions": {}}
         error: Optional[Error] = None
 
     def __init__(
@@ -59,76 +60,128 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
+    @observe(name="Validate Question")
     async def _validate_question(
         self,
         candidate: dict,
+        request_id: str,
+        max_questions: int,
+        max_categories: int,
         project_id: Optional[str] = None,
-    ) -> bool:
-        retrieval_result = await self._pipelines["retrieval"].run(
-            query=candidate["question"],
-            id=project_id,
-        )
-        documents = retrieval_result.get("construct_retrieval_results", [])
-        generated_sql = await self._pipelines["sql_generation"].run(
-            query=candidate["question"],
-            contexts=documents,
-            exclude=[],
-            configurations=AskConfigurations(),
-        )
-        valid_sql = generated_sql["post_process"]["valid_generation_results"]
-        logger.debug(f"Valid SQL: {valid_sql}")
+    ):
+        try:
+            retrieval_result = await self._pipelines["retrieval"].run(
+                query=candidate["question"],
+                id=project_id,
+            )
+            documents = retrieval_result.get("construct_retrieval_results", [])
+            generated_sql = await self._pipelines["sql_generation"].run(
+                query=candidate["question"],
+                contexts=documents,
+                exclude=[],
+                configurations=AskConfigurations(),
+            )
 
-        return True if valid_sql else False
+            post_process = generated_sql["post_process"]
+
+            if len(post_process["valid_generation_results"]) == 0:
+                return
+
+            valid_sql = post_process["valid_generation_results"][0]["sql"]
+            logger.debug(f"Request {request_id}: Valid SQL: {valid_sql}")
+
+            # Partial update the resource
+            current = self._cache[request_id]
+            questions = current.response["questions"]
+
+            if len(questions) >= max_categories:
+                return
+
+            currnet_category = questions.setdefault(candidate["category"], [])
+
+            if len(currnet_category) >= max_questions:
+                return
+
+            currnet_category.append({**candidate, "sql": valid_sql})
+
+        except Exception as e:
+            logger.error(f"Request {request_id}: Error validating question: {str(e)}")
+
+    async def _recommend(self, request: dict, input: Input):
+        resp = await self._pipelines["question_recommendation"].run(**request)
+        questions = resp.get("normalized", {}).get("questions", [])
+        validation_tasks = [
+            self._validate_question(
+                question,
+                input.id,
+                input.max_questions,
+                input.max_categories,
+                input.project_id,
+            )
+            for question in questions
+        ]
+
+        await asyncio.gather(*validation_tasks, return_exceptions=True)
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
-    async def recommend(self, request: Input, **kwargs) -> Resource:
-        logger.info("Generate Question Recommendation pipeline is running...")
+    async def recommend(self, input: Input, **kwargs) -> Resource:
+        logger.info(
+            f"Request {input.id}: Generate Question Recommendation pipeline is running..."
+        )
 
         try:
-            input = {
-                "mdl": orjson.loads(request.mdl),
-                "previous_questions": request.previous_questions,
-                "language": request.configuration.language,
-                "current_date": request.configuration.show_current_time(),
-                "max_questions": request.max_questions,
-                "max_categories": request.max_categories,
+            request = {
+                "mdl": orjson.loads(input.mdl),
+                "previous_questions": input.previous_questions,
+                "language": input.configuration.language,
+                "current_date": input.configuration.show_current_time(),
+                "max_questions": input.max_questions,
+                "max_categories": input.max_categories,
             }
 
-            resp = await self._pipelines["question_recommendation"].run(**input)
-            questions = resp.get("normalized", {}).get("questions", [])
+            await self._recommend(request, input)
 
-            validation_tasks = [
-                self._validate_question(question, request.project_id)
-                for question in questions
-            ]
+            resource = self._cache[input.id]
+            response = resource.response
 
-            validation_results = await asyncio.gather(*validation_tasks)
+            categories_count = {
+                category: input.max_questions - len(questions)
+                for category, questions in response["questions"].items()
+                if len(questions) < input.max_questions
+            }
+            categories = list(categories_count.keys())
+            need_regenerate = len(categories) > 0 and input.regenerate
 
-            validated_questions = [
-                question
-                for question, is_valid in zip(questions, validation_results)
-                if is_valid
-            ]
+            resource.status = "generating" if need_regenerate else "finished"
 
-            self._cache[request.id] = self.Resource(
-                id=request.id,
-                status="finished",
-                response={"questions": validated_questions},
+            if resource.status == "finished":
+                return resource.with_metadata()
+
+            await self._recommend(
+                {
+                    **request,
+                    "categories": categories,
+                    "max_categories": len(categories),
+                },
+                input,
             )
+
+            self._cache[input.id].status = "finished"
+
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                request,
+                input,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
             )
         except Exception as e:
             self._handle_exception(
-                request,
+                input,
                 f"An error occurred during question recommendation generation: {str(e)}",
             )
 
-        return self._cache[request.id].with_metadata()
+        return self._cache[input.id].with_metadata()
 
     def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)
