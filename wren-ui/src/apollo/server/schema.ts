@@ -580,7 +580,7 @@ export const typeDefs = gql`
   type ResultQuestion {
     question: String!
     category: String!
-    explanation: String!
+    sql: String!
   }
 
   type RecommendedQuestionsTask {
