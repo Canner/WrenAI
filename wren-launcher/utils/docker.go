@@ -40,7 +40,7 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	str = reg.ReplaceAllString(str, "SHOULD_FORCE_DEPLOY=1")
 
 	// replace OPENAI_API_KEY
-	reg = regexp.MustCompile(`OPENAI_API_KEY=(.*)`)
+	reg = regexp.MustCompile(`(?m)^OPENAI_API_KEY=(.*)`)
 	str = reg.ReplaceAllString(str, "OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
