@@ -104,7 +104,7 @@ def save_mdl_json_file(file_name: str, mdl_json: Dict):
 
 
 def get_mdl_json(database_name: str):
-    assert database_name in ["music", "nba", "ecommerce"]
+    assert database_name in ["ecommerce", "hr"]
 
     with open(f"demo/sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
         mdl_json = json.load(f)
@@ -162,7 +162,6 @@ def get_data_from_wren_engine(
 def show_query_history():
     if st.session_state["query_history"]:
         with st.expander("Query History", expanded=False):
-            st.markdown(st.session_state["query_history"]["summary"])
             st.code(
                 body=sqlparse.format(
                     st.session_state["query_history"]["sql"],
@@ -202,19 +201,16 @@ def show_asks_results():
                 ),
                 language="sql",
             )
-            st.markdown(st.session_state["asks_results"][i]["summary"])
             choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
     for i, choose_result in enumerate(choose_result_n):
         if choose_result:
             sql = st.session_state["asks_results"][i]["sql"]
-            summary = st.session_state["asks_results"][i]["summary"]
 
             st.session_state["chosen_query_result"] = {
                 "index": i,
                 "query": st.session_state["query"],
                 "sql": sql,
-                "summary": summary,
             }
 
             # reset relevant session_states
@@ -310,7 +306,6 @@ def show_asks_details_results(query: str):
                 get_sql_answer(
                     st.session_state["chosen_query_result"]["query"],
                     st.session_state["chosen_query_result"]["sql"],
-                    st.session_state["chosen_query_result"]["summary"],
                 )
             )
 
@@ -535,25 +530,27 @@ def generate_mdl_metadata(mdl_model_json: dict):
 
 
 def _prepare_duckdb(dataset_name: str):
-    assert dataset_name in ["ecommerce", "nba"]
-
-    DATASET_VERSION = "v0.3.0"
+    assert dataset_name in ["ecommerce", "hr"]
 
     init_sqls = {
-        "nba": f"""
-CREATE TABLE game AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/game.csv',header=true);
-CREATE TABLE line_score AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/line_score.csv',header=true);
-CREATE TABLE player_games AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/player_game.csv',header=true);
-CREATE TABLE player AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/player.csv',header=true);
-CREATE TABLE team AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/team.csv',header=true);
+        "ecommerce": """
+CREATE TABLE olist_customers_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_customers_dataset.parquet');
+CREATE TABLE olist_order_items_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_items_dataset.parquet');
+CREATE TABLE olist_orders_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_orders_dataset.parquet');
+CREATE TABLE olist_order_payments_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_payments_dataset.parquet');
+CREATE TABLE olist_products_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_products_dataset.parquet');
+CREATE TABLE olist_order_reviews_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_reviews_dataset.parquet');
+CREATE TABLE olist_geolocation_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_geolocation_dataset.parquet');
+CREATE TABLE olist_sellers_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_sellers_dataset.parquet');
+CREATE TABLE product_category_name_translation AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/product_category_name_translation.parquet');
 """,
-        "ecommerce": f"""
-CREATE TABLE customers AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/customers.csv',header=true);
-CREATE TABLE order_items AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/order_items.csv',header=true);
-CREATE TABLE orders AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/orders.csv',header=true);
-CREATE TABLE payments AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/payments.csv',header=true);
-CREATE TABLE products AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/products.csv',header=true);
-CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/reviews.csv',header=true);
+        "hr": """
+CREATE TABLE salaries AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/salaries.parquet');
+CREATE TABLE titles AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/titles.parquet');
+CREATE TABLE dept_emp AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/dept_emp.parquet');
+CREATE TABLE departments AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/departments.parquet');
+CREATE TABLE employees AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/employees.parquet');
+CREATE TABLE dept_manager AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/dept_manager.parquet');
 """,
     }
 
@@ -698,14 +695,12 @@ def ask(query: str, query_history: Optional[dict] = None):
 def get_sql_answer(
     query: str,
     sql: str,
-    sql_summary: str,
 ):
     sql_answer_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers",
         json={
             "query": query,
             "sql": sql,
-            "sql_summary": sql_summary,
             "configurations": {
                 "language": st.session_state["language"],
             },
@@ -742,7 +737,6 @@ def ask_details():
         json={
             "query": st.session_state["chosen_query_result"]["query"],
             "sql": st.session_state["chosen_query_result"]["sql"],
-            "summary": st.session_state["chosen_query_result"]["summary"],
         },
     )
 
