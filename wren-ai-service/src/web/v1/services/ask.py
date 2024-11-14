@@ -107,7 +107,6 @@ class AskResultResponse(BaseModel):
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
-    _data_assistance_task: Optional[asyncio.Task] = None
 
 
 class AskService:
