@@ -1,8 +1,6 @@
 import { IProjectRepository } from '../repositories/projectRepository';
-import {
-  IWrenAIAdaptor,
-  RecommendationQuestionStatus,
-} from '../adaptors/wrenAIAdaptor';
+import { RecommendationQuestionStatus } from '@server/models/adaptor';
+import { IWrenAIAdaptor } from '../adaptors/wrenAIAdaptor';
 import { IThreadRepository, Project, Thread } from '../repositories';
 import {
   ITelemetry,

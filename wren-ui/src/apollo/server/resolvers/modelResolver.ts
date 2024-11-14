@@ -228,28 +228,7 @@ export class ModelResolver {
       project.id,
       args.force,
     );
-    const recommendQuestionResult =
-      await ctx.wrenAIAdaptor.generateRecommendationQuestions({
-        manifest,
-        projectId: project.id.toString(),
-        maxCategories: 3,
-        maxQuestions: 9,
-        configuration: {
-          language: project.language,
-        },
-      });
-    const updatedProject = await ctx.projectRepository.updateOne(project.id, {
-      queryId: recommendQuestionResult.queryId,
-      questionsStatus: null,
-      questions: null,
-      questionsError: null,
-    });
-    const tasks = ctx.projectRecommendQuestionBackgroundTracker.getTasks();
-    const taskKey =
-      ctx.projectRecommendQuestionBackgroundTracker.taskKey(updatedProject);
-    if (!tasks[taskKey]) {
-      ctx.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
-    }
+    await ctx.projectService.generateProjectRecommendationQuestions();
     return deployRes;
   }
 

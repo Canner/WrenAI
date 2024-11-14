@@ -1,13 +1,14 @@
+import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
   AskResult,
-  IWrenAIAdaptor,
   AskResultStatus,
   AskHistory,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
   RecommendationQuestion,
   WrenAIError,
-} from '@server/adaptors/wrenAIAdaptor';
+  RecommendationQuestionStatus,
+} from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
 import { IThreadRepository, Thread } from '../repositories/threadRepository';
@@ -424,9 +425,9 @@ export class AskingService implements IAskingService {
     // reset thread recommended questions
     const updatedThread = await this.threadRepository.updateOne(threadId, {
       queryId: result.queryId,
-      questions: null,
+      questionsStatus: RecommendationQuestionStatus.GENERATING,
+      questions: [],
       questionsError: null,
-      questionsStatus: null,
     });
     this.threadRecommendQuestionBackgroundTracker.addTask(updatedThread);
     return;
