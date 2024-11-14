@@ -30,10 +30,11 @@ timeout: 120
 
 ---
 type: llm
-provider: ollama
+provider: ollama_llm
 models:
-  - model: phi3:latest
+  - model: gemma2:9b
     kwargs: { "temperature": 0 }
+url: http://localhost:11434
 timeout: 120
 
 ---
@@ -57,10 +58,10 @@ timeout: 120
 
 ---
 type: embedder
-provider: ollama
+provider: ollama_embedder
 models:
-  - model: nomic-embed-text:latest
-    dimension: 768
+  - model: nomic-embed-text
+    dimension: 786
 url: http://localhost:11434
 timeout: 120
 
