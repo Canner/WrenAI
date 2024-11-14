@@ -212,12 +212,13 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) like lower(<value>)" function or "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
-    - Use "lower(<column_name>) LIKE lower(<value>)" when:
+- ALWAYS QUALIFY column names with their table name or table alias to avoid ambiguity (e.g., orders.OrderId, o.OrderId)
+- YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
+    - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
         - The user requests a pattern or partial match.
         - The value is not specific enough to be a single, exact value.
         - Wildcards (%) are needed to capture the pattern.
-    - Use "lower(<column_name>) = lower(<value>)" when:
+    - Use "lower(<table_name>.<column_name>) = lower(<value>)" when:
         - The user requests an exact, specific value.
         - There is no ambiguity or pattern in the value.
 - ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
@@ -226,7 +227,7 @@ TEXT_TO_SQL_RULES = """
     - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
 - If the user asks for a specific date, please give the date range in SQL query
     - example: "What is the total revenue for the month of 2024-11-01?"
-    - answer: "SELECT SUM(PriceSum) FROM Revenue WHERE CAST(PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+    - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
 - ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
@@ -240,8 +241,10 @@ TEXT_TO_SQL_RULES = """
     }
 
     SQL
-    SELECT ApprovedTimestamp AS _timestamp FROM orders AS _orders;
+    SELECT _orders.ApprovedTimestamp AS _timestamp FROM orders AS _orders;
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
+- DON'T USE "FILTER(WHERE <condition>)" clause in the query.
+- DON'T USE "EXTRACT(EPOCH FROM <timestamp_column>)" clause in the query.
 - ONLY USE the following SQL functions if you need to when generating answers:
   - Aggregation functions:
     - AVG
