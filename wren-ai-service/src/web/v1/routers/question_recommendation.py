@@ -31,10 +31,11 @@ Endpoints:
        "project_id": "project-id",                       # Optional project ID
        "max_questions": 5,                               # Optional max number of questions to generate, defaults to 5
        "max_categories": 3,                              # Optional max number of categories, defaults to 3
+       "regenerate": false,                              # Optional flag to force regeneration, defaults to false
        "configuration": {                                # Optional configuration settings
-         "language": "English",                         # Optional language, defaults to "English"
-         "timezone": {                                  # Optional timezone settings
-           "name": "Asia/Taipei",                       # Timezone name, defaults to "Asia/Taipei"
+         "language": "English",                          # Optional language, defaults to "English"
+         "timezone": {                                   # Optional timezone settings
+           "name": "Asia/Taipei",                        # Timezone name, defaults to "Asia/Taipei"
          }
        }
      }
@@ -77,6 +78,7 @@ class PostRequest(BaseModel):
     project_id: Optional[str] = None
     max_questions: Optional[int] = 5
     max_categories: Optional[int] = 3
+    regenerate: Optional[bool] = False
     configuration: Optional[Configuration] = Configuration()
 
 
@@ -105,6 +107,7 @@ async def recommend(
         project_id=request.project_id,
         max_questions=request.max_questions,
         max_categories=request.max_categories,
+        regenerate=request.regenerate,
         configuration=request.configuration,
     )
 
@@ -132,9 +135,17 @@ async def get(
 ) -> GetResponse:
     resource = service_container.question_recommendation[id]
 
+    def _formatter(response: dict) -> dict:
+        questions = [
+            question
+            for _, questions in response["questions"].items()
+            for question in questions
+        ]
+        return {"questions": questions}
+
     return GetResponse(
         id=resource.id,
         status=resource.status,
-        response=resource.response,
+        response=_formatter(resource.response),
         error=resource.error and resource.error.model_dump(),
     )

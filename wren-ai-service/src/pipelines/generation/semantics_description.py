@@ -41,10 +41,15 @@ def prompt(
     picked_models: list[dict],
     user_prompt: str,
     prompt_builder: PromptBuilder,
+    language: str,
 ) -> dict:
     logger.debug(f"User prompt: {user_prompt}")
     logger.debug(f"Picked models: {picked_models}")
-    return prompt_builder.run(picked_models=picked_models, user_prompt=user_prompt)
+    return prompt_builder.run(
+        picked_models=picked_models,
+        user_prompt=user_prompt,
+        language=language,
+    )
 
 
 @observe(as_type="generation", capture_input=False)
@@ -172,6 +177,7 @@ user_prompt_template = """
 ### Input:
 User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
+Language: {{ language }}
 
 Please provide a brief description for the model and each column based on the user's prompt.
 """
@@ -197,6 +203,7 @@ class SemanticsDescription(BasicPipeline):
         user_prompt: str,
         selected_models: list[str],
         mdl: dict,
+        language: str = "English",
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -209,6 +216,7 @@ class SemanticsDescription(BasicPipeline):
                 "user_prompt": user_prompt,
                 "selected_models": selected_models,
                 "mdl": mdl,
+                "language": language,
                 **self._components,
             },
             show_legend=True,
@@ -221,6 +229,7 @@ class SemanticsDescription(BasicPipeline):
         user_prompt: str,
         selected_models: list[str],
         mdl: dict,
+        language: str = "English",
     ) -> dict:
         logger.info("Semantics Description Generation pipeline is running...")
         return await self._pipe.execute(
@@ -229,6 +238,7 @@ class SemanticsDescription(BasicPipeline):
                 "user_prompt": user_prompt,
                 "selected_models": selected_models,
                 "mdl": mdl,
+                "language": language,
                 **self._components,
             },
         )
@@ -264,9 +274,10 @@ if __name__ == "__main__":
             "Course",
         ],
         "mdl": mdl,
+        "language": "Chinese",
     }
 
-    pipeline.visualize(**input)
+    # pipeline.visualize(**input)
     async_validate(lambda: pipeline.run(**input))
 
     langfuse_context.flush()

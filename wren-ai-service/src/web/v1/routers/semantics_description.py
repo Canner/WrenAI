@@ -11,6 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
+from src.web.v1.services import Configuration
 from src.web.v1.services.semantics_description import SemanticsDescription
 
 router = APIRouter()
@@ -27,7 +28,10 @@ Endpoints:
      {
        "selected_models": ["model1", "model2"],  # List of model names to describe
        "user_prompt": "Describe these models",   # User's instruction for description
-       "mdl": "{ ... }"                          # JSON string of the MDL (Model Definition Language)
+       "mdl": "{ ... }",                         # JSON string of the MDL (Model Definition Language)
+       "configuration": {                        # Optional configuration settings
+         "language": "English"                   # Optional language, defaults to "English"
+       }
      }
    - Response: PostResponse
      {
@@ -85,6 +89,7 @@ class PostRequest(BaseModel):
     selected_models: list[str]
     user_prompt: str
     mdl: str
+    configuration: Optional[Configuration] = Configuration()
 
 
 class PostResponse(BaseModel):
@@ -110,6 +115,7 @@ async def generate(
         selected_models=request.selected_models,
         user_prompt=request.user_prompt,
         mdl=request.mdl,
+        configuration=request.configuration,
     )
 
     background_tasks.add_task(
