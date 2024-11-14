@@ -7,7 +7,7 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, remove_sql_summary_duplicates, trace_metadata
+from src.utils import async_timer, trace_metadata
 from src.web.v1.services import SSEEvent
 from src.web.v1.services.ask_details import SQLBreakdown
 
@@ -16,7 +16,6 @@ logger = logging.getLogger("wren-ai-service")
 
 class AskHistory(BaseModel):
     sql: str
-    summary: str
     steps: List[SQLBreakdown]
 
 
@@ -82,7 +81,6 @@ class StopAskResponse(BaseModel):
 # GET /v1/asks/{query_id}/result
 class AskResult(BaseModel):
     sql: str
-    summary: str
     type: Literal["llm", "view"] = "llm"
     viewId: Optional[str] = None
 
@@ -101,6 +99,7 @@ class AskResultResponse(BaseModel):
         "understanding",
         "searching",
         "generating",
+        "correcting",
         "finished",
         "failed",
         "stopped",
@@ -135,20 +134,6 @@ class AskService:
         return list(
             filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
         )
-
-    async def _add_summary_to_sql_candidates(
-        self, sqls: list[str], query: str, language: str
-    ):
-        sql_summary_results = await self._pipelines["sql_summary"].run(
-            query=query,
-            sqls=sqls,
-            language=language,
-        )
-        valid_sql_summary_results = sql_summary_results["post_process"][
-            "sql_summary_results"
-        ]
-        # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
-        return remove_sql_summary_duplicates(valid_sql_summary_results)
 
     @async_timer
     @observe(name="Ask Question")
@@ -207,18 +192,13 @@ class AskService:
                     results["metadata"]["type"] = "GENERAL"
                     return results
 
-            query_for_retrieval = (
-                ask_request.history.summary + " " + ask_request.query
-                if ask_request.history
-                else ask_request.query
-            )
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
                 )
 
                 retrieval_result = await self._pipelines["retrieval"].run(
-                    query=query_for_retrieval,
+                    query=ask_request.query,
                     id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
@@ -246,7 +226,7 @@ class AskService:
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=query_for_retrieval,
+                    query=ask_request.query,
                     id=ask_request.project_id,
                 )
 
@@ -261,7 +241,6 @@ class AskService:
                         AskResult(
                             **{
                                 "sql": result.get("statement"),
-                                "summary": result.get("summary"),
                                 "type": "view",
                                 "viewId": result.get("viewId"),
                             }
@@ -293,42 +272,26 @@ class AskService:
                     if sql_valid_results := text_to_sql_generation_results[
                         "post_process"
                     ]["valid_generation_results"]:
-                        valid_sql_summary_results = (
-                            await self._add_summary_to_sql_candidates(
-                                sql_valid_results,
-                                ask_request.query,
-                                ask_request.configurations.language,
-                            )
-                        )
                         api_results = [
-                            AskResult(**result) for result in valid_sql_summary_results
+                            AskResult(
+                                **{
+                                    "sql": result.get("sql"),
+                                    "type": "llm",
+                                }
+                            )
+                            for result in sql_valid_results
                         ][:1]
                     elif failed_dry_run_results := self._get_failed_dry_run_results(
                         text_to_sql_generation_results["post_process"][
                             "invalid_generation_results"
                         ]
                     ):
-                        # Run sql_correction and _add_summary_to_sql_candidates concurrently
-                        sql_correction_task = self._pipelines["sql_correction"].run(
+                        sql_correction_results = await self._pipelines[
+                            "sql_correction"
+                        ].run(
                             contexts=documents,
                             invalid_generation_results=failed_dry_run_results,
                             project_id=ask_request.project_id,
-                        )
-                        valid_sql_summary_task = self._add_summary_to_sql_candidates(
-                            [
-                                {
-                                    "sql": failed_dry_run_results[0]["sql"],
-                                }
-                            ],
-                            ask_request.query,
-                            ask_request.configurations.language,
-                        )
-
-                        (
-                            sql_correction_results,
-                            valid_sql_summary_results,
-                        ) = await asyncio.gather(
-                            sql_correction_task, valid_sql_summary_task
                         )
 
                         if valid_generation_results := sql_correction_results[
@@ -338,13 +301,10 @@ class AskService:
                                 AskResult(
                                     **{
                                         "sql": valid_generation_result.get("sql"),
-                                        "summary": sql_summary_result.get("summary"),
                                         "type": "llm",
                                     }
                                 )
-                                for sql_summary_result, valid_generation_result in zip(
-                                    valid_sql_summary_results, valid_generation_results
-                                )
+                                for valid_generation_result in valid_generation_results
                             ][:1]
 
                 if api_results:
