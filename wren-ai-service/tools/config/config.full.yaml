@@ -134,6 +134,12 @@ pipes:
   - name: relationship_recommendation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
+  - name: intent_classification
+    llm: openai_llm.gpt-4o-mini
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: data_assistance
+    llm: openai_llm.gpt-4o-mini
 
 ---
 settings:
