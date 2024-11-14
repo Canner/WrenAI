@@ -35,6 +35,20 @@ provider: wren_ui
 endpoint: http://localhost:3000
 
 ---
+type: engine
+provider: wren_ibis
+endpoint: http://localhost:8000
+source: bigquery
+manifest: "" # base64 encoded string of the MDL
+connection_info: "" # base64 encoded string of the connection info
+
+---
+type: engine
+provider: wren_engine
+endpoint: http://localhost:8080
+manifest: ""
+
+---
 type: document_store
 provider: qdrant
 location: http://localhost:6333
