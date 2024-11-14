@@ -80,7 +80,7 @@ with st.sidebar:
         key="choose_demo_dataset",
         options=[
             "ecommerce",
-            "nba",
+            "hr",
         ],
         index=0,
         on_change=onchange_demo_dataset,
@@ -166,7 +166,6 @@ if query:
     if st.session_state["asks_results"] and st.session_state["asks_details_result"]:
         st.session_state["query_history"] = {
             "sql": st.session_state["chosen_query_result"]["sql"],
-            "summary": st.session_state["chosen_query_result"]["summary"],
             "steps": st.session_state["asks_details_result"]["steps"],
         }
     else:

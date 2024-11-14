@@ -59,7 +59,7 @@ class SQLSummaryPostProcessor:
         try:
             return {
                 "sql_summary_results": [
-                    {"sql": sql["sql"], "summary": summary["summary"]}
+                    {"sql": sql, "summary": summary["summary"]}
                     for (sql, summary) in zip(
                         sqls, orjson.loads(replies[0])["sql_summary_results"]
                     )
