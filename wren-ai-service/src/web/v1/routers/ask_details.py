@@ -30,7 +30,6 @@ Endpoints:
      {
        "query": "SELECT * FROM table;",        # SQL query to be analyzed
        "sql": "SELECT * FROM table;",           # Original SQL string
-       "summary": "Summary of the query",       # Brief summary of the query
        "mdl_hash": "optional-hash",             # Optional model hash for reference
        "thread_id": "optional-thread-id",       # Optional thread identifier
        "project_id": "optional-project-id",     # Optional project identifier
