@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import MetadataTraceable
+from src.web.v1.services import Configuration, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -20,6 +20,7 @@ class SemanticsDescription:
         selected_models: list[str]
         user_prompt: str
         mdl: str
+        configuration: Optional[Configuration] = Configuration()
 
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
@@ -61,6 +62,7 @@ class SemanticsDescription:
         template = {
             "user_prompt": request.user_prompt,
             "mdl": mdl_dict,
+            "language": request.configuration.language,
         }
         return [
             {
