@@ -11,7 +11,12 @@ import aiohttp
 import orjson
 import requests
 
-from demo.utils import _get_connection_info, _replace_wren_engine_env_variables
+from demo.utils import (
+    _get_connection_info,
+    _prepare_duckdb,
+    _replace_wren_engine_env_variables,
+    _update_wren_engine_configs,
+)
 
 
 def is_ai_service_ready(url: str):
@@ -44,17 +49,34 @@ def test_load_mdl_and_questions(usecases: list[str]):
     return mdls_and_questions
 
 
-def setup_datasource(mdl_str: str):
-    dataset_type = "bigquery"
-    connection_info = _get_connection_info(dataset_type)
-    _replace_wren_engine_env_variables(
-        "wren_ibis",
-        {
-            "manifest": base64.b64encode(mdl_str.encode("utf-8")).decode("utf-8"),
-            "source": dataset_type,
-            "connection_info": base64.b64encode(orjson.dumps(connection_info)).decode(),
-        },
-    )
+def setup_datasource(mdl_str: str, dataset: str, dataset_type: str):
+    assert dataset_type in ["bigquery", "duckdb"]
+
+    manifest = base64.b64encode(mdl_str.encode("utf-8")).decode("utf-8")
+    if dataset_type == "bigquery":
+        connection_info = _get_connection_info(dataset_type)
+        _replace_wren_engine_env_variables(
+            "wren_ibis",
+            {
+                "manifest": manifest,
+                "source": dataset_type,
+                "connection_info": base64.b64encode(
+                    orjson.dumps(connection_info)
+                ).decode(),
+            },
+        )
+    elif dataset_type == "duckdb":
+        _update_wren_engine_configs(
+            [
+                {
+                    "name": "duckdb.connector.init-sql-path",
+                    "value": "/usr/src/app/etc/duckdb-init.sql",
+                },
+            ]
+        )
+        _prepare_duckdb(dataset)
+        _replace_wren_engine_env_variables("wren_engine", {"manifest": manifest})
+
     ready = False
     while not ready:
         ready = is_ai_service_ready(url)
@@ -122,6 +144,13 @@ async def ask_questions(questions: list[str], url: str, semantics_preperation_id
 
 
 if __name__ == "__main__":
+    usecase_to_dataset_type = {
+        "hubspot": "bigquery",
+        "ga4": "bigquery",
+        "ecommerce": "duckdb",
+        "hr": "duckdb",
+    }
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--usecases",
@@ -149,7 +178,7 @@ if __name__ == "__main__":
     for usecase, data in mdls_and_questions_by_usecase.items():
         print(f"testing usecase: {usecase}")
 
-        setup_datasource(data["mdl_str"])
+        setup_datasource(data["mdl_str"], usecase, usecase_to_dataset_type[usecase])
 
         semantics_preperation_id = deploy_mdl(data["mdl_str"], url)
 
