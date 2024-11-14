@@ -5,7 +5,7 @@ import {
   IQueryOptions,
 } from './baseRepository';
 import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
-import { AskResultStatus, WrenAIError } from '../adaptors/wrenAIAdaptor';
+import { AskResultStatus, WrenAIError } from '@server/models/adaptor';
 
 export interface DetailStep {
   summary: string;

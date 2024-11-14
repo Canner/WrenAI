@@ -1,6 +1,9 @@
 import axios from 'axios';
-import { RecommendationQuestionsInput, WrenAIAdaptor } from '../wrenAIAdaptor';
-import { RecommendationQuestionStatus } from '../wrenAIAdaptor';
+import { WrenAIAdaptor } from '../wrenAIAdaptor';
+import {
+  RecommendationQuestionsInput,
+  RecommendationQuestionStatus,
+} from '@server/models/adaptor';
 import { Manifest } from '../../mdl/type';
 
 jest.mock('axios');

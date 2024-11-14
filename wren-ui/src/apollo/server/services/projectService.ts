@@ -10,12 +10,13 @@ import {
   RecommendConstraint,
 } from './metadataService';
 import { DataSourceName } from '../types';
-import { encryptConnectionInfo } from '../dataSource';
 import {
-  IWrenAIAdaptor,
   RecommendationQuestion,
+  RecommendationQuestionStatus,
   WrenAIError,
-} from '../adaptors';
+} from '@server/models/adaptor';
+import { encryptConnectionInfo } from '../dataSource';
+import { IWrenAIAdaptor } from '../adaptors';
 import { RecommendQuestionResultStatus } from './askingService';
 import { IMDLService } from './mdlService';
 import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
@@ -106,8 +107,8 @@ export class ProjectService implements IProjectService {
       });
     const updatedProject = await this.projectRepository.updateOne(project.id, {
       queryId: recommendQuestionResult.queryId,
-      questionsStatus: null,
-      questions: null,
+      questionsStatus: RecommendationQuestionStatus.GENERATING,
+      questions: [],
       questionsError: null,
     });
     const tasks = this.projectRecommendQuestionBackgroundTracker.getTasks();

@@ -4,7 +4,7 @@ import {
   AskResultStatus,
   AskResultType,
   RecommendationQuestionStatus,
-} from '../adaptors/wrenAIAdaptor';
+} from '@server/models/adaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
   DetailStep,
@@ -58,7 +58,7 @@ export interface RecommendedQuestionsTask {
   questions: {
     question: string;
     category: string;
-    explanation: string;
+    sql: string;
   }[];
   status: RecommendationQuestionStatus;
   error: WrenAIError | null;
