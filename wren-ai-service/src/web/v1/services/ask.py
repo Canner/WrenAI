@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
 
@@ -7,6 +8,7 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
+from src.web.v1.services import SSEEvent
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
@@ -84,9 +86,7 @@ class AskResult(BaseModel):
 
 
 class AskError(BaseModel):
-    code: Literal[
-        "MISLEADING_QUERY", "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"
-    ]  # MISLEADING_QUERY is not in use now, we may add it back in the future when we implement the clarification pipeline
+    code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
     message: str
 
 
@@ -104,6 +104,7 @@ class AskResultResponse(BaseModel):
         "failed",
         "stopped",
     ]
+    type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -144,6 +145,7 @@ class AskService:
         results = {
             "ask_result": {},
             "metadata": {
+                "type": "",
                 "error_type": "",
                 "error_message": "",
             },
@@ -158,6 +160,36 @@ class AskService:
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
                 )
+
+                intent_classification_result = (
+                    await self._pipelines["intent_classification"].run(
+                        query=ask_request.query,
+                        id=ask_request.project_id,
+                    )
+                ).get("post_process", {})
+                intent = intent_classification_result.get("intent")
+                if intent == "MISLEADING_QUERY":
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="MISLEADING_QUERY",
+                    )
+                    results["metadata"]["type"] = "MISLEADING_QUERY"
+                    return results
+                elif intent == "GENERAL":
+                    asyncio.create_task(
+                        self._pipelines["data_assistance"].run(
+                            query=ask_request.query,
+                            db_schemas=intent_classification_result.get("db_schemas"),
+                            language=ask_request.configurations.language,
+                            query_id=ask_request.query_id,
+                        )
+                    )
+
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished", type="GENERAL"
+                    )
+                    results["metadata"]["type"] = "GENERAL"
+                    return results
 
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
@@ -177,12 +209,14 @@ class AskService:
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
+                            type="TEXT_TO_SQL",
                             error=AskError(
                                 code="NO_RELEVANT_DATA",
                                 message="No relevant data",
                             ),
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
             if not self._is_stopped(query_id):
@@ -276,9 +310,11 @@ class AskService:
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="finished",
+                            type="TEXT_TO_SQL",
                             response=api_results,
                         )
                     results["ask_result"] = api_results
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
                 else:
                     logger.exception(
                         f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
@@ -286,12 +322,14 @@ class AskService:
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
+                            type="TEXT_TO_SQL",
                             error=AskError(
                                 code="NO_RELEVANT_SQL",
                                 message="No relevant SQL",
                             ),
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
 
             return results
         except Exception as e:
@@ -299,6 +337,7 @@ class AskService:
 
             self._ask_results[ask_request.query_id] = AskResultResponse(
                 status="failed",
+                type="TEXT_TO_SQL",
                 error=AskError(
                     code="OTHERS",
                     message=str(e),
@@ -307,6 +346,7 @@ class AskService:
 
             results["metadata"]["error_type"] = "OTHERS"
             results["metadata"]["error_message"] = str(e)
+            results["metadata"]["type"] = "TEXT_TO_SQL"
             return results
 
     def stop_ask(
@@ -327,6 +367,7 @@ class AskService:
             )
             return AskResultResponse(
                 status="failed",
+                type="TEXT_TO_SQL",
                 error=AskError(
                     code="OTHERS",
                     message=f"{ask_result_request.query_id} is not found",
@@ -334,3 +375,19 @@ class AskService:
             )
 
         return result
+
+    async def get_ask_streaming_result(
+        self,
+        query_id: str,
+    ):
+        if (
+            self._ask_results.get(query_id)
+            and self._ask_results.get(query_id).type == "GENERAL"
+        ):
+            async for chunk in self._pipelines["data_assistance"].get_streaming_results(
+                query_id
+            ):
+                event = SSEEvent(
+                    data=SSEEvent.SSEEventMessage(message=chunk),
+                )
+                yield event.serialize()
