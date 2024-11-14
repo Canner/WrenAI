@@ -27,7 +27,6 @@ class AskDetailsRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
-    summary: str
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
@@ -125,7 +124,7 @@ class AskDetailsService:
                 ask_details_result["steps"] = [
                     {
                         "sql": quoted_sql if no_error else ask_details_request.sql,
-                        "summary": ask_details_request.summary,
+                        "summary": ask_details_result["description"],
                         "cte_name": "",
                     }
                 ]
