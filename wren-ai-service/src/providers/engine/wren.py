@@ -73,7 +73,11 @@ class WrenUI(Engine):
                     },
                 )
         except asyncio.TimeoutError:
-            return False, None, f"Request timed out: {timeout} seconds"
+            return (
+                False,
+                None,
+                {"error_message": f"Request timed out: {timeout} seconds"},
+            )
 
 
 @provider("wren_ibis")
