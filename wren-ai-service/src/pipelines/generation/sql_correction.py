@@ -26,11 +26,11 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_correction_user_prompt_template = """
-You are a Trino SQL expert with exceptional logical thinking skills and debugging skills.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
 ### TASK ###
-Now you are given syntactically incorrect Trino SQL query and related error message.
-With given database schema, please think step by step to correct the wrong Trino SQL query.
+Now you are given syntactically incorrect ANSI SQL query and related error message.
+With given database schema, please think step by step to correct the wrong ANSI SQL query.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
