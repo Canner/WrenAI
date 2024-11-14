@@ -80,7 +80,7 @@ with st.sidebar:
         key="choose_demo_dataset",
         options=[
             "ecommerce",
-            "nba",
+            "hr",
         ],
         index=0,
         on_change=onchange_demo_dataset,
