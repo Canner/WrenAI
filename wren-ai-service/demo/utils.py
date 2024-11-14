@@ -162,7 +162,6 @@ def get_data_from_wren_engine(
 def show_query_history():
     if st.session_state["query_history"]:
         with st.expander("Query History", expanded=False):
-            st.markdown(st.session_state["query_history"]["summary"])
             st.code(
                 body=sqlparse.format(
                     st.session_state["query_history"]["sql"],
@@ -202,19 +201,16 @@ def show_asks_results():
                 ),
                 language="sql",
             )
-            st.markdown(st.session_state["asks_results"][i]["summary"])
             choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
     for i, choose_result in enumerate(choose_result_n):
         if choose_result:
             sql = st.session_state["asks_results"][i]["sql"]
-            summary = st.session_state["asks_results"][i]["summary"]
 
             st.session_state["chosen_query_result"] = {
                 "index": i,
                 "query": st.session_state["query"],
                 "sql": sql,
-                "summary": summary,
             }
 
             # reset relevant session_states
@@ -310,7 +306,6 @@ def show_asks_details_results(query: str):
                 get_sql_answer(
                     st.session_state["chosen_query_result"]["query"],
                     st.session_state["chosen_query_result"]["sql"],
-                    st.session_state["chosen_query_result"]["summary"],
                 )
             )
 
@@ -698,14 +693,12 @@ def ask(query: str, query_history: Optional[dict] = None):
 def get_sql_answer(
     query: str,
     sql: str,
-    sql_summary: str,
 ):
     sql_answer_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers",
         json={
             "query": query,
             "sql": sql,
-            "sql_summary": sql_summary,
             "configurations": {
                 "language": st.session_state["language"],
             },
@@ -742,7 +735,6 @@ def ask_details():
         json={
             "query": st.session_state["chosen_query_result"]["query"],
             "sql": st.session_state["chosen_query_result"]["sql"],
-            "summary": st.session_state["chosen_query_result"]["summary"],
         },
     )
 
