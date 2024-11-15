@@ -94,8 +94,8 @@ export default function HomeThread() {
     }
 
     // store thread questions for instant recommended questions
-    const questions = thread?.responses.flatMap((res) => res.question || [])
-    if(questions) askPrompt.onStoreThreadQuestions(questions);
+    const questions = thread?.responses.flatMap((res) => res.question || []);
+    if (questions) askPrompt.onStoreThreadQuestions(questions);
   }, [thread]);
 
   useEffect(() => {
