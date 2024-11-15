@@ -145,6 +145,7 @@ class OllamaLLMProvider(LLMProvider):
 
         logger.info(f"Using Ollama LLM: {self._generation_model}")
         logger.info(f"Using Ollama URL: {self._url}")
+        logger.info(f"Using Ollama model kwargs: {self._model_kwargs}")
 
     def get_generator(
         self,
@@ -153,9 +154,6 @@ class OllamaLLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        logger.info(
-            f"Creating Ollama generator with model kwargs: {self._model_kwargs}"
-        )
         return AsyncGenerator(
             model=self._generation_model,
             url=f"{self._url}/api/generate",
