@@ -2,7 +2,6 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from fastapi.responses import StreamingResponse
 
 from src.globals import (
     ServiceContainer,
@@ -55,7 +54,6 @@ Endpoints:
      - `query_id`: The unique identifier of the query.
    - **Response**:
      - `status`: The current status of the query (`"understanding"`, `"searching"`, `"generating"`, `"finished"`, `"failed"`, or `"stopped"`).
-     - `type`: The type of result (`"MISLEADING_QUERY"`, `"GENERAL"`, or `"TEXT_TO_SQL"`).
      - `response`: (Optional) A list of SQL results, each containing:
        - `sql`: The generated SQL statement.
        - `summary`: The generated SQL summary.
@@ -65,18 +63,10 @@ Endpoints:
        - `code`: The error code (e.g., `"NO_RELEVANT_DATA"`, `"NO_RELEVANT_SQL"`, `"OTHERS"`).
        - `message`: A detailed error message.
 
-4. **GET /asks/{query_id}/streaming-result**
-   - Retrieves the streaming result of a submitted query.
-   - **Path Parameter**:
-     - `query_id`: The unique identifier of the query.
-   - **Response**:
-     - Streaming response with the query result.
-
 Process:
 1. Use the POST endpoint to submit a new query. This returns a `query_id` to track the query.
 2. To stop an ongoing query, use the PATCH endpoint with the `query_id`.
 3. Use the GET endpoint to check the query status or retrieve the result once the query is processed.
-4. Use the GET endpoint to retrieve the streaming result if the query generates a "GENERAL" type result from the `/asks/{query_id}/result` endpoint.
 
 Note: The query processing is asynchronous, and status updates can be polled via the GET endpoint.
 """
@@ -125,15 +115,4 @@ async def get_ask_result(
 ) -> AskResultResponse:
     return service_container.ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
-    )
-
-
-@router.get("/asks/{query_id}/streaming-result")
-async def get_ask_streaming_result(
-    query_id: str,
-    service_container: ServiceContainer = Depends(get_service_container),
-) -> StreamingResponse:
-    return StreamingResponse(
-        service_container.ask_service.get_ask_streaming_result(query_id),
-        media_type="text/event-stream",
     )

@@ -11,7 +11,6 @@ import pandas as pd
 import requests
 import sqlglot
 import sqlparse
-import sseclient
 import streamlit as st
 import yaml
 from dotenv import load_dotenv
@@ -23,11 +22,6 @@ POLLING_INTERVAL = 0.5
 DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
 
 load_dotenv()
-
-
-def with_requests(url, headers):
-    """Get a streaming response for the given event feed using requests."""
-    return requests.get(url, stream=True, headers=headers)
 
 
 def add_quotes(sql: str) -> Tuple[str, bool]:
@@ -193,43 +187,38 @@ def show_asks_results():
     show_query_history()
 
     st.markdown("### Query Results")
-    if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
-        asks_result_count = len(st.session_state["asks_results"])
-        ask_result_cols = st.columns(asks_result_count)
-        choose_result_n = [False] * asks_result_count
-        for i, ask_result_col in enumerate(ask_result_cols):
-            with ask_result_col:
-                st.markdown(f"Result {i+1}")
-                st.code(
-                    body=sqlparse.format(
-                        st.session_state["asks_results"][i]["sql"],
-                        reindent=True,
-                        keyword_case="upper",
-                    ),
-                    language="sql",
-                )
-                choose_result_n[i] = st.button(f"Choose Result {i+1}")
+    asks_result_count = len(st.session_state["asks_results"])
+    ask_result_cols = st.columns(asks_result_count)
+    choose_result_n = [False] * asks_result_count
+    for i, ask_result_col in enumerate(ask_result_cols):
+        with ask_result_col:
+            st.markdown(f"Result {i+1}")
+            st.code(
+                body=sqlparse.format(
+                    st.session_state["asks_results"][i]["sql"],
+                    reindent=True,
+                    keyword_case="upper",
+                ),
+                language="sql",
+            )
+            choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
-        for i, choose_result in enumerate(choose_result_n):
-            if choose_result:
-                sql = st.session_state["asks_results"][i]["sql"]
+    for i, choose_result in enumerate(choose_result_n):
+        if choose_result:
+            sql = st.session_state["asks_results"][i]["sql"]
 
-                st.session_state["chosen_query_result"] = {
-                    "index": i,
-                    "query": st.session_state["query"],
-                    "sql": sql,
-                }
+            st.session_state["chosen_query_result"] = {
+                "index": i,
+                "query": st.session_state["query"],
+                "sql": sql,
+            }
 
-                # reset relevant session_states
-                st.session_state["asks_details_result"] = None
-                st.session_state["preview_data_button_index"] = None
-                st.session_state["preview_sql"] = None
+            # reset relevant session_states
+            st.session_state["asks_details_result"] = None
+            st.session_state["preview_data_button_index"] = None
+            st.session_state["preview_sql"] = None
 
-                break
-    elif st.session_state["asks_results_type"] == "MISLEADING_QUERY":
-        st.markdown(
-            "Misleading query detected. Please try again with a different query."
-        )
+            break
 
 
 def show_asks_details_results(query: str):
@@ -691,37 +680,16 @@ def ask(query: str, query_history: Optional[dict] = None):
         )
         assert asks_status_response.status_code == 200
         asks_status = asks_status_response.json()["status"]
-        asks_type = asks_status_response.json()["type"]
         st.toast(f"The query processing status: {asks_status}")
         time.sleep(POLLING_INTERVAL)
 
     if asks_status == "finished":
-        st.session_state["asks_results_type"] = asks_type
-        if asks_type == "GENERAL":
-            display_general_response(query_id)
-        elif asks_type == "TEXT_TO_SQL":
-            st.session_state["asks_results"] = asks_status_response.json()["response"]
-        else:
-            st.session_state["asks_results"] = asks_type
+        st.session_state["asks_results"] = asks_status_response.json()["response"]
     elif asks_status == "failed":
         st.error(
             f'An error occurred while processing the query: {asks_status_response.json()['error']}',
             icon="🚨",
         )
-
-
-def display_general_response(query_id: str):
-    url = f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/{query_id}/streaming-result"
-    headers = {"Accept": "text/event-stream"}
-    response = with_requests(url, headers)
-    client = sseclient.SSEClient(response)
-
-    markdown_content = ""
-    placeholder = st.empty()
-
-    for event in client.events():
-        markdown_content += orjson.loads(event.data)["message"]
-        placeholder.markdown(markdown_content)
 
 
 def get_sql_answer(

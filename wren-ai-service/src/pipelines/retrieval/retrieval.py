@@ -15,7 +15,6 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import _build_table_ddl
 from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -93,6 +92,30 @@ table_columns_selection_user_prompt_template = """
 ### INPUT ###
 {{ question }}
 """
+
+
+def _build_table_ddl(
+    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+) -> str:
+    columns_ddl = []
+    for column in content["columns"]:
+        if column["type"] == "COLUMN":
+            if not columns or (columns and column["name"] in columns):
+                column_ddl = (
+                    f"{column['comment']}{column['name']} {column['data_type']}"
+                )
+                if column["is_primary_key"]:
+                    column_ddl += " PRIMARY KEY"
+                columns_ddl.append(column_ddl)
+        elif column["type"] == "FOREIGN_KEY":
+            if not tables or (tables and set(column["tables"]).issubset(tables)):
+                columns_ddl.append(f"{column['comment']}{column['constraint']}")
+
+    return (
+        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
+    )
 
 
 def _build_metric_ddl(content: dict) -> str:

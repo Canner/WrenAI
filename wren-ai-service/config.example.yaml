@@ -110,9 +110,3 @@ pipes:
     engine: wren_ui
   - name: question_recommendation
     llm: openai_llm.gpt-4o-mini
-  - name: intent_classification
-    llm: openai_llm.gpt-4o-mini
-    embedder: openai_embedder.text-embedding-3-large
-    document_store: qdrant
-  - name: data_assistance
-    llm: openai_llm.gpt-4o-mini

@@ -39,7 +39,6 @@ streamlit = "==1.37.0"
 watchdog = "==4.0.0"
 pandas = "==2.2.2"
 matplotlib = "==3.9.2"
-sseclient-py = "==1.8.0"
 dspy-ai = "==2.5.26"
 
 [tool.poetry.group.eval.dependencies]

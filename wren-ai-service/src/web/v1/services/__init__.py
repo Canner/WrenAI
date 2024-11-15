@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
 
-import orjson
 import pytz
 from pydantic import BaseModel
 
@@ -42,16 +41,3 @@ class Configuration(BaseModel):
     fiscal_year: Optional[FiscalYear] = None
     language: Optional[str] = "English"
     timezone: Optional[Timezone] = Timezone()
-
-
-class SSEEvent(BaseModel):
-    class SSEEventMessage(BaseModel):
-        message: str
-
-        def to_dict(self):
-            return {"message": self.message}
-
-    data: SSEEventMessage
-
-    def serialize(self):
-        return f"data: {orjson.dumps(self.data.to_dict()).decode()}\n\n"

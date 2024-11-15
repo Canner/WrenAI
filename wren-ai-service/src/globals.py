@@ -7,9 +7,7 @@ import toml
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
-    data_assistance,
     followup_sql_generation,
-    intent_classification,
     question_recommendation,
     relationship_recommendation,
     semantics_description,
@@ -86,12 +84,6 @@ def create_service_container(
         ),
         ask_service=AskService(
             pipelines={
-                "intent_classification": intent_classification.IntentClassification(
-                    **pipe_components["intent_classification"],
-                ),
-                "data_assistance": data_assistance.DataAssistance(
-                    **pipe_components["data_assistance"]
-                ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["retrieval"],
                     table_retrieval_size=table_retrieval_size,

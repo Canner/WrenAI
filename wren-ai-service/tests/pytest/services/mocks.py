@@ -1,6 +1,6 @@
 from typing import Optional
 
-from src.pipelines.generation import intent_classification, sql_generation, sql_summary
+from src.pipelines.generation import sql_generation, sql_summary
 from src.pipelines.retrieval import historical_question, retrieval
 from src.web.v1.services.ask import AskConfigurations
 
@@ -19,14 +19,6 @@ class HistoricalQuestionMock(historical_question.HistoricalQuestion):
 
     async def run(self, query: str, id: Optional[str] = None):
         return {"formatted_output": {"documents": self._documents}}
-
-
-class IntentClassificationMock(intent_classification.IntentClassification):
-    def __init__(self, intent: str = "MISLEADING_QUERY"):
-        self._intent = intent
-
-    async def run(self, query: str, id: Optional[str] = None):
-        return {"post_process": {"intent": self._intent, "db_schemas": []}}
 
 
 class GenerationMock(sql_generation.SQLGeneration):
