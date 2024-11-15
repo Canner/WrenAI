@@ -27,6 +27,7 @@ class AskDetailsRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
+    summary: str
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
@@ -77,14 +78,6 @@ class AskDetailsService:
             maxsize=maxsize, ttl=ttl
         )
 
-    async def _add_summary_to_sql(self, sql: str, query: str, language: str):
-        sql_summary_results = await self._pipelines["sql_summary"].run(
-            query=query,
-            sqls=[sql],
-            language=language,
-        )
-        return sql_summary_results["post_process"]["sql_summary_results"]
-
     @async_timer
     @observe(name="Ask Details(Breakdown SQL)")
     @trace_metadata
@@ -129,21 +122,10 @@ class AskDetailsService:
 
             if not ask_details_result["steps"]:
                 quoted_sql, no_error = add_quotes(ask_details_request.sql)
-                sql = quoted_sql if no_error else ask_details_request.sql
-
-                sql_summary_results = await self._pipelines["sql_summary"].run(
-                    query=ask_details_request.query,
-                    sqls=[sql],
-                    language=ask_details_request.configurations.language,
-                )
-                sql_summary_result = sql_summary_results["post_process"][
-                    "sql_summary_results"
-                ][0]
-
                 ask_details_result["steps"] = [
                     {
-                        "sql": sql_summary_result["sql"],
-                        "summary": sql_summary_result["summary"],
+                        "sql": quoted_sql if no_error else ask_details_request.sql,
+                        "summary": ask_details_request.summary,
                         "cte_name": "",
                     }
                 ]

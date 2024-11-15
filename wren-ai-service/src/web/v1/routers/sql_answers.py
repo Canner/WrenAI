@@ -30,6 +30,7 @@ Endpoints:
      {
        "query": "user's question",
        "sql": "SELECT * FROM table_name WHERE condition",      # Actual SQL statement
+       "sql_summary": "SQL summary",                          # SQL summary
        "thread_id": "unique-thread-id",                        # Optional thread identifier for tracking
        "user_id": "user-id"                                   # Optional user identifier for tracking
      }

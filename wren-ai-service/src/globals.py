@@ -128,10 +128,7 @@ def create_service_container(
             pipelines={
                 "sql_breakdown": sql_breakdown.SQLBreakdown(
                     **pipe_components["sql_breakdown"],
-                ),
-                "sql_summary": sql_summary.SQLSummary(
-                    **pipe_components["sql_summary"],
-                ),
+                )
             },
             **query_cache,
         ),
