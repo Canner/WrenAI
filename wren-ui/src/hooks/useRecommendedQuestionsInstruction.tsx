@@ -1,10 +1,14 @@
 import { useMemo, useState, useEffect } from 'react';
 import { groupBy, map, orderBy } from 'lodash';
+import { message } from 'antd';
 import Icon from '@ant-design/icons';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { CopilotSVG } from '@/utils/svgs';
 import { isRecommendedFinished } from '@/hooks/useAskPrompt';
-import { ResultQuestion } from '@/apollo/client/graphql/__types__';
+import {
+  ResultQuestion,
+  RecommendedQuestionsTaskStatus,
+} from '@/apollo/client/graphql/__types__';
 import {
   useGetProjectRecommendationQuestionsLazyQuery,
   useGenerateProjectRecommendationQuestionsMutation,
@@ -79,6 +83,16 @@ export default function useRecommendedQuestionsInstruction() {
 
       if (recommendedQuestionsTask.questions.length === 0) {
         isRegenerate && setShowRetry(true);
+
+        if (
+          showRecommendedQuestionsPromptMode &&
+          recommendedQuestionsTask.status ===
+            RecommendedQuestionsTaskStatus.FAILED
+        ) {
+          message.error(
+            `We couldn't regenerate questions right now. Let's try again later.`,
+          );
+        }
       } else {
         setIsRegenerate(true);
 
