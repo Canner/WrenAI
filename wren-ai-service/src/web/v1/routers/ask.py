@@ -35,7 +35,7 @@ Endpoints:
      - `mdl_hash`: (Optional) Hash or ID related to the model to be used for the query.
      - `thread_id`: (Optional) Thread identifier for the query.
      - `user_id`: (Optional) User identifier.
-     - `history`: (Optional) Query history (summary andSQL steps).
+     - `history`: (Optional) Query history (summary and SQL steps).
      - `configurations`: (Optional) Configurations such as fiscal year.
    - **Response**:
      - `query_id`: A unique identifier (UUID) for tracking the query.
