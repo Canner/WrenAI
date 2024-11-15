@@ -201,7 +201,7 @@ const GeneralAnswer = (props: Props) => {
     getRecommendedQuestionProps(recommendedQuestions);
 
   return (
-    <div>
+    <Wrapper>
       <div className="d-flex justify-space-between">
         <div className="d-flex align-start">
           <MessageOutlined className="mr-2 mt-1 geekblue-6" />
@@ -239,7 +239,7 @@ const GeneralAnswer = (props: Props) => {
           onSelect={onSelectQuestion}
         />
       )}
-    </div>
+    </Wrapper>
   );
 };
 
