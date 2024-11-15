@@ -23,7 +23,6 @@ import {
 interface Props {
   onSelect: (payload: {
     sql?: string;
-    summary?: string;
     question?: string;
     viewId?: number;
   }) => Promise<void>;
@@ -63,6 +62,8 @@ const convertAskingTaskToProcessState = (data: AskingTask) => {
     [AskingTaskStatus.UNDERSTANDING]: PROCESS_STATE.UNDERSTANDING,
     [AskingTaskStatus.SEARCHING]: PROCESS_STATE.SEARCHING,
     [AskingTaskStatus.GENERATING]: PROCESS_STATE.GENERATING,
+    // Show generating state component when AI correcting
+    [AskingTaskStatus.CORRECTING]: PROCESS_STATE.GENERATING,
     [AskingTaskStatus.FINISHED]: PROCESS_STATE.FINISHED,
   }[data.status];
 
@@ -147,7 +148,6 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     } else if (question) {
       data = {
         sql: payload.sql,
-        summary: payload.summary,
         question,
       };
     }

@@ -1,12 +1,12 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef } from 'react';
-import { Alert, Divider } from 'antd';
+import { Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
-import { makeIterable } from '@/utils/iteration';
+import { makeIterable, IterableComponent } from '@/utils/iteration';
 import {
-  AskingTaskStatus,
   DetailedThread,
+  ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 import { getIsFinished } from '@/hooks/useAskPrompt';
 
@@ -39,49 +39,34 @@ const StyledPromptThread = styled.div`
   }
 `;
 
-const AnswerResultTemplate = ({
-  id,
+const AnswerResultTemplate: React.FC<
+  IterableComponent<ThreadResponse> & {
+    motion: boolean;
+    onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+    onInitPreviewDone: () => void;
+  }
+> = ({
   data,
   index,
-  error,
-  status,
-  detail,
-  summary,
-  question,
   motion,
-  // callbacks
   onOpenSaveAsViewModal,
   onInitPreviewDone,
+  ...threadResponse
 }) => {
+  const { id } = threadResponse;
   const lastResponseId = data[data.length - 1].id;
   const isLastThreadResponse = id === lastResponseId;
 
   return (
     <div key={`${id}-${index}`}>
       {index > 0 && <Divider />}
-      {error ? (
-        <Alert
-          message={error.shortMessage}
-          description={error.message}
-          type="error"
-          showIcon
-        />
-      ) : (
-        <AnswerResult
-          motion={motion}
-          answerResultSteps={detail?.steps}
-          description={detail?.description}
-          loading={status !== AskingTaskStatus.FINISHED}
-          question={question}
-          summary={summary}
-          view={detail?.view}
-          fullSql={detail?.sql}
-          threadResponseId={id}
-          onOpenSaveAsViewModal={onOpenSaveAsViewModal}
-          onInitPreviewDone={onInitPreviewDone}
-          isLastThreadResponse={isLastThreadResponse}
-        />
-      )}
+      <AnswerResult
+        motion={motion}
+        isLastThreadResponse={isLastThreadResponse}
+        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
+        onInitPreviewDone={onInitPreviewDone}
+        threadResponse={threadResponse}
+      />
     </div>
   );
 };

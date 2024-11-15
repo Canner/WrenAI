@@ -41,7 +41,6 @@ export interface AskingTask {
   status: AskResultStatus;
   candidates: Array<{
     sql: string;
-    summary: string;
   }>;
   error: WrenAIError | null;
 }
@@ -50,7 +49,6 @@ export interface AskingTask {
 export interface DetailedThread {
   id: number; // ID
   sql: string; // SQL
-  summary: string; // Thread summary
   responses: ThreadResponse[];
 }
 
@@ -207,7 +205,6 @@ export class AskingResolver {
         return {
           type: response.type,
           sql: response.sql,
-          summary: response.summary,
           view,
         };
       }),
@@ -227,7 +224,6 @@ export class AskingResolver {
       data: {
         question?: string;
         sql?: string;
-        summary?: string;
         viewId?: number;
       };
     },
@@ -272,20 +268,12 @@ export class AskingResolver {
         if (!acc.id) {
           acc.id = response.threadId;
           acc.sql = response.sql;
-          acc.summary = response.threadSummary;
           acc.responses = [];
         }
 
         acc.responses.push({
           id: response.id,
           question: response.question,
-
-          // we added summary in version 0.3.0.
-          // if summary is not available, we use description and question instead.
-          summary:
-            response.summary ||
-            response.detail?.description ||
-            response.question,
           status: response.status,
           detail: response.detail,
           error: response.error,
@@ -357,7 +345,6 @@ export class AskingResolver {
       data: {
         question?: string;
         sql?: string;
-        summary?: string;
         viewId?: number;
       };
     },
@@ -395,13 +382,7 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
 
-    // we added summary in version 0.3.0.
-    // if summary is not available, we use description and question instead.
-    return {
-      ...response,
-      summary:
-        response.summary || response.detail?.description || response.question,
-    };
+    return response;
   }
 
   public async previewData(

@@ -51,8 +51,11 @@ export interface AskingTaskInput {
 export interface AskingDetailTaskInput {
   question?: string;
   sql?: string;
-  summary?: string;
   viewId?: number;
+}
+
+export interface AskingDetailTaskUpdateInput {
+  summary?: string;
 }
 
 export enum RecommendQuestionResultStatus {
@@ -92,7 +95,7 @@ export interface IAskingService {
   ): Promise<Thread>;
   updateThread(
     threadId: number,
-    input: Partial<AskingDetailTaskInput>,
+    input: Partial<AskingDetailTaskUpdateInput>,
   ): Promise<Thread>;
   deleteThread(threadId: number): Promise<void>;
   listThreads(): Promise<Thread[]>;
@@ -460,7 +463,7 @@ export class AskingService implements IAskingService {
     const deployId = await this.getDeployId();
 
     // if it's a follow-up question, then the input will have a threadId
-    // then use the threadId to get the sql, summary and get the steps of last thread response
+    // then use the threadId to get the sql and get the steps of last thread response
     // construct it into AskHistory and pass to ask
     const history: AskHistory = threadId
       ? await this.getHistory(threadId)
@@ -514,7 +517,6 @@ export class AskingService implements IAskingService {
     const response = await this.wrenAIAdaptor.generateAskDetail({
       query: input.question,
       sql: input.sql,
-      summary: input.summary,
       configurations: { language },
     });
 
@@ -523,15 +525,13 @@ export class AskingService implements IAskingService {
     const thread = await this.threadRepository.createOne({
       projectId: id,
       sql: input.sql,
-      summary: input.summary,
+      summary: input.question,
     });
 
-    // in follow-up questions, we still need to save the summary
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: response.queryId,
       question: input.question,
-      summary: input.summary,
       status: AskResultStatus.UNDERSTANDING,
     });
 
@@ -549,7 +549,7 @@ export class AskingService implements IAskingService {
 
   public async updateThread(
     threadId: number,
-    input: Partial<AskingDetailTaskInput>,
+    input: Partial<AskingDetailTaskUpdateInput>,
   ): Promise<Thread> {
     // if input is empty, throw error
     if (isEmpty(input)) {
@@ -594,18 +594,15 @@ export class AskingService implements IAskingService {
     const response = await this.wrenAIAdaptor.generateAskDetail({
       query: input.question,
       sql: input.sql,
-      summary: input.summary,
       configurations: { language },
     });
 
     // 2. create a thread and the first thread response
-    // in follow-up questions, we still need to save the summary
     // insert question first, another API  all the asked questions to generate the next recommendation questions
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: response.queryId,
       question: input.question,
-      summary: input.summary,
       status: AskResultStatus.UNDERSTANDING,
     });
 
@@ -718,7 +715,6 @@ export class AskingService implements IAskingService {
     const latestResponse = responses[0];
     return {
       sql: latestResponse.sql,
-      summary: latestResponse.summary,
       steps: latestResponse.detail.steps,
     };
   }
@@ -747,7 +743,6 @@ export class AskingService implements IAskingService {
       threadId: thread.id,
       queryId: QUERY_ID_PLACEHOLDER,
       question: properties.question,
-      summary: properties.summary,
       status: AskResultStatus.FINISHED,
       detail: {
         ...properties.detail,
