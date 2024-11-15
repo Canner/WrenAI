@@ -16,6 +16,7 @@ import {
   useCreateThreadMutation,
   useGenerateThreadRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
+import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 
 const { Text } = Typography;
 
@@ -56,12 +57,16 @@ function RecommendedQuestionsInstruction(props) {
   } = useRecommendedQuestionsInstruction();
 
   return showRecommendedQuestionsPromptMode ? (
-    <div className="d-flex align-center flex-column pt-15">
+    <div
+      className="d-flex align-center flex-column pt-10"
+      style={{ margin: 'auto' }}
+    >
       <RecommendedQuestionsPrompt
         recommendedQuestions={recommendedQuestions}
         onSelect={onSelect}
         buttonProps={buttonProps}
       />
+      <div className="py-12" />
     </div>
   ) : (
     <Wrapper>
@@ -98,12 +103,17 @@ export default function Home() {
   const [generateThreadRecommendationQuestions] =
     useGenerateThreadRecommendationQuestionsMutation();
 
+  const { data: settingsResult } = useGetSettingsQuery();
+  const settings = settingsResult?.settings;
+  const isSampleDataset = useMemo(
+    () => Boolean(settings?.dataSource?.sampleDataset),
+    [settings],
+  );
+
   const sampleQuestions = useMemo(
     () => suggestedQuestionsData?.suggestedQuestions.questions || [],
     [suggestedQuestionsData],
   );
-
-  const isSampleDataset = sampleQuestions.length > 0;
 
   const onSelectQuestion = async ({ question }) => {
     $prompt.current.setValue(question);
@@ -136,7 +146,6 @@ export default function Home() {
       {!isSampleDataset && (
         <RecommendedQuestionsInstruction onSelect={onSelectQuestion} />
       )}
-
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
     </SiderLayout>
   );

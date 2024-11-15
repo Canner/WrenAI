@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { groupBy, map, orderBy } from 'lodash';
+import { groupBy, orderBy, flatMap } from 'lodash';
 import { message } from 'antd';
 import Icon from '@ant-design/icons';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
@@ -14,18 +14,21 @@ import {
   useGenerateProjectRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
 
-const getGroupedQuestions = (questions: ResultQuestion[]) => {
+interface GroupedQuestion {
+  category: string;
+  question: string;
+  sql: string;
+}
+
+const getGroupedQuestions = (
+  questions: ResultQuestion[],
+): GroupedQuestion[] => {
+  const groupedData = groupBy(questions, 'category');
   return orderBy(
-    map(groupBy(questions, 'category'), (questions, category) => ({
-      label: category,
-      questions: questions.slice(0, 3).map((q) => ({
-        question: q.question,
-        sql: q.sql,
-      })),
-    })),
-    (group) => group.questions.length,
-    'desc', // Sort by the number of questions in descending order
-  ).slice(0, 3); // Limit categories to the top 3
+    flatMap(groupedData),
+    (item) => groupedData[item.category].length, // Sort by number of questions in each category
+    'desc',
+  );
 };
 
 export default function useRecommendedQuestionsInstruction() {
@@ -37,10 +40,7 @@ export default function useRecommendedQuestionsInstruction() {
     setShowRecommendedQuestionsPromptMode,
   ] = useState<boolean>(false);
   const [recommendedQuestions, setRecommendedQuestions] = useState<
-    Array<{
-      label: string;
-      questions: Array<{ question: string; sql: string }>;
-    }>
+    GroupedQuestion[]
   >([]);
 
   const [fetchRecommendationQuestions, recommendationQuestionsResult] =
