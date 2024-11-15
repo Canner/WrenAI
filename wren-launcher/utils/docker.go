@@ -26,8 +26,8 @@ const (
 	// please change the version when the version is updated
 	WREN_PRODUCT_VERSION    string = "0.10.0"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
-	AI_SERVICE_CONFIG_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
+	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
+	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
 )
 
 func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool) string {
@@ -39,9 +39,13 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	reg = regexp.MustCompile(`SHOULD_FORCE_DEPLOY=(.*)`)
 	str = reg.ReplaceAllString(str, "SHOULD_FORCE_DEPLOY=1")
 
-	// replace OPENAI_API_KEY
-	reg = regexp.MustCompile(`(?m)^OPENAI_API_KEY=(.*)`)
-	str = reg.ReplaceAllString(str, "OPENAI_API_KEY="+openaiApiKey)
+	// replace LLM_OPENAI_API_KEY
+	reg = regexp.MustCompile(`LLM_OPENAI_API_KEY=(.*)`)
+	str = reg.ReplaceAllString(str, "LLM_OPENAI_API_KEY="+openaiApiKey)
+
+	// replace EMBEDDER_OPENAI_API_KEY
+	reg = regexp.MustCompile(`EMBEDDER_OPENAI_API_KEY=(.*)`)
+	str = reg.ReplaceAllString(str, "EMBEDDER_OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
 	// it seems like using for telemetry to know the model, might be we can remove this in the future and provide a endpoint to get the information
@@ -149,8 +153,6 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 	// replace the generation model in config.yaml
 	config := string(content)
 	config = strings.ReplaceAll(config, "openai_llm.gpt-4o-mini", "openai_llm."+generationModel)
-	// disable the langfuse for starting wren-ai from the launcher
-	config = strings.ReplaceAll(config, "langfuse_enable: true", "langfuse_enable: false")
 
 	// write back to config.yaml
 	err = os.WriteFile(configPath, []byte(config), 0644)
