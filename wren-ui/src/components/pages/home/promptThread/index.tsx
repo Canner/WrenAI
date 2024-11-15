@@ -107,7 +107,15 @@ export default function PromptThread(props: Props) {
     if ((data.thread?.responses || []).length <= 1) return;
     const contentLayout = divRef.current?.parentElement;
     const lastChild = divRef.current?.lastElementChild as HTMLElement;
-    const lastChildElement = lastChild?.lastElementChild as HTMLElement;
+
+    let lastChildElement = lastChild?.lastElementChild as HTMLElement;
+    if (data.showRecommendedQuestions) {
+      const lastThreadResponseElement =
+        lastChild?.previousElementSibling as HTMLElement;
+      lastChildElement =
+        lastThreadResponseElement?.lastElementChild as HTMLElement;
+    }
+
     const dividerSpace = 48;
     if (contentLayout && lastChildElement) {
       contentLayout.scrollTo({
@@ -133,7 +141,7 @@ export default function PromptThread(props: Props) {
     );
     const lastResponseMotion = Object.values(motionResponsesRef.current).pop();
     triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
-  }, [data.thread?.responses]);
+  }, [data.thread?.responses, data.showRecommendedQuestions]);
 
   const onInitPreviewDone = () => {
     triggerScrollToBottom();
