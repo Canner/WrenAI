@@ -54,7 +54,7 @@ Endpoints:
    - **Path Parameter**:
      - `query_id`: The unique identifier of the query.
    - **Response**:
-     - `status`: The current status of the query (`"understanding"`, `"searching"`, `"generating"`, `"correcting"`, `"finished"`, `"failed"`, or `"stopped"`).
+     - `status`: The current status of the query (`"understanding"`, `"searching"`, `"generating"`, `"finished"`, `"failed"`, or `"stopped"`).
      - `type`: The type of result (`"MISLEADING_QUERY"`, `"GENERAL"`, or `"TEXT_TO_SQL"`).
      - `response`: (Optional) A list of SQL results, each containing:
        - `sql`: The generated SQL statement.

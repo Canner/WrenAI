@@ -101,7 +101,6 @@ class AskResultResponse(BaseModel):
         "understanding",
         "searching",
         "generating",
-        "correcting",
         "finished",
         "failed",
         "stopped",
