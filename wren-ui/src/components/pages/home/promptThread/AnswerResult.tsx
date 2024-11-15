@@ -44,7 +44,10 @@ interface Props {
 const QuestionTitle = (props) => {
   const { question, className } = props;
   return (
-    <Title className={clsx('d-flex bg-gray-1 rounded', className)} level={4}>
+    <Title
+      className={clsx('d-flex bg-gray-1 rounded mt-0', className)}
+      level={4}
+    >
       <MessageOutlined className="geekblue-5 mt-1 mr-3" />
       <Text className="text-medium gray-8">{question}</Text>
     </Title>

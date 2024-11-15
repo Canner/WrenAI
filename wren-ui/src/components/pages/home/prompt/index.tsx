@@ -23,7 +23,6 @@ import {
 interface Props {
   onSelect: (payload: {
     sql?: string;
-    summary?: string;
     question?: string;
     viewId?: number;
   }) => Promise<void>;
@@ -147,7 +146,6 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     } else if (question) {
       data = {
         sql: payload.sql,
-        summary: payload.summary,
         question,
       };
     }

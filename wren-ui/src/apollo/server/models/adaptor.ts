@@ -50,7 +50,6 @@ export interface AskStep {
 
 export interface AskHistory {
   sql: string;
-  summary: string;
   steps: Array<AskStep>;
 }
 
@@ -101,7 +100,6 @@ export interface AskResponse<R, S> {
 export interface AskDetailInput {
   query: string;
   sql: string;
-  summary: string;
   configurations?: AskConfigurations;
 }
 
@@ -117,7 +115,6 @@ export type AskResult = AskResponse<
   Array<{
     type: AskCandidateType;
     sql: string;
-    summary: string;
     viewId?: number | null;
   }>,
   AskResultStatus
