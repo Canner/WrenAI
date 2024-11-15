@@ -11,6 +11,7 @@ export const typeDefs = gql`
     MSSQL
     CLICK_HOUSE
     TRINO
+    SNOWFLAKE
   }
 
   enum ExpressionName {

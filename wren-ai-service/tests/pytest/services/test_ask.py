@@ -7,7 +7,12 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.generation import sql_correction, sql_generation
+from src.pipelines.generation import (
+    data_assistance,
+    intent_classification,
+    sql_correction,
+    sql_generation,
+)
 from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.providers import init_providers
@@ -24,6 +29,7 @@ from src.web.v1.services.semantics_preparation import (
 from tests.pytest.services.mocks import (
     GenerationMock,
     HistoricalQuestionMock,
+    IntentClassificationMock,
     RetrievalMock,
     SQLSummaryMock,
 )
@@ -37,6 +43,14 @@ def ask_service():
 
     return AskService(
         {
+            "intent_classification": intent_classification.IntentClassification(
+                llm_provider=llm_provider,
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
+            "data_assistance": data_assistance.DataAssistance(
+                llm_provider=llm_provider,
+            ),
             "retrieval": retrieval.Retrieval(
                 llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
@@ -149,6 +163,8 @@ async def test_ask_with_successful_query(
 def _ask_service_ttl_mock(query: str):
     return AskService(
         {
+            "intent_classification": IntentClassificationMock(),
+            "data_assistance": "",
             "retrieval": RetrievalMock(
                 [
                     f"mock document 1 for {query}",
@@ -157,7 +173,7 @@ def _ask_service_ttl_mock(query: str):
             ),
             "historical_question": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
-                valid=["select count(*) from books"],
+                valid=[{"sql": "select count(*) from books"}],
             ),
             "sql_summary": SQLSummaryMock(
                 results=[

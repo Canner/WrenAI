@@ -58,6 +58,7 @@ export default function CollapseContent(props: Props) {
     onChangeNativeSQL,
     nativeSQLResult,
   } = props;
+  const isStepViewSQL = !isViewFullSQL && isViewSQL;
 
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = Boolean(attributes.isLastStep) && hasNativeSQL;
@@ -127,7 +128,7 @@ export default function CollapseContent(props: Props) {
           />
         </div>
       )}
-      {(isViewSQL || isPreviewData) && (
+      {(isStepViewSQL || isPreviewData) && (
         <div className="d-flex justify-space-between">
           <Button
             className="gray-6"

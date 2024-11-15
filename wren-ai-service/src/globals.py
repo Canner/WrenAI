@@ -1,13 +1,15 @@
 import logging
 from dataclasses import asdict, dataclass
-from typing import Optional
 
 import toml
 
+from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
+    data_assistance,
     followup_sql_generation,
+    intent_classification,
     question_recommendation,
     relationship_recommendation,
     semantics_description,
@@ -58,12 +60,12 @@ class ServiceMetadata:
 
 def create_service_container(
     pipe_components: dict[str, PipelineComponent],
-    column_indexing_batch_size: Optional[int] = 50,
-    table_retrieval_size: Optional[int] = 10,
-    table_column_retrieval_size: Optional[int] = 100,
-    query_cache: Optional[dict] = {},
-    allow_using_db_schemas_without_pruning: Optional[bool] = False,
+    settings: Settings,
 ) -> ServiceContainer:
+    query_cache = {
+        "maxsize": settings.query_cache_maxsize,
+        "ttl": settings.query_cache_ttl,
+    }
     return ServiceContainer(
         semantics_description=SemanticsDescription(
             pipelines={
@@ -77,18 +79,24 @@ def create_service_container(
             pipelines={
                 "indexing": indexing.Indexing(
                     **pipe_components["indexing"],
-                    column_indexing_batch_size=column_indexing_batch_size,
+                    column_indexing_batch_size=settings.column_indexing_batch_size,
                 ),
             },
             **query_cache,
         ),
         ask_service=AskService(
             pipelines={
+                "intent_classification": intent_classification.IntentClassification(
+                    **pipe_components["intent_classification"],
+                ),
+                "data_assistance": data_assistance.DataAssistance(
+                    **pipe_components["data_assistance"]
+                ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["retrieval"],
-                    table_retrieval_size=table_retrieval_size,
-                    table_column_retrieval_size=table_column_retrieval_size,
-                    allow_using_db_schemas_without_pruning=allow_using_db_schemas_without_pruning,
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "historical_question": historical_question.HistoricalQuestion(
                     **pipe_components["historical_question"],
@@ -121,6 +129,9 @@ def create_service_container(
                 "sql_breakdown": sql_breakdown.SQLBreakdown(
                     **pipe_components["sql_breakdown"],
                 ),
+                "sql_summary": sql_summary.SQLSummary(
+                    **pipe_components["sql_summary"],
+                ),
             },
             **query_cache,
         ),
@@ -128,8 +139,8 @@ def create_service_container(
             pipelines={
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["retrieval"],
-                    table_retrieval_size=table_retrieval_size,
-                    table_column_retrieval_size=table_column_retrieval_size,
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
                 ),
                 "sql_expansion": sql_expansion.SQLExpansion(
                     **pipe_components["sql_expansion"],
@@ -174,8 +185,9 @@ def create_service_container(
                 ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["retrieval"],
-                    table_retrieval_size=table_retrieval_size,
-                    table_column_retrieval_size=table_column_retrieval_size,
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],

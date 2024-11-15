@@ -9,24 +9,7 @@ models:
         "max_tokens": 4096,
         "response_format": { "type": "json_object" },
       }
-api_key: sk-xxx
 api_base: https://api.openai.com/v1
-
----
-type: llm
-provider: azure_openai_llm
-models:
-  - model: gpt-4o
-    kwargs:
-      {
-        "temperature": 0,
-        "n": 1,
-        "max_tokens": 4096,
-        "response_format": { "type": "json_object" },
-      }
-api_key: sk-xxx
-api_base: https://api.openai.com/v1
-api_version: "2024-05-13"
 
 ---
 type: embedder
@@ -34,7 +17,6 @@ provider: openai_embedder
 models:
   - model: text-embedding-3-large
     dimension: 3072
-api_key: sk-xxx
 api_base: https://api.openai.com/v1
 timeout: 120
 
@@ -44,24 +26,9 @@ provider: wren_ui
 endpoint: http://localhost:3000
 
 ---
-type: engine
-provider: wren_ibis
-endpoint: http://localhost:8000
-source: bigquery
-manifest: "" # base64 encoded string of the MDL
-connection_info: "" # base64 encoded string of the connection info
-
----
-type: engine
-provider: wren_engine
-endpoint: http://localhost:8080
-manifest: ""
-
----
 type: document_store
 provider: qdrant
 location: http://localhost:6333
-api_key: ""
 embedding_model_dim: 3072
 timeout: 120
 
@@ -108,5 +75,18 @@ pipes:
   - name: relationship_recommendation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
-  - name: question_recommendation
-    llm: openai_llm.gpt-4o-mini
+
+---
+settings:
+  host: 127.0.0.1
+  port: 5556
+  column_indexing_batch_size: 50
+  table_retrieval_size: 10
+  table_column_retrieval_size: 1000
+  query_cache_maxsize: 1000
+  query_cache_ttl: 3600
+  langfuse_host: https://cloud.langfuse.com
+  langfuse_enable: false
+  enable_timer: false
+  logging_level: INFO
+  development: false

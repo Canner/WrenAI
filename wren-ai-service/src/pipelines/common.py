@@ -243,6 +243,8 @@ TEXT_TO_SQL_RULES = """
     SQL
     SELECT _orders.ApprovedTimestamp AS _timestamp FROM orders AS _orders;
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
+- DON'T USE "FILTER(WHERE <condition>)" clause in the query.
+- DON'T USE "EXTRACT(EPOCH FROM <timestamp_column>)" clause in the query.
 - ONLY USE the following SQL functions if you need to when generating answers:
   - Aggregation functions:
     - AVG
@@ -462,3 +464,27 @@ def show_current_time(timezone: AskConfigurations.Timezone):
     current_time = datetime.now(tz)
 
     return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
+
+
+def _build_table_ddl(
+    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+) -> str:
+    columns_ddl = []
+    for column in content["columns"]:
+        if column["type"] == "COLUMN":
+            if not columns or (columns and column["name"] in columns):
+                column_ddl = (
+                    f"{column['comment']}{column['name']} {column['data_type']}"
+                )
+                if column["is_primary_key"]:
+                    column_ddl += " PRIMARY KEY"
+                columns_ddl.append(column_ddl)
+        elif column["type"] == "FOREIGN_KEY":
+            if not tables or (tables and set(column["tables"]).issubset(tables)):
+                columns_ddl.append(f"{column['comment']}{column['constraint']}")
+
+    return (
+        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
+    )
