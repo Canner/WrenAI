@@ -14,6 +14,7 @@ import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
 import SQLServerProperties from './dataSources/SQLServerProperties';
 import ClickHouseProperties from './dataSources/ClickHouseProperties';
 import TrinoProperties from './dataSources/TrinoProperties';
+import SnowflakeProperties from './dataSources/SnowflakeProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 import { ERROR_CODES } from '@/utils/errorHandler';
 
@@ -102,6 +103,12 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/oss/guide/connect/trino',
     disabled: false,
   },
+  [DATA_SOURCES.SNOWFLAKE]: {
+    label: 'Snowflake',
+    logo: '/images/dataSource/snowflake.svg',
+    guide: 'https://docs.getwren.ai/oss/guide/connect/snowflake',
+    disabled: false,
+  },
 } as { [key: string]: ButtonOption };
 
 export const DATA_SOURCE_FORM = {
@@ -112,6 +119,7 @@ export const DATA_SOURCE_FORM = {
   [DATA_SOURCES.MSSQL]: { component: SQLServerProperties },
   [DATA_SOURCES.CLICK_HOUSE]: { component: ClickHouseProperties },
   [DATA_SOURCES.TRINO]: { component: TrinoProperties },
+  [DATA_SOURCES.SNOWFLAKE]: { component: SnowflakeProperties },
 };
 
 export const TEMPLATE_OPTIONS = {
@@ -165,6 +173,10 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
       [DATA_SOURCES.TRINO]: merge(
         DATA_SOURCE_OPTIONS[DATA_SOURCES.TRINO],
         DATA_SOURCE_FORM[DATA_SOURCES.TRINO],
+      ),
+      [DATA_SOURCES.SNOWFLAKE]: merge(
+        DATA_SOURCE_OPTIONS[DATA_SOURCES.SNOWFLAKE],
+        DATA_SOURCE_FORM[DATA_SOURCES.SNOWFLAKE],
       ),
     }[dataSource] || defaultDataSource
   );

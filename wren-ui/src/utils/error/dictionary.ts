@@ -46,6 +46,9 @@ export const ERROR_TEXTS = {
     CATALOG: {
       REQUIRED: 'Please input catalog name.',
     },
+    ACCOUNT: {
+      REQUIRED: 'Please input account.',
+    },
   },
   ADD_RELATION: {
     FROM_FIELD: {
