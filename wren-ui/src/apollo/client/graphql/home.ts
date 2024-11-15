@@ -13,7 +13,6 @@ const COMMON_RESPONSE = gql`
   fragment CommonResponse on ThreadResponse {
     id
     question
-    summary
     status
     detail {
       sql
@@ -51,7 +50,6 @@ export const ASKING_TASK = gql`
       type
       candidates {
         sql
-        summary
         type
         view {
           id
@@ -82,7 +80,6 @@ export const THREAD = gql`
     thread(threadId: $threadId) {
       id
       sql
-      summary
       responses {
         ...CommonResponse
         error {
@@ -127,7 +124,6 @@ export const CREATE_THREAD = gql`
     createThread(data: $data) {
       id
       sql
-      summary
     }
   }
 `;

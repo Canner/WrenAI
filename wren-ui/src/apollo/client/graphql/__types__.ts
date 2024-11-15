@@ -28,6 +28,7 @@ export type AskingTaskInput = {
 };
 
 export enum AskingTaskStatus {
+  CORRECTING = 'CORRECTING',
   FAILED = 'FAILED',
   FINISHED = 'FINISHED',
   GENERATING = 'GENERATING',
@@ -98,14 +99,12 @@ export type CreateSimpleMetricInput = {
 export type CreateThreadInput = {
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
-  summary?: InputMaybe<Scalars['String']>;
   viewId?: InputMaybe<Scalars['Int']>;
 };
 
 export type CreateThreadResponseInput = {
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
-  summary?: InputMaybe<Scalars['String']>;
   viewId?: InputMaybe<Scalars['Int']>;
 };
 
@@ -233,7 +232,6 @@ export type DetailedThread = {
   responses: Array<ThreadResponse>;
   /** @deprecated Doesn't seem to be reasonable to put a sql in a thread */
   sql: Scalars['String'];
-  summary: Scalars['String'];
 };
 
 export type Diagram = {
@@ -848,7 +846,6 @@ export type ResolveSchemaChangeWhereInput = {
 export type ResultCandidate = {
   __typename?: 'ResultCandidate';
   sql: Scalars['String'];
-  summary: Scalars['String'];
   type: ResultCandidateType;
   view?: Maybe<ViewInfo>;
 };
@@ -954,7 +951,6 @@ export type ThreadResponse = {
   id: Scalars['Int'];
   question: Scalars['String'];
   status: AskingTaskStatus;
-  summary: Scalars['String'];
 };
 
 export type ThreadResponseDetail = {

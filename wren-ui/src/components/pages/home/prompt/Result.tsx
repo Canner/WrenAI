@@ -41,7 +41,7 @@ interface Props {
     recommendedQuestions: RecommendedQuestionsTask;
   };
   error?: any;
-  onSelectResult: (payload: { sql: string; summary: string }) => void;
+  onSelectResult: (payload: { sql: string }) => void;
   onSelectQuestion: (question: string) => void;
   onClose: () => void;
   onStop: () => void;
@@ -160,8 +160,7 @@ const Finished = (props: Props) => {
   useEffect(() => {
     if (candidates.length) {
       const [result] = candidates;
-      onSelectResult &&
-        onSelectResult({ sql: result.sql, summary: result.summary });
+      onSelectResult && onSelectResult({ sql: result.sql });
     }
   }, [data]);
 

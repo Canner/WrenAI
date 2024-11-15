@@ -150,7 +150,8 @@ export default function useAskPrompt(threadId?: number) {
 
   const onStopRecommend = () => instantRecommendedQuestionsResult.stopPolling();
 
-  const onStoreThreadQuestions = (questions: string[]) => setThreadQuestions(questions);
+  const onStoreThreadQuestions = (questions: string[]) =>
+    setThreadQuestions(questions);
 
   return {
     data,

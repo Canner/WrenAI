@@ -536,6 +536,7 @@ export const typeDefs = gql`
     UNDERSTANDING
     SEARCHING
     GENERATING
+    CORRECTING
     FINISHED
     FAILED
     STOPPED
@@ -555,7 +556,6 @@ export const typeDefs = gql`
   type ResultCandidate {
     type: ResultCandidateType!
     sql: String!
-    summary: String!
     view: ViewInfo
   }
 
@@ -593,14 +593,12 @@ export const typeDefs = gql`
   input CreateThreadInput {
     question: String
     sql: String
-    summary: String
     viewId: Int
   }
 
   input CreateThreadResponseInput {
     question: String
     sql: String
-    summary: String
     viewId: Int
   }
 
@@ -637,7 +635,6 @@ export const typeDefs = gql`
   type ThreadResponse {
     id: Int!
     question: String!
-    summary: String!
     status: AskingTaskStatus!
     detail: ThreadResponseDetail
     error: Error
@@ -660,7 +657,6 @@ export const typeDefs = gql`
       @deprecated(
         reason: "Doesn't seem to be reasonable to put a sql in a thread"
       )
-    summary: String!
     responses: [ThreadResponse!]!
   }
 

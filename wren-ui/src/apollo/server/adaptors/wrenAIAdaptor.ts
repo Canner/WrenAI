@@ -34,7 +34,7 @@ export interface IWrenAIAdaptor {
 
   /**
    * Ask AI service a question.
-   * AI service will return anwser candidates containing sql and summary.
+   * AI service will return anwser candidates containing sql.
    * 1. use ask() to ask a question, AI service will return a queryId
    * 2. use getAskResult() to get the result of the queryId
    * 3. use cancelAsk() to cancel the query
@@ -72,7 +72,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   /**
    * Ask AI service a question.
-   * AI service will return anwser candidates containing sql and summary.
+   * AI service will return anwser candidates containing sql.
    */
 
   public async ask(input: AskInput): Promise<AsyncQueryResponse> {
@@ -307,7 +307,6 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     const candidates = (body?.response || []).map((candidate: any) => ({
       type: candidate?.type?.toUpperCase() as AskCandidateType,
       sql: candidate.sql,
-      summary: candidate.summary,
       viewId: candidate?.viewId ? Number(candidate.viewId) : null,
     }));
 

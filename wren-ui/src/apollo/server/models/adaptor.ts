@@ -50,7 +50,6 @@ export interface AskStep {
 
 export interface AskHistory {
   sql: string;
-  summary: string;
   steps: Array<AskStep>;
 }
 
@@ -73,6 +72,7 @@ export enum AskResultStatus {
   UNDERSTANDING = 'UNDERSTANDING',
   SEARCHING = 'SEARCHING',
   GENERATING = 'GENERATING',
+  CORRECTING = 'CORRECTING',
   FINISHED = 'FINISHED',
   FAILED = 'FAILED',
   STOPPED = 'STOPPED',
@@ -101,7 +101,6 @@ export interface AskResponse<R, S> {
 export interface AskDetailInput {
   query: string;
   sql: string;
-  summary: string;
   configurations?: AskConfigurations;
 }
 
@@ -117,7 +116,6 @@ export type AskResult = AskResponse<
   Array<{
     type: AskCandidateType;
     sql: string;
-    summary: string;
     viewId?: number | null;
   }>,
   AskResultStatus
