@@ -153,8 +153,6 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 	// replace the generation model in config.yaml
 	config := string(content)
 	config = strings.ReplaceAll(config, "openai_llm.gpt-4o-mini", "openai_llm."+generationModel)
-	// disable the langfuse for starting wren-ai from the launcher
-	config = strings.ReplaceAll(config, "langfuse_enable: true", "langfuse_enable: false")
 
 	// write back to config.yaml
 	err = os.WriteFile(configPath, []byte(config), 0644)
