@@ -157,7 +157,7 @@ class AsyncGenerator(OpenAIGenerator):
 class OpenAILLMProvider(LLMProvider):
     def __init__(
         self,
-        api_key: str = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_OPENAI_API_KEY"),
+        api_key: str = os.getenv("LLM_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_OPENAI_API_BASE") or LLM_OPENAI_API_BASE,
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
         kwargs: Dict[str, Any] = (
