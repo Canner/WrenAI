@@ -142,12 +142,11 @@ class GenerationResults(BaseModel):
 
 SQL_GENERATION_MODEL_KWARGS = {
     "response_format": {
-        "type": "text",
-        # "type": "json_schema",
-        # "json_schema": {
-        #     "name": "sql_results",
-        #     "schema": GenerationResults.model_json_schema(),
-        # },
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_results",
+            "schema": GenerationResults.model_json_schema(),
+        },
     }
 }
 
