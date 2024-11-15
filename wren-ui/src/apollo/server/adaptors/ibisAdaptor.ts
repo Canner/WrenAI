@@ -52,12 +52,21 @@ export interface IbisTrinoConnectionInfo {
   password: string;
 }
 
+export interface IbisSnowflakeConnectionInfo {
+  user: string;
+  password: string;
+  account: string;
+  database: string;
+  schema: string;
+}
+
 export type IbisConnectionInfo =
   | UrlBasedConnectionInfo
   | HostBasedConnectionInfo
   | IbisPostgresConnectionInfo
   | IbisBigQueryConnectionInfo
-  | IbisTrinoConnectionInfo;
+  | IbisTrinoConnectionInfo
+  | IbisSnowflakeConnectionInfo;
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',

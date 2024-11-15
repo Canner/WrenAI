@@ -15,6 +15,7 @@ import {
   MYSQL_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
   TRINO_CONNECTION_INFO,
+  SNOWFLAKE_CONNECTION_INFO,
 } from '../../repositories';
 import { snakeCase } from 'lodash';
 import { Encryptor } from '../../utils';
@@ -80,6 +81,14 @@ describe('IbisAdaptor', () => {
     password: 'my-password',
     ssl: true,
     username: 'my-username',
+  };
+
+  const mockSnowflakeConnectionInfo: SNOWFLAKE_CONNECTION_INFO = {
+    user: 'my-user',
+    password: 'my-password',
+    account: 'my-account',
+    database: 'my-database',
+    schema: 'my-schema',
   };
 
   const mockManifest: Manifest = {
@@ -260,6 +269,29 @@ describe('IbisAdaptor', () => {
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v2/connector/trino/metadata/constraints`,
+      { connectionInfo: expectConnectionInfo },
+    );
+  });
+
+  it('should get snowflake constraints', async () => {
+    const mockResponse = { data: [] };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+    // mock decrypt method in Encryptor to return the same password
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockSnowflakeConnectionInfo.password }),
+    );
+
+    const result = await ibisAdaptor.getConstraints(
+      DataSourceName.SNOWFLAKE,
+      mockSnowflakeConnectionInfo,
+    );
+    const expectConnectionInfo = Object.entries(
+      mockSnowflakeConnectionInfo,
+    ).reduce((acc, [key, value]) => ((acc[snakeCase(key)] = value), acc), {});
+
+    expect(result).toEqual([]);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/connector/snowflake/metadata/constraints`,
       { connectionInfo: expectConnectionInfo },
     );
   });

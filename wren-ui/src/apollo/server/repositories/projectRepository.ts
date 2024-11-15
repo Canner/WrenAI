@@ -60,6 +60,14 @@ export interface TRINO_CONNECTION_INFO {
   ssl: boolean;
 }
 
+export interface SNOWFLAKE_CONNECTION_INFO {
+  user: string;
+  password: string;
+  account: string;
+  database: string;
+  schema: string;
+}
+
 export interface DUCKDB_CONNECTION_INFO {
   initSql: string;
   extensions: Array<string>;
@@ -73,7 +81,8 @@ export type WREN_AI_CONNECTION_INFO =
   | DUCKDB_CONNECTION_INFO
   | MS_SQL_CONNECTION_INFO
   | CLICK_HOUSE_CONNECTION_INFO
-  | TRINO_CONNECTION_INFO;
+  | TRINO_CONNECTION_INFO
+  | SNOWFLAKE_CONNECTION_INFO;
 
 export interface Project {
   id: number; // ID

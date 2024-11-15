@@ -131,7 +131,8 @@ export enum DataSourceName {
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES',
-  TRINO = 'TRINO'
+  TRINO = 'TRINO',
+  SNOWFLAKE = 'SNOWFLAKE',
 }
 
 export type DetailStep = {
