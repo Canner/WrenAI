@@ -37,7 +37,7 @@ export interface SelectedRecommendRelations {
 interface Props {
   fetching: boolean;
   recommendRelations: SelectedRecommendRelations;
-  recommendNameMappping: Record<string, string>;
+  recommendNameMapping: Record<string, string>;
   onNext: (data: { relations: SelectedRecommendRelations }) => void;
   onBack: () => void;
   onSkip: () => void;
@@ -53,7 +53,7 @@ interface EditableRelationTableProps {
   }) => void;
   onDeleteRow: (modelName: string, selectedRelation: RelationsDataType) => void;
   relations: RelationsDataType[];
-  recommendNameMappping: Record<string, string>;
+  recommendNameMapping: Record<string, string>;
 }
 
 function EditableRelationTable(props: EditableRelationTableProps) {
@@ -63,7 +63,7 @@ function EditableRelationTable(props: EditableRelationTableProps) {
     onSetRelation,
     onDeleteRow,
     relations,
-    recommendNameMappping,
+    recommendNameMapping,
   } = props;
 
   const columns: ColumnsType<RelationsDataType> = [
@@ -130,12 +130,12 @@ function EditableRelationTable(props: EditableRelationTableProps) {
       <ModelRelationSelectionTable
         columns={columns}
         dataSource={relations}
-        tableTitle={recommendNameMappping[modelName]}
+        tableTitle={recommendNameMapping[modelName]}
         extra={(onCollapseOpen) => (
           <Button
             onClick={(event) => {
               onSetRelation({ modelName });
-              onCollapseOpen(event, recommendNameMappping[modelName]);
+              onCollapseOpen(event, recommendNameMapping[modelName]);
             }}
             size="small"
             title="Add relationship"
@@ -156,7 +156,7 @@ export default function DefineRelations(props: Props) {
   const {
     fetching,
     recommendRelations,
-    recommendNameMappping,
+    recommendNameMapping,
     onBack,
     onNext,
     onSkip,
@@ -298,7 +298,7 @@ export default function DefineRelations(props: Props) {
               relations={relations}
               onSetRelation={onSetRelation}
               onDeleteRow={onDeleteRow}
-              recommendNameMappping={recommendNameMappping}
+              recommendNameMapping={recommendNameMapping}
             />
           ),
         )}
@@ -361,6 +361,7 @@ export default function DefineRelations(props: Props) {
             : undefined
         }
         relations={relations}
+        isRecommendMode={Boolean(selectedRelation?.defaultValue)}
       />
     </div>
   );

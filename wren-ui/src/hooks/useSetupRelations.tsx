@@ -94,12 +94,12 @@ export default function useSetupRelations() {
           });
 
           acc['recommendRelations'][referenceName] = newRelations;
-          acc['recommendNameMappping'][referenceName] = displayName;
+          acc['recommendNameMapping'][referenceName] = displayName;
           return acc;
         },
         {
           recommendRelations: {},
-          recommendNameMappping: {},
+          recommendNameMapping: {},
         },
       ),
     [autoGenerateRelation],
