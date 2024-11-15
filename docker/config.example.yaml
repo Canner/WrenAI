@@ -21,30 +21,12 @@ api_base: https://api.openai.com/v1
 timeout: 120
 
 ---
-type: llm
-provider: ollama_llm
-models:
-  - model: gemma2:9b
-    kwargs: { "temperature": 0 }
-url: http://host.docker.internal:11434
-timeout: 120
-
----
 type: embedder
 provider: openai_embedder
 models:
   - model: text-embedding-3-large
     dimension: 3072
 api_base: https://api.openai.com/v1
-timeout: 120
-
----
-type: embedder
-provider: ollama_embedder
-models:
-  - model: nomic-embed-text
-    dimension: 786
-url: http://host.docker.internal:11434
 timeout: 120
 
 ---
