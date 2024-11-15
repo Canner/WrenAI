@@ -28,6 +28,7 @@ export type AskingTaskInput = {
 };
 
 export enum AskingTaskStatus {
+  CORRECTING = 'CORRECTING',
   FAILED = 'FAILED',
   FINISHED = 'FINISHED',
   GENERATING = 'GENERATING',

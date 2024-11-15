@@ -536,6 +536,7 @@ export const typeDefs = gql`
     UNDERSTANDING
     SEARCHING
     GENERATING
+    CORRECTING
     FINISHED
     FAILED
     STOPPED
