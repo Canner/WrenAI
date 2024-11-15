@@ -1,9 +1,9 @@
 import logging
 from dataclasses import asdict, dataclass
-from typing import Optional
 
 import toml
 
+from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
@@ -60,12 +60,12 @@ class ServiceMetadata:
 
 def create_service_container(
     pipe_components: dict[str, PipelineComponent],
-    column_indexing_batch_size: Optional[int] = 50,
-    table_retrieval_size: Optional[int] = 10,
-    table_column_retrieval_size: Optional[int] = 100,
-    query_cache: Optional[dict] = {},
-    allow_using_db_schemas_without_pruning: Optional[bool] = False,
+    settings: Settings,
 ) -> ServiceContainer:
+    query_cache = {
+        "maxsize": settings.query_cache_maxsize,
+        "ttl": settings.query_cache_ttl,
+    }
     return ServiceContainer(
         semantics_description=SemanticsDescription(
             pipelines={
@@ -79,7 +79,7 @@ def create_service_container(
             pipelines={
                 "indexing": indexing.Indexing(
                     **pipe_components["indexing"],
-                    column_indexing_batch_size=column_indexing_batch_size,
+                    column_indexing_batch_size=settings.column_indexing_batch_size,
                 ),
             },
             **query_cache,
@@ -94,9 +94,9 @@ def create_service_container(
                 ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["retrieval"],
-                    table_retrieval_size=table_retrieval_size,
-                    table_column_retrieval_size=table_column_retrieval_size,
-                    allow_using_db_schemas_without_pruning=allow_using_db_schemas_without_pruning,
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "historical_question": historical_question.HistoricalQuestion(
                     **pipe_components["historical_question"],
@@ -139,8 +139,8 @@ def create_service_container(
             pipelines={
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["retrieval"],
-                    table_retrieval_size=table_retrieval_size,
-                    table_column_retrieval_size=table_column_retrieval_size,
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
                 ),
                 "sql_expansion": sql_expansion.SQLExpansion(
                     **pipe_components["sql_expansion"],
@@ -185,8 +185,9 @@ def create_service_container(
                 ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["retrieval"],
-                    table_retrieval_size=table_retrieval_size,
-                    table_column_retrieval_size=table_column_retrieval_size,
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],

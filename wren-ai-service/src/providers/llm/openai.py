@@ -157,7 +157,7 @@ class AsyncGenerator(OpenAIGenerator):
 class OpenAILLMProvider(LLMProvider):
     def __init__(
         self,
-        api_key: str = os.getenv("LLM_OPENAI_API_KEY"),
+        api_key: str = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_OPENAI_API_BASE") or LLM_OPENAI_API_BASE,
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
         kwargs: Dict[str, Any] = (
@@ -179,8 +179,12 @@ class OpenAILLMProvider(LLMProvider):
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
         if self._api_base == LLM_OPENAI_API_BASE:
             logger.info(f"Using OpenAI LLM: {self._generation_model}")
+            logger.info(f"Using OpenAI LLM model kwargs: {self._model_kwargs}")
         else:
             logger.info(f"Using OpenAI API-compatible LLM: {self._generation_model}")
+            logger.info(
+                f"Using OpenAI API-compatible LLM model kwargs: {self._model_kwargs}"
+            )
 
     def get_generator(
         self,
@@ -189,15 +193,6 @@ class OpenAILLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        if self._api_base == LLM_OPENAI_API_BASE:
-            logger.info(
-                f"Creating OpenAI generator {self._generation_model} with model kwargs: {self._model_kwargs}"
-            )
-        else:
-            logger.info(
-                f"Creating OpenAI API-compatible generator {self._generation_model} with model kwargs: {self._model_kwargs}"
-            )
-
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,

@@ -345,12 +345,23 @@ class QdrantProvider(DocumentStoreProvider):
         or get_default_embedding_model_dim(
             os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
         ),
+        recreate_index: bool = (
+            bool(os.getenv("SHOULD_FORCE_DEPLOY"))
+            if os.getenv("SHOULD_FORCE_DEPLOY")
+            else False
+        ),
         **_,
     ):
         self._location = location
         self._api_key = Secret.from_token(api_key) if api_key else None
         self._timeout = timeout
         self._embedding_model_dim = embedding_model_dim
+        self._reset_document_store(recreate_index)
+
+    def _reset_document_store(self, recreate_index: bool):
+        self.get_store(recreate_index=recreate_index)
+        self.get_store(dataset_name="table_descriptions", recreate_index=recreate_index)
+        self.get_store(dataset_name="view_questions", recreate_index=recreate_index)
 
     def get_store(
         self,

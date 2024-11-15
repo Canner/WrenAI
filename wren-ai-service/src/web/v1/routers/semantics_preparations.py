@@ -1,4 +1,3 @@
-import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends
@@ -9,16 +8,14 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-
-router = APIRouter()
-
-
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationResponse,
     SemanticsPreparationStatusRequest,
     SemanticsPreparationStatusResponse,
 )
+
+router = APIRouter()
 
 
 """
@@ -94,5 +91,3 @@ async def get_prepare_semantics_status(
     return service_container.semantics_preparation_service.get_prepare_semantics_status(
         SemanticsPreparationStatusRequest(mdl_hash=mdl_hash)
     )
-
-
