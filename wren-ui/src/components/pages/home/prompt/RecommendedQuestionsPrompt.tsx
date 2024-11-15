@@ -25,6 +25,8 @@ const QuestionBlock = styled.div`
   }
 `;
 
+const MAX_EXPANDED_QUESTIONS = 9;
+
 const QuestionTemplate = ({ category, sql, question, onSelect }) => {
   return (
     <Col span={8}>
@@ -51,12 +53,15 @@ export default function RecommendedQuestionsPrompt(props) {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   const questionList = useMemo(() => {
-    return recommendedQuestions.slice(0, isExpanded ? undefined : 9);
+    return recommendedQuestions.slice(
+      0,
+      isExpanded ? undefined : MAX_EXPANDED_QUESTIONS,
+    );
   }, [recommendedQuestions, isExpanded]);
 
   const onHandleToggle = () => setIsExpanded((prev) => !prev);
 
-  const showExpandButton = recommendedQuestions.length > 9;
+  const showExpandButton = recommendedQuestions.length > MAX_EXPANDED_QUESTIONS;
 
   return (
     <div className="bg-gray-2 px-10 py-6">
