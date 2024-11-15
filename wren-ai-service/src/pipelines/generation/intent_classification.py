@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import _build_table_ddl
+from src.pipelines.common import build_table_ddl
 from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -150,7 +150,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
             db_schemas_in_ddl.append(
-                _build_table_ddl(
+                build_table_ddl(
                     table_schema,
                 )
             )
