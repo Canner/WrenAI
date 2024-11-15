@@ -195,7 +195,7 @@ export const INSTANT_RECOMMENDED_QUESTIONS = gql`
       questions {
         question
         category
-        explanation
+        sql
       }
       error {
         ...CommonError

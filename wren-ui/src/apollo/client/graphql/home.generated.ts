@@ -108,7 +108,7 @@ export type InstantRecommendedQuestionsQueryVariables = Types.Exact<{
 }>;
 
 
-export type InstantRecommendedQuestionsQuery = { __typename?: 'Query', instantRecommendedQuestions: { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, explanation: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+export type InstantRecommendedQuestionsQuery = { __typename?: 'Query', instantRecommendedQuestions: { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, sql: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
 
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
@@ -652,7 +652,7 @@ export const InstantRecommendedQuestionsDocument = gql`
     questions {
       question
       category
-      explanation
+      sql
     }
     error {
       ...CommonError

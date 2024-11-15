@@ -858,8 +858,8 @@ export enum ResultCandidateType {
 export type ResultQuestion = {
   __typename?: 'ResultQuestion';
   category: Scalars['String'];
-  explanation: Scalars['String'];
   question: Scalars['String'];
+  sql: Scalars['String'];
 };
 
 export type SampleDatasetInput = {
