@@ -1,0 +1,3 @@
+services:
+  wren-ai-service:
+    env_file: ${PROJECT_DIR}/.env.ai

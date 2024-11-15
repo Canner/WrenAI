@@ -8,15 +8,16 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
+
+router = APIRouter()
+
+
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationResponse,
     SemanticsPreparationStatusRequest,
     SemanticsPreparationStatusResponse,
 )
-
-router = APIRouter()
-
 
 """
 Semantics Preparation Router

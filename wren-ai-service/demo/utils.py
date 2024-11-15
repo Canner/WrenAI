@@ -579,20 +579,47 @@ CREATE TABLE dept_manager AS FROM read_parquet('https://assets.getwren.ai/sample
 def _replace_wren_engine_env_variables(engine_type: str, data: dict):
     assert engine_type in ("wren_engine", "wren_ibis")
 
-    with open("config.yaml", "r") as f:
-        configs = list(yaml.safe_load_all(f))
+    if not Path("config.yaml").exists():
+        if engine_type == "wren_engine":
+            with open(".env.dev", "r") as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if line.startswith("ENGINE"):
+                        lines[i] = "ENGINE=wren_engine\n"
+                    elif line.startswith("WREN_ENGINE_MANIFEST"):
+                        lines[i] = f"WREN_ENGINE_MANIFEST={data['manifest']}\n"
+        else:
+            with open(".env.dev", "r") as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if line.startswith("ENGINE"):
+                        lines[i] = "ENGINE=wren_ibis\n"
+                    elif line.startswith("WREN_IBIS_SOURCE"):
+                        lines[i] = f"WREN_IBIS_SOURCE={data['source']}\n"
+                    elif line.startswith("WREN_IBIS_MANIFEST"):
+                        lines[i] = f"WREN_IBIS_MANIFEST={data['manifest']}\n"
+                    elif line.startswith("WREN_IBIS_CONNECTION_INFO"):
+                        lines[
+                            i
+                        ] = f"WREN_IBIS_CONNECTION_INFO={data['connection_info']}\n"
 
-        for config in configs:
-            if config.get("type") == "engine" and config.get("provider") == engine_type:
-                for key, value in data.items():
-                    config[key] = value
-            if "pipes" in config:
-                for i, pipe in enumerate(config["pipes"]):
-                    if "engine" in pipe:
-                        config["pipes"][i]["engine"] = engine_type
+        with open(".env.dev", "w") as f:
+            f.writelines(lines)
+    else:
+        with open("config.yaml", "r") as f:
+            configs = list(yaml.safe_load_all(f))
 
-    with open("config.yaml", "w") as f:
-        yaml.safe_dump_all(configs, f, default_flow_style=False)
+            for config in configs:
+                if config["type"] == "engine" and config["provider"] == engine_type:
+                    for key, value in data.items():
+                        config[key] = value
+                if "pipes" in config:
+                    for i, pipe in enumerate(config["pipes"]):
+                        if "engine" in pipe:
+                            config["pipes"][i]["engine"] = engine_type
+
+        with open("config.yaml", "w") as f:
+            yaml.safe_dump_all(configs, f, default_flow_style=False)
 
 
 def prepare_semantics(mdl_json: dict):

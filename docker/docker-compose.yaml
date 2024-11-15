@@ -54,18 +54,19 @@ services:
     environment:
       WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
       WREN_UI_PORT: ${WREN_UI_PORT}
-      QDRANT_HOST: ${QDRANT_HOST}
       WREN_UI_ENDPOINT: http://wren-ui:${WREN_UI_PORT}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
-      QDRANT_API_KEY: ${QDRANT_API_KEY}
+      QDRANT_HOST: ${QDRANT_HOST}
+      LLM_OPENAI_API_KEY: ${LLM_OPENAI_API_KEY}
+      EMBEDDER_OPENAI_API_KEY: ${EMBEDDER_OPENAI_API_KEY}
+      LLM_AZURE_OPENAI_API_KEY: ${LLM_AZURE_OPENAI_API_KEY}
+      EMBEDDER_AZURE_OPENAI_API_KEY: ${EMBEDDER_AZURE_OPENAI_API_KEY}
+      GENERATION_MODEL: ${GENERATION_MODEL}
+      ENABLE_TIMER: ${AI_SERVICE_ENABLE_TIMER}
+      LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
       SHOULD_FORCE_DEPLOY: ${SHOULD_FORCE_DEPLOY}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
-      CONFIG_PATH: /app/data/config.yaml
-    volumes:
-      - ${PROJECT_DIR}/config.yaml:/app/data/config.yaml
     networks:
       - wren
     depends_on:
@@ -93,7 +94,8 @@ services:
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
       WREN_AI_ENDPOINT: http://wren-ai-service:${WREN_AI_SERVICE_PORT}
       IBIS_SERVER_ENDPOINT: http://ibis-server:${IBIS_SERVER_PORT}
-      # this is for telemetry to know the model, i think ai-service might be able to provide a endpoint to get the information
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      EMBEDDING_MODEL_DIMENSION: ${EMBEDDING_MODEL_DIMENSION}
       GENERATION_MODEL: ${GENERATION_MODEL}
       # telemetry
       WREN_ENGINE_PORT: ${WREN_ENGINE_PORT}

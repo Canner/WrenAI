@@ -114,12 +114,12 @@ func askForGenerationModel() (string, error) {
 	return result, nil
 }
 
-func isConfigFileValidForCustomLLM(projectDir string) error {
-	// validate if config.yaml file exists in ~/.wrenai
-	configFilePath := path.Join(projectDir, "config.yaml")
+func isEnvFileValidForCustomLLM(projectDir string) error {
+	// validate if .env.ai file exists in ~/.wrenai
+	envFilePath := path.Join(projectDir, ".env.ai")
 
-	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
-		errMessage := fmt.Sprintf("Please create a config.yaml file in %s first, more details at https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
+	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
+		errMessage := fmt.Sprintf("Please create a .env.ai file in %s first, more details at https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
 		return errors.New(errMessage)
 	}
 
@@ -191,15 +191,9 @@ func Launch() {
 		if shouldReturn {
 			return
 		}
-
-		// prepare config.yaml file for OpenAI
-		err := utils.PrepareConfigFileForOpenAI(projectDir, openaiGenerationModel)
-		if err != nil {
-			panic(err)
-		}
 	} else {
-		// check if config.yaml file exists
-		err := isConfigFileValidForCustomLLM(projectDir)
+		// check if .env.ai file exists
+		err := isEnvFileValidForCustomLLM(projectDir)
 		if err != nil {
 			panic(err)
 		}
@@ -307,8 +301,8 @@ func getOpenaiGenerationModel() (string, bool) {
 		// validate if input args is a valid generation model
 		pterm.Info.Println("OpenAI generation model is provided")
 		validModels := map[string]bool{
-			"gpt-4o-mini": true,
-			"gpt-4o":      true,
+			"gpt-4o-mini":   true,
+			"gpt-4o":        true,
 		}
 		if !validModels[openaiGenerationModel] {
 			pterm.Error.Println("Invalid generation model", openaiGenerationModel)

@@ -1,3 +1,5 @@
+import logging
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -7,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
 from langfuse.decorators import langfuse_context
 
-from src.config import settings
 from src.globals import (
     create_service_container,
     create_service_metadata,
@@ -15,20 +16,52 @@ from src.globals import (
 from src.providers import generate_components
 from src.utils import (
     init_langfuse,
+    load_env_vars,
     setup_custom_logger,
 )
 from src.web.v1 import routers
 
-setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
+env = load_env_vars()
+setup_custom_logger(
+    "wren-ai-service",
+    level=(
+        logging.DEBUG if os.getenv("LOGGING_LEVEL", "INFO") == "DEBUG" else logging.INFO
+    ),
+)
 
 
 # https://fastapi.tiangolo.com/advanced/events/#lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-
-    pipe_components = generate_components(settings.components)
-    app.state.service_container = create_service_container(pipe_components, settings)
+    pipe_components = generate_components(force_deploy=os.getenv("SHOULD_FORCE_DEPLOY"))
+    app.state.service_container = create_service_container(
+        pipe_components,
+        column_indexing_batch_size=(
+            int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
+            if os.getenv("COLUMN_INDEXING_BATCH_SIZE")
+            else 50
+        ),
+        table_retrieval_size=(
+            int(os.getenv("TABLE_RETRIEVAL_SIZE"))
+            if os.getenv("TABLE_RETRIEVAL_SIZE")
+            else 10
+        ),
+        table_column_retrieval_size=(
+            int(os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE"))
+            if os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE")
+            else 1000
+        ),
+        query_cache={
+            # the maxsize is a necessary parameter to init cache, but we don't want to expose it to the user
+            # so we set it to 1_000_000, which is a large number
+            "maxsize": 1_000_000,
+            "ttl": int(os.getenv("QUERY_CACHE_TTL") or 120),
+        },
+        allow_using_db_schemas_without_pruning=bool(
+            os.getenv("ALLOW_USING_DB_SCHEMAS_WITHOUT_PRUNING", False)
+        ),
+    )
     app.state.service_metadata = create_service_metadata(pipe_components)
     init_langfuse()
 
@@ -53,14 +86,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(routers.router, prefix="/v1", tags=["v1"])
-if settings.development:
+if env == "dev":
     from src.web import development
 
     app.include_router(development.router, prefix="/dev", tags=["dev"])
 
 
 @app.exception_handler(Exception)
-async def exception_handler(_, exc: Exception):
+async def exception_handler(request, exc: Exception):
     return ORJSONResponse(
         status_code=500,
         content={"detail": str(exc)},
@@ -68,7 +101,7 @@ async def exception_handler(_, exc: Exception):
 
 
 @app.exception_handler(RequestValidationError)
-async def request_exception_handler(_, exc: Exception):
+async def request_exception_handler(request, exc: Exception):
     return ORJSONResponse(
         status_code=400,
         content={"detail": str(exc)},
@@ -86,11 +119,20 @@ def health():
 
 
 if __name__ == "__main__":
+    server_host = os.getenv("WREN_AI_SERVICE_HOST") or "127.0.0.1"
+    server_port = (
+        int(os.getenv("WREN_AI_SERVICE_PORT"))
+        if os.getenv("WREN_AI_SERVICE_PORT") is not None
+        else 8000
+    )
+
+    should_reload = env == "dev"
+
     uvicorn.run(
         "src.__main__:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.development,
+        host=server_host,
+        port=server_port,
+        reload=should_reload,
         reload_includes=["src/**/*.py", ".env.dev", "config.yaml"],
         workers=1,
         loop="uvloop",

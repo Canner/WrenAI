@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"strings"
 
 	"github.com/Canner/WrenAI/wren-launcher/config"
 	"github.com/docker/cli/cli/command"
@@ -24,10 +23,10 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION    string = "0.10.0"
-	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
-	DOCKER_COMPOSE_ENV_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
-	AI_SERVICE_CONFIG_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
+	WREN_PRODUCT_VERSION        string = "0.10.0"
+	DOCKER_COMPOSE_YAML_URL     string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
+	DOCKER_COMPOSE_LLM_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.llm.yaml"
+	DOCKER_COMPOSE_ENV_URL      string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 )
 
 func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool) string {
@@ -39,12 +38,18 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	reg = regexp.MustCompile(`SHOULD_FORCE_DEPLOY=(.*)`)
 	str = reg.ReplaceAllString(str, "SHOULD_FORCE_DEPLOY=1")
 
-	// replace OPENAI_API_KEY
-	reg = regexp.MustCompile(`(?m)^OPENAI_API_KEY=(.*)`)
-	str = reg.ReplaceAllString(str, "OPENAI_API_KEY="+openaiApiKey)
+	// replace LLM_OPENAI_API_KEY
+	// Might be overwritten by the .env.ai file
+	reg = regexp.MustCompile(`LLM_OPENAI_API_KEY=(.*)`)
+	str = reg.ReplaceAllString(str, "LLM_OPENAI_API_KEY="+openaiApiKey)
+
+	// replace EMBEDDER_OPENAI_API_KEY,
+	// Might be overwritten by the .env.ai file
+	reg = regexp.MustCompile(`EMBEDDER_OPENAI_API_KEY=(.*)`)
+	str = reg.ReplaceAllString(str, "EMBEDDER_OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
-	// it seems like using for telemetry to know the model, might be we can remove this in the future and provide a endpoint to get the information
+	// Might be overwritten by the .env.ai file
 	reg = regexp.MustCompile(`GENERATION_MODEL=(.*)`)
 	str = reg.ReplaceAllString(str, "GENERATION_MODEL="+openAIGenerationModel)
 
@@ -131,106 +136,19 @@ func prepareUserUUID(projectDir string) (string, error) {
 	return userUUID, nil
 }
 
-func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error {
-	// download config.yaml file
-	configPath := path.Join(projectDir, "config.yaml")
-	pterm.Info.Println("Downloading config.yaml file to", configPath)
-	err := downloadFile(configPath, AI_SERVICE_CONFIG_URL)
-	if err != nil {
-		return err
-	}
-
-	// read the config.yaml file
-	content, err := os.ReadFile(configPath)
-	if err != nil {
-		return err
-	}
-
-	// replace the generation model in config.yaml
-	config := string(content)
-	config = strings.ReplaceAll(config, "openai_llm.gpt-4o-mini", "openai_llm."+generationModel)
-	// disable the langfuse for starting wren-ai from the launcher
-	config = strings.ReplaceAll(config, "langfuse_enable: true", "langfuse_enable: false")
-
-	// write back to config.yaml
-	err = os.WriteFile(configPath, []byte(config), 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
-	// Check if .env file does not exist
-	if _, err := os.Stat(newEnvFile); err != nil {
-		return envFileContent, nil
-	}
-
-	// File exists, read existing content
-	existingContent, err := os.ReadFile(newEnvFile)
-	if err != nil {
-		return "", err
-	}
-
-	// Split both contents into lines
-	existingLines := strings.Split(string(existingContent), "\n")
-	newLines := strings.Split(envFileContent, "\n")
-
-	// Create map of existing env vars
-	existingEnvVars := make(map[string]string)
-	// Helper function to parse env var line
-	parseEnvVar := func(line string) (string, string, bool) {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			return "", "", false
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			return "", "", false
-		}
-		return parts[0], parts[1], true
-	}
-
-	// Parse existing env vars
-	for _, line := range existingLines {
-		if key, val, ok := parseEnvVar(line); ok {
-			existingEnvVars[key] = val
-		}
-	}
-
-	// Merge with new values
-	for _, line := range newLines {
-		if key, val, ok := parseEnvVar(line); ok && val != "" {
-			existingEnvVars[key] = val
-		}
-	}
-
-	// Build merged content
-	var mergedLines []string
-	for _, line := range newLines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			mergedLines = append(mergedLines, line)
-			continue
-		}
-		if key, _, ok := parseEnvVar(line); ok {
-			if val, exists := existingEnvVars[key]; exists {
-				mergedLines = append(mergedLines, key+"="+val)
-			}
-		}
-	}
-
-	// Update envFileContent with merged content
-	envFileContent = strings.Join(mergedLines, "\n")
-	return envFileContent, nil
-}
-
 func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
 	err := downloadFile(composeFile, DOCKER_COMPOSE_YAML_URL)
+	if err != nil {
+		return err
+	}
+
+	// download docker-compose.llm.yaml file
+	composeLLMFile := path.Join(projectDir, "docker-compose.llm.yaml")
+	pterm.Info.Println("Downloading docker-compose.llm file to", composeLLMFile)
+	err = downloadFile(composeLLMFile, DOCKER_COMPOSE_LLM_YAML_URL)
 	if err != nil {
 		return err
 	}
@@ -266,13 +184,6 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		telemetryEnabled,
 	)
 	newEnvFile := getEnvFilePath(projectDir)
-
-	// merge the env file content with the existing env file
-	envFileContent, err = mergeEnvContent(newEnvFile, envFileContent)
-	if err != nil {
-		return err
-	}
-
 	// write the file
 	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
 	if err != nil {
@@ -298,6 +209,15 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 	envFile := path.Join(projectDir, ".env")
 	envFiles := []string{envFile}
 	configPaths := []string{composeFilePath}
+
+	if llmProvider == "Custom" {
+		customEnvFile := path.Join(projectDir, ".env.ai")
+		llmComposeFile := path.Join(projectDir, "docker-compose.llm.yaml")
+		// Note: there are env variables with the same name in .env.ai and .env files
+		// Be aware of the order of the env files
+		envFiles = append(envFiles, customEnvFile)
+		configPaths = append(configPaths, llmComposeFile)
+	}
 
 	// docker-compose up
 	dockerCli, err := command.NewDockerCli()

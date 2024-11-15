@@ -153,17 +153,18 @@ class WrenEngine(Engine):
     def __init__(
         self,
         endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT"),
-        manifest: str = os.getenv("WREN_ENGINE_MANIFEST"),
         **_,
     ):
         self._endpoint = endpoint
-        self._manifest = manifest
         logger.info("Using Engine: wren_engine")
 
     async def execute_sql(
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        properties: Dict[str, Any] = {
+            "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
+        },
         dry_run: bool = True,
         timeout: float = 30.0,
         **kwargs,
@@ -179,9 +180,9 @@ class WrenEngine(Engine):
                 api_endpoint,
                 json={
                     "manifest": orjson.loads(
-                        base64.b64decode(self._manifest)
+                        base64.b64decode(properties.get("manifest"))
                     )
-                    if self._manifest
+                    if properties.get("manifest")
                     else {},
                     "sql": remove_limit_statement(sql),
                     "limit": 1 if dry_run else 500,

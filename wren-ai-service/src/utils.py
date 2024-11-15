@@ -35,14 +35,7 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-def setup_custom_logger(name, level_str: str):
-    level_str = level_str.upper()
-
-    if level_str not in logging._nameToLevel:
-        raise ValueError(f"Invalid logging level: {level_str}")
-
-    level = logging._nameToLevel[level_str]
-
+def setup_custom_logger(name, level=logging.INFO):
     handler = logging.StreamHandler()
     handler.setFormatter(CustomFormatter())
 
@@ -53,7 +46,6 @@ def setup_custom_logger(name, level_str: str):
 
 
 def load_env_vars() -> str:
-    # DEPRECATED: This method is deprecated and will be removed in the future
     if Path(".env.dev").exists():
         load_dotenv(".env.dev", override=True)
         return "dev"
@@ -64,9 +56,7 @@ def load_env_vars() -> str:
 def timer(func):
     @functools.wraps(func)
     def wrapper_timer(*args, **kwargs):
-        from src.config import settings
-
-        if settings.enable_timer:
+        if os.getenv("ENABLE_TIMER", False):
             startTime = time.perf_counter()
             result = func(*args, **kwargs)
             endTime = time.perf_counter()
@@ -90,9 +80,7 @@ def async_timer(func):
 
     @functools.wraps(func)
     async def wrapper_timer(*args, **kwargs):
-        from src.config import settings
-
-        if settings.enable_timer:
+        if os.getenv("ENABLE_TIMER", False):
             startTime = time.perf_counter()
             result = await process(func, *args, **kwargs)
             endTime = time.perf_counter()
@@ -114,17 +102,18 @@ def remove_trailing_slash(endpoint: str) -> str:
 
 
 def init_langfuse():
-    from src.config import settings
+    enabled = bool(os.getenv("LANGFUSE_ENABLE", False))
+    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
     langfuse_context.configure(
-        enabled=settings.langfuse_enable,
-        host=settings.langfuse_host,
-        public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-        secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+        enabled=enabled,
+        public_key=os.getenv("LANGFUSE_PUBLIC_KEY", ""),
+        secret_key=os.getenv("LANGFUSE_SECRET_KEY", ""),
+        host=host,
     )
 
-    logger.info(f"LANGFUSE_ENABLE: {settings.langfuse_enable}")
-    logger.info(f"LANGFUSE_HOST: {settings.langfuse_host}")
+    logger.info(f"LANGFUSE_ENABLE: {enabled}")
+    logger.info(f"LANGFUSE_HOST: {host}")
 
 
 def trace_metadata(func):
