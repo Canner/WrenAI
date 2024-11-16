@@ -243,8 +243,8 @@ class DDLConverter:
                 if "relationship" not in column:
                     if "properties" in column:
                         column_properties = {
-                            "alias": column["properties"].pop("displayName", ""),
-                            "description": column["properties"].pop("description", ""),
+                            "alias": column["properties"].get("displayName", ""),
+                            "description": column["properties"].get("description", ""),
                         }
                         nested_cols = {
                             k: v
@@ -314,8 +314,8 @@ class DDLConverter:
 
             if "properties" in model:
                 model_properties = {
-                    "alias": model["properties"].pop("displayName", ""),
-                    "description": model["properties"].pop("description", ""),
+                    "alias": model["properties"].get("displayName", ""),
+                    "description": model["properties"].get("description", ""),
                 }
                 comment = f"\n/* {orjson.dumps(model_properties).decode("utf-8")} */\n"
             else:
