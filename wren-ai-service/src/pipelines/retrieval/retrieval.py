@@ -94,7 +94,7 @@ table_columns_selection_user_prompt_template = """
 """
 
 
-def _build_table_ddl(
+def build_table_ddl(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> str:
     columns_ddl = []
@@ -245,7 +245,7 @@ def check_using_db_schemas_without_pruning(
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
             retrieval_results.append(
-                _build_table_ddl(
+                build_table_ddl(
                     table_schema,
                 )
             )
@@ -286,7 +286,7 @@ def prompt(
             "db_schemas token count is greater than 100,000, so we will prune columns"
         )
         db_schemas = [
-            _build_table_ddl(construct_db_schema)
+            build_table_ddl(construct_db_schema)
             for construct_db_schema in construct_db_schemas
         ]
 
@@ -334,7 +334,7 @@ def construct_retrieval_results(
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
                 retrieval_results.append(
-                    _build_table_ddl(
+                    build_table_ddl(
                         table_schema,
                         columns=set(
                             columns_and_tables_needed[table_schema["name"]]["columns"]
