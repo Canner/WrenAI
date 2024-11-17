@@ -22,7 +22,6 @@ class SqlAnswerRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
-    sql_summary: str
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     configurations: Optional[SqlAnswerConfigurations] = SqlAnswerConfigurations()
@@ -105,7 +104,6 @@ class SqlAnswerService:
                 self._pipelines["sql_answer"].run(
                     query=sql_answer_request.query,
                     sql=sql_answer_request.sql,
-                    sql_summary=sql_answer_request.sql_summary,
                     sql_data=sql_data["execute_sql"],
                     language=sql_answer_request.configurations.language,
                     query_id=query_id,

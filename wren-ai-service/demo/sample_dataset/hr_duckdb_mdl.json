@@ -1,0 +1,539 @@
+{
+    "schema": "public",
+    "catalog": "wrenai",
+    "models": [
+        {
+            "name": "departments",
+            "columns": [
+                {
+                    "name": "dept_no",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "A unique identifier for each department. It serves as the primary key of the table.",
+                        "displayName": "dept_no"
+                    }
+                },
+                {
+                    "name": "dept_name",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The name of the department. Limited to a maximum of 40 characters. This column is also unique across the table, ensuring no two departments share the same name",
+                        "displayName": "dept_name"
+                    }
+                },
+                {
+                    "name": "dept_emp",
+                    "type": "dept_emp",
+                    "properties": null,
+                    "relationship": "DepartmentsDept_noDept_empDept_no",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "dept_manager",
+                    "type": "dept_manager",
+                    "properties": null,
+                    "relationship": "DepartmentsDept_noDept_managerDept_no",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "departments"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "departments"
+            },
+            "primaryKey": ""
+        },
+        {
+            "name": "dept_emp",
+            "columns": [
+                {
+                    "name": "emp_no",
+                    "type": "INTEGER",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The employee number.",
+                        "displayName": "emp_no"
+                    }
+                },
+                {
+                    "name": "dept_no",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The department number the employee is associated with, referencing the dept_no in the departments table.",
+                        "displayName": "dept_no"
+                    }
+                },
+                {
+                    "name": "from_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The start date of the employee's association with the department.",
+                        "displayName": "from_date"
+                    }
+                },
+                {
+                    "name": "to_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The end date of the employee's association with the department",
+                        "displayName": "to_date"
+                    }
+                },
+                {
+                    "name": "departments",
+                    "type": "departments",
+                    "properties": null,
+                    "relationship": "DepartmentsDept_noDept_empDept_no",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "employees",
+                    "type": "employees",
+                    "properties": null,
+                    "relationship": "Dept_empEmp_noEmployeesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "dept_emp"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "dept_emp"
+            },
+            "primaryKey": ""
+        },
+        {
+            "name": "dept_manager",
+            "columns": [
+                {
+                    "name": "emp_no",
+                    "type": "INTEGER",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The employee number of the department manager",
+                        "displayName": "emp_no"
+                    }
+                },
+                {
+                    "name": "dept_no",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The department number that the manager is assigned to, referencing the dept_no in the departments table.",
+                        "displayName": "dept_no"
+                    }
+                },
+                {
+                    "name": "from_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The start date of the employee’s managerial role in the department.",
+                        "displayName": "from_date"
+                    }
+                },
+                {
+                    "name": "to_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The end date of the employee’s managerial role in the department.",
+                        "displayName": "to_date"
+                    }
+                },
+                {
+                    "name": "employees",
+                    "type": "employees",
+                    "properties": null,
+                    "relationship": "Dept_managerEmp_noEmployeesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "departments",
+                    "type": "departments",
+                    "properties": null,
+                    "relationship": "DepartmentsDept_noDept_managerDept_no",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "dept_manager"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "dept_manager",
+                "description": "Tracks the assignment of managers to departments, including the period during which they managed a department"
+            },
+            "primaryKey": ""
+        },
+        {
+            "name": "employees",
+            "columns": [
+                {
+                    "name": "emp_no",
+                    "type": "INTEGER",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "A unique identifier for each employee. It serves as the primary key of the table",
+                        "displayName": "emp_no"
+                    }
+                },
+                {
+                    "name": "birth_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The birth date of the employee.",
+                        "displayName": "birth_date"
+                    }
+                },
+                {
+                    "name": "first_name",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The first name of the employee. Limited to a maximum of 14 characters.",
+                        "displayName": "first_name"
+                    }
+                },
+                {
+                    "name": "last_name",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The last name of the employee. Limited to a maximum of 16 characters.",
+                        "displayName": "last_name"
+                    }
+                },
+                {
+                    "name": "gender",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The gender of the employee, with possible values 'M' (Male) or 'F' (Female).",
+                        "displayName": "gender"
+                    }
+                },
+                {
+                    "name": "hire_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The date when the employee was hired.",
+                        "displayName": "hire_date"
+                    }
+                },
+                {
+                    "name": "titles",
+                    "type": "titles",
+                    "properties": null,
+                    "relationship": "EmployeesEmp_noTitlesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "salaries",
+                    "type": "salaries",
+                    "properties": null,
+                    "relationship": "EmployeesEmp_noSalariesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "dept_manager",
+                    "type": "dept_manager",
+                    "properties": null,
+                    "relationship": "Dept_managerEmp_noEmployeesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "dept_emp",
+                    "type": "dept_emp",
+                    "properties": null,
+                    "relationship": "Dept_empEmp_noEmployeesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "employees"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "employees",
+                "description": "Stores basic information about employees such as their employee number, name, gender, birth date, and hire date"
+            },
+            "primaryKey": ""
+        },
+        {
+            "name": "salaries",
+            "columns": [
+                {
+                    "name": "emp_no",
+                    "type": "INTEGER",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The employee number",
+                        "displayName": "emp_no"
+                    }
+                },
+                {
+                    "name": "salary",
+                    "type": "INTEGER",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The salary of the employee.",
+                        "displayName": "salary"
+                    }
+                },
+                {
+                    "name": "from_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The start date of the salary period.",
+                        "displayName": "from_date"
+                    }
+                },
+                {
+                    "name": "to_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The end date of the salary period.",
+                        "displayName": "to_date"
+                    }
+                },
+                {
+                    "name": "employees",
+                    "type": "employees",
+                    "properties": null,
+                    "relationship": "EmployeesEmp_noSalariesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "salaries"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "salaries",
+                "description": "Tracks the salary of employees, including the period during which each salary was valid."
+            },
+            "primaryKey": ""
+        },
+        {
+            "name": "titles",
+            "columns": [
+                {
+                    "name": "emp_no",
+                    "type": "INTEGER",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The employee number",
+                        "displayName": "emp_no"
+                    }
+                },
+                {
+                    "name": "title",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The title or position held by the employee. Limited to a maximum of 50 characters.",
+                        "displayName": "title"
+                    }
+                },
+                {
+                    "name": "from_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The start date when the employee held this title",
+                        "displayName": "from_date"
+                    }
+                },
+                {
+                    "name": "to_date",
+                    "type": "DATE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The end date when the employee held this title. This can be NULL if the employee currently holds the title.",
+                        "displayName": "to_date"
+                    }
+                },
+                {
+                    "name": "employees",
+                    "type": "employees",
+                    "properties": null,
+                    "relationship": "EmployeesEmp_noTitlesEmp_no",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "titles"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "titles",
+                "description": "Tracks the titles (positions) held by employees, including the period during which they held each title."
+            },
+            "primaryKey": ""
+        }
+    ],
+    "relationships": [
+        {
+            "name": "EmployeesEmp_noTitlesEmp_no",
+            "models": [
+                "employees",
+                "titles"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"employees\".emp_no = \"titles\".emp_no",
+            "properties": {
+                "description": "Each entry represents a title held by an employee during a specific time period."
+            }
+        },
+        {
+            "name": "DepartmentsDept_noDept_empDept_no",
+            "models": [
+                "departments",
+                "dept_emp"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"departments\".dept_no = \"dept_emp\".dept_no",
+            "properties": {}
+        },
+        {
+            "name": "EmployeesEmp_noSalariesEmp_no",
+            "models": [
+                "employees",
+                "salaries"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"employees\".emp_no = \"salaries\".emp_no",
+            "properties": {}
+        },
+        {
+            "name": "Dept_managerEmp_noEmployeesEmp_no",
+            "models": [
+                "dept_manager",
+                "employees"
+            ],
+            "joinType": "MANY_TO_ONE",
+            "condition": "\"dept_manager\".emp_no = \"employees\".emp_no",
+            "properties": {}
+        },
+        {
+            "name": "Dept_empEmp_noEmployeesEmp_no",
+            "models": [
+                "dept_emp",
+                "employees"
+            ],
+            "joinType": "MANY_TO_ONE",
+            "condition": "\"dept_emp\".emp_no = \"employees\".emp_no",
+            "properties": {
+                "description": "meaning an employee can be associated with multiple departments, titles, and salaries over time."
+            }
+        },
+        {
+            "name": "DepartmentsDept_noDept_managerDept_no",
+            "models": [
+                "departments",
+                "dept_manager"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"departments\".dept_no = \"dept_manager\".dept_no",
+            "properties": {}
+        }
+    ],
+    "views": []
+}

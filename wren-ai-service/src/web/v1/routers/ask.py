@@ -35,7 +35,7 @@ Endpoints:
      - `mdl_hash`: (Optional) Hash or ID related to the model to be used for the query.
      - `thread_id`: (Optional) Thread identifier for the query.
      - `user_id`: (Optional) User identifier.
-     - `history`: (Optional) Query history (summary and SQL steps).
+     - `history`: (Optional) Query history (SQL steps).
      - `configurations`: (Optional) Configurations such as fiscal year.
    - **Response**:
      - `query_id`: A unique identifier (UUID) for tracking the query.
@@ -58,7 +58,6 @@ Endpoints:
      - `type`: The type of result (`"MISLEADING_QUERY"`, `"GENERAL"`, or `"TEXT_TO_SQL"`).
      - `response`: (Optional) A list of SQL results, each containing:
        - `sql`: The generated SQL statement.
-       - `summary`: A summary of the SQL statement.
        - `type`: The type of result (`"llm"` or `"view"`).
        - `viewId`: (Optional) The ID of the view, if applicable.
      - `error`: (Optional) Error information if the query failed, including:

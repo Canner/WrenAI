@@ -19,15 +19,14 @@ logger = logging.getLogger("wren-ai-service")
 sql_to_answer_system_prompt = """
 ### TASK
 
-You are a data analyst that great at answering user's questions based on the data, sql and sql summary so that even non technical users can easily understand.
+You are a data analyst that great at answering user's questions based on the data, sql so that even non technical users can easily understand.
 Please answer the user's question in concise and clear manner in Markdown format.
 
 ### INSTRUCTIONS
 
 1. Read the user's question and understand the user's intention.
-2. Read the sql summary and understand the data.
-3. Read the sql and understand the data.
-4. Generate a consice and clear answer in string format to the user's question based on the data, sql and sql summary.
+2. Read the sql and understand the data.
+4. Generate a consice and clear answer in string format and a reasoning process in string format to the user's question based on the data, sql.
 5. If answer is in list format, only list top few examples, and tell users there are more results omitted.
 6. Answer must be in the same language user specified.
 
@@ -40,7 +39,6 @@ sql_to_answer_user_prompt_template = """
 ### Input
 User's question: {{ query }}
 SQL: {{ sql }}
-SQL summary: {{ sql_summary }}
 Data: {{ sql_data }}
 Language: {{ language }}
 
@@ -54,20 +52,17 @@ Please think step by step and answer the user's question.
 def prompt(
     query: str,
     sql: str,
-    sql_summary: str,
     sql_data: dict,
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
-    logger.debug(f"sql_summary: {sql_summary}")
-    logger.debug(f"sql data: {sql_data["results"]}")
+    logger.debug(f"sql data: {sql_data['results']}")
     logger.debug(f"language: {language}")
     return prompt_builder.run(
         query=query,
         sql=sql,
-        sql_summary=sql_summary,
         sql_data=sql_data["results"],
         language=language,
     )
@@ -138,7 +133,6 @@ class SQLAnswer(BasicPipeline):
         self,
         query: str,
         sql: str,
-        sql_summary: str,
         sql_data: dict,
         language: str,
         query_id: Optional[str] = None,
@@ -153,7 +147,6 @@ class SQLAnswer(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
-                "sql_summary": sql_summary,
                 "sql_data": sql_data,
                 "language": language,
                 "query_id": query_id,
@@ -169,7 +162,6 @@ class SQLAnswer(BasicPipeline):
         self,
         query: str,
         sql: str,
-        sql_summary: str,
         sql_data: dict,
         language: str,
         query_id: Optional[str] = None,
@@ -180,7 +172,6 @@ class SQLAnswer(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
-                "sql_summary": sql_summary,
                 "sql_data": sql_data,
                 "language": language,
                 "query_id": query_id,
@@ -205,13 +196,9 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    pipeline.visualize(
-        "query", "SELECT * FROM table_name", "sql summary", {}, "English"
-    )
+    pipeline.visualize("query", "SELECT * FROM table_name", {}, "English")
     async_validate(
-        lambda: pipeline.run(
-            "query", "SELECT * FROM table_name", "sql summary", {}, "English"
-        )
+        lambda: pipeline.run("query", "SELECT * FROM table_name", {}, "English")
     )
 
     langfuse_context.flush()

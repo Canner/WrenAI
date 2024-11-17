@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from src.core.engine import EngineConfig
-from src.pipelines.generation import sql_breakdown
+from src.pipelines.generation import sql_breakdown, sql_summary
 from src.providers import init_providers
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
@@ -20,6 +20,9 @@ def ask_details_service():
             "sql_breakdown": sql_breakdown.SQLBreakdown(
                 llm_provider=llm_provider,
                 engine=engine,
+            ),
+            "sql_summary": sql_summary.SQLSummary(
+                llm_provider=llm_provider,
             ),
         }
     )

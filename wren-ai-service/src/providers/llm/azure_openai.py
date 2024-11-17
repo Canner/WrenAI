@@ -151,6 +151,7 @@ class AzureOpenAILLMProvider(LLMProvider):
         logger.info(
             f"Using AzureOpenAI LLM with API version: {self._generation_api_version}"
         )
+        logger.info(f"Using AzureOpenAI LLM model kwargs: {self._model_kwargs}")
 
     def get_generator(
         self,
@@ -159,9 +160,6 @@ class AzureOpenAILLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        logger.info(
-            f"Creating Azure OpenAI generator with model kwargs: {self._model_kwargs}"
-        )
         return AsyncGenerator(
             api_key=self._generation_api_key,
             model=self._generation_model,
