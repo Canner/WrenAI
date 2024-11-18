@@ -327,9 +327,11 @@ def show_asks_details_results(query: str):
                 language=st.session_state["language"],
             )
             if chart_response:
-                st.markdown(chart_response["reasoning"])
-                st.json(chart_response["schema"], expanded=False)
-                st.vega_lite_chart(chart_response["schema"], use_container_width=True)
+                if reasoning := chart_response["reasoning"]:
+                    st.markdown(reasoning)
+                if vega_lite_schema := chart_response["schema"]:
+                    st.json(vega_lite_schema, expanded=False)
+                    st.vega_lite_chart(vega_lite_schema, use_container_width=True)
 
         st.markdown("---")
         st.button(

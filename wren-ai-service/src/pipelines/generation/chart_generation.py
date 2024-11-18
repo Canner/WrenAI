@@ -10,6 +10,7 @@ from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from jsonschema import validate
+from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
@@ -157,46 +158,14 @@ Please think step by step
 
 
 @component
-class ChartGenerationPostProcessor:
-    @component.output_types(
-        results=Dict[str, Any],
-    )
-    def run(
-        self,
-        replies: str,
-        vega_schema: Dict[str, Any],
-    ):
-        try:
-            generation_result = orjson.loads(replies[0])
-            if chart_schema := generation_result.get("schema", ""):
-                validate(chart_schema, schema=vega_schema)
-                return {
-                    "results": {
-                        "schema": chart_schema,
-                        "reasoning": generation_result.get("reasoning", ""),
-                    }
-                }
-
-            return {"results": {"schema": "", "reasoning": ""}}
-        except Exception as e:
-            logger.exception(f"Vega-lite schema is not valid: {e}")
-
-            return {
-                "results": {
-                    "schema": "",
-                    "reasoning": "",
-                }
-            }
-
-
-@component
 class ChartDataPreprocessor:
     @component.output_types(
         results=Dict[str, Any],
     )
     def run(self, data: Dict[str, Any]):
         sample_data_statistics = {
-            column["name"]: set() for column in data["results"]["columns"]
+            column["name"] if isinstance(column, dict) else column: set()
+            for column in data["results"]["columns"]
         }
         for row in data["results"]["data"]:
             for column, value in zip(sample_data_statistics.keys(), row):
@@ -214,6 +183,49 @@ class ChartDataPreprocessor:
                 "sample_data": sample_data,
             }
         }
+
+
+@component
+class ChartGenerationPostProcessor:
+    @component.output_types(
+        results=Dict[str, Any],
+    )
+    def run(
+        self,
+        replies: str,
+        vega_schema: Dict[str, Any],
+    ):
+        try:
+            generation_result = orjson.loads(replies[0])
+            reasoning = generation_result.get("reasoning", "")
+            if chart_schema := generation_result.get("schema", {}):
+                validate(chart_schema, schema=vega_schema)
+                return {
+                    "results": {
+                        "schema": chart_schema,
+                        "reasoning": reasoning,
+                    }
+                }
+
+            return {"results": {"schema": {}, "reasoning": reasoning}}
+        except ValidationError as e:
+            logger.exception(f"Vega-lite schema is not valid: {e}")
+
+            return {
+                "results": {
+                    "schema": {},
+                    "reasoning": reasoning,
+                }
+            }
+        except Exception as e:
+            logger.exception(f"JSON deserialization failed: {e}")
+
+            return {
+                "results": {
+                    "schema": {},
+                    "reasoning": "",
+                }
+            }
 
 
 ## Start of Pipeline
