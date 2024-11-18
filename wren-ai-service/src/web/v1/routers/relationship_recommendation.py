@@ -25,7 +25,8 @@ Endpoints:
    - Generates a new relationship recommendation
    - Request body: PostRequest
      {
-       "mdl": "{ ... }"                          # JSON string of the MDL (Model Definition Language)
+       "mdl": "{ ... }",                           # JSON string of the MDL (Model Definition Language)
+       "project_id": "project-id"                  # Optional project ID  
      }
    - Response: PostResponse
      {
@@ -62,6 +63,7 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 
 class PostRequest(BaseModel):
     mdl: str
+    project_id: Optional[str] = None
 
 
 class PostResponse(BaseModel):
