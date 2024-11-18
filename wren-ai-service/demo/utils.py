@@ -321,14 +321,15 @@ def show_asks_details_results(query: str):
             )
 
             st.markdown("### Chart")
-            chart_schema = generate_chart(
+            chart_response = generate_chart(
                 query=st.session_state["chosen_query_result"]["query"],
                 sql=st.session_state["chosen_query_result"]["sql"],
                 language=st.session_state["language"],
             )
-            if chart_schema:
-                st.json(chart_schema, expanded=False)
-                st.vega_lite_chart(chart_schema, use_container_width=True)
+            if chart_response:
+                st.markdown(chart_response["reasoning"])
+                st.json(chart_response["schema"], expanded=False)
+                st.vega_lite_chart(chart_response["schema"], use_container_width=True)
 
         st.markdown("---")
         st.button(

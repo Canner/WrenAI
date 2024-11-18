@@ -105,13 +105,14 @@ class WrenIbis(Engine):
         session: aiohttp.ClientSession,
         dry_run: bool = True,
         timeout: float = 30.0,
+        limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         api_endpoint = f"{self._endpoint}/v2/connector/{self._source}/query"
         if dry_run:
             api_endpoint += "?dryRun=true&limit=1"
         else:
-            api_endpoint += "?limit=500"
+            api_endpoint += f"?limit={limit}"
 
         try:
             async with session.post(
@@ -167,6 +168,7 @@ class WrenEngine(Engine):
         session: aiohttp.ClientSession,
         dry_run: bool = True,
         timeout: float = 30.0,
+        limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         api_endpoint = (
@@ -183,7 +185,7 @@ class WrenEngine(Engine):
                     if self._manifest
                     else {},
                     "sql": remove_limit_statement(sql),
-                    "limit": 1 if dry_run else 500,
+                    "limit": 1 if dry_run else limit,
                 },
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:

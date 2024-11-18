@@ -71,11 +71,16 @@ class ChartResultRequest(BaseModel):
     query_id: str
 
 
+class ChartResult(BaseModel):
+    reasoning: str
+    schema: dict
+
+
 class ChartResultResponse(BaseModel):
     status: Literal[
         "understanding", "fetching", "generating", "finished", "failed", "stopped"
     ]
-    response: Optional[dict] = None
+    response: Optional[ChartResult] = None
     error: Optional[ChartError] = None
 
 
@@ -125,7 +130,7 @@ class ChartService:
             sql_data = await self._pipelines["sql_executor"].run(
                 sql=chart_request.sql,
                 project_id=chart_request.project_id,
-                limit=100,
+                limit=5,
             )
 
             self._chart_results[query_id] = ChartResultResponse(status="generating")
@@ -137,7 +142,7 @@ class ChartService:
                 language=chart_request.configurations.language,
                 timezone=chart_request.configurations.timezone,
             )
-            chart_result = chart_generation_result["post_process"]["results"]["schema"]
+            chart_result = chart_generation_result["post_process"]["results"]
 
             if not chart_result:
                 self._chart_results[query_id] = ChartResultResponse(
@@ -150,7 +155,8 @@ class ChartService:
                 results["metadata"]["error_message"] = "chart generation failed"
             else:
                 self._chart_results[query_id] = ChartResultResponse(
-                    status="finished", response=chart_result
+                    status="finished",
+                    response=ChartResult(**chart_result),
                 )
                 results["chart_result"] = chart_result
 

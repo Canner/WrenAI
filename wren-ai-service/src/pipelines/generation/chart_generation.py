@@ -31,7 +31,7 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 ### INSTRUCTIONS ###
 
 - Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
-- Chart types: bar, line, area, pie, scatter, donut, stacked bar
+- Chart types: bar, line, area, pie, scatter, donut, stacked bar, 
 - If you think the data is not suitable for visualization, you can return an empty string for the schema.
 - Please use the language provided by the user to generate the chart.
 - Please use the current time provided by the user to generate the chart.
@@ -58,14 +58,14 @@ OUTPUT:
         "description": "A bar chart representing values from 'col 1' and 'col 2' for each row.",
         "data": {
             "values": [
-            {"Row": "row 1", "col 1": "a", "col 2": "b"},
-            {"Row": "row 2", "col 1": "c", "col 2": "d"}
+                {"Row": "row 1", "col 1": "a", "col 2": "b"},
+                {"Row": "row 2", "col 1": "c", "col 2": "d"}
             ]
         },
         "transform": [
             {
-            "fold": ["col 1", "col 2"],
-            "as": ["Column", "Value"]
+                "fold": ["col 1", "col 2"],
+                "as": ["Column", "Value"]
             }
         ],
         "mark": "bar",
@@ -82,7 +82,7 @@ OUTPUT:
 Please provide your chain of thought reasoning and the vega-lite schema in JSON format.
 
 {
-    "chain_of_thought_reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING>
+    "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING>
     "schema": <VEGA_LITE_JSON_SCHEMA>
 }
 """
@@ -113,15 +113,21 @@ class ChartGenerationPostProcessor:
             generation_result = orjson.loads(replies[0])
             if chart_schema := generation_result.get("schema", ""):
                 validate(chart_schema, schema=vega_schema)
-                return {"results": {"schema": chart_schema}}
+                return {
+                    "results": {
+                        "schema": chart_schema,
+                        "reasoning": generation_result.get("reasoning", ""),
+                    }
+                }
 
-            return {"results": {"schema": ""}}
+            return {"results": {"schema": "", "reasoning": ""}}
         except Exception as e:
             logger.exception(f"Vega-lite schema is not valid: {e}")
 
             return {
                 "results": {
                     "schema": "",
+                    "reasoning": "",
                 }
             }
 
@@ -137,7 +143,11 @@ def prompt(
     timezone: ChartConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    logger.debug(f"query: {query}")
+    logger.debug(f"sql: {sql}")
     logger.debug(f"data: {data['results']}")
+    logger.debug(f"language: {language}")
+    logger.debug(f"timezone: {timezone}")
 
     return prompt_builder.run(
         query=query,
@@ -172,7 +182,7 @@ def post_process(
 
 ## End of Pipeline
 class ChartGenerationResults(BaseModel):
-    chain_of_thought_reasoning: str
+    reasoning: str
     schema: dict
 
 
