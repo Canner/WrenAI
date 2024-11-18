@@ -326,8 +326,9 @@ def show_asks_details_results(query: str):
                 sql=st.session_state["chosen_query_result"]["sql"],
                 language=st.session_state["language"],
             )
-            st.json(chart_schema, expanded=False)
-            st.vega_lite_chart(chart_schema, use_container_width=True)
+            if chart_schema:
+                st.json(chart_schema, expanded=False)
+                st.vega_lite_chart(chart_schema, use_container_width=True)
 
         st.markdown("---")
         st.button(
