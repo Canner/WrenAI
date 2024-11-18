@@ -93,10 +93,17 @@ class SemanticsDescription:
 
     async def _generate_task(self, request_id: str, chunk: dict):
         resp = await self._pipelines["semantics_description"].run(**chunk)
+        normalize = resp.get("normalize")
 
         current = self[request_id]
         current.response = current.response or {}
-        current.response.update(resp.get("normalize"))
+
+        for key in normalize.keys():
+            if key not in current.response:
+                current.response[key] = normalize[key]
+                continue
+
+            current.response[key]["columns"].extend(normalize[key]["columns"])
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
