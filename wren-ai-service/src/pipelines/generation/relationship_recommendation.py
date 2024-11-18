@@ -97,7 +97,7 @@ You are an expert in database schema design and relationship recommendation. Giv
 - **name**: A descriptive name for the relationship.
 - **fromModel**: The name of the source model.
 - **fromColumn**: The column in the source model that forms the relationship.
-- **type**: The type of relationship, which can be ONE_TO_MANY, MANY_TO_MANY, or MANY_TO_ONE.
+- **type**: The type of relationship, which can be MANY_TO_ONE, ONE_TO_MANY or ONE_TO_ONE.
 - **toModel**: The name of the target model.
 - **toColumn**: The column in the target model that forms the relationship.
 - **reason**: The reason for recommending this relationship.
