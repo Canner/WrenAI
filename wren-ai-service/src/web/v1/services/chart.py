@@ -12,11 +12,23 @@ logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/charts
+class ChartConfigurations(BaseModel):
+    class Timezone(BaseModel):
+        name: str
+        utc_offset: str
+
+    language: str = "English"
+    timezone: Optional[Timezone] = Timezone(name="Asia/Taipei", utc_offset="+8:00")
+
+
 class ChartRequest(BaseModel):
     _query_id: str | None = None
-    data: dict[str, dict]
+    query: str
+    sql: str
+    project_id: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
+    configurations: Optional[ChartConfigurations] = ChartConfigurations()
 
     @property
     def query_id(self) -> str:
@@ -60,7 +72,9 @@ class ChartResultRequest(BaseModel):
 
 
 class ChartResultResponse(BaseModel):
-    status: Literal["understanding", "generating", "finished", "failed", "stopped"]
+    status: Literal[
+        "understanding", "fetching", "generating", "finished", "failed", "stopped"
+    ]
     response: Optional[dict] = None
     error: Optional[ChartError] = None
 
@@ -106,10 +120,21 @@ class ChartService:
 
             self._chart_results[query_id] = ChartResultResponse(status="understanding")
 
+            self._chart_results[query_id] = ChartResultResponse(status="fetching")
+
+            sql_data = await self._pipelines["sql_executor"].run(
+                sql=chart_request.sql,
+                project_id=chart_request.project_id,
+            )
+
             self._chart_results[query_id] = ChartResultResponse(status="generating")
 
             chart_generation_result = await self._pipelines["chart_generation"].run(
-                data=chart_request.data,
+                query=chart_request.query,
+                sql=chart_request.sql,
+                data=sql_data["execute_sql"],
+                language=chart_request.configurations.language,
+                timezone=chart_request.configurations.timezone,
             )
             chart_result = chart_generation_result["post_process"]["results"]["schema"]
 

@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from src.web.v1.routers import (
     ask,
     ask_details,
-    chart_generation,
+    chart,
     question_recommendation,
     relationship_recommendation,
     semantics_description,
@@ -24,6 +24,6 @@ router.include_router(semantics_preparations.router)
 router.include_router(sql_answers.router)
 router.include_router(sql_expansions.router)
 router.include_router(sql_explanations.router)
-router.include_router(chart_generation.router)
+router.include_router(chart.router)
 router.include_router(sql_regenerations.router)
 # connected subrouter

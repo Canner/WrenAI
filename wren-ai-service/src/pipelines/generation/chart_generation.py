@@ -1,33 +1,40 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-import aiohttp
 import orjson
+import requests
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from jsonschema import validate
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
+from src.pipelines.common import show_current_time
 from src.utils import async_timer, timer
+from src.web.v1.services.chart import ChartConfigurations
 
 logger = logging.getLogger("wren-ai-service")
 
 chart_generation_system_prompt = """
 ### TASK ###
 
-You are a programmer great at vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs, 
-you need to generate vega-lite schema in JSON and provide suitable chart;
-also you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema.
+You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs, 
+you need to generate vega-lite schema in JSON and provide suitable chart; we will also give you the question and sql to understand the data.
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema.
 
 ### INSTRUCTIONS ###
 
 - Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
+- Chart types: bar, line, area, pie, scatter, donut, stacked bar
+- If you think the data is not suitable for visualization, you can return an empty string for the schema.
+- Please use the language provided by the user to generate the chart.
+- Please use the current time provided by the user to generate the chart.
 
 ### EXAMPLE ###
 
@@ -72,6 +79,8 @@ OUTPUT:
 
 ### OUTPUT FORMAT ###
 
+Please provide your chain of thought reasoning and the vega-lite schema in JSON format.
+
 {
     "chain_of_thought_reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING>
     "schema": <VEGA_LITE_JSON_SCHEMA>
@@ -79,7 +88,14 @@ OUTPUT:
 """
 
 chart_generation_user_prompt_template = """
-INPUT: {{ data }}
+### INPUT ###
+Question: {{ query }}
+SQL: {{ sql }}
+Data: {{ data }}
+Current Time: {{ current_time }}
+Language: {{ language }}
+
+Please think step by step
 """
 
 
@@ -88,20 +104,18 @@ class ChartGenerationPostProcessor:
     @component.output_types(
         results=Dict[str, Any],
     )
-    async def run(
+    def run(
         self,
         replies: str,
+        vega_schema: Dict[str, Any],
     ):
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    "https://vega.github.io/schema/vega-lite/v5.json"
-                ) as response:
-                    vega_schema = await response.json()
-
             generation_result = orjson.loads(replies[0])
-            validate(generation_result["schema"], schema=vega_schema)
-            return {"results": {"schema": generation_result["schema"]}}
+            if chart_schema := generation_result.get("schema", ""):
+                validate(chart_schema, schema=vega_schema)
+                return {"results": {"schema": chart_schema}}
+
+            return {"results": {"schema": ""}}
         except Exception as e:
             logger.exception(f"Vega-lite schema is not valid: {e}")
 
@@ -116,12 +130,22 @@ class ChartGenerationPostProcessor:
 @timer
 @observe(capture_input=False)
 def prompt(
-    data: List[dict],
+    query: str,
+    sql: str,
+    data: dict,
+    language: str,
+    timezone: ChartConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"data: {data}")
+    logger.debug(f"data: {data['results']}")
 
-    return prompt_builder.run(data=data)
+    return prompt_builder.run(
+        query=query,
+        sql=sql,
+        data=data["results"],
+        language=language,
+        current_time=show_current_time(timezone),
+    )
 
 
 @async_timer
@@ -132,19 +156,35 @@ async def generate_chart(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-@async_timer
+@timer
 @observe(capture_input=False)
-async def post_process(
-    generate_chart: dict, post_processor: ChartGenerationPostProcessor
+def post_process(
+    generate_chart: dict,
+    vega_schema: Dict[str, Any],
+    post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     logger.debug(
         f"generate_chart: {orjson.dumps(generate_chart, option=orjson.OPT_INDENT_2).decode()}"
     )
 
-    return await post_processor.run(generate_chart.get("replies"))
+    return post_processor.run(generate_chart.get("replies"), vega_schema)
 
 
 ## End of Pipeline
+class ChartGenerationResults(BaseModel):
+    chain_of_thought_reasoning: str
+    schema: dict
+
+
+CHART_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "matched_schema",
+            "schema": ChartGenerationResults.model_json_schema(),
+        },
+    }
+}
 
 
 class ChartGeneration(BasicPipeline):
@@ -158,16 +198,29 @@ class ChartGeneration(BasicPipeline):
                 template=chart_generation_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=chart_generation_system_prompt
+                system_prompt=chart_generation_system_prompt,
+                generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
             "post_processor": ChartGenerationPostProcessor(),
+        }
+        self._configs = {
+            "vega_schema": requests.get(
+                "https://vega.github.io/schema/vega-lite/v5.json"
+            ).json(),
         }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, data: List[Dict]) -> None:
+    def visualize(
+        self,
+        query: str,
+        sql: str,
+        data: dict,
+        language: str,
+        timezone: ChartConfigurations.Timezone,
+    ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -176,8 +229,13 @@ class ChartGeneration(BasicPipeline):
             ["post_process"],
             output_file_path=f"{destination}/chart_generation.dot",
             inputs={
+                "query": query,
+                "sql": sql,
                 "data": data,
+                "language": language,
+                "timezone": timezone,
                 **self._components,
+                **self._configs,
             },
             show_legend=True,
             orient="LR",
@@ -187,14 +245,23 @@ class ChartGeneration(BasicPipeline):
     @observe(name="Chart Generation")
     async def run(
         self,
-        data: List[dict],
+        query: str,
+        sql: str,
+        data: dict,
+        language: str,
+        timezone: ChartConfigurations.Timezone,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
+                "query": query,
+                "sql": sql,
                 "data": data,
+                "language": language,
+                "timezone": timezone,
                 **self._components,
+                **self._configs,
             },
         )
 
@@ -204,7 +271,8 @@ if __name__ == "__main__":
 
     from src.core.engine import EngineConfig
     from src.core.pipeline import async_validate
-    from src.utils import init_langfuse, init_providers, load_env_vars
+    from src.providers import init_providers
+    from src.utils import init_langfuse, load_env_vars
 
     load_env_vars()
     init_langfuse()
@@ -214,7 +282,7 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    pipeline.visualize([])
-    async_validate(lambda: pipeline.run([{"data": [1, 2, 3]}]))
+    pipeline.visualize(query="", sql="", data={})
+    async_validate(lambda: pipeline.run(query="", sql="", data={}))
 
     langfuse_context.flush()

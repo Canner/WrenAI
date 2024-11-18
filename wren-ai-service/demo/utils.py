@@ -322,13 +322,10 @@ def show_asks_details_results(query: str):
 
             st.markdown("### Chart")
             chart_schema = generate_chart(
-                data=get_data_from_wren_engine(
-                    st.session_state["chosen_query_result"]["sql"],
-                    st.session_state["dataset_type"],
-                    st.session_state["mdl_json"],
-                )
+                query=st.session_state["chosen_query_result"]["query"],
+                sql=st.session_state["chosen_query_result"]["sql"],
             )
-            st.json(chart_schema)
+            st.json(chart_schema, expanded=False)
             st.vega_lite_chart(chart_schema)
 
         st.markdown("---")
@@ -856,11 +853,15 @@ def sql_regeneration(sql_regeneration_data: dict):
         return None
 
 
-def generate_chart(data: pd.DataFrame):
+def generate_chart(query: str, sql: str):
     chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
         json={
-            "data": orjson.loads(data.to_json(orient="columns")),
+            "query": query,
+            "sql": sql,
+            "configurations": {
+                "language": st.session_state["language"],
+            },
         },
     )
 

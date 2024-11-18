@@ -24,7 +24,7 @@ from src.pipelines.generation import (
     sql_summary,
 )
 from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.retrieval import historical_question, retrieval, sql_executor
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.chart import ChartService
@@ -121,6 +121,9 @@ def create_service_container(
         ),
         chart_service=ChartService(
             pipelines={
+                "sql_executor": sql_executor.SQLExecutor(
+                    **pipe_components["sql_executor"],
+                ),
                 "chart_generation": chart_generation.ChartGeneration(
                     **pipe_components["chart_generation"],
                 ),
