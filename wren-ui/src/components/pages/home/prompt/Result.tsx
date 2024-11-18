@@ -11,13 +11,14 @@ import MessageOutlined from '@ant-design/icons/MessageOutlined';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import useAskProcessState from '@/hooks/useAskProcessState';
-import RecommendedQuestions from '@/components/pages/home/RecommendedQuestions';
+import RecommendedQuestions, {
+  getRecommendedQuestionProps,
+} from '@/components/pages/home/RecommendedQuestions';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import {
   AskingTask,
   AskingTaskType,
   RecommendedQuestionsTask,
-  RecommendedQuestionsTaskStatus,
 } from '@/apollo/client/graphql/__types__';
 
 const StyledResult = styled.div`
@@ -42,7 +43,13 @@ interface Props {
   };
   error?: any;
   onSelectResult: (payload: { sql: string }) => void;
-  onSelectQuestion: (question: string) => void;
+  onSelectQuestion: ({
+    question,
+    sql,
+  }: {
+    question: string;
+    sql: string;
+  }) => void;
   onClose: () => void;
   onStop: () => void;
   loading?: boolean;
@@ -54,20 +61,6 @@ const Wrapper = ({ children }) => {
       {children}
     </StyledResult>
   );
-};
-
-const getRecommendedQuestionProps = (data: RecommendedQuestionsTask) => {
-  if (!data) return { show: false };
-  const questions = (data?.questions || []).map((item) => item.question);
-  const loading = data?.status === RecommendedQuestionsTaskStatus.GENERATING;
-  return {
-    show: loading || questions.length > 0,
-    state: {
-      items: questions,
-      loading,
-      error: data?.error,
-    },
-  };
 };
 
 const makeProcessing = (text: string) => (props: Props) => {

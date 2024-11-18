@@ -132,11 +132,10 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     }
   }, [error]);
 
-  const selectQuestion = async (value: string) => {
-    setInputValue(value);
-    onStopStreaming && onStopStreaming();
+  const selectQuestion = async (payload) => {
+    onSelect && (await onSelect(payload));
+    closeResult();
     askProcessState.resetState();
-    onSubmit && (await onSubmit(value));
   };
 
   const selectResult = async (payload) => {
