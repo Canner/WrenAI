@@ -30,10 +30,13 @@ export const getIsFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.STOPPED,
   ].includes(status);
 
-const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
+export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
   [
     RecommendedQuestionsTaskStatus.FINISHED,
     RecommendedQuestionsTaskStatus.FAILED,
+
+    // for existing thread response & existing projects that are not executed to generate recommendation questions
+    RecommendedQuestionsTaskStatus.NOT_STARTED,
   ].includes(status);
 
 const isNeedRecommendedQuestions = (askingTask: AskingTask) => {

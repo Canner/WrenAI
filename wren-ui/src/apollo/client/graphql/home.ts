@@ -32,6 +32,22 @@ const COMMON_RESPONSE = gql`
   }
 `;
 
+const COMMON_RECOMMENDED_QUESTIONS_TASK = gql`
+  fragment CommonRecommendedQuestionsTask on RecommendedQuestionsTask {
+    status
+    questions {
+      question
+      category
+      sql
+    }
+    error {
+      ...CommonError
+    }
+  }
+
+  ${COMMON_ERROR}
+`;
+
 export const SUGGESTED_QUESTIONS = gql`
   query SuggestedQuestions {
     suggestedQuestions {
@@ -191,16 +207,40 @@ export const CREATE_INSTANT_RECOMMENDED_QUESTIONS = gql`
 export const INSTANT_RECOMMENDED_QUESTIONS = gql`
   query InstantRecommendedQuestions($taskId: String!) {
     instantRecommendedQuestions(taskId: $taskId) {
-      status
-      questions {
-        question
-        category
-        sql
-      }
-      error {
-        ...CommonError
-      }
+      ...CommonRecommendedQuestionsTask
     }
   }
-  ${COMMON_ERROR}
+  ${COMMON_RECOMMENDED_QUESTIONS_TASK}
+`;
+
+export const GET_THREAD_RECOMMENDATION_QUESTIONS = gql`
+  query GetThreadRecommendationQuestions($threadId: Int!) {
+    getThreadRecommendationQuestions(threadId: $threadId) {
+      ...CommonRecommendedQuestionsTask
+    }
+  }
+
+  ${COMMON_RECOMMENDED_QUESTIONS_TASK}
+`;
+
+export const GET_PROJECT_RECOMMENDATION_QUESTIONS = gql`
+  query GetProjectRecommendationQuestions {
+    getProjectRecommendationQuestions {
+      ...CommonRecommendedQuestionsTask
+    }
+  }
+
+  ${COMMON_RECOMMENDED_QUESTIONS_TASK}
+`;
+
+export const GENERATE_PROJECT_RECOMMENDATION_QUESTIONS = gql`
+  mutation GenerateProjectRecommendationQuestions {
+    generateProjectRecommendationQuestions
+  }
+`;
+
+export const GENERATE_THREAD_RECOMMENDATION_QUESTIONS = gql`
+  mutation GenerateThreadRecommendationQuestions($threadId: Int!) {
+    generateThreadRecommendationQuestions(threadId: $threadId)
+  }
 `;
