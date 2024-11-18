@@ -77,15 +77,7 @@ class SemanticsDescription:
         return [
             {
                 **template,
-                "mdl": {
-                    "models": [
-                        {
-                            "name": chunk["name"],
-                            "columns": chunk["columns"],
-                            "properties": chunk["properties"],
-                        }
-                    ]
-                },
+                "mdl": {"models": [chunk]},
                 "selected_models": [chunk["name"]],
             }
             for chunk in chunks
