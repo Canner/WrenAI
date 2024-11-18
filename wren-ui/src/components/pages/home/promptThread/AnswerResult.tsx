@@ -9,6 +9,10 @@ import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import StepContent from '@/components/pages/home/promptThread/StepContent';
 import { getIsFinished } from '@/hooks/useAskPrompt';
+import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
+import RecommendedQuestions, {
+  getRecommendedQuestionProps,
+} from '@/components/pages/home/RecommendedQuestions';
 import { ThreadResponse } from '@/apollo/client/graphql/__types__';
 
 const { Title, Text } = Typography;
@@ -39,6 +43,9 @@ interface Props {
   isLastThreadResponse: boolean;
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onInitPreviewDone: () => void;
+
+  // recommended questions
+  recommendedQuestionsProps: RecommendedQuestionsProps;
 }
 
 const QuestionTitle = (props) => {
@@ -61,6 +68,7 @@ export default function AnswerResult(props: Props) {
     isLastThreadResponse,
     onOpenSaveAsViewModal,
     onInitPreviewDone,
+    recommendedQuestionsProps,
   } = props;
 
   const { question, status, error } = threadResponse;
@@ -72,11 +80,16 @@ export default function AnswerResult(props: Props) {
   const isViewSaved = !!view;
 
   const resultStyle = isLastThreadResponse
-    ? { minHeight: 'calc(100vh - (360px))' }
+    ? { minHeight: 'calc(100vh - (194px))' }
     : null;
 
+  const recommendedQuestionProps = getRecommendedQuestionProps(
+    recommendedQuestionsProps.data,
+    recommendedQuestionsProps.show,
+  );
+
   return (
-    <div style={resultStyle}>
+    <div style={resultStyle} className="adm-answer-result">
       <QuestionTitle className="mb-9" question={question} />
       {error ? (
         <Alert
@@ -136,6 +149,13 @@ export default function AnswerResult(props: Props) {
               >
                 Save as View
               </Button>
+            )}
+            {isLastThreadResponse && recommendedQuestionProps.show && (
+              <RecommendedQuestions
+                className="mt-5 mb-4"
+                {...recommendedQuestionProps.state}
+                onSelect={recommendedQuestionsProps.onSelect}
+              />
             )}
           </div>
         </StyledSkeleton>

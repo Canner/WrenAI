@@ -178,7 +178,7 @@ export default function HomeThread() {
       <PromptThread
         data={result}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
-        onSelectQuestion={onSelect}
+        onSelect={onSelect}
       />
       <div className="py-12" />
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
