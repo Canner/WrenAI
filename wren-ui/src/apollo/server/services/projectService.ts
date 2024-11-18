@@ -111,14 +111,14 @@ export class ProjectService implements IProjectService {
       questions: [],
       questionsError: null,
     });
-    const tasks = this.projectRecommendQuestionBackgroundTracker.getTasks();
-    const taskKey =
-      this.projectRecommendQuestionBackgroundTracker.taskKey(updatedProject);
-    if (!tasks[taskKey]) {
+
+    if (
+      !this.projectRecommendQuestionBackgroundTracker.isExist(updatedProject)
+    ) {
       this.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
     } else {
       logger.debug(
-        `Generate Project Recommendation Questions Task ${taskKey} already exists, skip adding`,
+        `Generate Project Recommendation Questions Task ${updatedProject.id} already exists, skip adding`,
       );
     }
   }

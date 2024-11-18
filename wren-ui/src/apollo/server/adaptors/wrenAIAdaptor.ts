@@ -222,15 +222,13 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       max_categories: input.maxCategories,
       configuration: input.configuration,
     };
-    logger.debug(
-      `Wren AI: Generating recommendation questions, body: ${JSON.stringify(body)}`,
-    );
+    logger.info(`Wren AI: Generating recommendation questions`);
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/question-recommendations`,
         body,
       );
-      logger.debug(
+      logger.info(
         `Wren AI: Generating recommendation questions, queryId: ${res.data.id}`,
       );
       return { queryId: res.data.id };

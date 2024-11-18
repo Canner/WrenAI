@@ -390,10 +390,7 @@ export class AskingService implements IAskingService {
       throw new Error(`Thread ${threadId} not found`);
     }
 
-    const tasks = this.threadRecommendQuestionBackgroundTracker.getTasks();
-    const taskKey =
-      this.threadRecommendQuestionBackgroundTracker.taskKey(thread);
-    if (tasks[taskKey]) {
+    if (this.threadRecommendQuestionBackgroundTracker.isExist(thread)) {
       logger.debug(
         `thread "${threadId}" recommended questions are generating, skip the current request`,
       );
