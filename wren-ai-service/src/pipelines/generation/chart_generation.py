@@ -36,45 +36,100 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 - If you think the data is not suitable for visualization, you can return an empty string for the schema
 - Please use the language provided by the user to generate the chart
 - Please use the current time provided by the user to generate the chart
+- In order to generate the grouped bar chart, you need to follow the given instructions:
+    - Disable Stacking: Add "stack": null to the y-encoding.
+    - Use xOffset: Introduce xOffset for subcategories to group bars.
 
-### EXAMPLE ###
+### GUIDELINES TO PLOT CHART ###
 
-INPUT:
+1. Understanding Your Data Types
+- Nominal (Categorical): Names or labels without a specific order (e.g., types of fruits, countries).
+- Ordinal: Categorical data with a meaningful order but no fixed intervals (e.g., rankings, satisfaction levels).
+- Quantitative: Numerical values representing counts or measurements (e.g., sales figures, temperatures).
+- Temporal: Date or time data (e.g., timestamps, dates).
+2. Chart Types and When to Use Them
+- Bar Chart
+    - Use When: Comparing quantities across different categories.
+    - Data Requirements:
+        - One categorical variable (x-axis).
+        - One quantitative variable (y-axis).
+    - Example: Comparing sales numbers for different product categories.
+- Grouped Bar Chart
+    - Use When: Comparing sub-categories within main categories.
+    - Data Requirements:
+        - Two categorical variables (x-axis grouped by one, color-coded by another).
+        - One quantitative variable (y-axis).
+        - Example: Sales numbers for different products across various regions.
+- Line Chart
+    - Use When: Displaying trends over continuous data, especially time.
+    - Data Requirements:
+        - One temporal or ordinal variable (x-axis).
+        - One quantitative variable (y-axis).
+    - Example: Tracking monthly revenue over a year.
+- Area Chart
+    - Use When: Similar to line charts but emphasizing the volume of change over time.
+    - Data Requirements:
+        - Same as Line Chart.
+    - Example: Visualizing cumulative rainfall over months.
+- Pie Chart / Donut Chart
+    - Use When: Showing parts of a whole as percentages.
+    - Data Requirements:
+        - One categorical variable.
+        - One quantitative variable representing proportions.
+    - Example: Market share distribution among companies.
+- Scatter Plot Chart
+    - Use When: Exploring relationships or correlations between two quantitative variables.
+    - Data Requirements:
+        - Two quantitative variables (x-axis and y-axis).
+        - Optional third variable for size or color encoding.
+    - Example: Correlating advertising spend with sales revenue.
+- Guidelines for Selecting Chart Types
+    - Single Quantitative Variable
+        - Histogram: Distribution of data.
+        - Use When: Understanding the frequency of data within certain ranges.
+    - Categorical vs. Quantitative
+        - Bar Chart or Pie Chart: Comparing categories.
+        - Use When: Highlighting differences between groups.
+    - Temporal vs. Quantitative
+        - Line Chart or Area Chart: Trends over time.
+        - Use When: Showing how data changes at regular intervals.
+    - Two Quantitative Variables
+        - Scatter Plot: Relationship analysis.
+        - Use When: Identifying correlations or patterns.
+    - Multiple Categorical Variables
+        - Grouped Bar Chart: Complex comparisons.
+        - Use When: Comparing sub-groups within main categories.
+    
+### EXAMPLES ###
+
+1. Comparing Sales Across Regions
+- Chart Type: Bar Chart.
+- Vega-Lite Spec:
 {
-    "col 1": {
-        "row 1": "a",
-        "row 2": "c"
-    },
-    "col 2": {
-        "row 1": "b",
-        "row 2": "d"
+    "mark": "bar",
+    "encoding": {
+        "x": {"field": "Region", "type": "nominal"},
+        "y": {"field": "Sales", "type": "quantitative"}
     }
 }
-
-OUTPUT:
+2. Sales Trends Over Time
+- Chart Type: Line Chart.
+- Vega-Lite Spec:
 {
-    "chain_of_thought_reasoning": 'The provided data has two columns, each containing two rows. This is a small dataset where each "row" has categorical values. The most straightforward way to visualize this would be with a table-like format or a simple bar chart to represent the categories in "col 1" and "col 2" against their respective "rows". Since there are no numerical values, we cannot plot continuous variables. Therefore, a bar chart would help display the categorical comparison between the values of "col 1" and "col 2."'
-    "schema": {
-        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-        "description": "A bar chart representing values from 'col 1' and 'col 2' for each row.",
-        "data": {
-            "values": [
-                {"Row": "row 1", "col 1": "a", "col 2": "b"},
-                {"Row": "row 2", "col 1": "c", "col 2": "d"}
-            ]
-        },
-        "transform": [
-            {
-                "fold": ["col 1", "col 2"],
-                "as": ["Column", "Value"]
-            }
-        ],
-        "mark": "bar",
-        "encoding": {
-            "x": {"field": "Row", "type": "nominal", "title": "Rows"},
-            "y": {"field": "Value", "type": "nominal", "title": "Values"},
-            "color": {"field": "Column", "type": "nominal", "title": "Columns"}
-        }
+    "mark": "line",
+    "encoding": {
+        "x": {"field": "Date", "type": "temporal"},
+        "y": {"field": "Sales", "type": "quantitative"}
+    }
+}
+3. Market Share Distribution
+- Chart Type: Donut Chart.
+- Vega-Lite Spec:
+{
+    "mark": {"type": "arc", "innerRadius": 50},
+    "encoding": {
+        "theta": {"field": "Market Share", "type": "quantitative"},
+        "color": {"field": "Company", "type": "nominal"}
     }
 }
 
@@ -92,8 +147,8 @@ chart_generation_user_prompt_template = """
 ### INPUT ###
 Question: {{ query }}
 SQL: {{ sql }}
-Data Statistics: {{ data_statistics }}
-SampleData: {{ sample_data }}
+Sample Data: {{ sample_data }}
+Sample Data Statistics: {{ sample_data_statistics }}
 Current Time: {{ current_time }}
 Language: {{ language }}
 
@@ -140,22 +195,23 @@ class ChartDataPreprocessor:
         results=Dict[str, Any],
     )
     def run(self, data: Dict[str, Any]):
-        data_statistics = {
+        sample_data_statistics = {
             column["name"]: set() for column in data["results"]["columns"]
         }
         for row in data["results"]["data"]:
-            for column, value in zip(data_statistics.keys(), row):
-                data_statistics[column].add(value)
+            for column, value in zip(sample_data_statistics.keys(), row):
+                if len(sample_data_statistics[column]) < 10:
+                    sample_data_statistics[column].add(value)
 
         sample_data = {
             "columns": data["results"]["columns"],
-            "data": data["results"]["data"][:5],
+            "data": data["results"]["data"][:10],
         }
 
         return {
             "results": {
-                "data_statistics": data_statistics,
-                "data": sample_data,
+                "sample_data_statistics": sample_data_statistics,
+                "sample_data": sample_data,
             }
         }
 
@@ -179,13 +235,13 @@ def prompt(
     timezone: ChartConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    sample_data = preprocess_data["results"]["data"]
-    data_statistics = preprocess_data["results"]["data_statistics"]
+    sample_data = preprocess_data["results"]["sample_data"]
+    sample_data_statistics = preprocess_data["results"]["sample_data_statistics"]
 
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
     logger.debug(f"sample data: {sample_data}")
-    logger.debug(f"data statistics: {data_statistics}")
+    logger.debug(f"sample data statistics: {sample_data_statistics}")
     logger.debug(f"language: {language}")
     logger.debug(f"timezone: {timezone}")
 
@@ -193,7 +249,7 @@ def prompt(
         query=query,
         sql=sql,
         sample_data=sample_data,
-        data_statistics=data_statistics,
+        sample_data_statistics=sample_data_statistics,
         language=language,
         current_time=show_current_time(timezone),
     )
