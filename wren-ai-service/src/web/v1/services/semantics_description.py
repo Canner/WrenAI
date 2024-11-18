@@ -57,19 +57,38 @@ class SemanticsDescription:
         logger.error(error_message)
 
     def _chunking(
-        self, mdl_dict: dict, request: Input, chunk_size: int = 1
+        self, mdl_dict: dict, request: Input, chunk_size: int = 50
     ) -> list[dict]:
         template = {
             "user_prompt": request.user_prompt,
-            "mdl": mdl_dict,
             "language": request.configuration.language,
         }
+
+        chunks = [
+            {
+                **model,
+                "columns": model["columns"][i : i + chunk_size],
+            }
+            for model in mdl_dict["models"]
+            if model["name"] in request.selected_models
+            for i in range(0, len(model["columns"]), chunk_size)
+        ]
+
         return [
             {
                 **template,
-                "selected_models": request.selected_models[i : i + chunk_size],
+                "mdl": {
+                    "models": [
+                        {
+                            "name": chunk["name"],
+                            "columns": chunk["columns"],
+                            "properties": chunk["properties"],
+                        }
+                    ]
+                },
+                "selected_models": [chunk["name"]],
             }
-            for i in range(0, len(request.selected_models), chunk_size)
+            for chunk in chunks
         ]
 
     async def _generate_task(self, request_id: str, chunk: dict):
