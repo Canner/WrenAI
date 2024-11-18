@@ -31,10 +31,11 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 ### INSTRUCTIONS ###
 
 - Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
-- Chart types: bar, line, area, pie, scatter, donut, stacked bar, 
-- If you think the data is not suitable for visualization, you can return an empty string for the schema.
-- Please use the language provided by the user to generate the chart.
-- Please use the current time provided by the user to generate the chart.
+- Chart types: Bar chart, Line chart, Area chart, Pie chart, Scatter plot chart, Donut chart, Grouped bar chart
+- You can only use the chart types provided in the instructions
+- If you think the data is not suitable for visualization, you can return an empty string for the schema
+- Please use the language provided by the user to generate the chart
+- Please use the current time provided by the user to generate the chart
 
 ### EXAMPLE ###
 
@@ -91,7 +92,8 @@ chart_generation_user_prompt_template = """
 ### INPUT ###
 Question: {{ query }}
 SQL: {{ sql }}
-Data: {{ data }}
+Data Statistics: {{ data_statistics }}
+SampleData: {{ sample_data }}
 Current Time: {{ current_time }}
 Language: {{ language }}
 
@@ -132,27 +134,66 @@ class ChartGenerationPostProcessor:
             }
 
 
+@component
+class ChartDataPreprocessor:
+    @component.output_types(
+        results=Dict[str, Any],
+    )
+    def run(self, data: Dict[str, Any]):
+        data_statistics = {
+            column["name"]: set() for column in data["results"]["columns"]
+        }
+        for row in data["results"]["data"]:
+            for column, value in zip(data_statistics.keys(), row):
+                data_statistics[column].add(value)
+
+        sample_data = {
+            "columns": data["results"]["columns"],
+            "data": data["results"]["data"][:5],
+        }
+
+        return {
+            "results": {
+                "data_statistics": data_statistics,
+                "data": sample_data,
+            }
+        }
+
+
 ## Start of Pipeline
+@timer
+@observe(capture_input=False)
+def preprocess_data(
+    data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
+) -> dict:
+    return chart_data_preprocessor.run(data)
+
+
 @timer
 @observe(capture_input=False)
 def prompt(
     query: str,
     sql: str,
-    data: dict,
+    preprocess_data: dict,
     language: str,
     timezone: ChartConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    sample_data = preprocess_data["results"]["data"]
+    data_statistics = preprocess_data["results"]["data_statistics"]
+
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
-    logger.debug(f"data: {data['results']}")
+    logger.debug(f"sample data: {sample_data}")
+    logger.debug(f"data statistics: {data_statistics}")
     logger.debug(f"language: {language}")
     logger.debug(f"timezone: {timezone}")
 
     return prompt_builder.run(
         query=query,
         sql=sql,
-        data=data["results"],
+        sample_data=sample_data,
+        data_statistics=data_statistics,
         language=language,
         current_time=show_current_time(timezone),
     )
@@ -211,6 +252,7 @@ class ChartGeneration(BasicPipeline):
                 system_prompt=chart_generation_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
+            "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }
         self._configs = {
