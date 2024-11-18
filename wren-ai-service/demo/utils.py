@@ -324,9 +324,10 @@ def show_asks_details_results(query: str):
             chart_schema = generate_chart(
                 query=st.session_state["chosen_query_result"]["query"],
                 sql=st.session_state["chosen_query_result"]["sql"],
+                language=st.session_state["language"],
             )
             st.json(chart_schema, expanded=False)
-            st.vega_lite_chart(chart_schema)
+            st.vega_lite_chart(chart_schema, use_container_width=True)
 
         st.markdown("---")
         st.button(
@@ -853,14 +854,14 @@ def sql_regeneration(sql_regeneration_data: dict):
         return None
 
 
-def generate_chart(query: str, sql: str):
+def generate_chart(query: str, sql: str, language: str):
     chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
         json={
             "query": query,
             "sql": sql,
             "configurations": {
-                "language": st.session_state["language"],
+                "language": language,
             },
         },
     )

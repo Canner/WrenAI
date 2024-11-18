@@ -30,6 +30,7 @@ class WrenUI(Engine):
         project_id: str | None = None,
         dry_run: bool = True,
         timeout: float = 30.0,
+        limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         data = {
@@ -40,7 +41,7 @@ class WrenUI(Engine):
             data["dryRun"] = True
             data["limit"] = 1
         else:
-            data["limit"] = 500
+            data["limit"] = limit
 
         try:
             async with session.post(
@@ -178,9 +179,7 @@ class WrenEngine(Engine):
             async with session.get(
                 api_endpoint,
                 json={
-                    "manifest": orjson.loads(
-                        base64.b64decode(self._manifest)
-                    )
+                    "manifest": orjson.loads(base64.b64decode(self._manifest))
                     if self._manifest
                     else {},
                     "sql": remove_limit_statement(sql),

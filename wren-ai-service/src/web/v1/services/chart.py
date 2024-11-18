@@ -125,6 +125,7 @@ class ChartService:
             sql_data = await self._pipelines["sql_executor"].run(
                 sql=chart_request.sql,
                 project_id=chart_request.project_id,
+                limit=100,
             )
 
             self._chart_results[query_id] = ChartResultResponse(status="generating")
