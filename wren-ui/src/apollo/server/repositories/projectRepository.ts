@@ -106,7 +106,7 @@ export class ProjectRepository
   extends BaseRepository<Project>
   implements IProjectRepository
 {
-  private jsonTypeColumns = ['questions', 'questionsError', 'connectionInfo'];
+  private jsonTypeColumns = ['questions', 'questions_error', 'connection_info'];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'project' });
@@ -127,8 +127,7 @@ export class ProjectRepository
     if (!isPlainObject(data)) {
       throw new Error('Unexpected db data');
     }
-    const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
-    const formattedData = mapValues(camelCaseData, (value, key) => {
+    const formattedData = mapValues(data, (value, key) => {
       if (this.jsonTypeColumns.includes(key) && typeof value === 'string') {
         // should return {} if value is null / {}, use value ? {} : JSON.parse(value) will throw error when value is null
         return isEmpty(value) ? {} : JSON.parse(value);
@@ -138,7 +137,10 @@ export class ProjectRepository
       }
       return value;
     });
-    return formattedData as Project;
+    const camelCaseData = mapKeys(formattedData, (_value, key) =>
+      camelCase(key),
+    );
+    return camelCaseData as Project;
   };
 
   public override transformToDBData: (data: Project) => any = (

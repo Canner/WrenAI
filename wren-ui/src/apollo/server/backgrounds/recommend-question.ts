@@ -164,6 +164,10 @@ export class ProjectRecommendQuestionBackgroundTracker {
   public taskKey(project: Project) {
     return project.id;
   }
+
+  public isExist(project: Project) {
+    return this.tasks[this.taskKey(project)];
+  }
 }
 
 export class ThreadRecommendQuestionBackgroundTracker {
@@ -309,5 +313,9 @@ export class ThreadRecommendQuestionBackgroundTracker {
 
   public taskKey(thread: Thread) {
     return thread.id;
+  }
+
+  public isExist(thread: Thread) {
+    return this.tasks[this.taskKey(thread)];
   }
 }

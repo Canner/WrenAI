@@ -268,8 +268,8 @@ export class QueryService implements IQueryService {
     this.telemetry.sendEvent(
       event,
       {
-        correlationId: err.extensions.other.correlationId,
-        processTime: err.extensions.other.processTime,
+        correlationId: err.extensions?.other?.correlationId,
+        processTime: err.extensions?.other?.processTime,
         error: err.message,
         ...others,
       },
