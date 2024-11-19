@@ -101,6 +101,8 @@ pipes:
     engine: wren_ui
   - name: question_recommendation
     llm: openai_llm.gpt-4o-mini
+  - name: chart_generation
+    llm: openai_llm.gpt-4o-mini
   - name: intent_classification
     llm: openai_llm.gpt-4o-mini
     embedder: openai_embedder.text-embedding-3-large
