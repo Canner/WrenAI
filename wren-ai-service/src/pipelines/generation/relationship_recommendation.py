@@ -2,7 +2,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import orjson
 from hamilton import base
@@ -72,7 +72,7 @@ class ModelRelationship(BaseModel):
     name: str
     fromModel: str
     fromColumn: str
-    type: str
+    type: Literal["MANY_TO_ONE", "ONE_TO_MANY", "ONE_TO_ONE"]
     toModel: str
     toColumn: str
     reason: str
@@ -97,7 +97,7 @@ You are an expert in database schema design and relationship recommendation. Giv
 - **name**: A descriptive name for the relationship.
 - **fromModel**: The name of the source model.
 - **fromColumn**: The column in the source model that forms the relationship.
-- **type**: The type of relationship, which can be MANY_TO_ONE, ONE_TO_MANY or ONE_TO_ONE.
+- **type**: The type of relationship, which can be "MANY_TO_ONE" or "ONE_TO_ONE" only. (Note: "MANY_TO_MANY" relationships are out of scope.)
 - **toModel**: The name of the target model.
 - **toColumn**: The column in the target model that forms the relationship.
 - **reason**: The reason for recommending this relationship.
@@ -201,23 +201,22 @@ class RelationshipRecommendation(BasicPipeline):
 if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
-    from src.core.engine import EngineConfig
+    from src.config import settings
     from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
+    from src.providers import generate_components
+    from src.utils import init_langfuse
 
-    load_env_vars()
+    pipe_components = generate_components(settings.components)
+    pipeline = RelationshipRecommendation(
+        **pipe_components["relationship_recommendation"]
+    )
     init_langfuse()
 
-    llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = RelationshipRecommendation(llm_provider=llm_provider, engine=engine)
-
-    with open("sample/college_3_bigquery_mdl.json", "r") as file:
+    with open("sample/woocommerce_bigquery_mdl.json", "r") as file:
         mdl = json.load(file)
 
     input = {"mdl": mdl}
 
-    pipeline.visualize(**input)
     async_validate(lambda: pipeline.run(**input))
 
     langfuse_context.flush()
