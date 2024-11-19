@@ -13,6 +13,7 @@ from utils import (
     get_data_from_wren_engine,
     get_mdl_json,
     get_sql_answer,
+    on_click_adjust_chart,
     prepare_semantics,
     rerun_wren_engine,
     save_mdl_json_file,
@@ -219,12 +220,17 @@ if st.session_state["asks_results"]:
     if chosen_tab_id == "1":
         if st.session_state["chosen_query_result"]:
             st.markdown("### Data Answer")
-            st.markdown(
-                get_sql_answer(
-                    st.session_state["chosen_query_result"]["query"],
-                    st.session_state["chosen_query_result"]["sql"],
-                )
+            sql_answer_result = get_sql_answer(
+                st.session_state["chosen_query_result"]["query"],
+                st.session_state["chosen_query_result"]["sql"],
             )
+            if sql_answer := sql_answer_result.get("response"):
+                st.markdown(sql_answer)
+            else:
+                st.error(
+                    f'An error occurred while processing the query: {sql_answer_result.get("error")}',
+                    icon="🚨",
+                )
 
             st.markdown("### Data Preview")
             st.dataframe(
@@ -236,7 +242,18 @@ if st.session_state["asks_results"]:
             )
     elif chosen_tab_id == "2":
         if st.session_state["chosen_query_result"]:
-            ask_details()
+            ask_details_result = ask_details()
+            if ask_details_response := ask_details_result.get("response"):
+                st.session_state["asks_details_result"] = ask_details_response
+                st.session_state["sql_explanation_question"] = None
+                st.session_state["sql_explanation_steps_with_analysis"] = None
+                st.session_state["sql_analysis_results"] = None
+                st.session_state["sql_explanation_results"] = None
+            else:
+                st.error(
+                    f'An error occurred while processing the query: {ask_details_result.get("error")}',
+                    icon="🚨",
+                )
             if st.session_state["asks_details_result"]:
                 show_asks_details_results()
     else:
@@ -246,13 +263,28 @@ if st.session_state["asks_results"]:
                 sql=st.session_state["chosen_query_result"]["sql"],
                 language=st.session_state["language"],
             )
-            if chart_response:
-                if reasoning := chart_response["reasoning"]:
+            if chart_result := chart_response.get("response"):
+                if reasoning := chart_result["reasoning"]:
                     st.markdown("### Reasoning for making this chart")
                     st.markdown(f"{reasoning}")
-                if vega_lite_schema := chart_response["schema"]:
+                if vega_lite_schema := chart_result["schema"]:
                     st.markdown("### Vega-Lite Schema")
                     st.json(vega_lite_schema, expanded=False)
                     st.markdown("### Chart Description")
-                    st.markdown(f'{chart_response["description"]}')
+                    st.markdown(f'{chart_result["description"]}')
                     st.vega_lite_chart(vega_lite_schema, use_container_width=True)
+
+                st.button(
+                    "Adjust Chart",
+                    on_click=on_click_adjust_chart,
+                    kwargs={
+                        "query": st.session_state["chosen_query_result"]["query"],
+                        "sql": st.session_state["chosen_query_result"]["sql"],
+                        "chart_schema": vega_lite_schema,
+                    },
+                )
+            else:
+                st.error(
+                    f'An error occurred while processing the query: {chart_response.get("error")}',
+                    icon="🚨",
+                )

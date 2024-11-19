@@ -108,7 +108,7 @@ class ChartAdjustmentService:
         return False
 
     @async_timer
-    @observe(name="Generate Chart Adjustment")
+    @observe(name="Adjust Chart")
     @trace_metadata
     async def chart_adjustment(
         self,
@@ -137,7 +137,6 @@ class ChartAdjustmentService:
             sql_data = await self._pipelines["sql_executor"].run(
                 sql=chart_adjustment_request.sql,
                 project_id=chart_adjustment_request.project_id,
-                limit=500,
             )
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
@@ -147,6 +146,8 @@ class ChartAdjustmentService:
             chart_adjustment_result = await self._pipelines["chart_adjustment"].run(
                 query=chart_adjustment_request.query,
                 sql=chart_adjustment_request.sql,
+                adjustment_query=chart_adjustment_request.adjustment_query,
+                chart_schema=chart_adjustment_request.chart_schema,
                 data=sql_data["execute_sql"],
                 language=chart_adjustment_request.configurations.language,
             )

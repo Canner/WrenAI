@@ -23,9 +23,9 @@ logger = logging.getLogger("wren-ai-service")
 chart_adjustment_system_prompt = """
 ### TASK ###
 
-You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs, 
-you need to generate vega-lite schema in JSON and provide suitable chart; we will also give you the question and sql to understand the data.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema.
+You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs,
+original question and sql, vega-lite schema and the adjustment query, you need to regenerate vega-lite schema in JSON and provide suitable chart;
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema and a within 20 words description of the chart..
 
 ### INSTRUCTIONS ###
 
@@ -144,8 +144,10 @@ Please provide your chain of thought reasoning and the vega-lite schema in JSON 
 
 chart_adjustment_user_prompt_template = """
 ### INPUT ###
-Question: {{ query }}
-SQL: {{ sql }}
+Adjustment Question: {{ adjustment_query }}
+Original Question: {{ query }}
+Original SQL: {{ sql }}
+Original Vega-Lite Schema: {{ chart_schema }}
 Sample Data: {{ sample_data }}
 Sample Data Statistics: {{ sample_data_statistics }}
 Language: {{ language }}
@@ -239,6 +241,8 @@ def preprocess_data(
 def prompt(
     query: str,
     sql: str,
+    adjustment_query: str,
+    chart_schema: dict,
     preprocess_data: dict,
     language: str,
     prompt_builder: PromptBuilder,
@@ -248,6 +252,8 @@ def prompt(
 
     logger.debug(f"query: {query}")
     logger.debug(f"sql: {sql}")
+    logger.debug(f"adjustment_query: {adjustment_query}")
+    logger.debug(f"chart_schema: {chart_schema}")
     logger.debug(f"sample data: {sample_data}")
     logger.debug(f"sample data statistics: {sample_data_statistics}")
     logger.debug(f"language: {language}")
@@ -255,6 +261,8 @@ def prompt(
     return prompt_builder.run(
         query=query,
         sql=sql,
+        adjustment_query=adjustment_query,
+        chart_schema=chart_schema,
         sample_data=sample_data,
         sample_data_statistics=sample_data_statistics,
         language=language,
@@ -331,6 +339,8 @@ class ChartAdjustment(BasicPipeline):
         self,
         query: str,
         sql: str,
+        adjustment_query: str,
+        chart_schema: dict,
         data: dict,
         language: str,
     ) -> None:
@@ -344,6 +354,8 @@ class ChartAdjustment(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
+                "adjustment_query": adjustment_query,
+                "chart_schema": chart_schema,
                 "data": data,
                 "language": language,
                 **self._components,
@@ -359,6 +371,8 @@ class ChartAdjustment(BasicPipeline):
         self,
         query: str,
         sql: str,
+        adjustment_query: str,
+        chart_schema: dict,
         data: dict,
         language: str,
     ) -> dict:
@@ -368,6 +382,8 @@ class ChartAdjustment(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
+                "adjustment_query": adjustment_query,
+                "chart_schema": chart_schema,
                 "data": data,
                 "language": language,
                 **self._components,
@@ -392,7 +408,23 @@ if __name__ == "__main__":
         llm_provider=llm_provider,
     )
 
-    pipeline.visualize(query="", sql="", data={})
-    async_validate(lambda: pipeline.run(query="", sql="", data={}))
+    pipeline.visualize(
+        query="",
+        sql="",
+        adjustment_query="",
+        chart_schema={},
+        data={},
+        language="",
+    )
+    async_validate(
+        lambda: pipeline.run(
+            query="",
+            sql="",
+            adjustment_query="",
+            chart_schema={},
+            data={},
+            language="",
+        )
+    )
 
     langfuse_context.flush()

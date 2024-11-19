@@ -188,10 +188,10 @@ def show_query_history():
 
 
 def show_asks_results():
+    show_query_history()
+
     st.markdown("### Query")
     st.markdown(f"{st.session_state['query']}")
-
-    show_query_history()
 
     st.markdown("### Query Result")
     if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
@@ -417,6 +417,10 @@ def on_click_sql_regeneration_button(
     show_sql_regeneration_results_dialog(sql_user_corrections_by_step)
 
 
+def on_click_adjust_chart(query: str, sql: str, chart_schema: dict):
+    show_chart_adjustment_dialog(query, sql, chart_schema)
+
+
 # ai service api related
 def generate_mdl_metadata(mdl_model_json: dict):
     identifiers = [mdl_model_json["name"]]
@@ -613,6 +617,7 @@ def display_general_response(query_id: str):
         placeholder.markdown(markdown_content)
 
 
+@st.cache_data
 def get_sql_answer(
     query: str,
     sql: str,
@@ -640,18 +645,12 @@ def get_sql_answer(
         )
         assert sql_answer_status_response.status_code == 200
         sql_answer_status = sql_answer_status_response.json()["status"]
-        st.toast(f"The query processing status: {sql_answer_status}")
         time.sleep(POLLING_INTERVAL)
 
-    if sql_answer_status == "finished":
-        return sql_answer_status_response.json()["response"]
-    elif sql_answer_status == "failed":
-        st.error(
-            f'An error occurred while processing the query: {sql_answer_status_response.json()['error']}',
-            icon="🚨",
-        )
+    return sql_answer_status_response.json()
 
 
+@st.cache_data
 def ask_details():
     asks_details_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details",
@@ -676,22 +675,9 @@ def ask_details():
         )
         assert asks_details_status_response.status_code == 200
         asks_details_status = asks_details_status_response.json()["status"]
-        st.toast(f"The query processing status: {asks_details_status}")
         time.sleep(POLLING_INTERVAL)
 
-    if asks_details_status == "finished":
-        st.session_state["asks_details_result"] = asks_details_status_response.json()[
-            "response"
-        ]
-        st.session_state["sql_explanation_question"] = None
-        st.session_state["sql_explanation_steps_with_analysis"] = None
-        st.session_state["sql_analysis_results"] = None
-        st.session_state["sql_explanation_results"] = None
-    elif asks_details_status == "failed":
-        st.error(
-            f'An error occurred while processing the query: {asks_details_status_response.json()['error']}',
-            icon="🚨",
-        )
+    return asks_details_status_response.json()
 
 
 def sql_explanation():
@@ -761,6 +747,7 @@ def sql_regeneration(sql_regeneration_data: dict):
         return None
 
 
+@st.cache_data
 def generate_chart(query: str, sql: str, language: str):
     chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
@@ -787,16 +774,9 @@ def generate_chart(query: str, sql: str, language: str):
         )
         assert charts_status_response.status_code == 200
         charts_status = charts_status_response.json()["status"]
-        st.toast(f"The query processing status: {charts_status}")
         time.sleep(POLLING_INTERVAL)
 
-    if charts_status == "finished":
-        return charts_status_response.json()["response"]
-    elif charts_status == "failed":
-        st.error(
-            f'An error occurred while generating the chart: {charts_status_response.json()['error']}',
-            icon="🚨",
-        )
+    return charts_status_response.json()
 
 
 @st.dialog(
@@ -874,3 +854,21 @@ def show_sql_regeneration_results_dialog(
                 language="sql",
             )
             sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
+
+
+@st.dialog("Adjust Chart", width="large")
+def show_chart_adjustment_dialog(query: str, sql: str, chart_schema: dict):
+    st.markdown("### Original Question")
+    st.markdown(query)
+    st.markdown("### Original SQL")
+    st.code(
+        body=sqlparse.format(
+            sql,
+            reindent=True,
+            keyword_case="upper",
+        ),
+        language="sql",
+    )
+    st.markdown("### Original Vega-Lite Schema")
+    st.json(chart_schema, expanded=False)
+    st.vega_lite_chart(chart_schema, use_container_width=True)
