@@ -167,12 +167,12 @@ class ChartDataPreprocessor:
         }
         for row in data["results"]["data"]:
             for column, value in zip(sample_data_statistics.keys(), row):
-                if len(sample_data_statistics[column]) < 10:
+                if len(sample_data_statistics[column]) < 5:
                     sample_data_statistics[column].add(value)
 
         sample_data = {
             "columns": data["results"]["columns"],
-            "data": data["results"]["data"][:10],
+            "data": data["results"]["data"][:5],
         }
 
         return {
