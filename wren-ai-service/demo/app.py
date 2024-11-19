@@ -101,32 +101,6 @@ with st.sidebar:
         on_change=onchange_demo_dataset,
     )
 
-    st.selectbox(
-        "Language",
-        key="language_selectbox",
-        options=[
-            "English",
-            "Spanish",
-            "French",
-            "TraditionalChinese",
-            "SimplifiedChinese",
-            "German",
-            "Portuguese",
-            "Russian",
-            "Japanese",
-            "Korean",
-        ],
-        index=0,
-        on_change=onchange_language,
-    )
-    st.selectbox(
-        "Timezone",
-        key="timezone_selectbox",
-        options=pytz.all_timezones,
-        index=pytz.all_timezones.index(st.session_state["timezone"]),
-        on_change=onchange_timezone,
-    )
-
     if uploaded_file is not None:
         match = re.match(
             r".+_(" + "|".join(DATA_SOURCES) + r")_mdl\.json$",
@@ -155,29 +129,56 @@ with st.sidebar:
         st.session_state["dataset_type"] = "duckdb"
         st.session_state["mdl_json"] = get_mdl_json(chosen_demo_dataset)
 
-    st.markdown("---")
-
     if st.session_state["mdl_json"]:
         # Display the model using the selected database
-        st.markdown("MDL Model")
+        st.markdown("MDL Model Preview")
         st.json(
             body=st.session_state["mdl_json"],
             expanded=False,
         )
 
-        deploy_ok = st.button(
-            "Deploy",
-            use_container_width=True,
-            type="primary",
+    st.markdown("## Settings")
+    st.selectbox(
+        "LLM Output Language",
+        key="language_selectbox",
+        options=[
+            "English",
+            "Spanish",
+            "French",
+            "TraditionalChinese",
+            "SimplifiedChinese",
+            "German",
+            "Portuguese",
+            "Russian",
+            "Japanese",
+            "Korean",
+        ],
+        index=0,
+        on_change=onchange_language,
+    )
+    st.selectbox(
+        "User Timezone",
+        key="timezone_selectbox",
+        options=pytz.all_timezones,
+        index=pytz.all_timezones.index(st.session_state["timezone"]),
+        on_change=onchange_timezone,
+    )
+
+    st.markdown("---")
+
+    deploy_ok = st.button(
+        "Deploy",
+        use_container_width=True,
+        type="primary",
+    )
+    # Semantics preparation
+    if deploy_ok:
+        rerun_wren_engine(
+            st.session_state["mdl_json"],
+            st.session_state["dataset_type"],
+            st.session_state["chosen_dataset"],
         )
-        # Semantics preparation
-        if deploy_ok:
-            rerun_wren_engine(
-                st.session_state["mdl_json"],
-                st.session_state["dataset_type"],
-                st.session_state["chosen_dataset"],
-            )
-            prepare_semantics(st.session_state["mdl_json"])
+        prepare_semantics(st.session_state["mdl_json"])
 
 query = st.chat_input(
     "Ask a question about the database",
