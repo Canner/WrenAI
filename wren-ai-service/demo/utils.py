@@ -753,6 +753,9 @@ def ask_details():
         json={
             "query": st.session_state["chosen_query_result"]["query"],
             "sql": st.session_state["chosen_query_result"]["sql"],
+            "configurations": {
+                "language": st.session_state["language"],
+            },
         },
     )
 
