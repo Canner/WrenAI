@@ -548,7 +548,7 @@ def prepare_semantics(mdl_json: dict):
         st.toast("Semantics is prepared successfully", icon="🎉")
 
 
-def ask(query: str, query_history: Optional[dict] = None):
+def ask(query: str, timezone: str, query_history: Optional[dict] = None):
     st.session_state["query"] = query
     asks_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/asks",
@@ -558,6 +558,10 @@ def ask(query: str, query_history: Optional[dict] = None):
             "history": query_history,
             "configurations": {
                 "language": st.session_state["language"],
+                "timezone": {
+                    "name": timezone,
+                    "utc_offset": "",
+                },
             },
         },
     )
@@ -757,7 +761,7 @@ def sql_regeneration(sql_regeneration_data: dict):
         return None
 
 
-def generate_chart(query: str, sql: str, language: str):
+def generate_chart(query: str, sql: str, language: str, timezone: str):
     chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
         json={
@@ -765,6 +769,10 @@ def generate_chart(query: str, sql: str, language: str):
             "sql": sql,
             "configurations": {
                 "language": language,
+                "timezone": {
+                    "name": timezone,
+                    "utc_offset": "",
+                },
             },
         },
     )

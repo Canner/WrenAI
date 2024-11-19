@@ -3,6 +3,7 @@ import uuid
 
 import extra_streamlit_components as stx
 import orjson
+import pytz
 import streamlit as st
 from utils import (
     DATA_SOURCES,
@@ -64,6 +65,8 @@ if "sql_regeneration_results" not in st.session_state:
     st.session_state["sql_regeneration_results"] = None
 if "language" not in st.session_state:
     st.session_state["language"] = "English"
+if "timezone" not in st.session_state:
+    st.session_state["timezone"] = "UTC"
 if "chosen_tab_id" not in st.session_state:
     st.session_state["chosen_tab_id"] = "1"
 
@@ -74,6 +77,10 @@ def onchange_demo_dataset():
 
 def onchange_language():
     st.session_state["language"] = st.session_state["language_selectbox"]
+
+
+def onchange_timezone():
+    st.session_state["timezone"] = st.session_state["timezone_selectbox"]
 
 
 with st.sidebar:
@@ -111,6 +118,13 @@ with st.sidebar:
         ],
         index=0,
         on_change=onchange_language,
+    )
+    st.selectbox(
+        "Timezone",
+        key="timezone_selectbox",
+        options=pytz.all_timezones,
+        index=pytz.all_timezones.index(st.session_state["timezone"]),
+        on_change=onchange_timezone,
     )
 
     if uploaded_file is not None:
@@ -187,7 +201,7 @@ if query:
     st.session_state["preview_data_button_index"] = None
     st.session_state["preview_sql"] = None
 
-    ask(query, st.session_state["query_history"])
+    ask(query, st.session_state["timezone"], st.session_state["query_history"])
 if st.session_state["asks_results"]:
     show_asks_results()
 
@@ -228,6 +242,7 @@ if st.session_state["asks_results"]:
                 query=st.session_state["chosen_query_result"]["query"],
                 sql=st.session_state["chosen_query_result"]["sql"],
                 language=st.session_state["language"],
+                timezone=st.session_state["timezone"],
             )
             if chart_response:
                 if reasoning := chart_response["reasoning"]:
