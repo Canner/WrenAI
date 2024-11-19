@@ -92,7 +92,7 @@ export const askSuggestionQuestionTest = async ({
   baseURL,
   suggestedQuestion,
 }) => {
-  await page.goto('/');
+  await page.goto('/home');
   await expect(page).toHaveURL('/home', { timeout: 60000 });
 
   await page.getByText(suggestedQuestion).click();
@@ -143,7 +143,7 @@ export const askSuggestionQuestionTest = async ({
 };
 
 export const followUpQuestionTest = async ({ page, baseURL, question }) => {
-  await page.goto('/');
+  await page.goto('/home');
   await expect(page).toHaveURL('/home', { timeout: 60000 });
 
   // click existing thread
