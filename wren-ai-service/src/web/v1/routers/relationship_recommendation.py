@@ -26,7 +26,7 @@ Endpoints:
    - Request body: PostRequest
      {
        "mdl": "{ ... }",                           # JSON string of the MDL (Model Definition Language)
-       "project_id": "project-id"                  # Optional project ID  
+       "project_id": "project-id"                  # Optional project ID
      }
    - Response: PostResponse
      {
@@ -87,6 +87,7 @@ async def recommend(
     input = RelationshipRecommendation.Input(
         id=id,
         mdl=request.mdl,
+        project_id=request.project_id,
     )
 
     background_tasks.add_task(

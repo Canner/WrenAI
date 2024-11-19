@@ -17,6 +17,7 @@ class RelationshipRecommendation:
     class Input(BaseModel):
         id: str
         mdl: str
+        project_id: Optional[str] = None  # this is for tracing purpose
 
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):

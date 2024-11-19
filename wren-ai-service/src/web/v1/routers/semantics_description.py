@@ -118,6 +118,7 @@ async def generate(
         user_prompt=request.user_prompt,
         mdl=request.mdl,
         configuration=request.configuration,
+        project_id=request.project_id,
     )
 
     background_tasks.add_task(
