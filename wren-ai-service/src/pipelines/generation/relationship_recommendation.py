@@ -1,8 +1,9 @@
 import json
 import logging
 import sys
+from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import orjson
 from hamilton import base
@@ -62,17 +63,36 @@ def normalized(generate: dict) -> dict:
 
 
 def validated(normalized: dict, engine: Engine) -> dict:
+    relationships = normalized.get("relationships", [])
+
+    validated_relationships = [
+        relationship
+        for relationship in relationships
+        if RelationType.is_include(relationship.get("type"))
+    ]
+
     # todo: after wren-engine support function to validate the relationships, we will use that function to validate the relationships
     # for now, we will just return the normalized relationships
-    return normalized
+
+    return {"relationships": validated_relationships}
 
 
 ## End of Pipeline
+class RelationType(Enum):
+    MANY_TO_ONE = "MANY_TO_ONE"
+    ONE_TO_MANY = "ONE_TO_MANY"
+    ONE_TO_ONE = "ONE_TO_ONE"
+
+    @classmethod
+    def is_include(cls, value: str) -> bool:
+        return value in cls._value2member_map_
+
+
 class ModelRelationship(BaseModel):
     name: str
     fromModel: str
     fromColumn: str
-    type: Literal["MANY_TO_ONE", "ONE_TO_MANY", "ONE_TO_ONE"]
+    type: RelationType
     toModel: str
     toColumn: str
     reason: str
