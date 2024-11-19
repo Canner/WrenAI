@@ -218,6 +218,7 @@ if st.session_state["asks_results"]:
 
     if chosen_tab_id == "1":
         if st.session_state["chosen_query_result"]:
+            st.markdown("### Data Answer")
             st.markdown(
                 get_sql_answer(
                     st.session_state["chosen_query_result"]["query"],
@@ -225,6 +226,7 @@ if st.session_state["asks_results"]:
                 )
             )
 
+            st.markdown("### Data Preview")
             st.dataframe(
                 get_data_from_wren_engine(
                     st.session_state["chosen_query_result"]["sql"],
@@ -243,11 +245,14 @@ if st.session_state["asks_results"]:
                 query=st.session_state["chosen_query_result"]["query"],
                 sql=st.session_state["chosen_query_result"]["sql"],
                 language=st.session_state["language"],
-                timezone=st.session_state["timezone"],
             )
             if chart_response:
                 if reasoning := chart_response["reasoning"]:
-                    st.markdown(reasoning)
+                    st.markdown("### Reasoning for making this chart")
+                    st.markdown(f"{reasoning}")
                 if vega_lite_schema := chart_response["schema"]:
+                    st.markdown("### Vega-Lite Schema")
                     st.json(vega_lite_schema, expanded=False)
+                    st.markdown("### Chart Description")
+                    st.markdown(f'{chart_response["description"]}')
                     st.vega_lite_chart(vega_lite_schema, use_container_width=True)

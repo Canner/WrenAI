@@ -16,9 +16,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.common import show_current_time
 from src.utils import async_timer, timer
-from src.web.v1.services.chart import ChartConfigurations
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -150,7 +148,6 @@ Question: {{ query }}
 SQL: {{ sql }}
 Sample Data: {{ sample_data }}
 Sample Data Statistics: {{ sample_data_statistics }}
-Current Time: {{ current_time }}
 Language: {{ language }}
 
 Please think step by step
@@ -244,7 +241,6 @@ def prompt(
     sql: str,
     preprocess_data: dict,
     language: str,
-    timezone: ChartConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
     sample_data = preprocess_data["results"]["sample_data"]
@@ -255,7 +251,6 @@ def prompt(
     logger.debug(f"sample data: {sample_data}")
     logger.debug(f"sample data statistics: {sample_data_statistics}")
     logger.debug(f"language: {language}")
-    logger.debug(f"timezone: {timezone}")
 
     return prompt_builder.run(
         query=query,
@@ -263,7 +258,6 @@ def prompt(
         sample_data=sample_data,
         sample_data_statistics=sample_data_statistics,
         language=language,
-        current_time=show_current_time(timezone),
     )
 
 
@@ -339,7 +333,6 @@ class ChartAdjustment(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        timezone: ChartConfigurations.Timezone,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -353,7 +346,6 @@ class ChartAdjustment(BasicPipeline):
                 "sql": sql,
                 "data": data,
                 "language": language,
-                "timezone": timezone,
                 **self._components,
                 **self._configs,
             },
@@ -369,7 +361,6 @@ class ChartAdjustment(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        timezone: ChartConfigurations.Timezone,
     ) -> dict:
         logger.info("Chart Adjustment pipeline is running...")
         return await self._pipe.execute(
@@ -379,7 +370,6 @@ class ChartAdjustment(BasicPipeline):
                 "sql": sql,
                 "data": data,
                 "language": language,
-                "timezone": timezone,
                 **self._components,
                 **self._configs,
             },

@@ -761,7 +761,7 @@ def sql_regeneration(sql_regeneration_data: dict):
         return None
 
 
-def generate_chart(query: str, sql: str, language: str, timezone: str):
+def generate_chart(query: str, sql: str, language: str):
     chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
         json={
@@ -769,10 +769,6 @@ def generate_chart(query: str, sql: str, language: str, timezone: str):
             "sql": sql,
             "configurations": {
                 "language": language,
-                "timezone": {
-                    "name": timezone,
-                    "utc_offset": "",
-                },
             },
         },
     )

@@ -16,9 +16,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.common import show_current_time
 from src.utils import async_timer, timer
-from src.web.v1.services.chart import ChartConfigurations
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -27,7 +25,7 @@ chart_generation_system_prompt = """
 
 You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs, 
 you need to generate vega-lite schema in JSON and provide suitable chart; we will also give you the question and sql to understand the data.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema.
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema and a within 20 words description of the chart.
 
 ### INSTRUCTIONS ###
 
@@ -139,7 +137,8 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 Please provide your chain of thought reasoning and the vega-lite schema in JSON format.
 
 {
-    "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING>
+    "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING>,
+    "description": <DESCRIPTION_OF_THE_CHART_IN_STRING>,
     "schema": <VEGA_LITE_JSON_SCHEMA>
 }
 """
@@ -150,7 +149,6 @@ Question: {{ query }}
 SQL: {{ sql }}
 Sample Data: {{ sample_data }}
 Sample Data Statistics: {{ sample_data_statistics }}
-Current Time: {{ current_time }}
 Language: {{ language }}
 
 Please think step by step
@@ -198,16 +196,24 @@ class ChartGenerationPostProcessor:
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
+            description = generation_result.get("description", "")
             if chart_schema := generation_result.get("schema", {}):
                 validate(chart_schema, schema=vega_schema)
                 return {
                     "results": {
                         "schema": chart_schema,
                         "reasoning": reasoning,
+                        "description": description,
                     }
                 }
 
-            return {"results": {"schema": {}, "reasoning": reasoning}}
+            return {
+                "results": {
+                    "schema": {},
+                    "reasoning": reasoning,
+                    "description": description,
+                }
+            }
         except ValidationError as e:
             logger.exception(f"Vega-lite schema is not valid: {e}")
 
@@ -215,6 +221,7 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "schema": {},
                     "reasoning": reasoning,
+                    "description": description,
                 }
             }
         except Exception as e:
@@ -224,6 +231,7 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "schema": {},
                     "reasoning": "",
+                    "description": "",
                 }
             }
 
@@ -244,7 +252,6 @@ def prompt(
     sql: str,
     preprocess_data: dict,
     language: str,
-    timezone: ChartConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
     sample_data = preprocess_data["results"]["sample_data"]
@@ -255,7 +262,6 @@ def prompt(
     logger.debug(f"sample data: {sample_data}")
     logger.debug(f"sample data statistics: {sample_data_statistics}")
     logger.debug(f"language: {language}")
-    logger.debug(f"timezone: {timezone}")
 
     return prompt_builder.run(
         query=query,
@@ -263,7 +269,6 @@ def prompt(
         sample_data=sample_data,
         sample_data_statistics=sample_data_statistics,
         language=language,
-        current_time=show_current_time(timezone),
     )
 
 
@@ -339,7 +344,6 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        timezone: ChartConfigurations.Timezone,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -353,7 +357,6 @@ class ChartGeneration(BasicPipeline):
                 "sql": sql,
                 "data": data,
                 "language": language,
-                "timezone": timezone,
                 **self._components,
                 **self._configs,
             },
@@ -369,7 +372,6 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        timezone: ChartConfigurations.Timezone,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -379,7 +381,6 @@ class ChartGeneration(BasicPipeline):
                 "sql": sql,
                 "data": data,
                 "language": language,
-                "timezone": timezone,
                 **self._components,
                 **self._configs,
             },

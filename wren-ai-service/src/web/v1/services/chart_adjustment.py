@@ -18,13 +18,14 @@ class ChartAdjustmentConfigurations(BaseModel):
         utc_offset: str
 
     language: str = "English"
-    timezone: Optional[Timezone] = Timezone(name="Asia/Taipei", utc_offset="+8:00")
 
 
 class ChartAdjustmentRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
+    adjustment_query: str
+    chart_schema: dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
@@ -143,14 +144,13 @@ class ChartAdjustmentService:
                 status="generating"
             )
 
-            chart_generation_result = await self._pipelines["chart_generation"].run(
+            chart_adjustment_result = await self._pipelines["chart_adjustment"].run(
                 query=chart_adjustment_request.query,
                 sql=chart_adjustment_request.sql,
                 data=sql_data["execute_sql"],
                 language=chart_adjustment_request.configurations.language,
-                timezone=chart_adjustment_request.configurations.timezone,
             )
-            chart_result = chart_generation_result["post_process"]["results"]
+            chart_result = chart_adjustment_result["post_process"]["results"]
 
             if not chart_result.get("schema", {}) and not chart_result.get(
                 "reasoning", ""

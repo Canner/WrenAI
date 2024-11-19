@@ -13,12 +13,7 @@ logger = logging.getLogger("wren-ai-service")
 
 # POST /v1/charts
 class ChartConfigurations(BaseModel):
-    class Timezone(BaseModel):
-        name: str
-        utc_offset: str
-
     language: str = "English"
-    timezone: Optional[Timezone] = Timezone(name="Asia/Taipei", utc_offset="+8:00")
 
 
 class ChartRequest(BaseModel):
@@ -73,6 +68,7 @@ class ChartResultRequest(BaseModel):
 
 class ChartResult(BaseModel):
     reasoning: str
+    description: str
     schema: dict
 
 
@@ -130,7 +126,6 @@ class ChartService:
             sql_data = await self._pipelines["sql_executor"].run(
                 sql=chart_request.sql,
                 project_id=chart_request.project_id,
-                limit=500,
             )
 
             self._chart_results[query_id] = ChartResultResponse(status="generating")
@@ -140,7 +135,6 @@ class ChartService:
                 sql=chart_request.sql,
                 data=sql_data["execute_sql"],
                 language=chart_request.configurations.language,
-                timezone=chart_request.configurations.timezone,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 
