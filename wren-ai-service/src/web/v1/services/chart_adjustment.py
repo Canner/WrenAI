@@ -202,7 +202,7 @@ class ChartAdjustmentService:
             status="stopped",
         )
 
-    def get_chart_result(
+    def get_chart_adjustment_result(
         self,
         chart_adjustment_result_request: ChartAdjustmentResultRequest,
     ) -> ChartAdjustmentResultResponse:
