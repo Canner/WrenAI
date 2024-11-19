@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Literal, Optional
+from typing import Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -14,7 +14,7 @@ logger = logging.getLogger("wren-ai-service")
 # POST /v1/charts
 class ChartRequest(BaseModel):
     _query_id: str | None = None
-    data: List[dict]
+    data: dict[str, dict]
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
 
@@ -51,7 +51,7 @@ class StopChartResponse(BaseModel):
 
 # GET /v1/charts/{query_id}/result
 class ChartError(BaseModel):
-    code: Literal["OTHERS"]
+    code: Literal["NO_CHART", "OTHERS"]
     message: str
 
 
@@ -93,7 +93,56 @@ class ChartService:
         chart_request: ChartRequest,
         **kwargs,
     ):
-        pass
+        results = {
+            "chart_result": {},
+            "metadata": {
+                "error_type": "",
+                "error_message": "",
+            },
+        }
+
+        try:
+            query_id = chart_request.query_id
+
+            self._chart_results[query_id] = ChartResultResponse(status="understanding")
+
+            self._chart_results[query_id] = ChartResultResponse(status="generating")
+
+            chart_generation_result = await self._pipelines["chart_generation"].run(
+                data=chart_request.data,
+            )
+            chart_result = chart_generation_result["post_process"]["results"]["schema"]
+
+            if not chart_result:
+                self._chart_results[query_id] = ChartResultResponse(
+                    status="failed",
+                    error=ChartError(
+                        code="NO_CHART", message="chart generation failed"
+                    ),
+                )
+                results["metadata"]["error_type"] = "NO_CHART"
+                results["metadata"]["error_message"] = "chart generation failed"
+            else:
+                self._chart_results[query_id] = ChartResultResponse(
+                    status="finished", response=chart_result
+                )
+                results["chart_result"] = chart_result
+
+            return results
+        except Exception as e:
+            logger.exception(f"chart pipeline - OTHERS: {e}")
+
+            self._chart_results[chart_request.query_id] = ChartResultResponse(
+                status="failed",
+                error=ChartError(
+                    code="OTHERS",
+                    message=str(e),
+                ),
+            )
+
+            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error_message"] = str(e)
+            return results
 
     def stop_chart(
         self,
