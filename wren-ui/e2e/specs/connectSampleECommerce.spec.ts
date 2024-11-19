@@ -17,8 +17,11 @@ test.describe('Test E-commerce sample dataset', () => {
   test('Starting E-commerce dataset successfully', async ({ page }) => {
     await page.goto('/setup/connection');
     await page.getByRole('button', { name: 'E-commerce' }).click();
-    await expect(page).toHaveURL('/home', { timeout: 60000 });
+    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  });
 
+  test('Check suggested questions', async ({ page }) => {
+    await page.goto('/home');
     for (const question of suggestedQuestions) {
       await expect(page.getByText(question)).toBeVisible();
     }
