@@ -203,18 +203,18 @@ if st.session_state["asks_results"]:
 
     if chosen_tab_id == "1":
         if st.session_state["chosen_query_result"]:
+            st.markdown(
+                get_sql_answer(
+                    st.session_state["chosen_query_result"]["query"],
+                    st.session_state["chosen_query_result"]["sql"],
+                )
+            )
+
             st.dataframe(
                 get_data_from_wren_engine(
                     st.session_state["chosen_query_result"]["sql"],
                     st.session_state["dataset_type"],
                     st.session_state["mdl_json"],
-                )
-            )
-
-            st.markdown(
-                get_sql_answer(
-                    st.session_state["chosen_query_result"]["query"],
-                    st.session_state["chosen_query_result"]["sql"],
                 )
             )
     elif chosen_tab_id == "2":
