@@ -135,6 +135,9 @@ def create_service_container(
         ),
         chart_adjustment_service=ChartAdjustmentService(
             pipelines={
+                "sql_executor": sql_executor.SQLExecutor(
+                    **pipe_components["sql_executor"],
+                ),
                 "chart_adjustment": chart_adjustment.ChartAdjustment(
                     **pipe_components["chart_adjustment"],
                 ),

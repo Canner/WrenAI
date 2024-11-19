@@ -417,8 +417,17 @@ def on_click_sql_regeneration_button(
     show_sql_regeneration_results_dialog(sql_user_corrections_by_step)
 
 
-def on_click_adjust_chart(query: str, sql: str, chart_schema: dict):
-    show_chart_adjustment_dialog(query, sql, chart_schema)
+def on_click_adjust_chart(
+    query: str,
+    sql: str,
+    chart_schema: dict,
+    language: str,
+    description: str,
+    reasoning: str,
+):
+    show_chart_adjustment_dialog(
+        query, sql, chart_schema, language, description, reasoning
+    )
 
 
 # ai service api related
@@ -779,6 +788,42 @@ def generate_chart(query: str, sql: str, language: str):
     return charts_status_response.json()
 
 
+@st.cache_data
+def adjust_chart(
+    query: str, sql: str, chart_schema: dict, adjustment_query: str, language: str
+):
+    adjust_chart_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments",
+        json={
+            "query": query,
+            "sql": sql,
+            "adjustment_query": adjustment_query,
+            "chart_schema": chart_schema,
+            "configurations": {
+                "language": language,
+            },
+        },
+    )
+
+    assert adjust_chart_response.status_code == 200
+    query_id = adjust_chart_response.json()["query_id"]
+    charts_status = None
+
+    while not charts_status or (
+        charts_status != "finished"
+        and charts_status != "failed"
+        and charts_status != "stopped"
+    ):
+        charts_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments/{query_id}/result"
+        )
+        assert charts_status_response.status_code == 200
+        charts_status = charts_status_response.json()["status"]
+        time.sleep(POLLING_INTERVAL)
+
+    return charts_status_response.json()
+
+
 @st.dialog(
     "Comparing SQL step-by-step breakdown before and after SQL Generation Feedback",
     width="large",
@@ -856,11 +901,31 @@ def show_sql_regeneration_results_dialog(
             sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
 
+def show_original_chart(chart_schema: dict, reasoning: str, description: str):
+    st.markdown("### Original")
+    st.markdown("#### Reasoning for making this chart")
+    st.markdown(f"{reasoning}")
+    st.markdown("#### Vega-Lite Schema")
+    st.json(chart_schema, expanded=False)
+    st.markdown("#### Chart Description")
+    st.markdown(description)
+    st.vega_lite_chart(chart_schema, use_container_width=True)
+
+
 @st.dialog("Adjust Chart", width="large")
-def show_chart_adjustment_dialog(query: str, sql: str, chart_schema: dict):
-    st.markdown("### Original Question")
+def show_chart_adjustment_dialog(
+    query: str,
+    sql: str,
+    chart_schema: dict,
+    language: str,
+    description: str,
+    reasoning: str,
+):
+    adjustment_query = st.chat_input("Adjust the chart")
+
+    st.markdown("### Question")
     st.markdown(query)
-    st.markdown("### Original SQL")
+    st.markdown("### SQL")
     st.code(
         body=sqlparse.format(
             sql,
@@ -869,6 +934,26 @@ def show_chart_adjustment_dialog(query: str, sql: str, chart_schema: dict):
         ),
         language="sql",
     )
-    st.markdown("### Original Vega-Lite Schema")
-    st.json(chart_schema, expanded=False)
-    st.vega_lite_chart(chart_schema, use_container_width=True)
+
+    if adjustment_query:
+        adjust_chart_response = adjust_chart(
+            query, sql, chart_schema, adjustment_query, language
+        )
+
+        original_col, new_col = st.columns(2)
+        with original_col:
+            show_original_chart(chart_schema, reasoning, description)
+        with new_col:
+            if adjust_chart_result := adjust_chart_response.get("response"):
+                st.markdown("### Adjusted")
+                if reasoning := adjust_chart_result["reasoning"]:
+                    st.markdown("#### Reasoning for making this chart")
+                    st.markdown(f"{reasoning}")
+                if vega_lite_schema := adjust_chart_result["schema"]:
+                    st.markdown("#### Vega-Lite Schema")
+                    st.json(vega_lite_schema, expanded=False)
+                    st.markdown("#### Chart Description")
+                    st.markdown(f'{adjust_chart_result["description"]}')
+                    st.vega_lite_chart(vega_lite_schema, use_container_width=True)
+    else:
+        show_original_chart(chart_schema, reasoning, description)

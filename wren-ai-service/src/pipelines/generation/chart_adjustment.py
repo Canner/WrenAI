@@ -197,23 +197,32 @@ class ChartAdjustmentPostProcessor:
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
+            description = generation_result.get("description", "")
             if chart_schema := generation_result.get("schema", {}):
                 validate(chart_schema, schema=vega_schema)
                 return {
                     "results": {
                         "schema": chart_schema,
+                        "description": description,
                         "reasoning": reasoning,
                     }
                 }
 
-            return {"results": {"schema": {}, "reasoning": reasoning}}
+            return {
+                "results": {
+                    "schema": {},
+                    "description": description,
+                    "reasoning": reasoning,
+                }
+            }
         except ValidationError as e:
             logger.exception(f"Vega-lite schema is not valid: {e}")
 
             return {
                 "results": {
                     "schema": {},
-                    "reasoning": reasoning,
+                    "reasoning": "",
+                    "description": "",
                 }
             }
         except Exception as e:
@@ -223,6 +232,7 @@ class ChartAdjustmentPostProcessor:
                 "results": {
                     "schema": {},
                     "reasoning": "",
+                    "description": "",
                 }
             }
 
@@ -294,6 +304,7 @@ def post_process(
 ## End of Pipeline
 class ChartAdjustmentResults(BaseModel):
     reasoning: str
+    description: str
     schema: dict
 
 

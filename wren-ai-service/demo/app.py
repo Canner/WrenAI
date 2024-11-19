@@ -274,15 +274,18 @@ if st.session_state["asks_results"]:
                     st.markdown(f'{chart_result["description"]}')
                     st.vega_lite_chart(vega_lite_schema, use_container_width=True)
 
-                st.button(
-                    "Adjust Chart",
-                    on_click=on_click_adjust_chart,
-                    kwargs={
-                        "query": st.session_state["chosen_query_result"]["query"],
-                        "sql": st.session_state["chosen_query_result"]["sql"],
-                        "chart_schema": vega_lite_schema,
-                    },
-                )
+                    st.button(
+                        "Adjust Chart",
+                        on_click=on_click_adjust_chart,
+                        kwargs={
+                            "query": st.session_state["chosen_query_result"]["query"],
+                            "sql": st.session_state["chosen_query_result"]["sql"],
+                            "chart_schema": vega_lite_schema,
+                            "language": st.session_state["language"],
+                            "description": chart_result["description"],
+                            "reasoning": chart_result["reasoning"],
+                        },
+                    )
             else:
                 st.error(
                     f'An error occurred while processing the query: {chart_response.get("error")}',

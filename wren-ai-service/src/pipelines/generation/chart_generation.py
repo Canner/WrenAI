@@ -220,8 +220,8 @@ class ChartGenerationPostProcessor:
             return {
                 "results": {
                     "schema": {},
-                    "reasoning": reasoning,
-                    "description": description,
+                    "reasoning": "",
+                    "description": "",
                 }
             }
         except Exception as e:

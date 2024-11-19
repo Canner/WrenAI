@@ -76,6 +76,7 @@ class ChartAdjustmentResultRequest(BaseModel):
 
 class ChartAdjustmentResult(BaseModel):
     reasoning: str
+    description: str
     schema: dict
 
 
