@@ -92,7 +92,7 @@ export const askSuggestionQuestionTest = async ({
   baseURL,
   suggestedQuestion,
 }) => {
-  await page.goto('/');
+  await page.goto('/home');
   await expect(page).toHaveURL('/home', { timeout: 60000 });
 
   await page.getByText(suggestedQuestion).click();
