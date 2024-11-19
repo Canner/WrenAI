@@ -1,13 +1,17 @@
 import re
 import uuid
 
+import extra_streamlit_components as stx
 import orjson
 import streamlit as st
 from utils import (
     DATA_SOURCES,
     ask,
     ask_details,
+    generate_chart,
+    get_data_from_wren_engine,
     get_mdl_json,
+    get_sql_answer,
     prepare_semantics,
     rerun_wren_engine,
     save_mdl_json_file,
@@ -60,6 +64,8 @@ if "sql_regeneration_results" not in st.session_state:
     st.session_state["sql_regeneration_results"] = None
 if "language" not in st.session_state:
     st.session_state["language"] = "English"
+if "chosen_tab_id" not in st.session_state:
+    st.session_state["chosen_tab_id"] = "1"
 
 
 def onchange_demo_dataset():
@@ -184,9 +190,48 @@ if query:
     ask(query, st.session_state["query_history"])
 if st.session_state["asks_results"]:
     show_asks_results()
-if st.session_state["asks_details_result"] and st.session_state["chosen_query_result"]:
-    show_asks_details_results(st.session_state["query"])
-elif st.session_state["chosen_query_result"]:
-    ask_details()
-    if st.session_state["asks_details_result"]:
-        show_asks_details_results(st.session_state["query"])
+
+    chosen_tab_id = stx.tab_bar(
+        data=[
+            stx.TabBarItemData(id=1, title="Answer", description=""),
+            stx.TabBarItemData(id=2, title="SQL Details", description=""),
+            stx.TabBarItemData(id=3, title="Chart", description=""),
+        ],
+        default=st.session_state["chosen_tab_id"],
+    )
+    st.session_state["chosen_tab_id"] = chosen_tab_id
+
+    if chosen_tab_id == "1":
+        if st.session_state["chosen_query_result"]:
+            st.dataframe(
+                get_data_from_wren_engine(
+                    st.session_state["chosen_query_result"]["sql"],
+                    st.session_state["dataset_type"],
+                    st.session_state["mdl_json"],
+                )
+            )
+
+            st.markdown(
+                get_sql_answer(
+                    st.session_state["chosen_query_result"]["query"],
+                    st.session_state["chosen_query_result"]["sql"],
+                )
+            )
+    elif chosen_tab_id == "2":
+        if st.session_state["chosen_query_result"]:
+            ask_details()
+            if st.session_state["asks_details_result"]:
+                show_asks_details_results()
+    else:
+        if st.session_state["chosen_query_result"]:
+            chart_response = generate_chart(
+                query=st.session_state["chosen_query_result"]["query"],
+                sql=st.session_state["chosen_query_result"]["sql"],
+                language=st.session_state["language"],
+            )
+            if chart_response:
+                if reasoning := chart_response["reasoning"]:
+                    st.markdown(reasoning)
+                if vega_lite_schema := chart_response["schema"]:
+                    st.json(vega_lite_schema, expanded=False)
+                    st.vega_lite_chart(vega_lite_schema, use_container_width=True)

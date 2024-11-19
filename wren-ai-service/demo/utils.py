@@ -188,18 +188,17 @@ def show_query_history():
 
 
 def show_asks_results():
-    st.markdown(f'## Query: {st.session_state['query']}')
+    st.markdown("### Query")
+    st.markdown(f"{st.session_state['query']}")
 
     show_query_history()
 
-    st.markdown("### Query Results")
+    st.markdown("### Query Result")
     if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
         asks_result_count = len(st.session_state["asks_results"])
         ask_result_cols = st.columns(asks_result_count)
-        choose_result_n = [False] * asks_result_count
         for i, ask_result_col in enumerate(ask_result_cols):
             with ask_result_col:
-                st.markdown(f"Result {i+1}")
                 st.code(
                     body=sqlparse.format(
                         st.session_state["asks_results"][i]["sql"],
@@ -208,174 +207,74 @@ def show_asks_results():
                     ),
                     language="sql",
                 )
-                choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
-        for i, choose_result in enumerate(choose_result_n):
-            if choose_result:
-                sql = st.session_state["asks_results"][i]["sql"]
+        sql = st.session_state["asks_results"][0]["sql"]
 
-                st.session_state["chosen_query_result"] = {
-                    "index": i,
-                    "query": st.session_state["query"],
-                    "sql": sql,
-                }
+        st.session_state["chosen_query_result"] = {
+            "index": 0,
+            "query": st.session_state["query"],
+            "sql": sql,
+        }
 
-                # reset relevant session_states
-                st.session_state["asks_details_result"] = None
-                st.session_state["preview_data_button_index"] = None
-                st.session_state["preview_sql"] = None
-
-                break
+        # reset relevant session_states
+        st.session_state["asks_details_result"] = None
+        st.session_state["preview_data_button_index"] = None
+        st.session_state["preview_sql"] = None
     elif st.session_state["asks_results_type"] == "MISLEADING_QUERY":
         st.markdown(
             "Misleading query detected. Please try again with a different query."
         )
 
 
-def show_asks_details_results(query: str):
-    col1, col2 = st.columns([4, 2])
-    with col1:
-        with st.container(height=1000):
-            st.markdown(
-                f'### Details of Result {st.session_state['chosen_query_result']['index'] + 1}'
-            )
-            st.markdown(
-                f'Description: {st.session_state['asks_details_result']["description"]}'
-            )
+def show_asks_details_results():
+    st.markdown("### SQL Details of Result")
+    st.markdown(
+        f'Description: {st.session_state['asks_details_result']["description"]}'
+    )
 
-            sqls_with_cte = []
-            sqls = []
-            summaries = []
-            for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
-                st.markdown(f"#### Step {i + 1}")
-                st.markdown(f'Summary: {step["summary"]}')
+    sqls_with_cte = []
+    sqls = []
+    summaries = []
+    for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
+        st.markdown(f"#### Step {i + 1}")
+        st.markdown(f'Summary: {step["summary"]}')
 
-                sql = ""
-                if sqls_with_cte:
-                    sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
-                sql += step["sql"]
-                sqls.append(sql)
-                summaries.append(step["summary"])
+        sql = ""
+        if sqls_with_cte:
+            sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
+        sql += step["sql"]
+        sqls.append(sql)
+        summaries.append(step["summary"])
 
-                st.code(
-                    body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
-                    language="sql",
-                )
-                sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
-
-                if (
-                    st.session_state["sql_analysis_results"]
-                    and st.session_state["sql_explanation_results"]
-                ):
-                    _col1, _col2 = st.columns(2)
-                    with _col1:
-                        st.markdown("**SQL Analysis Results With Cte Removed**")
-                        st.json(
-                            list(
-                                filter(
-                                    lambda analysis_result: not analysis_result[
-                                        "isSubqueryOrCte"
-                                    ],
-                                    st.session_state["sql_analysis_results"][i],
-                                )
-                            ),
-                            expanded=False,
-                        )
-                    with _col2:
-                        st.markdown("**SQL Explanation Results**")
-                        st.json(
-                            st.session_state["sql_explanation_results"][i],
-                            expanded=False,
-                        )
-
-                st.button(
-                    label="Preview Data",
-                    key=f"preview_data_btn_{i}",
-                    on_click=on_click_preview_data_button,
-                    args=[i, sqls],
-                )
-
-                if (
-                    st.session_state["preview_data_button_index"] is not None
-                    and st.session_state["preview_sql"] is not None
-                    and i == st.session_state["preview_data_button_index"]
-                ):
-                    st.markdown(
-                        f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
-                    )
-
-                    st.dataframe(
-                        get_data_from_wren_engine(
-                            st.session_state["preview_sql"],
-                            st.session_state["dataset_type"],
-                            st.session_state["mdl_json"],
-                        )
-                    )
-
-            st.markdown("### Answer")
-            st.markdown(
-                get_sql_answer(
-                    st.session_state["chosen_query_result"]["query"],
-                    st.session_state["chosen_query_result"]["sql"],
-                )
-            )
-
-            st.markdown("### Chart")
-            chart_response = generate_chart(
-                query=st.session_state["chosen_query_result"]["query"],
-                sql=st.session_state["chosen_query_result"]["sql"],
-                language=st.session_state["language"],
-            )
-            if chart_response:
-                if reasoning := chart_response["reasoning"]:
-                    st.markdown(reasoning)
-                if vega_lite_schema := chart_response["schema"]:
-                    st.json(vega_lite_schema, expanded=False)
-                    st.vega_lite_chart(vega_lite_schema, use_container_width=True)
-
-        st.markdown("---")
-        st.button(
-            label="SQL Explanation",
-            key="sql_explanation_btn",
-            on_click=on_click_sql_explanation_button,
-            args=[query, sqls, summaries, st.session_state["mdl_json"]],
-            use_container_width=True,
+        st.code(
+            body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
+            language="sql",
         )
+        sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
-    with col2:
-        with st.container(height=600):
-            st.markdown("### SQL Generation Feedback")
+        # st.button(
+        #     label="Preview Data",
+        #     key=f"preview_data_btn_{i}",
+        #     on_click=on_click_preview_data_button,
+        #     args=[i, sqls],
+        # )
 
-            for i, _ in enumerate(st.session_state["asks_details_result"]["steps"]):
-                st.markdown(f"#### Step {i + 1}")
-                if st.session_state["sql_explanation_results"]:
-                    for j, explanation_result in enumerate(
-                        st.session_state["sql_explanation_results"][i]
-                    ):
-                        st.json(explanation_result)
-                        st.text_input(
-                            "User Correction",
-                            key=f"user_correction_{i}_{j}",
-                            on_change=on_change_user_correction,
-                            args=[i, j, explanation_result],
-                        )
+        # if (
+        #     st.session_state["preview_data_button_index"] is not None
+        #     and st.session_state["preview_sql"] is not None
+        #     and i == st.session_state["preview_data_button_index"]
+        # ):
+        #     st.markdown(
+        #         f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
+        #     )
 
-        with st.container(height=400):
-            st.markdown("#### Adjustments")
-            st.json(st.session_state["sql_user_corrections_by_step"])
-
-        st.markdown("---")
-
-        st.button(
-            label="SQL Regeneration",
-            key="sql_regeneration_btn",
-            on_click=on_click_sql_regeneration_button,
-            args=[
-                st.session_state["asks_details_result"],
-                st.session_state["sql_user_corrections_by_step"],
-            ],
-            use_container_width=True,
-        )
+        #     st.dataframe(
+        #         get_data_from_wren_engine(
+        #             st.session_state["preview_sql"],
+        #             st.session_state["dataset_type"],
+        #             st.session_state["mdl_json"],
+        #         )
+        #     )
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
