@@ -143,7 +143,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
 
     let data = null;
     if (isSavedViewCandidate) {
-      data = { viewId: payload.viewId };
+      data = { viewId: payload.viewId, question };
     } else if (question) {
       data = {
         sql: payload.sql,
