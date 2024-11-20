@@ -21,6 +21,7 @@ class SemanticsDescription:
         user_prompt: str
         mdl: str
         configuration: Optional[Configuration] = Configuration()
+        project_id: Optional[str] = None  # this is for tracing purpose
 
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
