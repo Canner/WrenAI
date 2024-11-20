@@ -82,10 +82,6 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"sqls: {sqls}")
-    logger.debug(f"language: {language}")
-
     return prompt_builder.run(
         query=query,
         sqls=sqls,
@@ -96,7 +92,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_summary(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -106,9 +101,6 @@ def post_process(
     sqls: List[str],
     post_processor: SQLSummaryPostProcessor,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_summary: {orjson.dumps(generate_sql_summary, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return post_processor.run(sqls, generate_sql_summary.get("replies"))
 
 

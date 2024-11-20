@@ -118,7 +118,6 @@ def _build_view_ddl(content: dict) -> str:
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any) -> dict:
-    logger.debug(f"query: {query}")
     return await embedder.run(query)
 
 
@@ -153,8 +152,6 @@ async def dbschema_retrieval(
     for table in tables:
         content = ast.literal_eval(table.content)
         table_names.append(content["name"])
-
-    logger.debug(f"dbschema_retrieval with table_names: {table_names}")
 
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
@@ -256,8 +253,6 @@ def prompt(
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
 ) -> dict:
-    logger.debug(f"db_schemas: {construct_db_schemas}")
-
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         logger.info(
             "db_schemas token count is greater than 100,000, so we will prune columns"
@@ -277,8 +272,6 @@ def prompt(
 async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any
 ) -> dict:
-    logger.debug(f"prompt: {prompt}")
-
     if prompt:
         return await table_columns_selection_generator.run(prompt=prompt.get("prompt"))
     else:
@@ -297,7 +290,6 @@ def construct_retrieval_results(
         columns_and_tables_needed = orjson.loads(
             filter_columns_in_tables["replies"][0]
         )["results"]
-        logger.debug(f"columns_and_tables_needed: {columns_and_tables_needed}")
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
@@ -330,8 +322,6 @@ def construct_retrieval_results(
                     retrieval_results.append(_build_view_ddl(content))
     else:
         retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
-
-    logger.debug(f"retrieval_results: {retrieval_results}")
 
     return retrieval_results
 

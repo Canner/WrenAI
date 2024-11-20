@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document, component
@@ -42,7 +41,6 @@ class OutputFormatter:
     )
     def run(self, documents: List[Document]):
         list = []
-        logger.debug(f"historical_question_output_formatter: {documents}")
 
         for doc in documents:
             formatted = {
@@ -78,7 +76,6 @@ async def count_documents(store: DocumentStore, id: Optional[str] = None) -> int
 @observe(capture_input=False, capture_output=False)
 async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
     if count_documents:
-        logger.debug(f"query: {query}")
         return await embedder.run(query)
 
     return {}
@@ -112,9 +109,6 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
 @observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     if retrieval:
-        logger.debug(
-            f"retrieval: {orjson.dumps(retrieval, option=orjson.OPT_INDENT_2).decode()}"
-        )
         return score_filter.run(documents=retrieval.get("documents"))
 
     return {}
@@ -126,9 +120,6 @@ def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
 ) -> dict:
     if filtered_documents:
-        logger.debug(
-            f"filtered_documents: {orjson.dumps(filtered_documents, option=orjson.OPT_INDENT_2).decode()}"
-        )
         return output_formatter.run(documents=filtered_documents.get("documents"))
 
     return {"documents": []}
