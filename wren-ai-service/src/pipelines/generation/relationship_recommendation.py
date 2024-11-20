@@ -34,8 +34,9 @@ def cleaned_models(mdl: dict) -> dict:
 def prompt(
     cleaned_models: dict,
     prompt_builder: PromptBuilder,
+    language: str,
 ) -> dict:
-    return prompt_builder.run(models=cleaned_models)
+    return prompt_builder.run(models=cleaned_models, language=language)
 
 
 @observe(as_type="generation", capture_input=False)
@@ -154,13 +155,14 @@ If no relationships are recommended, return:
 """
 
 user_prompt_template = """
-Here is my data model's relationship specification:
+Here is the relationship specification for my data model:
 
 {{models}}
 
+**Please analyze these models and suggest optimizations for their relationships.**
+Take into account best practices in database design, opportunities for normalization, indexing strategies, and any additional relationships that could improve data integrity and enhance query performance.
 
-**Please review these models and provide recommendations of relationship to optimize them.**
-Consider best practices in database design, potential normalization opportunities, indexing strategies, and any additional relationships that might enhance data integrity and query performance.
+Use this for the relationship name and reason: {{language}}
 """
 
 
@@ -189,6 +191,7 @@ class RelationshipRecommendation(BasicPipeline):
     def visualize(
         self,
         mdl: dict,
+        language: str = "English",
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -199,6 +202,7 @@ class RelationshipRecommendation(BasicPipeline):
             output_file_path=f"{destination}/relationship_recommendation.dot",
             inputs={
                 "mdl": mdl,
+                "language": language,
                 **self._components,
             },
             show_legend=True,
@@ -209,12 +213,14 @@ class RelationshipRecommendation(BasicPipeline):
     async def run(
         self,
         mdl: dict,
+        language: str = "English",
     ) -> dict:
         logger.info("Relationship Recommendation pipeline is running...")
         return await self._pipe.execute(
             [self._final],
             inputs={
                 "mdl": mdl,
+                "language": language,
                 **self._components,
             },
         )
@@ -237,7 +243,7 @@ if __name__ == "__main__":
     with open("sample/woocommerce_bigquery_mdl.json", "r") as file:
         mdl = json.load(file)
 
-    input = {"mdl": mdl}
+    input = {"mdl": mdl, "language": "Traditional Chinese"}
 
     async_validate(lambda: pipeline.run(**input))
 

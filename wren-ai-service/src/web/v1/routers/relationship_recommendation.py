@@ -11,6 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
+from src.web.v1.services import Configuration
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 
 router = APIRouter()
@@ -64,6 +65,7 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 class PostRequest(BaseModel):
     mdl: str
     project_id: Optional[str] = None
+    configuration: Optional[Configuration] = Configuration()
 
 
 class PostResponse(BaseModel):
@@ -88,6 +90,7 @@ async def recommend(
         id=id,
         mdl=request.mdl,
         project_id=request.project_id,
+        configuration=request.configuration,
     )
 
     background_tasks.add_task(
