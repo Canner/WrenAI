@@ -445,8 +445,8 @@ describe('IbisAdaptor', () => {
         dtypes: {},
       },
       headers: {
-        'X-Correlation-ID': '123',
-        'X-Process-Time': '1s',
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
       },
     });
     mockedEncryptor.prototype.decrypt.mockReturnValue(
@@ -473,8 +473,8 @@ describe('IbisAdaptor', () => {
       response: {
         data: 'Error message',
         headers: {
-          'X-Correlation-ID': '123',
-          'X-Process-Time': '1s',
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
         },
       },
     });
@@ -503,8 +503,8 @@ describe('IbisAdaptor', () => {
   it('should get data, correlationId and processTime when dry run succeeds', async () => {
     mockedAxios.post.mockResolvedValue({
       headers: {
-        'X-Correlation-ID': '123',
-        'X-Process-Time': '1s',
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
       },
     });
     mockedEncryptor.prototype.decrypt.mockReturnValue(
@@ -529,8 +529,8 @@ describe('IbisAdaptor', () => {
       response: {
         data: 'Error message',
         headers: {
-          'X-Correlation-ID': '123',
-          'X-Process-Time': '1s',
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
         },
       },
     });
