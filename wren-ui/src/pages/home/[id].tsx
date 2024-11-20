@@ -158,7 +158,7 @@ export default function HomeThread() {
       const response = await createThreadResponse({
         variables: { threadId: thread.id, data: payload },
       });
-      generateThreadRecommendationQuestions({
+      await generateThreadRecommendationQuestions({
         variables: { threadId: thread.id },
       });
       setShowRecommendedQuestions(false);
