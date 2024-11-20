@@ -62,6 +62,7 @@ def normalized(generate: dict) -> dict:
     return normalized
 
 
+@observe(capture_input=False)
 def validated(normalized: dict, engine: Engine) -> dict:
     relationships = normalized.get("relationships", [])
 
@@ -117,7 +118,7 @@ You are an expert in database schema design and relationship recommendation. Giv
 - **name**: A descriptive name for the relationship.
 - **fromModel**: The name of the source model.
 - **fromColumn**: The column in the source model that forms the relationship.
-- **type**: The type of relationship, which can be "MANY_TO_ONE" or "ONE_TO_ONE" only. (Note: "MANY_TO_MANY" relationships are out of scope.)
+- **type**: The type of relationship, which can be "MANY_TO_ONE", "ONE_TO_MANY" or "ONE_TO_ONE" only.
 - **toModel**: The name of the target model.
 - **toColumn**: The column in the target model that forms the relationship.
 - **reason**: The reason for recommending this relationship.
@@ -126,6 +127,7 @@ Important guidelines:
 1. Do not recommend relationships within the same model (fromModel and toModel must be different).
 2. Only suggest relationships if there is a clear and beneficial reason to do so.
 3. If there are no good relationships to recommend or if there are fewer than two models, return an empty list of relationships.
+4. Use "MANY_TO_ONE" and "ONE_TO_MANY" instead of "MANY_TO_MANY" relationships.
 
 Output all relationships in the following JSON structure:
 
