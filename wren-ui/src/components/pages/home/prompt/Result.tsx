@@ -42,7 +42,7 @@ interface Props {
     recommendedQuestions: RecommendedQuestionsTask;
   };
   error?: any;
-  onSelectResult: (payload: { sql: string }) => void;
+  onSelectResult: (payload: { sql: string; viewId: number | null }) => void;
   onSelectQuestion: ({
     question,
     sql,
@@ -153,7 +153,8 @@ const Finished = (props: Props) => {
   useEffect(() => {
     if (candidates.length) {
       const [result] = candidates;
-      onSelectResult && onSelectResult({ sql: result.sql });
+      onSelectResult &&
+        onSelectResult({ sql: result.sql, viewId: result.view?.id });
     }
   }, [data]);
 
