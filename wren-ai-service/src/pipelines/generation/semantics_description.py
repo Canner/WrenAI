@@ -20,15 +20,29 @@ logger = logging.getLogger("wren-ai-service")
 ## Start of Pipeline
 @observe(capture_input=False)
 def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
-    def remove_relation_columns(columns: list[dict]) -> list[dict]:
-        # remove columns that have a relationship property
-        return [column for column in columns if "relationship" not in column]
+    def relation_filter(column: dict) -> bool:
+        return "relationship" not in column
+
+    def column_formatter(columns: list[dict]) -> list[dict]:
+        return [
+            {
+                "name": column["name"],
+                "type": column["type"],
+                "properties": {
+                    "description": column["properties"].get("description", ""),
+                },
+            }
+            for column in columns
+            if relation_filter(column)
+        ]
 
     def extract(model: dict) -> dict:
         return {
             "name": model["name"],
-            "columns": remove_relation_columns(model["columns"]),
-            "properties": model["properties"],
+            "columns": column_formatter(model["columns"]),
+            "properties": {
+                "description": model["properties"].get("description", ""),
+            },
         }
 
     return [
@@ -43,8 +57,6 @@ def prompt(
     prompt_builder: PromptBuilder,
     language: str,
 ) -> dict:
-    logger.debug(f"User prompt: {user_prompt}")
-    logger.debug(f"Picked models: {picked_models}")
     return prompt_builder.run(
         picked_models=picked_models,
         user_prompt=user_prompt,
@@ -54,7 +66,6 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -70,10 +81,6 @@ def normalize(generate: dict) -> dict:
         except orjson.JSONDecodeError as e:
             logger.error(f"Error decoding JSON: {e}")
             return {"models": []}  # Return an empty list if JSON decoding fails
-
-    logger.debug(
-        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
-    )
 
     reply = generate.get("replies")[0]  # Expecting only one reply
     normalized = wrapper(reply)
@@ -117,11 +124,11 @@ I have a data model represented in JSON format, with the following structure:
 ```
 [
     {'name': 'model', 'columns': [
-            {'name': 'column_1', 'type': 'type', 'notNull': True, 'properties': {}
+            {'name': 'column_1', 'type': 'type', 'properties': {}
             },
-            {'name': 'column_2', 'type': 'type', 'notNull': True, 'properties': {}
+            {'name': 'column_2', 'type': 'type', 'properties': {}
             },
-            {'name': 'column_3', 'type': 'type', 'notNull': False, 'properties': {}
+            {'name': 'column_3', 'type': 'type', 'properties': {}
             }
         ], 'properties': {}
     }

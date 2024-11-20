@@ -47,6 +47,8 @@ export enum TelemetryEvent {
   HOME_ANSWER_QUESTION = 'home_answer_question',
   HOME_ASK_FOLLOWUP_QUESTION = 'home_ask_followup_question',
   HOME_CANCEL_ASK = 'home_cancel_ask',
+  HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS = 'home_generate_project_recommendation_questions',
+  HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS = 'home_generate_thread_recommendation_questions',
 
   // event after ask
   HOME_CREATE_VIEW = 'home_create_view',

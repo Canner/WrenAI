@@ -286,6 +286,9 @@ class AskService:
                             "invalid_generation_results"
                         ]
                     ):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="correcting",
+                        )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(

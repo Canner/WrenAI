@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import _build_table_ddl
+from src.pipelines.common import build_table_ddl
 from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -58,7 +58,6 @@ Please think step by step
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any) -> dict:
-    logger.debug(f"query: {query}")
     return await embedder.run(query)
 
 
@@ -150,7 +149,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
             db_schemas_in_ddl.append(
-                _build_table_ddl(
+                build_table_ddl(
                     table_schema,
                 )
             )
@@ -165,27 +164,18 @@ def prompt(
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"db_schemas: {construct_db_schemas}")
-
     return prompt_builder.run(query=query, db_schemas=construct_db_schemas)
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def classify_intent(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @timer
 @observe(capture_input=False)
 def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
-    logger.debug(
-        f"classify_intent: {orjson.dumps(classify_intent, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     try:
         intent = orjson.loads(classify_intent.get("replies")[0])["results"]
         return {

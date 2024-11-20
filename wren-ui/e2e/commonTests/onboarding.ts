@@ -14,5 +14,5 @@ export const saveRecommendedRelationships = async ({ page }) => {
   await page.goto('/setup/relationships');
 
   await page.getByRole('button', { name: 'Finish' }).click();
-  await expect(page).toHaveURL('/home', { timeout: 60000 });
+  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
 };

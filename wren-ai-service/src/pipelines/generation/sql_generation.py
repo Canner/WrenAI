@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -88,15 +87,6 @@ def prompt(
     configurations: AskConfigurations | None = None,
     samples: List[Dict] | None = None,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"documents: {documents}")
-    logger.debug(
-        f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    logger.debug(f"configurations: {configurations}")
-    if samples:
-        logger.debug(f"samples: {samples}")
-
     return prompt_builder.run(
         query=query,
         documents=documents,
@@ -114,7 +104,6 @@ async def generate_sql(
     prompt: dict,
     generator: Any,
 ) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -125,9 +114,6 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
-    logger.debug(
-        f"generate_sql: {orjson.dumps(generate_sql, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await post_processor.run(generate_sql.get("replies"), project_id=project_id)
 
 

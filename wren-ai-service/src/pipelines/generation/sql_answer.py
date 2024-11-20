@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -56,10 +55,6 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(f"sql data: {sql_data['results']}")
-    logger.debug(f"language: {language}")
     return prompt_builder.run(
         query=query,
         sql=sql,
@@ -71,8 +66,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_answer(prompt: dict, generator: Any, query_id: str) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
     return await generator.run(prompt=prompt.get("prompt"), query_id=query_id)
 
 

@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +34,9 @@ def cleaned_models(mdl: dict) -> dict:
 def prompt(
     cleaned_models: dict,
     prompt_builder: PromptBuilder,
+    language: str,
 ) -> dict:
-    return prompt_builder.run(models=cleaned_models)
+    return prompt_builder.run(models=cleaned_models, language=language)
 
 
 @observe(as_type="generation", capture_input=False)
@@ -61,18 +63,38 @@ def normalized(generate: dict) -> dict:
     return normalized
 
 
+@observe(capture_input=False)
 def validated(normalized: dict, engine: Engine) -> dict:
+    relationships = normalized.get("relationships", [])
+
+    validated_relationships = [
+        relationship
+        for relationship in relationships
+        if RelationType.is_include(relationship.get("type"))
+    ]
+
     # todo: after wren-engine support function to validate the relationships, we will use that function to validate the relationships
     # for now, we will just return the normalized relationships
-    return normalized
+
+    return {"relationships": validated_relationships}
 
 
 ## End of Pipeline
+class RelationType(Enum):
+    MANY_TO_ONE = "MANY_TO_ONE"
+    ONE_TO_MANY = "ONE_TO_MANY"
+    ONE_TO_ONE = "ONE_TO_ONE"
+
+    @classmethod
+    def is_include(cls, value: str) -> bool:
+        return value in cls._value2member_map_
+
+
 class ModelRelationship(BaseModel):
     name: str
     fromModel: str
     fromColumn: str
-    type: str
+    type: RelationType
     toModel: str
     toColumn: str
     reason: str
@@ -97,7 +119,7 @@ You are an expert in database schema design and relationship recommendation. Giv
 - **name**: A descriptive name for the relationship.
 - **fromModel**: The name of the source model.
 - **fromColumn**: The column in the source model that forms the relationship.
-- **type**: The type of relationship, which can be ONE_TO_MANY, MANY_TO_MANY, or MANY_TO_ONE.
+- **type**: The type of relationship, which can be "MANY_TO_ONE", "ONE_TO_MANY" or "ONE_TO_ONE" only.
 - **toModel**: The name of the target model.
 - **toColumn**: The column in the target model that forms the relationship.
 - **reason**: The reason for recommending this relationship.
@@ -106,6 +128,7 @@ Important guidelines:
 1. Do not recommend relationships within the same model (fromModel and toModel must be different).
 2. Only suggest relationships if there is a clear and beneficial reason to do so.
 3. If there are no good relationships to recommend or if there are fewer than two models, return an empty list of relationships.
+4. Use "MANY_TO_ONE" and "ONE_TO_MANY" instead of "MANY_TO_MANY" relationships.
 
 Output all relationships in the following JSON structure:
 
@@ -132,13 +155,14 @@ If no relationships are recommended, return:
 """
 
 user_prompt_template = """
-Here is my data model's relationship specification:
+Here is the relationship specification for my data model:
 
 {{models}}
 
+**Please analyze these models and suggest optimizations for their relationships.**
+Take into account best practices in database design, opportunities for normalization, indexing strategies, and any additional relationships that could improve data integrity and enhance query performance.
 
-**Please review these models and provide recommendations of relationship to optimize them.**
-Consider best practices in database design, potential normalization opportunities, indexing strategies, and any additional relationships that might enhance data integrity and query performance.
+Use this for the relationship name and reason: {{language}}
 """
 
 
@@ -167,6 +191,7 @@ class RelationshipRecommendation(BasicPipeline):
     def visualize(
         self,
         mdl: dict,
+        language: str = "English",
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -177,6 +202,7 @@ class RelationshipRecommendation(BasicPipeline):
             output_file_path=f"{destination}/relationship_recommendation.dot",
             inputs={
                 "mdl": mdl,
+                "language": language,
                 **self._components,
             },
             show_legend=True,
@@ -187,12 +213,14 @@ class RelationshipRecommendation(BasicPipeline):
     async def run(
         self,
         mdl: dict,
+        language: str = "English",
     ) -> dict:
         logger.info("Relationship Recommendation pipeline is running...")
         return await self._pipe.execute(
             [self._final],
             inputs={
                 "mdl": mdl,
+                "language": language,
                 **self._components,
             },
         )
@@ -201,23 +229,22 @@ class RelationshipRecommendation(BasicPipeline):
 if __name__ == "__main__":
     from langfuse.decorators import langfuse_context
 
-    from src.core.engine import EngineConfig
+    from src.config import settings
     from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
+    from src.providers import generate_components
+    from src.utils import init_langfuse
 
-    load_env_vars()
+    pipe_components = generate_components(settings.components)
+    pipeline = RelationshipRecommendation(
+        **pipe_components["relationship_recommendation"]
+    )
     init_langfuse()
 
-    llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = RelationshipRecommendation(llm_provider=llm_provider, engine=engine)
-
-    with open("sample/college_3_bigquery_mdl.json", "r") as file:
+    with open("sample/woocommerce_bigquery_mdl.json", "r") as file:
         mdl = json.load(file)
 
-    input = {"mdl": mdl}
+    input = {"mdl": mdl, "language": "Traditional Chinese"}
 
-    pipeline.visualize(**input)
     async_validate(lambda: pipeline.run(**input))
 
     langfuse_context.flush()

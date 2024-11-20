@@ -13,21 +13,26 @@ import PromptResult from '@/components/pages/home/prompt/Result';
 import useAskProcessState, {
   getIsProcessing,
 } from '@/hooks/useAskProcessState';
+import { AskPromptData } from '@/hooks/useAskPrompt';
 import {
   AskingTask,
   AskingTaskStatus,
+  AskingTaskType,
 } from '@/apollo/client/graphql/__types__';
 
 interface Props {
   onSelect: (payload: {
     sql?: string;
-    summary?: string;
     question?: string;
     viewId?: number;
   }) => Promise<void>;
   onStop: () => void;
   onSubmit: (value: string) => Promise<void>;
-  data?: AskingTask;
+  onStopPolling: () => void;
+  onStopStreaming: () => void;
+  onStopRecommend: () => void;
+  data: AskPromptData;
+  loading: boolean;
 }
 
 interface Attributes {
@@ -57,10 +62,16 @@ const convertAskingTaskToProcessState = (data: AskingTask) => {
     [AskingTaskStatus.UNDERSTANDING]: PROCESS_STATE.UNDERSTANDING,
     [AskingTaskStatus.SEARCHING]: PROCESS_STATE.SEARCHING,
     [AskingTaskStatus.GENERATING]: PROCESS_STATE.GENERATING,
+    // Show generating state component when AI correcting
+    [AskingTaskStatus.CORRECTING]: PROCESS_STATE.GENERATING,
     [AskingTaskStatus.FINISHED]: PROCESS_STATE.FINISHED,
   }[data.status];
 
-  if (processState === PROCESS_STATE.FINISHED && data.candidates.length === 0) {
+  if (
+    data?.type === AskingTaskType.TEXT_TO_SQL &&
+    processState === PROCESS_STATE.FINISHED &&
+    data.candidates.length === 0
+  ) {
     return PROCESS_STATE.NO_RESULT;
   }
   return processState;
@@ -68,12 +79,36 @@ const convertAskingTaskToProcessState = (data: AskingTask) => {
 
 export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const $promptInput = useRef<HTMLTextAreaElement>(null);
-  const { data, onSubmit, onStop, onSelect } = props;
+  const {
+    data,
+    loading,
+    onSubmit,
+    onStop,
+    onSelect,
+    onStopStreaming,
+    onStopRecommend,
+  } = props;
   const [inputValue, setInputValue] = useState('');
   const askProcessState = useAskProcessState();
 
-  const candidates = useMemo(() => data?.candidates || [], [data?.candidates]);
-  const error = useMemo(() => data?.error || null, [data?.error]);
+  const {
+    originalQuestion,
+    askingTask,
+    askingStreamTask,
+    recommendedQuestions,
+  } = data;
+
+  const result = useMemo(
+    () => ({
+      type: askingTask?.type, // question's type
+      originalQuestion, // original question
+      candidates: askingTask?.candidates || [], // for text to sql answer, only one candidate
+      askingStreamTask, // for general answer
+      recommendedQuestions, // guiding user to ask
+    }),
+    [data],
+  );
+  const error = useMemo(() => askingTask?.error || null, [askingTask?.error]);
   const question = useMemo(() => inputValue.trim(), [inputValue]);
   const isProcessing = useMemo(
     () => getIsProcessing(askProcessState.currentState),
@@ -85,11 +120,11 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   }, [isProcessing]);
 
   useEffect(() => {
-    if (data) {
-      const processState = convertAskingTaskToProcessState(data);
+    if (askingTask) {
+      const processState = convertAskingTaskToProcessState(askingTask);
       askProcessState.setState(processState);
     }
-  }, [data]);
+  }, [askingTask]);
 
   useEffect(() => {
     if (error) {
@@ -97,16 +132,21 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     }
   }, [error]);
 
+  const selectQuestion = async (payload) => {
+    onSelect && (await onSelect(payload));
+    closeResult();
+    askProcessState.resetState();
+  };
+
   const selectResult = async (payload) => {
     const isSavedViewCandidate = !!payload.viewId;
 
     let data = null;
     if (isSavedViewCandidate) {
-      data = { viewId: payload.viewId };
+      data = { viewId: payload.viewId, question };
     } else if (question) {
       data = {
         sql: payload.sql,
-        summary: payload.summary,
         question,
       };
     }
@@ -121,6 +161,8 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const closeResult = () => {
     askProcessState.resetState();
     setInputValue('');
+    onStopStreaming && onStopStreaming();
+    onStopRecommend && onStopRecommend();
   };
 
   const stopProcess = () => {
@@ -178,10 +220,12 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
       </PromptButton>
 
       <PromptResult
-        data={candidates}
+        data={result}
         error={error}
+        loading={loading}
         processState={askProcessState}
-        onSelect={selectResult}
+        onSelectQuestion={selectQuestion}
+        onSelectResult={selectResult}
         onClose={closeResult}
         onStop={stopProcess}
       />

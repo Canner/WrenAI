@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -57,8 +56,6 @@ class SQLBreakdownGenPostProcessor:
                 }
 
         sql = self._build_cte_query(steps)
-        logger.debug(f": steps: {pformat(steps)}")
-        logger.debug(f"SQLBreakdownGenPostProcessor: final sql: {sql}")
 
         if not await self._check_if_sql_executable(sql, project_id=project_id):
             return {
@@ -466,7 +463,7 @@ def show_current_time(timezone: AskConfigurations.Timezone):
     return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
 
 
-def _build_table_ddl(
+def build_table_ddl(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> str:
     columns_ddl = []

@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from typing import Any, List
 
-import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -61,9 +60,6 @@ def prompt(
     timezone: AskConfigurations.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"documents: {documents}")
-    logger.debug(f"history: {history}")
     return prompt_builder.run(
         query=query,
         documents=documents,
@@ -75,7 +71,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_expansion(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -86,9 +81,6 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_expansion: {orjson.dumps(generate_sql_expansion, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await post_processor.run(
         generate_sql_expansion.get("replies"), project_id=project_id
     )

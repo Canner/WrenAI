@@ -32,7 +32,7 @@ async def test_generate_semantics_description(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
-        mdl='{"models": [{"name": "model1", "columns": []}]}',
+        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
     await service.generate(request)
@@ -80,7 +80,7 @@ async def test_generate_semantics_description_with_exception(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
-        mdl='{"models": [{"name": "model1", "columns": []}]}',
+        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
     service._pipelines["semantics_description"].run.side_effect = Exception(
@@ -136,7 +136,7 @@ async def test_batch_processing_with_multiple_models(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3"],
-        mdl='{"models": [{"name": "model1"}, {"name": "model2"}, {"name": "model3"}]}',
+        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
     # Mock pipeline responses for each chunk
@@ -172,16 +172,18 @@ def test_batch_processing_with_custom_chunk_size(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3", "model4"],
-        mdl='{"models": [{"name": "model1"}, {"name": "model2"}, {"name": "model3"}, {"name": "model4"}]}',
+        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model4", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
     # Test chunking with custom chunk size
     chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
 
-    assert len(chunks) == 2  # Should create 2 chunks with size 2
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [2, 2]
-    assert chunks[0]["selected_models"] == ["model1", "model2"]
-    assert chunks[1]["selected_models"] == ["model3", "model4"]
+    assert len(chunks) == 4
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1, 1]
+    assert chunks[0]["selected_models"] == ["model1"]
+    assert chunks[1]["selected_models"] == ["model2"]
+    assert chunks[2]["selected_models"] == ["model3"]
+    assert chunks[3]["selected_models"] == ["model4"]
 
 
 @pytest.mark.asyncio
@@ -193,7 +195,7 @@ async def test_batch_processing_partial_failure(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2"],
-        mdl='{"models": [{"name": "model1"}, {"name": "model2"}]}',
+        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
     # Mock first chunk succeeds, second chunk fails
@@ -222,7 +224,7 @@ async def test_concurrent_updates_no_race_condition(
         id=test_id,
         user_prompt="Test concurrent updates",
         selected_models=["model1", "model2", "model3", "model4", "model5"],
-        mdl='{"models": [{"name": "model1"}, {"name": "model2"}, {"name": "model3"}, {"name": "model4"}, {"name": "model5"}]}',
+        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model4", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model5", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
     # Mock pipeline responses with delays to simulate concurrent execution

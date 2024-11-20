@@ -29,6 +29,7 @@ Endpoints:
        "selected_models": ["model1", "model2"],  # List of model names to describe
        "user_prompt": "Describe these models",   # User's instruction for description
        "mdl": "{ ... }",                         # JSON string of the MDL (Model Definition Language)
+       "project_id": "project-id",               # Optional project ID
        "configuration": {                        # Optional configuration settings
          "language": "English"                   # Optional language, defaults to "English"
        }
@@ -89,6 +90,7 @@ class PostRequest(BaseModel):
     selected_models: list[str]
     user_prompt: str
     mdl: str
+    project_id: Optional[str] = None
     configuration: Optional[Configuration] = Configuration()
 
 
@@ -116,6 +118,7 @@ async def generate(
         user_prompt=request.user_prompt,
         mdl=request.mdl,
         configuration=request.configuration,
+        project_id=request.project_id,
     )
 
     background_tasks.add_task(

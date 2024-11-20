@@ -1,20 +1,25 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { ComponentRef, useEffect, useMemo, useRef } from 'react';
+import { ComponentRef, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
+import useAskPrompt, {
+  getIsFinished,
+  isRecommendedFinished,
+} from '@/hooks/useAskPrompt';
+import useModalAction from '@/hooks/useModalAction';
+import PromptThread from '@/components/pages/home/promptThread';
+import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import {
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
+  useGenerateThreadRecommendationQuestionsMutation,
+  useGetThreadRecommendationQuestionsLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
-import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
-import useModalAction from '@/hooks/useModalAction';
-import PromptThread from '@/components/pages/home/promptThread';
-import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 
 export default function HomeThread() {
@@ -25,6 +30,10 @@ export default function HomeThread() {
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
   const askPrompt = useAskPrompt(threadId);
   const saveAsViewModal = useModalAction();
+
+  const [showRecommendedQuestions, setShowRecommendedQuestions] =
+    useState<boolean>(false);
+
   const [createViewMutation, { loading: creating }] = useCreateViewMutation({
     onError: (error) => console.error(error),
     onCompleted: () => message.success('Successfully created view.'),
@@ -67,6 +76,16 @@ export default function HomeThread() {
       },
     });
 
+  const [generateThreadRecommendationQuestions] =
+    useGenerateThreadRecommendationQuestionsMutation();
+
+  const [
+    fetchThreadRecommendationQuestions,
+    threadRecommendationQuestionsResult,
+  ] = useGetThreadRecommendationQuestionsLazyQuery({
+    pollInterval: 1000,
+  });
+
   const thread = useMemo(() => data?.thread || null, [data]);
   const threadResponse = useMemo(
     () => threadResponseResult.data?.threadResponse || null,
@@ -79,9 +98,15 @@ export default function HomeThread() {
 
   // stop all requests when change thread
   useEffect(() => {
-    askPrompt.stopPolling();
+    askPrompt.onStopPolling();
     threadResponseResult.stopPolling();
+    threadRecommendationQuestionsResult.stopPolling();
     $prompt.current?.close();
+
+    if (threadId !== null) {
+      fetchThreadRecommendationQuestions({ variables: { threadId } });
+      setShowRecommendedQuestions(true);
+    }
   }, [threadId]);
 
   useEffect(() => {
@@ -92,20 +117,56 @@ export default function HomeThread() {
     if (unfinishedRespose) {
       fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
     }
+
+    // store thread questions for instant recommended questions
+    const questions = thread?.responses.flatMap((res) => res.question || []);
+    if (questions) askPrompt.onStoreThreadQuestions(questions);
   }, [thread]);
 
   useEffect(() => {
-    if (isFinished) threadResponseResult.stopPolling();
+    if (isFinished) {
+      threadResponseResult.stopPolling();
+      setShowRecommendedQuestions(true);
+    }
   }, [isFinished]);
+
+  const recommendedQuestions = useMemo(
+    () =>
+      threadRecommendationQuestionsResult.data
+        ?.getThreadRecommendationQuestions || null,
+    [threadRecommendationQuestionsResult.data],
+  );
+
+  useEffect(() => {
+    if (isRecommendedFinished(recommendedQuestions?.status)) {
+      threadRecommendationQuestionsResult.stopPolling();
+    }
+  }, [recommendedQuestions]);
+
+  const result = useMemo(
+    () => ({
+      thread,
+      recommendedQuestions,
+      showRecommendedQuestions,
+    }),
+    [thread, recommendedQuestions, showRecommendedQuestions],
+  );
 
   const onSelect = async (payload) => {
     try {
-      askPrompt.stopPolling();
+      askPrompt.onStopPolling();
       const response = await createThreadResponse({
         variables: { threadId: thread.id, data: payload },
       });
+      generateThreadRecommendationQuestions({
+        variables: { threadId: thread.id },
+      });
+      setShowRecommendedQuestions(false);
       await fetchThreadResponse({
         variables: { responseId: response.data.createThreadResponse.id },
+      });
+      fetchThreadRecommendationQuestions({
+        variables: { threadId: thread.id },
       });
     } catch (error) {
       console.error(error);
@@ -115,17 +176,12 @@ export default function HomeThread() {
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>
       <PromptThread
-        data={thread}
+        data={result}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
-      />
-      <div className="py-12" />
-      <Prompt
-        ref={$prompt}
-        data={askPrompt.data}
-        onSubmit={askPrompt.onSubmit}
-        onStop={askPrompt.onStop}
         onSelect={onSelect}
       />
+      <div className="py-12" />
+      <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
       <SaveAsViewModal
         {...saveAsViewModal.state}
         loading={creating}

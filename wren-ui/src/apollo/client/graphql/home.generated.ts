@@ -5,7 +5,9 @@ import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
 export type CommonErrorFragment = { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null };
 
-export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null };
+export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null };
+
+export type CommonRecommendedQuestionsTaskFragment = { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, sql: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
 
 export type SuggestedQuestionsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -17,7 +19,7 @@ export type AskingTaskQueryVariables = Types.Exact<{
 }>;
 
 
-export type AskingTaskQuery = { __typename?: 'Query', askingTask: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, summary: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+export type AskingTaskQuery = { __typename?: 'Query', askingTask: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
 
 export type ThreadsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -29,14 +31,14 @@ export type ThreadQueryVariables = Types.Exact<{
 }>;
 
 
-export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, summary: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null }> } };
+export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null }> } };
 
 export type ThreadResponseQueryVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
 }>;
 
 
-export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null } };
+export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null } };
 
 export type CreateAskingTaskMutationVariables = Types.Exact<{
   data: Types.AskingTaskInput;
@@ -57,7 +59,7 @@ export type CreateThreadMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateThreadMutation = { __typename?: 'Mutation', createThread: { __typename?: 'Thread', id: number, sql: string, summary: string } };
+export type CreateThreadMutation = { __typename?: 'Mutation', createThread: { __typename?: 'Thread', id: number, sql: string } };
 
 export type CreateThreadResponseMutationVariables = Types.Exact<{
   threadId: Types.Scalars['Int'];
@@ -65,7 +67,7 @@ export type CreateThreadResponseMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, summary: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null } };
+export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null } };
 
 export type UpdateThreadMutationVariables = Types.Exact<{
   where: Types.ThreadUniqueWhereInput;
@@ -96,19 +98,48 @@ export type GetNativeSqlQueryVariables = Types.Exact<{
 
 export type GetNativeSqlQuery = { __typename?: 'Query', nativeSql: string };
 
-export const CommonErrorFragmentDoc = gql`
-    fragment CommonError on Error {
-  code
-  shortMessage
-  message
-  stacktrace
-}
-    `;
+export type CreateInstantRecommendedQuestionsMutationVariables = Types.Exact<{
+  data: Types.InstantRecommendedQuestionsInput;
+}>;
+
+
+export type CreateInstantRecommendedQuestionsMutation = { __typename?: 'Mutation', createInstantRecommendedQuestions: { __typename?: 'Task', id: string } };
+
+export type InstantRecommendedQuestionsQueryVariables = Types.Exact<{
+  taskId: Types.Scalars['String'];
+}>;
+
+
+export type InstantRecommendedQuestionsQuery = { __typename?: 'Query', instantRecommendedQuestions: { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, sql: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+
+export type GetThreadRecommendationQuestionsQueryVariables = Types.Exact<{
+  threadId: Types.Scalars['Int'];
+}>;
+
+
+export type GetThreadRecommendationQuestionsQuery = { __typename?: 'Query', getThreadRecommendationQuestions: { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, sql: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+
+export type GetProjectRecommendationQuestionsQueryVariables = Types.Exact<{ [key: string]: never; }>;
+
+
+export type GetProjectRecommendationQuestionsQuery = { __typename?: 'Query', getProjectRecommendationQuestions: { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, sql: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+
+export type GenerateProjectRecommendationQuestionsMutationVariables = Types.Exact<{ [key: string]: never; }>;
+
+
+export type GenerateProjectRecommendationQuestionsMutation = { __typename?: 'Mutation', generateProjectRecommendationQuestions: boolean };
+
+export type GenerateThreadRecommendationQuestionsMutationVariables = Types.Exact<{
+  threadId: Types.Scalars['Int'];
+}>;
+
+
+export type GenerateThreadRecommendationQuestionsMutation = { __typename?: 'Mutation', generateThreadRecommendationQuestions: boolean };
+
 export const CommonResponseFragmentDoc = gql`
     fragment CommonResponse on ThreadResponse {
   id
   question
-  summary
   status
   detail {
     sql
@@ -127,6 +158,27 @@ export const CommonResponseFragmentDoc = gql`
   }
 }
     `;
+export const CommonErrorFragmentDoc = gql`
+    fragment CommonError on Error {
+  code
+  shortMessage
+  message
+  stacktrace
+}
+    `;
+export const CommonRecommendedQuestionsTaskFragmentDoc = gql`
+    fragment CommonRecommendedQuestionsTask on RecommendedQuestionsTask {
+  status
+  questions {
+    question
+    category
+    sql
+  }
+  error {
+    ...CommonError
+  }
+}
+    ${CommonErrorFragmentDoc}`;
 export const SuggestedQuestionsDocument = gql`
     query SuggestedQuestions {
   suggestedQuestions {
@@ -168,9 +220,9 @@ export const AskingTaskDocument = gql`
     query AskingTask($taskId: String!) {
   askingTask(taskId: $taskId) {
     status
+    type
     candidates {
       sql
-      summary
       type
       view {
         id
@@ -253,7 +305,6 @@ export const ThreadDocument = gql`
   thread(threadId: $threadId) {
     id
     sql
-    summary
     responses {
       ...CommonResponse
       error {
@@ -400,7 +451,6 @@ export const CreateThreadDocument = gql`
   createThread(data: $data) {
     id
     sql
-    summary
   }
 }
     `;
@@ -601,3 +651,201 @@ export function useGetNativeSqlLazyQuery(baseOptions?: Apollo.LazyQueryHookOptio
 export type GetNativeSqlQueryHookResult = ReturnType<typeof useGetNativeSqlQuery>;
 export type GetNativeSqlLazyQueryHookResult = ReturnType<typeof useGetNativeSqlLazyQuery>;
 export type GetNativeSqlQueryResult = Apollo.QueryResult<GetNativeSqlQuery, GetNativeSqlQueryVariables>;
+export const CreateInstantRecommendedQuestionsDocument = gql`
+    mutation CreateInstantRecommendedQuestions($data: InstantRecommendedQuestionsInput!) {
+  createInstantRecommendedQuestions(data: $data) {
+    id
+  }
+}
+    `;
+export type CreateInstantRecommendedQuestionsMutationFn = Apollo.MutationFunction<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>;
+
+/**
+ * __useCreateInstantRecommendedQuestionsMutation__
+ *
+ * To run a mutation, you first call `useCreateInstantRecommendedQuestionsMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateInstantRecommendedQuestionsMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createInstantRecommendedQuestionsMutation, { data, loading, error }] = useCreateInstantRecommendedQuestionsMutation({
+ *   variables: {
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useCreateInstantRecommendedQuestionsMutation(baseOptions?: Apollo.MutationHookOptions<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>(CreateInstantRecommendedQuestionsDocument, options);
+      }
+export type CreateInstantRecommendedQuestionsMutationHookResult = ReturnType<typeof useCreateInstantRecommendedQuestionsMutation>;
+export type CreateInstantRecommendedQuestionsMutationResult = Apollo.MutationResult<CreateInstantRecommendedQuestionsMutation>;
+export type CreateInstantRecommendedQuestionsMutationOptions = Apollo.BaseMutationOptions<CreateInstantRecommendedQuestionsMutation, CreateInstantRecommendedQuestionsMutationVariables>;
+export const InstantRecommendedQuestionsDocument = gql`
+    query InstantRecommendedQuestions($taskId: String!) {
+  instantRecommendedQuestions(taskId: $taskId) {
+    ...CommonRecommendedQuestionsTask
+  }
+}
+    ${CommonRecommendedQuestionsTaskFragmentDoc}`;
+
+/**
+ * __useInstantRecommendedQuestionsQuery__
+ *
+ * To run a query within a React component, call `useInstantRecommendedQuestionsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useInstantRecommendedQuestionsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useInstantRecommendedQuestionsQuery({
+ *   variables: {
+ *      taskId: // value for 'taskId'
+ *   },
+ * });
+ */
+export function useInstantRecommendedQuestionsQuery(baseOptions: Apollo.QueryHookOptions<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>(InstantRecommendedQuestionsDocument, options);
+      }
+export function useInstantRecommendedQuestionsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>(InstantRecommendedQuestionsDocument, options);
+        }
+export type InstantRecommendedQuestionsQueryHookResult = ReturnType<typeof useInstantRecommendedQuestionsQuery>;
+export type InstantRecommendedQuestionsLazyQueryHookResult = ReturnType<typeof useInstantRecommendedQuestionsLazyQuery>;
+export type InstantRecommendedQuestionsQueryResult = Apollo.QueryResult<InstantRecommendedQuestionsQuery, InstantRecommendedQuestionsQueryVariables>;
+export const GetThreadRecommendationQuestionsDocument = gql`
+    query GetThreadRecommendationQuestions($threadId: Int!) {
+  getThreadRecommendationQuestions(threadId: $threadId) {
+    ...CommonRecommendedQuestionsTask
+  }
+}
+    ${CommonRecommendedQuestionsTaskFragmentDoc}`;
+
+/**
+ * __useGetThreadRecommendationQuestionsQuery__
+ *
+ * To run a query within a React component, call `useGetThreadRecommendationQuestionsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGetThreadRecommendationQuestionsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useGetThreadRecommendationQuestionsQuery({
+ *   variables: {
+ *      threadId: // value for 'threadId'
+ *   },
+ * });
+ */
+export function useGetThreadRecommendationQuestionsQuery(baseOptions: Apollo.QueryHookOptions<GetThreadRecommendationQuestionsQuery, GetThreadRecommendationQuestionsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<GetThreadRecommendationQuestionsQuery, GetThreadRecommendationQuestionsQueryVariables>(GetThreadRecommendationQuestionsDocument, options);
+      }
+export function useGetThreadRecommendationQuestionsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetThreadRecommendationQuestionsQuery, GetThreadRecommendationQuestionsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<GetThreadRecommendationQuestionsQuery, GetThreadRecommendationQuestionsQueryVariables>(GetThreadRecommendationQuestionsDocument, options);
+        }
+export type GetThreadRecommendationQuestionsQueryHookResult = ReturnType<typeof useGetThreadRecommendationQuestionsQuery>;
+export type GetThreadRecommendationQuestionsLazyQueryHookResult = ReturnType<typeof useGetThreadRecommendationQuestionsLazyQuery>;
+export type GetThreadRecommendationQuestionsQueryResult = Apollo.QueryResult<GetThreadRecommendationQuestionsQuery, GetThreadRecommendationQuestionsQueryVariables>;
+export const GetProjectRecommendationQuestionsDocument = gql`
+    query GetProjectRecommendationQuestions {
+  getProjectRecommendationQuestions {
+    ...CommonRecommendedQuestionsTask
+  }
+}
+    ${CommonRecommendedQuestionsTaskFragmentDoc}`;
+
+/**
+ * __useGetProjectRecommendationQuestionsQuery__
+ *
+ * To run a query within a React component, call `useGetProjectRecommendationQuestionsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGetProjectRecommendationQuestionsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useGetProjectRecommendationQuestionsQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useGetProjectRecommendationQuestionsQuery(baseOptions?: Apollo.QueryHookOptions<GetProjectRecommendationQuestionsQuery, GetProjectRecommendationQuestionsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<GetProjectRecommendationQuestionsQuery, GetProjectRecommendationQuestionsQueryVariables>(GetProjectRecommendationQuestionsDocument, options);
+      }
+export function useGetProjectRecommendationQuestionsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetProjectRecommendationQuestionsQuery, GetProjectRecommendationQuestionsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<GetProjectRecommendationQuestionsQuery, GetProjectRecommendationQuestionsQueryVariables>(GetProjectRecommendationQuestionsDocument, options);
+        }
+export type GetProjectRecommendationQuestionsQueryHookResult = ReturnType<typeof useGetProjectRecommendationQuestionsQuery>;
+export type GetProjectRecommendationQuestionsLazyQueryHookResult = ReturnType<typeof useGetProjectRecommendationQuestionsLazyQuery>;
+export type GetProjectRecommendationQuestionsQueryResult = Apollo.QueryResult<GetProjectRecommendationQuestionsQuery, GetProjectRecommendationQuestionsQueryVariables>;
+export const GenerateProjectRecommendationQuestionsDocument = gql`
+    mutation GenerateProjectRecommendationQuestions {
+  generateProjectRecommendationQuestions
+}
+    `;
+export type GenerateProjectRecommendationQuestionsMutationFn = Apollo.MutationFunction<GenerateProjectRecommendationQuestionsMutation, GenerateProjectRecommendationQuestionsMutationVariables>;
+
+/**
+ * __useGenerateProjectRecommendationQuestionsMutation__
+ *
+ * To run a mutation, you first call `useGenerateProjectRecommendationQuestionsMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useGenerateProjectRecommendationQuestionsMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [generateProjectRecommendationQuestionsMutation, { data, loading, error }] = useGenerateProjectRecommendationQuestionsMutation({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useGenerateProjectRecommendationQuestionsMutation(baseOptions?: Apollo.MutationHookOptions<GenerateProjectRecommendationQuestionsMutation, GenerateProjectRecommendationQuestionsMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<GenerateProjectRecommendationQuestionsMutation, GenerateProjectRecommendationQuestionsMutationVariables>(GenerateProjectRecommendationQuestionsDocument, options);
+      }
+export type GenerateProjectRecommendationQuestionsMutationHookResult = ReturnType<typeof useGenerateProjectRecommendationQuestionsMutation>;
+export type GenerateProjectRecommendationQuestionsMutationResult = Apollo.MutationResult<GenerateProjectRecommendationQuestionsMutation>;
+export type GenerateProjectRecommendationQuestionsMutationOptions = Apollo.BaseMutationOptions<GenerateProjectRecommendationQuestionsMutation, GenerateProjectRecommendationQuestionsMutationVariables>;
+export const GenerateThreadRecommendationQuestionsDocument = gql`
+    mutation GenerateThreadRecommendationQuestions($threadId: Int!) {
+  generateThreadRecommendationQuestions(threadId: $threadId)
+}
+    `;
+export type GenerateThreadRecommendationQuestionsMutationFn = Apollo.MutationFunction<GenerateThreadRecommendationQuestionsMutation, GenerateThreadRecommendationQuestionsMutationVariables>;
+
+/**
+ * __useGenerateThreadRecommendationQuestionsMutation__
+ *
+ * To run a mutation, you first call `useGenerateThreadRecommendationQuestionsMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useGenerateThreadRecommendationQuestionsMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [generateThreadRecommendationQuestionsMutation, { data, loading, error }] = useGenerateThreadRecommendationQuestionsMutation({
+ *   variables: {
+ *      threadId: // value for 'threadId'
+ *   },
+ * });
+ */
+export function useGenerateThreadRecommendationQuestionsMutation(baseOptions?: Apollo.MutationHookOptions<GenerateThreadRecommendationQuestionsMutation, GenerateThreadRecommendationQuestionsMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<GenerateThreadRecommendationQuestionsMutation, GenerateThreadRecommendationQuestionsMutationVariables>(GenerateThreadRecommendationQuestionsDocument, options);
+      }
+export type GenerateThreadRecommendationQuestionsMutationHookResult = ReturnType<typeof useGenerateThreadRecommendationQuestionsMutation>;
+export type GenerateThreadRecommendationQuestionsMutationResult = Apollo.MutationResult<GenerateThreadRecommendationQuestionsMutation>;
+export type GenerateThreadRecommendationQuestionsMutationOptions = Apollo.BaseMutationOptions<GenerateThreadRecommendationQuestionsMutation, GenerateThreadRecommendationQuestionsMutationVariables>;

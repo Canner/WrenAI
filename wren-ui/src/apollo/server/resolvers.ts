@@ -27,6 +27,7 @@ const resolvers = {
     // Ask
     askingTask: askingResolver.getAskingTask,
     suggestedQuestions: askingResolver.getSuggestedQuestions,
+    instantRecommendedQuestions: askingResolver.getInstantRecommendedQuestions,
 
     // Thread
     thread: askingResolver.getThread,
@@ -44,6 +45,12 @@ const resolvers = {
 
     // Learning
     learningRecord: learningResolver.getLearningRecord,
+
+    // Recommendation questions
+    getThreadRecommendationQuestions:
+      askingResolver.getThreadRecommendationQuestions,
+    getProjectRecommendationQuestions:
+      projectResolver.getProjectRecommendationQuestions,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -73,6 +80,8 @@ const resolvers = {
     // Ask
     createAskingTask: askingResolver.createAskingTask,
     cancelAskingTask: askingResolver.cancelAskingTask,
+    createInstantRecommendedQuestions:
+      askingResolver.createInstantRecommendedQuestions,
 
     // Thread
     createThread: askingResolver.createThread,
@@ -98,6 +107,12 @@ const resolvers = {
 
     // Learning
     saveLearningRecord: learningResolver.saveLearningRecord,
+
+    // Recommendation questions
+    generateThreadRecommendationQuestions:
+      askingResolver.generateThreadRecommendationQuestions,
+    generateProjectRecommendationQuestions:
+      askingResolver.generateProjectRecommendationQuestions,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

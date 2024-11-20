@@ -2,7 +2,9 @@ import {
   WrenAIError,
   WrenAILanguage,
   AskResultStatus,
-} from '../adaptors/wrenAIAdaptor';
+  AskResultType,
+  RecommendationQuestionStatus,
+} from '@server/models/adaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
   DetailStep,
@@ -12,7 +14,10 @@ import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
-import { constructCteSql } from '../services/askingService';
+import {
+  constructCteSql,
+  ThreadRecommendQuestionResult,
+} from '../services/askingService';
 import {
   SuggestedQuestion,
   SampleDatasetName,
@@ -32,10 +37,10 @@ export interface Task {
 }
 
 export interface AskingTask {
+  type: AskResultType | null;
   status: AskResultStatus;
   candidates: Array<{
     sql: string;
-    summary: string;
   }>;
   error: WrenAIError | null;
 }
@@ -44,8 +49,17 @@ export interface AskingTask {
 export interface DetailedThread {
   id: number; // ID
   sql: string; // SQL
-  summary: string; // Thread summary
   responses: ThreadResponse[];
+}
+
+export interface RecommendedQuestionsTask {
+  questions: {
+    question: string;
+    category: string;
+    sql: string;
+  }[];
+  status: RecommendationQuestionStatus;
+  error: WrenAIError | null;
 }
 
 export class AskingResolver {
@@ -60,7 +74,49 @@ export class AskingResolver {
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
+    this.previewData = this.previewData.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
+    this.createInstantRecommendedQuestions =
+      this.createInstantRecommendedQuestions.bind(this);
+    this.getInstantRecommendedQuestions =
+      this.getInstantRecommendedQuestions.bind(this);
+    this.generateThreadRecommendationQuestions =
+      this.generateThreadRecommendationQuestions.bind(this);
+    this.generateProjectRecommendationQuestions =
+      this.generateProjectRecommendationQuestions.bind(this);
+
+    this.getThreadRecommendationQuestions =
+      this.getThreadRecommendationQuestions.bind(this);
+  }
+
+  public async generateProjectRecommendationQuestions(
+    _root: any,
+    _args: any,
+    ctx: IContext,
+  ): Promise<boolean> {
+    await ctx.projectService.generateProjectRecommendationQuestions();
+    return true;
+  }
+
+  public async generateThreadRecommendationQuestions(
+    _root: any,
+    args: { threadId: number },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { threadId } = args;
+    const askingService = ctx.askingService;
+    await askingService.generateThreadRecommendationQuestions(threadId);
+    return true;
+  }
+
+  public async getThreadRecommendationQuestions(
+    _root: any,
+    args: { threadId: number },
+    ctx: IContext,
+  ): Promise<ThreadRecommendQuestionResult> {
+    const { threadId } = args;
+    const askingService = ctx.askingService;
+    return askingService.getThreadRecommendationQuestions(threadId);
   }
 
   public async getSuggestedQuestions(
@@ -149,13 +205,13 @@ export class AskingResolver {
         return {
           type: response.type,
           sql: response.sql,
-          summary: response.summary,
           view,
         };
       }),
     );
 
     return {
+      type: askResult.type,
       status: askResult.status,
       error: askResult.error,
       candidates,
@@ -168,7 +224,6 @@ export class AskingResolver {
       data: {
         question?: string;
         sql?: string;
-        summary?: string;
         viewId?: number;
       };
     },
@@ -213,20 +268,12 @@ export class AskingResolver {
         if (!acc.id) {
           acc.id = response.threadId;
           acc.sql = response.sql;
-          acc.summary = response.threadSummary;
           acc.responses = [];
         }
 
         acc.responses.push({
           id: response.id,
           question: response.question,
-
-          // we added summary in version 0.3.0.
-          // if summary is not available, we use description and question instead.
-          summary:
-            response.summary ||
-            response.detail?.description ||
-            response.question,
           status: response.status,
           detail: response.detail,
           error: response.error,
@@ -298,7 +345,6 @@ export class AskingResolver {
       data: {
         question?: string;
         sql?: string;
-        summary?: string;
         viewId?: number;
       };
     },
@@ -336,13 +382,7 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
 
-    // we added summary in version 0.3.0.
-    // if summary is not available, we use description and question instead.
-    return {
-      ...response,
-      summary:
-        response.summary || response.detail?.description || response.question,
-    };
+    return response;
   }
 
   public async previewData(
@@ -354,6 +394,31 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const data = await askingService.previewData(responseId, stepIndex, limit);
     return data;
+  }
+
+  public async createInstantRecommendedQuestions(
+    _root: any,
+    args: { data: { previousQuestions?: string[] } },
+    ctx: IContext,
+  ): Promise<Task> {
+    const { data } = args;
+    const askingService = ctx.askingService;
+    return askingService.createInstantRecommendedQuestions(data);
+  }
+
+  public async getInstantRecommendedQuestions(
+    _root: any,
+    args: { taskId: string },
+    ctx: IContext,
+  ): Promise<RecommendedQuestionsTask> {
+    const { taskId } = args;
+    const askingService = ctx.askingService;
+    const result = await askingService.getInstantRecommendedQuestions(taskId);
+    return {
+      questions: result.response?.questions || [],
+      status: result.status,
+      error: result.error,
+    };
   }
 
   /**

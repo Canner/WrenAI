@@ -57,6 +57,13 @@ const defaultTestConfig = {
     database: 'clickhouse-database',
     ssl: false,
   },
+  snowflake: {
+    username: 'snowflake-username',
+    password: 'snowflake-password',
+    account: 'snowflake-account',
+    database: 'snowflake-database',
+    schema: 'snowflake-schema',
+  },
 };
 
 let userTestConfig = {};

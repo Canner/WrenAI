@@ -8,7 +8,6 @@ import { GraphQLError } from 'graphql';
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { ModelService } from '@server/services/modelService';
-import { MDLService } from '@server/services/mdlService';
 import {
   defaultApolloErrorHandler,
   GeneralErrorCodes,
@@ -46,22 +45,20 @@ const bootstrapServer = async () => {
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
+    wrenAIAdaptor,
 
     // services
     projectService,
     queryService,
     askingService,
     deployService,
+    mdlService,
+
+    // background trackers
+    projectRecommendQuestionBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
   } = components;
 
-  const mdlService = new MDLService({
-    projectRepository,
-    modelRepository,
-    modelColumnRepository,
-    modelNestedColumnRepository,
-    relationRepository,
-    viewRepository,
-  });
   const modelService = new ModelService({
     projectService,
     modelRepository,
@@ -74,7 +71,11 @@ const bootstrapServer = async () => {
   });
 
   // initialize services
-  await askingService.initialize();
+  await Promise.all([
+    askingService.initialize(),
+    projectRecommendQuestionBackgroundTracker.initialize(),
+    threadRecommendQuestionBackgroundTracker.initialize(),
+  ]);
 
   const apolloServer: ApolloServer = new ApolloServer({
     typeDefs,
@@ -105,7 +106,7 @@ const bootstrapServer = async () => {
           TelemetryEvent.GRAPHQL_ERROR,
           {
             originalErrorStack: originalError?.stack,
-            originalErrorMessage: originalError.message,
+            originalErrorMessage: originalError?.message,
             errorMessage: error.message,
           },
           error.extensions?.service,
@@ -121,7 +122,7 @@ const bootstrapServer = async () => {
       // adaptor
       wrenEngineAdaptor,
       ibisServerAdaptor: ibisAdaptor,
-
+      wrenAIAdaptor,
       // services
       projectService,
       modelService,
@@ -140,6 +141,10 @@ const bootstrapServer = async () => {
       deployRepository: deployLogRepository,
       schemaChangeRepository,
       learningRepository,
+
+      // background trackers
+      projectRecommendQuestionBackgroundTracker,
+      threadRecommendQuestionBackgroundTracker,
     }),
   });
   await apolloServer.start();
