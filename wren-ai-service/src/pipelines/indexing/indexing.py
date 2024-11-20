@@ -148,8 +148,6 @@ class DDLConverter:
             "Ask Indexing pipeline is writing new documents for table schema..."
         )
 
-        logger.debug(f"original mdl_json: {mdl}")
-
         ddl_commands = self._get_ddl_commands(mdl, column_indexing_batch_size)
 
         return {
@@ -418,8 +416,6 @@ class TableDescriptionConverter:
             "Ask Indexing pipeline is writing new documents for table descriptions..."
         )
 
-        logger.debug(f"original mdl_json: {mdl}")
-
         table_descriptions = self._get_table_descriptions(mdl)
 
         return {
@@ -494,7 +490,6 @@ class AsyncDocumentWriter(DocumentWriter):
 async def clean_document_store(
     mdl_str: str, cleaner: DocumentCleaner, id: Optional[str] = None
 ) -> Dict[str, Any]:
-    logger.debug(f"input in clean_document_store: {mdl_str}")
     return await cleaner.run(mdl=mdl_str, id=id)
 
 
@@ -504,9 +499,6 @@ async def clean_document_store(
 def validate_mdl(
     clean_document_store: Dict[str, Any], validator: MDLValidator
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in validate_mdl: {orjson.dumps(clean_document_store, option=orjson.OPT_INDENT_2).decode()}"
-    )
     mdl = clean_document_store.get("mdl")
     res = validator.run(mdl=mdl)
     return dict(mdl=res["mdl"])
@@ -519,9 +511,6 @@ def covert_to_table_descriptions(
     table_description_converter: TableDescriptionConverter,
     id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in convert_to_table_descriptions: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return table_description_converter.run(mdl=mdl, id=id)
 
 
@@ -531,10 +520,6 @@ async def embed_table_descriptions(
     covert_to_table_descriptions: Dict[str, Any],
     document_embedder: Any,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input(covert_to_table_descriptions) in embed_table_descriptions: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return await document_embedder.run(covert_to_table_descriptions["documents"])
 
 
@@ -556,10 +541,6 @@ def convert_to_ddl(
     column_indexing_batch_size: int,
     id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return ddl_converter.run(
         mdl=mdl,
         column_indexing_batch_size=column_indexing_batch_size,
@@ -573,10 +554,6 @@ async def embed_dbschema(
     convert_to_ddl: Dict[str, Any],
     document_embedder: Any,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input(convert_to_ddl) in embed_dbschema: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return await document_embedder.run(documents=convert_to_ddl["documents"])
 
 
@@ -593,9 +570,6 @@ async def write_dbschema(
 def view_chunk(
     mdl: Dict[str, Any], view_chunker: ViewChunker, id: Optional[str] = None
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in view_chunk: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return view_chunker.run(mdl=mdl, id=id)
 
 
@@ -604,9 +578,6 @@ def view_chunk(
 async def embed_view(
     view_chunk: Dict[str, Any], document_embedder: Any
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in embed_view: {orjson.dumps(view_chunk, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await document_embedder.run(documents=view_chunk["documents"])
 
 

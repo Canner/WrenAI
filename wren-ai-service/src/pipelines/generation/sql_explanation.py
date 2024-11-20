@@ -340,10 +340,6 @@ class SQLExplanationGenerationPostProcessor:
                         "results"
                     ]
 
-                    logger.debug(
-                        f"sql_explanation_results: {orjson.dumps(sql_explanation_results, option=orjson.OPT_INDENT_2).decode()}"
-                    )
-
                     if preprocessed_sql_analysis_results.get(
                         "filter", {}
                     ) and sql_explanation_results.get("filter", {}):
@@ -477,9 +473,6 @@ class SQLExplanationGenerationPostProcessor:
 def preprocess(
     sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
 ) -> dict:
-    logger.debug(
-        f"sql_analysis_results: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return pre_processor.run(sql_analysis_results)
 
 
@@ -492,13 +485,6 @@ def prompts(
     sql_summary: str,
     prompt_builder: PromptBuilder,
 ) -> List[dict]:
-    logger.debug(f"question: {question}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(
-        f"preprocess: {orjson.dumps(preprocess, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    logger.debug(f"sql_summary: {sql_summary}")
-
     preprocessed_sql_analysis_results_with_values = []
     for preprocessed_sql_analysis_result in preprocess[
         "preprocessed_sql_analysis_results"
@@ -534,10 +520,6 @@ def prompts(
                         }
                     )
 
-    logger.debug(
-        f"preprocessed_sql_analysis_results_with_values: {orjson.dumps(preprocessed_sql_analysis_results_with_values, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return [
         prompt_builder.run(
             question=question,
@@ -552,10 +534,6 @@ def prompts(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_explanation(prompts: List[dict], generator: Any) -> List[dict]:
-    logger.debug(
-        f"prompts: {orjson.dumps(prompts, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     async def _task(prompt: str, generator: Any):
         return await generator.run(prompt=prompt.get("prompt"))
 
@@ -570,13 +548,6 @@ def post_process(
     preprocess: dict,
     post_processor: SQLExplanationGenerationPostProcessor,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_explanation: {orjson.dumps(generate_sql_explanation, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    logger.debug(
-        f"preprocess: {orjson.dumps(preprocess, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return post_processor.run(
         generate_sql_explanation,
         preprocess["preprocessed_sql_analysis_results"],

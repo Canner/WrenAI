@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -57,8 +56,6 @@ class SQLBreakdownGenPostProcessor:
                 }
 
         sql = self._build_cte_query(steps)
-        logger.debug(f": steps: {pformat(steps)}")
-        logger.debug(f"SQLBreakdownGenPostProcessor: final sql: {sql}")
 
         if not await self._check_if_sql_executable(sql, project_id=project_id):
             return {

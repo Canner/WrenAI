@@ -57,8 +57,6 @@ def prompt(
     prompt_builder: PromptBuilder,
     language: str,
 ) -> dict:
-    logger.debug(f"User prompt: {user_prompt}")
-    logger.debug(f"Picked models: {picked_models}")
     return prompt_builder.run(
         picked_models=picked_models,
         user_prompt=user_prompt,
@@ -68,7 +66,6 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def generate(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -84,10 +81,6 @@ def normalize(generate: dict) -> dict:
         except orjson.JSONDecodeError as e:
             logger.error(f"Error decoding JSON: {e}")
             return {"models": []}  # Return an empty list if JSON decoding fails
-
-    logger.debug(
-        f"generate: {orjson.dumps(generate, option=orjson.OPT_INDENT_2).decode()}"
-    )
 
     reply = generate.get("replies")[0]  # Expecting only one reply
     normalized = wrapper(reply)

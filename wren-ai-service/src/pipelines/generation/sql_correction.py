@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import Document
@@ -65,12 +64,6 @@ def prompts(
     alert: str,
     prompt_builder: PromptBuilder,
 ) -> list[dict]:
-    logger.debug(
-        f"documents: {orjson.dumps(documents, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    logger.debug(
-        f"invalid_generation_results: {orjson.dumps(invalid_generation_results, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return [
         prompt_builder.run(
             documents=documents,
@@ -84,10 +77,6 @@ def prompts(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[dict]:
-    logger.debug(
-        f"prompts: {orjson.dumps(prompts, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     tasks = []
     for prompt in prompts:
         task = asyncio.ensure_future(generator.run(prompt=prompt.get("prompt")))
@@ -103,10 +92,6 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> list[dict]:
-    logger.debug(
-        f"generate_sql_corrections: {orjson.dumps(generate_sql_corrections, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return await post_processor.run(generate_sql_corrections, project_id=project_id)
 
 

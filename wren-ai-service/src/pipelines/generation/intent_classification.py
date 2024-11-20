@@ -58,7 +58,6 @@ Please think step by step
 @async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any) -> dict:
-    logger.debug(f"query: {query}")
     return await embedder.run(query)
 
 
@@ -165,27 +164,18 @@ def prompt(
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"db_schemas: {construct_db_schemas}")
-
     return prompt_builder.run(query=query, db_schemas=construct_db_schemas)
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def classify_intent(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
     return await generator.run(prompt=prompt.get("prompt"))
 
 
 @timer
 @observe(capture_input=False)
 def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
-    logger.debug(
-        f"classify_intent: {orjson.dumps(classify_intent, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     try:
         intent = orjson.loads(classify_intent.get("replies")[0])["results"]
         return {
