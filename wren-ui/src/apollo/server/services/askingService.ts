@@ -507,7 +507,7 @@ export class AskingService implements IAskingService {
     const { language } = payload;
     // if input contains a viewId, simply create a thread from saved properties of the view
     if (input.viewId) {
-      return this.createThreadFromView(input.viewId);
+      return this.createThreadFromView(input);
     }
 
     // 1. create a task on AI service to generate the detail
@@ -583,7 +583,7 @@ export class AskingService implements IAskingService {
         throw new Error(`View ${input.viewId} not found`);
       }
 
-      const res = await this.createThreadResponseFromView(view, thread);
+      const res = await this.createThreadResponseFromView(input, view, thread);
       return res;
     }
 
@@ -716,30 +716,33 @@ export class AskingService implements IAskingService {
     };
   }
 
-  private async createThreadFromView(viewId: number) {
-    const view = await this.viewRepository.findOneBy({ id: viewId });
+  private async createThreadFromView(input: AskingDetailTaskInput) {
+    const view = await this.viewRepository.findOneBy({ id: input.viewId });
     if (!view) {
-      throw new Error(`View ${viewId} not found`);
+      throw new Error(`View ${input.viewId} not found`);
     }
 
-    const properties = JSON.parse(view.properties) || {};
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
       sql: view.statement,
-      summary: properties.summary,
+      summary: input.question,
     });
 
-    await this.createThreadResponseFromView(view, thread);
+    await this.createThreadResponseFromView(input, view, thread);
     return thread;
   }
 
-  private async createThreadResponseFromView(view: View, thread: Thread) {
+  private async createThreadResponseFromView(
+    input: AskingDetailTaskInput,
+    view: View,
+    thread: Thread,
+  ) {
     const properties = JSON.parse(view.properties) || {};
     return this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: QUERY_ID_PLACEHOLDER,
-      question: properties.question,
+      question: input.question,
       status: AskResultStatus.FINISHED,
       detail: {
         ...properties.detail,
