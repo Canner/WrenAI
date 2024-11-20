@@ -935,25 +935,20 @@ def show_chart_adjustment_dialog(
         language="sql",
     )
 
+    show_original_chart(chart_schema, reasoning, description)
+
     if adjustment_query:
         adjust_chart_response = adjust_chart(
             query, sql, chart_schema, adjustment_query, language
         )
-
-        original_col, new_col = st.columns(2)
-        with original_col:
-            show_original_chart(chart_schema, reasoning, description)
-        with new_col:
-            if adjust_chart_result := adjust_chart_response.get("response"):
-                st.markdown("### Adjusted")
-                if reasoning := adjust_chart_result["reasoning"]:
-                    st.markdown("#### Reasoning for making this chart")
-                    st.markdown(f"{reasoning}")
-                if vega_lite_schema := adjust_chart_result["schema"]:
-                    st.markdown("#### Vega-Lite Schema")
-                    st.json(vega_lite_schema, expanded=False)
-                    st.markdown("#### Chart Description")
-                    st.markdown(f'{adjust_chart_result["description"]}')
-                    st.vega_lite_chart(vega_lite_schema, use_container_width=True)
-    else:
-        show_original_chart(chart_schema, reasoning, description)
+        if adjust_chart_result := adjust_chart_response.get("response"):
+            st.markdown("### Adjusted")
+            if reasoning := adjust_chart_result["reasoning"]:
+                st.markdown("#### Reasoning for making this chart")
+                st.markdown(f"{reasoning}")
+            if vega_lite_schema := adjust_chart_result["schema"]:
+                st.markdown("#### Vega-Lite Schema")
+                st.json(vega_lite_schema, expanded=False)
+                st.markdown("#### Chart Description")
+                st.markdown(f'{adjust_chart_result["description"]}')
+                st.vega_lite_chart(vega_lite_schema, use_container_width=True)
