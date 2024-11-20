@@ -27,7 +27,10 @@ Endpoints:
    - Request body: PostRequest
      {
        "mdl": "{ ... }",                           # JSON string of the MDL (Model Definition Language)
-       "project_id": "project-id"                  # Optional project ID
+       "project_id": "project-id",                 # Optional project ID
+       "configuration": {                           # Optional configuration settings
+         "language": "English",                     # Language for the recommendation
+       }
      }
    - Response: PostResponse
      {
