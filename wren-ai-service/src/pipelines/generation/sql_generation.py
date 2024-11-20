@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -221,23 +221,12 @@ class SQLGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = SQLGeneration(
-        llm_provider=llm_provider,
-        engine=engine,
+    dry_run_pipeline(
+        SQLGeneration,
+        "sql_generation",
+        query="this is a test query",
+        contexts=[],
+        exclude=[],
     )
-
-    pipeline.visualize("this is a test query", [], [])
-    async_validate(lambda: pipeline.run("this is a test query", [], []))
-
-    langfuse_context.flush()

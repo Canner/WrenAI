@@ -13,6 +13,7 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
+from src.core.pipeline import BasicPipeline
 from src.web.v1.services.ask import AskConfigurations
 
 logger = logging.getLogger("wren-ai-service")
@@ -485,3 +486,21 @@ def build_table_ddl(
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
+
+
+def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
+    from langfuse.decorators import langfuse_context
+
+    from src.config import settings
+    from src.core.pipeline import async_validate
+    from src.providers import generate_components
+    from src.utils import init_langfuse
+
+    pipe_components = generate_components(settings.components)
+    pipeline = pipeline_cls(**pipe_components[pipeline_name])
+    init_langfuse()
+
+    pipeline.visualize(**kwargs)
+    async_validate(lambda: pipeline.run(**kwargs))
+
+    langfuse_context.flush()

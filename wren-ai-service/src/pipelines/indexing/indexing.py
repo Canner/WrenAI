@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
 from haystack import Document, component
 from haystack.components.writers import DocumentWriter
@@ -669,25 +669,10 @@ class Indexing(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
-
-    pipeline = Indexing(
-        embedder_provider=embedder_provider,
-        document_store_provider=document_store_provider,
+    dry_run_pipeline(
+        Indexing,
+        "indexing",
+        mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
     )
-
-    input = '{"models": [], "views": [], "relationships": [], "metrics": []}'
-    pipeline.visualize(input)
-    async_validate(lambda: pipeline.run(input))
-
-    langfuse_context.flush()

@@ -1,4 +1,3 @@
-import json
 import logging
 import sys
 from enum import Enum
@@ -7,13 +6,13 @@ from typing import Any
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.engine import Engine
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 
 logger = logging.getLogger("wren-ai-service")
@@ -26,7 +25,8 @@ def cleaned_models(mdl: dict) -> dict:
         return [column for column in columns if "relationship" not in column]
 
     return [
-        {**model, "columns": column_filter(model["columns"])} for model in mdl["models"]
+        {**model, "columns": column_filter(model.get("columns", []))}
+        for model in mdl.get("models", [])
     ]
 
 
@@ -227,24 +227,11 @@ class RelationshipRecommendation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.config import settings
-    from src.core.pipeline import async_validate
-    from src.providers import generate_components
-    from src.utils import init_langfuse
-
-    pipe_components = generate_components(settings.components)
-    pipeline = RelationshipRecommendation(
-        **pipe_components["relationship_recommendation"]
+    dry_run_pipeline(
+        RelationshipRecommendation,
+        "relationship_recommendation",
+        mdl={},
+        language="English",
     )
-    init_langfuse()
-
-    with open("sample/woocommerce_bigquery_mdl.json", "r") as file:
-        mdl = json.load(file)
-
-    input = {"mdl": mdl, "language": "Traditional Chinese"}
-
-    async_validate(lambda: pipeline.run(**input))
-
-    langfuse_context.flush()

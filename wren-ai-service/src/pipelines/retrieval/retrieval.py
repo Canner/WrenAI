@@ -7,7 +7,7 @@ from typing import Any, Optional
 import orjson
 import tiktoken
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
@@ -438,25 +438,10 @@ class Retrieval(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    _, embedder_provider, document_store_provider, _ = init_providers(
-        engine_config=EngineConfig()
+    dry_run_pipeline(
+        Retrieval,
+        "retrieval",
+        query="this is a test query",
     )
-    pipeline = Retrieval(
-        embedder_provider=embedder_provider,
-        document_store_provider=document_store_provider,
-    )
-
-    pipeline.visualize("this is a query")
-    async_validate(lambda: pipeline.run("this is a query"))
-
-    langfuse_context.flush()
