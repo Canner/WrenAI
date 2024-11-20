@@ -114,8 +114,6 @@ class SQLAnswerGenerationPostProcessor:
 async def execute_sql(
     sql: str, data_fetcher: DataFetcher, project_id: str | None = None
 ) -> dict:
-    logger.debug(f"Executing SQL: {sql}")
-
     return await data_fetcher.run(sql=sql, project_id=project_id)
 
 
@@ -128,10 +126,6 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(f"sql data: {execute_sql}")
-    logger.debug(f"language: {language}")
     return prompt_builder.run(
         query=query,
         sql=sql,
@@ -143,8 +137,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_answer(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -153,10 +145,6 @@ async def generate_answer(prompt: dict, generator: Any) -> dict:
 def post_process(
     generate_answer: dict, post_processor: SQLAnswerGenerationPostProcessor
 ) -> dict:
-    logger.debug(
-        f"generate_answer: {orjson.dumps(generate_answer, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return post_processor.run(generate_answer.get("replies"))
 
 

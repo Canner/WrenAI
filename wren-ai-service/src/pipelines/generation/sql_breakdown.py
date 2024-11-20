@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -125,10 +124,6 @@ def prompt(
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(f"language: {language}")
-    logger.debug(f"text_to_sql_rules: {text_to_sql_rules}")
     return prompt_builder.run(
         query=query, sql=sql, language=language, text_to_sql_rules=text_to_sql_rules
     )
@@ -137,7 +132,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_details(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -148,9 +142,6 @@ async def post_process(
     post_processor: SQLBreakdownGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_details: {orjson.dumps(generate_sql_details, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await post_processor.run(
         generate_sql_details.get("replies"), project_id=project_id
     )

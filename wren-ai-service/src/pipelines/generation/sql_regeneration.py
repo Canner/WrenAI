@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-import orjson
 from hamilton import base
 from hamilton.experimental.h_async import AsyncDriver
 from haystack import component
@@ -104,8 +103,6 @@ def preprocess(
     steps: List[SQLExplanationWithUserCorrections],
     preprocesser: SQLRegenerationPreprocesser,
 ) -> dict[str, Any]:
-    logger.debug(f"steps: {steps}")
-    logger.debug(f"description: {description}")
     return preprocesser.run(
         description=description,
         steps=steps,
@@ -118,7 +115,6 @@ def sql_regeneration_prompt(
     preprocess: Dict[str, Any],
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"preprocess: {preprocess}")
     return prompt_builder.run(results=preprocess["results"])
 
 
@@ -128,9 +124,6 @@ async def generate_sql_regeneration(
     sql_regeneration_prompt: dict,
     generator: Any,
 ) -> dict:
-    logger.debug(
-        f"sql_regeneration_prompt: {orjson.dumps(sql_regeneration_prompt, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await generator.run(prompt=sql_regeneration_prompt.get("prompt"))
 
 
@@ -141,9 +134,6 @@ async def sql_regeneration_post_process(
     post_processor: SQLBreakdownGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_regeneration: {orjson.dumps(generate_sql_regeneration, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await post_processor.run(
         replies=generate_sql_regeneration.get("replies"),
         project_id=project_id,
