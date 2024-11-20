@@ -30,7 +30,7 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 ### INSTRUCTIONS ###
 
 - Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
-- Chart types: Bar chart, Line chart, Area chart, Pie chart, Scatter plot chart, Donut chart, Grouped bar chart
+- Chart types: Bar chart, Line chart, Area chart, Pie chart, Scatter plot chart, Donut chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
 - If you think the data is not suitable for visualization, you can return an empty string for the schema
 - Please use the language provided by the user to generate the chart
@@ -82,22 +82,23 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
         - Two quantitative variables (x-axis and y-axis).
         - Optional third variable for size or color encoding.
     - Example: Correlating advertising spend with sales revenue.
+- Stacked Bar Chart
+    - Use When: Showing composition and comparison across categories.
+    - Data Requirements: Same as grouped bar chart.
+    - Example: Sales by region and product type.
 - Guidelines for Selecting Chart Types
-    - Single Quantitative Variable
-        - Histogram: Distribution of data.
-        - Use When: Understanding the frequency of data within certain ranges.
-    - Categorical vs. Quantitative
-        - Bar Chart or Pie Chart: Comparing categories.
-        - Use When: Highlighting differences between groups.
-    - Temporal vs. Quantitative
-        - Line Chart or Area Chart: Trends over time.
-        - Use When: Showing how data changes at regular intervals.
-    - Two Quantitative Variables
-        - Scatter Plot: Relationship analysis.
-        - Use When: Identifying correlations or patterns.
-    - Multiple Categorical Variables
-        - Grouped Bar Chart: Complex comparisons.
-        - Use When: Comparing sub-groups within main categories.
+    - Comparing Categories:
+        - Bar Chart: Best for simple comparisons across categories.
+        - Grouped Bar Chart: Use when you have sub-categories.
+        - Stacked Bar Chart: Use to show composition within categories.
+    - Showing Trends Over Time:
+        - Line Chart: Ideal for continuous data over time.
+        - Area Chart: Use when you want to emphasize volume or total value over time.
+    - Displaying Proportions:
+        - Pie/Donut Chart: Use for simple compositions at a single point in time.
+        - Stacked Bar Chart (100%): Use for comparing compositions across multiple categories.
+    - Exploring Relationships:
+        - Scatter Plot Chart: Best for identifying correlations between two quantitative variables.
     
 ### EXAMPLES ###
 
