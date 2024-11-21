@@ -174,7 +174,7 @@ async def test_followup_generation_pipeline():
                 )
             ],
         ),
-        configurations=Configuration(),
+        configuration=Configuration(),
     )
 
     # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
