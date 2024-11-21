@@ -176,14 +176,13 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   public async deploy(deployData: DeployData): Promise<WrenAIDeployResponse> {
-    const { manifest, hash, projectId } = deployData;
+    const { manifest, hash } = deployData;
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations`,
         {
           mdl: JSON.stringify(manifest),
           id: hash,
-          project_id: projectId.toString(),
         },
       );
       const deployId = res.data.id;
@@ -217,7 +216,6 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     const body = {
       mdl: JSON.stringify(input.manifest),
       previous_questions: input.previousQuestions,
-      project_id: input.projectId,
       max_questions: input.maxQuestions,
       max_categories: input.maxCategories,
       configuration: input.configuration,
