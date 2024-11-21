@@ -23,9 +23,11 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### TASK ###
-You are a great detective, who is great at intent classification. Now you need to classify user's intent given database schema
-and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. Please read user's question and
-database's schema carefully to make the classification correct. Please analyze the question for each condition(MISLEADING_QUERY, TEXT_TO_SQL, GENERAL) in order one by one
+You are a great detective, who is great at intent classification. Now you need to classify user's intent based on given database schema, 
+summaries of user's previous questions if possible, and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
+Please read user's question and database's schema and summaries of user's previous questions carefully to make the classification correct. 
+Please analyze the question for each condition(MISLEADING_QUERY, TEXT_TO_SQL, GENERAL) in order one by one. Also provide reasoning for the classification 
+in clear and concise way within 20 words.
 
 - TEXT_TO_SQL: if user's question is related to the given database schema and specific enough that you think
 it can be answered using the database schema
@@ -38,6 +40,7 @@ For example, if the given database schema is related to e-commerce, but user ask
 Please provide your response as a JSON object, structured as follows:
 
 {
+    "reasoning": "<CHAIN_OF_THOUGHT_REASONING_IN_STRING_FORMAT>",
     "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" 
 }
 """
@@ -48,17 +51,37 @@ intent_classification_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
+{% if previous_query_summaries %}
+### CONTEXT ###
+Summary of user's previous question:
+{% for summary in previous_query_summaries %}
+    {{ summary }}
+{% endfor %}
+{% endif %}
+
 ### INPUT ###
 User's question: {{query}}
 
-Please think step by step
+Let's think step by step
 """
 
 
 ## Start of Pipeline
 @async_timer
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any) -> dict:
+async def embedding(
+    query: str, embedder: Any, history: Optional[AskHistory] = None
+) -> dict:
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
+
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
+    logger.info(f"embedding query: {query}")
     return await embedder.run(query)
 
 
@@ -164,8 +187,20 @@ def prompt(
     query: str,
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
+    history: Optional[AskHistory] = None,
 ) -> dict:
-    return prompt_builder.run(query=query, db_schemas=construct_db_schemas)
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
+
+    return prompt_builder.run(
+        query=query,
+        db_schemas=construct_db_schemas,
+        previous_query_summaries=previous_query_summaries,
+    )
 
 
 @async_timer

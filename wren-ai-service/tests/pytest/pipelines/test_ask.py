@@ -136,7 +136,7 @@ async def test_generation_pipeline():
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
         exclude=[],
-        configurations=Configuration(),
+        configuration=Configuration(),
     )
 
     # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.

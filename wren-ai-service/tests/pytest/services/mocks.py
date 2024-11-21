@@ -40,7 +40,7 @@ class GenerationMock(sql_generation.SQLGeneration):
         contexts: list[str],
         exclude: list[dict],
         project_id: str | None = None,
-        configurations: Configuration | None = None,
+        configuration: Configuration | None = None,
     ):
         return {
             "post_process": {

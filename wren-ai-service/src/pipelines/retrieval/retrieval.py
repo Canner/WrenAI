@@ -118,7 +118,18 @@ def _build_view_ddl(content: dict) -> str:
 ## Start of Pipeline
 @async_timer
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any) -> dict:
+async def embedding(
+    query: str, embedder: Any, history: Optional[AskHistory] = None
+) -> dict:
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
+
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
     return await embedder.run(query)
 
 
@@ -253,6 +264,7 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
+    history: Optional[AskHistory] = None,
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         logger.info(
@@ -263,6 +275,14 @@ def prompt(
             for construct_db_schema in construct_db_schemas
         ]
 
+        if history:
+            previous_query_summaries = [
+                step.summary for step in history.steps if step.summary
+            ]
+        else:
+            previous_query_summaries = []
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
         return prompt_builder.run(question=query, db_schemas=db_schemas)
     else:
         return {}

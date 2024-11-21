@@ -40,9 +40,15 @@ data_assistance_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
+### CONTEXT ###
+Summary of user's previous question:
+{% for summary in previous_query_summaries %}
+    {{ summary }}
+{% endfor %}
+Language: {{language}}
+
 ### INPUT ###
 User's question: {{query}}
-Language: {{language}}
 
 Please think step by step
 """
@@ -56,8 +62,21 @@ def prompt(
     db_schemas: list[str],
     language: str,
     prompt_builder: PromptBuilder,
+    history: Optional[AskHistory] = None,
 ) -> dict:
-    return prompt_builder.run(query=query, db_schemas=db_schemas, language=language)
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
+
+    return prompt_builder.run(
+        query=query,
+        db_schemas=db_schemas,
+        language=language,
+        previous_query_summaries=previous_query_summaries,
+    )
 
 
 @async_timer

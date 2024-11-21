@@ -244,7 +244,7 @@ class AskService:
                             contexts=documents,
                             history=ask_request.history,
                             project_id=ask_request.project_id,
-                            configurations=ask_request.configurations,
+                            configuration=ask_request.configurations,
                         )
                     else:
                         text_to_sql_generation_results = await self._pipelines[
@@ -254,7 +254,7 @@ class AskService:
                             contexts=documents,
                             exclude=historical_question_result,
                             project_id=ask_request.project_id,
-                            configurations=ask_request.configurations,
+                            configuration=ask_request.configurations,
                         )
 
                     if sql_valid_results := text_to_sql_generation_results[
