@@ -241,7 +241,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
-                "configurations": configuration,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },
