@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import Configuration, MetadataTraceable
-from src.web.v1.services.ask import AskConfigurations
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -79,7 +78,7 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=documents,
                 exclude=[],
-                configurations=AskConfigurations(),
+                configurations=Configuration(),
             )
 
             post_process = generated_sql["post_process"]

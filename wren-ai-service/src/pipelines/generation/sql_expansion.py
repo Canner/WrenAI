@@ -14,7 +14,8 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import SQLGenPostProcessor, show_current_time
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskConfigurations, AskHistory
+from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -57,7 +58,7 @@ def prompt(
     query: str,
     documents: List[str],
     history: AskHistory,
-    timezone: AskConfigurations.Timezone,
+    timezone: Configuration.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
@@ -135,7 +136,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        timezone: AskConfigurations.Timezone,
+        timezone: Configuration.Timezone,
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -164,7 +165,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        timezone: AskConfigurations.Timezone = AskConfigurations().timezone,
+        timezone: Configuration.Timezone = Configuration().timezone,
         project_id: str | None = None,
     ):
         logger.info("Sql Expansion Generation pipeline is running...")
@@ -190,5 +191,5 @@ if __name__ == "__main__":
         query="query",
         contexts=[],
         history=AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
-        timezone=AskConfigurations.Timezone(name="UTC", utc_offset="+00:00"),
+        timezone=Configuration.Timezone(name="UTC", utc_offset="+00:00"),
     )

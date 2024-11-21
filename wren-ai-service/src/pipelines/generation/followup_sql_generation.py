@@ -20,7 +20,8 @@ from src.pipelines.common import (
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskConfigurations, AskHistory
+from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -115,7 +116,7 @@ def prompt(
     documents: List[str],
     history: AskHistory,
     alert: str,
-    configurations: AskConfigurations,
+    configuration: Configuration,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
@@ -123,8 +124,8 @@ def prompt(
         documents=documents,
         history=history,
         alert=alert,
-        instructions=construct_instructions(configurations),
-        current_time=show_current_time(configurations.timezone),
+        instructions=construct_instructions(configuration),
+        current_time=show_current_time(configuration.timezone),
     )
 
 
@@ -199,7 +200,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        configurations: AskConfigurations = AskConfigurations(),
+        configuration: Configuration = Configuration(),
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -214,7 +215,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },
@@ -229,7 +230,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        configurations: AskConfigurations = AskConfigurations(),
+        configuration: Configuration = Configuration(),
         project_id: str | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
@@ -240,7 +241,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configurations": configuration,
                 **self._components,
                 **self._configs,
             },

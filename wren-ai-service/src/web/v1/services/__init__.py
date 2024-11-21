@@ -29,6 +29,7 @@ class Configuration(BaseModel):
 
     class Timezone(BaseModel):
         name: str = "Asia/Taipei"
+        utc_offset: str = ""  # Deprecated, will be removed in the future
 
     def show_current_time(self):
         # Get the current time in the specified timezone

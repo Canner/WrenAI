@@ -20,7 +20,7 @@ from src.pipelines.common import (
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskConfigurations
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -84,7 +84,7 @@ def prompt(
     exclude: List[Dict],
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
-    configurations: AskConfigurations | None = None,
+    configurations: Configuration | None = None,
     samples: List[Dict] | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -168,7 +168,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations = AskConfigurations(),
+        configurations: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ) -> None:
@@ -200,7 +200,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations = AskConfigurations(),
+        configurations: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):

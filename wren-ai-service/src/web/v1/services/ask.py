@@ -8,7 +8,7 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
-from src.web.v1.services import SSEEvent
+from src.web.v1.services import Configuration, SSEEvent
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
@@ -17,20 +17,6 @@ logger = logging.getLogger("wren-ai-service")
 class AskHistory(BaseModel):
     sql: str
     steps: List[SQLBreakdown]
-
-
-class AskConfigurations(BaseModel):
-    class FiscalYear(BaseModel):
-        start: str
-        end: str
-
-    class Timezone(BaseModel):
-        name: str
-        utc_offset: str
-
-    fiscal_year: Optional[FiscalYear] = None
-    language: Optional[str] = "English"
-    timezone: Optional[Timezone] = Timezone(name="Asia/Taipei", utc_offset="+8:00")
 
 
 # POST /v1/asks
@@ -45,7 +31,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[AskHistory] = None
-    configurations: Optional[AskConfigurations] = AskConfigurations()
+    configurations: Optional[Configuration] = Configuration()
 
     @property
     def query_id(self) -> str:

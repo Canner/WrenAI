@@ -14,7 +14,7 @@ from src.core.engine import (
     clean_generation_result,
 )
 from src.core.pipeline import BasicPipeline
-from src.web.v1.services.ask import AskConfigurations
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -445,16 +445,16 @@ Learn about the usage of the schema structures and generate SQL based on them.
 """
 
 
-def construct_instructions(configurations: AskConfigurations | None):
+def construct_instructions(configuration: Configuration | None):
     instructions = ""
-    if configurations:
-        if configurations.fiscal_year:
-            instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
+    if configuration:
+        if configuration.fiscal_year:
+            instructions += f"- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
 
     return instructions
 
 
-def show_current_time(timezone: AskConfigurations.Timezone):
+def show_current_time(timezone: Configuration.Timezone):
     # Get the current time in the specified timezone
     tz = pytz.timezone(
         timezone.name
