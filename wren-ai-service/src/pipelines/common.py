@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -14,7 +13,8 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
-from src.web.v1.services.ask import AskConfigurations
+from src.core.pipeline import BasicPipeline
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -57,8 +57,6 @@ class SQLBreakdownGenPostProcessor:
                 }
 
         sql = self._build_cte_query(steps)
-        logger.debug(f": steps: {pformat(steps)}")
-        logger.debug(f"SQLBreakdownGenPostProcessor: final sql: {sql}")
 
         if not await self._check_if_sql_executable(sql, project_id=project_id):
             return {
@@ -97,7 +95,9 @@ class SQLBreakdownGenPostProcessor:
             )
 
         if not status:
-            logger.exception(f"SQL is not executable: {addition["error_message"]}")
+            logger.exception(
+                f"SQL is not executable: {addition.get('error_message', '')}"
+            )
 
         return status
 
@@ -173,7 +173,7 @@ class SQLGenPostProcessor:
                     valid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "correlation_id": addition["correlation_id"],
+                            "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
                 else:
@@ -181,8 +181,8 @@ class SQLGenPostProcessor:
                         {
                             "sql": quoted_sql,
                             "type": "DRY_RUN",
-                            "error": addition["error_message"],
-                            "correlation_id": addition["correlation_id"],
+                            "error": addition.get("error_message", ""),
+                            "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
             else:
@@ -209,7 +209,41 @@ TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- ONLY USE the following SQL functions when generating answers:
+- YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- ALWAYS QUALIFY column names with their table name or table alias to avoid ambiguity (e.g., orders.OrderId, o.OrderId)
+- YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
+    - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
+        - The user requests a pattern or partial match.
+        - The value is not specific enough to be a single, exact value.
+        - Wildcards (%) are needed to capture the pattern.
+    - Use "lower(<table_name>.<column_name>) = lower(<value>)" when:
+        - The user requests an exact, specific value.
+        - There is no ambiguity or pattern in the value.
+- ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
+    - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
+    - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
+    - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
+- If the user asks for a specific date, please give the date range in SQL query
+    - example: "What is the total revenue for the month of 2024-11-01?"
+    - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+- ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
+- USE THE VIEW TO SIMPLIFY THE QUERY.
+- DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
+- MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
+  - EXAMPLE
+    DATABASE SCHEMA
+    /* {"displayName":"_orders","description":"A model representing the orders data."} */
+    CREATE TABLE orders (
+      -- {"description":"A column that represents the timestamp when the order was approved.","alias":"_timestamp"}
+      ApprovedTimestamp TIMESTAMP
+    }
+
+    SQL
+    SELECT _orders.ApprovedTimestamp AS _timestamp FROM orders AS _orders;
+- DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
+- DON'T USE "FILTER(WHERE <condition>)" clause in the query.
+- DON'T USE "EXTRACT(EPOCH FROM <timestamp_column>)" clause in the query.
+- ONLY USE the following SQL functions if you need to when generating answers:
   - Aggregation functions:
     - AVG
     - COUNT
@@ -267,29 +301,11 @@ TEXT_TO_SQL_RULES = """
     - `=`
     - `<>`
     - `!=`
-- YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- YOU MUST USE "lower(<column_name>) = lower(<value>)" function for case-insensitive comparison!
-- DON'T USE "DATE_ADD" or "DATE_SUB" functions for date operations, instead use syntax like this "current_date - INTERVAL '7' DAY"!
-- DON'T USE "COUNT(*) FILTER(WHERE <condition>)"
-- ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
-- USE THE VIEW TO SIMPLIFY THE QUERY.
-- DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
-  - EXAMPLE
-    DATABASE SCHEMA
-    /* {"displayName":"_orders","description":"A model representing the orders data."} */
-    CREATE TABLE orders (
-      -- {"description":"A column that represents the timestamp when the order was approved.","alias":"_timestamp"}
-      ApprovedTimestamp TIMESTAMP
-    }
-
-    SQL
-    SELECT ApprovedTimestamp AS _timestamp FROM orders AS _orders;
 """
 
 
 sql_generation_system_prompt = """
-You are a Trino SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
+You are an ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
 Before the main task, you need to learn about some specific structures in the given DB schema.
 
 ## LESSON 1 ##
@@ -429,20 +445,62 @@ Learn about the usage of the schema structures and generate SQL based on them.
 """
 
 
-def construct_instructions(configurations: AskConfigurations | None):
+def construct_instructions(configuration: Configuration | None):
     instructions = ""
-    if configurations:
-        if configurations.fiscal_year:
-            instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
+    if configuration:
+        if configuration.fiscal_year:
+            instructions += f"- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
 
     return instructions
 
 
-def show_current_time(timezone: AskConfigurations.Timezone):
+def show_current_time(timezone: Configuration.Timezone):
     # Get the current time in the specified timezone
     tz = pytz.timezone(
         timezone.name
     )  # Assuming timezone.name contains the timezone string
     current_time = datetime.now(tz)
 
-    return f'{current_time.strftime("%Y-%m-%d %A")}'  # YYYY-MM-DD weekday_name, ex: 2024-10-23 Wednesday
+    return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
+
+
+def build_table_ddl(
+    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+) -> str:
+    columns_ddl = []
+    for column in content["columns"]:
+        if column["type"] == "COLUMN":
+            if not columns or (columns and column["name"] in columns):
+                column_ddl = (
+                    f"{column['comment']}{column['name']} {column['data_type']}"
+                )
+                if column["is_primary_key"]:
+                    column_ddl += " PRIMARY KEY"
+                columns_ddl.append(column_ddl)
+        elif column["type"] == "FOREIGN_KEY":
+            if not tables or (tables and set(column["tables"]).issubset(tables)):
+                columns_ddl.append(f"{column['comment']}{column['constraint']}")
+
+    return (
+        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
+    )
+
+
+def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
+    from langfuse.decorators import langfuse_context
+
+    from src.config import settings
+    from src.core.pipeline import async_validate
+    from src.providers import generate_components
+    from src.utils import init_langfuse
+
+    pipe_components = generate_components(settings.components)
+    pipeline = pipeline_cls(**pipe_components[pipeline_name])
+    init_langfuse()
+
+    pipeline.visualize(**kwargs)
+    async_validate(lambda: pipeline.run(**kwargs))
+
+    langfuse_context.flush()

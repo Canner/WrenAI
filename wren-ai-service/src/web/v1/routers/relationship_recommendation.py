@@ -11,6 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
+from src.web.v1.services import Configuration
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 
 router = APIRouter()
@@ -25,7 +26,11 @@ Endpoints:
    - Generates a new relationship recommendation
    - Request body: PostRequest
      {
-       "mdl": "{ ... }"                          # JSON string of the MDL (Model Definition Language)
+       "mdl": "{ ... }",                           # JSON string of the MDL (Model Definition Language)
+       "project_id": "project-id",                 # Optional project ID
+       "configuration": {                           # Optional configuration settings
+         "language": "English",                     # Language for the recommendation
+       }
      }
    - Response: PostResponse
      {
@@ -40,7 +45,7 @@ Endpoints:
        "id": "unique-uuid",                      # Unique identifier of the recommendation
        "status": "generating" | "finished" | "failed",
        "response": {                             # Present only if status is "finished"
-         "recommendations": [...]                # List of relationship recommendations
+         "relationships": [...]                  # List of relationship recommendations
        },
        "error": {                                # Present only if status is "failed"
          "code": "OTHERS",
@@ -62,6 +67,8 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 
 class PostRequest(BaseModel):
     mdl: str
+    project_id: Optional[str] = None
+    configuration: Optional[Configuration] = Configuration()
 
 
 class PostResponse(BaseModel):
@@ -85,6 +92,8 @@ async def recommend(
     input = RelationshipRecommendation.Input(
         id=id,
         mdl=request.mdl,
+        project_id=request.project_id,
+        configuration=request.configuration,
     )
 
     background_tasks.add_task(

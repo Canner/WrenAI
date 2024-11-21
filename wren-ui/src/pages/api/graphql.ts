@@ -4,43 +4,16 @@ import { ApolloServer } from 'apollo-server-micro';
 import { typeDefs } from '@server';
 import resolvers from '@server/resolvers';
 import { IContext } from '@server/types';
-import {
-  ModelNestedColumnRepository,
-  ModelColumnRepository,
-  ModelRepository,
-  ProjectRepository,
-  RelationRepository,
-  ViewRepository,
-  LearningRepository,
-} from '@server/repositories';
-import { bootstrapKnex } from '../../apollo/server/utils/knex';
 import { GraphQLError } from 'graphql';
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
-import { ProjectService } from '@server/services/projectService';
 import { ModelService } from '@server/services/modelService';
-import { MDLService } from '@server/services/mdlService';
-import { WrenEngineAdaptor } from '@/apollo/server/adaptors/wrenEngineAdaptor';
-import { DeployLogRepository } from '@/apollo/server/repositories/deployLogRepository';
-import { DeployService } from '@/apollo/server/services/deployService';
-import { WrenAIAdaptor } from '@/apollo/server/adaptors/wrenAIAdaptor';
-import { AskingService } from '@/apollo/server/services/askingService';
-import { ThreadRepository } from '@/apollo/server/repositories/threadRepository';
-import { ThreadResponseRepository } from '@/apollo/server/repositories/threadResponseRepository';
-import { SchemaChangeRepository } from '@/apollo/server/repositories/schemaChangeRepository';
 import {
   defaultApolloErrorHandler,
   GeneralErrorCodes,
 } from '@/apollo/server/utils/error';
-import {
-  PostHogTelemetry,
-  TelemetryEvent,
-} from '@/apollo/server/telemetry/telemetry';
-import { IbisAdaptor } from '@/apollo/server/adaptors/ibisAdaptor';
-import {
-  DataSourceMetadataService,
-  QueryService,
-} from '@/apollo/server/services';
+import { TelemetryEvent } from '@/apollo/server/telemetry/telemetry';
+import { components } from '@/common';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -55,59 +28,37 @@ export const config: PageConfig = {
 };
 
 const bootstrapServer = async () => {
-  const telemetry = new PostHogTelemetry();
+  const {
+    telemetry,
 
-  const knex = bootstrapKnex({
-    dbType: serverConfig.dbType,
-    pgUrl: serverConfig.pgUrl,
-    debug: serverConfig.debug,
-    sqliteFile: serverConfig.sqliteFile,
-  });
-
-  const projectRepository = new ProjectRepository(knex);
-  const modelRepository = new ModelRepository(knex);
-  const modelColumnRepository = new ModelColumnRepository(knex);
-  const modelNestedColumnRepository = new ModelNestedColumnRepository(knex);
-  const relationRepository = new RelationRepository(knex);
-  const deployLogRepository = new DeployLogRepository(knex);
-  const threadRepository = new ThreadRepository(knex);
-  const threadResponseRepository = new ThreadResponseRepository(knex);
-  const viewRepository = new ViewRepository(knex);
-  const schemaChangeRepository = new SchemaChangeRepository(knex);
-  const learningRepository = new LearningRepository(knex);
-
-  const wrenEngineAdaptor = new WrenEngineAdaptor({
-    wrenEngineEndpoint: serverConfig.wrenEngineEndpoint,
-  });
-  const wrenAIAdaptor = new WrenAIAdaptor({
-    wrenAIBaseEndpoint: serverConfig.wrenAIEndpoint,
-  });
-  const ibisAdaptor = new IbisAdaptor({
-    ibisServerEndpoint: serverConfig.ibisServerEndpoint,
-  });
-
-  const metadataService = new DataSourceMetadataService({
-    ibisAdaptor,
-    wrenEngineAdaptor,
-  });
-
-  const projectService = new ProjectService({
-    projectRepository,
-    metadataService,
-  });
-  const mdlService = new MDLService({
+    // repositories
     projectRepository,
     modelRepository,
     modelColumnRepository,
-    modelNestedColumnRepository,
     relationRepository,
+    deployLogRepository,
     viewRepository,
-  });
-  const queryService = new QueryService({
-    ibisAdaptor,
+    schemaChangeRepository,
+    learningRepository,
+    modelNestedColumnRepository,
+
+    // adaptors
     wrenEngineAdaptor,
-    telemetry,
-  });
+    ibisAdaptor,
+    wrenAIAdaptor,
+
+    // services
+    projectService,
+    queryService,
+    askingService,
+    deployService,
+    mdlService,
+
+    // background trackers
+    projectRecommendQuestionBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
+  } = components;
+
   const modelService = new ModelService({
     projectService,
     modelRepository,
@@ -118,25 +69,13 @@ const bootstrapServer = async () => {
     wrenEngineAdaptor,
     queryService,
   });
-  const deployService = new DeployService({
-    wrenAIAdaptor,
-    deployLogRepository,
-    telemetry,
-  });
-
-  const askingService = new AskingService({
-    telemetry,
-    wrenAIAdaptor,
-    deployService,
-    projectService,
-    viewRepository,
-    threadRepository,
-    threadResponseRepository,
-    queryService,
-  });
 
   // initialize services
-  await askingService.initialize();
+  await Promise.all([
+    askingService.initialize(),
+    projectRecommendQuestionBackgroundTracker.initialize(),
+    threadRecommendQuestionBackgroundTracker.initialize(),
+  ]);
 
   const apolloServer: ApolloServer = new ApolloServer({
     typeDefs,
@@ -167,7 +106,7 @@ const bootstrapServer = async () => {
           TelemetryEvent.GRAPHQL_ERROR,
           {
             originalErrorStack: originalError?.stack,
-            originalErrorMessage: originalError.message,
+            originalErrorMessage: originalError?.message,
             errorMessage: error.message,
           },
           error.extensions?.service,
@@ -183,7 +122,7 @@ const bootstrapServer = async () => {
       // adaptor
       wrenEngineAdaptor,
       ibisServerAdaptor: ibisAdaptor,
-
+      wrenAIAdaptor,
       // services
       projectService,
       modelService,
@@ -202,6 +141,10 @@ const bootstrapServer = async () => {
       deployRepository: deployLogRepository,
       schemaChangeRepository,
       learningRepository,
+
+      // background trackers
+      projectRecommendQuestionBackgroundTracker,
+      threadRecommendQuestionBackgroundTracker,
     }),
   });
   await apolloServer.start();

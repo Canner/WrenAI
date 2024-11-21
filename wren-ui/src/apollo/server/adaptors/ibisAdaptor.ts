@@ -52,12 +52,21 @@ export interface IbisTrinoConnectionInfo {
   password: string;
 }
 
+export interface IbisSnowflakeConnectionInfo {
+  user: string;
+  password: string;
+  account: string;
+  database: string;
+  schema: string;
+}
+
 export type IbisConnectionInfo =
   | UrlBasedConnectionInfo
   | HostBasedConnectionInfo
   | IbisPostgresConnectionInfo
   | IbisBigQueryConnectionInfo
-  | IbisTrinoConnectionInfo;
+  | IbisTrinoConnectionInfo
+  | IbisSnowflakeConnectionInfo;
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
@@ -203,8 +212,8 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return {
         ...res.data,
-        correlationId: res.headers['X-Correlation-ID'],
-        processTime: res.headers['X-Process-Time'],
+        correlationId: res.headers['x-correlation-id'],
+        processTime: res.headers['x-process-time'],
       };
     } catch (e) {
       logger.debug(`Got error when querying ibis: ${e.response.data}`);
@@ -213,8 +222,8 @@ export class IbisAdaptor implements IIbisAdaptor {
         customMessage: e.response.data || 'Error querying ibis server',
         originalError: e,
         other: {
-          correlationId: e.response.headers['X-Correlation-ID'],
-          processTime: e.response.headers['X-Process-Time'],
+          correlationId: e.response.headers['x-correlation-id'],
+          processTime: e.response.headers['x-process-time'],
         },
       });
     }
@@ -240,8 +249,8 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       logger.debug(`Ibis server Dry run success`);
       return {
-        correlationId: response.headers['X-Correlation-ID'],
-        processTime: response.headers['X-Process-Time'],
+        correlationId: response.headers['x-correlation-id'],
+        processTime: response.headers['x-process-time'],
       };
     } catch (err) {
       logger.info(`Got error when dry running ibis`);
@@ -249,8 +258,8 @@ export class IbisAdaptor implements IIbisAdaptor {
         customMessage: err.response.data,
         originalError: err,
         other: {
-          correlationId: err.response.headers['X-Correlation-ID'],
-          processTime: err.response.headers['X-Process-Time'],
+          correlationId: err.response.headers['x-correlation-id'],
+          processTime: err.response.headers['x-process-time'],
         },
       });
     }

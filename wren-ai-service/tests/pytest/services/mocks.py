@@ -1,8 +1,9 @@
 from typing import Optional
 
-from src.pipelines.generation import sql_generation, sql_summary
+from src.pipelines.generation import intent_classification, sql_generation, sql_summary
 from src.pipelines.retrieval import historical_question, retrieval
-from src.web.v1.services.ask import AskConfigurations
+from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 
 
 class RetrievalMock(retrieval.Retrieval):
@@ -21,6 +22,16 @@ class HistoricalQuestionMock(historical_question.HistoricalQuestion):
         return {"formatted_output": {"documents": self._documents}}
 
 
+class IntentClassificationMock(intent_classification.IntentClassification):
+    def __init__(self, intent: str = "MISLEADING_QUERY"):
+        self._intent = intent
+
+    async def run(
+        self, query: str, id: Optional[str] = None, history: Optional[AskHistory] = None
+    ):
+        return {"post_process": {"intent": self._intent, "db_schemas": []}}
+
+
 class GenerationMock(sql_generation.SQLGeneration):
     def __init__(self, valid: list = [], invalid: list = []):
         self._valid = valid
@@ -32,7 +43,7 @@ class GenerationMock(sql_generation.SQLGeneration):
         contexts: list[str],
         exclude: list[dict],
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
+        configuration: Configuration | None = None,
     ):
         return {
             "post_process": {

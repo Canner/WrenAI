@@ -5,13 +5,14 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import backoff
 import google.auth
 import google.auth.transport.requests
+import langfuse.openai
 import openai
 import orjson
 from haystack import component
 from haystack.components.generators import OpenAIGenerator
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from haystack.utils import Secret
-from openai import AsyncOpenAI, Stream
+from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from src.core.provider import LLMProvider
@@ -36,7 +37,9 @@ class AsyncGenerator(OpenAIGenerator):
         self,
         api_key: Secret = Secret.from_env_var("LLM_OPENAI_API_KEY"),
         model: str = "gpt-4o-mini",
-        streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
+        streaming_callback: Optional[
+            Callable[[StreamingChunk, Optional[str]], None]
+        ] = None,
         api_base_url: Optional[str] = None,
         organization: Optional[str] = None,
         system_prompt: Optional[str] = None,
@@ -87,7 +90,10 @@ class AsyncGenerator(OpenAIGenerator):
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.OpenAIError, max_time=60.0, max_tries=3)
     async def run(
-        self, prompt: str, generation_kwargs: Optional[Dict[str, Any]] = None
+        self,
+        prompt: str,
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+        query_id: Optional[str] = None,
     ):
         logger.debug(f"Running AsyncOpenAI generator with prompt: {prompt}")
         message = ChatMessage.from_user(prompt)
@@ -104,7 +110,7 @@ class AsyncGenerator(OpenAIGenerator):
         openai_formatted_messages = [message.to_openai_format() for message in messages]
 
         completion: Union[
-            Stream[ChatCompletionChunk], ChatCompletion
+            AsyncStream[ChatCompletionChunk], ChatCompletion
         ] = await self.client.chat.completions.create(
             model=self.model,
             messages=openai_formatted_messages,  # type: ignore
@@ -113,23 +119,26 @@ class AsyncGenerator(OpenAIGenerator):
         )
 
         completions: List[ChatMessage] = []
-        if isinstance(completion, Stream):
+        if isinstance(completion, AsyncStream) or isinstance(
+            completion, langfuse.openai.LangfuseResponseGeneratorAsync
+        ):
             num_responses = generation_kwargs.pop("n", 1)
             if num_responses > 1:
                 raise ValueError("Cannot stream multiple responses, please set n=1.")
             chunks: List[StreamingChunk] = []
             chunk = None
 
-            # pylint: disable=not-an-iterable
-            for chunk in completion:
+            async for chunk in completion:
                 if chunk.choices and self.streaming_callback:
                     chunk_delta: StreamingChunk = self._build_chunk(chunk)
                     chunks.append(chunk_delta)
                     self.streaming_callback(
-                        chunk_delta
+                        chunk_delta, query_id
                     )  # invoke callback with the chunk_delta
             completions = [self._connect_chunks(chunk, chunks)]
-        elif isinstance(completion, ChatCompletion):
+        elif isinstance(completion, ChatCompletion) or isinstance(
+            completion, langfuse.openai.LangfuseResponseGeneratorSync
+        ):
             completions = [
                 self._build_message(completion, choice) for choice in completion.choices
             ]
@@ -170,24 +179,20 @@ class OpenAILLMProvider(LLMProvider):
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
         if self._api_base == LLM_OPENAI_API_BASE:
             logger.info(f"Using OpenAI LLM: {self._generation_model}")
+            logger.info(f"Using OpenAI LLM model kwargs: {self._model_kwargs}")
         else:
             logger.info(f"Using OpenAI API-compatible LLM: {self._generation_model}")
+            logger.info(
+                f"Using OpenAI API-compatible LLM model kwargs: {self._model_kwargs}"
+            )
 
     def get_generator(
         self,
         system_prompt: Optional[str] = None,
         # it is expected to only pass the response format only, others will be merged from the model parameters.
         generation_kwargs: Optional[Dict[str, Any]] = None,
+        streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        if self._api_base == LLM_OPENAI_API_BASE:
-            logger.info(
-                f"Creating OpenAI generator {self._generation_model} with model kwargs: {self._model_kwargs}"
-            )
-        else:
-            logger.info(
-                f"Creating OpenAI API-compatible generator {self._generation_model} with model kwargs: {self._model_kwargs}"
-            )
-
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,
@@ -195,9 +200,10 @@ class OpenAILLMProvider(LLMProvider):
             system_prompt=system_prompt,
             # merge model args with the shared args related to response_format
             generation_kwargs=(
-                {**generation_kwargs, **self._model_kwargs}
+                {**self._model_kwargs, **generation_kwargs}
                 if generation_kwargs
                 else self._model_kwargs
             ),
             timeout=self._timeout,
+            streaming_callback=streaming_callback,
         )

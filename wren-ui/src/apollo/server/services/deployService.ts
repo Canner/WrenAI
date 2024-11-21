@@ -1,7 +1,5 @@
-import {
-  IWrenAIAdaptor,
-  WrenAIDeployStatusEnum,
-} from '../adaptors/wrenAIAdaptor';
+import { WrenAIDeployStatusEnum } from '@server/models/adaptor';
+import { IWrenAIAdaptor } from '../adaptors/wrenAIAdaptor';
 import {
   Deploy,
   DeployStatusEnum,

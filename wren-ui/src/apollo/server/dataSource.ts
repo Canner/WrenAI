@@ -3,6 +3,7 @@ import {
   IbisPostgresConnectionInfo,
   HostBasedConnectionInfo,
   UrlBasedConnectionInfo,
+  IbisSnowflakeConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
   BIG_QUERY_CONNECTION_INFO,
@@ -13,6 +14,7 @@ import {
   WREN_AI_CONNECTION_INFO,
   CLICK_HOUSE_CONNECTION_INFO,
   TRINO_CONNECTION_INFO,
+  SNOWFLAKE_CONNECTION_INFO,
 } from './repositories';
 import { DataSourceName } from './types';
 import { getConfig } from './config';
@@ -177,6 +179,23 @@ const dataSource = {
       return { connectionUrl };
     },
   } as IDataSourceConnectionInfo<TRINO_CONNECTION_INFO, UrlBasedConnectionInfo>,
+
+  // Snowflake
+  [DataSourceName.SNOWFLAKE]: {
+    sensitiveProps: ['password'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.SNOWFLAKE,
+        connectionInfo,
+      );
+      const { user, password, account, database, schema } =
+        decryptedConnectionInfo as SNOWFLAKE_CONNECTION_INFO;
+      return { user, password, account, database, schema };
+    },
+  } as IDataSourceConnectionInfo<
+    SNOWFLAKE_CONNECTION_INFO,
+    IbisSnowflakeConnectionInfo
+  >,
 
   // DuckDB
   [DataSourceName.DUCKDB]: {

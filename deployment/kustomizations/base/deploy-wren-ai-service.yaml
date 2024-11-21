@@ -14,99 +14,61 @@ spec:
     spec:
       containers:
         - name: wren-ai-service
-          image: ghcr.io/canner/wren-ai-service:0.3.7
+          image: ghcr.io/canner/wren-ai-service:latest
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/data
           env:
-          - name: WREN_AI_SERVICE_PORT
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: WREN_AI_SERVICE_PORT
-          - name: LLM_PROVIDER
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: LLM_PROVIDER
-          - name: LLM_OPENAI_API_KEY
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: LLM_OPENAI_API_KEY
-          - name: LLM_OPENAI_API_BASE
-            valueFrom: 
-              configMapKeyRef:
-                name: wren-config
-                key: LLM_OPENAI_API_BASE
-          - name: EMBEDDER_PROVIDER
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: EMBEDDER_PROVIDER
-          - name: EMBEDDER_OPENAI_API_KEY
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: EMBEDDER_OPENAI_API_KEY
-          - name: EMBEDDER_OPENAI_API_BASE
-            valueFrom: 
-              configMapKeyRef:
-                name: wren-config
-                key: EMBEDDER_OPENAI_API_BASE
-          - name: GENERATION_MODEL
-            valueFrom: 
-              configMapKeyRef:
-                name: wren-config
-                key: GENERATION_MODEL
-          - name: QDRANT_HOST
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: QDRANT_HOST
-          - name: DOCUMENT_STORE_PROVIDER
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: DOCUMENT_STORE_PROVIDER
-          - name: WREN_ENGINE_ENDPOINT
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: WREN_ENGINE_ENDPOINT
-          - name: LOGGING_LEVEL
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: LOGGING_LEVEL
-          - name: WREN_UI_ENDPOINT
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: WREN_UI_ENDPOINT
-          - name: ENABLE_TIMER
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: WREN_AI_SERVICE_ENABLE_TIMER
-          - name: PYTHONUNBUFFERED
-            value: "1"
-          - name: LANGFUSE_ENABLE
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: LANGFUSE_ENABLE
-          - name: LANGFUSE_HOST
-            valueFrom:
-              configMapKeyRef:
-                name: wren-config
-                key: LANGFUSE_HOST
-          - name: LANGFUSE_PUBLIC_KEY
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: LANGFUSE_PUBLIC_KEY
-          - name: LANGFUSE_SECRET_KEY
-            valueFrom:
-              secretKeyRef:
-                name: wrenai-secrets
-                key: LANGFUSE_SECRET_KEY
+            - name: WREN_AI_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_AI_SERVICE_PORT
+            - name: LLM_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: LLM_OPENAI_API_KEY
+            - name: EMBEDDER_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: EMBEDDER_OPENAI_API_KEY
+            - name: QDRANT_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: QDRANT_HOST
+            - name: LOGGING_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: LOGGING_LEVEL
+            - name: WREN_UI_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_UI_ENDPOINT
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: LANGFUSE_PUBLIC_KEY
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: LANGFUSE_SECRET_KEY
+            - name: CONFIG_PATH
+              value: /app/data/config.yaml
           ports:
             - containerPort: 5555
+      volumes:
+        - name: config-volume
+          configMap:
+            name: wren-ai-service-config
+            items:
+              - key: config.yaml
+                path: config.yaml

@@ -1,3 +1,4 @@
+import { ComponentProps } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { Button, Switch, Typography, Empty } from 'antd';
@@ -7,7 +8,6 @@ import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import CopyOutlined from '@ant-design/icons/lib/icons/CopyOutlined';
 import UpCircleOutlined from '@ant-design/icons/UpCircleOutlined';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { PreviewDataMutationResult } from '@/apollo/client/graphql/home.generated';
 import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
 import { NativeSQLResult } from '@/hooks/useNativeSQL';
 
@@ -29,14 +29,14 @@ const StyledPre = styled.pre<{ showNativeSQL: boolean }>`
   }
 `;
 
-export interface Props {
+interface Props {
   isViewSQL?: boolean;
   isViewFullSQL?: boolean;
   isPreviewData?: boolean;
   onCloseCollapse: () => void;
   onCopyFullSQL?: () => void;
   sql: string;
-  previewDataResult: PreviewDataMutationResult;
+  previewDataResult: ComponentProps<typeof PreviewData>;
   attributes: {
     stepNumber: number;
     isLastStep: boolean;
@@ -58,6 +58,7 @@ export default function CollapseContent(props: Props) {
     onChangeNativeSQL,
     nativeSQLResult,
   } = props;
+  const isStepViewSQL = !isViewFullSQL && isViewSQL;
 
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = Boolean(attributes.isLastStep) && hasNativeSQL;
@@ -127,7 +128,7 @@ export default function CollapseContent(props: Props) {
           />
         </div>
       )}
-      {(isViewSQL || isPreviewData) && (
+      {(isStepViewSQL || isPreviewData) && (
         <div className="d-flex justify-space-between">
           <Button
             className="gray-6"

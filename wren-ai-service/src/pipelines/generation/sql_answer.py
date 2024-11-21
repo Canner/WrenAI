@@ -6,14 +6,14 @@ from typing import Any, Dict, Optional
 import aiohttp
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.engine import Engine
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
 
@@ -22,15 +22,14 @@ logger = logging.getLogger("wren-ai-service")
 sql_to_answer_system_prompt = """
 ### TASK
 
-You are a data analyst that great at answering user's questions based on the data, sql and sql summary so that even non technical users can easily understand.
+You are a data analyst that great at answering user's questions based on the data, sql so that even non technical users can easily understand.
 Please answer the user's question in concise and clear manner in Markdown format.
 
 ### INSTRUCTIONS
 
 1. Read the user's question and understand the user's intention.
-2. Read the sql summary and understand the data.
-3. Read the sql and understand the data.
-4. Generate a consice and clear answer in string format and a reasoning process in string format to the user's question based on the data, sql and sql summary.
+2. Read the sql and understand the data.
+4. Generate a consice and clear answer in string format and a reasoning process in string format to the user's question based on the data, sql.
 5. If answer is in list format, only list top few examples, and tell users there are more results omitted.
 6. Answer must be in the same language user specified.
 
@@ -48,7 +47,6 @@ sql_to_answer_user_prompt_template = """
 ### Input
 User's question: {{ query }}
 SQL: {{ sql }}
-SQL summary: {{ sql_summary }}
 Data: {{ sql_data }}
 Language: {{ language }}
 Please think step by step and answer the user's question.
@@ -116,8 +114,6 @@ class SQLAnswerGenerationPostProcessor:
 async def execute_sql(
     sql: str, data_fetcher: DataFetcher, project_id: str | None = None
 ) -> dict:
-    logger.debug(f"Executing SQL: {sql}")
-
     return await data_fetcher.run(sql=sql, project_id=project_id)
 
 
@@ -126,20 +122,13 @@ async def execute_sql(
 def prompt(
     query: str,
     sql: str,
-    sql_summary: str,
     execute_sql: dict,
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(f"sql_summary: {sql_summary}")
-    logger.debug(f"sql data: {execute_sql}")
-    logger.debug(f"language: {language}")
     return prompt_builder.run(
         query=query,
         sql=sql,
-        sql_summary=sql_summary,
         sql_data=execute_sql["results"],
         language=language,
     )
@@ -148,8 +137,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_answer(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -158,10 +145,6 @@ async def generate_answer(prompt: dict, generator: Any) -> dict:
 def post_process(
     generate_answer: dict, post_processor: SQLAnswerGenerationPostProcessor
 ) -> dict:
-    logger.debug(
-        f"generate_answer: {orjson.dumps(generate_answer, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return post_processor.run(generate_answer.get("replies"))
 
 
@@ -211,7 +194,6 @@ class SQLAnswer(BasicPipeline):
         self,
         query: str,
         sql: str,
-        sql_summary: str,
         language: str,
         project_id: str | None = None,
     ) -> None:
@@ -225,7 +207,6 @@ class SQLAnswer(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
-                "sql_summary": sql_summary,
                 "language": language,
                 "project_id": project_id,
                 **self._components,
@@ -240,7 +221,6 @@ class SQLAnswer(BasicPipeline):
         self,
         query: str,
         sql: str,
-        sql_summary: str,
         language: str,
         project_id: str | None = None,
     ) -> dict:
@@ -250,7 +230,6 @@ class SQLAnswer(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
-                "sql_summary": sql_summary,
                 "language": language,
                 "project_id": project_id,
                 **self._components,
@@ -259,27 +238,12 @@ class SQLAnswer(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = SQLAnswer(
-        llm_provider=llm_provider,
-        engine=engine,
+    dry_run_pipeline(
+        SQLAnswer,
+        "sql_answer",
+        query="query",
+        sql="SELECT * FROM table_name",
+        language="English",
     )
-
-    pipeline.visualize("query", "SELECT * FROM table_name", "sql summary", "English")
-    async_validate(
-        lambda: pipeline.run(
-            "query", "SELECT * FROM table_name", "sql summary", "English"
-        )
-    )
-
-    langfuse_context.flush()

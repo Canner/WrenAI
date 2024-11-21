@@ -11,6 +11,7 @@ import pandas as pd
 import requests
 import sqlglot
 import sqlparse
+import sseclient
 import streamlit as st
 import yaml
 from dotenv import load_dotenv
@@ -22,6 +23,11 @@ POLLING_INTERVAL = 0.5
 DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
 
 load_dotenv()
+
+
+def with_requests(url, headers):
+    """Get a streaming response for the given event feed using requests."""
+    return requests.get(url, stream=True, headers=headers)
 
 
 def add_quotes(sql: str) -> Tuple[str, bool]:
@@ -104,7 +110,7 @@ def save_mdl_json_file(file_name: str, mdl_json: Dict):
 
 
 def get_mdl_json(database_name: str):
-    assert database_name in ["music", "nba", "ecommerce"]
+    assert database_name in ["ecommerce", "hr"]
 
     with open(f"demo/sample_dataset/{database_name}_duckdb_mdl.json", "r") as f:
         mdl_json = json.load(f)
@@ -162,7 +168,6 @@ def get_data_from_wren_engine(
 def show_query_history():
     if st.session_state["query_history"]:
         with st.expander("Query History", expanded=False):
-            st.markdown(st.session_state["query_history"]["summary"])
             st.code(
                 body=sqlparse.format(
                     st.session_state["query_history"]["sql"],
@@ -188,41 +193,43 @@ def show_asks_results():
     show_query_history()
 
     st.markdown("### Query Results")
-    asks_result_count = len(st.session_state["asks_results"])
-    ask_result_cols = st.columns(asks_result_count)
-    choose_result_n = [False] * asks_result_count
-    for i, ask_result_col in enumerate(ask_result_cols):
-        with ask_result_col:
-            st.markdown(f"Result {i+1}")
-            st.code(
-                body=sqlparse.format(
-                    st.session_state["asks_results"][i]["sql"],
-                    reindent=True,
-                    keyword_case="upper",
-                ),
-                language="sql",
-            )
-            st.markdown(st.session_state["asks_results"][i]["summary"])
-            choose_result_n[i] = st.button(f"Choose Result {i+1}")
+    if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
+        asks_result_count = len(st.session_state["asks_results"])
+        ask_result_cols = st.columns(asks_result_count)
+        choose_result_n = [False] * asks_result_count
+        for i, ask_result_col in enumerate(ask_result_cols):
+            with ask_result_col:
+                st.markdown(f"Result {i+1}")
+                st.code(
+                    body=sqlparse.format(
+                        st.session_state["asks_results"][i]["sql"],
+                        reindent=True,
+                        keyword_case="upper",
+                    ),
+                    language="sql",
+                )
+                choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
-    for i, choose_result in enumerate(choose_result_n):
-        if choose_result:
-            sql = st.session_state["asks_results"][i]["sql"]
-            summary = st.session_state["asks_results"][i]["summary"]
+        for i, choose_result in enumerate(choose_result_n):
+            if choose_result:
+                sql = st.session_state["asks_results"][i]["sql"]
 
-            st.session_state["chosen_query_result"] = {
-                "index": i,
-                "query": st.session_state["query"],
-                "sql": sql,
-                "summary": summary,
-            }
+                st.session_state["chosen_query_result"] = {
+                    "index": i,
+                    "query": st.session_state["query"],
+                    "sql": sql,
+                }
 
-            # reset relevant session_states
-            st.session_state["asks_details_result"] = None
-            st.session_state["preview_data_button_index"] = None
-            st.session_state["preview_sql"] = None
+                # reset relevant session_states
+                st.session_state["asks_details_result"] = None
+                st.session_state["preview_data_button_index"] = None
+                st.session_state["preview_sql"] = None
 
-            break
+                break
+    elif st.session_state["asks_results_type"] == "MISLEADING_QUERY":
+        st.markdown(
+            "Misleading query detected. Please try again with a different query."
+        )
 
 
 def show_asks_details_results(query: str):
@@ -310,7 +317,6 @@ def show_asks_details_results(query: str):
                 get_sql_answer(
                     st.session_state["chosen_query_result"]["query"],
                     st.session_state["chosen_query_result"]["sql"],
-                    st.session_state["chosen_query_result"]["summary"],
                 )
             )
 
@@ -535,25 +541,27 @@ def generate_mdl_metadata(mdl_model_json: dict):
 
 
 def _prepare_duckdb(dataset_name: str):
-    assert dataset_name in ["ecommerce", "nba"]
-
-    DATASET_VERSION = "v0.3.0"
+    assert dataset_name in ["ecommerce", "hr"]
 
     init_sqls = {
-        "nba": f"""
-CREATE TABLE game AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/game.csv',header=true);
-CREATE TABLE line_score AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/line_score.csv',header=true);
-CREATE TABLE player_games AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/player_game.csv',header=true);
-CREATE TABLE player AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/player.csv',header=true);
-CREATE TABLE team AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/NBA/team.csv',header=true);
+        "ecommerce": """
+CREATE TABLE olist_customers_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_customers_dataset.parquet');
+CREATE TABLE olist_order_items_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_items_dataset.parquet');
+CREATE TABLE olist_orders_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_orders_dataset.parquet');
+CREATE TABLE olist_order_payments_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_payments_dataset.parquet');
+CREATE TABLE olist_products_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_products_dataset.parquet');
+CREATE TABLE olist_order_reviews_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_reviews_dataset.parquet');
+CREATE TABLE olist_geolocation_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_geolocation_dataset.parquet');
+CREATE TABLE olist_sellers_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_sellers_dataset.parquet');
+CREATE TABLE product_category_name_translation AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/product_category_name_translation.parquet');
 """,
-        "ecommerce": f"""
-CREATE TABLE customers AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/customers.csv',header=true);
-CREATE TABLE order_items AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/order_items.csv',header=true);
-CREATE TABLE orders AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/orders.csv',header=true);
-CREATE TABLE payments AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/payments.csv',header=true);
-CREATE TABLE products AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/products.csv',header=true);
-CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/demo/{DATASET_VERSION}/E-Commerce/reviews.csv',header=true);
+        "hr": """
+CREATE TABLE salaries AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/salaries.parquet');
+CREATE TABLE titles AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/titles.parquet');
+CREATE TABLE dept_emp AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/dept_emp.parquet');
+CREATE TABLE departments AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/departments.parquet');
+CREATE TABLE employees AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/employees.parquet');
+CREATE TABLE dept_manager AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/dept_manager.parquet');
 """,
     }
 
@@ -571,47 +579,20 @@ CREATE TABLE reviews AS FROM read_csv('https://wrenai-public.s3.amazonaws.com/de
 def _replace_wren_engine_env_variables(engine_type: str, data: dict):
     assert engine_type in ("wren_engine", "wren_ibis")
 
-    if not Path("config.yaml").exists():
-        if engine_type == "wren_engine":
-            with open(".env.dev", "r") as f:
-                lines = f.readlines()
-                for i, line in enumerate(lines):
-                    if line.startswith("ENGINE"):
-                        lines[i] = "ENGINE=wren_engine\n"
-                    elif line.startswith("WREN_ENGINE_MANIFEST"):
-                        lines[i] = f"WREN_ENGINE_MANIFEST={data['manifest']}\n"
-        else:
-            with open(".env.dev", "r") as f:
-                lines = f.readlines()
-                for i, line in enumerate(lines):
-                    if line.startswith("ENGINE"):
-                        lines[i] = "ENGINE=wren_ibis\n"
-                    elif line.startswith("WREN_IBIS_SOURCE"):
-                        lines[i] = f"WREN_IBIS_SOURCE={data['source']}\n"
-                    elif line.startswith("WREN_IBIS_MANIFEST"):
-                        lines[i] = f"WREN_IBIS_MANIFEST={data['manifest']}\n"
-                    elif line.startswith("WREN_IBIS_CONNECTION_INFO"):
-                        lines[
-                            i
-                        ] = f"WREN_IBIS_CONNECTION_INFO={data['connection_info']}\n"
+    with open("config.yaml", "r") as f:
+        configs = list(yaml.safe_load_all(f))
 
-        with open(".env.dev", "w") as f:
-            f.writelines(lines)
-    else:
-        with open("config.yaml", "r") as f:
-            configs = list(yaml.safe_load_all(f))
+        for config in configs:
+            if config.get("type") == "engine" and config.get("provider") == engine_type:
+                for key, value in data.items():
+                    config[key] = value
+            if "pipes" in config:
+                for i, pipe in enumerate(config["pipes"]):
+                    if "engine" in pipe:
+                        config["pipes"][i]["engine"] = engine_type
 
-            for config in configs:
-                if config["type"] == "engine" and config["provider"] == engine_type:
-                    for key, value in data.items():
-                        config[key] = value
-                if "pipes" in config:
-                    for i, pipe in enumerate(config["pipes"]):
-                        if "engine" in pipe:
-                            config["pipes"][i]["engine"] = engine_type
-
-        with open("config.yaml", "w") as f:
-            yaml.safe_dump_all(configs, f, default_flow_style=False)
+    with open("config.yaml", "w") as f:
+        yaml.safe_dump_all(configs, f, default_flow_style=False)
 
 
 def prepare_semantics(mdl_json: dict):
@@ -683,11 +664,18 @@ def ask(query: str, query_history: Optional[dict] = None):
         )
         assert asks_status_response.status_code == 200
         asks_status = asks_status_response.json()["status"]
+        asks_type = asks_status_response.json()["type"]
         st.toast(f"The query processing status: {asks_status}")
         time.sleep(POLLING_INTERVAL)
 
     if asks_status == "finished":
-        st.session_state["asks_results"] = asks_status_response.json()["response"]
+        st.session_state["asks_results_type"] = asks_type
+        if asks_type == "GENERAL":
+            display_general_response(query_id)
+        elif asks_type == "TEXT_TO_SQL":
+            st.session_state["asks_results"] = asks_status_response.json()["response"]
+        else:
+            st.session_state["asks_results"] = asks_type
     elif asks_status == "failed":
         st.error(
             f'An error occurred while processing the query: {asks_status_response.json()['error']}',
@@ -695,17 +683,29 @@ def ask(query: str, query_history: Optional[dict] = None):
         )
 
 
+def display_general_response(query_id: str):
+    url = f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/{query_id}/streaming-result"
+    headers = {"Accept": "text/event-stream"}
+    response = with_requests(url, headers)
+    client = sseclient.SSEClient(response)
+
+    markdown_content = ""
+    placeholder = st.empty()
+
+    for event in client.events():
+        markdown_content += orjson.loads(event.data)["message"]
+        placeholder.markdown(markdown_content)
+
+
 def get_sql_answer(
     query: str,
     sql: str,
-    sql_summary: str,
 ):
     sql_answer_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers",
         json={
             "query": query,
             "sql": sql,
-            "sql_summary": sql_summary,
             "configurations": {
                 "language": st.session_state["language"],
             },
@@ -742,7 +742,6 @@ def ask_details():
         json={
             "query": st.session_state["chosen_query_result"]["query"],
             "sql": st.session_state["chosen_query_result"]["sql"],
-            "summary": st.session_state["chosen_query_result"]["summary"],
         },
     )
 

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
 from haystack import Document, component
 from haystack.components.writers import DocumentWriter
@@ -148,8 +148,6 @@ class DDLConverter:
             "Ask Indexing pipeline is writing new documents for table schema..."
         )
 
-        logger.debug(f"original mdl_json: {mdl}")
-
         ddl_commands = self._get_ddl_commands(mdl, column_indexing_batch_size)
 
         return {
@@ -243,8 +241,8 @@ class DDLConverter:
                 if "relationship" not in column:
                     if "properties" in column:
                         column_properties = {
-                            "alias": column["properties"].pop("displayName", ""),
-                            "description": column["properties"].pop("description", ""),
+                            "alias": column["properties"].get("displayName", ""),
+                            "description": column["properties"].get("description", ""),
                         }
                         nested_cols = {
                             k: v
@@ -314,8 +312,8 @@ class DDLConverter:
 
             if "properties" in model:
                 model_properties = {
-                    "alias": model["properties"].pop("displayName", ""),
-                    "description": model["properties"].pop("description", ""),
+                    "alias": model["properties"].get("displayName", ""),
+                    "description": model["properties"].get("description", ""),
                 }
                 comment = f"\n/* {orjson.dumps(model_properties).decode("utf-8")} */\n"
             else:
@@ -418,8 +416,6 @@ class TableDescriptionConverter:
             "Ask Indexing pipeline is writing new documents for table descriptions..."
         )
 
-        logger.debug(f"original mdl_json: {mdl}")
-
         table_descriptions = self._get_table_descriptions(mdl)
 
         return {
@@ -494,7 +490,6 @@ class AsyncDocumentWriter(DocumentWriter):
 async def clean_document_store(
     mdl_str: str, cleaner: DocumentCleaner, id: Optional[str] = None
 ) -> Dict[str, Any]:
-    logger.debug(f"input in clean_document_store: {mdl_str}")
     return await cleaner.run(mdl=mdl_str, id=id)
 
 
@@ -504,9 +499,6 @@ async def clean_document_store(
 def validate_mdl(
     clean_document_store: Dict[str, Any], validator: MDLValidator
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in validate_mdl: {orjson.dumps(clean_document_store, option=orjson.OPT_INDENT_2).decode()}"
-    )
     mdl = clean_document_store.get("mdl")
     res = validator.run(mdl=mdl)
     return dict(mdl=res["mdl"])
@@ -519,9 +511,6 @@ def covert_to_table_descriptions(
     table_description_converter: TableDescriptionConverter,
     id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in convert_to_table_descriptions: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return table_description_converter.run(mdl=mdl, id=id)
 
 
@@ -531,10 +520,6 @@ async def embed_table_descriptions(
     covert_to_table_descriptions: Dict[str, Any],
     document_embedder: Any,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input(covert_to_table_descriptions) in embed_table_descriptions: {orjson.dumps(covert_to_table_descriptions, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return await document_embedder.run(covert_to_table_descriptions["documents"])
 
 
@@ -556,10 +541,6 @@ def convert_to_ddl(
     column_indexing_batch_size: int,
     id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in convert_to_ddl: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return ddl_converter.run(
         mdl=mdl,
         column_indexing_batch_size=column_indexing_batch_size,
@@ -573,10 +554,6 @@ async def embed_dbschema(
     convert_to_ddl: Dict[str, Any],
     document_embedder: Any,
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input(convert_to_ddl) in embed_dbschema: {orjson.dumps(convert_to_ddl, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return await document_embedder.run(documents=convert_to_ddl["documents"])
 
 
@@ -593,9 +570,6 @@ async def write_dbschema(
 def view_chunk(
     mdl: Dict[str, Any], view_chunker: ViewChunker, id: Optional[str] = None
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in view_chunk: {orjson.dumps(mdl, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return view_chunker.run(mdl=mdl, id=id)
 
 
@@ -604,9 +578,6 @@ def view_chunk(
 async def embed_view(
     view_chunk: Dict[str, Any], document_embedder: Any
 ) -> Dict[str, Any]:
-    logger.debug(
-        f"input in embed_view: {orjson.dumps(view_chunk, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await document_embedder.run(documents=view_chunk["documents"])
 
 
@@ -698,25 +669,10 @@ class Indexing(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
-
-    pipeline = Indexing(
-        embedder_provider=embedder_provider,
-        document_store_provider=document_store_provider,
+    dry_run_pipeline(
+        Indexing,
+        "indexing",
+        mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
     )
-
-    input = '{"models": [], "views": [], "relationships": [], "metrics": []}'
-    pipeline.visualize(input)
-    async_validate(lambda: pipeline.run(input))
-
-    langfuse_context.flush()

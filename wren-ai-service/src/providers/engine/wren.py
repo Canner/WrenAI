@@ -53,19 +53,31 @@ class WrenUI(Engine):
             ) as response:
                 res = await response.json()
                 if data := res.get("data"):
-                    return True, data, {
-                        "correlation_id": res.get("correlationId"),
-                    }
+                    return (
+                        True,
+                        data,
+                        {
+                            "correlation_id": res.get("correlationId"),
+                        },
+                    )
                 return (
                     False,
                     None,
                     {
-                        "error_message": res.get("errors", [{}])[0].get("message", "Unknown error"),
-                        "correlation_id": res.get("extensions", {}).get("other", {}).get("correlationId"),
-                    }
+                        "error_message": res.get("errors", [{}])[0].get(
+                            "message", "Unknown error"
+                        ),
+                        "correlation_id": res.get("extensions", {})
+                        .get("other", {})
+                        .get("correlationId"),
+                    },
                 )
         except asyncio.TimeoutError:
-            return False, None, f"Request timed out: {timeout} seconds"
+            return (
+                False,
+                None,
+                {"error_message": f"Request timed out: {timeout} seconds"},
+            )
 
 
 @provider("wren_ibis")
@@ -115,12 +127,23 @@ class WrenIbis(Engine):
                 else:
                     res = await response.json()
 
-                if response.status == 204:
-                    return True, None, None
-                if response.status == 200:
-                    return True, res, None
+                if response.status == 200 or response.status == 204:
+                    return (
+                        True,
+                        res,
+                        {
+                            "correlation_id": "",
+                        },
+                    )
 
-                return False, None, res
+                return (
+                    False,
+                    None,
+                    {
+                        "error_message": res,
+                        "correlation_id": "",
+                    },
+                )
         except asyncio.TimeoutError:
             return False, None, f"Request timed out: {timeout} seconds"
 
@@ -130,18 +153,17 @@ class WrenEngine(Engine):
     def __init__(
         self,
         endpoint: str = os.getenv("WREN_ENGINE_ENDPOINT"),
+        manifest: str = os.getenv("WREN_ENGINE_MANIFEST"),
         **_,
     ):
         self._endpoint = endpoint
+        self._manifest = manifest
         logger.info("Using Engine: wren_engine")
 
     async def execute_sql(
         self,
         sql: str,
         session: aiohttp.ClientSession,
-        properties: Dict[str, Any] = {
-            "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
-        },
         dry_run: bool = True,
         timeout: float = 30.0,
         **kwargs,
@@ -157,19 +179,36 @@ class WrenEngine(Engine):
                 api_endpoint,
                 json={
                     "manifest": orjson.loads(
-                        base64.b64decode(properties.get("manifest"))
+                        base64.b64decode(self._manifest)
                     )
-                    if properties.get("manifest")
+                    if self._manifest
                     else {},
                     "sql": remove_limit_statement(sql),
                     "limit": 1 if dry_run else 500,
                 },
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
-                res = await response.json()
-                if response.status == 200:
-                    return True, res, None
+                if dry_run:
+                    res = await response.text()
+                else:
+                    res = await response.json()
 
-                return False, None, res
+                if response.status == 200:
+                    return (
+                        True,
+                        res,
+                        {
+                            "correlation_id": "",
+                        },
+                    )
+
+                return (
+                    False,
+                    None,
+                    {
+                        "error_message": res,
+                        "correlation_id": "",
+                    },
+                )
         except asyncio.TimeoutError:
             return False, None, f"Request timed out: {timeout} seconds"

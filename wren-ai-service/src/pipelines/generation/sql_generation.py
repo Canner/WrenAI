@@ -3,9 +3,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -21,7 +20,7 @@ from src.pipelines.common import (
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskConfigurations
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -44,7 +43,7 @@ Ensure that the following excluded statements are not used in the generated quer
 {% endfor %}
 {% endif %}
 
-{{ alert }}
+{{ text_to_sql_rules }}
 {% if instructions %}
 {{ instructions }}
 {% endif %}
@@ -83,34 +82,28 @@ def prompt(
     query: str,
     documents: List[str],
     exclude: List[Dict],
-    alert: str,
+    text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
-    configurations: AskConfigurations | None = None,
+    configuration: Configuration | None = None,
     samples: List[Dict] | None = None,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"documents: {documents}")
-    logger.debug(
-        f"exclude: {orjson.dumps(exclude, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    logger.debug(f"configurations: {configurations}")
-    if samples:
-        logger.debug(f"samples: {samples}")
     return prompt_builder.run(
         query=query,
         documents=documents,
         exclude=exclude,
-        alert=alert,
-        instructions=construct_instructions(configurations),
+        text_to_sql_rules=text_to_sql_rules,
+        instructions=construct_instructions(configuration),
         samples=samples,
-        current_time=show_current_time(configurations.timezone),
+        current_time=show_current_time(configuration.timezone),
     )
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
-async def generate_sql(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
+async def generate_sql(
+    prompt: dict,
+    generator: Any,
+) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -121,9 +114,6 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
-    logger.debug(
-        f"generate_sql: {orjson.dumps(generate_sql, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await post_processor.run(generate_sql.get("replies"), project_id=project_id)
 
 
@@ -166,7 +156,7 @@ class SQLGeneration(BasicPipeline):
         }
 
         self._configs = {
-            "alert": TEXT_TO_SQL_RULES,
+            "text_to_sql_rules": TEXT_TO_SQL_RULES,
         }
 
         super().__init__(
@@ -178,7 +168,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations = AskConfigurations(),
+        configuration: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ) -> None:
@@ -195,7 +185,7 @@ class SQLGeneration(BasicPipeline):
                 "exclude": exclude,
                 "samples": samples,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },
@@ -210,7 +200,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations = AskConfigurations(),
+        configuration: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
@@ -223,7 +213,7 @@ class SQLGeneration(BasicPipeline):
                 "exclude": exclude,
                 "samples": samples,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },
@@ -231,23 +221,12 @@ class SQLGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = SQLGeneration(
-        llm_provider=llm_provider,
-        engine=engine,
+    dry_run_pipeline(
+        SQLGeneration,
+        "sql_generation",
+        query="this is a test query",
+        contexts=[],
+        exclude=[],
     )
-
-    pipeline.visualize("this is a test query", [], [])
-    async_validate(lambda: pipeline.run("this is a test query", [], []))
-
-    langfuse_context.flush()

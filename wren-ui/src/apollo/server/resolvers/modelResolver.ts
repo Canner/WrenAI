@@ -221,9 +221,15 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const { id } = await ctx.projectService.getCurrentProject();
+    const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, id, args.force);
+    const deployRes = await ctx.deployService.deploy(
+      manifest,
+      project.id,
+      args.force,
+    );
+    await ctx.projectService.generateProjectRecommendationQuestions();
+    return deployRes;
   }
 
   public async getMDL(_root: any, args: { hash: string }, ctx: IContext) {
@@ -836,7 +842,6 @@ export class ModelResolver {
       // properties from the thread response
       responseId, // helpful for mapping back to the thread response
       question: response.question,
-      summary: response.summary,
       // detail is not going to send to AI service for indexing, but useful if we want display on UI
       detail: response.detail,
     };

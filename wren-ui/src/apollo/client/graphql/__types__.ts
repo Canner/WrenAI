@@ -19,6 +19,7 @@ export type AskingTask = {
   candidates: Array<ResultCandidate>;
   error?: Maybe<Error>;
   status: AskingTaskStatus;
+  type?: Maybe<AskingTaskType>;
 };
 
 export type AskingTaskInput = {
@@ -27,12 +28,19 @@ export type AskingTaskInput = {
 };
 
 export enum AskingTaskStatus {
+  CORRECTING = 'CORRECTING',
   FAILED = 'FAILED',
   FINISHED = 'FINISHED',
   GENERATING = 'GENERATING',
   SEARCHING = 'SEARCHING',
   STOPPED = 'STOPPED',
   UNDERSTANDING = 'UNDERSTANDING'
+}
+
+export enum AskingTaskType {
+  GENERAL = 'GENERAL',
+  MISLEADING_QUERY = 'MISLEADING_QUERY',
+  TEXT_TO_SQL = 'TEXT_TO_SQL'
 }
 
 export type CalculatedFieldInput = {
@@ -91,14 +99,12 @@ export type CreateSimpleMetricInput = {
 export type CreateThreadInput = {
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
-  summary?: InputMaybe<Scalars['String']>;
   viewId?: InputMaybe<Scalars['Int']>;
 };
 
 export type CreateThreadResponseInput = {
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
-  summary?: InputMaybe<Scalars['String']>;
   viewId?: InputMaybe<Scalars['Int']>;
 };
 
@@ -131,7 +137,8 @@ export enum DataSourceName {
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES',
-  TRINO = 'TRINO'
+  TRINO = 'TRINO',
+  SNOWFLAKE = 'SNOWFLAKE',
 }
 
 export type DetailStep = {
@@ -226,7 +233,6 @@ export type DetailedThread = {
   responses: Array<ThreadResponse>;
   /** @deprecated Doesn't seem to be reasonable to put a sql in a thread */
   sql: Scalars['String'];
-  summary: Scalars['String'];
 };
 
 export type Diagram = {
@@ -381,6 +387,10 @@ export type GetMdlResult = {
   mdl?: Maybe<Scalars['String']>;
 };
 
+export type InstantRecommendedQuestionsInput = {
+  previousQuestions?: InputMaybe<Array<Scalars['String']>>;
+};
+
 export type LearningRecord = {
   __typename?: 'LearningRecord';
   paths: Array<Scalars['String']>;
@@ -421,6 +431,7 @@ export type Mutation = {
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
+  createInstantRecommendedQuestions: Task;
   createModel: Scalars['JSON'];
   createRelation: Scalars['JSON'];
   createThread: Thread;
@@ -432,6 +443,8 @@ export type Mutation = {
   deleteThread: Scalars['Boolean'];
   deleteView: Scalars['Boolean'];
   deploy: Scalars['JSON'];
+  generateProjectRecommendationQuestions: Scalars['Boolean'];
+  generateThreadRecommendationQuestions: Scalars['Boolean'];
   previewData: Scalars['JSON'];
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
@@ -469,6 +482,11 @@ export type MutationCreateAskingTaskArgs = {
 
 export type MutationCreateCalculatedFieldArgs = {
   data: CreateCalculatedFieldInput;
+};
+
+
+export type MutationCreateInstantRecommendedQuestionsArgs = {
+  data: InstantRecommendedQuestionsInput;
 };
 
 
@@ -525,6 +543,11 @@ export type MutationDeleteViewArgs = {
 
 export type MutationDeployArgs = {
   force?: InputMaybe<Scalars['Boolean']>;
+};
+
+
+export type MutationGenerateThreadRecommendationQuestionsArgs = {
+  threadId: Scalars['Int'];
 };
 
 
@@ -702,6 +725,9 @@ export type Query = {
   autoGenerateRelation: Array<RecommendRelations>;
   diagram: Diagram;
   getMDL: GetMdlResult;
+  getProjectRecommendationQuestions: RecommendedQuestionsTask;
+  getThreadRecommendationQuestions: RecommendedQuestionsTask;
+  instantRecommendedQuestions: RecommendedQuestionsTask;
   learningRecord: LearningRecord;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
@@ -727,6 +753,16 @@ export type QueryAskingTaskArgs = {
 
 export type QueryGetMdlArgs = {
   hash: Scalars['String'];
+};
+
+
+export type QueryGetThreadRecommendationQuestionsArgs = {
+  threadId: Scalars['Int'];
+};
+
+
+export type QueryInstantRecommendedQuestionsArgs = {
+  taskId: Scalars['String'];
 };
 
 
@@ -761,6 +797,20 @@ export type RecommendRelations = {
   referenceName: Scalars['String'];
   relations: Array<Maybe<Relation>>;
 };
+
+export type RecommendedQuestionsTask = {
+  __typename?: 'RecommendedQuestionsTask';
+  error?: Maybe<Error>;
+  questions: Array<ResultQuestion>;
+  status: RecommendedQuestionsTaskStatus;
+};
+
+export enum RecommendedQuestionsTaskStatus {
+  FAILED = 'FAILED',
+  FINISHED = 'FINISHED',
+  GENERATING = 'GENERATING',
+  NOT_STARTED = 'NOT_STARTED'
+}
 
 export type Relation = {
   __typename?: 'Relation';
@@ -797,7 +847,6 @@ export type ResolveSchemaChangeWhereInput = {
 export type ResultCandidate = {
   __typename?: 'ResultCandidate';
   sql: Scalars['String'];
-  summary: Scalars['String'];
   type: ResultCandidateType;
   view?: Maybe<ViewInfo>;
 };
@@ -806,6 +855,13 @@ export enum ResultCandidateType {
   LLM = 'LLM',
   VIEW = 'VIEW'
 }
+
+export type ResultQuestion = {
+  __typename?: 'ResultQuestion';
+  category: Scalars['String'];
+  question: Scalars['String'];
+  sql: Scalars['String'];
+};
 
 export type SampleDatasetInput = {
   name: SampleDatasetName;
@@ -896,7 +952,6 @@ export type ThreadResponse = {
   id: Scalars['Int'];
   question: Scalars['String'];
   status: AskingTaskStatus;
-  summary: Scalars['String'];
 };
 
 export type ThreadResponseDetail = {

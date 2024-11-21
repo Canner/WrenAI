@@ -1,15 +1,22 @@
+import argparse
 import asyncio
 import base64
 import json
+import os
 import time
 import uuid
+from datetime import datetime
 
 import aiohttp
 import orjson
 import requests
-import toml
 
-from demo.utils import _get_connection_info, _replace_wren_engine_env_variables
+from demo.utils import (
+    _get_connection_info,
+    _prepare_duckdb,
+    _replace_wren_engine_env_variables,
+    _update_wren_engine_configs,
+)
 
 
 def is_ai_service_ready(url: str):
@@ -20,32 +27,56 @@ def is_ai_service_ready(url: str):
         return False
 
 
-def test_load_mdl_and_questions():
-    try:
-        with open("tests/data/hubspot/mdl.json", "r") as f:
-            mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
+def test_load_mdl_and_questions(usecases: list[str]):
+    mdls_and_questions = {}
+    for usecase in usecases:
+        try:
+            with open(f"tests/data/usecases/{usecase}/mdl.json", "r") as f:
+                mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
-        data = toml.load("tests/data/hubspot/eval_dataset.toml")
-        questions = [item["question"] for item in data.get("eval_dataset", [])]
-    except FileNotFoundError:
-        raise Exception(
-            "tests/data/hubspot/mdl.json or tests/data/hubspot/eval_dataset.toml not found"
+            with open(f"tests/data/usecases/{usecase}/questions.json", "r") as f:
+                questions = json.load(f)
+
+            mdls_and_questions[usecase] = {
+                "mdl_str": mdl_str,
+                "questions": questions,
+            }
+        except FileNotFoundError:
+            raise Exception(
+                f"tests/data/usecases/{usecase}/mdl.json or tests/data/usecases/{usecase}/questions.json not found"
+            )
+
+    return mdls_and_questions
+
+
+def setup_datasource(mdl_str: str, dataset: str, dataset_type: str):
+    assert dataset_type in ["bigquery", "duckdb"]
+
+    manifest = base64.b64encode(mdl_str.encode("utf-8")).decode("utf-8")
+    if dataset_type == "bigquery":
+        connection_info = _get_connection_info(dataset_type)
+        _replace_wren_engine_env_variables(
+            "wren_ibis",
+            {
+                "manifest": manifest,
+                "source": dataset_type,
+                "connection_info": base64.b64encode(
+                    orjson.dumps(connection_info)
+                ).decode(),
+            },
         )
+    elif dataset_type == "duckdb":
+        _update_wren_engine_configs(
+            [
+                {
+                    "name": "duckdb.connector.init-sql-path",
+                    "value": "/usr/src/app/etc/duckdb-init.sql",
+                },
+            ]
+        )
+        _prepare_duckdb(dataset)
+        _replace_wren_engine_env_variables("wren_engine", {"manifest": manifest})
 
-    return mdl_str, questions
-
-
-def setup_datasource(mdl_str: str):
-    dataset_type = "bigquery"
-    connection_info = _get_connection_info(dataset_type)
-    _replace_wren_engine_env_variables(
-        "wren_ibis",
-        {
-            "manifest": base64.b64encode(mdl_str.encode("utf-8")).decode("utf-8"),
-            "source": dataset_type,
-            "connection_info": base64.b64encode(orjson.dumps(connection_info)).decode(),
-        },
-    )
     ready = False
     while not ready:
         ready = is_ai_service_ready(url)
@@ -77,6 +108,7 @@ def deploy_mdl(mdl_str: str, url: str):
 async def ask_question(question: str, url: str, semantics_preperation_id: str):
     print(f"preparing to ask question: {question}")
     async with aiohttp.ClientSession() as session:
+        start = time.time()
         response = await session.post(
             f"{url}/v1/asks", json={"query": question, "id": semantics_preperation_id}
         )
@@ -92,8 +124,11 @@ async def ask_question(question: str, url: str, semantics_preperation_id: str):
 
         assert response.status == 200
 
+        result = await response.json()
+        result["time"] = time.time() - start
+
         print(f"got the result of question: {question}")
-        return await response.json()
+        return result
 
 
 async def ask_questions(questions: list[str], url: str, semantics_preperation_id: str):
@@ -109,28 +144,73 @@ async def ask_questions(questions: list[str], url: str, semantics_preperation_id
 
 
 if __name__ == "__main__":
+    usecase_to_dataset_type = {
+        "hubspot": "bigquery",
+        "ga4": "bigquery",
+        "ecommerce": "duckdb",
+        "hr": "duckdb",
+    }
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--usecases",
+        type=str,
+        nargs="+",
+        default=["all"],
+        choices=["all", "hubspot", "ga4", "ecommerce", "hr"],
+    )
+    args = parser.parse_args()
+
+    if "all" in args.usecases:
+        usecases = ["hubspot", "ga4", "ecommerce", "hr"]
+    else:
+        usecases = args.usecases
+
     url = "http://localhost:5556"
 
     assert is_ai_service_ready(
         url
     ), "WrenAI AI service is not running, please start it first via 'just up && just start'"
 
-    mdl_str, questions = test_load_mdl_and_questions()
+    mdls_and_questions_by_usecase = test_load_mdl_and_questions(usecases)
 
-    setup_datasource(mdl_str)
+    final_results = {}
+    for usecase, data in mdls_and_questions_by_usecase.items():
+        print(f"testing usecase: {usecase}")
 
-    semantics_preperation_id = deploy_mdl(mdl_str, url)
+        setup_datasource(data["mdl_str"], usecase, usecase_to_dataset_type[usecase])
 
-    # ask questions
-    results = asyncio.run(ask_questions(questions, url, semantics_preperation_id))
-    assert len(results) == len(questions)
+        semantics_preperation_id = deploy_mdl(data["mdl_str"], url)
 
-    # count the number of results that are failed
-    for question, result in zip(questions, results):
-        print(f"question: {question}")
-        print(json.dumps(result, indent=2))
+        # ask questions
+        results = asyncio.run(
+            ask_questions(data["questions"], url, semantics_preperation_id)
+        )
+        assert len(results) == len(data["questions"])
 
-    failed_count = sum(1 for result in results if result["status"] == "failed")
-    assert (
-        failed_count == 0
-    ), f"got {failed_count} failed results in {len(results)} questions"
+        final_results[usecase] = {
+            "results": [],
+        }
+        # count the number of results that are failed
+        for question, result in zip(data["questions"], results):
+            final_results[usecase]["results"].append(
+                {
+                    "question": question,
+                    "result": result,
+                }
+            )
+
+        final_results[usecase]["total"] = len(results)
+        final_results[usecase]["failed"] = sum(
+            1 for result in results if result["status"] == "failed"
+        )
+
+    # write final_results to a json file
+    if not os.path.exists("outputs"):
+        os.makedirs("outputs")
+
+    with open(
+        f"outputs/final_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json",
+        "w",
+    ) as f:
+        json.dump(final_results, f, indent=2)

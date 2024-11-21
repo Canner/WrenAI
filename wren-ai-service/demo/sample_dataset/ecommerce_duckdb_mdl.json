@@ -1,547 +1,976 @@
 {
-  "catalog": "wrenai",
-  "schema": "public",
-  "models": [
-    {
-      "name": "customers",
-      "refSql": "select * from main.customers",
-      "columns": [
+    "schema": "public",
+    "catalog": "wrenai",
+    "models": [
         {
-          "name": "City",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "The Customer City, where the customer company is located. Also called \"customer segment\".",
-            "displayName": "City"
-          }
+            "name": "olist_customers_dataset",
+            "columns": [
+                {
+                    "name": "customer_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": null,
+                        "displayName": "customer_id"
+                    }
+                },
+                {
+                    "name": "customer_unique_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique id of the customer",
+                        "displayName": "customer_unique_id"
+                    }
+                },
+                {
+                    "name": "customer_zip_code_prefix",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "First 5 digits of customer zip code",
+                        "displayName": "customer_zip_code_prefix"
+                    }
+                },
+                {
+                    "name": "customer_city",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Name of the city where the customer is located",
+                        "displayName": "customer_city"
+                    }
+                },
+                {
+                    "name": "customer_state",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Name of the state where the customer is located",
+                        "displayName": "customer_state"
+                    }
+                },
+                {
+                    "name": "olist_orders_dataset",
+                    "type": "olist_orders_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetCustomer_idOlist_customers_datasetCustomer_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_geolocation_dataset",
+                    "type": "olist_geolocation_dataset",
+                    "properties": null,
+                    "relationship": "Olist_geolocation_datasetGeolocation_zip_code_prefixOlist_customers_datasetCustomer_zip_code_prefix",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_customers_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "customers"
+            },
+            "primaryKey": "customer_id"
         },
         {
-          "name": "Id",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A unique identifier for each customer in the data model.",
-            "displayName": "Id"
-          }
+            "name": "olist_geolocation_dataset",
+            "columns": [
+                {
+                    "name": "geolocation_zip_code_prefix",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "displayName": "geolocation_zip_code_prefix",
+                        "description": "First 5 digits of zip code"
+                    }
+                },
+                {
+                    "name": "geolocation_lat",
+                    "type": "DOUBLE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "displayName": "geolocation_lat",
+                        "description": "The coordinations for the locations latitude"
+                    }
+                },
+                {
+                    "name": "geolocation_lng",
+                    "type": "DOUBLE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "displayName": "geolocation_lng",
+                        "description": "The coordinations for the locations longitude"
+                    }
+                },
+                {
+                    "name": "geolocation_city",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "displayName": "geolocation_city",
+                        "description": "The city name of the geolocation"
+                    }
+                },
+                {
+                    "name": "geolocation_state",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "displayName": "geolocation_state",
+                        "description": "The state of the geolocation"
+                    }
+                },
+                {
+                    "name": "olist_customers_dataset",
+                    "type": "olist_customers_dataset",
+                    "properties": null,
+                    "relationship": "Olist_geolocation_datasetGeolocation_zip_code_prefixOlist_customers_datasetCustomer_zip_code_prefix",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_sellers_dataset",
+                    "type": "olist_sellers_dataset",
+                    "properties": null,
+                    "relationship": "Olist_geolocation_datasetGeolocation_zip_code_prefixOlist_sellers_datasetSeller_zip_code_prefix",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_geolocation_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "geolocation",
+                "description": "This table contains detailed information about Brazilian zip codes and their corresponding latitude and longitude coordinates. It can be used to plot maps, calculate distances between sellers and customers, and perform geographic analysis."
+            },
+            "primaryKey": ""
         },
         {
-          "name": "State",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A field indicating the state where the customer is located.",
-            "displayName": "State"
-          }
+            "name": "olist_orders_dataset",
+            "columns": [
+                {
+                    "name": "order_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the specific order",
+                        "displayName": "order_id"
+                    }
+                },
+                {
+                    "name": "customer_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the customer who placed the order.",
+                        "displayName": "customer_id"
+                    }
+                },
+                {
+                    "name": "order_status",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Current status of the order (e.g., delivered, shipped, canceled).",
+                        "displayName": "order_status"
+                    }
+                },
+                {
+                    "name": "order_purchase_timestamp",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Date and time when the order was placed by the customer.",
+                        "displayName": "order_purchase_timestamp"
+                    }
+                },
+                {
+                    "name": "order_approved_at",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Date and time when the order was approved for processing.",
+                        "displayName": "order_approved_at"
+                    }
+                },
+                {
+                    "name": "order_delivered_carrier_date",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Date when the order was handed over to the carrier or freight forwarder for delivery.",
+                        "displayName": "order_delivered_carrier_date"
+                    }
+                },
+                {
+                    "name": "order_delivered_customer_date",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Date when the order was delivered to the customer.",
+                        "displayName": "order_delivered_customer_date"
+                    }
+                },
+                {
+                    "name": "order_estimated_delivery_date",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Expected delivery date based on the initial estimate.",
+                        "displayName": "order_estimated_delivery_date"
+                    }
+                },
+                {
+                    "name": "olist_customers_dataset",
+                    "type": "olist_customers_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetCustomer_idOlist_customers_datasetCustomer_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_order_items_dataset",
+                    "type": "olist_order_items_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetOrder_idOlist_order_items_datasetOrder_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_order_reviews_dataset",
+                    "type": "olist_order_reviews_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetOrder_idOlist_order_reviews_datasetOrder_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_order_payments_dataset",
+                    "type": "olist_order_payments_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetOrder_idOlist_order_payments_datasetOrder_id",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_orders_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "orders",
+                "description": "This table contains detailed information about customer orders, including timestamps for various stages of the order process (approval, shipping, delivery), as well as the order status and customer identification. It helps track the lifecycle of an order from purchase to delivery."
+            },
+            "primaryKey": "order_id"
         },
         {
-          "name": "orders",
-          "type": "orders",
-          "relationship": "CustomersIdOrdersCustomerid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
+            "name": "olist_order_items_dataset",
+            "columns": [
+                {
+                    "name": "order_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the order across the platform",
+                        "displayName": "order_id"
+                    }
+                },
+                {
+                    "name": "order_item_id",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for each item within a specific order",
+                        "displayName": "order_item_id"
+                    }
+                },
+                {
+                    "name": "product_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the product sold in the order.",
+                        "displayName": "product_id"
+                    }
+                },
+                {
+                    "name": "seller_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier of the seller who fulfilled the order item.",
+                        "displayName": "seller_id"
+                    }
+                },
+                {
+                    "name": "shipping_limit_date",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Deadline for the order item to be shipped by the seller.",
+                        "displayName": "shipping_limit_date"
+                    }
+                },
+                {
+                    "name": "price",
+                    "type": "DOUBLE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Price of the individual item within the order",
+                        "displayName": "price"
+                    }
+                },
+                {
+                    "name": "freight_value",
+                    "type": "DOUBLE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Cost of shipping associated with the specific order item",
+                        "displayName": "freight_value"
+                    }
+                },
+                {
+                    "name": "olist_orders_dataset",
+                    "type": "olist_orders_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetOrder_idOlist_order_items_datasetOrder_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_products_dataset",
+                    "type": "olist_products_dataset",
+                    "properties": null,
+                    "relationship": "Olist_order_items_datasetProduct_idOlist_products_datasetProduct_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_sellers_dataset",
+                    "type": "olist_sellers_dataset",
+                    "properties": null,
+                    "relationship": "Olist_order_items_datasetSeller_idOlist_sellers_datasetSeller_id",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_order_items_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "order items",
+                "description": "This table contains the information related to a specific order containing its shipping cost, products, cost, number of order items, and the seller."
+            },
+            "primaryKey": "order_item_id"
+        },
+        {
+            "name": "olist_order_payments_dataset",
+            "columns": [
+                {
+                    "name": "order_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the order associated with the payment.",
+                        "displayName": "order_id"
+                    }
+                },
+                {
+                    "name": "payment_sequential",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Sequence number for tracking multiple payments within the same order.",
+                        "displayName": "payment_sequential"
+                    }
+                },
+                {
+                    "name": "payment_type",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Method used for the payment, such as credit card, debit, or voucher.",
+                        "displayName": "payment_type"
+                    }
+                },
+                {
+                    "name": "payment_installments",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Number of installments the payment is divided into for the order.",
+                        "displayName": "payment_installments"
+                    }
+                },
+                {
+                    "name": "payment_value",
+                    "type": "DOUBLE",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Total amount paid in the specific transaction.",
+                        "displayName": "payment_value"
+                    }
+                },
+                {
+                    "name": "olist_orders_dataset",
+                    "type": "olist_orders_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetOrder_idOlist_order_payments_datasetOrder_id",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_order_payments_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "order payments",
+                "description": "This table contains information about payment details for each order, including payment methods, amounts, installment plans, and payment sequences, helping to track how orders were paid and processed within the e-commerce platform."
+            },
+            "primaryKey": "order_id"
+        },
+        {
+            "name": "olist_order_reviews_dataset",
+            "columns": [
+                {
+                    "name": "review_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the specific review entry.",
+                        "displayName": "review_id"
+                    }
+                },
+                {
+                    "name": "order_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier linking the review to the corresponding order.",
+                        "displayName": "order_id"
+                    }
+                },
+                {
+                    "name": "review_score",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Numeric rating given by the customer, typically ranging from 1 (worst) to 5 (best).",
+                        "displayName": "review_score"
+                    }
+                },
+                {
+                    "name": "review_comment_title",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Summary or title of the customer's review",
+                        "displayName": "review_comment_title"
+                    }
+                },
+                {
+                    "name": "review_comment_message",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Detailed feedback or comments provided by the customer regarding the order.",
+                        "displayName": "review_comment_message"
+                    }
+                },
+                {
+                    "name": "review_creation_date",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Date and time when the customer initially submitted the review.",
+                        "displayName": "review_creation_date"
+                    }
+                },
+                {
+                    "name": "review_answer_timestamp",
+                    "type": "TIMESTAMP",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Date and time when the review was responded to by the seller",
+                        "displayName": "review_answer_timestamp"
+                    }
+                },
+                {
+                    "name": "olist_orders_dataset",
+                    "type": "olist_orders_dataset",
+                    "properties": null,
+                    "relationship": "Olist_orders_datasetOrder_idOlist_order_reviews_datasetOrder_id",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_order_reviews_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "order reviews",
+                "description": "This table contains customer reviews for each order, including feedback comments, ratings, and timestamps for when the review was submitted and responded to. It helps track customer satisfaction and review management on the e-commerce platform."
+            },
+            "primaryKey": "review_id"
+        },
+        {
+            "name": "olist_products_dataset",
+            "columns": [
+                {
+                    "name": "product_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the product",
+                        "displayName": "product_id"
+                    }
+                },
+                {
+                    "name": "product_category_name",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Name of the product category to which the item belongs.",
+                        "displayName": "product_category_name"
+                    }
+                },
+                {
+                    "name": "product_name_lenght",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Length of the product name in characters",
+                        "displayName": "product_name_lenght"
+                    }
+                },
+                {
+                    "name": "product_description_lenght",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Length of the product description in characters.",
+                        "displayName": "product_description_lenght"
+                    }
+                },
+                {
+                    "name": "product_photos_qty",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Number of photos available for the product",
+                        "displayName": "product_photos_qty"
+                    }
+                },
+                {
+                    "name": "product_weight_g",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Weight of the product in grams",
+                        "displayName": "product_weight_g"
+                    }
+                },
+                {
+                    "name": "product_length_cm",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Length of the product in centimeters",
+                        "displayName": "product_length_cm"
+                    }
+                },
+                {
+                    "name": "product_height_cm",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Height of the product in centimeters.",
+                        "displayName": "product_height_cm"
+                    }
+                },
+                {
+                    "name": "product_width_cm",
+                    "type": "BIGINT",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Width of the product in centimeters",
+                        "displayName": "product_width_cm"
+                    }
+                },
+                {
+                    "name": "olist_order_items_dataset",
+                    "type": "olist_order_items_dataset",
+                    "properties": null,
+                    "relationship": "Olist_order_items_datasetProduct_idOlist_products_datasetProduct_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "product_category_name_translation",
+                    "type": "product_category_name_translation",
+                    "properties": null,
+                    "relationship": "Product_category_name_translationProduct_category_nameOlist_products_datasetProduct_category_name",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_products_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "products",
+                "description": "This table provides detailed information about products, including their category, dimensions, weight, description length, and the number of photos. This helps in managing product details and enhancing the shopping experience on the e-commerce platform."
+            },
+            "primaryKey": "product_id"
+        },
+        {
+            "name": "olist_sellers_dataset",
+            "columns": [
+                {
+                    "name": "seller_id",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Unique identifier for the seller on the platform",
+                        "displayName": "seller_id"
+                    }
+                },
+                {
+                    "name": "seller_zip_code_prefix",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "First 5 digits of seller zip code",
+                        "displayName": "seller_zip_code_prefix"
+                    }
+                },
+                {
+                    "name": "seller_city",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The Brazilian city where the seller is located",
+                        "displayName": "seller_city"
+                    }
+                },
+                {
+                    "name": "seller_state",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "The Brazilian state where the seller is located",
+                        "displayName": "seller_state"
+                    }
+                },
+                {
+                    "name": "olist_order_items_dataset",
+                    "type": "olist_order_items_dataset",
+                    "properties": null,
+                    "relationship": "Olist_order_items_datasetSeller_idOlist_sellers_datasetSeller_id",
+                    "isCalculated": false,
+                    "notNull": false
+                },
+                {
+                    "name": "olist_geolocation_dataset",
+                    "type": "olist_geolocation_dataset",
+                    "properties": null,
+                    "relationship": "Olist_geolocation_datasetGeolocation_zip_code_prefixOlist_sellers_datasetSeller_zip_code_prefix",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "olist_sellers_dataset"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "sellers",
+                "description": "This table includes data about the sellers that fulfilled orders made. Use it to find the seller location and to identify which seller fulfilled each product."
+            },
+            "primaryKey": ""
+        },
+        {
+            "name": "product_category_name_translation",
+            "columns": [
+                {
+                    "name": "product_category_name",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Original name of the product category in Portuguese.",
+                        "displayName": "product_category_name"
+                    }
+                },
+                {
+                    "name": "product_category_name_english",
+                    "type": "VARCHAR",
+                    "isCalculated": false,
+                    "notNull": false,
+                    "expression": "",
+                    "properties": {
+                        "description": "Translated name of the product category in English.",
+                        "displayName": "product_category_name_english"
+                    }
+                },
+                {
+                    "name": "olist_products_dataset",
+                    "type": "olist_products_dataset",
+                    "properties": null,
+                    "relationship": "Product_category_name_translationProduct_category_nameOlist_products_datasetProduct_category_name",
+                    "isCalculated": false,
+                    "notNull": false
+                }
+            ],
+            "tableReference": {
+                "catalog": "memory",
+                "schema": "main",
+                "table": "product_category_name_translation"
+            },
+            "refSql": null,
+            "cached": false,
+            "refreshTime": null,
+            "properties": {
+                "displayName": "product category name translation",
+                "description": "This table contains translations of product categories from Portuguese to English."
+            },
+            "primaryKey": "product_category_name"
         }
-      ],
-      "primaryKey": "Id",
-      "cached": false,
-      "refreshTime": "30.00m",
-      "properties": {
-        "schema": "main",
-        "catalog": "memory",
-        "description": "A table of customers who have made purchases, including their city",
-        "displayName": "customers"
-      }
-    },
-    {
-      "name": "order_items",
-      "refSql": "select * from main.order_items",
-      "columns": [
+    ],
+    "relationships": [
         {
-          "name": "FreightValue",
-          "type": "DOUBLE",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A numerical value representing the cost of shipping for an item in an order.",
-            "displayName": "FreightValue"
-          }
+            "name": "Olist_orders_datasetCustomer_idOlist_customers_datasetCustomer_id",
+            "models": [
+                "olist_orders_dataset",
+                "olist_customers_dataset"
+            ],
+            "joinType": "MANY_TO_ONE",
+            "condition": "\"olist_orders_dataset\".customer_id = \"olist_customers_dataset\".customer_id",
+            "properties": {}
         },
         {
-          "name": "Id",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "displayName": "Id"
-          }
+            "name": "Olist_orders_datasetOrder_idOlist_order_items_datasetOrder_id",
+            "models": [
+                "olist_orders_dataset",
+                "olist_order_items_dataset"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"olist_orders_dataset\".order_id = \"olist_order_items_dataset\".order_id",
+            "properties": {}
         },
         {
-          "name": "ItemNumber",
-          "type": "BIGINT",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "The sequential number of the order item in this order. Each order item in an order has its unique ItemNumber.",
-            "displayName": "ItemNumber"
-          }
+            "name": "Olist_orders_datasetOrder_idOlist_order_reviews_datasetOrder_id",
+            "models": [
+                "olist_orders_dataset",
+                "olist_order_reviews_dataset"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"olist_orders_dataset\".order_id = \"olist_order_reviews_dataset\".order_id",
+            "properties": {}
         },
         {
-          "name": "OrderId",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A VARCHAR value indicating the order that this order_item belongs to. The column is used to map the order_item to Orders model in the OrdersOrder_items relationship.",
-            "displayName": "OrderId"
-          }
+            "name": "Olist_orders_datasetOrder_idOlist_order_payments_datasetOrder_id",
+            "models": [
+                "olist_orders_dataset",
+                "olist_order_payments_dataset"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"olist_orders_dataset\".order_id = \"olist_order_payments_dataset\".order_id",
+            "properties": {}
         },
         {
-          "name": "Price",
-          "type": "DOUBLE",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A numerical value representing the price of an item in an order.",
-            "displayName": "Price"
-          }
+            "name": "Olist_order_items_datasetProduct_idOlist_products_datasetProduct_id",
+            "models": [
+                "olist_order_items_dataset",
+                "olist_products_dataset"
+            ],
+            "joinType": "MANY_TO_ONE",
+            "condition": "\"olist_order_items_dataset\".product_id = \"olist_products_dataset\".product_id",
+            "properties": {}
         },
         {
-          "name": "ProductId",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A VARCHAR value representing the product of this order_item. The column is used to map the order_item to Products model using ProductsOrder_items relationship.",
-            "displayName": "ProductId"
-          }
+            "name": "Olist_order_items_datasetSeller_idOlist_sellers_datasetSeller_id",
+            "models": [
+                "olist_order_items_dataset",
+                "olist_sellers_dataset"
+            ],
+            "joinType": "MANY_TO_ONE",
+            "condition": "\"olist_order_items_dataset\".seller_id = \"olist_sellers_dataset\".seller_id",
+            "properties": {}
         },
         {
-          "name": "ShippingLimitDate",
-          "type": "DATE",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A date value indicating the limit by which an item should be shipped according to the order. It helps track the deadline for shipping items in the \"order_items\" model.",
-            "displayName": "ShippingLimitDate"
-          }
+            "name": "Olist_geolocation_datasetGeolocation_zip_code_prefixOlist_customers_datasetCustomer_zip_code_prefix",
+            "models": [
+                "olist_geolocation_dataset",
+                "olist_customers_dataset"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"olist_geolocation_dataset\".geolocation_zip_code_prefix = \"olist_customers_dataset\".customer_zip_code_prefix",
+            "properties": {}
         },
         {
-          "name": "orders",
-          "type": "orders",
-          "relationship": "OrdersOrderidOrder_itemsOrderid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
+            "name": "Olist_geolocation_datasetGeolocation_zip_code_prefixOlist_sellers_datasetSeller_zip_code_prefix",
+            "models": [
+                "olist_geolocation_dataset",
+                "olist_sellers_dataset"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"olist_geolocation_dataset\".geolocation_zip_code_prefix = \"olist_sellers_dataset\".seller_zip_code_prefix",
+            "properties": {}
         },
         {
-          "name": "products",
-          "type": "products",
-          "relationship": "ProductsIdOrder_itemsProductid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
+            "name": "Product_category_name_translationProduct_category_nameOlist_products_datasetProduct_category_name",
+            "models": [
+                "product_category_name_translation",
+                "olist_products_dataset"
+            ],
+            "joinType": "ONE_TO_MANY",
+            "condition": "\"product_category_name_translation\".product_category_name = \"olist_products_dataset\".product_category_name",
+            "properties": {}
         }
-      ],
-      "primaryKey": "Id",
-      "cached": false,
-      "refreshTime": "30.00m",
-      "properties": {
-        "schema": "main",
-        "catalog": "memory",
-        "description": "The model is used to store information about items in orders, including details like prices, product IDs, shipping limits, and relationships with orders and products tables.",
-        "displayName": "order_items"
-      }
-    },
-    {
-      "name": "orders",
-      "refSql": "select * from main.orders",
-      "columns": [
-        {
-          "name": "ApprovedTimestamp",
-          "type": "TIMESTAMP",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column that represents the timestamp when the order was approved.",
-            "displayName": "ApprovedTimestamp"
-          }
-        },
-        {
-          "name": "CustomerId",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A unique identifier representing the customer who purchased this order.",
-            "displayName": "CustomerId"
-          }
-        },
-        {
-          "name": "DeliveredCarrierDate",
-          "type": "DATE",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column that represents the date when the order was delivered by the carrier.",
-            "displayName": "DeliveredCarrierDate"
-          }
-        },
-        {
-          "name": "DeliveredCustomerDate",
-          "type": "DATE",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column that represents the date when the order was delivered to the customer.",
-            "displayName": "DeliveredCustomerDate"
-          }
-        },
-        {
-          "name": "EstimatedDeliveryDate",
-          "type": "DATE",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column that represents the estimated delivery date of the order.",
-            "displayName": "EstimatedDeliveryDate"
-          }
-        },
-        {
-          "name": "OrderId",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column that represents a unique identifier of this order.",
-            "displayName": "OrderId"
-          }
-        },
-        {
-          "name": "PurchaseTimestamp",
-          "type": "TIMESTAMP",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column that represents the timestamp when the order was purchased.",
-            "displayName": "PurchaseTimestamp"
-          }
-        },
-        {
-          "name": "Status",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column representing the status of the order.",
-            "displayName": "Status"
-          }
-        },
-        {
-          "name": "customers",
-          "type": "customers",
-          "relationship": "CustomersIdOrdersCustomerid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
-        },
-        {
-          "name": "order_items",
-          "type": "order_items",
-          "relationship": "OrdersOrderidOrder_itemsOrderid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
-        },
-        {
-          "name": "reviews",
-          "type": "reviews",
-          "relationship": "OrdersOrderidReviewsOrderid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
-        },
-        {
-          "name": "payments",
-          "type": "payments",
-          "relationship": "PaymentsOrderidOrdersOrderid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
-        }
-      ],
-      "primaryKey": "OrderId",
-      "cached": false,
-      "refreshTime": "30.00m",
-      "properties": {
-        "schema": "main",
-        "catalog": "memory",
-        "description": "A model representing the orders data.",
-        "displayName": "orders"
-      }
-    },
-    {
-      "name": "payments",
-      "refSql": "select * from main.payments",
-      "columns": [
-        {
-          "name": "Id",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "displayName": "Id"
-          }
-        },
-        {
-          "name": "Installments",
-          "type": "BIGINT",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column representing the number of installments in the payments data model.",
-            "displayName": "Installments"
-          }
-        },
-        {
-          "name": "OrderId",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column representing the order id associated with this payment. The column is used to map the payment to the order using PaymentsOrders relationship.",
-            "displayName": "OrderId"
-          }
-        },
-        {
-          "name": "Sequential",
-          "type": "BIGINT",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column representing the sequential number of the payment in its corresponding order. Each payment in the order has its unique sequential number.",
-            "displayName": "Sequential"
-          }
-        },
-        {
-          "name": "Type",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column representing the type of payment in the payments data model.",
-            "displayName": "Type"
-          }
-        },
-        {
-          "name": "Value",
-          "type": "DOUBLE",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A column representing the value of the payment in the payments data model.",
-            "displayName": "Value"
-          }
-        },
-        {
-          "name": "orders",
-          "type": "orders",
-          "relationship": "PaymentsOrderidOrdersOrderid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
-        }
-      ],
-      "primaryKey": "Id",
-      "cached": false,
-      "refreshTime": "30.00m",
-      "properties": {
-        "schema": "main",
-        "catalog": "memory",
-        "description": "A model representing the payment records, including installments, order IDs, sequential numbers, payment types, values, and relationships with orders.",
-        "displayName": "payments"
-      }
-    },
-    {
-      "name": "products",
-      "refSql": "select * from main.products",
-      "columns": [
-        {
-          "name": "Category",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A category that classifies the products in the data model.",
-            "displayName": "Category"
-          }
-        },
-        {
-          "name": "Id",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A unique identifier assigned to each product in the data model.",
-            "displayName": "Id"
-          }
-        },
-        {
-          "name": "Name",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A name of the product in the data model.",
-            "displayName": "Name"
-          }
-        },
-        {
-          "name": "order_items",
-          "type": "order_items",
-          "relationship": "ProductsIdOrder_itemsProductid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
-        }
-      ],
-      "primaryKey": "Id",
-      "cached": false,
-      "refreshTime": "30.00m",
-      "properties": {
-        "schema": "main",
-        "catalog": "memory",
-        "description": "A data model containing information about products such as category, ID, and name, with a relationship to order items.",
-        "displayName": "products"
-      }
-    },
-    {
-      "name": "reviews",
-      "refSql": "select * from main.reviews",
-      "columns": [
-        {
-          "name": "AnswerTimestamp",
-          "type": "TIMESTAMP",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "The date when the answer was provided.",
-            "displayName": "AnswerTimestamp"
-          }
-        },
-        {
-          "name": "CreationTimestamp",
-          "type": "TIMESTAMP",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "The date when the review was created.",
-            "displayName": "CreationTimestamp"
-          }
-        },
-        {
-          "name": "Id",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "A unique identifier assigned to each review entry.",
-            "displayName": "Id"
-          }
-        },
-        {
-          "name": "OrderId",
-          "type": "VARCHAR",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "The order id of the order which the review belongs to.",
-            "displayName": "OrderId"
-          }
-        },
-        {
-          "name": "Score",
-          "type": "BIGINT",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {
-            "description": "The score associated with each review entry.",
-            "displayName": "Score"
-          }
-        },
-        {
-          "name": "orders",
-          "type": "orders",
-          "relationship": "OrdersOrderidReviewsOrderid",
-          "isCalculated": false,
-          "notNull": false,
-          "properties": {}
-        }
-      ],
-      "primaryKey": "Id",
-      "cached": false,
-      "refreshTime": "30.00m",
-      "properties": {
-        "schema": "main",
-        "catalog": "memory",
-        "description": "A model containing information about review of orders.",
-        "displayName": "reviews"
-      }
-    }
-  ],
-  "relationships": [
-    {
-      "name": "CustomersIdOrdersCustomerid",
-      "models": ["customers", "orders"],
-      "joinType": "ONE_TO_MANY",
-      "condition": "\"customers\".Id = \"orders\".CustomerId",
-      "manySideSortKeys": [],
-      "properties": {}
-    },
-    {
-      "name": "OrdersOrderidOrder_itemsOrderid",
-      "models": ["orders", "order_items"],
-      "joinType": "ONE_TO_MANY",
-      "condition": "\"orders\".OrderId = \"order_items\".OrderId",
-      "manySideSortKeys": [],
-      "properties": {}
-    },
-    {
-      "name": "ProductsIdOrder_itemsProductid",
-      "models": ["products", "order_items"],
-      "joinType": "ONE_TO_MANY",
-      "condition": "\"products\".Id = \"order_items\".ProductId",
-      "manySideSortKeys": [],
-      "properties": {}
-    },
-    {
-      "name": "OrdersOrderidReviewsOrderid",
-      "models": ["orders", "reviews"],
-      "joinType": "ONE_TO_MANY",
-      "condition": "\"orders\".OrderId = \"reviews\".OrderId",
-      "manySideSortKeys": [],
-      "properties": {}
-    },
-    {
-      "name": "PaymentsOrderidOrdersOrderid",
-      "models": ["payments", "orders"],
-      "joinType": "MANY_TO_ONE",
-      "condition": "\"payments\".OrderId = \"orders\".OrderId",
-      "manySideSortKeys": [],
-      "properties": {}
-    }
-  ],
-  "enumDefinitions": [],
-  "metrics": [],
-  "cumulativeMetrics": [],
-  "views": [],
-  "macros": [],
-  "dateSpine": {
-    "unit": "DAY",
-    "start": "1970-01-01",
-    "end": "2077-12-31",
-    "properties": {}
-  }
+    ],
+    "views": []
 }

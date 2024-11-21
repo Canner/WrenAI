@@ -58,10 +58,11 @@ If you are contributing to both the [Wren UI Service](#wren-ui-service) and [Wre
     cd ../docker
     cp .env.example .env.local
     ```
-1. Modify your `.env.local` file: Fill in the `LLM_OPENAI_API_KEY` and `EMBEDDER_OPENAI_API_KEY` with your OpenAI API keys before starting.
-1. Start the UI and engine services from the source code.
-1. Update the `env` variables in the `.env.local` file to point to the services you started manually.
-1. Start the other services using docker-compose:
+2. Modify your `.env.local` file: Fill in the `LLM_OPENAI_API_KEY` and `EMBEDDER_OPENAI_API_KEY` with your OpenAI API keys before starting.
+3. In the `WrenAI/docker` folder, copy `config.example.yaml` to `config.yaml` for AI service configuration. Also change `http://wren-ui:3000` to `http://host.docker.internal:3000` in `config.yaml`.
+4. Start the UI and engine services from the source code.
+5. Update the `env` variables in the `.env.local` file to point to the services you started manually.
+6. Start the other services using docker-compose:
     ```sh
     # current directory is WrenAI/docker
     docker-compose -f docker-compose-dev.yaml --env-file .env.example up
@@ -71,7 +72,7 @@ If you are contributing to both the [Wren UI Service](#wren-ui-service) and [Wre
     # to stop the services, use
     docker-compose -f docker-compose-dev.yaml --env-file .env.example down
     ```
-1. Happy coding!
+7. Happy coding!
 
 ## :electric_plug: Creating a New Data Source Connector
 
@@ -87,7 +88,7 @@ The UI must be aware of the connection details it needs to retain, as specified 
 
 
 - Engine:
-  - Implement the new data source (you’ll determine what connection information is needed and how it should be passed from the UI).
+  - Implement the new data source (you'll determine what connection information is needed and how it should be passed from the UI).
   - Implement the metadata API for the UI to access.
 - UI:
   - Back-End:

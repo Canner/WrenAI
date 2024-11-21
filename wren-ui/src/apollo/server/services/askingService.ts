@@ -1,9 +1,14 @@
+import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
   AskResult,
-  IWrenAIAdaptor,
   AskResultStatus,
   AskHistory,
-} from '@server/adaptors/wrenAIAdaptor';
+  RecommendationQuestionsResult,
+  RecommendationQuestionsInput,
+  RecommendationQuestion,
+  WrenAIError,
+  RecommendationQuestionStatus,
+} from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
 import { IThreadRepository, Thread } from '../repositories/threadRepository';
@@ -22,6 +27,8 @@ import {
 } from '../telemetry/telemetry';
 import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
+import { IMDLService } from './mdlService';
+import { ThreadRecommendQuestionBackgroundTracker } from '../backgrounds';
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -44,8 +51,28 @@ export interface AskingTaskInput {
 export interface AskingDetailTaskInput {
   question?: string;
   sql?: string;
-  summary?: string;
   viewId?: number;
+}
+
+export interface AskingDetailTaskUpdateInput {
+  summary?: string;
+}
+
+export enum RecommendQuestionResultStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  GENERATING = 'GENERATING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+}
+
+export interface ThreadRecommendQuestionResult {
+  status: RecommendQuestionResultStatus;
+  questions: RecommendationQuestion[];
+  error?: WrenAIError;
+}
+
+export interface InstantRecommendedQuestionsInput {
+  previousQuestions?: string[];
 }
 
 export interface IAskingService {
@@ -68,7 +95,7 @@ export interface IAskingService {
   ): Promise<Thread>;
   updateThread(
     threadId: number,
-    input: Partial<AskingDetailTaskInput>,
+    input: Partial<AskingDetailTaskUpdateInput>,
   ): Promise<Thread>;
   deleteThread(threadId: number): Promise<void>;
   listThreads(): Promise<Thread[]>;
@@ -85,6 +112,21 @@ export interface IAskingService {
     stepIndex?: number,
     limit?: number,
   ): Promise<PreviewDataResponse>;
+
+  /**
+   * Recommendation questions
+   */
+  createInstantRecommendedQuestions(
+    input: InstantRecommendedQuestionsInput,
+  ): Promise<Task>;
+  getInstantRecommendedQuestions(
+    queryId: string,
+  ): Promise<RecommendationQuestionsResult>;
+  generateThreadRecommendationQuestions(threadId: number): Promise<void>;
+  getThreadRecommendationQuestions(
+    threadId: number,
+  ): Promise<ThreadRecommendQuestionResult>;
+
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
 
@@ -267,8 +309,10 @@ export class AskingService implements IAskingService {
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
   private backgroundTracker: BackgroundTracker;
+  private threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: PostHogTelemetry;
+  private mdlService: IMDLService;
 
   constructor({
     telemetry,
@@ -279,6 +323,7 @@ export class AskingService implements IAskingService {
     threadRepository,
     threadResponseRepository,
     queryService,
+    mdlService,
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
@@ -288,6 +333,7 @@ export class AskingService implements IAskingService {
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
     queryService: IQueryService;
+    mdlService: IMDLService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
@@ -302,6 +348,88 @@ export class AskingService implements IAskingService {
       wrenAIAdaptor,
       threadResponseRepository,
     });
+    this.threadRecommendQuestionBackgroundTracker =
+      new ThreadRecommendQuestionBackgroundTracker({
+        telemetry,
+        wrenAIAdaptor,
+        threadRepository,
+      });
+
+    this.mdlService = mdlService;
+  }
+
+  public async getThreadRecommendationQuestions(
+    threadId: number,
+  ): Promise<ThreadRecommendQuestionResult> {
+    const thread = await this.threadRepository.findOneBy({ id: threadId });
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    // handle not started
+    const res: ThreadRecommendQuestionResult = {
+      status: RecommendQuestionResultStatus.NOT_STARTED,
+      questions: [],
+      error: null,
+    };
+    if (thread.queryId && thread.questionsStatus) {
+      res.status = RecommendQuestionResultStatus[thread.questionsStatus]
+        ? RecommendQuestionResultStatus[thread.questionsStatus]
+        : res.status;
+      res.questions = thread.questions || [];
+      res.error = thread.questionsError as WrenAIError;
+    }
+    return res;
+  }
+
+  public async generateThreadRecommendationQuestions(
+    threadId: number,
+  ): Promise<void> {
+    const thread = await this.threadRepository.findOneBy({ id: threadId });
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    if (this.threadRecommendQuestionBackgroundTracker.isExist(thread)) {
+      logger.debug(
+        `thread "${threadId}" recommended questions are generating, skip the current request`,
+      );
+      return;
+    }
+
+    const project = await this.projectService.getCurrentProject();
+    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+
+    const threadResponses = await this.threadResponseRepository.findAllBy({
+      threadId,
+    });
+    // descending order and get the latest 5
+    const slicedThreadResponses = threadResponses
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 5);
+    const questions = slicedThreadResponses.map(({ question }) => question);
+    const recommendQuestionData: RecommendationQuestionsInput = {
+      manifest,
+      previousQuestions: questions,
+      maxCategories: 3,
+      maxQuestions: 9,
+      configuration: {
+        language: project.language,
+      },
+    };
+
+    const result = await this.wrenAIAdaptor.generateRecommendationQuestions(
+      recommendQuestionData,
+    );
+    // reset thread recommended questions
+    const updatedThread = await this.threadRepository.updateOne(threadId, {
+      queryId: result.queryId,
+      questionsStatus: RecommendationQuestionStatus.GENERATING,
+      questions: [],
+      questionsError: null,
+    });
+    this.threadRecommendQuestionBackgroundTracker.addTask(updatedThread);
+    return;
   }
 
   public async initialize() {
@@ -331,7 +459,7 @@ export class AskingService implements IAskingService {
     const deployId = await this.getDeployId();
 
     // if it's a follow-up question, then the input will have a threadId
-    // then use the threadId to get the sql, summary and get the steps of last thread response
+    // then use the threadId to get the sql and get the steps of last thread response
     // construct it into AskHistory and pass to ask
     const history: AskHistory = threadId
       ? await this.getHistory(threadId)
@@ -378,14 +506,13 @@ export class AskingService implements IAskingService {
     const { language } = payload;
     // if input contains a viewId, simply create a thread from saved properties of the view
     if (input.viewId) {
-      return this.createThreadFromView(input.viewId);
+      return this.createThreadFromView(input);
     }
 
     // 1. create a task on AI service to generate the detail
     const response = await this.wrenAIAdaptor.generateAskDetail({
       query: input.question,
       sql: input.sql,
-      summary: input.summary,
       configurations: { language },
     });
 
@@ -394,15 +521,13 @@ export class AskingService implements IAskingService {
     const thread = await this.threadRepository.createOne({
       projectId: id,
       sql: input.sql,
-      summary: input.summary,
+      summary: input.question,
     });
 
-    // in follow-up questions, we still need to save the summary
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: response.queryId,
       question: input.question,
-      summary: input.summary,
       status: AskResultStatus.UNDERSTANDING,
     });
 
@@ -420,7 +545,7 @@ export class AskingService implements IAskingService {
 
   public async updateThread(
     threadId: number,
-    input: Partial<AskingDetailTaskInput>,
+    input: Partial<AskingDetailTaskUpdateInput>,
   ): Promise<Thread> {
     // if input is empty, throw error
     if (isEmpty(input)) {
@@ -457,7 +582,7 @@ export class AskingService implements IAskingService {
         throw new Error(`View ${input.viewId} not found`);
       }
 
-      const res = await this.createThreadResponseFromView(view, thread);
+      const res = await this.createThreadResponseFromView(input, view, thread);
       return res;
     }
 
@@ -465,17 +590,15 @@ export class AskingService implements IAskingService {
     const response = await this.wrenAIAdaptor.generateAskDetail({
       query: input.question,
       sql: input.sql,
-      summary: input.summary,
       configurations: { language },
     });
 
     // 2. create a thread and the first thread response
-    // in follow-up questions, we still need to save the summary
+    // insert question first, another API  all the asked questions to generate the next recommendation questions
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: response.queryId,
       question: input.question,
-      summary: input.summary,
       status: AskResultStatus.UNDERSTANDING,
     });
 
@@ -536,6 +659,30 @@ export class AskingService implements IAskingService {
     }
   }
 
+  public async createInstantRecommendedQuestions(
+    input: InstantRecommendedQuestionsInput,
+  ): Promise<Task> {
+    const project = await this.projectService.getCurrentProject();
+    const { manifest } = await this.deployService.getLastDeployment(project.id);
+
+    const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
+      manifest,
+      previousQuestions: input.previousQuestions,
+      maxCategories: 3,
+      maxQuestions: 3,
+      configuration: { language: project.language },
+    });
+    return { id: response.queryId };
+  }
+
+  public async getInstantRecommendedQuestions(
+    queryId: string,
+  ): Promise<RecommendationQuestionsResult> {
+    const response =
+      await this.wrenAIAdaptor.getRecommendationQuestionsResult(queryId);
+    return response;
+  }
+
   public async deleteAllByProjectId(projectId: number): Promise<void> {
     // delete all threads
     await this.threadRepository.deleteAllBy({ projectId });
@@ -563,36 +710,37 @@ export class AskingService implements IAskingService {
     const latestResponse = responses[0];
     return {
       sql: latestResponse.sql,
-      summary: latestResponse.summary,
       steps: latestResponse.detail.steps,
     };
   }
 
-  private async createThreadFromView(viewId: number) {
-    const view = await this.viewRepository.findOneBy({ id: viewId });
+  private async createThreadFromView(input: AskingDetailTaskInput) {
+    const view = await this.viewRepository.findOneBy({ id: input.viewId });
     if (!view) {
-      throw new Error(`View ${viewId} not found`);
+      throw new Error(`View ${input.viewId} not found`);
     }
 
-    const properties = JSON.parse(view.properties) || {};
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
       sql: view.statement,
-      summary: properties.summary,
+      summary: input.question,
     });
 
-    await this.createThreadResponseFromView(view, thread);
+    await this.createThreadResponseFromView(input, view, thread);
     return thread;
   }
 
-  private async createThreadResponseFromView(view: View, thread: Thread) {
+  private async createThreadResponseFromView(
+    input: AskingDetailTaskInput,
+    view: View,
+    thread: Thread,
+  ) {
     const properties = JSON.parse(view.properties) || {};
     return this.threadResponseRepository.createOne({
       threadId: thread.id,
       queryId: QUERY_ID_PLACEHOLDER,
-      question: properties.question,
-      summary: properties.summary,
+      question: input.question,
       status: AskResultStatus.FINISHED,
       detail: {
         ...properties.detail,

@@ -15,6 +15,7 @@ import {
   MYSQL_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
   TRINO_CONNECTION_INFO,
+  SNOWFLAKE_CONNECTION_INFO,
 } from '../../repositories';
 import { snakeCase } from 'lodash';
 import { Encryptor } from '../../utils';
@@ -82,6 +83,14 @@ describe('IbisAdaptor', () => {
     username: 'my-username',
   };
 
+  const mockSnowflakeConnectionInfo: SNOWFLAKE_CONNECTION_INFO = {
+    user: 'my-user',
+    password: 'my-password',
+    account: 'my-account',
+    database: 'my-database',
+    schema: 'my-schema',
+  };
+
   const mockManifest: Manifest = {
     catalog: 'wrenai', // eg: "test-catalog"
     schema: 'wrenai', // eg: "test-schema"
@@ -141,7 +150,17 @@ describe('IbisAdaptor', () => {
       mockMSSQLConnectionInfo,
     );
     const expectConnectionInfo = Object.entries(mockMSSQLConnectionInfo).reduce(
-      (acc, [key, value]) => ((acc[snakeCase(key)] = value), acc),
+      (acc, [key, value]) => {
+        if (key === 'trustServerCertificate') {
+          if (value) {
+            acc['kwargs'] = { trustServerCertificate: 'YES' };
+            return acc;
+          }
+        } else {
+          acc[snakeCase(key)] = value;
+        }
+        return acc;
+      },
       {},
     );
 
@@ -242,7 +261,7 @@ describe('IbisAdaptor', () => {
     const { username, catalog, host, password, port, schema, ssl } =
       mockTrinoConnectionInfo;
     const expectConnectionInfo = {
-      connectionUrl: `jdbc:trino://${host}:${port}/${catalog}/${schema}?user=${username}&password=${password}`,
+      connectionUrl: `trino://${username}:${password}@${host}:${port}/${catalog}/${schema}`,
     };
 
     if (ssl) expectConnectionInfo.connectionUrl += '&SSL=true';
@@ -250,6 +269,29 @@ describe('IbisAdaptor', () => {
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v2/connector/trino/metadata/constraints`,
+      { connectionInfo: expectConnectionInfo },
+    );
+  });
+
+  it('should get snowflake constraints', async () => {
+    const mockResponse = { data: [] };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+    // mock decrypt method in Encryptor to return the same password
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockSnowflakeConnectionInfo.password }),
+    );
+
+    const result = await ibisAdaptor.getConstraints(
+      DataSourceName.SNOWFLAKE,
+      mockSnowflakeConnectionInfo,
+    );
+    const expectConnectionInfo = Object.entries(
+      mockSnowflakeConnectionInfo,
+    ).reduce((acc, [key, value]) => ((acc[snakeCase(key)] = value), acc), {});
+
+    expect(result).toEqual([]);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/connector/snowflake/metadata/constraints`,
       { connectionInfo: expectConnectionInfo },
     );
   });
@@ -403,8 +445,8 @@ describe('IbisAdaptor', () => {
         dtypes: {},
       },
       headers: {
-        'X-Correlation-ID': '123',
-        'X-Process-Time': '1s',
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
       },
     });
     mockedEncryptor.prototype.decrypt.mockReturnValue(
@@ -431,8 +473,8 @@ describe('IbisAdaptor', () => {
       response: {
         data: 'Error message',
         headers: {
-          'X-Correlation-ID': '123',
-          'X-Process-Time': '1s',
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
         },
       },
     });
@@ -461,8 +503,8 @@ describe('IbisAdaptor', () => {
   it('should get data, correlationId and processTime when dry run succeeds', async () => {
     mockedAxios.post.mockResolvedValue({
       headers: {
-        'X-Correlation-ID': '123',
-        'X-Process-Time': '1s',
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
       },
     });
     mockedEncryptor.prototype.decrypt.mockReturnValue(
@@ -487,8 +529,8 @@ describe('IbisAdaptor', () => {
       response: {
         data: 'Error message',
         headers: {
-          'X-Correlation-ID': '123',
-          'X-Process-Time': '1s',
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
         },
       },
     });

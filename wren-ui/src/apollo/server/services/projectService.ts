@@ -10,7 +10,17 @@ import {
   RecommendConstraint,
 } from './metadataService';
 import { DataSourceName } from '../types';
+import {
+  RecommendationQuestion,
+  RecommendationQuestionStatus,
+  WrenAIError,
+} from '@server/models/adaptor';
 import { encryptConnectionInfo } from '../dataSource';
+import { IWrenAIAdaptor } from '../adaptors';
+import { RecommendQuestionResultStatus } from './askingService';
+import { IMDLService } from './mdlService';
+import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
+import { ITelemetry } from '../telemetry/telemetry';
 
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
@@ -22,6 +32,11 @@ export interface ProjectData {
   connectionInfo: WREN_AI_CONNECTION_INFO;
 }
 
+export interface ProjectRecommendationQuestionsResult {
+  status: RecommendQuestionResultStatus;
+  questions: RecommendationQuestion[];
+  error: WrenAIError;
+}
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
   getGeneralConnectionInfo: (project: Project) => Record<string, any>;
@@ -41,21 +56,91 @@ export interface IProjectService {
     persistCredentialDir: string,
   ) => string;
   deleteProject: (projectId: number) => Promise<void>;
+  getProjectRecommendationQuestions: () => Promise<ProjectRecommendationQuestionsResult>;
+
+  // recommend questions
+  generateProjectRecommendationQuestions: () => Promise<void>;
 }
 
 export class ProjectService implements IProjectService {
   private projectRepository: IProjectRepository;
   private metadataService: IDataSourceMetadataService;
-
+  private mdlService: IMDLService;
+  private wrenAIAdaptor: IWrenAIAdaptor;
+  private projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
   constructor({
     projectRepository,
     metadataService,
+    mdlService,
+    wrenAIAdaptor,
+    telemetry,
   }: {
     projectRepository: IProjectRepository;
     metadataService: IDataSourceMetadataService;
+    mdlService: IMDLService;
+    wrenAIAdaptor: IWrenAIAdaptor;
+    telemetry: ITelemetry;
   }) {
     this.projectRepository = projectRepository;
     this.metadataService = metadataService;
+    this.mdlService = mdlService;
+    this.wrenAIAdaptor = wrenAIAdaptor;
+    this.projectRecommendQuestionBackgroundTracker =
+      new ProjectRecommendQuestionBackgroundTracker({
+        projectRepository,
+        telemetry,
+        wrenAIAdaptor,
+      });
+  }
+
+  public async generateProjectRecommendationQuestions(): Promise<void> {
+    const project = await this.getCurrentProject();
+    if (!project) {
+      throw new Error(`Project not found`);
+    }
+    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+    const recommendQuestionResult =
+      await this.wrenAIAdaptor.generateRecommendationQuestions({
+        manifest,
+        ...this.getProjectRecommendationQuestionsConfig(project),
+      });
+
+    const updatedProject = await this.projectRepository.updateOne(project.id, {
+      queryId: recommendQuestionResult.queryId,
+      questionsStatus: RecommendationQuestionStatus.GENERATING,
+      questions: [],
+      questionsError: null,
+    });
+
+    if (
+      !this.projectRecommendQuestionBackgroundTracker.isExist(updatedProject)
+    ) {
+      this.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
+    } else {
+      logger.debug(
+        `Generate Project Recommendation Questions Task ${updatedProject.id} already exists, skip adding`,
+      );
+    }
+  }
+
+  public async getProjectRecommendationQuestions() {
+    const project = await this.projectRepository.getCurrentProject();
+    if (!project) {
+      throw new Error(`Project not found`);
+    }
+    const result: ProjectRecommendationQuestionsResult = {
+      status: RecommendQuestionResultStatus.NOT_STARTED,
+      questions: [],
+      error: null,
+    };
+    if (project.queryId) {
+      result.status = project.questionsStatus
+        ? RecommendQuestionResultStatus[project.questionsStatus]
+        : result.status;
+      result.questions = project.questions || [];
+      result.error = project.questionsError as WrenAIError;
+    }
+    return result;
   }
 
   public async getCurrentProject() {
@@ -144,5 +229,16 @@ export class ProjectService implements IProjectService {
       },
       {},
     );
+  }
+
+  private getProjectRecommendationQuestionsConfig(project: Project) {
+    return {
+      maxCategories: 3,
+      maxQuestions: 9,
+      regenerate: true,
+      configuration: {
+        language: project.language,
+      },
+    };
   }
 }

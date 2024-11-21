@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
+from src.web.v1.services import Configuration, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -16,8 +17,10 @@ class RelationshipRecommendation:
     class Input(BaseModel):
         id: str
         mdl: str
+        project_id: Optional[str] = None  # this is for tracing purpose
+        configuration: Optional[Configuration] = Configuration()
 
-    class Resource(BaseModel):
+    class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
             code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
             message: str
@@ -61,6 +64,7 @@ class RelationshipRecommendation:
 
             input = {
                 "mdl": mdl_dict,
+                "language": request.configuration.language,
             }
 
             resp = await self._pipelines["relationship_recommendation"].run(**input)
@@ -80,7 +84,7 @@ class RelationshipRecommendation:
                 f"An error occurred during relationship recommendation generation: {str(e)}",
             )
 
-        return self._cache[request.id]
+        return self._cache[request.id].with_metadata()
 
     def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)

@@ -3,9 +3,8 @@ import sys
 from pathlib import Path
 from typing import Any, List
 
-import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -15,7 +14,8 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import SQLGenPostProcessor, show_current_time
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskConfigurations, AskHistory
+from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -58,12 +58,9 @@ def prompt(
     query: str,
     documents: List[str],
     history: AskHistory,
-    timezone: AskConfigurations.Timezone,
+    timezone: Configuration.Timezone,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"documents: {documents}")
-    logger.debug(f"history: {history}")
     return prompt_builder.run(
         query=query,
         documents=documents,
@@ -75,7 +72,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_expansion(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -86,9 +82,6 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_expansion: {orjson.dumps(generate_sql_expansion, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await post_processor.run(
         generate_sql_expansion.get("replies"), project_id=project_id
     )
@@ -143,7 +136,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        timezone: AskConfigurations.Timezone,
+        timezone: Configuration.Timezone,
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -172,7 +165,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        timezone: AskConfigurations.Timezone = AskConfigurations().timezone,
+        timezone: Configuration.Timezone = Configuration().timezone,
         project_id: str | None = None,
     ):
         logger.info("Sql Expansion Generation pipeline is running...")
@@ -190,30 +183,13 @@ class SQLExpansion(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = SQLExpansion(llm_provider=llm_provider, engine=engine)
-
-    pipeline.visualize(
-        "this is a test query",
-        [],
-        AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
+    dry_run_pipeline(
+        SQLExpansion,
+        "sql_expansion",
+        query="query",
+        contexts=[],
+        history=AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
+        timezone=Configuration.Timezone(name="UTC", utc_offset="+00:00"),
     )
-    async_validate(
-        lambda: pipeline.run(
-            "this is a test query",
-            [],
-            AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
-        )
-    )
-
-    langfuse_context.flush()
