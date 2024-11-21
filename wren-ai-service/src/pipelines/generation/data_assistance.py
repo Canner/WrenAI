@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -128,6 +129,7 @@ class DataAssistance(BasicPipeline):
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -141,6 +143,7 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
+                "history": history,
                 **self._components,
             },
             show_legend=True,
@@ -155,6 +158,7 @@ class DataAssistance(BasicPipeline):
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
     ):
         logger.info("Data Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -164,6 +168,7 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
+                "history": history,
                 **self._components,
             },
         )

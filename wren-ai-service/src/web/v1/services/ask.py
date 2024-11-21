@@ -150,6 +150,7 @@ class AskService:
                 intent_classification_result = (
                     await self._pipelines["intent_classification"].run(
                         query=ask_request.query,
+                        history=ask_request.history,
                         id=ask_request.project_id,
                     )
                 ).get("post_process", {})
@@ -165,6 +166,7 @@ class AskService:
                     asyncio.create_task(
                         self._pipelines["data_assistance"].run(
                             query=ask_request.query,
+                            history=ask_request.history,
                             db_schemas=intent_classification_result.get("db_schemas"),
                             language=ask_request.configurations.language,
                             query_id=ask_request.query_id,
@@ -184,6 +186,7 @@ class AskService:
 
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=ask_request.query,
+                    history=ask_request.history,
                     id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])

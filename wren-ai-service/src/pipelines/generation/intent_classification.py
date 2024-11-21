@@ -16,6 +16,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -241,6 +242,7 @@ class IntentClassification(BasicPipeline):
         self,
         query: str,
         id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -252,6 +254,7 @@ class IntentClassification(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
+                "history": history,
                 **self._components,
             },
             show_legend=True,
@@ -260,13 +263,16 @@ class IntentClassification(BasicPipeline):
 
     @async_timer
     @observe(name="Intent Classification")
-    async def run(self, query: str, id: Optional[str] = None):
+    async def run(
+        self, query: str, id: Optional[str] = None, history: Optional[AskHistory] = None
+    ):
         logger.info("Intent Classification pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
                 "id": id or "",
+                "history": history,
                 **self._components,
             },
         )
