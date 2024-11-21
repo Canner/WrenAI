@@ -411,7 +411,6 @@ export class AskingService implements IAskingService {
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
       previousQuestions: questions,
-      projectId: project.id.toString(),
       maxCategories: 3,
       maxQuestions: 9,
       configuration: {
@@ -668,7 +667,6 @@ export class AskingService implements IAskingService {
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
-      projectId: project.id.toString(),
       previousQuestions: input.previousQuestions,
       maxCategories: 3,
       maxQuestions: 3,

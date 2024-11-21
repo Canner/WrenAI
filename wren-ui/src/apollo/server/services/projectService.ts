@@ -233,7 +233,6 @@ export class ProjectService implements IProjectService {
 
   private getProjectRecommendationQuestionsConfig(project: Project) {
     return {
-      projectId: project.id.toString(),
       maxCategories: 3,
       maxQuestions: 9,
       regenerate: true,
