@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from src.core.engine import add_quotes
 from src.utils import async_timer, trace_metadata
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -19,10 +20,6 @@ class SQLBreakdown(BaseModel):
 
 
 # POST /v1/ask-details
-class AskDetailsConfigurations(BaseModel):
-    language: str = "English"
-
-
 class AskDetailsRequest(BaseModel):
     _query_id: str | None = None
     query: str
@@ -31,7 +28,7 @@ class AskDetailsRequest(BaseModel):
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
     user_id: Optional[str] = None
-    configurations: AskDetailsConfigurations = AskDetailsConfigurations()
+    configurations: Configuration = Configuration()
 
     @property
     def query_id(self) -> str:

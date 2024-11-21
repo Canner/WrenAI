@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -20,7 +20,7 @@ from src.pipelines.common import (
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskConfigurations
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -84,7 +84,7 @@ def prompt(
     exclude: List[Dict],
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
-    configurations: AskConfigurations | None = None,
+    configurations: Configuration | None = None,
     samples: List[Dict] | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -168,7 +168,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations = AskConfigurations(),
+        configurations: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ) -> None:
@@ -200,7 +200,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: AskConfigurations = AskConfigurations(),
+        configurations: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
@@ -221,23 +221,12 @@ class SQLGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = SQLGeneration(
-        llm_provider=llm_provider,
-        engine=engine,
+    dry_run_pipeline(
+        SQLGeneration,
+        "sql_generation",
+        query="this is a test query",
+        contexts=[],
+        exclude=[],
     )
-
-    pipeline.visualize("this is a test query", [], [])
-    async_validate(lambda: pipeline.run("this is a test query", [], []))
-
-    langfuse_context.flush()

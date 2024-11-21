@@ -11,7 +11,8 @@ from src.pipelines.generation.sql_generation import SQLGeneration
 from src.pipelines.indexing.indexing import Indexing
 from src.pipelines.retrieval.retrieval import Retrieval
 from src.providers import init_providers
-from src.web.v1.services.ask import AskConfigurations, AskHistory
+from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 from src.web.v1.services.ask_details import SQLBreakdown
 
 GLOBAL_DATA = {
@@ -135,7 +136,7 @@ async def test_generation_pipeline():
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
         exclude=[],
-        configurations=AskConfigurations(),
+        configurations=Configuration(),
     )
 
     # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.
@@ -146,7 +147,7 @@ async def test_generation_pipeline():
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
         exclude=[{"statement": "SELECT 1 FROM author"}],
-        configurations=AskConfigurations(),
+        configurations=Configuration(),
     )
 
     assert generation_result["post_process"]["valid_generation_results"] is not None
@@ -173,7 +174,7 @@ async def test_followup_generation_pipeline():
                 )
             ],
         ),
-        configurations=AskConfigurations(),
+        configuration=Configuration(),
     )
 
     # TODO: we'll refactor almost all test case with a mock server, thus temporarily only assert it is not None.

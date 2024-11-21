@@ -1,4 +1,3 @@
-import json
 import logging
 import sys
 from datetime import datetime
@@ -7,12 +6,12 @@ from typing import Any
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 
 logger = logging.getLogger("wren-ai-service")
@@ -30,7 +29,7 @@ def prompt(
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
-        models=mdl["models"],
+        models=mdl.get("models", []),
         previous_questions=previous_questions,
         language=language,
         current_date=current_date,
@@ -203,6 +202,7 @@ class QuestionRecommendation(BasicPipeline):
                 "current_date": current_date,
                 "max_questions": max_questions,
                 "max_categories": max_categories,
+                **self._components,
             },
             show_legend=True,
             orient="LR",
@@ -215,7 +215,7 @@ class QuestionRecommendation(BasicPipeline):
         previous_questions: list[str] = [],
         categories: list[str] = [],
         language: str = "English",
-        current_date: str = datetime.now(),
+        current_date: str = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
         max_questions: int = 5,
         max_categories: int = 3,
         **_,
@@ -237,32 +237,16 @@ class QuestionRecommendation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = QuestionRecommendation(llm_provider=llm_provider)
-
-    with open("sample/ecommerce_duckdb_mdl.json", "r") as file:
-        mdl = json.load(file)
-
-    input = {
-        "mdl": mdl,
-        "previous_questions": [],
-        "categories": ["Customer Insights", "Product Performance"],
-        "language": "English",
-        "max_questions": 5,
-        "max_categories": 2,
-    }
-
-    # pipeline.visualize(**input)
-    async_validate(lambda: pipeline.run(**input))
-
-    langfuse_context.flush()
+    dry_run_pipeline(
+        QuestionRecommendation,
+        "question_recommendation",
+        mdl={},
+        previous_questions=[],
+        categories=[],
+        language="English",
+        current_date=datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
+        max_questions=5,
+        max_categories=3,
+    )

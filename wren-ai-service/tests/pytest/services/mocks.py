@@ -2,7 +2,7 @@ from typing import Optional
 
 from src.pipelines.generation import intent_classification, sql_generation, sql_summary
 from src.pipelines.retrieval import historical_question, retrieval
-from src.web.v1.services.ask import AskConfigurations
+from src.web.v1.services import Configuration
 
 
 class RetrievalMock(retrieval.Retrieval):
@@ -40,7 +40,7 @@ class GenerationMock(sql_generation.SQLGeneration):
         contexts: list[str],
         exclude: list[dict],
         project_id: str | None = None,
-        configurations: AskConfigurations | None = None,
+        configurations: Configuration | None = None,
     ):
         return {
             "post_process": {

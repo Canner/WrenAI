@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, List
 
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -20,7 +20,8 @@ from src.pipelines.common import (
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
-from src.web.v1.services.ask import AskConfigurations, AskHistory
+from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -115,7 +116,7 @@ def prompt(
     documents: List[str],
     history: AskHistory,
     alert: str,
-    configurations: AskConfigurations,
+    configuration: Configuration,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
@@ -123,8 +124,8 @@ def prompt(
         documents=documents,
         history=history,
         alert=alert,
-        instructions=construct_instructions(configurations),
-        current_time=show_current_time(configurations.timezone),
+        instructions=construct_instructions(configuration),
+        current_time=show_current_time(configuration.timezone),
     )
 
 
@@ -199,7 +200,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        configurations: AskConfigurations = AskConfigurations(),
+        configuration: Configuration = Configuration(),
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -214,7 +215,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },
@@ -229,7 +230,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        configurations: AskConfigurations = AskConfigurations(),
+        configuration: Configuration = Configuration(),
         project_id: str | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
@@ -240,7 +241,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },
@@ -248,30 +249,12 @@ class FollowUpSQLGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(engine_config=EngineConfig())
-    pipeline = FollowUpSQLGeneration(llm_provider=llm_provider, engine=engine)
-
-    pipeline.visualize(
-        "this is a test query",
-        [],
-        AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
+    dry_run_pipeline(
+        FollowUpSQLGeneration,
+        "followup_sql_generation",
+        query="show me the dataset",
+        contexts=[],
+        history=AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
     )
-    async_validate(
-        lambda: pipeline.run(
-            "this is a test query",
-            [],
-            AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
-        )
-    )
-
-    langfuse_context.flush()
