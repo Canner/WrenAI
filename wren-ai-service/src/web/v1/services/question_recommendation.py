@@ -78,7 +78,7 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=documents,
                 exclude=[],
-                configurations=Configuration(),
+                configuration=Configuration(),
             )
 
             post_process = generated_sql["post_process"]

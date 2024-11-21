@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -55,8 +56,22 @@ def prompt(
     db_schemas: list[str],
     language: str,
     prompt_builder: PromptBuilder,
+    history: Optional[AskHistory] = None,
 ) -> dict:
-    return prompt_builder.run(query=query, db_schemas=db_schemas, language=language)
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
+
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
+    return prompt_builder.run(
+        query=query,
+        db_schemas=db_schemas,
+        language=language,
+    )
 
 
 @async_timer
@@ -128,6 +143,7 @@ class DataAssistance(BasicPipeline):
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -141,6 +157,7 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
+                "history": history,
                 **self._components,
             },
             show_legend=True,
@@ -155,6 +172,7 @@ class DataAssistance(BasicPipeline):
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
     ):
         logger.info("Data Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -164,6 +182,7 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
+                "history": history,
                 **self._components,
             },
         )

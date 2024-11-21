@@ -84,7 +84,7 @@ def prompt(
     exclude: List[Dict],
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
-    configurations: Configuration | None = None,
+    configuration: Configuration | None = None,
     samples: List[Dict] | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -92,9 +92,9 @@ def prompt(
         documents=documents,
         exclude=exclude,
         text_to_sql_rules=text_to_sql_rules,
-        instructions=construct_instructions(configurations),
+        instructions=construct_instructions(configuration),
         samples=samples,
-        current_time=show_current_time(configurations.timezone),
+        current_time=show_current_time(configuration.timezone),
     )
 
 
@@ -168,7 +168,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: Configuration = Configuration(),
+        configuration: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ) -> None:
@@ -185,7 +185,7 @@ class SQLGeneration(BasicPipeline):
                 "exclude": exclude,
                 "samples": samples,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },
@@ -200,7 +200,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         exclude: List[Dict],
-        configurations: Configuration = Configuration(),
+        configuration: Configuration = Configuration(),
         samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
@@ -213,7 +213,7 @@ class SQLGeneration(BasicPipeline):
                 "exclude": exclude,
                 "samples": samples,
                 "project_id": project_id,
-                "configurations": configurations,
+                "configuration": configuration,
                 **self._components,
                 **self._configs,
             },

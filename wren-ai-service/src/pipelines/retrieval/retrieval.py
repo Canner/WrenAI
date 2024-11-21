@@ -17,6 +17,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -117,7 +118,18 @@ def _build_view_ddl(content: dict) -> str:
 ## Start of Pipeline
 @async_timer
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any) -> dict:
+async def embedding(
+    query: str, embedder: Any, history: Optional[AskHistory] = None
+) -> dict:
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
+
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
     return await embedder.run(query)
 
 
@@ -252,6 +264,7 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
+    history: Optional[AskHistory] = None,
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         logger.info(
@@ -262,6 +275,14 @@ def prompt(
             for construct_db_schema in construct_db_schemas
         ]
 
+        if history:
+            previous_query_summaries = [
+                step.summary for step in history.steps if step.summary
+            ]
+        else:
+            previous_query_summaries = []
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
         return prompt_builder.run(question=query, db_schemas=db_schemas)
     else:
         return {}
@@ -404,6 +425,7 @@ class Retrieval(BasicPipeline):
         self,
         query: str,
         id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
     ) -> None:
         destination = "outputs/pipelines/retrieval"
         if not Path(destination).exists():
@@ -415,6 +437,7 @@ class Retrieval(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
+                "history": history,
                 **self._components,
                 **self._configs,
             },
@@ -424,13 +447,19 @@ class Retrieval(BasicPipeline):
 
     @async_timer
     @observe(name="Ask Retrieval")
-    async def run(self, query: str, id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
+    ):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["construct_retrieval_results"],
             inputs={
                 "query": query,
                 "id": id or "",
+                "history": history,
                 **self._components,
                 **self._configs,
             },

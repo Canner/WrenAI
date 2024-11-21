@@ -94,15 +94,20 @@ The final answer must be the JSON format like following:
 
 {{ alert }}
 
-### QUESTION ###
-Previous SQL Summary: {{ history.summary }}
+### CONTEXT ###
+Previous SQL Summary:
+{% for summary in previous_query_summaries %}
+    {{ summary }}
+{% endfor %}
 Previous SQL Query: {{ history.sql }}
-User's Follow-up Question: {{ query }}
 Current Time: {{ current_time }}
 
 {% if instructions %}
 Instructions: {{ instructions }}
 {% endif %}
+
+### INPUT ###
+User's Follow-up Question: {{ query }}
 
 Let's think step by step.
 """
@@ -119,10 +124,13 @@ def prompt(
     configuration: Configuration,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    previous_query_summaries = [step.summary for step in history.steps if step.summary]
+
     return prompt_builder.run(
         query=query,
         documents=documents,
         history=history,
+        previous_query_summaries=previous_query_summaries,
         alert=alert,
         instructions=construct_instructions(configuration),
         current_time=show_current_time(configuration.timezone),
