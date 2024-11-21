@@ -36,7 +36,7 @@ Endpoints:
      - `thread_id`: (Optional) Thread identifier for the query.
      - `user_id`: (Optional) User identifier.
      - `history`: (Optional) Query history (SQL steps).
-     - `configurations`: (Optional) Configurations such as fiscal year.
+     - `configurations`: (Optional) Configuration such as fiscal year.
    - **Response**:
      - `query_id`: A unique identifier (UUID) for tracking the query.
 

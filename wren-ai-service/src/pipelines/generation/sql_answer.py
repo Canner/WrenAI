@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
 
@@ -174,24 +174,12 @@ class SQLAnswer(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = SQLAnswer(
-        llm_provider=llm_provider,
+    dry_run_pipeline(
+        SQLAnswer,
+        "sql_answer",
+        query="query",
+        sql="SELECT * FROM table_name",
+        language="English",
     )
-
-    pipeline.visualize("query", "SELECT * FROM table_name", {}, "English")
-    async_validate(
-        lambda: pipeline.run("query", "SELECT * FROM table_name", {}, "English")
-    )
-
-    langfuse_context.flush()

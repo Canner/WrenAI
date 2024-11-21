@@ -38,7 +38,6 @@ export enum WrenAILanguage {
 export interface DeployData {
   manifest: Manifest;
   hash: string;
-  projectId: string;
 }
 
 // ask

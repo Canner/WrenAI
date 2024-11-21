@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import Document, component
-from haystack.document_stores.types import DocumentStore
+from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
@@ -57,7 +57,7 @@ class OutputFormatter:
 ## Start of Pipeline
 @async_timer
 @observe(capture_input=False)
-async def count_documents(store: DocumentStore, id: Optional[str] = None) -> int:
+async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) -> int:
     filters = (
         {
             "operator": "AND",
@@ -187,26 +187,10 @@ class HistoricalQuestion(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    _, embedder_provider, document_store_provider, _ = init_providers(
-        engine_config=EngineConfig()
+    dry_run_pipeline(
+        HistoricalQuestion,
+        "historical_question",
+        query="this is a test query",
     )
-
-    pipeline = HistoricalQuestion(
-        embedder_provider=embedder_provider,
-        document_store_provider=document_store_provider,
-    )
-
-    pipeline.visualize("this is a query")
-    async_validate(lambda: pipeline.run("this is a query"))
-
-    langfuse_context.flush()

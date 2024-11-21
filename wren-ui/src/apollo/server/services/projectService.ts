@@ -99,12 +99,12 @@ export class ProjectService implements IProjectService {
       throw new Error(`Project not found`);
     }
     const { manifest } = await this.mdlService.makeCurrentModelMDL();
-
     const recommendQuestionResult =
       await this.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,
         ...this.getProjectRecommendationQuestionsConfig(project),
       });
+
     const updatedProject = await this.projectRepository.updateOne(project.id, {
       queryId: recommendQuestionResult.queryId,
       questionsStatus: RecommendationQuestionStatus.GENERATING,
@@ -231,9 +231,8 @@ export class ProjectService implements IProjectService {
     );
   }
 
-  private async getProjectRecommendationQuestionsConfig(project: Project) {
+  private getProjectRecommendationQuestionsConfig(project: Project) {
     return {
-      projectId: project.id.toString(),
       maxCategories: 3,
       maxQuestions: 9,
       regenerate: true,

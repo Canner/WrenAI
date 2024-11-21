@@ -8,13 +8,9 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
-from src.web.v1.services import SSEEvent
+from src.web.v1.services import Configuration, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
-
-
-class SqlAnswerConfigurations(BaseModel):
-    language: str = "English"
 
 
 # POST /v1/sql-answers
@@ -24,7 +20,7 @@ class SqlAnswerRequest(BaseModel):
     sql: str
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
-    configurations: Optional[SqlAnswerConfigurations] = SqlAnswerConfigurations()
+    configurations: Optional[Configuration] = Configuration()
 
     @property
     def query_id(self) -> str:

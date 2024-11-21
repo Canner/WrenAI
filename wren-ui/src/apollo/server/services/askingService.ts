@@ -411,7 +411,6 @@ export class AskingService implements IAskingService {
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
       previousQuestions: questions,
-      projectId: project.id.toString(),
       maxCategories: 3,
       maxQuestions: 9,
       configuration: {
@@ -622,8 +621,8 @@ export class AskingService implements IAskingService {
    * this function is used to preview the data of a thread response
    * get the target thread response and get the steps
    * construct the CTEs and get the data
-   * @param responseId
-   * @param stepIndex
+   * @param responseId: the id of the thread response
+   * @param stepIndex: the step in the response detail
    * @returns Promise<QueryResponse>
    */
   public async previewData(
@@ -668,7 +667,6 @@ export class AskingService implements IAskingService {
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
-      projectId: project.id.toString(),
       previousQuestions: input.previousQuestions,
       maxCategories: 3,
       maxQuestions: 3,

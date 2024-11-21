@@ -125,7 +125,7 @@ export default function Home() {
     try {
       askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
-      generateThreadRecommendationQuestions({
+      await generateThreadRecommendationQuestions({
         variables: { threadId: response.data.createThread.id },
       });
       router.push(Path.Home + `/${response.data.createThread.id}`);

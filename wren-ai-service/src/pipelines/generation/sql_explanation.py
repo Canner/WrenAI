@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
@@ -656,38 +656,13 @@ class SQLExplanation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = SQLExplanation(
-        llm_provider=llm_provider,
-    )
-
-    pipeline.visualize(
-        "this is a test question",
-        StepWithAnalysisResult(
-            sql="xxx",
-            summary="xxx",
-            sql_analysis_results=[],
+    dry_run_pipeline(
+        SQLExplanation,
+        "sql_explanation",
+        question="this is a test question",
+        step_with_analysis_results=StepWithAnalysisResult(
+            sql="xxx", summary="xxx", sql_analysis_results=[]
         ),
     )
-    async_validate(
-        lambda: pipeline.run(
-            "this is a test question",
-            StepWithAnalysisResult(
-                sql="xxx",
-                summary="xxx",
-                sql_analysis_results=[],
-            ),
-        )
-    )
-
-    langfuse_context.flush()
