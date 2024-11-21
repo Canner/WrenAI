@@ -23,25 +23,45 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### TASK ###
-You are a great detective, who is great at intent classification. Now you need to classify user's intent based on given database schema, 
-summaries of user's previous questions if possible, and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
-Please read user's question and database's schema and summaries of user's previous questions carefully to make the classification correct. 
-Please analyze the question for each condition(MISLEADING_QUERY, TEXT_TO_SQL, GENERAL) in order one by one. Also provide reasoning for the classification 
-in clear and concise way within 20 words.
+You are a great detective, who is great at intent classification. Now you need to classify user's intent based on given database schema and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
+Please carefully analyze user's question and analyze database's schema carefully to make the classification correct.
+Also you should provide reasoning for the classification in clear and concise way within 20 words.
 
-- TEXT_TO_SQL: if user's question is related to the given database schema and specific enough that you think
-it can be answered using the database schema
-- GENERAL: if user's question is related to the given database schema or user wants you to help guide ask proper questions; however, it's too general.
-For example, user might asked "what is the dataset about?", "tell me more about dataset", "what can Wren AI do"
-- MISLEADING_QUERY: if user's question is irrelevant to the given database schema.
-For example, if the given database schema is related to e-commerce, but user asked "how are you"
+- TEXT_TO_SQL
+    - When to Use: Select this category if the user's question is directly related to the given database schema and can be answered by generating an SQL query using that schema.
+    - Characteristics:
+        - The question involves specific data retrieval or manipulation that requires SQL.
+        - It references tables, columns, or specific data points within the schema.
+    - Examples:
+        - "What is the total sales for last quarter?"
+        - "Show me all customers who purchased product X."
+        - "List the top 10 products by revenue."
+- MISLEADING_QUERY
+    - When to Use: Choose this category if the user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
+    - Characteristics:
+        - The question does not pertain to any aspect of the database or its data.
+        - It might be a casual conversation starter or about an entirely different topic.
+    - Examples:
+        - "How are you?"
+        - "What's the weather like today?"
+        - "Tell me a joke."
+- GENERAL
+    - When to Use: Use this category if the user is seeking general information about the database schema, needs help formulating a proper question, or asks a vague question related to the schema.
+    - Characteristics:
+        - The question is about understanding the dataset or its capabilities.
+        - The user may need guidance on how to proceed or what questions to ask.
+    - Examples:
+        - "What is the dataset about?"
+        - "Tell me more about the database."
+        - "What can Wren AI do?"
+        - "How can I analyze customer behavior with this data?"
 
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
     "reasoning": "<CHAIN_OF_THOUGHT_REASONING_IN_STRING_FORMAT>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" 
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL"
 }
 """
 
@@ -50,14 +70,6 @@ intent_classification_user_prompt_template = """
 {% for db_schema in db_schemas %}
     {{ db_schema }}
 {% endfor %}
-
-{% if previous_query_summaries %}
-### CONTEXT ###
-Summary of user's previous question:
-{% for summary in previous_query_summaries %}
-    {{ summary }}
-{% endfor %}
-{% endif %}
 
 ### INPUT ###
 User's question: {{query}}
@@ -81,7 +93,6 @@ async def embedding(
 
     query = "\n".join(previous_query_summaries) + "\n" + query
 
-    logger.info(f"embedding query: {query}")
     return await embedder.run(query)
 
 
@@ -196,10 +207,11 @@ def prompt(
     else:
         previous_query_summaries = []
 
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
     return prompt_builder.run(
         query=query,
         db_schemas=construct_db_schemas,
-        previous_query_summaries=previous_query_summaries,
     )
 
 
