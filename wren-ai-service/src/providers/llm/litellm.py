@@ -16,7 +16,7 @@ from src.providers.loader import provider
 
 
 @provider("litellm_llm")
-class LitellmProvider(LLMProvider):
+class LitellmLLMProvider(LLMProvider):
     def __init__(
         self,
         model: str,
