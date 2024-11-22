@@ -104,7 +104,7 @@ async def generate_sql(
     prompt: dict,
     generator: Any,
 ) -> dict:
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @async_timer

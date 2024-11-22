@@ -176,16 +176,16 @@ class OpenAILLMProvider(LLMProvider):
     ):
         self._api_key = Secret.from_token(api_key)
         self._api_base = remove_trailing_slash(api_base)
-        self._generation_model = model
+        self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
 
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
         if self._api_base == LLM_OPENAI_API_BASE:
-            logger.info(f"Using OpenAI LLM: {self._generation_model}")
+            logger.info(f"Using OpenAI LLM: {self._model}")
             logger.info(f"Using OpenAI LLM model kwargs: {self._model_kwargs}")
         else:
-            logger.info(f"Using OpenAI API-compatible LLM: {self._generation_model}")
+            logger.info(f"Using OpenAI API-compatible LLM: {self._model}")
             logger.info(
                 f"Using OpenAI API-compatible LLM model kwargs: {self._model_kwargs}"
             )
@@ -200,7 +200,7 @@ class OpenAILLMProvider(LLMProvider):
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,
-            model=self._generation_model,
+            model=self._model,
             system_prompt=system_prompt,
             # merge model args with the shared args related to response_format
             generation_kwargs=(

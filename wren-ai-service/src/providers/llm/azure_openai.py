@@ -147,11 +147,11 @@ class AzureOpenAILLMProvider(LLMProvider):
         self._generation_api_key = api_key
         self._generation_api_base = remove_trailing_slash(api_base)
         self._generation_api_version = api_version
-        self._generation_model = model
+        self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
 
-        logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")
+        logger.info(f"Using AzureOpenAI LLM: {self._model}")
         logger.info(f"Using AzureOpenAI LLM with API base: {self._generation_api_base}")
         logger.info(
             f"Using AzureOpenAI LLM with API version: {self._generation_api_version}"
@@ -167,7 +167,7 @@ class AzureOpenAILLMProvider(LLMProvider):
     ):
         return AsyncGenerator(
             api_key=self._generation_api_key,
-            model=self._generation_model,
+            model=self._model,
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,

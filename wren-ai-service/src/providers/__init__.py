@@ -70,12 +70,14 @@ def llm_processor(entry: dict) -> dict:
     """
     others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
-    for model in entry["models"]:
-        model_name = f"{entry['provider']}.{model['model']}"
+    for model in entry.get("models", []):
+        model_name = f"{entry.get('provider')}.{model.get('model')}"
         returned[model_name] = {
-            "provider": entry["provider"],
-            "model": model["model"],
-            "kwargs": model["kwargs"],
+            "provider": entry.get("provider"),
+            "model": model.get("model"),
+            "kwargs": model.get("kwargs"),
+            "api_base": model.get("api_base"),
+            "api_version": model.get("api_version"),
             **others,
         }
     return returned
