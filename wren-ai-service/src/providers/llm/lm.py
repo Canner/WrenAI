@@ -2,7 +2,6 @@ import logging
 import os
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import litellm
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from litellm import acompletion
 from litellm.types.utils import ModelResponse
@@ -11,9 +10,6 @@ from src.core.provider import LLMProvider
 from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
-
-litellm.success_callback = ["langfuse"]
-litellm.failure_callback = ["langfuse"]
 
 
 def _build_message(completion: Any, choice: Any) -> ChatMessage:
