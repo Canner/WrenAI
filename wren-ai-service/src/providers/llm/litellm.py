@@ -20,7 +20,9 @@ class LitellmProvider(LLMProvider):
     def __init__(
         self,
         model: str,
-        api_key: Optional[str] = os.getenv("LLM_OPENAI_API_KEY"),
+        api_key_name: Optional[
+            str
+        ] = None,  # e.g. LLM_OPENAI_API_KEY, LLM_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
         api_version: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,
@@ -28,7 +30,7 @@ class LitellmProvider(LLMProvider):
         **_,
     ):
         self._model = model
-        self._api_key = api_key
+        self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = api_base
         self._api_version = api_version
         self._model_kwargs = kwargs
@@ -49,7 +51,7 @@ class LitellmProvider(LLMProvider):
         ):
             message = ChatMessage.from_user(prompt)
             if system_prompt:
-                messages = [ChatMessage.from_assistant(system_prompt), message]
+                messages = [ChatMessage.from_system(system_prompt), message]
             else:
                 messages = [message]
 

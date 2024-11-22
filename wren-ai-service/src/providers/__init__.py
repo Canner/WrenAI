@@ -78,6 +78,7 @@ def llm_processor(entry: dict) -> dict:
             "kwargs": model.get("kwargs"),
             "api_base": model.get("api_base"),
             "api_version": model.get("api_version"),
+            "api_key_name": model.get("api_key_name"),
             **others,
         }
     return returned
