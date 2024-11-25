@@ -79,6 +79,7 @@ class QuestionRecommendation:
                 contexts=documents,
                 exclude=[],
                 configuration=Configuration(),
+                project_id=project_id,
             )
 
             post_process = generated_sql["post_process"]
