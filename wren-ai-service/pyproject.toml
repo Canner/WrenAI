@@ -20,7 +20,7 @@ tqdm = "~4.67.0"
 numpy = "~1.26.0"
 sqlparse = "~0.5.0"
 orjson = "~3.10.0"
-sf-hamilton = {version = "~1.83.0", extras = ["visualization"]}
+sf-hamilton = {version = "^2.0.0", extras = ["visualization"]}
 aiohttp = {extras = ["speedups"], version = "~3.11.0"}
 ollama-haystack = "~2.0.0"
 langfuse = "~2.54.0"
