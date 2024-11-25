@@ -20,7 +20,6 @@ class SqlAnswerRequest(BaseModel):
     sql: str
     sql_data: Dict
     thread_id: Optional[str] = None
-    user_id: Optional[str] = None
     configurations: Optional[Configuration] = Configuration()
 
     @property

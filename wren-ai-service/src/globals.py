@@ -33,6 +33,7 @@ from src.web.v1.services.semantics_preparation import SemanticsPreparationServic
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
 from src.web.v1.services.sql_explanation import SQLExplanationService
+from src.web.v1.services.sql_pairs_preparation import SqlPairsPreparationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
 logger = logging.getLogger("wren-ai-service")
@@ -50,6 +51,7 @@ class ServiceContainer:
     sql_expansion_service: SqlExpansionService
     sql_explanation_service: SQLExplanationService
     sql_regeneration_service: SQLRegenerationService
+    sql_pairs_preparation_service: SqlPairsPreparationService
 
 
 @dataclass
@@ -196,6 +198,10 @@ def create_service_container(
                     **pipe_components["sql_generation"],
                 ),
             },
+            **query_cache,
+        ),
+        sql_pairs_preparation_service=SqlPairsPreparationService(
+            pipelines={},
             **query_cache,
         ),
     )

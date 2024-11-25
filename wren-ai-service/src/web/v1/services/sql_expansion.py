@@ -23,7 +23,6 @@ class SqlExpansionRequest(BaseModel):
     project_id: Optional[str] = None
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
-    user_id: Optional[str] = None
     configurations: Optional[Configuration] = Configuration()
 
     @property

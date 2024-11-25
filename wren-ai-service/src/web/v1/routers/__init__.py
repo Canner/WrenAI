@@ -10,6 +10,7 @@ from src.web.v1.routers import (
     sql_answers,
     sql_expansions,
     sql_explanations,
+    sql_pairs_preparation,
     sql_regenerations,
 )
 
@@ -24,4 +25,5 @@ router.include_router(sql_answers.router)
 router.include_router(sql_expansions.router)
 router.include_router(sql_explanations.router)
 router.include_router(sql_regenerations.router)
+router.include_router(sql_pairs_preparation.router)
 # connected subrouter
