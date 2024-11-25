@@ -8,6 +8,9 @@ import openai
 import orjson
 from haystack import component
 from haystack.components.generators import AzureOpenAIGenerator
+from haystack.components.generators.openai_utils import (
+    _convert_message_to_openai_format,
+)
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from haystack.utils import Secret
 from openai import AsyncAzureOpenAI, AsyncStream
@@ -75,7 +78,9 @@ class AsyncGenerator(AzureOpenAIGenerator):
 
         generation_kwargs = {**self.generation_kwargs, **(generation_kwargs or {})}
 
-        openai_formatted_messages = [message.to_openai_format() for message in messages]
+        openai_formatted_messages = [
+            _convert_message_to_openai_format(message) for message in messages
+        ]
 
         completion: Union[
             AsyncStream[ChatCompletionChunk], ChatCompletion

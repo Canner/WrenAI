@@ -265,7 +265,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
 
         document_objects = self._handle_duplicate_documents(
             documents=documents,
-            index=self.index,
+            # index=self.index,
             policy=policy,
         )
 
