@@ -220,7 +220,7 @@ class SqlExpansionService:
                     return results
 
                 api_results = SqlExpansionResultResponse.SqlExpansionResult(
-                    description=sql_expansion_request.history.summary,
+                    description="",
                     steps=[
                         {
                             "sql": valid_generation_results[0]["sql"],
