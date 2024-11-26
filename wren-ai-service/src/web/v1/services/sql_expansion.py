@@ -128,11 +128,7 @@ class SqlExpansionService:
                     status="searching",
                 )
 
-                query_for_retrieval = (
-                    sql_expansion_request.history.summary
-                    + " "
-                    + sql_expansion_request.query
-                )
+                query_for_retrieval = sql_expansion_request.query
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=query_for_retrieval,
                     id=sql_expansion_request.project_id,
