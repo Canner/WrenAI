@@ -220,6 +220,7 @@ class SqlExpansionService:
                     return results
 
                 api_results = SqlExpansionResultResponse.SqlExpansionResult(
+                    # at the moment, we skip the description, since no description is generated in ai pipelines
                     description="",
                     steps=[
                         {
