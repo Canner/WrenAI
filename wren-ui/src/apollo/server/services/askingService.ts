@@ -29,6 +29,9 @@ import { IViewRepository, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
 import { ThreadRecommendQuestionBackgroundTracker } from '../backgrounds';
+import { getConfig } from '@server/config';
+
+const config = getConfig();
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -411,11 +414,7 @@ export class AskingService implements IAskingService {
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
       previousQuestions: questions,
-      maxCategories: 3,
-      maxQuestions: 9,
-      configuration: {
-        language: project.language,
-      },
+      ...this.getThreadRecommendationQuestionsConfig(project),
     };
 
     const result = await this.wrenAIAdaptor.generateRecommendationQuestions(
@@ -668,9 +667,7 @@ export class AskingService implements IAskingService {
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
       previousQuestions: input.previousQuestions,
-      maxCategories: 3,
-      maxQuestions: 3,
-      configuration: { language: project.language },
+      ...this.getThreadRecommendationQuestionsConfig(project),
     });
     return { id: response.queryId };
   }
@@ -747,5 +744,14 @@ export class AskingService implements IAskingService {
         viewId: view.id,
       },
     });
+  }
+  private getThreadRecommendationQuestionsConfig(project: Project) {
+    return {
+      maxCategories: config.threadRecommendationQuestionMaxCategories,
+      maxQuestions: config.threadRecommendationQuestionsMaxQuestions,
+      configuration: {
+        language: project.language,
+      },
+    };
   }
 }
