@@ -85,7 +85,7 @@ class QuestionRecommendation:
             post_process = generated_sql["post_process"]
 
             if len(post_process["valid_generation_results"]) == 0:
-                return
+                return post_process
 
             valid_sql = post_process["valid_generation_results"][0]["sql"]
             logger.debug(f"Request {request_id}: Valid SQL: {valid_sql}")
@@ -94,15 +94,21 @@ class QuestionRecommendation:
             current = self._cache[request_id]
             questions = current.response["questions"]
 
-            if len(questions) >= max_categories:
-                return
+            if (
+                candidate["category"] not in questions
+                and len(questions) >= max_categories
+            ):
+                # Skip to update the question dictionary if it is already full
+                return post_process
 
             currnet_category = questions.setdefault(candidate["category"], [])
 
             if len(currnet_category) >= max_questions:
-                return
+                # Skip to update the questions for the category if it is already full
+                return post_process
 
             currnet_category.append({**candidate, "sql": valid_sql})
+            return post_process
 
         except Exception as e:
             logger.error(f"Request {request_id}: Error validating question: {str(e)}")
