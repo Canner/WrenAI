@@ -190,7 +190,7 @@ class SqlExpansionService:
                 if valid_generation_results:
                     sql_summary_results = await self._pipelines["sql_summary"].run(
                         query=sql_expansion_request.query,
-                        sqls=valid_generation_results,
+                        sqls=[result.get("sql") for result in valid_generation_results],
                         language=sql_expansion_request.configurations.language,
                     )
                     valid_sql_summary_results = sql_summary_results["post_process"][
