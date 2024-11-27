@@ -14,7 +14,7 @@ const DemoBlock = styled.div`
 
 interface Props {
   demo: any[];
-  onSelect: (data: any) => void;
+  onSelect: (data: { label: string; question: string }) => void;
 }
 
 const DemoTemplate = ({ label, question, onSelect }) => {

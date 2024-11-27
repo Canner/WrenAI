@@ -14,7 +14,7 @@ import {
   useGenerateProjectRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
 
-interface GroupedQuestion {
+export interface GroupedQuestion {
   category: string;
   question: string;
   sql: string;
@@ -125,7 +125,6 @@ export default function useRecommendedQuestionsInstruction() {
     };
 
     if (showRecommendedQuestionsPromptMode && isRegenerate) {
-      // The cost of generating recommend questions is too high, so we still return button pops, but the button will not show on the UI now.
       return {
         ...baseProps,
         icon: <ReloadOutlined />,
