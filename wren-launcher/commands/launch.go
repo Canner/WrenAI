@@ -46,6 +46,11 @@ func evaluateTelemetryPreferences() (bool, error) {
 
 func askForLLMProvider() (string, error) {
 	// let users know we're asking for a LLM provider
+	pterm.Warning.Println("We highly recommend using OpenAI GPT-4o or GPT-4o-mini with Wren AI.")
+	pterm.Warning.Println("These models have been extensively tested to ensure optimal performance and compatibility.")
+	pterm.Warning.Println("While it is technically possible to integrate other AI models, please note that they have not been fully tested with our system.")
+	pterm.Warning.Println("Therefore, using alternative models is at your own risk and may result in unexpected behavior or suboptimal performance.")
+	fmt.Println("")
 	fmt.Println("Please provide the LLM provider you want to use")
 	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
 
