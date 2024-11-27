@@ -783,11 +783,12 @@ def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
     schema = copy.deepcopy(vega_lite_schema)
 
     # Get field names from encoding
-    x_field = schema["encoding"]["x"]["field"]
-    y_field = schema["encoding"]["y"]["field"]
+    fields = []
+    for key in schema["encoding"].keys():
+        fields.append(schema["encoding"][key]["field"])
 
     # Convert DataFrame to list of dicts with just the needed fields
-    values = df[[x_field, y_field]].to_dict(orient="records")
+    values = df[fields].to_dict(orient="records")
 
     # Update schema values
     schema["data"]["values"] = values
