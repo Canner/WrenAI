@@ -12,7 +12,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 
-RUN poetry install --without dev,eval,demo,test --no-root && rm -rf $POETRY_CACHE_DIR
+RUN poetry install --without dev,eval,test --no-root && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.12.0-slim-bookworm as runtime
 
