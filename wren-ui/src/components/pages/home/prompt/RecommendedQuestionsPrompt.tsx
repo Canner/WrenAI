@@ -48,7 +48,7 @@ const QuestionTemplate = ({ category, sql, question, onSelect }) => {
 const QuestionColumnIterator = makeIterable(QuestionTemplate);
 
 export default function RecommendedQuestionsPrompt(props) {
-  const { onSelect, recommendedQuestions, buttonProps } = props;
+  const { onSelect, recommendedQuestions } = props;
 
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
@@ -65,7 +65,7 @@ export default function RecommendedQuestionsPrompt(props) {
 
   return (
     <div className="bg-gray-2 px-10 py-6">
-      <div className="d-flex align-center mb-3 justify-space-between">
+      <div className="d-flex align-center mb-3">
         <Logo size={24} color="var(--gray-8)" />
         <div className="text-md text-medium gray-8 mx-3">
           Know more about your data.
@@ -73,7 +73,6 @@ export default function RecommendedQuestionsPrompt(props) {
         <div className="text-medium gray-7">
           Try asking some of the following questions
         </div>
-        <Button className="ml-3" {...buttonProps} />
       </div>
       <Space
         style={{ width: 680 }}

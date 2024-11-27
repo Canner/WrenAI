@@ -64,7 +64,6 @@ function RecommendedQuestionsInstruction(props) {
       <RecommendedQuestionsPrompt
         recommendedQuestions={recommendedQuestions}
         onSelect={onSelect}
-        buttonProps={buttonProps}
       />
       <div className="py-12" />
     </div>
