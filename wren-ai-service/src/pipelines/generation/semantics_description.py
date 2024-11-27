@@ -185,7 +185,7 @@ user_prompt_template = """
 ### Input:
 User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
-Language: {{ language }}
+Localization Language: {{ language }}
 
 Please provide a brief description for the model and each column based on the user's prompt.
 """
@@ -211,7 +211,7 @@ class SemanticsDescription(BasicPipeline):
         user_prompt: str,
         selected_models: list[str],
         mdl: dict,
-        language: str = "English",
+        language: str = "en",
     ) -> None:
         destination = "outputs/pipelines/generation"
         if not Path(destination).exists():
@@ -237,7 +237,7 @@ class SemanticsDescription(BasicPipeline):
         user_prompt: str,
         selected_models: list[str],
         mdl: dict,
-        language: str = "English",
+        language: str = "en",
     ) -> dict:
         logger.info("Semantics Description Generation pipeline is running...")
         return await self._pipe.execute(
@@ -261,5 +261,5 @@ if __name__ == "__main__":
         user_prompt="Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
         selected_models=[],
         mdl={},
-        language="English",
+        language="en",
     )

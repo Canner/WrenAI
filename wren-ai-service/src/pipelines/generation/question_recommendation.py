@@ -150,9 +150,9 @@ Categories: {{categories}}
 {% endif %}
 
 Current Date: {{current_date}}
-Language: {{language}}
+Localization Language: {{language}}
 
-Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
+Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model, using the localization language provided{% if user_question %} and the user's question{% endif %}.
 """
 
 
@@ -181,7 +181,7 @@ class QuestionRecommendation(BasicPipeline):
         mdl: dict,
         previous_questions: list[str] = [],
         categories: list[str] = [],
-        language: str = "English",
+        language: str = "en",
         current_date: str = datetime.now(),
         max_questions: int = 5,
         max_categories: int = 3,
@@ -214,7 +214,7 @@ class QuestionRecommendation(BasicPipeline):
         mdl: dict,
         previous_questions: list[str] = [],
         categories: list[str] = [],
-        language: str = "English",
+        language: str = "en",
         current_date: str = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
         max_questions: int = 5,
         max_categories: int = 3,
@@ -245,7 +245,7 @@ if __name__ == "__main__":
         mdl={},
         previous_questions=[],
         categories=[],
-        language="English",
+        language="en",
         current_date=datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
         max_questions=5,
         max_categories=3,
