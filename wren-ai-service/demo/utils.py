@@ -123,6 +123,7 @@ def get_data_from_wren_engine(
     sql: str,
     dataset_type: str,
     manifest: dict,
+    limit: int = 100,
 ):
     if dataset_type == "duckdb":
         quoted_sql, no_error = add_quotes(sql)
@@ -133,33 +134,33 @@ def get_data_from_wren_engine(
             json={
                 "sql": quoted_sql,
                 "manifest": manifest,
-                "limit": 100,
+                "limit": limit,
             },
         )
 
         assert response.status_code == 200, response.json()
 
         data = response.json()
-        column_names = [f'{i}_{col['name']}' for i, col in enumerate(data["columns"])]
+        column_names = [col["name"] for col in data["columns"]]
 
         return pd.DataFrame(data["data"], columns=column_names)
     else:
         quoted_sql, no_error = add_quotes(sql)
         assert no_error, f"Error in adding quotes to SQL: {sql}"
         response = requests.post(
-            f"{WREN_IBIS_API_URL}/v2/connector/{dataset_type}/query?limit=100",
+            f"{WREN_IBIS_API_URL}/v2/connector/{dataset_type}/query?limit={limit}",
             json={
                 "sql": quoted_sql,
                 "manifestStr": base64.b64encode(orjson.dumps(manifest)).decode(),
                 "connectionInfo": _get_connection_info(dataset_type),
-                "limit": 100,
+                "limit": limit,
             },
         )
 
         assert response.status_code == 200, response.json()
 
         data = response.json()
-        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+        column_names = [col for col in data["columns"]]
 
         return pd.DataFrame(data["data"], columns=column_names)
 
@@ -424,9 +425,20 @@ def on_click_adjust_chart(
     language: str,
     description: str,
     reasoning: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
 ):
     show_chart_adjustment_dialog(
-        query, sql, chart_schema, language, description, reasoning
+        query,
+        sql,
+        chart_schema,
+        language,
+        description,
+        reasoning,
+        dataset_type,
+        manifest,
+        limit,
     )
 
 
@@ -757,7 +769,41 @@ def sql_regeneration(sql_regeneration_data: dict):
 
 
 @st.cache_data
-def generate_chart(query: str, sql: str, language: str):
+def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
+    """Fill Vega-Lite schema values from pandas DataFrame based on x/y encodings.
+
+    Args:
+        vega_lite_schema: Original Vega-Lite schema
+        df: Pandas DataFrame containing the data
+
+    Returns:
+        Updated Vega-Lite schema with values from DataFrame
+    """
+    # Create a copy to avoid modifying original
+    schema = copy.deepcopy(vega_lite_schema)
+
+    # Get field names from encoding
+    x_field = schema["encoding"]["x"]["field"]
+    y_field = schema["encoding"]["y"]["field"]
+
+    # Convert DataFrame to list of dicts with just the needed fields
+    values = df[[x_field, y_field]].to_dict(orient="records")
+
+    # Update schema values
+    schema["data"]["values"] = values
+
+    return schema
+
+
+@st.cache_data
+def generate_chart(
+    query: str,
+    sql: str,
+    language: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
+):
     chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
         json={
@@ -785,12 +831,31 @@ def generate_chart(query: str, sql: str, language: str):
         charts_status = charts_status_response.json()["status"]
         time.sleep(POLLING_INTERVAL)
 
-    return charts_status_response.json()
+    sql_data_df = get_data_from_wren_engine(
+        sql,
+        dataset_type,
+        manifest,
+        limit,
+    )
+    chart_response = charts_status_response.json()
+    if chart_result := chart_response.get("response"):
+        if schema := chart_result.get("schema"):
+            filled_vega_lite_schema = fill_vega_lite_values(schema, sql_data_df)
+            chart_response["response"]["schema"] = filled_vega_lite_schema
+
+    return chart_response
 
 
 @st.cache_data
 def adjust_chart(
-    query: str, sql: str, chart_schema: dict, adjustment_query: str, language: str
+    query: str,
+    sql: str,
+    chart_schema: dict,
+    adjustment_query: str,
+    language: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
 ):
     adjust_chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments",
@@ -821,7 +886,19 @@ def adjust_chart(
         charts_status = charts_status_response.json()["status"]
         time.sleep(POLLING_INTERVAL)
 
-    return charts_status_response.json()
+    sql_data_df = get_data_from_wren_engine(
+        sql,
+        dataset_type,
+        manifest,
+        limit,
+    )
+    chart_response = charts_status_response.json()
+    if chart_result := chart_response.get("response"):
+        if schema := chart_result.get("schema"):
+            filled_vega_lite_schema = fill_vega_lite_values(schema, sql_data_df)
+            chart_response["response"]["schema"] = filled_vega_lite_schema
+
+    return chart_response
 
 
 @st.dialog(
@@ -920,6 +997,9 @@ def show_chart_adjustment_dialog(
     language: str,
     description: str,
     reasoning: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
 ):
     adjustment_query = st.chat_input("Adjust the chart")
 
@@ -939,7 +1019,14 @@ def show_chart_adjustment_dialog(
 
     if adjustment_query:
         adjust_chart_response = adjust_chart(
-            query, sql, chart_schema, adjustment_query, language
+            query,
+            sql,
+            chart_schema,
+            adjustment_query,
+            language,
+            dataset_type,
+            manifest,
+            limit,
         )
         if adjust_chart_result := adjust_chart_response.get("response"):
             st.markdown("### Adjusted")

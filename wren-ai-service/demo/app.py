@@ -262,6 +262,9 @@ if st.session_state["asks_results"]:
                 query=st.session_state["chosen_query_result"]["query"],
                 sql=st.session_state["chosen_query_result"]["sql"],
                 language=st.session_state["language"],
+                dataset_type=st.session_state["dataset_type"],
+                manifest=st.session_state["mdl_json"],
+                limit=500,
             )
             if chart_result := chart_response.get("response"):
                 if reasoning := chart_result["reasoning"]:
@@ -284,6 +287,9 @@ if st.session_state["asks_results"]:
                             "language": st.session_state["language"],
                             "description": chart_result["description"],
                             "reasoning": chart_result["reasoning"],
+                            "dataset_type": st.session_state["dataset_type"],
+                            "manifest": st.session_state["mdl_json"],
+                            "limit": 500,
                         },
                     )
             else:
