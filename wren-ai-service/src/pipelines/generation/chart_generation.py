@@ -155,12 +155,6 @@ def prompt(
     sample_data = preprocess_data["results"]["sample_data"]
     sample_data_statistics = preprocess_data["results"]["sample_data_statistics"]
 
-    logger.debug(f"query: {query}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(f"sample data: {sample_data}")
-    logger.debug(f"sample data statistics: {sample_data_statistics}")
-    logger.debug(f"language: {language}")
-
     return prompt_builder.run(
         query=query,
         sql=sql,
@@ -173,8 +167,6 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_chart(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
     return await generator.run(prompt=prompt.get("prompt"))
 
 
@@ -185,10 +177,6 @@ def post_process(
     vega_schema: Dict[str, Any],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
-    logger.debug(
-        f"generate_chart: {orjson.dumps(generate_chart, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return post_processor.run(generate_chart.get("replies"), vega_schema)
 
 
