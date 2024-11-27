@@ -517,6 +517,15 @@ chart_generation_instructions = """
 - Chart Type: Bar Chart.
 - Vega-Lite Spec:
 {
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "data": {
+        "values": [
+            {"Region": "North", "Sales": 100},
+            {"Region": "South", "Sales": 200},
+            {"Region": "East", "Sales": 300},
+            {"Region": "West", "Sales": 400}
+        ]
+    },
     "mark": "bar",
     "encoding": {
         "x": {"field": "Region", "type": "nominal"},
@@ -527,6 +536,15 @@ chart_generation_instructions = """
 - Chart Type: Line Chart.
 - Vega-Lite Spec:
 {
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "data": {
+        "values": [
+            {"Date": "2022-01-01", "Sales": 100},
+            {"Date": "2022-01-02", "Sales": 200},
+            {"Date": "2022-01-03", "Sales": 300},
+            {"Date": "2022-01-04", "Sales": 400}
+        ]
+    },
     "mark": "line",
     "encoding": {
         "x": {"field": "Date", "type": "temporal"},
@@ -537,6 +555,15 @@ chart_generation_instructions = """
 - Chart Type: Pie Chart.
 - Vega-Lite Spec:
 {
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "data": {
+        "values": [
+            {"Company": "Company A", "Market Share": 0.4},
+            {"Company": "Company B", "Market Share": 0.3},
+            {"Company": "Company C", "Market Share": 0.2},
+            {"Company": "Company D", "Market Share": 0.1}
+        ]
+    },
     "mark": {"type": "arc", "innerRadius": 50},
     "encoding": {
         "theta": {"field": "Market Share", "type": "quantitative"},
