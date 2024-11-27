@@ -143,7 +143,7 @@ export default function Home() {
       )}
 
       {!isSampleDataset && (
-        <RecommendedQuestionsInstruction onSelect={onSelectQuestion} />
+        <RecommendedQuestionsInstruction onSelect={onSelect} />
       )}
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
     </SiderLayout>
