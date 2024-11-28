@@ -6,6 +6,7 @@ import MinusOutlined from '@ant-design/icons/MinusOutlined';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import { Logo } from '@/components/Logo';
 import { makeIterable } from '@/utils/iteration';
+import { GroupedQuestion } from '@/hooks/useRecommendedQuestionsInstruction';
 
 const CategorySectionBlock = styled.div`
   background: var(--gray-1);
@@ -27,6 +28,11 @@ const QuestionBlock = styled.div`
 
 const MAX_EXPANDED_QUESTIONS = 9;
 
+interface Props {
+  onSelect: (payload: { sql: string; question: string }) => void;
+  recommendedQuestions: GroupedQuestion[];
+}
+
 const QuestionTemplate = ({ category, sql, question, onSelect }) => {
   return (
     <Col span={8}>
@@ -47,7 +53,7 @@ const QuestionTemplate = ({ category, sql, question, onSelect }) => {
 
 const QuestionColumnIterator = makeIterable(QuestionTemplate);
 
-export default function RecommendedQuestionsPrompt(props) {
+export default function RecommendedQuestionsPrompt(props: Props) {
   const { onSelect, recommendedQuestions } = props;
 
   const [isExpanded, setIsExpanded] = useState<boolean>(false);

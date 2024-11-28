@@ -18,14 +18,14 @@ import {
   AskingTask,
   AskingTaskStatus,
   AskingTaskType,
+  CreateThreadInput,
+  CreateThreadResponseInput,
 } from '@/apollo/client/graphql/__types__';
 
 interface Props {
-  onSelect: (payload: {
-    sql?: string;
-    question?: string;
-    viewId?: number;
-  }) => Promise<void>;
+  onSelect: (
+    payload: CreateThreadInput | CreateThreadResponseInput,
+  ) => Promise<void>;
   onStop: () => void;
   onSubmit: (value: string) => Promise<void>;
   onStopPolling: () => void;

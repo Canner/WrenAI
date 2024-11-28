@@ -9,6 +9,11 @@ import {
   RecommendedQuestionsTaskStatus,
 } from '@/apollo/client/graphql/__types__';
 
+export interface SelectQuestionProps {
+  question: string;
+  sql: string;
+}
+
 interface Props {
   items: { question: string; sql: string }[];
   loading?: boolean;
@@ -19,7 +24,7 @@ interface Props {
     stacktrace?: string[];
   };
   className?: string;
-  onSelect?: ({ question, sql }: { question: string; sql: string }) => void;
+  onSelect: ({ question, sql }: SelectQuestionProps) => void;
 }
 
 const StyledSkeleton = styled(Skeleton)`
@@ -59,7 +64,7 @@ const QuestionItem = (props: {
   index: number;
   question: string;
   sql: string;
-  onSelect?: ({ question, sql }: { question: string; sql: string }) => void;
+  onSelect: ({ question, sql }: SelectQuestionProps) => void;
 }) => {
   const { index, question, sql, onSelect } = props;
   return (

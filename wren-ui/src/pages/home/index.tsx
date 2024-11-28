@@ -17,6 +17,7 @@ import {
   useGenerateThreadRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
+import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
 
 const { Text } = Typography;
 
@@ -120,7 +121,7 @@ export default function Home() {
     $prompt.current.submit();
   };
 
-  const onSelect = async (payload) => {
+  const onSelect = async (payload: CreateThreadInput) => {
     try {
       askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
@@ -143,7 +144,7 @@ export default function Home() {
       )}
 
       {!isSampleDataset && (
-        <RecommendedQuestionsInstruction onSelect={onSelectQuestion} />
+        <RecommendedQuestionsInstruction onSelect={onSelect} />
       )}
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
     </SiderLayout>

@@ -21,6 +21,7 @@ import {
   useGetThreadRecommendationQuestionsLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
+import { CreateThreadResponseInput } from '@/apollo/client/graphql/__types__';
 
 export default function HomeThread() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
@@ -152,7 +153,7 @@ export default function HomeThread() {
     [thread, recommendedQuestions, showRecommendedQuestions],
   );
 
-  const onSelect = async (payload) => {
+  const onSelect = async (payload: CreateThreadResponseInput) => {
     try {
       askPrompt.onStopPolling();
       const response = await createThreadResponse({
