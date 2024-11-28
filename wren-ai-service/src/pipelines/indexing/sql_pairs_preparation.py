@@ -89,7 +89,6 @@ def prompts(
 
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_intention(
-    sql_pairs: List[SqlPair],
     prompts: List[dict],
     sql_intention_generator: Any,
 ) -> List[dict]:
