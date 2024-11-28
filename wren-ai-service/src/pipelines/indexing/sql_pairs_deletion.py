@@ -11,7 +11,6 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
-from src.web.v1.services.sql_pairs_preparation import SqlPair
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -28,7 +27,7 @@ class SqlPairsCleaner:
         filters = {
             "operator": "AND",
             "conditions": [
-                {"field": "sql_pair_id", "operator": "IN", "value": sql_pair_ids},
+                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
             ],
         }
 
@@ -69,13 +68,13 @@ class SqlPairsDeletion(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, sql_pair_ids: List[SqlPair], id: Optional[str] = None) -> None:
+    def visualize(self, sql_pair_ids: List[str], id: Optional[str] = None) -> None:
         destination = "outputs/pipelines/indexing"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            [],
+            ["delete_sql_pairs"],
             output_file_path=f"{destination}/sql_pairs_deletion.dot",
             inputs={
                 "sql_pair_ids": sql_pair_ids,
@@ -88,11 +87,11 @@ class SqlPairsDeletion(BasicPipeline):
 
     @observe(name="SQL Pairs Deletion")
     async def run(
-        self, sql_pair_ids: List[SqlPair], id: Optional[str] = None
+        self, sql_pair_ids: List[str], id: Optional[str] = None
     ) -> Dict[str, Any]:
         logger.info("SQL Pairs Deletion pipeline is running...")
         return await self._pipe.execute(
-            [],
+            ["delete_sql_pairs"],
             inputs={
                 "sql_pair_ids": sql_pair_ids,
                 "id": id or "",
