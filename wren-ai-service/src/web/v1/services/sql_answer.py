@@ -18,6 +18,7 @@ class SqlAnswerRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
+    sql_data: Dict
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     configurations: Optional[Configuration] = Configuration()
@@ -45,8 +46,8 @@ class SqlAnswerResultResponse(BaseModel):
         code: Literal["OTHERS"]
         message: str
 
-    status: Literal["fetching", "generating", "failed"]
-    response: Optional[str] = None
+    status: Literal["preprocessing", "succeeded", "failed"]
+    num_rows_used_in_llm: Optional[int] = None
     error: Optional[SqlAnswerError] = None
 
 
@@ -84,23 +85,23 @@ class SqlAnswerService:
             query_id = sql_answer_request.query_id
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="fetching",
+                status="preprocessing",
             )
 
-            sql_data = await self._pipelines["sql_executor"].run(
-                sql=sql_answer_request.sql,
-                project_id=sql_answer_request.thread_id,
-            )
+            preprocessed_sql_data = self._pipelines["preprocess_sql_data"].run(
+                sql_data=sql_answer_request.sql_data,
+            )["preprocess"]
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="generating",
+                status="succeeded",
+                num_rows_used_in_llm=preprocessed_sql_data.get("num_rows_used_in_llm"),
             )
 
             asyncio.create_task(
                 self._pipelines["sql_answer"].run(
                     query=sql_answer_request.query,
                     sql=sql_answer_request.sql,
-                    sql_data=sql_data["execute_sql"],
+                    sql_data=preprocessed_sql_data.get("sql_data", {}),
                     language=sql_answer_request.configurations.language,
                     query_id=query_id,
                 )
@@ -150,7 +151,7 @@ class SqlAnswerService:
     ):
         if (
             self._sql_answer_results.get(query_id)
-            and self._sql_answer_results.get(query_id).status == "generating"
+            and self._sql_answer_results.get(query_id).status == "succeeded"
         ):
             async for chunk in self._pipelines["sql_answer"].get_streaming_results(
                 query_id

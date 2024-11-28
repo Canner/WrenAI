@@ -58,7 +58,7 @@ def prompt(
     return prompt_builder.run(
         query=query,
         sql=sql,
-        sql_data=sql_data["results"],
+        sql_data=sql_data,
         language=language,
     )
 

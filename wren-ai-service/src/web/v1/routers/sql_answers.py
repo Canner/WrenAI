@@ -45,11 +45,8 @@ Endpoints:
    - Response: SqlAnswerResultResponse
      {
        "query_id": "unique-uuid",                             # Unique identifier of the SQL answer operation
-       "status": "fetching" | "generating" | "failed",
-       "response": {                                          # Present only if status is "finished"
-         "answer": "Result of the SQL query execution.",     # The answer from the SQL operation
-         "reasoning": "Explanation of how the answer was derived." # Explanation of the result
-       },
+       "status": "preprocessing" | "succeeded" | "failed",
+       "num_rows_used_in_llm": int | None,
        "error": {                                             # Present only if status is "failed"
          "code": "OTHERS",
          "message": "Error description"
@@ -87,7 +84,7 @@ async def sql_answer(
     service_container.sql_answer_service._sql_answer_results[
         query_id
     ] = SqlAnswerResultResponse(
-        status="fetching",
+        status="preprocessing",
     )
 
     background_tasks.add_task(
