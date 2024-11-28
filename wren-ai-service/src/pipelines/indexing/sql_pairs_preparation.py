@@ -117,11 +117,11 @@ def post_process(
 
 @observe(capture_input=False)
 def convert_sql_pairs_to_documents(
-    sql_pairs: List[Dict[str, Any]],
+    post_process: List[Dict[str, Any]],
     sql_pairs_description_converter: SqlPairsDescriptionConverter,
     id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return sql_pairs_description_converter.run(sql_pairs=sql_pairs, id=id)
+    return sql_pairs_description_converter.run(sql_pairs=post_process, id=id)
 
 
 @observe(capture_input=False, capture_output=False)
