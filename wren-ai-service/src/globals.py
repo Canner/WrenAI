@@ -22,7 +22,7 @@ from src.pipelines.generation import (
     sql_regeneration,
     sql_summary,
 )
-from src.pipelines.indexing import indexing
+from src.pipelines.indexing import db_schema, table_description, view
 from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
@@ -77,9 +77,15 @@ def create_service_container(
         ),
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
-                "indexing": indexing.Indexing(
-                    **pipe_components["indexing"],
+                "db_schema": db_schema.DBSchema(
+                    **pipe_components["db_schema"],
                     column_indexing_batch_size=settings.column_indexing_batch_size,
+                ),
+                "view": view.View(
+                    **pipe_components["view"],
+                ),
+                "table_description": table_description.TableDescription(
+                    **pipe_components["table_description"],
                 ),
             },
             **query_cache,

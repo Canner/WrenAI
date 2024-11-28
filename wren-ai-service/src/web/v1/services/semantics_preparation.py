@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
@@ -72,10 +73,18 @@ class SemanticsPreparationService:
 
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            await self._pipelines["indexing"].run(
-                mdl_str=prepare_semantics_request.mdl,
-                id=prepare_semantics_request.project_id,
-            )
+
+            input = {
+                "mdl_str": prepare_semantics_request.mdl,
+                "id": prepare_semantics_request.project_id,
+            }
+
+            tasks = [
+                self._pipelines[name].run(**input)
+                for name in ["db_schema", "view", "table_description"]
+            ]
+
+            await asyncio.gather(*tasks)
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.mdl_hash
