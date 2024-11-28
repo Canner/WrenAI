@@ -119,6 +119,8 @@ data:
       - name: sql_answer
         llm: openai_llm.gpt-4o-mini
         engine: wren_ui
+      - name: preprocess_sql_data
+        llm: openai_llm.gpt-4o-mini
       - name: sql_breakdown
         llm: openai_llm.gpt-4o-mini
         engine: wren_ui
