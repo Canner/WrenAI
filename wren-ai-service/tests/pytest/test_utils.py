@@ -74,7 +74,7 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
     asyncio.run(my_function("", Request(), service_metadata=asdict(service_metadata)))
 
     function.assert_called_once_with(
-        user_id="",
+        user_id=None,
         session_id="mock-thread-id",
         release=service_metadata.service_version,
         metadata={
