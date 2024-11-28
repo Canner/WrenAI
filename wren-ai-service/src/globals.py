@@ -79,7 +79,7 @@ def create_service_container(
             pipelines={
                 "db_schema": indexing.DBSchema(
                     **pipe_components["db_schema"],
-                    column_indexing_batch_size=settings.column_indexing_batch_size,
+                    column_batch_size=settings.column_indexing_batch_size,
                 ),
                 "historical_question": indexing.HistoricalQuestion(
                     **pipe_components["historical_question_indexing"],

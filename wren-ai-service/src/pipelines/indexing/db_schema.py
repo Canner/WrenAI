@@ -22,43 +22,42 @@ logger = logging.getLogger("wren-ai-service")
 
 
 @component
-class DDLConverter:
+class DDLChunker:
     @component.output_types(documents=List[Document])
     def run(
         self,
         mdl: Dict[str, Any],
-        column_indexing_batch_size: int,
+        column_batch_size: int,
         project_id: Optional[str] = None,
     ):
-        ddl_commands = self._get_ddl_commands(mdl, column_indexing_batch_size)
+        def _additional_meta() -> Dict[str, Any]:
+            return {"project_id": project_id} if project_id else {}
+
+        chunks = [
+            {
+                "id": str(uuid.uuid4()),
+                "meta": {
+                    "type": "TABLE_SCHEMA",
+                    "name": chunk["name"],
+                    **_additional_meta(),
+                },
+                "content": chunk["payload"],
+            }
+            for chunk in self._get_ddl_commands(mdl, column_batch_size)
+        ]
 
         return {
             "documents": [
-                Document(
-                    id=str(uuid.uuid4()),
-                    meta=(
-                        {
-                            "project_id": project_id,
-                            "type": "TABLE_SCHEMA",
-                            "name": ddl_command["name"],
-                        }
-                        if project_id
-                        else {
-                            "type": "TABLE_SCHEMA",
-                            "name": ddl_command["name"],
-                        }
-                    ),
-                    content=ddl_command["payload"],
-                )
-                for ddl_command in tqdm(
-                    ddl_commands,
-                    desc="indexing ddl commands into the dbschema store",
+                Document(**chunk)
+                for chunk in tqdm(
+                    chunks,
+                    desc=f"Project ID: {project_id}, Chunking DDL commands into documents",
                 )
             ]
         }
 
     def _get_ddl_commands(
-        self, mdl: Dict[str, Any], column_indexing_batch_size: int = 50
+        self, mdl: Dict[str, Any], column_batch_size: int = 50
     ) -> List[dict]:
         semantics = {
             "models": [],
@@ -98,7 +97,7 @@ class DDLConverter:
             self._convert_models_and_relationships(
                 semantics["models"],
                 semantics["relationships"],
-                column_indexing_batch_size,
+                column_batch_size,
             )
             + self._convert_views(semantics["views"])
             + self._convert_metrics(semantics["metrics"])
@@ -109,7 +108,7 @@ class DDLConverter:
         self,
         models: List[Dict[str, Any]],
         relationships: List[Dict[str, Any]],
-        column_indexing_batch_size: int,
+        column_batch_size: int,
     ) -> List[str]:
         ddl_commands = []
 
@@ -219,11 +218,11 @@ class DDLConverter:
                     "payload": str(
                         {
                             "type": "TABLE_COLUMNS",
-                            "columns": columns_ddl[i : i + column_indexing_batch_size],
+                            "columns": columns_ddl[i : i + column_batch_size],
                         }
                     ),
                 }
-                for i in range(0, len(columns_ddl), column_indexing_batch_size)
+                for i in range(0, len(columns_ddl), column_batch_size)
             ]
             ddl_commands += column_ddl_commands
 
@@ -311,13 +310,13 @@ def validate_mdl(
 @observe(capture_input=False)
 def chunk(
     mdl: Dict[str, Any],
-    chunker: DDLConverter,
-    column_indexing_batch_size: int,
+    chunker: DDLChunker,
+    column_batch_size: int,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     return chunker.run(
         mdl=mdl,
-        column_indexing_batch_size=column_indexing_batch_size,
+        column_batch_size=column_batch_size,
         project_id=project_id,
     )
 
@@ -340,7 +339,7 @@ class DBSchema(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        column_indexing_batch_size: Optional[int] = 50,
+        column_batch_size: Optional[int] = 50,
         **kwargs,
     ) -> None:
         dbschema_store = document_store_provider.get_store()
@@ -349,14 +348,14 @@ class DBSchema(BasicPipeline):
             "cleaner": DocumentCleaner([dbschema_store]),
             "validator": MDLValidator(),
             "embedder": embedder_provider.get_document_embedder(),
-            "chunker": DDLConverter(),
+            "chunker": DDLChunker(),
             "writer": AsyncDocumentWriter(
                 document_store=dbschema_store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
         self._configs = {
-            "column_indexing_batch_size": column_indexing_batch_size,
+            "column_batch_size": column_batch_size,
         }
         self._final = "write"
 
