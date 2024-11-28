@@ -26,6 +26,10 @@ class DocumentCleaner:
         async def _clear_documents(
             store: DocumentStore, project_id: Optional[str] = None
         ) -> None:
+            store_name = (
+                store.to_dict().get("init_parameters", {}).get("index", "unknown")
+            )
+            logger.info(f"Project ID: {project_id}, Cleaning documents in {store_name}")
             filters = (
                 {
                     "operator": "AND",
@@ -38,7 +42,6 @@ class DocumentCleaner:
             )
             await store.delete_documents(filters)
 
-        logger.info(f"Project ID: {project_id}, Cleaning documents in {self._stores}")
         await asyncio.gather(
             *[_clear_documents(store, project_id) for store in self._stores]
         )
