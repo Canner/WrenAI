@@ -95,7 +95,13 @@ recreate_index: false
 ---
 type: pipeline
 pipes:
-  - name: indexing
+  - name: db_schema
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: view
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: table_description
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: retrieval
