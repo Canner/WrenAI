@@ -76,7 +76,7 @@ class SemanticsPreparationService:
 
             input = {
                 "mdl_str": prepare_semantics_request.mdl,
-                "id": prepare_semantics_request.project_id,
+                "project_id": prepare_semantics_request.project_id,
             }
 
             tasks = [

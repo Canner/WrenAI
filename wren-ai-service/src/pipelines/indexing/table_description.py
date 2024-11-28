@@ -33,24 +33,26 @@ class DocumentCleaner:
         self._stores = stores
 
     @component.output_types(mdl=str)
-    async def run(self, mdl: str, id: Optional[str] = None) -> str:
+    async def run(self, mdl: str, project_id: Optional[str] = None) -> str:
         async def _clear_documents(
-            store: DocumentStore, id: Optional[str] = None
+            store: DocumentStore, project_id: Optional[str] = None
         ) -> None:
             filters = (
                 {
                     "operator": "AND",
                     "conditions": [
-                        {"field": "project_id", "operator": "==", "value": id},
+                        {"field": "project_id", "operator": "==", "value": project_id},
                     ],
                 }
-                if id
+                if project_id
                 else None
             )
             await store.delete_documents(filters)
 
         logger.info("Ask Indexing pipeline is clearing old documents...")
-        await asyncio.gather(*[_clear_documents(store, id) for store in self._stores])
+        await asyncio.gather(
+            *[_clear_documents(store, project_id) for store in self._stores]
+        )
         return {"mdl": mdl}
 
 
@@ -82,7 +84,7 @@ class MDLValidator:
 @component
 class TableDescriptionConverter:
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], id: Optional[str] = None):
+    def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
         logger.info(
             "Ask Indexing pipeline is writing new documents for table descriptions..."
         )
@@ -94,8 +96,8 @@ class TableDescriptionConverter:
                 Document(
                     id=str(uuid.uuid4()),
                     meta=(
-                        {"project_id": id, "type": "TABLE_DESCRIPTION"}
-                        if id
+                        {"project_id": project_id, "type": "TABLE_DESCRIPTION"}
+                        if project_id
                         else {"type": "TABLE_DESCRIPTION"}
                     ),
                     content=table_description,
@@ -158,9 +160,9 @@ class AsyncDocumentWriter(DocumentWriter):
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def clean_document_store(
-    mdl_str: str, cleaner: DocumentCleaner, id: Optional[str] = None
+    mdl_str: str, cleaner: DocumentCleaner, project_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    return await cleaner.run(mdl=mdl_str, id=id)
+    return await cleaner.run(mdl=mdl_str, project_id=project_id)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -177,9 +179,9 @@ def validate_mdl(
 def covert_to_table_descriptions(
     mdl: Dict[str, Any],
     table_description_converter: TableDescriptionConverter,
-    id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return table_description_converter.run(mdl=mdl, id=id)
+    return table_description_converter.run(mdl=mdl, project_id=project_id)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -230,7 +232,7 @@ class TableDescription(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(self, mdl_str: str, id: Optional[str] = None) -> None:
+    def visualize(self, mdl_str: str, project_id: Optional[str] = None) -> None:
         destination = "outputs/pipelines/indexing"
         if not Path(destination).exists():
             Path(destination).mkdir(parents=True, exist_ok=True)
@@ -240,7 +242,7 @@ class TableDescription(BasicPipeline):
             output_file_path=f"{destination}/table_description.dot",
             inputs={
                 "mdl_str": mdl_str,
-                "id": id,
+                "project_id": project_id,
                 **self._components,
                 **self._configs,
             },
@@ -249,13 +251,15 @@ class TableDescription(BasicPipeline):
         )
 
     @observe(name="Table Description Indexing")
-    async def run(self, mdl_str: str, id: Optional[str] = None) -> Dict[str, Any]:
+    async def run(
+        self, mdl_str: str, project_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         logger.info("Table Description Indexing pipeline is running...")
         return await self._pipe.execute(
             ["write_table_description"],
             inputs={
                 "mdl_str": mdl_str,
-                "id": id,
+                "project_id": project_id,
                 **self._components,
                 **self._configs,
             },
