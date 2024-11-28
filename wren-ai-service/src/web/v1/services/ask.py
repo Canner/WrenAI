@@ -250,7 +250,7 @@ class AskService:
                             history=ask_request.history,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
-                            samples=sql_pairs,
+                            samples=sql_pairs.get("documents", []),
                         )
                     else:
                         text_to_sql_generation_results = await self._pipelines[
@@ -261,7 +261,7 @@ class AskService:
                             exclude=historical_question_result,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
-                            samples=sql_pairs,
+                            samples=sql_pairs.get("documents", []),
                         )
 
                     if sql_valid_results := text_to_sql_generation_results[
