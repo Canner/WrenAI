@@ -125,6 +125,7 @@ export default function useRecommendedQuestionsInstruction() {
     };
 
     if (showRecommendedQuestionsPromptMode && isRegenerate) {
+      // The cost of generating recommend questions is too high, so we still return button pops, but the button will not show on the UI now.
       return {
         ...baseProps,
         icon: <ReloadOutlined />,
