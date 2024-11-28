@@ -14,7 +14,7 @@ import {
   useGenerateProjectRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
 
-interface GroupedQuestion {
+export interface GroupedQuestion {
   category: string;
   question: string;
   sql: string;

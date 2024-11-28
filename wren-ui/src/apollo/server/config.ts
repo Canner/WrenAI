@@ -40,6 +40,12 @@ export interface IConfig {
   wrenEngineVersion?: string;
   wrenAIVersion?: string;
   wrenProductVersion?: string;
+
+  // generate recommendation questions max categories
+  projectRecommendationQuestionMaxCategories?: number;
+  projectRecommendationQuestionsMaxQuestions?: number;
+  threadRecommendationQuestionMaxCategories?: number;
+  threadRecommendationQuestionsMaxQuestions?: number;
 }
 
 const defaultConfig = {
@@ -124,6 +130,24 @@ const config = {
   wrenEngineVersion: process.env.WREN_ENGINE_VERSION,
   wrenAIVersion: process.env.WREN_AI_SERVICE_VERSION,
   wrenProductVersion: process.env.WREN_PRODUCT_VERSION,
+
+  // generate recommendation questions max questions
+  projectRecommendationQuestionMaxCategories: process.env
+    .PROJECT_RECOMMENDATION_QUESTION_MAX_CATEGORIES
+    ? parseInt(process.env.PROJECT_RECOMMENDATION_QUESTION_MAX_CATEGORIES)
+    : 3,
+  projectRecommendationQuestionsMaxQuestions: process.env
+    .PROJECT_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS
+    ? parseInt(process.env.PROJECT_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS)
+    : 3,
+  threadRecommendationQuestionMaxCategories: process.env
+    .THREAD_RECOMMENDATION_QUESTION_MAX_CATEGORIES
+    ? parseInt(process.env.THREAD_RECOMMENDATION_QUESTION_MAX_CATEGORIES)
+    : 3,
+  threadRecommendationQuestionsMaxQuestions: process.env
+    .THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS
+    ? parseInt(process.env.THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS)
+    : 1,
 };
 
 export function getConfig(): IConfig {

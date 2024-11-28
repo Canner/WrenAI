@@ -21,6 +21,9 @@ import { RecommendQuestionResultStatus } from './askingService';
 import { IMDLService } from './mdlService';
 import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
 import { ITelemetry } from '../telemetry/telemetry';
+import { getConfig } from '../config';
+
+const config = getConfig();
 
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
@@ -233,8 +236,8 @@ export class ProjectService implements IProjectService {
 
   private getProjectRecommendationQuestionsConfig(project: Project) {
     return {
-      maxCategories: 3,
-      maxQuestions: 9,
+      maxCategories: config.projectRecommendationQuestionMaxCategories,
+      maxQuestions: config.projectRecommendationQuestionsMaxQuestions,
       regenerate: true,
       configuration: {
         language: project.language,
