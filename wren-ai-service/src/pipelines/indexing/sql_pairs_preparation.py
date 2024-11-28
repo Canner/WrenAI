@@ -110,7 +110,7 @@ def post_process(
     ]
 
     return [
-        {"id": sql_pair.get("id"), "sql": sql_pair.get("sql"), "intention": intention}
+        {"id": sql_pair.id, "sql": sql_pair.sql, "intention": intention}
         for sql_pair, intention in zip(sql_pairs, intentions)
     ]
 
@@ -194,7 +194,7 @@ class SqlPairsPreparation(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            [],
+            ["write_sql_pairs"],
             output_file_path=f"{destination}/sql_pairs_preparation.dot",
             inputs={
                 "sql_pairs": sql_pairs,
@@ -211,7 +211,7 @@ class SqlPairsPreparation(BasicPipeline):
     ) -> Dict[str, Any]:
         logger.info("SQL Pairs Preparation pipeline is running...")
         return await self._pipe.execute(
-            [],
+            ["write_sql_pairs"],
             inputs={
                 "sql_pairs": sql_pairs,
                 "id": id or "",
