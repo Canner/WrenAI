@@ -1,84 +1,23 @@
-import asyncio
-import json
 import logging
 import sys
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
 from haystack import Document, component
 from haystack.components.writers import DocumentWriter
-from haystack.document_stores.types import DocumentStore, DuplicatePolicy
+from haystack.document_stores.types import DuplicatePolicy
 from langfuse.decorators import observe
 from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 
 logger = logging.getLogger("wren-ai-service")
-
-
-@component
-class DocumentCleaner:
-    """
-    This component is used to clear all the documents in the specified document store(s).
-
-    """
-
-    def __init__(self, stores: List[DocumentStore]) -> None:
-        self._stores = stores
-
-    @component.output_types(mdl=str)
-    async def run(self, mdl: str, project_id: Optional[str] = None) -> str:
-        async def _clear_documents(
-            store: DocumentStore, project_id: Optional[str] = None
-        ) -> None:
-            filters = (
-                {
-                    "operator": "AND",
-                    "conditions": [
-                        {"field": "project_id", "operator": "==", "value": project_id},
-                    ],
-                }
-                if project_id
-                else None
-            )
-            await store.delete_documents(filters)
-
-        logger.info("Ask Indexing pipeline is clearing old documents...")
-        await asyncio.gather(
-            *[_clear_documents(store, project_id) for store in self._stores]
-        )
-        return {"mdl": mdl}
-
-
-@component
-class MDLValidator:
-    """
-    Validate the MDL to check if it is a valid JSON and contains the required keys.
-    """
-
-    @component.output_types(mdl=Dict[str, Any])
-    def run(self, mdl: str) -> str:
-        try:
-            mdl_json = orjson.loads(mdl)
-            logger.debug(f"MDL JSON: {mdl_json}")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON: {e}")
-        if "models" not in mdl_json:
-            mdl_json["models"] = []
-        if "views" not in mdl_json:
-            mdl_json["views"] = []
-        if "relationships" not in mdl_json:
-            mdl_json["relationships"] = []
-        if "metrics" not in mdl_json:
-            mdl_json["metrics"] = []
-
-        return {"mdl": mdl_json}
 
 
 @component
@@ -133,24 +72,9 @@ class ViewChunker:
         }
 
 
-@component
-class AsyncDocumentWriter(DocumentWriter):
-    @component.output_types(documents_written=int)
-    async def run(
-        self, documents: List[Document], policy: Optional[DuplicatePolicy] = None
-    ):
-        if policy is None:
-            policy = self.policy
-
-        documents_written = await self.document_store.write_documents(
-            documents=documents, policy=policy
-        )
-        return {"documents_written": documents_written}
-
-
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def clean_document_store(
+async def clean_documents(
     mdl_str: str, cleaner: DocumentCleaner, project_id: Optional[str] = None
 ) -> Dict[str, Any]:
     return await cleaner.run(mdl=mdl_str, project_id=project_id)
@@ -159,30 +83,30 @@ async def clean_document_store(
 @observe(capture_input=False, capture_output=False)
 @extract_fields(dict(mdl=Dict[str, Any]))
 def validate_mdl(
-    clean_document_store: Dict[str, Any], validator: MDLValidator
+    clean_documents: Dict[str, Any], validator: MDLValidator
 ) -> Dict[str, Any]:
-    mdl = clean_document_store.get("mdl")
+    mdl = clean_documents.get("mdl")
     res = validator.run(mdl=mdl)
     return dict(mdl=res["mdl"])
 
 
 @observe(capture_input=False)
-def view_chunk(
-    mdl: Dict[str, Any], view_chunker: ViewChunker, project_id: Optional[str] = None
+def chunk(
+    mdl: Dict[str, Any],
+    chunker: ViewChunker,
+    project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return view_chunker.run(mdl=mdl, project_id=project_id)
+    return chunker.run(mdl=mdl, project_id=project_id)
 
 
 @observe(capture_input=False, capture_output=False)
-async def embed_view(
-    view_chunk: Dict[str, Any], document_embedder: Any
-) -> Dict[str, Any]:
-    return await document_embedder.run(documents=view_chunk["documents"])
+async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
+    return await embedder.run(documents=chunk["documents"])
 
 
 @observe(capture_input=False)
-async def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
-    return await view_writer.run(documents=embed_view["documents"])
+async def write(embedding: Dict[str, Any], writer: DocumentWriter) -> None:
+    return await writer.run(documents=embedding["documents"])
 
 
 ## End of Pipeline
@@ -200,15 +124,15 @@ class View(BasicPipeline):
         self._components = {
             "cleaner": DocumentCleaner([view_store]),
             "validator": MDLValidator(),
-            "document_embedder": embedder_provider.get_document_embedder(),
-            "view_chunker": ViewChunker(),
-            "view_writer": AsyncDocumentWriter(
+            "embedder": embedder_provider.get_document_embedder(),
+            "chunker": ViewChunker(),
+            "writer": AsyncDocumentWriter(
                 document_store=view_store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
-
         self._configs = {}
+        self._final = "write"
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -220,7 +144,7 @@ class View(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["write_view"],
+            [self._final],
             output_file_path=f"{destination}/view.dot",
             inputs={
                 "mdl_str": mdl_str,
@@ -236,9 +160,9 @@ class View(BasicPipeline):
     async def run(
         self, mdl_str: str, project_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        logger.info("View Indexing pipeline is running...")
+        logger.info(f"Project ID: {project_id}, View Indexing pipeline is running...")
         return await self._pipe.execute(
-            ["write_view"],
+            [self._final],
             inputs={
                 "mdl_str": mdl_str,
                 "project_id": project_id,

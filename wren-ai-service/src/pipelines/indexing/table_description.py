@@ -1,94 +1,29 @@
-import asyncio
-import json
 import logging
 import sys
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
 from haystack import Document, component
 from haystack.components.writers import DocumentWriter
-from haystack.document_stores.types import DocumentStore, DuplicatePolicy
+from haystack.document_stores.types import DuplicatePolicy
 from langfuse.decorators import observe
 from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 
 logger = logging.getLogger("wren-ai-service")
-
-
-@component
-class DocumentCleaner:
-    """
-    This component is used to clear all the documents in the specified document store(s).
-
-    """
-
-    def __init__(self, stores: List[DocumentStore]) -> None:
-        self._stores = stores
-
-    @component.output_types(mdl=str)
-    async def run(self, mdl: str, project_id: Optional[str] = None) -> str:
-        async def _clear_documents(
-            store: DocumentStore, project_id: Optional[str] = None
-        ) -> None:
-            filters = (
-                {
-                    "operator": "AND",
-                    "conditions": [
-                        {"field": "project_id", "operator": "==", "value": project_id},
-                    ],
-                }
-                if project_id
-                else None
-            )
-            await store.delete_documents(filters)
-
-        logger.info("Ask Indexing pipeline is clearing old documents...")
-        await asyncio.gather(
-            *[_clear_documents(store, project_id) for store in self._stores]
-        )
-        return {"mdl": mdl}
-
-
-@component
-class MDLValidator:
-    """
-    Validate the MDL to check if it is a valid JSON and contains the required keys.
-    """
-
-    @component.output_types(mdl=Dict[str, Any])
-    def run(self, mdl: str) -> str:
-        try:
-            mdl_json = orjson.loads(mdl)
-            logger.debug(f"MDL JSON: {mdl_json}")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON: {e}")
-        if "models" not in mdl_json:
-            mdl_json["models"] = []
-        if "views" not in mdl_json:
-            mdl_json["views"] = []
-        if "relationships" not in mdl_json:
-            mdl_json["relationships"] = []
-        if "metrics" not in mdl_json:
-            mdl_json["metrics"] = []
-
-        return {"mdl": mdl_json}
 
 
 @component
 class TableDescriptionConverter:
     @component.output_types(documents=List[Document])
     def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
-        logger.info(
-            "Ask Indexing pipeline is writing new documents for table descriptions..."
-        )
-
         table_descriptions = self._get_table_descriptions(mdl)
 
         return {
@@ -142,24 +77,9 @@ class TableDescriptionConverter:
         return table_descriptions
 
 
-@component
-class AsyncDocumentWriter(DocumentWriter):
-    @component.output_types(documents_written=int)
-    async def run(
-        self, documents: List[Document], policy: Optional[DuplicatePolicy] = None
-    ):
-        if policy is None:
-            policy = self.policy
-
-        documents_written = await self.document_store.write_documents(
-            documents=documents, policy=policy
-        )
-        return {"documents_written": documents_written}
-
-
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def clean_document_store(
+async def clean_documents(
     mdl_str: str, cleaner: DocumentCleaner, project_id: Optional[str] = None
 ) -> Dict[str, Any]:
     return await cleaner.run(mdl=mdl_str, project_id=project_id)
@@ -168,37 +88,33 @@ async def clean_document_store(
 @observe(capture_input=False, capture_output=False)
 @extract_fields(dict(mdl=Dict[str, Any]))
 def validate_mdl(
-    clean_document_store: Dict[str, Any], validator: MDLValidator
+    clean_documents: Dict[str, Any], validator: MDLValidator
 ) -> Dict[str, Any]:
-    mdl = clean_document_store.get("mdl")
+    mdl = clean_documents.get("mdl")
     res = validator.run(mdl=mdl)
     return dict(mdl=res["mdl"])
 
 
 @observe(capture_input=False)
-def covert_to_table_descriptions(
+def chunk(
     mdl: Dict[str, Any],
-    table_description_converter: TableDescriptionConverter,
+    chunker: TableDescriptionConverter,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return table_description_converter.run(mdl=mdl, project_id=project_id)
+    return chunker.run(mdl=mdl, project_id=project_id)
 
 
 @observe(capture_input=False, capture_output=False)
-async def embed_table_descriptions(
-    covert_to_table_descriptions: Dict[str, Any],
-    document_embedder: Any,
-) -> Dict[str, Any]:
-    return await document_embedder.run(covert_to_table_descriptions["documents"])
+async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
+    return await embedder.run(documents=chunk["documents"])
 
 
 @observe(capture_input=False)
-async def write_table_description(
-    embed_table_descriptions: Dict[str, Any], table_description_writer: DocumentWriter
+async def write(
+    embedding: Dict[str, Any],
+    writer: DocumentWriter,
 ) -> None:
-    return await table_description_writer.run(
-        documents=embed_table_descriptions["documents"]
-    )
+    return await writer.run(documents=embedding["documents"])
 
 
 ## End of Pipeline
@@ -218,15 +134,15 @@ class TableDescription(BasicPipeline):
         self._components = {
             "cleaner": DocumentCleaner([table_description_store]),
             "validator": MDLValidator(),
-            "document_embedder": embedder_provider.get_document_embedder(),
-            "table_description_converter": TableDescriptionConverter(),
-            "table_description_writer": AsyncDocumentWriter(
+            "embedder": embedder_provider.get_document_embedder(),
+            "chunker": TableDescriptionConverter(),
+            "writer": AsyncDocumentWriter(
                 document_store=table_description_store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
-
         self._configs = {}
+        self._final = "write"
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -238,7 +154,7 @@ class TableDescription(BasicPipeline):
             Path(destination).mkdir(parents=True, exist_ok=True)
 
         self._pipe.visualize_execution(
-            ["write_table_description"],
+            [self._final],
             output_file_path=f"{destination}/table_description.dot",
             inputs={
                 "mdl_str": mdl_str,
@@ -254,9 +170,11 @@ class TableDescription(BasicPipeline):
     async def run(
         self, mdl_str: str, project_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        logger.info("Table Description Indexing pipeline is running...")
+        logger.info(
+            f"Project ID: {project_id}, Table Description Indexing pipeline is running..."
+        )
         return await self._pipe.execute(
-            ["write_table_description"],
+            [self._final],
             inputs={
                 "mdl_str": mdl_str,
                 "project_id": project_id,
