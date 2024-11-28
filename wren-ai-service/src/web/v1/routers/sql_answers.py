@@ -45,7 +45,7 @@ Endpoints:
    - Response: SqlAnswerResultResponse
      {
        "query_id": "unique-uuid",                             # Unique identifier of the SQL answer operation
-       "status": "understanding" | "processing" | "finished" | "failed",
+       "status": "fetching" | "generating" | "failed",
        "response": {                                          # Present only if status is "finished"
          "answer": "Result of the SQL query execution.",     # The answer from the SQL operation
          "reasoning": "Explanation of how the answer was derived." # Explanation of the result

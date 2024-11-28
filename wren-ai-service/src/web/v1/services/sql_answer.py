@@ -45,7 +45,7 @@ class SqlAnswerResultResponse(BaseModel):
         code: Literal["OTHERS"]
         message: str
 
-    status: Literal["fetching", "generating", "finished", "failed"]
+    status: Literal["fetching", "generating", "failed"]
     response: Optional[str] = None
     error: Optional[SqlAnswerError] = None
 
