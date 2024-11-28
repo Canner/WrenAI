@@ -150,6 +150,9 @@ pipes:
   - name: sql_pairs_deletion
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
+  - name: sql_pairs_retrieval
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
 
 ---
 settings:
