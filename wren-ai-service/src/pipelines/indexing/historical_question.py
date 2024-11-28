@@ -112,22 +112,23 @@ async def write(embedding: Dict[str, Any], writer: DocumentWriter) -> None:
 ## End of Pipeline
 
 
-class View(BasicPipeline):
+class HistoricalQuestion(BasicPipeline):
     def __init__(
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
-        view_store = document_store_provider.get_store(dataset_name="view_questions")
+        # keep the store name as it is for now, might change in the future
+        store = document_store_provider.get_store(dataset_name="view_questions")
 
         self._components = {
-            "cleaner": DocumentCleaner([view_store]),
+            "cleaner": DocumentCleaner([store]),
             "validator": MDLValidator(),
             "embedder": embedder_provider.get_document_embedder(),
             "chunker": ViewChunker(),
             "writer": AsyncDocumentWriter(
-                document_store=view_store,
+                document_store=store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
@@ -145,7 +146,7 @@ class View(BasicPipeline):
 
         self._pipe.visualize_execution(
             [self._final],
-            output_file_path=f"{destination}/view.dot",
+            output_file_path=f"{destination}/historical_question.dot",
             inputs={
                 "mdl_str": mdl_str,
                 "project_id": project_id,
@@ -156,11 +157,13 @@ class View(BasicPipeline):
             orient="LR",
         )
 
-    @observe(name="View Indexing")
+    @observe(name="Historical Question Indexing")
     async def run(
         self, mdl_str: str, project_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        logger.info(f"Project ID: {project_id}, View Indexing pipeline is running...")
+        logger.info(
+            f"Project ID: {project_id}, Historical Question Indexing pipeline is running..."
+        )
         return await self._pipe.execute(
             [self._final],
             inputs={
@@ -176,7 +179,7 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        View,
-        "view",
+        HistoricalQuestion,
+        "historical_question",
         mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
     )

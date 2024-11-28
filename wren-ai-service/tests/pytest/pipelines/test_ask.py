@@ -84,6 +84,7 @@ async def test_clear_documents(mdl_str: str):
     assert await store.count_documents() == 1
 
 
+# todo: remove this test case
 @pytest.mark.asyncio
 async def test_indexing_pipeline(
     mdl_str: str,

@@ -6,6 +6,7 @@ import toml
 from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
+from src.pipelines import indexing
 from src.pipelines.generation import (
     data_assistance,
     followup_sql_generation,
@@ -22,7 +23,6 @@ from src.pipelines.generation import (
     sql_regeneration,
     sql_summary,
 )
-from src.pipelines.indexing import DBSchema, TableDescription, View
 from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
@@ -77,14 +77,14 @@ def create_service_container(
         ),
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
-                "db_schema": DBSchema(
+                "db_schema": indexing.DBSchema(
                     **pipe_components["db_schema"],
                     column_indexing_batch_size=settings.column_indexing_batch_size,
                 ),
-                "view": View(
-                    **pipe_components["view"],
+                "historical_question": indexing.HistoricalQuestion(
+                    **pipe_components["historical_question"],
                 ),
-                "table_description": TableDescription(
+                "table_description": indexing.TableDescription(
                     **pipe_components["table_description"],
                 ),
             },
