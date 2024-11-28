@@ -207,7 +207,6 @@ class TableDescription(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        column_indexing_batch_size: Optional[int] = 50,
         **kwargs,
     ) -> None:
         table_description_store = document_store_provider.get_store(
@@ -225,9 +224,7 @@ class TableDescription(BasicPipeline):
             ),
         }
 
-        self._configs = {
-            "column_indexing_batch_size": column_indexing_batch_size,
-        }
+        self._configs = {}
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
