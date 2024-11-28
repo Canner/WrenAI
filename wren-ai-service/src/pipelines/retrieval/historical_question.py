@@ -191,6 +191,6 @@ if __name__ == "__main__":
 
     dry_run_pipeline(
         HistoricalQuestion,
-        "historical_question",
+        "historical_question_retrieval",
         query="this is a test query",
     )

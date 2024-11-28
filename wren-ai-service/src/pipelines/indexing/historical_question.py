@@ -70,23 +70,24 @@ class ViewChunker:
                 "viewId": properties.get("viewId", ""),
             }
 
-        converted_views = [
-            {"content": _get_content(view), "meta": _get_meta(view)}
+        def _additional_meta() -> Dict[str, Any]:
+            return {"project_id": project_id} if project_id else {}
+
+        chunks = [
+            {
+                "id": str(uuid.uuid4()),
+                "content": _get_content(view),
+                "meta": {**_get_meta(view), **_additional_meta()},
+            }
             for view in mdl["views"]
         ]
 
         return {
             "documents": [
-                Document(
-                    id=str(uuid.uuid4()),
-                    meta={"project_id": project_id, **converted_view["meta"]}
-                    if project_id
-                    else {**converted_view["meta"]},
-                    content=converted_view["content"],
-                )
-                for converted_view in tqdm(
-                    converted_views,
-                    desc="indexing view into the historical view question store",
+                Document(**chunk)
+                for chunk in tqdm(
+                    chunks,
+                    desc=f"Project ID: {project_id}, Chunking views into documents",
                 )
             ]
         }
@@ -200,6 +201,6 @@ if __name__ == "__main__":
 
     dry_run_pipeline(
         HistoricalQuestion,
-        "historical_question",
+        "historical_question_indexing",
         mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
     )
