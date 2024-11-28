@@ -21,60 +21,57 @@ logger = logging.getLogger("wren-ai-service")
 
 
 @component
-class TableDescriptionConverter:
+class TableDescriptionChunker:
     @component.output_types(documents=List[Document])
     def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
-        table_descriptions = self._get_table_descriptions(mdl)
+        def _additional_meta() -> Dict[str, Any]:
+            return {"project_id": project_id} if project_id else {}
+
+        chunks = [
+            {
+                "id": str(uuid.uuid4()),
+                "meta": {
+                    "type": "TABLE_DESCRIPTION",
+                    **_additional_meta(),
+                },
+                "content": chunk,
+            }
+            for chunk in self._get_table_descriptions(mdl)
+        ]
 
         return {
             "documents": [
-                Document(
-                    id=str(uuid.uuid4()),
-                    meta=(
-                        {"project_id": project_id, "type": "TABLE_DESCRIPTION"}
-                        if project_id
-                        else {"type": "TABLE_DESCRIPTION"}
-                    ),
-                    content=table_description,
-                )
-                for table_description in tqdm(
-                    table_descriptions,
-                    desc="indexing table descriptions into the table description store",
+                Document(**chunk)
+                for chunk in tqdm(
+                    chunks,
+                    desc=f"Project ID: {project_id}, Chunking table descriptions into documents",
                 )
             ]
         }
 
     def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[str]:
-        table_descriptions = []
-        mdl_data = [
+        def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                "mdl_type": mdl_type,
+                "name": payload.get("name"),
+                "properties": payload.get("properties", {}),
+            }
+
+        resources = (
+            [_structure_data("MODEL", model) for model in mdl["models"]]
+            + [_structure_data("METRIC", metric) for metric in mdl["metrics"]]
+            + [_structure_data("VIEW", view) for view in mdl["views"]]
+        )
+
+        return [
             {
-                "mdl_type": "MODEL",
-                "payload": mdl["models"],
-            },
-            {
-                "mdl_type": "METRIC",
-                "payload": mdl["metrics"],
-            },
-            {
-                "mdl_type": "VIEW",
-                "payload": mdl["views"],
-            },
+                "name": resource["name"],
+                "mdl_type": resource["mdl_type"],
+                "description": resource.get("description", ""),
+            }
+            for resource in resources
+            if resource["name"] is not None
         ]
-
-        for data in mdl_data:
-            payload = data["payload"]
-            for unit in payload:
-                if name := unit.get("name", ""):
-                    table_description = {
-                        "name": name,
-                        "mdl_type": data["mdl_type"],
-                        "description": unit.get("properties", {}).get(
-                            "description", ""
-                        ),
-                    }
-                    table_descriptions.append(str(table_description))
-
-        return table_descriptions
 
 
 ## Start of Pipeline
@@ -98,7 +95,7 @@ def validate_mdl(
 @observe(capture_input=False)
 def chunk(
     mdl: Dict[str, Any],
-    chunker: TableDescriptionConverter,
+    chunker: TableDescriptionChunker,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     return chunker.run(mdl=mdl, project_id=project_id)
@@ -135,7 +132,7 @@ class TableDescription(BasicPipeline):
             "cleaner": DocumentCleaner([table_description_store]),
             "validator": MDLValidator(),
             "embedder": embedder_provider.get_document_embedder(),
-            "chunker": TableDescriptionConverter(),
+            "chunker": TableDescriptionChunker(),
             "writer": AsyncDocumentWriter(
                 document_store=table_description_store,
                 policy=DuplicatePolicy.OVERWRITE,
