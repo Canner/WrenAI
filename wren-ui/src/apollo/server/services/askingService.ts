@@ -25,7 +25,7 @@ import {
   TelemetryEvent,
   WrenService,
 } from '../telemetry/telemetry';
-import { IViewRepository, View } from '../repositories';
+import { IViewRepository, Project, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
 import { ThreadRecommendQuestionBackgroundTracker } from '../backgrounds';
