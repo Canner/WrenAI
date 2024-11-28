@@ -82,7 +82,7 @@ def create_service_container(
                     column_indexing_batch_size=settings.column_indexing_batch_size,
                 ),
                 "historical_question": indexing.HistoricalQuestion(
-                    **pipe_components["historical_question"],
+                    **pipe_components["historical_question_indexing"],
                 ),
                 "table_description": indexing.TableDescription(
                     **pipe_components["table_description"],
@@ -105,7 +105,7 @@ def create_service_container(
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "historical_question": historical_question.HistoricalQuestion(
-                    **pipe_components["historical_question"],
+                    **pipe_components["historical_question_retrieval"],
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],
