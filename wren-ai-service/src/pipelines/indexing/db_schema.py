@@ -167,31 +167,24 @@ class DDLChunker:
             if len(models) != 2:
                 return None
 
-            comment = f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
-            should_add_fk = False
-            if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
-                related_table = models[1]
-                fk_column = condition.split(" = ")[0].split(".")[1]
-                fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                should_add_fk = True
-            elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
-                related_table = models[0]
-                fk_column = condition.split(" = ")[1].split(".")[1]
-                fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                should_add_fk = True
-            elif table_name in models and join_type.upper() == "ONE_TO_ONE":
-                index = models.index(table_name)
-                related_table = [m for m in models if m != table_name][0]
-                fk_column = condition.split(" = ")[index].split(".")[1]
-                fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                should_add_fk = True
-
-            if not should_add_fk:
+            if table_name not in models:
                 return None
+
+            if join_type not in ["MANY_TO_ONE", "ONE_TO_MANY", "ONE_TO_ONE"]:
+                return None
+
+            # Get related table and foreign key column
+            is_source = table_name == models[0]
+            related_table = models[1] if is_source else models[0]
+            condition_parts = condition.split(" = ")
+            fk_column = condition_parts[0 if is_source else 1].split(".")[1]
+
+            # Build foreign key constraint
+            fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
 
             return {
                 "type": "FOREIGN_KEY",
-                "comment": comment,
+                "comment": f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  ',
                 "constraint": fk_constraint,
                 "tables": models,
             }
