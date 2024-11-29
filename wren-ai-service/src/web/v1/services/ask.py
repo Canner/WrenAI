@@ -236,10 +236,12 @@ class AskService:
                         for result in historical_question_result
                     ]
                 else:
-                    sql_pairs = await self._pipelines["sql_pairs_retrieval"].run(
-                        query=ask_request.query,
-                        id=ask_request.project_id,
-                    )
+                    sql_samples = (
+                        await self._pipelines["sql_pairs_retrieval"].run(
+                            query=ask_request.query,
+                            id=ask_request.project_id,
+                        )
+                    )["formatted_output"].get("documents", [])
 
                     if ask_request.history:
                         text_to_sql_generation_results = await self._pipelines[
@@ -250,7 +252,7 @@ class AskService:
                             history=ask_request.history,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
-                            samples=sql_pairs.get("documents", []),
+                            sql_samples=sql_samples,
                         )
                     else:
                         text_to_sql_generation_results = await self._pipelines[
@@ -261,7 +263,7 @@ class AskService:
                             exclude=historical_question_result,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
-                            samples=sql_pairs.get("documents", []),
+                            sql_samples=sql_samples,
                         )
 
                     if sql_valid_results := text_to_sql_generation_results[

@@ -56,9 +56,9 @@ The final answer must be the JSON format like following:
     ]
 }
 
-{% if samples %}
+{% if sql_samples %}
 ### SAMPLES ###
-{% for sample in samples %}
+{% for sample in sql_samples %}
 Summary:
 {{sample.summary}}
 SQL:
@@ -83,7 +83,7 @@ def prompt(
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = None,
-    samples: List[Dict] | None = None,
+    sql_samples: List[Dict] | None = None,
 ) -> dict:
     return prompt_builder.run(
         query=query,
@@ -91,7 +91,7 @@ def prompt(
         exclude=exclude,
         text_to_sql_rules=text_to_sql_rules,
         instructions=construct_instructions(configuration),
-        samples=samples,
+        sql_samples=sql_samples,
         current_time=show_current_time(configuration.timezone),
     )
 
@@ -165,7 +165,7 @@ class SQLGeneration(BasicPipeline):
         contexts: List[str],
         exclude: List[Dict],
         configuration: Configuration = Configuration(),
-        samples: List[Dict] | None = None,
+        sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -179,7 +179,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
-                "samples": samples,
+                "sql_samples": sql_samples,
                 "project_id": project_id,
                 "configuration": configuration,
                 **self._components,
@@ -196,7 +196,7 @@ class SQLGeneration(BasicPipeline):
         contexts: List[str],
         exclude: List[Dict],
         configuration: Configuration = Configuration(),
-        samples: List[Dict] | None = None,
+        sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
@@ -206,7 +206,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
-                "samples": samples,
+                "sql_samples": sql_samples,
                 "project_id": project_id,
                 "configuration": configuration,
                 **self._components,

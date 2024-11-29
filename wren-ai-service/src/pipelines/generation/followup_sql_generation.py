@@ -105,9 +105,9 @@ Current Time: {{ current_time }}
 Instructions: {{ instructions }}
 {% endif %}
 
-{% if samples %}
-### SAMPLES ###
-{% for sample in samples %}
+{% if sql_samples %}
+### SQL SAMPLES ###
+{% for sample in sql_samples %}
 Summary:
 {{sample.summary}}
 SQL:
@@ -131,7 +131,7 @@ def prompt(
     alert: str,
     configuration: Configuration,
     prompt_builder: PromptBuilder,
-    samples: List[Dict] | None = None,
+    sql_samples: List[Dict] | None = None,
 ) -> dict:
     previous_query_summaries = [step.summary for step in history.steps if step.summary]
 
@@ -143,7 +143,7 @@ def prompt(
         alert=alert,
         instructions=construct_instructions(configuration),
         current_time=show_current_time(configuration.timezone),
-        samples=samples,
+        sql_samples=sql_samples,
     )
 
 
@@ -217,7 +217,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         contexts: List[str],
         history: AskHistory,
         configuration: Configuration = Configuration(),
-        samples: List[Dict] | None = None,
+        sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
     ) -> None:
         destination = "outputs/pipelines/generation"
@@ -233,7 +233,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "history": history,
                 "project_id": project_id,
                 "configuration": configuration,
-                "samples": samples,
+                "sql_samples": sql_samples,
                 **self._components,
                 **self._configs,
             },
@@ -248,7 +248,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         contexts: List[str],
         history: AskHistory,
         configuration: Configuration = Configuration(),
-        samples: List[Dict] | None = None,
+        sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
@@ -260,7 +260,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "history": history,
                 "project_id": project_id,
                 "configuration": configuration,
-                "samples": samples,
+                "sql_samples": sql_samples,
                 **self._components,
                 **self._configs,
             },

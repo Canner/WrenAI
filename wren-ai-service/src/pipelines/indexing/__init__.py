@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from haystack import Document, component
 from haystack.components.writers import DocumentWriter
-from haystack.document_stores.types import DuplicatePolicy
+from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 
 
 @component
@@ -18,3 +18,25 @@ class AsyncDocumentWriter(DocumentWriter):
             documents=documents, policy=policy
         )
         return {"documents_written": documents_written}
+
+
+@component
+class SqlPairsCleaner:
+    def __init__(self, sql_pairs_store: DocumentStore) -> None:
+        self._sql_pairs_store = sql_pairs_store
+
+    @component.output_types(documents=List[Document])
+    async def run(self, sql_pair_ids: List[str], id: Optional[str] = None) -> None:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
+            ],
+        }
+
+        if id:
+            filters["conditions"].append(
+                {"field": "project_id", "operator": "==", "value": id}
+            )
+
+        return await self._sql_pairs_store.delete_documents(filters)

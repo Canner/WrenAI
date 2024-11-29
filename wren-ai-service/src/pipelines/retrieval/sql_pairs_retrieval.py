@@ -85,7 +85,7 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
 @observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     if retrieval:
-        return score_filter.run(documents=retrieval.get("documents"), score=0.75)
+        return score_filter.run(documents=retrieval.get("documents"), score=0.7)
 
     return {}
 

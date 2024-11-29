@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.indexing import AsyncDocumentWriter
+from src.pipelines.indexing import AsyncDocumentWriter, SqlPairsCleaner
 from src.web.v1.services.sql_pairs_preparation import SqlPair
 
 logger = logging.getLogger("wren-ai-service")
@@ -43,7 +43,7 @@ You need to output a JSON object as following:
 
 sql_intention_generation_user_prompt_template = """
 ### INPUT ###
-SQL: {sql}
+SQL: {{sql}}
 
 Please think step by step
 """
@@ -79,12 +79,24 @@ class SqlPairsDescriptionConverter:
 
 
 ## Start of Pipeline
+@observe(capture_input=False, capture_output=False)
+async def delete_sql_pairs(
+    sql_pairs_cleaner: SqlPairsCleaner,
+    sql_pairs: List[SqlPair],
+    id: Optional[str] = None,
+) -> List[SqlPair]:
+    sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
+    await sql_pairs_cleaner.run(sql_pair_ids=sql_pair_ids, id=id)
+
+    return sql_pairs
+
+
 @observe(capture_input=False)
 def prompts(
-    sql_pairs: List[SqlPair],
+    delete_sql_pairs: List[SqlPair],
     prompt_builder: PromptBuilder,
 ) -> List[dict]:
-    return [prompt_builder.run(sql=sql_pair.sql) for sql_pair in sql_pairs]
+    return [prompt_builder.run(sql=sql_pair.sql) for sql_pair in delete_sql_pairs]
 
 
 @observe(as_type="generation", capture_input=False)
@@ -169,6 +181,7 @@ class SqlPairsPreparation(BasicPipeline):
         sql_pairs_store = document_store_provider.get_store(dataset_name="sql_pairs")
 
         self._components = {
+            "sql_pairs_cleaner": SqlPairsCleaner(sql_pairs_store),
             "prompt_builder": PromptBuilder(
                 template=sql_intention_generation_user_prompt_template
             ),

@@ -5,38 +5,13 @@ from typing import Any, Dict, List, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import Document, component
-from haystack.document_stores.types import DocumentStore
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
+from src.pipelines.indexing import SqlPairsCleaner
 
 logger = logging.getLogger("wren-ai-service")
-
-
-@component
-class SqlPairsCleaner:
-    def __init__(self, sql_pairs_store: DocumentStore) -> None:
-        self._sql_pairs_store = sql_pairs_store
-
-    @component.output_types(documents=List[Document])
-    async def run(self, sql_pair_ids: List[str], id: Optional[str] = None) -> None:
-        logger.info("Removing SQL pairs given sql_pair_ids from the store...")
-
-        filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
-            ],
-        }
-
-        if id:
-            filters["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": id}
-            )
-
-        return await self._sql_pairs_store.delete_documents(filters)
 
 
 ## Start of Pipeline
