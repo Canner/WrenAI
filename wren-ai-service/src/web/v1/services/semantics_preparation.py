@@ -7,7 +7,7 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, trace_metadata
+from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -56,7 +56,6 @@ class SemanticsPreparationService:
             str, SemanticsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
-    @async_timer
     @observe(name="Prepare Semantics")
     @trace_metadata
     async def prepare_semantics(
@@ -129,3 +128,15 @@ class SemanticsPreparationService:
             )
 
         return result
+
+    @observe(name="Delete Documents")
+    @trace_metadata
+    async def delete_documents(self, project_id: str):
+        logger.info(f"Project ID: {project_id}, Deleting documents...")
+
+        tasks = [
+            self._pipelines[name].clean(project_id=project_id)
+            for name in ["db_schema", "historical_question", "table_description"]
+        ]
+
+        await asyncio.gather(*tasks)

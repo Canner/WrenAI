@@ -180,6 +180,13 @@ class TableDescription(BasicPipeline):
             },
         )
 
+    @observe(name="Clean Documents for Table Description")
+    async def clean(self, project_id: Optional[str] = None) -> None:
+        await self._pipe.execute(
+            ["clean_documents"],
+            inputs={"project_id": project_id, "mdl_str": "", **self._components},
+        )
+
 
 if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline

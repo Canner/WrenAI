@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
@@ -91,3 +92,11 @@ async def get_prepare_semantics_status(
     return service_container.semantics_preparation_service.get_prepare_semantics_status(
         SemanticsPreparationStatusRequest(mdl_hash=mdl_hash)
     )
+
+
+@router.delete("/documents")
+async def delete_documents(
+    project_id: Optional[str] = None,
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> None:
+    await service_container.semantics_preparation_service.delete_documents(project_id)
