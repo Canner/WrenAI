@@ -452,7 +452,7 @@ chart_generation_instructions = """
 - Chart types: Bar chart, Line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
 - If you think the data is not suitable for visualization, you can return an empty string for the schema
-- Please use the language provided by the user to generate the chart
+- The language for the chart, description and reasoning must be the same language provided by the user
 - Please use the current time provided by the user to generate the chart
 - In order to generate the grouped bar chart, you need to follow the given instructions:
     - Disable Stacking: Add "stack": null to the y-encoding.
