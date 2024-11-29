@@ -103,130 +103,121 @@ class DDLChunker:
             + self._convert_metrics(semantics["metrics"])
         )
 
-    # TODO: refactor this method
     def _convert_models_and_relationships(
         self,
         models: List[Dict[str, Any]],
         relationships: List[Dict[str, Any]],
         column_batch_size: int,
     ) -> List[str]:
-        ddl_commands = []
+        def _model_command(model: Dict[str, Any]) -> dict:
+            properties = model.get("properties", {})
+
+            model_properties = {
+                "alias": properties.get("displayName", ""),
+                "description": properties.get("description", ""),
+            }
+            comment = f"\n/* {str(model_properties)} */\n"
+
+            table_name = model["name"]
+            payload = {
+                "type": "TABLE",
+                "comment": comment,
+                "name": table_name,
+            }
+            return {"name": table_name, "payload": str(payload)}
+
+        def _column_command(column: Dict[str, Any], model: Dict[str, Any]) -> dict:
+            # Build column properties
+            props = column["properties"]
+            column_properties = {
+                "alias": props.get("displayName", ""),
+                "description": props.get("description", ""),
+            }
+
+            # Add any nested columns if they exist
+            nested = {k: v for k, v in props.items() if k.startswith("nested")}
+            if nested:
+                column_properties["nested_columns"] = nested
+
+            # Build comment string
+            comment = f"-- {orjson.dumps(column_properties).decode('utf-8')}\n  "
+            if column.get("isCalculated"):
+                comment += f"-- This column is a Calculated Field\n  -- column expression: {column['expression']}\n  "
+
+            return {
+                "type": "COLUMN",
+                "comment": comment,
+                "name": column["name"],
+                "data_type": column["type"],
+                "is_primary_key": column["name"] == model["primaryKey"],
+            }
+
+        def _relationship_command(
+            relationship: Dict[str, Any],
+            table_name: str,
+            primary_keys_map: Dict[str, str],
+        ) -> dict:
+            condition = relationship.get("condition", "")
+            join_type = relationship.get("joinType", "")
+            models = relationship.get("models", [])
+            if len(models) == 2:
+                comment = (
+                    f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
+                )
+                should_add_fk = False
+                if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
+                    related_table = models[1]
+                    fk_column = condition.split(" = ")[0].split(".")[1]
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    should_add_fk = True
+                elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
+                    related_table = models[0]
+                    fk_column = condition.split(" = ")[1].split(".")[1]
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    should_add_fk = True
+                elif table_name in models and join_type.upper() == "ONE_TO_ONE":
+                    index = models.index(table_name)
+                    related_table = [m for m in models if m != table_name][0]
+                    fk_column = condition.split(" = ")[index].split(".")[1]
+                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    should_add_fk = True
+
+                if should_add_fk:
+                    return {
+                        "type": "FOREIGN_KEY",
+                        "comment": comment,
+                        "constraint": fk_constraint,
+                        "tables": models,
+                    }
+
+        def _column_batch(
+            model: Dict[str, Any], primary_keys_map: Dict[str, str]
+        ) -> List[dict]:
+            commands = [
+                _column_command(column, model)
+                for column in model["columns"]
+                if column.get("relationship") is None  # Ignore relationship columns
+            ] + [
+                _relationship_command(relationship, model["name"], primary_keys_map)
+                for relationship in relationships
+            ]
+            return [
+                {
+                    "name": model["name"],
+                    "payload": str(commands[i : i + column_batch_size]),
+                }
+                for i in range(0, len(commands), column_batch_size)
+            ]
 
         # A map to store model primary keys for foreign key relationships
         primary_keys_map = {model["name"]: model["primaryKey"] for model in models}
 
-        for model in models:
-            table_name = model["name"]
-            columns_ddl = []
-            for column in model["columns"]:
-                if "relationship" not in column:
-                    if "properties" in column:
-                        column_properties = {
-                            "alias": column["properties"].get("displayName", ""),
-                            "description": column["properties"].get("description", ""),
-                        }
-                        nested_cols = {
-                            k: v
-                            for k, v in column["properties"].items()
-                            if k.startswith("nested")
-                        }
-                        if nested_cols:
-                            column_properties["nested_columns"] = nested_cols
-                        comment = (
-                            f"-- {orjson.dumps(column_properties).decode("utf-8")}\n  "
-                        )
-                    else:
-                        comment = ""
-                    if "isCalculated" in column and column["isCalculated"]:
-                        comment = (
-                            comment
-                            + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
-                        )
-
-                    columns_ddl.append(
-                        {
-                            "type": "COLUMN",
-                            "comment": comment,
-                            "name": column["name"],
-                            "data_type": column["type"],
-                            "is_primary_key": column["name"] == model["primaryKey"],
-                        }
-                    )
-
-            # Add foreign key constraints based on relationships
-            for relationship in relationships:
-                condition = relationship.get("condition", "")
-                join_type = relationship.get("joinType", "")
-                models = relationship.get("models", [])
-
-                if len(models) == 2:
-                    comment = (
-                        f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
-                    )
-                    should_add_fk = False
-                    if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
-                        related_table = models[1]
-                        fk_column = condition.split(" = ")[0].split(".")[1]
-                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                        should_add_fk = True
-                    elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
-                        related_table = models[0]
-                        fk_column = condition.split(" = ")[1].split(".")[1]
-                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                        should_add_fk = True
-                    elif table_name in models and join_type.upper() == "ONE_TO_ONE":
-                        index = models.index(table_name)
-                        related_table = [m for m in models if m != table_name][0]
-                        fk_column = condition.split(" = ")[index].split(".")[1]
-                        fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                        should_add_fk = True
-
-                    if should_add_fk:
-                        columns_ddl.append(
-                            {
-                                "type": "FOREIGN_KEY",
-                                "comment": comment,
-                                "constraint": fk_constraint,
-                                "tables": models,
-                            }
-                        )
-
-            if "properties" in model:
-                model_properties = {
-                    "alias": model["properties"].get("displayName", ""),
-                    "description": model["properties"].get("description", ""),
-                }
-                comment = f"\n/* {orjson.dumps(model_properties).decode("utf-8")} */\n"
-            else:
-                comment = ""
-
-            ddl_commands.append(
-                {
-                    "name": table_name,
-                    "payload": str(
-                        {
-                            "type": "TABLE",
-                            "comment": comment,
-                            "name": table_name,
-                        }
-                    ),
-                }
-            )
-            column_ddl_commands = [
-                {
-                    "name": table_name,
-                    "payload": str(
-                        {
-                            "type": "TABLE_COLUMNS",
-                            "columns": columns_ddl[i : i + column_batch_size],
-                        }
-                    ),
-                }
-                for i in range(0, len(columns_ddl), column_batch_size)
-            ]
-            ddl_commands += column_ddl_commands
-
-        return ddl_commands
+        return [
+            command
+            for model in models
+            for command in _column_batch(model, primary_keys_map)
+            + [_model_command(model)]
+        ]
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
         def _payload(view: Dict[str, Any]) -> dict:
