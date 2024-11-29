@@ -127,6 +127,9 @@ class DDLChunker:
             return {"name": table_name, "payload": str(payload)}
 
         def _column_command(column: Dict[str, Any], model: Dict[str, Any]) -> dict:
+            if column.get("relationship"):
+                return None
+
             # Build column properties
             props = column["properties"]
             column_properties = {
@@ -160,53 +163,57 @@ class DDLChunker:
             condition = relationship.get("condition", "")
             join_type = relationship.get("joinType", "")
             models = relationship.get("models", [])
-            if len(models) == 2:
-                comment = (
-                    f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
-                )
-                should_add_fk = False
-                if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
-                    related_table = models[1]
-                    fk_column = condition.split(" = ")[0].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    should_add_fk = True
-                elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
-                    related_table = models[0]
-                    fk_column = condition.split(" = ")[1].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    should_add_fk = True
-                elif table_name in models and join_type.upper() == "ONE_TO_ONE":
-                    index = models.index(table_name)
-                    related_table = [m for m in models if m != table_name][0]
-                    fk_column = condition.split(" = ")[index].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
-                    should_add_fk = True
 
-                if should_add_fk:
-                    return {
-                        "type": "FOREIGN_KEY",
-                        "comment": comment,
-                        "constraint": fk_constraint,
-                        "tables": models,
-                    }
+            if len(models) != 2:
+                return None
+
+            comment = f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  '
+            should_add_fk = False
+            if table_name == models[0] and join_type.upper() == "MANY_TO_ONE":
+                related_table = models[1]
+                fk_column = condition.split(" = ")[0].split(".")[1]
+                fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                should_add_fk = True
+            elif table_name == models[1] and join_type.upper() == "ONE_TO_MANY":
+                related_table = models[0]
+                fk_column = condition.split(" = ")[1].split(".")[1]
+                fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                should_add_fk = True
+            elif table_name in models and join_type.upper() == "ONE_TO_ONE":
+                index = models.index(table_name)
+                related_table = [m for m in models if m != table_name][0]
+                fk_column = condition.split(" = ")[index].split(".")[1]
+                fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                should_add_fk = True
+
+            if not should_add_fk:
+                return None
+
+            return {
+                "type": "FOREIGN_KEY",
+                "comment": comment,
+                "constraint": fk_constraint,
+                "tables": models,
+            }
 
         def _column_batch(
             model: Dict[str, Any], primary_keys_map: Dict[str, str]
         ) -> List[dict]:
             commands = [
-                _column_command(column, model)
-                for column in model["columns"]
-                if column.get("relationship") is None  # Ignore relationship columns
+                _column_command(column, model) for column in model["columns"]
             ] + [
                 _relationship_command(relationship, model["name"], primary_keys_map)
                 for relationship in relationships
             ]
+
+            filtered = [command for command in commands if command is not None]
+
             return [
                 {
                     "name": model["name"],
-                    "payload": str(commands[i : i + column_batch_size]),
+                    "payload": str(filtered[i : i + column_batch_size]),
                 }
-                for i in range(0, len(commands), column_batch_size)
+                for i in range(0, len(filtered), column_batch_size)
             ]
 
         # A map to store model primary keys for foreign key relationships
