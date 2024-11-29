@@ -23,17 +23,26 @@ def preprocess(
     encoding: tiktoken.Encoding,
 ) -> Dict:
     _token_count = len(encoding.encode(str(sql_data)))
+    num_rows_used_in_llm = len(sql_data.get("data", []))
 
     if _token_count > 100_000:
+        sql_data = {
+            "columns": sql_data.get("columns", []),
+            "data": sql_data.get("data", [])[:250],
+            "dtypes": sql_data.get("dtypes", {}),
+        }
+
+        num_rows_used_in_llm = len(sql_data.get("data", []))
+
         return {
             "sql_data": sql_data,
-            "num_rows_used_in_llm": 500,
+            "num_rows_used_in_llm": num_rows_used_in_llm,
             "tokens": _token_count,
         }
 
     return {
         "sql_data": sql_data,
-        "num_rows_used_in_llm": 500,
+        "num_rows_used_in_llm": num_rows_used_in_llm,
         "tokens": _token_count,
     }
 
