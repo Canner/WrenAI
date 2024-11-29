@@ -204,7 +204,12 @@ class DDLChunker:
             return [
                 {
                     "name": model["name"],
-                    "payload": str(filtered[i : i + column_batch_size]),
+                    "payload": str(
+                        {
+                            "type": "TABLE_COLUMNS",
+                            "columns": filtered[i : i + column_batch_size],
+                        }
+                    ),
                 }
                 for i in range(0, len(filtered), column_batch_size)
             ]
