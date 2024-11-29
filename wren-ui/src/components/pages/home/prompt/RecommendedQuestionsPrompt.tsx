@@ -41,7 +41,10 @@ const QuestionTemplate = ({ category, sql, question, onSelect }) => {
         onClick={() => onSelect({ sql, question })}
       >
         <div className="d-flex justify-space-between align-center text-sm mb-3">
-          <div className="border border-gray-5 px-2 rounded-pill">
+          <div
+            className="border border-gray-5 px-2 rounded-pill text-truncate"
+            title={category}
+          >
             {category}
           </div>
         </div>
