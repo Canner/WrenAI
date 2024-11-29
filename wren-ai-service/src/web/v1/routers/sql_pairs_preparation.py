@@ -25,6 +25,43 @@ router = APIRouter()
 Sql Pairs Preparation Router
 
 This router manages the endpoints related to users uploading SQL pairs and retrieving their status.
+
+Endpoints:
+1. **POST /sql-pairs-preparations**
+   - Initiates the preparation of SQL pairs for processing.
+   - **Request Body**: SqlPairsPreparationRequest
+     - `sql_pairs`: List of SQL pairs, each containing:
+       - `sql`: The SQL statement
+       - `id`: Unique identifier for the SQL pair
+     - `project_id`: (Optional) Identifier for the project context
+   - **Response**: SqlPairsPreparationResponse
+     - `sql_pairs_preparation_id`: A unique identifier (UUID) for tracking the preparation process
+
+2. **DELETE /sql-pairs-preparations**
+   - Deletes specified SQL pairs.
+   - **Request Body**: DeleteSqlPairsRequest
+     - `ids`: List of SQL pair IDs to delete
+     - `project_id`: (Optional) Project identifier
+   - **Response**: DeleteSqlPairsResponse
+     - `sql_pairs_preparation_id`: A unique identifier (UUID) for tracking the deletion process
+
+3. **GET /sql-pairs-preparations/{sql_pairs_preparation_id}/status**
+   - Retrieves the current status of a SQL pairs preparation or deletion process.
+   - **Path Parameter**:
+     - `sql_pairs_preparation_id`: The unique identifier of the process
+   - **Response**: SqlPairsPreparationStatusResponse
+     - `status`: Current status ("indexing", "deleting", "finished", or "failed")
+     - `error`: (Optional) Error information if the process failed, including:
+       - `code`: Error code ("OTHERS")
+       - `message`: Detailed error message
+
+Process:
+1. Submit SQL pairs using the POST endpoint to initiate preparation. This returns a preparation ID.
+2. Use the DELETE endpoint to remove specific SQL pairs from the system.
+3. Track the status of any operation using the GET endpoint with the preparation ID.
+
+Note: All operations are processed asynchronously using background tasks. The status can be polled 
+via the GET endpoint. Results are cached with a TTL of 120 seconds.
 """
 
 
