@@ -60,14 +60,6 @@ Endpoints:
    - **Response**:
      - Streaming response with the SQL answer.
 
-The SQL answer generation is an asynchronous process. The POST endpoint
-initiates the operation and returns immediately with a query ID. The GET endpoint can
-then be used to check the status and retrieve the result when it's ready.
-
-Usage:
-1. Send a POST request to start the SQL answer operation.
-2. Use the returned query ID to poll the GET endpoint until the status is "finished" or "failed".
-
 Note: The actual SQL processing is performed in the background using FastAPI's BackgroundTasks.
 """
 
