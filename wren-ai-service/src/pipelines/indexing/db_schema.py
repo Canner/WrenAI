@@ -229,7 +229,7 @@ class DDLChunker:
         return ddl_commands
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
-        def _format(view: Dict[str, Any]) -> dict:
+        def _payload(view: Dict[str, Any]) -> dict:
             return {
                 "type": "VIEW",
                 "comment": f"/* {view['properties']} */\n"
@@ -239,54 +239,51 @@ class DDLChunker:
                 "statement": view["statement"],
             }
 
-        return [{"name": view["name"], "payload": str(_format(view))} for view in views]
+        return [
+            {"name": view["name"], "payload": str(_payload(view))} for view in views
+        ]
 
     def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[str]:
-        ddl_commands = []
+        def _create_column(name: str, data_type: str, comment: str) -> dict:
+            return {
+                "type": "COLUMN",
+                "comment": comment,
+                "name": name,
+                "data_type": data_type,
+            }
 
-        for metric in metrics:
-            table_name = metric.get("name", "")
-            columns_ddl = []
-            for dimension in metric.get("dimension", []):
-                comment = "-- This column is a dimension\n  "
-                name = dimension.get("name", "")
-                columns_ddl.append(
-                    {
-                        "type": "COLUMN",
-                        "comment": comment,
-                        "name": name,
-                        "data_type": dimension.get("type", ""),
-                    }
+        def _dimensions(metric: Dict[str, Any]) -> List[dict]:
+            return [
+                _create_column(
+                    name=dim.get("name", ""),
+                    data_type=dim.get("type", ""),
+                    comment="-- This column is a dimension\n  ",
                 )
+                for dim in metric.get("dimension", [])
+            ]
 
-            for measure in metric.get("measure", []):
-                comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
-                name = measure.get("name", "")
-                columns_ddl.append(
-                    {
-                        "type": "COLUMN",
-                        "comment": comment,
-                        "name": name,
-                        "data_type": measure.get("type", ""),
-                    }
+        def _measures(metric: Dict[str, Any]) -> List[dict]:
+            return [
+                _create_column(
+                    name=measure.get("name", ""),
+                    data_type=measure.get("type", ""),
+                    comment=f"-- This column is a measure\n  -- expression: {measure['expression']}\n  ",
                 )
+                for measure in metric.get("measure", [])
+            ]
 
-            comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
-            ddl_commands.append(
-                {
-                    "name": table_name,
-                    "payload": str(
-                        {
-                            "type": "METRIC",
-                            "comment": comment,
-                            "name": table_name,
-                            "columns": columns_ddl,
-                        }
-                    ),
-                }
-            )
+        def _payload(metric: Dict[str, Any]) -> dict:
+            return {
+                "type": "METRIC",
+                "comment": f"\n/* This table is a metric */\n/* Metric Base Object: {metric['baseObject']} */\n",
+                "name": metric["name"],
+                "columns": _dimensions(metric) + _measures(metric),
+            }
 
-        return ddl_commands
+        return [
+            {"name": metric["name"], "payload": str(_payload(metric))}
+            for metric in metrics
+        ]
 
 
 ## Start of Pipeline
