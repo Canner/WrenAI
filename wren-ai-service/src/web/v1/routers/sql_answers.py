@@ -31,6 +31,7 @@ Endpoints:
      {
        "query": "user's question",
        "sql": "SELECT * FROM table_name WHERE condition",      # Actual SQL statement
+       "sql_data": <dictionary>,                                   # Preprocessed SQL data
        "thread_id": "unique-thread-id",                        # Optional thread identifier for tracking
        "user_id": "user-id"                                   # Optional user identifier for tracking
      }
@@ -39,7 +40,7 @@ Endpoints:
        "query_id": "unique-uuid"                              # Unique identifier for the initiated SQL operation
      }
 
-2. GET /sql-answers/{query_id}/result
+2. GET /sql-answers/{query_id}
    - Retrieves the status and result of a SQL answer operation
    - Path parameter: query_id (str)
    - Response: SqlAnswerResultResponse
@@ -53,7 +54,7 @@ Endpoints:
        }
      }
 
-3. **GET /sql-answers/{query_id}/streaming-result**
+3. **GET /sql-answers/{query_id}/streaming**
    - Retrieves the streaming result of a SQL answer.
    - **Path Parameter**:
      - `query_id`: The unique identifier of the query.
@@ -87,7 +88,7 @@ async def sql_answer(
     return SqlAnswerResponse(query_id=query_id)
 
 
-@router.get("/sql-answers/{query_id}/result")
+@router.get("/sql-answers/{query_id}")
 async def get_sql_answer_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
@@ -97,7 +98,7 @@ async def get_sql_answer_result(
     )
 
 
-@router.get("/sql-answers/{query_id}/streaming-result")
+@router.get("/sql-answers/{query_id}/streaming")
 async def get_sql_answer_streaming_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),

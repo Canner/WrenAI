@@ -708,7 +708,7 @@ def display_general_response(query_id: str):
 
 
 def display_sql_answer(query_id: str):
-    url = f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/streaming-result"
+    url = f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/streaming"
     headers = {"Accept": "text/event-stream"}
     response = with_requests(url, headers)
     client = sseclient.SSEClient(response)
@@ -754,7 +754,7 @@ def get_sql_answer(
         sql_answer_status != "succeeded" and sql_answer_status != "failed"
     ):
         sql_answer_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/result"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}"
         )
         assert sql_answer_status_response.status_code == 200
         sql_answer_status = sql_answer_status_response.json()["status"]

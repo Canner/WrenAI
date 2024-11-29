@@ -36,7 +36,7 @@ class SqlAnswerResponse(BaseModel):
     query_id: str
 
 
-# GET /v1/sql-answers/{query_id}/result
+# GET /v1/sql-answers/{query_id}
 class SqlAnswerResultRequest(BaseModel):
     query_id: str
 
