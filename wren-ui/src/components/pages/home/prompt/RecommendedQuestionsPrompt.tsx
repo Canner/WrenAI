@@ -6,6 +6,7 @@ import MinusOutlined from '@ant-design/icons/MinusOutlined';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import { Logo } from '@/components/Logo';
 import { makeIterable } from '@/utils/iteration';
+import { GroupedQuestion } from '@/hooks/useRecommendedQuestionsInstruction';
 
 const CategorySectionBlock = styled.div`
   background: var(--gray-1);
@@ -27,6 +28,11 @@ const QuestionBlock = styled.div`
 
 const MAX_EXPANDED_QUESTIONS = 9;
 
+interface Props {
+  onSelect: (payload: { sql: string; question: string }) => void;
+  recommendedQuestions: GroupedQuestion[];
+}
+
 const QuestionTemplate = ({ category, sql, question, onSelect }) => {
   return (
     <Col span={8}>
@@ -35,7 +41,10 @@ const QuestionTemplate = ({ category, sql, question, onSelect }) => {
         onClick={() => onSelect({ sql, question })}
       >
         <div className="d-flex justify-space-between align-center text-sm mb-3">
-          <div className="border border-gray-5 px-2 rounded-pill">
+          <div
+            className="border border-gray-5 px-2 rounded-pill text-truncate"
+            title={category}
+          >
             {category}
           </div>
         </div>
@@ -47,8 +56,8 @@ const QuestionTemplate = ({ category, sql, question, onSelect }) => {
 
 const QuestionColumnIterator = makeIterable(QuestionTemplate);
 
-export default function RecommendedQuestionsPrompt(props) {
-  const { onSelect, recommendedQuestions, buttonProps } = props;
+export default function RecommendedQuestionsPrompt(props: Props) {
+  const { onSelect, recommendedQuestions } = props;
 
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
@@ -65,7 +74,7 @@ export default function RecommendedQuestionsPrompt(props) {
 
   return (
     <div className="bg-gray-2 px-10 py-6">
-      <div className="d-flex align-center mb-3 justify-space-between">
+      <div className="d-flex align-center mb-3">
         <Logo size={24} color="var(--gray-8)" />
         <div className="text-md text-medium gray-8 mx-3">
           Know more about your data.
@@ -73,7 +82,6 @@ export default function RecommendedQuestionsPrompt(props) {
         <div className="text-medium gray-7">
           Try asking some of the following questions
         </div>
-        <Button className="ml-3" {...buttonProps} />
       </div>
       <Space
         style={{ width: 680 }}

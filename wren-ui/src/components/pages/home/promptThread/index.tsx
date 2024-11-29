@@ -10,11 +10,7 @@ import {
   RecommendedQuestionsTask,
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
-
-interface SelectQuestionProps {
-  question: string;
-  sql: string;
-}
+import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
 export interface RecommendedQuestionsProps {
   data: RecommendedQuestionsTask;
@@ -61,11 +57,7 @@ const AnswerResultTemplate: React.FC<
     motion: boolean;
     onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
     onInitPreviewDone: () => void;
-    recommendedQuestionsProps: {
-      data: RecommendedQuestionsTask;
-      show: boolean;
-      onSelect: ({ question, sql }: SelectQuestionProps) => void;
-    };
+    recommendedQuestionsProps: RecommendedQuestionsProps;
   }
 > = ({
   data,

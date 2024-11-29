@@ -61,6 +61,22 @@ const QuestionTitle = (props) => {
   );
 };
 
+const renderRecommendedQuestions = (
+  isLastThreadResponse: boolean,
+  recommendedQuestionProps,
+  onSelect: RecommendedQuestionsProps['onSelect'],
+) => {
+  if (!isLastThreadResponse || !recommendedQuestionProps.show) return null;
+
+  return (
+    <RecommendedQuestions
+      className="mt-5 mb-4"
+      {...recommendedQuestionProps.state}
+      onSelect={onSelect}
+    />
+  );
+};
+
 export default function AnswerResult(props: Props) {
   const {
     motion,
@@ -92,12 +108,19 @@ export default function AnswerResult(props: Props) {
     <div style={resultStyle} className="adm-answer-result">
       <QuestionTitle className="mb-9" question={question} />
       {error ? (
-        <Alert
-          message={error.shortMessage}
-          description={error.message}
-          type="error"
-          showIcon
-        />
+        <>
+          <Alert
+            message={error.shortMessage}
+            description={error.message}
+            type="error"
+            showIcon
+          />
+          {renderRecommendedQuestions(
+            isLastThreadResponse,
+            recommendedQuestionProps,
+            recommendedQuestionsProps.onSelect,
+          )}
+        </>
       ) : (
         <StyledSkeleton active loading={loading}>
           <div className={clsx({ 'promptThread-answer': motion })}>
@@ -150,12 +173,10 @@ export default function AnswerResult(props: Props) {
                 Save as View
               </Button>
             )}
-            {isLastThreadResponse && recommendedQuestionProps.show && (
-              <RecommendedQuestions
-                className="mt-5 mb-4"
-                {...recommendedQuestionProps.state}
-                onSelect={recommendedQuestionsProps.onSelect}
-              />
+            {renderRecommendedQuestions(
+              isLastThreadResponse,
+              recommendedQuestionProps,
+              recommendedQuestionsProps.onSelect,
             )}
           </div>
         </StyledSkeleton>
