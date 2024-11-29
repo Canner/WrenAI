@@ -150,9 +150,8 @@ Categories: {{categories}}
 {% endif %}
 
 Current Date: {{current_date}}
-Localization Language: {{language}}
 
-Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model, using the localization language provided{% if user_question %} and the user's question{% endif %}.
+Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model. Both the questions and category names should be translated into {{language}}{% if user_question %} and be related to the user's question{% endif %}. The output format should maintain the structure but with localized text.
 """
 
 
