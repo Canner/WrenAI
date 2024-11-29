@@ -34,7 +34,7 @@ class TableDescriptionChunker:
                     "type": "TABLE_DESCRIPTION",
                     **_additional_meta(),
                 },
-                "content": chunk,
+                "content": str(chunk),
             }
             for chunk in self._get_table_descriptions(mdl)
         ]
