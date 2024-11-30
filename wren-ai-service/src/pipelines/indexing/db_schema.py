@@ -56,51 +56,46 @@ class DDLChunker:
             ]
         }
 
+    def _model_preprocessor(self, models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        def _column_preprocessor(column: Dict[str, Any]) -> Dict[str, Any]:
+            ddl_column = {
+                "name": column.get("name", ""),
+                "type": column.get("type", ""),
+            }
+            if "properties" in column:
+                ddl_column["properties"] = column["properties"]
+            if "relationship" in column:
+                ddl_column["relationship"] = column["relationship"]
+            if "expression" in column:
+                ddl_column["expression"] = column["expression"]
+            if "isCalculated" in column:
+                ddl_column["isCalculated"] = column["isCalculated"]
+            return ddl_column
+
+        def _preprocessor(model: Dict[str, Any]) -> Dict[str, Any]:
+            columns = [
+                _column_preprocessor(column) for column in model.get("columns", [])
+            ]
+            return {
+                "name": model.get("name", ""),
+                "properties": model.get("properties", {}),
+                "columns": columns,
+                "primaryKey": model.get("primaryKey", ""),
+            }
+
+        return [_preprocessor(model) for model in models]
+
     def _get_ddl_commands(
         self, mdl: Dict[str, Any], column_batch_size: int = 50
     ) -> List[dict]:
-        semantics = {
-            "models": [],
-            "relationships": mdl["relationships"],
-            "views": mdl["views"],
-            "metrics": mdl["metrics"],
-        }
-
-        for model in mdl["models"]:
-            columns = []
-            for column in model.get("columns", []):
-                ddl_column = {
-                    "name": column.get("name", ""),
-                    "type": column.get("type", ""),
-                }
-                if "properties" in column:
-                    ddl_column["properties"] = column["properties"]
-                if "relationship" in column:
-                    ddl_column["relationship"] = column["relationship"]
-                if "expression" in column:
-                    ddl_column["expression"] = column["expression"]
-                if "isCalculated" in column:
-                    ddl_column["isCalculated"] = column["isCalculated"]
-
-                columns.append(ddl_column)
-
-            semantics["models"].append(
-                {
-                    "name": model.get("name", ""),
-                    "properties": model.get("properties", {}),
-                    "columns": columns,
-                    "primaryKey": model.get("primaryKey", ""),
-                }
-            )
-
         return (
             self._convert_models_and_relationships(
-                semantics["models"],
-                semantics["relationships"],
+                self._model_preprocessor(mdl["models"]),
+                mdl["relationships"],
                 column_batch_size,
             )
-            + self._convert_views(semantics["views"])
-            + self._convert_metrics(semantics["metrics"])
+            + self._convert_views(mdl["views"])
+            + self._convert_metrics(mdl["metrics"])
         )
 
     def _convert_models_and_relationships(
