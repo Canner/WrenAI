@@ -4,7 +4,6 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
@@ -17,6 +16,10 @@ from tqdm import tqdm
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
+from src.pipelines.indexing.db_schema.helper import (
+    COLUMN_COMMENT_HELPERS,
+    COLUMN_PROPRECESSORS,
+)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -43,7 +46,9 @@ class DDLChunker:
                 },
                 "content": chunk["payload"],
             }
-            for chunk in self._get_ddl_commands(mdl, column_batch_size)
+            for chunk in self._get_ddl_commands(
+                **mdl, column_batch_size=column_batch_size
+            )
         ]
 
         return {
@@ -56,25 +61,28 @@ class DDLChunker:
             ]
         }
 
-    def _model_preprocessor(self, models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        def _column_preprocessor(column: Dict[str, Any]) -> Dict[str, Any]:
-            ddl_column = {
+    def _model_preprocessor(
+        self, models: List[Dict[str, Any]], **kwargs
+    ) -> List[Dict[str, Any]]:
+        def _column_preprocessor(
+            column: Dict[str, Any], model: Dict[str, Any]
+        ) -> Dict[str, Any]:
+            addition = {
+                key: helper(column, model, **kwargs)
+                for key, helper in COLUMN_PROPRECESSORS.items()
+                if helper.condition(column)
+            }
+
+            return {
                 "name": column.get("name", ""),
                 "type": column.get("type", ""),
+                **addition,
             }
-            if "properties" in column:
-                ddl_column["properties"] = column["properties"]
-            if "relationship" in column:
-                ddl_column["relationship"] = column["relationship"]
-            if "expression" in column:
-                ddl_column["expression"] = column["expression"]
-            if "isCalculated" in column:
-                ddl_column["isCalculated"] = column["isCalculated"]
-            return ddl_column
 
         def _preprocessor(model: Dict[str, Any]) -> Dict[str, Any]:
             columns = [
-                _column_preprocessor(column) for column in model.get("columns", [])
+                _column_preprocessor(column, model)
+                for column in model.get("columns", [])
             ]
             return {
                 "name": model.get("name", ""),
@@ -86,16 +94,22 @@ class DDLChunker:
         return [_preprocessor(model) for model in models]
 
     def _get_ddl_commands(
-        self, mdl: Dict[str, Any], column_batch_size: int = 50
+        self,
+        models: List[Dict[str, Any]],
+        relationships: List[Dict[str, Any]],
+        views: List[Dict[str, Any]],
+        metrics: List[Dict[str, Any]],
+        column_batch_size: int = 50,
+        **kwargs,
     ) -> List[dict]:
         return (
             self._convert_models_and_relationships(
-                self._model_preprocessor(mdl["models"]),
-                mdl["relationships"],
+                self._model_preprocessor(models, **kwargs),
+                relationships,
                 column_batch_size,
             )
-            + self._convert_views(mdl["views"])
-            + self._convert_metrics(mdl["metrics"])
+            + self._convert_views(views)
+            + self._convert_metrics(metrics)
         )
 
     def _convert_models_and_relationships(
@@ -125,26 +139,15 @@ class DDLChunker:
             if column.get("relationship"):
                 return None
 
-            # Build column properties
-            props = column["properties"]
-            column_properties = {
-                "alias": props.get("displayName", ""),
-                "description": props.get("description", ""),
-            }
-
-            # Add any nested columns if they exist
-            nested = {k: v for k, v in props.items() if k.startswith("nested")}
-            if nested:
-                column_properties["nested_columns"] = nested
-
-            # Build comment string
-            comment = f"-- {orjson.dumps(column_properties).decode('utf-8')}\n  "
-            if column.get("isCalculated"):
-                comment += f"-- This column is a Calculated Field\n  -- column expression: {column['expression']}\n  "
+            comments = [
+                helper(column, model)
+                for helper in COLUMN_COMMENT_HELPERS.values()
+                if helper.condition(column)
+            ]
 
             return {
                 "type": "COLUMN",
-                "comment": comment,
+                "comment": "".join(comments),
                 "name": column["name"],
                 "data_type": column["type"],
                 "is_primary_key": column["name"] == model["primaryKey"],
