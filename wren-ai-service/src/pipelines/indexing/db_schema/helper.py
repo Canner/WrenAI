@@ -12,10 +12,10 @@ logger = logging.getLogger("wren-ai-service")
 class ColumnHelper:
     def __init__(
         self,
-        condiction: Callable[[Dict[str, Any]], bool],
+        condition: Callable[[Dict[str, Any]], bool],
         helper: Callable[[Dict[str, Any]], Any],
     ):
-        self.condiction = condiction
+        self.condiction = condition
         self.helper = helper
 
     def condition(self, column: Dict[str, Any], **kwargs) -> bool:
@@ -42,30 +42,30 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
 
 COLUMN_PROPRECESSORS = {
     "properties": ColumnHelper(
-        condiction=lambda column, **_: "properties" in column,
+        condition=lambda column, **_: "properties" in column,
         helper=lambda column, **_: column.get("properties"),
     ),
     "relationship": ColumnHelper(
-        condiction=lambda column, **_: "relationship" in column,
+        condition=lambda column, **_: "relationship" in column,
         helper=lambda column, **_: column.get("relationship"),
     ),
     "expression": ColumnHelper(
-        condiction=lambda column, **_: "expression" in column,
+        condition=lambda column, **_: "expression" in column,
         helper=lambda column, **_: column.get("expression"),
     ),
     "isCalculated": ColumnHelper(
-        condiction=lambda column, **_: column.get("isCalculated", False),
+        condition=lambda column, **_: column.get("isCalculated", False),
         helper=lambda column, **_: column.get("isCalculated"),
     ),
 }
 
 COLUMN_COMMENT_HELPERS = {
     "properties": ColumnHelper(
-        condiction=lambda column, **_: "properties" in column,
+        condition=lambda column, **_: "properties" in column,
         helper=_properties_comment,
     ),
     "isCalculated": ColumnHelper(
-        condiction=lambda column, **_: column.get("isCalculated", False),
+        condition=lambda column, **_: column.get("isCalculated", False),
         helper=lambda column,
         **_: f"-- This column is a Calculated Field\n  -- column expression: {column['expression']}\n  ",
     ),
