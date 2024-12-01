@@ -68,7 +68,7 @@ class DDLChunker:
             column: Dict[str, Any], model: Dict[str, Any]
         ) -> Dict[str, Any]:
             addition = {
-                key: helper(column, model, **kwargs)
+                key: helper(column, model=model, **kwargs)
                 for key, helper in COLUMN_PROPRECESSORS.items()
                 if helper.condition(column)
             }
@@ -140,7 +140,7 @@ class DDLChunker:
                 return None
 
             comments = [
-                helper(column, model)
+                helper(column, model=model)
                 for helper in COLUMN_COMMENT_HELPERS.values()
                 if helper.condition(column)
             ]

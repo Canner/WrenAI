@@ -54,7 +54,7 @@ COLUMN_PROPRECESSORS = {
         helper=lambda column, **_: column.get("expression"),
     ),
     "isCalculated": ColumnHelper(
-        condiction=lambda column, **_: "isCalculated" in column,
+        condiction=lambda column, **_: column.get("isCalculated", False),
         helper=lambda column, **_: column.get("isCalculated"),
     ),
 }
@@ -65,7 +65,7 @@ COLUMN_COMMENT_HELPERS = {
         helper=_properties_comment,
     ),
     "isCalculated": ColumnHelper(
-        condiction=lambda column, **_: "isCalculated" in column,
+        condiction=lambda column, **_: column.get("isCalculated", False),
         helper=lambda column,
         **_: f"-- This column is a Calculated Field\n  -- column expression: {column['expression']}\n  ",
     ),
