@@ -16,10 +16,7 @@ from tqdm import tqdm
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
-from src.pipelines.indexing.db_schema.helper import (
-    COLUMN_COMMENT_HELPERS,
-    COLUMN_PROPRECESSORS,
-)
+from src.pipelines.indexing.db_schema import helper
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -69,7 +66,7 @@ class DDLChunker:
         ) -> Dict[str, Any]:
             addition = {
                 key: helper(column, model=model, **kwargs)
-                for key, helper in COLUMN_PROPRECESSORS.items()
+                for key, helper in helper.COLUMN_PROPRECESSORS.items()
                 if helper.condition(column)
             }
 
@@ -141,7 +138,7 @@ class DDLChunker:
 
             comments = [
                 helper(column, model=model)
-                for helper in COLUMN_COMMENT_HELPERS.values()
+                for helper in helper.COLUMN_COMMENT_HELPERS.values()
                 if helper.condition(column)
             ]
 
@@ -350,6 +347,7 @@ class DBSchema(BasicPipeline):
         }
         self._final = "write"
 
+        helper.load_helpers()
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )

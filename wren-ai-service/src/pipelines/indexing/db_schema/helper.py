@@ -74,46 +74,48 @@ COLUMN_COMMENT_HELPERS = {
 
 def load_helpers(package_path: str = "src.pipelines.indexing.db_schema"):
     """
-    Dynamically loads column helpers from modules within a specified package path.
+    Dynamically loads column preprocessors and comment helpers from modules within a specified package path.
 
     This function walks through all modules in the given package path and looks for modules
-    that define a HELPER dictionary. When found, these helpers are added to the
-    global COLUMN_HELPER dictionary.
+    that define COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS dictionaries. When found,
+    these helpers are added to the global COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS dictionaries.
 
     Args:
         package_path (str): The Python package path to search for helper modules.
                           Defaults to "src.pipelines.indexing.db_schema".
 
     Returns:
-        None: The function updates the global COLUMN_HELPER dictionary in place.
+        None: The function updates the global COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS
+              dictionaries in place.
 
     Example:
         If a module in the package path contains:
-        HELPER = {
-            "sample": Helper(
-                condiction=lambda column: True,
-                processor=lambda column, **_: column.get("sample", ""),
+        COLUMN_PROPRECESSORS = {
+            "example": ColumnHelper(
+                condition=lambda column: True,
+                helper=lambda column, **_: column.get("example", ""),
             )
         }
-        This will be added to COLUMN_HELPER.
+        COLUMN_COMMENT_HELPERS = {
+            "example": ColumnHelper(
+                condition=lambda column: True,
+                helper=lambda column, **_: f"-- {column.get('example')}\n  ",
+            )
+        }
+        These will be added to the respective global dictionaries.
     """
-    if package_path in sys.modules:
-        return
-
     package = importlib.import_module(package_path)
+    logger.debug(f"Loading Helpers for DB Schema Indexing Pipeline: {package_path}")
 
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         if name in sys.modules:
             continue
 
         module = importlib.import_module(name)
-        logger.debug(f"Imported Helper: {name}")
+        logger.debug(f"Imported Helper from {name}")
         if hasattr(module, "COLUMN_PROPRECESSORS"):
             COLUMN_PROPRECESSORS.update(module.COLUMN_PROPRECESSORS)
-            logger.debug(f"Updated Helper: {name} for column preprocessors")
+            logger.debug(f"Updated Helper for column preprocessors: {name}")
         if hasattr(module, "COLUMN_COMMENT_HELPERS"):
             COLUMN_COMMENT_HELPERS.update(module.COLUMN_COMMENT_HELPERS)
-            logger.debug(f"Updated Helper: {name} for column comment helpers")
-
-
-load_helpers()
+            logger.debug(f"Updated Helper for column comment helpers: {name}")
