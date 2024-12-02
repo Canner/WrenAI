@@ -159,10 +159,10 @@ export default function HomeThread() {
       const response = await createThreadResponse({
         variables: { threadId: thread.id, data: payload },
       });
+      setShowRecommendedQuestions(false);
       await generateThreadRecommendationQuestions({
         variables: { threadId: thread.id },
       });
-      setShowRecommendedQuestions(false);
       await fetchThreadResponse({
         variables: { responseId: response.data.createThreadResponse.id },
       });
