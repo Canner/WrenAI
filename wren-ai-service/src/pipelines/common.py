@@ -564,7 +564,7 @@ chart_generation_instructions = """
             {"Company": "Company D", "Market Share": 0.1}
         ]
     },
-    "mark": {"type": "arc", "innerRadius": 50},
+    "mark": {"type": "arc"},
     "encoding": {
         "theta": {"field": "Market Share", "type": "quantitative"},
         "color": {"field": "Company", "type": "nominal"}
