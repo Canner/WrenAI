@@ -107,10 +107,8 @@ pipes:
     document_store: qdrant
   - name: data_assistance
     llm: openai_llm.gpt-4o-mini
-  - name: sql_executor
-    engine: wren_ui
-  - llm: openai_llm.gpt-4o-mini
-    name: preprocess_sql_data
+  - name: preprocess_sql_data
+    llm: openai_llm.gpt-4o-mini
 ---
 settings:
   host: 127.0.0.1

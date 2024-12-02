@@ -5,12 +5,12 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import component
 from langfuse.decorators import observe
 
 from src.core.engine import Engine
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.utils import async_timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -100,22 +100,10 @@ class SQLExecutor(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    _, _, _, engine = init_providers(EngineConfig())
-    pipeline = SQLExecutor(
-        engine=engine,
+    dry_run_pipeline(
+        SQLExecutor,
+        "sql_executor",
+        sql="SELECT * FROM table",
     )
-
-    pipeline.visualize("SELECT * FROM table_name")
-    async_validate(lambda: pipeline.run("SELECT * FROM table_name"))
-
-    langfuse_context.flush()
