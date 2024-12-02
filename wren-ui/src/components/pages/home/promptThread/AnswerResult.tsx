@@ -102,21 +102,30 @@ export default function AnswerResult(props: Props) {
     recommendedQuestionsProps.show,
   );
 
+  // TODO: existing thread response doesn't have a text-based answer
+  const hasTextBasedAnswer = true;
+
   return (
     <div style={resultStyle} className="adm-answer-result">
       <QuestionTitle className="mb-6" question={question} />
       <StyledTabs type="card" size="small">
-        <Tabs.TabPane
-          key="answer"
-          tab={
-            <>
-              <CheckCircleFilled className="mr-2 green-6" />
-              <Text>Answer</Text>
-            </>
-          }
-        >
-          <TextBasedAnswer />
-        </Tabs.TabPane>
+        {hasTextBasedAnswer && (
+          <Tabs.TabPane
+            key="answer"
+            tab={
+              <>
+                <CheckCircleFilled className="mr-2 green-6" />
+                <Text>Answer</Text>
+              </>
+            }
+          >
+            <TextBasedAnswer
+              threadResponse={threadResponse}
+              isLastThreadResponse={isLastThreadResponse}
+              onInitPreviewDone={onInitPreviewDone}
+            />
+          </Tabs.TabPane>
+        )}
         <Tabs.TabPane
           key="view-sql"
           tab={
