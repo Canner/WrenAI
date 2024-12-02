@@ -444,7 +444,6 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 """
 
-
 chart_generation_instructions = """
 ### INSTRUCTIONS ###
 
@@ -457,7 +456,19 @@ chart_generation_instructions = """
 - In order to generate the grouped bar chart, you need to follow the given instructions:
     - Disable Stacking: Add "stack": null to the y-encoding.
     - Use xOffset: Introduce xOffset for subcategories to group bars.
-
+- In order to generate the pie chart, you need to follow the given instructions:
+    - Add {"type": "arc"} to the mark section.
+    - Add "theta" encoding to the encoding section.
+    - Add "color" encoding to the encoding section.
+    - Don't add "innerRadius" to the mark section.
+- If the x-axis of the chart is a temporal field, the time unit should be the same as the question user asked.
+    - For yearly question, the time unit should be "year", ex. YYYY.
+    - For monthly question, the time unit should be "year + month", ex. YYYY-MM.
+    - For weekly question, the time unit should be "year + month + day", ex. YYYY-MM-DD.
+    - For daily question, the time unit should be "year + month + day", ex. YYYY-MM-DD.
+- Always add tooltip to the chart using the "tooltip" property in the mark section.
+    - The tooltip should be {"content": "data"}
+    
 ### GUIDELINES TO PLOT CHART ###
 
 1. Understanding Your Data Types
@@ -526,7 +537,7 @@ chart_generation_instructions = """
             {"Region": "West", "Sales": 400}
         ]
     },
-    "mark": "bar",
+    "mark": {"type": "bar", "tooltip": {"content": "data"}},
     "encoding": {
         "x": {"field": "Region", "type": "nominal"},
         "y": {"field": "Sales", "type": "quantitative"}
@@ -545,7 +556,7 @@ chart_generation_instructions = """
             {"Date": "2022-01-04", "Sales": 400}
         ]
     },
-    "mark": "line",
+    "mark": {"type": "line", "tooltip": {"content": "data"}},
     "encoding": {
         "x": {"field": "Date", "type": "temporal"},
         "y": {"field": "Sales", "type": "quantitative"}
@@ -564,7 +575,7 @@ chart_generation_instructions = """
             {"Company": "Company D", "Market Share": 0.1}
         ]
     },
-    "mark": {"type": "arc"},
+    "mark": {"type": "arc", "tooltip": {"content": "data"}},
     "encoding": {
         "theta": {"field": "Market Share", "type": "quantitative"},
         "color": {"field": "Company", "type": "nominal"}
