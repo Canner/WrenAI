@@ -76,35 +76,48 @@ MODEL_PREPROCESSORS = {}
 
 def load_helpers(package_path: str = "src.pipelines.indexing.db_schema"):
     """
-    Dynamically loads column preprocessors and comment helpers from modules within a specified package path.
+    Dynamically loads preprocessors and comment helpers from modules within a specified package path.
 
     This function walks through all modules in the given package path and looks for modules
-    that define COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS dictionaries. When found,
-    these helpers are added to the global COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS dictionaries.
+    that define MODEL_PREPROCESSORS, COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS dictionaries.
+    When found, these helpers are added to the corresponding global dictionaries.
+
+    The helpers are used to preprocess and format comments for database schema elements like
+    models and columns during the DB Schema indexing pipeline.
 
     Args:
         package_path (str): The Python package path to search for helper modules.
                           Defaults to "src.pipelines.indexing.db_schema".
 
     Returns:
-        None: The function updates the global COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS
-              dictionaries in place.
+        None: The function updates the global MODEL_PREPROCESSORS, COLUMN_PROPRECESSORS
+              and COLUMN_COMMENT_HELPERS dictionaries in place.
 
     Example:
         If a module in the package path contains:
+
+        MODEL_PREPROCESSORS = {
+            "example": Helper(
+                condition=lambda model: True,
+                helper=lambda model, **_: model.get("example", ""),
+            )
+        }
+
         COLUMN_PROPRECESSORS = {
-            "example": ColumnHelper(
+            "example": Helper(
                 condition=lambda column: True,
                 helper=lambda column, **_: column.get("example", ""),
             )
         }
+
         COLUMN_COMMENT_HELPERS = {
-            "example": ColumnHelper(
+            "example": Helper(
                 condition=lambda column: True,
                 helper=lambda column, **_: f"-- {column.get('example')}\n  ",
             )
         }
-        These will be added to the respective global dictionaries.
+
+        These will be added to their respective global dictionaries.
     """
     package = importlib.import_module(package_path)
     logger.debug(f"Loading Helpers for DB Schema Indexing Pipeline: {package_path}")
