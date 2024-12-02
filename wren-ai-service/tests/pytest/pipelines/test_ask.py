@@ -8,7 +8,6 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvid
 from src.pipelines.generation.followup_sql_generation import FollowUpSQLGeneration
 from src.pipelines.generation.sql_correction import SQLCorrection
 from src.pipelines.generation.sql_generation import SQLGeneration
-from src.pipelines.indexing.indexing import Indexing
 from src.pipelines.retrieval.retrieval import Retrieval
 from src.providers import init_providers
 from src.web.v1.services import Configuration
@@ -45,66 +44,6 @@ def document_store_provider():
     _, _, document_store_provider, _ = init_providers(EngineConfig())
 
     return document_store_provider
-
-
-@pytest.mark.asyncio
-async def test_clear_documents(mdl_str: str):
-    _, embedder_provider, document_store_provider, _ = init_providers(EngineConfig())
-    store = document_store_provider.get_store()
-
-    indexing_pipeline = Indexing(
-        embedder_provider=embedder_provider,
-        document_store_provider=document_store_provider,
-    )
-
-    await indexing_pipeline.run(mdl_str)
-
-    assert await store.count_documents() == 5
-
-    await indexing_pipeline.run(
-        """
-        {
-            "models": [],
-            "relationships": [],
-            "metrics": [],
-            "views": [
-                {
-                    "name": "book",
-                    "statement": "SELECT * FROM book",
-                    "properties": {
-                        "question": "How many books are there?",
-                        "description": "Retrieve the number of books"
-                    }
-                }
-            ]
-        }
-        """
-    )
-
-    assert await store.count_documents() == 1
-
-
-# todo: remove this test case
-@pytest.mark.asyncio
-async def test_indexing_pipeline(
-    mdl_str: str,
-    embedder_provider: EmbedderProvider,
-    document_store_provider: DocumentStoreProvider,
-):
-    indexing_pipeline = Indexing(
-        embedder_provider=embedder_provider,
-        document_store_provider=document_store_provider,
-    )
-
-    await indexing_pipeline.run(mdl_str)
-
-    assert await document_store_provider.get_store().count_documents() == 5
-    assert (
-        await document_store_provider.get_store(
-            dataset_name="view_questions",
-        ).count_documents()
-        == 1
-    )
 
 
 @pytest.mark.asyncio

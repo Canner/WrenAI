@@ -13,7 +13,6 @@ from src.pipelines.generation import (
     sql_correction,
     sql_generation,
 )
-from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question, retrieval
 from src.providers import init_providers
 from src.web.v1.services.ask import (
@@ -78,10 +77,10 @@ def indexing_service():
 
     return SemanticsPreparationService(
         {
-            "indexing": indexing.Indexing(
-                embedder_provider=embedder_provider,
-                document_store_provider=document_store_provider,
-            ),
+            # "indexing": indexing.Indexing(
+            #     embedder_provider=embedder_provider,
+            #     document_store_provider=document_store_provider,
+            # ),
         }
     )
 
