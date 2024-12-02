@@ -1,18 +1,15 @@
 import clsx from 'clsx';
-import Link from 'next/link';
-import { Button, Skeleton, Typography, Alert } from 'antd';
+import { Skeleton, Typography, Alert } from 'antd';
 import styled from 'styled-components';
-import { Path } from '@/utils/enum';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
-import SaveOutlined from '@ant-design/icons/SaveOutlined';
-import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import StepContent from '@/components/pages/home/promptThread/StepContent';
 import { getIsFinished } from '@/hooks/useAskPrompt';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
+import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import { ThreadResponse } from '@/apollo/client/graphql/__types__';
 
 const { Title, Text } = Typography;
@@ -93,8 +90,6 @@ export default function AnswerResult(props: Props) {
 
   const loading = !getIsFinished(status);
 
-  const isViewSaved = !!view;
-
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
     : null;
@@ -144,35 +139,15 @@ export default function AnswerResult(props: Props) {
                 />
               ))}
             </StyledAnswer>
-            {isViewSaved ? (
-              <div className="mt-2 gray-6 text-medium">
-                <FileDoneOutlined className="mr-2" />
-                Generated from saved view{' '}
-                <Link
-                  className="gray-7"
-                  href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {view.displayName}
-                </Link>
-              </div>
-            ) : (
-              <Button
-                className="mt-2 gray-6"
-                type="text"
-                size="small"
-                icon={<SaveOutlined />}
-                onClick={() =>
-                  onOpenSaveAsViewModal({
-                    sql,
-                    responseId: threadResponse.id,
-                  })
-                }
-              >
-                Save as View
-              </Button>
-            )}
+            <ViewBlock
+              view={view}
+              onClick={() =>
+                onOpenSaveAsViewModal({
+                  sql,
+                  responseId: threadResponse.id,
+                })
+              }
+            />
             {renderRecommendedQuestions(
               isLastThreadResponse,
               recommendedQuestionProps,
