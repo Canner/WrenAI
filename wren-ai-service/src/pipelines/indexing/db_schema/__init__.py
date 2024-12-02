@@ -62,12 +62,12 @@ class DDLChunker:
         self, models: List[Dict[str, Any]], **kwargs
     ) -> List[Dict[str, Any]]:
         def _column_preprocessor(
-            column: Dict[str, Any], model: Dict[str, Any]
+            column: Dict[str, Any], addition: Dict[str, Any]
         ) -> Dict[str, Any]:
             addition = {
-                key: helper(column, model=model, **kwargs)
+                key: helper(column, **addition)
                 for key, helper in helper.COLUMN_PROPRECESSORS.items()
-                if helper.condition(column)
+                if helper.condition(column, **addition)
             }
 
             return {
@@ -76,9 +76,15 @@ class DDLChunker:
                 **addition,
             }
 
-        def _preprocessor(model: Dict[str, Any]) -> Dict[str, Any]:
+        def _preprocessor(model: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            addition = {
+                key: helper(model, **kwargs)
+                for key, helper in helper.MODEL_PREPROCESSORS.items()
+                if helper.condition(model, **kwargs)
+            }
+
             columns = [
-                _column_preprocessor(column, model)
+                _column_preprocessor(column, addition)
                 for column in model.get("columns", [])
             ]
             return {
@@ -88,7 +94,7 @@ class DDLChunker:
                 "primaryKey": model.get("primaryKey", ""),
             }
 
-        return [_preprocessor(model) for model in models]
+        return [_preprocessor(model, **kwargs) for model in models]
 
     def _get_ddl_commands(
         self,

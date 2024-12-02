@@ -9,7 +9,7 @@ import orjson
 logger = logging.getLogger("wren-ai-service")
 
 
-class ColumnHelper:
+class Helper:
     def __init__(
         self,
         condition: Callable[[Dict[str, Any]], bool],
@@ -41,35 +41,37 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
 
 
 COLUMN_PROPRECESSORS = {
-    "properties": ColumnHelper(
+    "properties": Helper(
         condition=lambda column, **_: "properties" in column,
         helper=lambda column, **_: column.get("properties"),
     ),
-    "relationship": ColumnHelper(
+    "relationship": Helper(
         condition=lambda column, **_: "relationship" in column,
         helper=lambda column, **_: column.get("relationship"),
     ),
-    "expression": ColumnHelper(
+    "expression": Helper(
         condition=lambda column, **_: "expression" in column,
         helper=lambda column, **_: column.get("expression"),
     ),
-    "isCalculated": ColumnHelper(
+    "isCalculated": Helper(
         condition=lambda column, **_: column.get("isCalculated", False),
         helper=lambda column, **_: column.get("isCalculated"),
     ),
 }
 
 COLUMN_COMMENT_HELPERS = {
-    "properties": ColumnHelper(
+    "properties": Helper(
         condition=lambda column, **_: "properties" in column,
         helper=_properties_comment,
     ),
-    "isCalculated": ColumnHelper(
+    "isCalculated": Helper(
         condition=lambda column, **_: column.get("isCalculated", False),
         helper=lambda column,
         **_: f"-- This column is a Calculated Field\n  -- column expression: {column['expression']}\n  ",
     ),
 }
+
+MODEL_PREPROCESSORS = {}
 
 
 def load_helpers(package_path: str = "src.pipelines.indexing.db_schema"):
@@ -113,6 +115,9 @@ def load_helpers(package_path: str = "src.pipelines.indexing.db_schema"):
 
         module = importlib.import_module(name)
         logger.debug(f"Imported Helper from {name}")
+        if hasattr(module, "MODEL_PREPROCESSORS"):
+            MODEL_PREPROCESSORS.update(module.MODEL_PREPROCESSORS)
+            logger.debug(f"Updated Helper for model preprocessors: {name}")
         if hasattr(module, "COLUMN_PROPRECESSORS"):
             COLUMN_PROPRECESSORS.update(module.COLUMN_PROPRECESSORS)
             logger.debug(f"Updated Helper for column preprocessors: {name}")
