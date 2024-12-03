@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
@@ -7,7 +8,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
-from src.web.v1.services import Configuration
+from src.web.v1.services import Configuration, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -17,6 +18,7 @@ class SqlAnswerRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
+    sql_data: Dict
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     configurations: Optional[Configuration] = Configuration()
@@ -34,7 +36,7 @@ class SqlAnswerResponse(BaseModel):
     query_id: str
 
 
-# GET /v1/sql-answers/{query_id}/result
+# GET /v1/sql-answers/{query_id}
 class SqlAnswerResultRequest(BaseModel):
     query_id: str
 
@@ -44,8 +46,8 @@ class SqlAnswerResultResponse(BaseModel):
         code: Literal["OTHERS"]
         message: str
 
-    status: Literal["understanding", "processing", "finished", "failed"]
-    response: Optional[str] = None
+    status: Literal["preprocessing", "succeeded", "failed"]
+    num_rows_used_in_llm: Optional[int] = None
     error: Optional[SqlAnswerError] = None
 
 
@@ -83,41 +85,28 @@ class SqlAnswerService:
             query_id = sql_answer_request.query_id
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="understanding",
+                status="preprocessing",
             )
+
+            preprocessed_sql_data = self._pipelines["preprocess_sql_data"].run(
+                sql_data=sql_answer_request.sql_data,
+            )["preprocess"]
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                status="processing",
+                status="succeeded",
+                num_rows_used_in_llm=preprocessed_sql_data.get("num_rows_used_in_llm"),
             )
 
-            data = await self._pipelines["sql_answer"].run(
-                query=sql_answer_request.query,
-                sql=sql_answer_request.sql,
-                project_id=sql_answer_request.thread_id,
-                language=sql_answer_request.configurations.language,
+            asyncio.create_task(
+                self._pipelines["sql_answer"].run(
+                    query=sql_answer_request.query,
+                    sql=sql_answer_request.sql,
+                    sql_data=preprocessed_sql_data.get("sql_data", {}),
+                    language=sql_answer_request.configurations.language,
+                    query_id=query_id,
+                )
             )
-            api_results = data["post_process"]["results"]
-            if answer := api_results["answer"]:
-                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                    status="finished",
-                    response=answer,
-                )
-            else:
-                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                    status="failed",
-                    error=SqlAnswerResultResponse.SqlAnswerError(
-                        code="OTHERS",
-                        message=api_results["error"],
-                    ),
-                )
 
-                results["metadata"]["error_type"] = "OTHERS"
-                results["metadata"]["error_message"] = api_results["error"]
-
-            results["sql_answer_result"] = {
-                "answer": api_results["answer"],
-                "reasoning": api_results["reasoning"],
-            }
             return results
         except Exception as e:
             logger.exception(f"sql answer pipeline - OTHERS: {e}")
@@ -155,3 +144,19 @@ class SqlAnswerService:
             )
 
         return result
+
+    async def get_sql_answer_streaming_result(
+        self,
+        query_id: str,
+    ):
+        if (
+            self._sql_answer_results.get(query_id)
+            and self._sql_answer_results.get(query_id).status == "succeeded"
+        ):
+            async for chunk in self._pipelines["sql_answer"].get_streaming_results(
+                query_id
+            ):
+                event = SSEEvent(
+                    data=SSEEvent.SSEEventMessage(message=chunk),
+                )
+                yield event.serialize()

@@ -23,7 +23,7 @@ from src.pipelines.generation import (
     sql_summary,
 )
 from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.question_recommendation import QuestionRecommendation
@@ -118,9 +118,12 @@ def create_service_container(
         ),
         sql_answer_service=SqlAnswerService(
             pipelines={
+                "preprocess_sql_data": preprocess_sql_data.PreprocessSqlData(
+                    **pipe_components["preprocess_sql_data"],
+                ),
                 "sql_answer": sql_answer.SQLAnswer(
                     **pipe_components["sql_answer"],
-                )
+                ),
             },
             **query_cache,
         ),
