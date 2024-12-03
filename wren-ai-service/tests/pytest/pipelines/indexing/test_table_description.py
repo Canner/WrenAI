@@ -128,7 +128,7 @@ def test_table_description_missing_description():
 
 
 @pytest.mark.asyncio
-async def test_table_description_pipeline_run(mocker: MockFixture):
+async def test_pipeline_run(mocker: MockFixture):
     test_mdl = {
         "models": [
             {
@@ -144,8 +144,6 @@ async def test_table_description_pipeline_run(mocker: MockFixture):
         "relationships": [],
         "metrics": [],
     }
-    chunker = TableDescriptionChunker()
-    documents = chunker.run(test_mdl)["documents"]
 
     # Mock embedder provider
     embedder_provider = mocker.patch("src.core.provider.EmbedderProvider")
@@ -154,7 +152,7 @@ async def test_table_description_pipeline_run(mocker: MockFixture):
         embedder,
         "run",
         new_callable=AsyncMock,
-        return_value={"documents": documents},
+        side_effect=lambda documents: {"documents": documents},
     )
     embedder_provider.get_document_embedder.return_value = embedder
 
@@ -167,7 +165,7 @@ async def test_table_description_pipeline_run(mocker: MockFixture):
         document_store,
         "write_documents",
         new_callable=AsyncMock,
-        return_value=len(documents),
+        side_effect=lambda documents, *_, **__: len(documents),
     )
     document_store_provider = mocker.patch("src.core.provider.DocumentStoreProvider")
     document_store_provider.get_store.return_value = document_store
@@ -179,4 +177,4 @@ async def test_table_description_pipeline_run(mocker: MockFixture):
 
     result = await pipeline.run(orjson.dumps(test_mdl), project_id="test-project")
     assert result is not None
-    assert result == {"write": {"documents_written": len(documents)}}
+    assert result == {"write": {"documents_written": 2}}

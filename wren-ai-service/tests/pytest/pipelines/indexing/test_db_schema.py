@@ -535,7 +535,7 @@ def test_metric():
 
 
 @pytest.mark.asyncio
-async def test_pipeline(mocker: MockFixture):
+async def test_pipeline_run(mocker: MockFixture):
     test_mdl = {
         "models": [
             {
@@ -574,9 +574,6 @@ async def test_pipeline(mocker: MockFixture):
             }
         ],
     }
-
-    # chunker = DDLChunker()
-    # documents = chunker.run(test_mdl, column_batch_size=1)["documents"]
 
     # Mock embedder provider
     embedder_provider = mocker.patch("src.core.provider.EmbedderProvider")

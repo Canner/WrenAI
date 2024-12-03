@@ -290,7 +290,7 @@ async def test_pipeline_run(mocker: MockFixture):
         embedder,
         "run",
         new_callable=AsyncMock,
-        return_value={"documents": [Document(content="test")]},
+        side_effect=lambda documents: {"documents": documents},
     )
     embedder_provider.get_document_embedder.return_value = embedder
 
@@ -300,7 +300,10 @@ async def test_pipeline_run(mocker: MockFixture):
         document_store, "delete_documents", new_callable=AsyncMock, return_value=None
     )
     mocker.patch.object(
-        document_store, "write_documents", new_callable=AsyncMock, return_value=1
+        document_store,
+        "write_documents",
+        new_callable=AsyncMock,
+        side_effect=lambda documents, *_, **__: len(documents),
     )
     document_store_provider = mocker.patch("src.core.provider.DocumentStoreProvider")
     document_store_provider.get_store.return_value = document_store
@@ -348,7 +351,10 @@ async def test_pipeline_run_embedder_error(mocker: MockFixture):
         document_store, "delete_documents", new_callable=AsyncMock, return_value=None
     )
     mocker.patch.object(
-        document_store, "write_documents", new_callable=AsyncMock, return_value=1
+        document_store,
+        "write_documents",
+        new_callable=AsyncMock,
+        side_effect=lambda documents, *_, **__: len(documents),
     )
     document_store_provider = mocker.patch("src.core.provider.DocumentStoreProvider")
     document_store_provider.get_store.return_value = document_store
