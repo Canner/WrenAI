@@ -41,7 +41,6 @@ Endpoints:
        "mdl_hash": null,                         # Optional hash for model identification
        "thread_id": null,                        # Optional identifier for the processing thread
        "project_id": null,                       # Optional project identifier
-       "user_id": null                           # Optional user identifier
      }
    - Response: SQLRegenerationResponse
      {

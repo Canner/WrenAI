@@ -13,7 +13,6 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -74,7 +73,6 @@ class SQLSummaryPostProcessor:
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -89,13 +87,11 @@ def prompt(
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_summary(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-@timer
 def post_process(
     generate_sql_summary: dict,
     sqls: List[str],
@@ -166,7 +162,6 @@ class SQLSummary(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="SQL Summary")
     async def run(
         self,

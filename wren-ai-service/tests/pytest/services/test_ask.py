@@ -14,7 +14,7 @@ from src.pipelines.generation import (
     sql_generation,
 )
 from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.retrieval import historical_question_retrieval, retrieval
 from src.providers import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
@@ -56,7 +56,7 @@ def ask_service():
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
-            "historical_question": historical_question.HistoricalQuestion(
+            "historical_question_retrieval": historical_question_retrieval.HistoricalQuestionRetrieval(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),
@@ -171,7 +171,7 @@ def _ask_service_ttl_mock(query: str):
                     f"mock document 2 for {query}",
                 ]
             ),
-            "historical_question": HistoricalQuestionMock(),
+            "historical_question_retrieval": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
                 valid=[{"sql": "select count(*) from books"}],
             ),

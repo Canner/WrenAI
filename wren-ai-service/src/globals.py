@@ -22,8 +22,13 @@ from src.pipelines.generation import (
     sql_regeneration,
     sql_summary,
 )
-from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
+from src.pipelines.indexing import indexing, sql_pairs_deletion, sql_pairs_preparation
+from src.pipelines.retrieval import (
+    historical_question_retrieval,
+    preprocess_sql_data,
+    retrieval,
+    sql_pairs_retrieval,
+)
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.question_recommendation import QuestionRecommendation
@@ -33,6 +38,7 @@ from src.web.v1.services.semantics_preparation import SemanticsPreparationServic
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
 from src.web.v1.services.sql_explanation import SQLExplanationService
+from src.web.v1.services.sql_pairs_preparation import SqlPairsPreparationService
 from src.web.v1.services.sql_regeneration import SQLRegenerationService
 
 logger = logging.getLogger("wren-ai-service")
@@ -50,6 +56,7 @@ class ServiceContainer:
     sql_expansion_service: SqlExpansionService
     sql_explanation_service: SQLExplanationService
     sql_regeneration_service: SQLRegenerationService
+    sql_pairs_preparation_service: SqlPairsPreparationService
 
 
 @dataclass
@@ -98,8 +105,11 @@ def create_service_container(
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
-                "historical_question": historical_question.HistoricalQuestion(
-                    **pipe_components["historical_question"],
+                "historical_question_retrieval": historical_question_retrieval.HistoricalQuestionRetrieval(
+                    **pipe_components["historical_question_retrieval"],
+                ),
+                "sql_pairs_retrieval": sql_pairs_retrieval.SqlPairsRetrieval(
+                    **pipe_components["sql_pairs_retrieval"],
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],
@@ -194,6 +204,17 @@ def create_service_container(
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],
+                ),
+            },
+            **query_cache,
+        ),
+        sql_pairs_preparation_service=SqlPairsPreparationService(
+            pipelines={
+                "sql_pairs_preparation": sql_pairs_preparation.SqlPairsPreparation(
+                    **pipe_components["sql_pairs_preparation"],
+                ),
+                "sql_pairs_deletion": sql_pairs_deletion.SqlPairsDeletion(
+                    **pipe_components["sql_pairs_deletion"],
                 ),
             },
             **query_cache,
