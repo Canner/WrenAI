@@ -122,9 +122,12 @@ def test_load_helpers(mocker: MockerFixture):
 
     assert len(MODEL_PREPROCESSORS) == 1
     assert MODEL_PREPROCESSORS.get("test") == "test_preprocessor"
+    del MODEL_PREPROCESSORS["test"]
 
     assert len(COLUMN_PROPRECESSORS) == 5
     assert COLUMN_PROPRECESSORS.get("test") == "test_column_preprocessor"
+    del COLUMN_PROPRECESSORS["test"]
 
     assert len(COLUMN_COMMENT_HELPERS) == 3
     assert COLUMN_COMMENT_HELPERS.get("test") == "test_comment_helper"
+    del COLUMN_COMMENT_HELPERS["test"]
