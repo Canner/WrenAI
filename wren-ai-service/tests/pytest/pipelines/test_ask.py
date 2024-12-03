@@ -46,6 +46,9 @@ def document_store_provider():
     return document_store_provider
 
 
+@pytest.mark.skip(
+    reason="Temporarily disabled as it depends on vector store and other tests"
+)
 @pytest.mark.asyncio
 async def test_retrieval_pipeline(
     llm_provider: LLMProvider,
@@ -68,6 +71,9 @@ async def test_retrieval_pipeline(
     GLOBAL_DATA["contexts"] = retrieval_result["construct_retrieval_results"]
 
 
+@pytest.mark.skip(
+    reason="Temporarily disabled as it depends on vector store and other tests"
+)
 @pytest.mark.asyncio
 async def test_generation_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
@@ -94,6 +100,9 @@ async def test_generation_pipeline():
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 
 
+@pytest.mark.skip(
+    reason="Temporarily disabled as it depends on vector store and other tests"
+)
 @pytest.mark.asyncio
 async def test_followup_generation_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
@@ -122,6 +131,9 @@ async def test_followup_generation_pipeline():
     assert generation_result["post_process"]["invalid_generation_results"] is not None
 
 
+@pytest.mark.skip(
+    reason="Temporarily disabled as it depends on vector store and other tests"
+)
 @pytest.mark.asyncio
 async def test_sql_correction_pipeline():
     llm_provider, _, _, engine = init_providers(EngineConfig())
