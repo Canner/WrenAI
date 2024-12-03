@@ -42,7 +42,10 @@ You need to output a JSON object as following:
 """
 
 sql_intention_generation_user_prompt_template = """
-{sql}
+### INPUT ###
+SQL: {sql}
+
+Please think step by step
 """
 
 

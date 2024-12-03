@@ -1,7 +1,7 @@
 from typing import Optional
 
 from src.pipelines.generation import intent_classification, sql_generation, sql_summary
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.retrieval import historical_question_retrieval, retrieval
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -14,7 +14,7 @@ class RetrievalMock(retrieval.Retrieval):
         return {"construct_retrieval_results": self._documents}
 
 
-class HistoricalQuestionMock(historical_question.HistoricalQuestion):
+class HistoricalQuestionMock(historical_question_retrieval.HistoricalQuestionRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 

@@ -23,7 +23,12 @@ from src.pipelines.generation import (
     sql_summary,
 )
 from src.pipelines.indexing import indexing, sql_pairs_deletion, sql_pairs_preparation
-from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
+from src.pipelines.retrieval import (
+    historical_question_retrieval,
+    preprocess_sql_data,
+    retrieval,
+    sql_pairs_retrieval,
+)
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.question_recommendation import QuestionRecommendation
@@ -100,8 +105,11 @@ def create_service_container(
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
-                "historical_question": historical_question.HistoricalQuestion(
-                    **pipe_components["historical_question"],
+                "historical_question_retrieval": historical_question_retrieval.HistoricalQuestionRetrieval(
+                    **pipe_components["historical_question_retrieval"],
+                ),
+                "sql_pairs_retrieval": sql_pairs_retrieval.SqlPairsRetrieval(
+                    **pipe_components["sql_pairs_retrieval"],
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],

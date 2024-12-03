@@ -211,7 +211,9 @@ class AskService:
                     status="generating",
                 )
 
-                historical_question = await self._pipelines["historical_question"].run(
+                historical_question = await self._pipelines[
+                    "historical_question_retrieval"
+                ].run(
                     query=ask_request.query,
                     id=ask_request.project_id,
                 )
@@ -234,6 +236,11 @@ class AskService:
                         for result in historical_question_result
                     ]
                 else:
+                    sql_pairs = await self._pipelines["sql_pairs_retrieval"].run(
+                        query=ask_request.query,
+                        id=ask_request.project_id,
+                    )
+
                     if ask_request.history:
                         text_to_sql_generation_results = await self._pipelines[
                             "followup_sql_generation"
@@ -243,6 +250,7 @@ class AskService:
                             history=ask_request.history,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
+                            samples=sql_pairs,
                         )
                     else:
                         text_to_sql_generation_results = await self._pipelines[
@@ -253,6 +261,7 @@ class AskService:
                             exclude=historical_question_result,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
+                            samples=sql_pairs,
                         )
 
                     if sql_valid_results := text_to_sql_generation_results[
