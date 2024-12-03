@@ -14,7 +14,6 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.utils import async_timer, timer
 from src.web.v1.services.sql_explanation import StepWithAnalysisResult
 
 logger = logging.getLogger("wren-ai-service")
@@ -468,7 +467,6 @@ class SQLExplanationGenerationPostProcessor:
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def preprocess(
     sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
@@ -476,7 +474,6 @@ def preprocess(
     return pre_processor.run(sql_analysis_results)
 
 
-@timer
 @observe(capture_input=False)
 def prompts(
     question: str,
@@ -531,7 +528,6 @@ def prompts(
     ]
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_explanation(prompts: List[dict], generator: Any) -> List[dict]:
     async def _task(prompt: str, generator: Any):
@@ -541,7 +537,6 @@ async def generate_sql_explanation(prompts: List[dict], generator: Any) -> List[
     return await asyncio.gather(*tasks)
 
 
-@timer
 @observe(capture_input=False)
 def post_process(
     generate_sql_explanation: List[dict],
@@ -634,7 +629,6 @@ class SQLExplanation(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="SQL Explanation Generation")
     async def run(
         self,

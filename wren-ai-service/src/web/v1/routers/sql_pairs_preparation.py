@@ -10,6 +10,8 @@ from src.globals import (
     get_service_metadata,
 )
 from src.web.v1.services.sql_pairs_preparation import (
+    DeleteSqlPairsRequest,
+    DeleteSqlPairsResponse,
     SqlPairsPreparationRequest,
     SqlPairsPreparationResponse,
     SqlPairsPreparationStatusRequest,
@@ -33,10 +35,10 @@ async def prepare_sql_pairs(
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> SqlPairsPreparationResponse:
-    sql_pairs_preparation_id = str(uuid.uuid4())
-    prepare_sql_pairs_request.query_id = sql_pairs_preparation_id
+    id = str(uuid.uuid4())
+    prepare_sql_pairs_request.query_id = id
     service_container.sql_pairs_preparation_service._prepare_sql_pairs_statuses[
-        sql_pairs_preparation_id
+        id
     ] = SqlPairsPreparationStatusResponse(
         status="indexing",
     )
@@ -46,9 +48,30 @@ async def prepare_sql_pairs(
         prepare_sql_pairs_request,
         service_metadata=asdict(service_metadata),
     )
-    return SqlPairsPreparationResponse(
-        sql_pairs_preparation_id=sql_pairs_preparation_id
+    return SqlPairsPreparationResponse(sql_pairs_preparation_id=id)
+
+
+@router.delete("/sql-pairs-preparations")
+async def delete_sql_pairs(
+    delete_sql_pairs_request: DeleteSqlPairsRequest,
+    background_tasks: BackgroundTasks,
+    service_container: ServiceContainer = Depends(get_service_container),
+    service_metadata: ServiceMetadata = Depends(get_service_metadata),
+) -> DeleteSqlPairsResponse:
+    id = str(uuid.uuid4())
+    delete_sql_pairs_request.query_id = id
+    service_container.sql_pairs_preparation_service._prepare_sql_pairs_statuses[
+        id
+    ] = SqlPairsPreparationStatusResponse(
+        status="deleting",
     )
+
+    background_tasks.add_task(
+        service_container.sql_pairs_preparation_service.delete_sql_pairs,
+        delete_sql_pairs_request,
+        service_metadata=asdict(service_metadata),
+    )
+    return DeleteSqlPairsResponse(sql_pairs_preparation_id=id)
 
 
 @router.get("/sql-pairs-preparations/{sql_pairs_preparation_id}/status")

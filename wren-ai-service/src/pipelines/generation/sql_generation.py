@@ -19,7 +19,6 @@ from src.pipelines.common import (
     show_current_time,
     sql_generation_system_prompt,
 )
-from src.utils import async_timer, timer
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -76,7 +75,6 @@ Let's think step by step.
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -98,7 +96,6 @@ def prompt(
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql(
     prompt: dict,
@@ -107,7 +104,6 @@ async def generate_sql(
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-@async_timer
 @observe(capture_input=False)
 async def post_process(
     generate_sql: dict,
@@ -193,7 +189,6 @@ class SQLGeneration(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="SQL Generation")
     async def run(
         self,

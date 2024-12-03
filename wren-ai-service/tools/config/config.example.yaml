@@ -109,6 +109,13 @@ pipes:
     llm: openai_llm.gpt-4o-mini
   - name: preprocess_sql_data
     llm: openai_llm.gpt-4o-mini
+  - name: sql_pairs_preparation
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: sql_pairs_deletion
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+
 ---
 settings:
   host: 127.0.0.1

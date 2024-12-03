@@ -11,10 +11,6 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.utils import (
-    async_timer,
-    timer,
-)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -55,7 +51,6 @@ class OutputFormatter:
 
 
 ## Start of Pipeline
-@async_timer
 @observe(capture_input=False)
 async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) -> int:
     filters = (
@@ -72,7 +67,6 @@ async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) 
     return document_count
 
 
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
     if count_documents:
@@ -81,7 +75,6 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
     return {}
 
 
-@async_timer
 @observe(capture_input=False)
 async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
     if embedding:
@@ -105,7 +98,6 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
     return {}
 
 
-@timer
 @observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     if retrieval:
@@ -114,7 +106,6 @@ def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     return {}
 
 
-@timer
 @observe(capture_input=False)
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
@@ -172,7 +163,6 @@ class HistoricalQuestion(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="Historical Question")
     async def run(self, query: str, id: Optional[str] = None):
         logger.info("HistoricalQuestion pipeline is running...")

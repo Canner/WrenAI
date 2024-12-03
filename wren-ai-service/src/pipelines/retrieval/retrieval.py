@@ -16,7 +16,6 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
-from src.utils import async_timer, timer
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -116,7 +115,6 @@ def _build_view_ddl(content: dict) -> str:
 
 
 ## Start of Pipeline
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(
     query: str, embedder: Any, history: Optional[AskHistory] = None
@@ -133,7 +131,6 @@ async def embedding(
     return await embedder.run(query)
 
 
-@async_timer
 @observe(capture_input=False)
 async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
     filters = {
@@ -154,7 +151,6 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
     )
 
 
-@async_timer
 @observe(capture_input=False)
 async def dbschema_retrieval(
     table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
@@ -189,7 +185,6 @@ async def dbschema_retrieval(
     return results["documents"]
 
 
-@timer
 @observe()
 def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
     db_schemas = {}
@@ -218,7 +213,6 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
     return list(db_schemas.values())
 
 
-@timer
 @observe(capture_input=False)
 def check_using_db_schemas_without_pruning(
     construct_db_schemas: list[dict],
@@ -257,7 +251,6 @@ def check_using_db_schemas_without_pruning(
     }
 
 
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -288,7 +281,6 @@ def prompt(
         return {}
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any
@@ -299,7 +291,6 @@ async def filter_columns_in_tables(
         return {}
 
 
-@timer
 @observe()
 def construct_retrieval_results(
     check_using_db_schemas_without_pruning: dict,
@@ -445,7 +436,6 @@ class Retrieval(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="Ask Retrieval")
     async def run(
         self,

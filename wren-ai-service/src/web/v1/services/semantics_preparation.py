@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, trace_metadata
+from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -54,7 +54,6 @@ class SemanticsPreparationService:
             str, SemanticsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
-    @async_timer
     @observe(name="Prepare Semantics")
     @trace_metadata
     async def prepare_semantics(

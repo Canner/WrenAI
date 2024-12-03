@@ -6,15 +6,20 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, trace_metadata
+from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-pairs-preparations
+class SqlPair(BaseModel):
+    sql: str
+    id: str
+
+
 class SqlPairsPreparationRequest(BaseModel):
     _query_id: str | None = None
-    sqls: List[str]
+    sql_pairs: List[SqlPair]
     project_id: Optional[str] = None
 
     @property
@@ -30,6 +35,25 @@ class SqlPairsPreparationResponse(BaseModel):
     sql_pairs_preparation_id: str
 
 
+# DELETE /v1/sql-pairs-preparations
+class DeleteSqlPairsRequest(BaseModel):
+    _query_id: str | None = None
+    ids: List[str]
+    project_id: Optional[str] = None
+
+    @property
+    def query_id(self) -> str:
+        return self._query_id
+
+    @query_id.setter
+    def query_id(self, query_id: str):
+        self._query_id = query_id
+
+
+class DeleteSqlPairsResponse(BaseModel):
+    sql_pairs_preparation_id: str
+
+
 # GET /v1/sql-pairs-preparations/{sql_pairs_preparation_id}/status
 class SqlPairsPreparationStatusRequest(BaseModel):
     sql_pairs_preparation_id: str
@@ -40,7 +64,7 @@ class SqlPairsPreparationStatusResponse(BaseModel):
         code: Literal["OTHERS"]
         message: str
 
-    status: Literal["indexing", "finished", "failed"]
+    status: Literal["indexing", "deleting", "finished", "failed"]
     error: Optional[SqlPairsPreparationError] = None
 
 
@@ -56,7 +80,6 @@ class SqlPairsPreparationService:
             str, SqlPairsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
-    @async_timer
     @observe(name="Prepare SQL Pairs")
     @trace_metadata
     async def prepare_sql_pairs(
@@ -64,7 +87,84 @@ class SqlPairsPreparationService:
         prepare_sql_pairs_request: SqlPairsPreparationRequest,
         **kwargs,
     ):
-        pass
+        results = {
+            "metadata": {
+                "error_type": "",
+                "error_message": "",
+            },
+        }
+
+        try:
+            await self._pipelines["sql_pairs_preparation"].run(
+                sql_pairs=prepare_sql_pairs_request.sql_pairs,
+                id=prepare_sql_pairs_request.project_id,
+            )
+
+            self._prepare_sql_pairs_statuses[
+                prepare_sql_pairs_request.query_id
+            ] = SqlPairsPreparationStatusResponse(
+                status="finished",
+            )
+        except Exception as e:
+            logger.exception(f"Failed to prepare SQL pairs: {e}")
+
+            self._prepare_sql_pairs_statuses[
+                prepare_sql_pairs_request.query_id
+            ] = SqlPairsPreparationStatusResponse(
+                status="failed",
+                error=SqlPairsPreparationStatusResponse.SqlPairsPreparationError(
+                    code="OTHERS",
+                    message=f"Failed to prepare SQL pairs: {e}",
+                ),
+            )
+
+            results["metadata"]["error_type"] = "INDEXING_FAILED"
+            results["metadata"]["error_message"] = str(e)
+
+        return results
+
+    @observe(name="Delete SQL Pairs")
+    @trace_metadata
+    async def delete_sql_pairs(
+        self,
+        delete_sql_pairs_request: DeleteSqlPairsRequest,
+        **kwargs,
+    ):
+        results = {
+            "metadata": {
+                "error_type": "",
+                "error_message": "",
+            },
+        }
+
+        try:
+            await self._pipelines["sql_pairs_deletion"].run(
+                sql_pair_ids=delete_sql_pairs_request.ids,
+                id=delete_sql_pairs_request.project_id,
+            )
+
+            self._prepare_sql_pairs_statuses[
+                delete_sql_pairs_request.query_id
+            ] = SqlPairsPreparationStatusResponse(
+                status="finished",
+            )
+        except Exception as e:
+            logger.exception(f"Failed to delete SQL pairs: {e}")
+
+            self._prepare_sql_pairs_statuses[
+                delete_sql_pairs_request.query_id
+            ] = SqlPairsPreparationStatusResponse(
+                status="failed",
+                error=SqlPairsPreparationStatusResponse.SqlPairsPreparationError(
+                    code="OTHERS",
+                    message=f"Failed to delete SQL pairs: {e}",
+                ),
+            )
+
+            results["metadata"]["error_type"] = "DELETION_FAILED"
+            results["metadata"]["error_message"] = str(e)
+
+        return results
 
     def get_prepare_sql_pairs_status(
         self, prepare_sql_pairs_status_request: SqlPairsPreparationStatusRequest

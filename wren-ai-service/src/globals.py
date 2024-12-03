@@ -22,7 +22,7 @@ from src.pipelines.generation import (
     sql_regeneration,
     sql_summary,
 )
-from src.pipelines.indexing import indexing
+from src.pipelines.indexing import indexing, sql_pairs_deletion, sql_pairs_preparation
 from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
@@ -201,7 +201,14 @@ def create_service_container(
             **query_cache,
         ),
         sql_pairs_preparation_service=SqlPairsPreparationService(
-            pipelines={},
+            pipelines={
+                "sql_pairs_preparation": sql_pairs_preparation.SqlPairsPreparation(
+                    **pipe_components["sql_pairs_preparation"],
+                ),
+                "sql_pairs_deletion": sql_pairs_deletion.SqlPairsDeletion(
+                    **pipe_components["sql_pairs_deletion"],
+                ),
+            },
             **query_cache,
         ),
     )

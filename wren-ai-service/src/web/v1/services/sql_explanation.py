@@ -6,8 +6,6 @@ from cachetools import TTLCache
 from haystack import Pipeline
 from pydantic import BaseModel
 
-from src.utils import async_timer
-
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -66,7 +64,6 @@ class SQLExplanationService:
             str, SQLExplanationResultResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
-    @async_timer
     async def sql_explanation(
         self,
         sql_explanation_request: SQLExplanationRequest,

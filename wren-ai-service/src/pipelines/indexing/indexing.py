@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.utils import async_timer, timer
+from src.pipelines.indexing import AsyncDocumentWriter
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -469,23 +469,7 @@ class TableDescriptionConverter:
         return table_descriptions
 
 
-@component
-class AsyncDocumentWriter(DocumentWriter):
-    @component.output_types(documents_written=int)
-    async def run(
-        self, documents: List[Document], policy: Optional[DuplicatePolicy] = None
-    ):
-        if policy is None:
-            policy = self.policy
-
-        documents_written = await self.document_store.write_documents(
-            documents=documents, policy=policy
-        )
-        return {"documents_written": documents_written}
-
-
 ## Start of Pipeline
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def clean_document_store(
     mdl_str: str, cleaner: DocumentCleaner, id: Optional[str] = None
@@ -493,7 +477,6 @@ async def clean_document_store(
     return await cleaner.run(mdl=mdl_str, id=id)
 
 
-@timer
 @observe(capture_input=False, capture_output=False)
 @extract_fields(dict(mdl=Dict[str, Any]))
 def validate_mdl(
@@ -504,7 +487,6 @@ def validate_mdl(
     return dict(mdl=res["mdl"])
 
 
-@timer
 @observe(capture_input=False)
 def covert_to_table_descriptions(
     mdl: Dict[str, Any],
@@ -514,7 +496,6 @@ def covert_to_table_descriptions(
     return table_description_converter.run(mdl=mdl, id=id)
 
 
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_table_descriptions(
     covert_to_table_descriptions: Dict[str, Any],
@@ -523,7 +504,6 @@ async def embed_table_descriptions(
     return await document_embedder.run(covert_to_table_descriptions["documents"])
 
 
-@async_timer
 @observe(capture_input=False)
 async def write_table_description(
     embed_table_descriptions: Dict[str, Any], table_description_writer: DocumentWriter
@@ -533,7 +513,6 @@ async def write_table_description(
     )
 
 
-@timer
 @observe(capture_input=False)
 def convert_to_ddl(
     mdl: Dict[str, Any],
@@ -548,7 +527,6 @@ def convert_to_ddl(
     )
 
 
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_dbschema(
     convert_to_ddl: Dict[str, Any],
@@ -557,7 +535,6 @@ async def embed_dbschema(
     return await document_embedder.run(documents=convert_to_ddl["documents"])
 
 
-@async_timer
 @observe(capture_input=False)
 async def write_dbschema(
     embed_dbschema: Dict[str, Any], dbschema_writer: DocumentWriter
@@ -565,7 +542,6 @@ async def write_dbschema(
     return await dbschema_writer.run(documents=embed_dbschema["documents"])
 
 
-@timer
 @observe(capture_input=False)
 def view_chunk(
     mdl: Dict[str, Any], view_chunker: ViewChunker, id: Optional[str] = None
@@ -573,7 +549,6 @@ def view_chunk(
     return view_chunker.run(mdl=mdl, id=id)
 
 
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embed_view(
     view_chunk: Dict[str, Any], document_embedder: Any
@@ -581,7 +556,6 @@ async def embed_view(
     return await document_embedder.run(documents=view_chunk["documents"])
 
 
-@async_timer
 @observe(capture_input=False)
 async def write_view(embed_view: Dict[str, Any], view_writer: DocumentWriter) -> None:
     return await view_writer.run(documents=embed_view["documents"])
@@ -645,7 +619,7 @@ class Indexing(BasicPipeline):
             output_file_path=f"{destination}/indexing.dot",
             inputs={
                 "mdl_str": mdl_str,
-                "id": id,
+                "id": id or "",
                 **self._components,
                 **self._configs,
             },
@@ -653,7 +627,6 @@ class Indexing(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="Document Indexing")
     async def run(self, mdl_str: str, id: Optional[str] = None) -> Dict[str, Any]:
         logger.info("Document Indexing pipeline is running...")
@@ -661,7 +634,7 @@ class Indexing(BasicPipeline):
             ["write_dbschema", "write_view", "write_table_description"],
             inputs={
                 "mdl_str": mdl_str,
-                "id": id,
+                "id": id or "",
                 **self._components,
                 **self._configs,
             },

@@ -15,7 +15,6 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
-from src.utils import async_timer, timer
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -79,7 +78,6 @@ Let's think step by step
 
 
 ## Start of Pipeline
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(
     query: str, embedder: Any, history: Optional[AskHistory] = None
@@ -96,7 +94,6 @@ async def embedding(
     return await embedder.run(query)
 
 
-@async_timer
 @observe(capture_input=False)
 async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
     filters = {
@@ -117,7 +114,6 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
     )
 
 
-@async_timer
 @observe(capture_input=False)
 async def dbschema_retrieval(
     table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
@@ -154,7 +150,6 @@ async def dbschema_retrieval(
     return results["documents"]
 
 
-@timer
 @observe()
 def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     db_schemas = {}
@@ -192,7 +187,6 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     return db_schemas_in_ddl
 
 
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -215,13 +209,11 @@ def prompt(
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def classify_intent(prompt: dict, generator: Any) -> dict:
     return await generator.run(prompt=prompt.get("prompt"))
 
 
-@timer
 @observe(capture_input=False)
 def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
     try:
@@ -308,7 +300,6 @@ class IntentClassification(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="Intent Classification")
     async def run(
         self, query: str, id: Optional[str] = None, history: Optional[AskHistory] = None

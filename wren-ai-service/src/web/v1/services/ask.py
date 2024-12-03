@@ -7,7 +7,7 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, trace_metadata
+from src.utils import trace_metadata
 from src.web.v1.services import Configuration, SSEEvent
 from src.web.v1.services.ask_details import SQLBreakdown
 
@@ -119,7 +119,6 @@ class AskService:
             filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
         )
 
-    @async_timer
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
