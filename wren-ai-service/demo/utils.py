@@ -143,9 +143,7 @@ def get_data_from_wren_engine(
 
         if return_df:
             data = response.json()
-            column_names = [
-                f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])
-            ]
+            column_names = [col["name"] for col in data["columns"]]
 
             return pd.DataFrame(data["data"], columns=column_names)
         else:
@@ -168,7 +166,7 @@ def get_data_from_wren_engine(
         data = response.json()
 
         if return_df:
-            column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+            column_names = [col for col in data["columns"]]
 
             return pd.DataFrame(data["data"], columns=column_names)
         else:
