@@ -89,6 +89,9 @@ class AsyncGenerator(OllamaGenerator):
             "options": generation_kwargs,
         }
 
+    async def __call__(self, *args, **kwargs):
+        return await self.run(*args, **kwargs)
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     async def run(
         self,

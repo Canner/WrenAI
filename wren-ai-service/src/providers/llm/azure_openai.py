@@ -62,6 +62,9 @@ class AsyncGenerator(AzureOpenAIGenerator):
             api_key=api_key.resolve_value(),
         )
 
+    async def __call__(self, *args, **kwargs):
+        return await self.run(*args, **kwargs)
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(
