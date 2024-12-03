@@ -829,11 +829,11 @@ def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
         for transform in transforms:
             for _fold, _as in zip(transform.get("fold", []), transform.get("as", [])):
                 try:
-                    if _index := fields.index(_as):
-                        fields[_index] = _fold
+                    fields[fields.index(_as)] = _fold
                 except ValueError:
-                    continue
+                    pass
 
+    print(f"fields: {fields}")
     # Convert DataFrame to list of dicts with just the needed fields
     values = df[fields].to_dict(orient="records")
 
