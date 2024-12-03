@@ -7,6 +7,8 @@ from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines.generation import (
+    chart_adjustment,
+    chart_generation,
     data_assistance,
     followup_sql_generation,
     intent_classification,
@@ -23,9 +25,16 @@ from src.pipelines.generation import (
     sql_summary,
 )
 from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
+from src.pipelines.retrieval import (
+    historical_question,
+    preprocess_sql_data,
+    retrieval,
+    sql_executor,
+)
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
+from src.web.v1.services.chart import ChartService
+from src.web.v1.services.chart_adjustment import ChartAdjustmentService
 from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 from src.web.v1.services.semantics_description import SemanticsDescription
@@ -46,6 +55,8 @@ class ServiceContainer:
     relationship_recommendation: RelationshipRecommendation
     semantics_description: SemanticsDescription
     semantics_preparation_service: SemanticsPreparationService
+    chart_service: ChartService
+    chart_adjustment_service: ChartAdjustmentService
     sql_answer_service: SqlAnswerService
     sql_expansion_service: SqlExpansionService
     sql_explanation_service: SQLExplanationService
@@ -112,6 +123,28 @@ def create_service_container(
                 ),
                 "sql_summary": sql_summary.SQLSummary(
                     **pipe_components["sql_summary"],
+                ),
+            },
+            **query_cache,
+        ),
+        chart_service=ChartService(
+            pipelines={
+                "sql_executor": sql_executor.SQLExecutor(
+                    **pipe_components["sql_executor"],
+                ),
+                "chart_generation": chart_generation.ChartGeneration(
+                    **pipe_components["chart_generation"],
+                ),
+            },
+            **query_cache,
+        ),
+        chart_adjustment_service=ChartAdjustmentService(
+            pipelines={
+                "sql_executor": sql_executor.SQLExecutor(
+                    **pipe_components["sql_executor"],
+                ),
+                "chart_adjustment": chart_adjustment.ChartAdjustment(
+                    **pipe_components["chart_adjustment"],
                 ),
             },
             **query_cache,
