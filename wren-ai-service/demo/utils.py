@@ -824,6 +824,13 @@ def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
     for key in schema["encoding"].keys():
         fields.append(schema["encoding"][key]["field"])
 
+    fields = list(set(fields))
+    if transforms := schema.get("transform"):
+        for transform in transforms:
+            for _fold, _as in zip(transform.get("fold", []), transform.get("as", [])):
+                if _index := fields.index(_as):
+                    fields[_index] = _fold
+
     # Convert DataFrame to list of dicts with just the needed fields
     values = df[fields].to_dict(orient="records")
 
