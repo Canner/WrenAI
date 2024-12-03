@@ -67,7 +67,7 @@ class TableDescriptionChunker:
             {
                 "name": resource["name"],
                 "mdl_type": resource["mdl_type"],
-                "description": resource.get("description", ""),
+                "description": resource["properties"].get("description", ""),
             }
             for resource in resources
             if resource["name"] is not None
