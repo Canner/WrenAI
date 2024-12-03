@@ -877,9 +877,9 @@ def generate_chart(
     )
     chart_response = charts_status_response.json()
     if chart_result := chart_response.get("response"):
-        if schema := chart_result.get("schema"):
+        if schema := chart_result.get("chart_schema"):
             filled_vega_lite_schema = fill_vega_lite_values(schema, sql_data_df)
-            chart_response["response"]["schema"] = filled_vega_lite_schema
+            chart_response["response"]["chart_schema"] = filled_vega_lite_schema
 
     return chart_response
 
@@ -932,9 +932,9 @@ def adjust_chart(
     )
     chart_response = charts_status_response.json()
     if chart_result := chart_response.get("response"):
-        if schema := chart_result.get("schema"):
+        if schema := chart_result.get("chart_schema"):
             filled_vega_lite_schema = fill_vega_lite_values(schema, sql_data_df)
-            chart_response["response"]["schema"] = filled_vega_lite_schema
+            chart_response["response"]["chart_schema"] = filled_vega_lite_schema
 
     return chart_response
 
@@ -1071,7 +1071,7 @@ def show_chart_adjustment_dialog(
             if reasoning := adjust_chart_result["reasoning"]:
                 st.markdown("#### Reasoning for making this chart")
                 st.markdown(f"{reasoning}")
-            if vega_lite_schema := adjust_chart_result["schema"]:
+            if vega_lite_schema := adjust_chart_result["chart_schema"]:
                 st.markdown("#### Vega-Lite Schema")
                 st.json(vega_lite_schema, expanded=False)
                 st.markdown("#### Chart Description")

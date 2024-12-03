@@ -69,7 +69,7 @@ class ChartResultRequest(BaseModel):
 class ChartResult(BaseModel):
     reasoning: str
     description: str
-    schema: dict
+    chart_schema: dict
 
 
 class ChartResultResponse(BaseModel):
@@ -138,7 +138,7 @@ class ChartService:
             )
             chart_result = chart_generation_result["post_process"]["results"]
 
-            if not chart_result.get("schema", {}) and not chart_result.get(
+            if not chart_result.get("chart_schema", {}) and not chart_result.get(
                 "reasoning", ""
             ):
                 self._chart_results[query_id] = ChartResultResponse(

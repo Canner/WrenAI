@@ -6,7 +6,7 @@ from typing import Any, Dict
 import orjson
 import requests
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from jsonschema import validate
@@ -37,7 +37,7 @@ Please provide your chain of thought reasoning and the vega-lite schema in JSON 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING>,
     "description": <DESCRIPTION_OF_THE_CHART_IN_STRING>,
-    "schema": <VEGA_LITE_JSON_SCHEMA>
+    "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
 
@@ -97,11 +97,11 @@ class ChartAdjustmentPostProcessor:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
             description = generation_result.get("description", "")
-            if chart_schema := generation_result.get("schema", {}):
+            if chart_schema := generation_result.get("chart_schema", {}):
                 validate(chart_schema, schema=vega_schema)
                 return {
                     "results": {
-                        "schema": chart_schema,
+                        "chart_schema": chart_schema,
                         "description": description,
                         "reasoning": reasoning,
                     }
@@ -109,7 +109,7 @@ class ChartAdjustmentPostProcessor:
 
             return {
                 "results": {
-                    "schema": {},
+                    "chart_schema": {},
                     "description": description,
                     "reasoning": reasoning,
                 }
@@ -119,7 +119,7 @@ class ChartAdjustmentPostProcessor:
 
             return {
                 "results": {
-                    "schema": {},
+                    "chart_schema": {},
                     "reasoning": "",
                     "description": "",
                 }
@@ -129,7 +129,7 @@ class ChartAdjustmentPostProcessor:
 
             return {
                 "results": {
-                    "schema": {},
+                    "chart_schema": {},
                     "reasoning": "",
                     "description": "",
                 }
@@ -190,14 +190,14 @@ def post_process(
 class ChartAdjustmentResults(BaseModel):
     reasoning: str
     description: str
-    schema: dict
+    chart_schema: dict
 
 
 CHART_ADJUSTMENT_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "matched_schema",
+            "name": "chart_adjustment_results",
             "schema": ChartAdjustmentResults.model_json_schema(),
         },
     }

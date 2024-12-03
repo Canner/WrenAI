@@ -265,7 +265,7 @@ if st.session_state["asks_results"]:
                 if reasoning := chart_result["reasoning"]:
                     st.markdown("### Reasoning for making this chart")
                     st.markdown(f"{reasoning}")
-                if vega_lite_schema := chart_result["schema"]:
+                if vega_lite_schema := chart_result["chart_schema"]:
                     st.markdown("### Vega-Lite Schema")
                     st.json(vega_lite_schema, expanded=False)
                     st.markdown("### Chart Description")
