@@ -149,6 +149,9 @@ pipes:
     llm: openai_llm.gpt-4o-mini
   - name: sql_executor
     engine: wren_ui
+  - name: preprocess_sql_data
+    llm: openai_llm.gpt-4o-mini
+
 ---
 settings:
   host: 127.0.0.1

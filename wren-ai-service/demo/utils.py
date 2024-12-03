@@ -124,6 +124,7 @@ def get_data_from_wren_engine(
     dataset_type: str,
     manifest: dict,
     limit: int = 100,
+    return_df: bool = True,
 ):
     if dataset_type == "duckdb":
         quoted_sql, no_error = add_quotes(sql)
@@ -140,10 +141,15 @@ def get_data_from_wren_engine(
 
         assert response.status_code == 200, response.json()
 
-        data = response.json()
-        column_names = [col["name"] for col in data["columns"]]
+        if return_df:
+            data = response.json()
+            column_names = [
+                f'{i}_{col["name"]}' for i, col in enumerate(data["columns"])
+            ]
 
-        return pd.DataFrame(data["data"], columns=column_names)
+            return pd.DataFrame(data["data"], columns=column_names)
+        else:
+            return data
     else:
         quoted_sql, no_error = add_quotes(sql)
         assert no_error, f"Error in adding quotes to SQL: {sql}"
@@ -160,9 +166,13 @@ def get_data_from_wren_engine(
         assert response.status_code == 200, response.json()
 
         data = response.json()
-        column_names = [col for col in data["columns"]]
 
-        return pd.DataFrame(data["data"], columns=column_names)
+        if return_df:
+            column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
+
+            return pd.DataFrame(data["data"], columns=column_names)
+        else:
+            return data
 
 
 # ui related
@@ -638,16 +648,39 @@ def display_general_response(query_id: str):
         placeholder.markdown(markdown_content)
 
 
-@st.cache_data
+def display_sql_answer(query_id: str):
+    url = f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/streaming"
+    headers = {"Accept": "text/event-stream"}
+    response = with_requests(url, headers)
+    client = sseclient.SSEClient(response)
+
+    markdown_content = ""
+    placeholder = st.empty()
+
+    for event in client.events():
+        markdown_content += orjson.loads(event.data)["message"]
+        placeholder.markdown(markdown_content)
+
+
 def get_sql_answer(
     query: str,
     sql: str,
+    dataset_type: str,
+    mdl_json: dict,
 ):
+    sql_data = get_data_from_wren_engine(
+        sql,
+        dataset_type,
+        mdl_json,
+        return_df=False,
+    )
+
     sql_answer_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers",
         json={
             "query": query,
             "sql": sql,
+            "sql_data": sql_data,
             "configurations": {
                 "language": st.session_state["language"],
             },
@@ -659,16 +692,22 @@ def get_sql_answer(
     sql_answer_status = None
 
     while not sql_answer_status or (
-        sql_answer_status != "finished" and sql_answer_status != "failed"
+        sql_answer_status != "succeeded" and sql_answer_status != "failed"
     ):
         sql_answer_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/result"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}"
         )
         assert sql_answer_status_response.status_code == 200
         sql_answer_status = sql_answer_status_response.json()["status"]
         time.sleep(POLLING_INTERVAL)
 
-    return sql_answer_status_response.json()
+    if sql_answer_status == "succeeded":
+        display_sql_answer(query_id)
+    elif sql_answer_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {sql_answer_status_response.json()['error']}',
+            icon="🚨",
+        )
 
 
 @st.cache_data

@@ -220,17 +220,12 @@ if st.session_state["asks_results"]:
     if chosen_tab_id == "1":
         if st.session_state["chosen_query_result"]:
             st.markdown("### Data Answer")
-            sql_answer_result = get_sql_answer(
+            get_sql_answer(
                 st.session_state["chosen_query_result"]["query"],
                 st.session_state["chosen_query_result"]["sql"],
+                st.session_state["dataset_type"],
+                st.session_state["mdl_json"],
             )
-            if sql_answer := sql_answer_result.get("response"):
-                st.markdown(sql_answer)
-            else:
-                st.error(
-                    f'An error occurred while processing the query: {sql_answer_result.get("error")}',
-                    icon="🚨",
-                )
 
             st.markdown("### Data Preview")
             st.dataframe(
