@@ -7,6 +7,7 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
+from src.pipelines import indexing
 from src.pipelines.generation import (
     data_assistance,
     intent_classification,
@@ -77,10 +78,18 @@ def indexing_service():
 
     return SemanticsPreparationService(
         {
-            # "indexing": indexing.Indexing(
-            #     embedder_provider=embedder_provider,
-            #     document_store_provider=document_store_provider,
-            # ),
+            "db_schema": indexing.DBSchema(
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
+            "historical_question": indexing.HistoricalQuestion(
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
+            "table_description": indexing.TableDescription(
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
         }
     )
 
