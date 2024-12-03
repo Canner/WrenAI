@@ -146,11 +146,16 @@ data:
       - name: data_assistance
         llm: openai_llm.gpt-4o-mini
       - name: sql_pairs_preparation
-        embedder: openai_embedder.text-embedding-3-large
         document_store: qdrant
+        embedder: openai_embedder.text-embedding-3-large
+        llm: openai_llm.gpt-4o-mini
       - name: sql_pairs_deletion
-        embedder: openai_embedder.text-embedding-3-large
         document_store: qdrant
+        embedder: openai_embedder.text-embedding-3-large
+      - name: sql_pairs_retrieval
+        document_store: qdrant
+        embedder: openai_embedder.text-embedding-3-large
+
     ---
     settings:
       column_indexing_batch_size: 50
