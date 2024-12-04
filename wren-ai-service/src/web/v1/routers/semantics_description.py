@@ -31,7 +31,7 @@ Endpoints:
        "mdl": "{ ... }",                         # JSON string of the MDL (Model Definition Language)
        "project_id": "project-id",               # Optional project ID
        "configuration": {                        # Optional configuration settings
-         "language": "English"                   # Optional language, defaults to "English"
+         "language": "en"                       # Optional language, defaults to "en"
        }
      }
    - Response: PostResponse
@@ -52,9 +52,11 @@ Endpoints:
            "columns": [
              {
                "name": "col1", 
+               "alias": "col1_alias",
                "description": "Unique identifier for each record in the example model."
              }
            ],
+           "alias": "model1_alias",
            "description": "This model is used for analysis purposes, capturing key attributes of records."
          },
          {
@@ -62,9 +64,11 @@ Endpoints:
            "columns": [
              {
                "name": "col1",
+               "alias": "col1_alias",
                "description": "Unique identifier for each record in the example model."
              }
            ],
+           "alias": "model2_alias",
            "description": "This model is used for analysis purposes, capturing key attributes of records."
          }
        ],
@@ -154,10 +158,12 @@ async def get(
                 "columns": [
                     {
                         "name": column["name"],
+                        "alias": column["properties"].get("alias", ""),
                         "description": column["properties"].get("description", ""),
                     }
                     for column in model_data["columns"]
                 ],
+                "alias": model_data["properties"].get("alias", ""),
                 "description": model_data["properties"].get("description", ""),
             }
             for model_name, model_data in response.items()
