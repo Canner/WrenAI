@@ -3,10 +3,10 @@ import json
 import orjson
 from fastapi.testclient import TestClient
 
-from tests.pytest.apis import GLOBAL_DATA
+from tests.pytest.apis import GLOBAL_DATA, app
 
 
-def test_semantics_preparations(app):
+def test_semantics_preparations(app: app):
     with TestClient(app) as client:
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
 

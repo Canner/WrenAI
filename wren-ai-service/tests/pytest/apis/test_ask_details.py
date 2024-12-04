@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 
+from tests.pytest.apis import app
 
-def test_ask_details(app):
+
+def test_ask_details(app: app):
     with TestClient(app) as client:
         response = client.post(
             url="/v1/ask-details",

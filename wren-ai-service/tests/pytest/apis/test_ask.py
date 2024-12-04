@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
 
-from tests.pytest.apis import GLOBAL_DATA
+from tests.pytest.apis import GLOBAL_DATA, app
 
 
-def test_asks_with_successful_query(app):
+def test_asks_with_successful_query(app: app):
     with TestClient(app) as client:
         semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
 
@@ -32,7 +32,7 @@ def test_asks_with_successful_query(app):
         assert response.json()["status"] == "finished" or "failed"
 
 
-def test_asks_with_invalid_query(app):
+def test_asks_with_invalid_query(app: app):
     with TestClient(app) as client:
         response = client.post(
             url="/v1/asks",
@@ -43,7 +43,7 @@ def test_asks_with_invalid_query(app):
         assert response.json()["detail"] != ""
 
 
-def test_stop_asks(app):
+def test_stop_asks(app: app):
     with TestClient(app) as client:
         query_id = GLOBAL_DATA["query_id"]
 

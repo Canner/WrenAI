@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 
+from tests.pytest.apis import app
 
-def test_sql_regenerations(app):
+
+def test_sql_regenerations(app: app):
     with TestClient(app) as client:
         response = client.post(
             url="/v1/sql-regenerations",
