@@ -16,7 +16,7 @@ from tqdm import tqdm
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
-from src.pipelines.indexing.db_schema import helper
+from src.pipelines.indexing.utils import helper
 
 logger = logging.getLogger("wren-ai-service")
 

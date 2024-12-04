@@ -1,6 +1,6 @@
 from pytest_mock import MockerFixture
 
-from src.pipelines.indexing.db_schema.helper import (
+from src.pipelines.indexing.utils.helper import (
     COLUMN_COMMENT_HELPERS,
     COLUMN_PROPRECESSORS,
     MODEL_PREPROCESSORS,

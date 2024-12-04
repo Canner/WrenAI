@@ -74,7 +74,7 @@ COLUMN_COMMENT_HELPERS = {
 MODEL_PREPROCESSORS = {}
 
 
-def load_helpers(package_path: str = "src.pipelines.indexing.db_schema"):
+def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
     """
     Dynamically loads preprocessors and comment helpers from modules within a specified package path.
 
@@ -87,7 +87,7 @@ def load_helpers(package_path: str = "src.pipelines.indexing.db_schema"):
 
     Args:
         package_path (str): The Python package path to search for helper modules.
-                          Defaults to "src.pipelines.indexing.db_schema".
+                          Defaults to "src.pipelines.indexing.utils".
 
     Returns:
         None: The function updates the global MODEL_PREPROCESSORS, COLUMN_PROPRECESSORS
