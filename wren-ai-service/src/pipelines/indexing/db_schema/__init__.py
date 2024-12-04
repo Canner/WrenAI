@@ -406,6 +406,6 @@ if __name__ == "__main__":
 
     dry_run_pipeline(
         DBSchema,
-        "db_schema",
+        "db_schema_indexing",
         mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
     )

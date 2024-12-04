@@ -78,14 +78,14 @@ def create_service_container(
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
                 "db_schema": indexing.DBSchema(
-                    **pipe_components["db_schema"],
+                    **pipe_components["db_schema_indexing"],
                     column_batch_size=settings.column_indexing_batch_size,
                 ),
                 "historical_question": indexing.HistoricalQuestion(
                     **pipe_components["historical_question_indexing"],
                 ),
                 "table_description": indexing.TableDescription(
-                    **pipe_components["table_description"],
+                    **pipe_components["table_description_indexing"],
                 ),
             },
             **query_cache,
@@ -99,7 +99,7 @@ def create_service_container(
                     **pipe_components["data_assistance"]
                 ),
                 "retrieval": retrieval.Retrieval(
-                    **pipe_components["retrieval"],
+                    **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
@@ -147,7 +147,7 @@ def create_service_container(
         sql_expansion_service=SqlExpansionService(
             pipelines={
                 "retrieval": retrieval.Retrieval(
-                    **pipe_components["retrieval"],
+                    **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                 ),
@@ -193,7 +193,7 @@ def create_service_container(
                     **pipe_components["question_recommendation"],
                 ),
                 "retrieval": retrieval.Retrieval(
-                    **pipe_components["retrieval"],
+                    **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,

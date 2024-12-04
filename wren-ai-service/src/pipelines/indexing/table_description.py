@@ -193,6 +193,6 @@ if __name__ == "__main__":
 
     dry_run_pipeline(
         TableDescription,
-        "table_description",
+        "table_description_indexing",
         mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
     )

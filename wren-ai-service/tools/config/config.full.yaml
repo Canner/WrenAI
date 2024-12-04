@@ -95,16 +95,16 @@ recreate_index: false
 ---
 type: pipeline
 pipes:
-  - name: db_schema
+  - name: db_schema_indexing
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: historical_question_indexing
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
-  - name: table_description
+  - name: table_description_indexing
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
-  - name: retrieval
+  - name: db_schema_retrieval
     llm: openai_llm.gpt-4o-mini
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
