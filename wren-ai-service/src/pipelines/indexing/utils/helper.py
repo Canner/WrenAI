@@ -120,20 +120,20 @@ def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
         These will be added to their respective global dictionaries.
     """
     package = importlib.import_module(package_path)
-    logger.debug(f"Loading Helpers for DB Schema Indexing Pipeline: {package_path}")
+    logger.info(f"Loading Helpers for DB Schema Indexing Pipeline: {package_path}")
 
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         if name in sys.modules:
             continue
 
         module = importlib.import_module(name)
-        logger.debug(f"Imported Helper from {name}")
+        logger.info(f"Imported Helper from {name}")
         if hasattr(module, "MODEL_PREPROCESSORS"):
             MODEL_PREPROCESSORS.update(module.MODEL_PREPROCESSORS)
-            logger.debug(f"Updated Helper for model preprocessors: {name}")
+            logger.info(f"Updated Helper for model preprocessors: {name}")
         if hasattr(module, "COLUMN_PROPRECESSORS"):
             COLUMN_PROPRECESSORS.update(module.COLUMN_PROPRECESSORS)
-            logger.debug(f"Updated Helper for column preprocessors: {name}")
+            logger.info(f"Updated Helper for column preprocessors: {name}")
         if hasattr(module, "COLUMN_COMMENT_HELPERS"):
             COLUMN_COMMENT_HELPERS.update(module.COLUMN_COMMENT_HELPERS)
-            logger.debug(f"Updated Helper for column comment helpers: {name}")
+            logger.info(f"Updated Helper for column comment helpers: {name}")
