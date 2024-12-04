@@ -10,7 +10,7 @@ def test_asks_with_text_to_sql_query(app: app):
         response = client.post(
             url="/v1/asks",
             json={
-                "query": "How many books are there?",
+                "query": "Show me book with the longest title",
                 "mdl_hash": semantics_preparation_id,
             },
         )
@@ -31,6 +31,44 @@ def test_asks_with_text_to_sql_query(app: app):
         assert response.status_code == 200
         assert response.json()["status"] == "finished" or "failed"
         assert response.json()["type"] == "TEXT_TO_SQL"
+        assert len(response.json()["response"]) == 1
+        assert response.json()["response"][0]["type"] == "llm"
+        assert not response.json()["response"][0]["viewId"]
+        assert response.json()["response"][0]["sql"]
+
+
+def test_asks_with_saved_query(app: app):
+    with TestClient(app) as client:
+        semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
+
+        response = client.post(
+            url="/v1/asks",
+            json={
+                "query": "How many customers are there?",
+                "mdl_hash": semantics_preparation_id,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["query_id"] != ""
+
+        query_id = response.json()["query_id"]
+        GLOBAL_DATA["query_id"] = query_id
+
+        response = client.get(url=f"/v1/asks/{query_id}/result")
+        while (
+            response.json()["status"] != "finished"
+            and response.json()["status"] != "failed"
+        ):
+            response = client.get(url=f"/v1/asks/{query_id}/result")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "finished" or "failed"
+        assert response.json()["type"] == "TEXT_TO_SQL"
+        assert len(response.json()["response"]) == 1
+        assert response.json()["response"][0]["type"] == "view"
+        assert response.json()["response"][0]["viewId"] == "fake-id-1"
+        assert response.json()["response"][0]["sql"] == "SELECT * FROM book"
 
 
 def test_asks_with_general_query(app: app):

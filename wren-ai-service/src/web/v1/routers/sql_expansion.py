@@ -30,7 +30,6 @@ Endpoints:
    - Initiates an SQL expansion operation
    - Request body: SqlExpansionRequest
      {
-       "query_id": "unique-query-id",           # Unique identifier for the query
        "query": "user's quest to modify sql result",
        "history": { ... },                       # Historical context for the query
        "project_id": "project-identifier",      # Identifier for the project

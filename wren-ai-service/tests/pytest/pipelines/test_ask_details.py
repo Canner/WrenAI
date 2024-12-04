@@ -14,7 +14,7 @@ async def test_generation_pipeline_producing_executable_sqls():
     )
 
     candidate_sql_queries = [
-        "SELECT COUNT(*) FROM book",
+        "SELECT COUNT(Book_ID) FROM book",
         "SELECT Writer FROM book ORDER BY Writer ASC NULLS FIRST",
         "SELECT Title FROM book ORDER BY Issues ASC NULLS FIRST",
         'SELECT Title FROM book WHERE Writer <> "Elaine Lee"',

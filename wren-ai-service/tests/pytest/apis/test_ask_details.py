@@ -9,8 +9,7 @@ def test_ask_details(app: app):
             url="/v1/ask-details",
             json={
                 "query": "How many books are there?",
-                "sql": "SELECT COUNT(*) FROM book",
-                "summary": "Retrieve the number of books",
+                "sql": "SELECT COUNT(Book_ID) FROM book",
             },
         )
 

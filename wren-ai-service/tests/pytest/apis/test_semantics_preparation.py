@@ -10,14 +10,14 @@ def test_semantics_preparations(app: app):
     with TestClient(app) as client:
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
 
-        with open("tests/data/book_2_mdl.json", "r") as f:
+        with open("tests/data/mdl.json", "r") as f:
             mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
         response = client.post(
             url="/v1/semantics-preparations",
             json={
                 "mdl": mdl_str,
-                "id": semantics_preperation_id,
+                "mdl_hash": semantics_preperation_id,
             },
         )
 

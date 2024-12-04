@@ -164,11 +164,11 @@ async def test_followup_generation_pipeline():
         "What are names of the books?",
         contexts=GLOBAL_DATA["contexts"],
         history=AskHistory(
-            sql="SELECT COUNT(*) FROM book",
+            sql="SELECT COUNT(Book_ID) FROM book",
             summary="Retrieve the number of books",
             steps=[
                 SQLBreakdown(
-                    sql="SELECT COUNT(*) FROM book",
+                    sql="SELECT COUNT(Book_ID) FROM book",
                     summary="Retrieve the number of books",
                     cte_name="",
                 )
@@ -191,7 +191,7 @@ async def test_sql_correction_pipeline():
         contexts=GLOBAL_DATA["contexts"],
         invalid_generation_results=[
             {
-                "sql": "Select count(*) from books",
+                "sql": "Select count(Book_ID) from books",
                 "summary": "Retrieve the number of books",
                 "error": 'ERROR:  com.google.cloud.bigquery.BigQueryException: Table "books" must be qualified with a dataset (e.g. dataset.table).',
             }
