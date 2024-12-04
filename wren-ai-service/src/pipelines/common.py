@@ -302,24 +302,28 @@ TEXT_TO_SQL_RULES = """
     - `<>`
     - `!=`
 - ONLY USE JSON_QUERY for querying fields inside JSON objects, NOT the deprecated JSON_EXTRACT_SCALAR function.
-    - ONLY USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING function to get the value from the fields inside JSON object, NOT the CAST function.
+    - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
+      - LAX_BOOL for boolean fields
+      - LAX_FLOAT64 for double and float fields
+      - LAX_INT64 for bigint fields
+      - LAX_STRING for varchar fields
     - For Example:
       DATA SCHEMA:
-      - TABLE customers
-        - COLUMN billing
-          - {billing.city varchar, billing.state varchar, billing.postcode varchar}
-      To get the city of billing in customers table use SQL:
-      `SELECT LAX_STRING(JSON_QUERY(c.billing, '$.city')) FROM customers as c`
+      - TABLE user
+        - COLUMN address
+          - {address.city varchar, address.state varchar, address.postcode varchar}
+      To get the city of address in user table use SQL:
+      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
 - ONLY USE JSON_QUERY_ARRAY for querying JSON_ARRAY object, NOT the deprecated JSON_EXTRACT_ARRAY.
     - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY. 
     - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
     - For Example:
       DATA SCHEMA:
-      - TABLE orders
-        - COLUMN line_items
-          - [{id bigint, name varchar, product_id bigint, quantity bigint}]
-      To get the quantity of line_items in orders table use SQL:
-      `SELECT LAX_INT64(JSON_QUERY(line_item, '$.quantity')) FROM orders as o, UNNEST(JSON_QUERY_ARRAY(line_items)) AS line_item`
+      - TABLE my_table
+        - COLUMN elements
+          - [{id bigint, name varchar, number bigint, value double}]
+      To get the number of elements in my_table table use SQL:
+      `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS element`
 """
 
 
