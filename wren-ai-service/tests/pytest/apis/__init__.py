@@ -29,7 +29,7 @@ def app():
 
 def semantics_preparation(semantics_preperation_id: str, app: app):
     with TestClient(app) as client:
-        with open("tests/data/mdl.json", "r") as f:
+        with open("tests/data/book_2_mdl.json", "r") as f:
             mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
         response = client.post(

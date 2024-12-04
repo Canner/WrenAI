@@ -44,7 +44,7 @@ def test_asks_with_saved_query(app: app):
         response = client.post(
             url="/v1/asks",
             json={
-                "query": "How many customers are there?",
+                "query": "How many books are there?",
                 "mdl_hash": semantics_preparation_id,
             },
         )
