@@ -44,11 +44,10 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
             },
         }
 
-    return [
-        extract(model)
-        for model in mdl.get("models", [])
-        if model.get("name", "") in selected_models or "*" in selected_models
-    ]
+    def model_picker(model: dict) -> bool:
+        return model.get("name", "") in selected_models or "*" in selected_models
+
+    return [extract(model) for model in mdl.get("models", []) if model_picker(model)]
 
 
 @observe(capture_input=False)
