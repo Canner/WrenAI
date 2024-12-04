@@ -11,7 +11,6 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -41,7 +40,6 @@ class DataFetcher:
 
 
 ## Start of Pipeline
-@async_timer
 @observe(capture_input=False)
 async def execute_sql(
     sql: str, data_fetcher: DataFetcher, project_id: str | None = None
@@ -85,7 +83,6 @@ class SQLExecutor(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="SQL Execution")
     async def run(self, sql: str, project_id: str | None = None) -> dict:
         logger.info("SQL Execution pipeline is running...")

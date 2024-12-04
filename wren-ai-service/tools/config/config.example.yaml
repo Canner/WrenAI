@@ -132,6 +132,5 @@ settings:
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
   langfuse_enable: true
-  enable_timer: false
   logging_level: DEBUG
   development: true

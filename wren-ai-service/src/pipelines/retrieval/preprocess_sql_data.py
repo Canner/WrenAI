@@ -10,13 +10,11 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.utils import timer
 
 logger = logging.getLogger("wren-ai-service")
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False, capture_output=False)
 def preprocess(
     sql_data: Dict,
@@ -84,7 +82,6 @@ class PreprocessSqlData(BasicPipeline):
             orient="LR",
         )
 
-    @timer
     @observe(name="Preprocess SQL Data")
     def run(
         self,
