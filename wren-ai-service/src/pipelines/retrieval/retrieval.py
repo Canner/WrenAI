@@ -471,6 +471,6 @@ if __name__ == "__main__":
 
     dry_run_pipeline(
         Retrieval,
-        "retrieval",
+        "db_schema_retrieval",
         query="this is a test query",
     )
