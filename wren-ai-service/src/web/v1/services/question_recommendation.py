@@ -88,7 +88,6 @@ class QuestionRecommendation:
                 return post_process
 
             valid_sql = post_process["valid_generation_results"][0]["sql"]
-            logger.debug(f"Request {request_id}: Valid SQL: {valid_sql}")
 
             # Partial update the resource
             current = self._cache[request_id]

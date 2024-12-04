@@ -95,8 +95,6 @@ class AsyncGenerator(OllamaGenerator):
         prompt: str,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
-        logger.debug(f"Running Ollama generator with prompt: {prompt}")
-
         generation_kwargs = {**self.generation_kwargs, **(generation_kwargs or {})}
 
         stream = self.streaming_callback is not None
