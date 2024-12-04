@@ -58,7 +58,7 @@ class MDLValidator:
     def run(self, mdl: str) -> str:
         try:
             mdl_json = orjson.loads(mdl)
-            logger.debug(f"MDL JSON: {mdl_json}")
+            logger.info(f"MDL JSON: {mdl_json}")
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON: {e}")
         if "models" not in mdl_json:

@@ -98,7 +98,6 @@ class AsyncGenerator(OpenAIGenerator):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         query_id: Optional[str] = None,
     ):
-        logger.debug(f"Running AsyncOpenAI generator with prompt: {prompt}")
         message = ChatMessage.from_user(prompt)
         if self.system_prompt:
             # updated from_system to from_assistent as the new openai api is not accepting system prompts anymore, only user and assistant.
