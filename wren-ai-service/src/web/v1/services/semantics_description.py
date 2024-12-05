@@ -65,24 +65,20 @@ class SemanticsDescription:
             "language": request.configuration.language,
         }
 
+        def _model_picker(model: dict, selected: list[str]) -> bool:
+            return model["name"] in selected or "*" in selected
+
         chunks = [
             {
                 **model,
                 "columns": model["columns"][i : i + chunk_size],
             }
             for model in mdl_dict["models"]
-            if model["name"] in request.selected_models
+            if _model_picker(model, request.selected_models)
             for i in range(0, len(model["columns"]), chunk_size)
         ]
 
-        return [
-            {
-                **template,
-                "mdl": {"models": [chunk]},
-                "selected_models": [chunk["name"]],
-            }
-            for chunk in chunks
-        ]
+        return [{**template, "mdl": {"models": [chunk]}} for chunk in chunks]
 
     async def _generate_task(self, request_id: str, chunk: dict):
         resp = await self._pipelines["semantics_description"].run(**chunk)
