@@ -18,7 +18,7 @@ logger = logging.getLogger("wren-ai-service")
 
 ## Start of Pipeline
 @observe(capture_input=False)
-def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
+def picked_models(mdl: dict) -> list[dict]:
     def relation_filter(column: dict) -> bool:
         return "relationship" not in column
 
@@ -28,6 +28,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
                 "name": column["name"],
                 "type": column["type"],
                 "properties": {
+                    "alias": column["properties"].get("displayName", ""),
                     "description": column["properties"].get("description", ""),
                 },
             }
@@ -36,18 +37,17 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
         ]
 
     def extract(model: dict) -> dict:
+        prop = model["properties"]
         return {
             "name": model["name"],
             "columns": column_formatter(model["columns"]),
             "properties": {
-                "description": model["properties"].get("description", ""),
+                "alias": prop.get("displayName", ""),
+                "description": prop.get("description", ""),
             },
         }
 
-    def model_picker(model: dict) -> bool:
-        return model.get("name", "") in selected_models or "*" in selected_models
-
-    return [extract(model) for model in mdl.get("models", []) if model_picker(model)]
+    return [extract(model) for model in mdl.get("models", [])]
 
 
 @observe(capture_input=False)
@@ -120,69 +120,54 @@ SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
 }
 
 system_prompt = """
-I have a data model represented in JSON format, with the following structure:
+You are a data model expert. Your task is to enrich a JSON data model with descriptive metadata.
 
-```
-[
-    {'name': 'model', 'columns': [
-            {'name': 'column_1', 'type': 'type', 'properties': {}
-            },
-            {'name': 'column_2', 'type': 'type', 'properties': {}
-            },
-            {'name': 'column_3', 'type': 'type', 'properties': {}
-            }
-        ], 'properties': {}
-    }
-]
-```
+Input Format:
+[{
+    'name': 'model',
+    'columns': [{'name': 'column', 'type': 'type', 'properties': {'alias': 'alias', 'description': 'description'}}],
+    'properties': {'alias': 'alias', 'description': 'description'}
+}]
 
-Your task is to update this JSON structure by adding `description`, `alias` fields inside both the `properties` attribute of each `column` and the `model` itself.
-Each `description`, `alias` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns.
-Follow these steps:
-1. **For the `model`**: Prompt the user to provide a brief description and alias of the model's overall purpose or its context. Insert this description and alias in the `properties` field of the `model`.
-2. **For each `column`**: Ask the user to describe each column's role or significance. Each column's description and alias should be added under its respective `properties` field in the format: `'description': 'user-provided text'`, `'alias': 'user-provided text'`.
-3. Ensure that the output is a well-formatted JSON structure, preserving the input's original format and adding the appropriate `description`, `alias` fields.
+For each model and column, you will:
+1. Add a clear, concise alias that serves as a business-friendly name
+2. Add a detailed description explaining its purpose and usage
 
-### Output Format:
+Guidelines:
+- Descriptions should be clear, concise and business-focused
+- Aliases should be intuitive and user-friendly
+- Use the user's context to inform the descriptions
+- Maintain technical accuracy while being accessible to non-technical users
 
-```
+Output Format:
 {
-    "models": [
-        {
+    "models": [{
         "name": "model",
-        "columns": [
-            {
-                "name": "column_1",
-                "properties": {
-                    "alias": "<alias for column_1>",
-                    "description": "<description for column_1>"
-                }
-            },
-            {
-                "name": "column_2",
-                "properties": {
-                    "alias": "<alias for column_2>",
-                    "description": "<description for column_2>"
-                }
-            },
-            {
-                "name": "column_3",
-                "properties": {
-                    "alias": "<alias for column_3>",
-                    "description": "<description for column_3>"
-                }
+        "columns": [{
+            "name": "column",
+            "properties": {
+                "alias": "User-friendly column name",
+                "description": "Clear explanation of column purpose"
             }
-        ],
+        }],
         "properties": {
-            "alias": "<alias for model>",
-            "description": "<description for model>"
+            "alias": "User-friendly model name", 
+            "description": "Clear explanation of model purpose"
         }
-        }
-    ]
+    }]
 }
-```
 
-Make sure that the descriptions are concise, informative, and contextually appropriate based on the input provided by the user.
+Example:
+Input model "orders" with column "created_at" might become:
+{
+    "name": "created_at",
+    "properties": {
+        "alias": "Order Creation Date",
+        "description": "Timestamp when the order was first created in the system"
+    }
+}
+
+Focus on providing business value through clear, accurate descriptions while maintaining JSON structure integrity.
 """
 
 user_prompt_template = """
@@ -213,7 +198,6 @@ class SemanticsDescription(BasicPipeline):
     def visualize(
         self,
         user_prompt: str,
-        selected_models: list[str],
         mdl: dict,
         language: str = "en",
     ) -> None:
@@ -226,7 +210,6 @@ class SemanticsDescription(BasicPipeline):
             output_file_path=f"{destination}/semantics_description.dot",
             inputs={
                 "user_prompt": user_prompt,
-                "selected_models": selected_models,
                 "mdl": mdl,
                 "language": language,
                 **self._components,
@@ -239,7 +222,6 @@ class SemanticsDescription(BasicPipeline):
     async def run(
         self,
         user_prompt: str,
-        selected_models: list[str],
         mdl: dict,
         language: str = "en",
     ) -> dict:
@@ -248,7 +230,6 @@ class SemanticsDescription(BasicPipeline):
             [self._final],
             inputs={
                 "user_prompt": user_prompt,
-                "selected_models": selected_models,
                 "mdl": mdl,
                 "language": language,
                 **self._components,
