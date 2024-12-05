@@ -244,6 +244,5 @@ if __name__ == "__main__":
         "semantics_enrichment",
         user_prompt="Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
         mdl={},
-        selected_models=["*"],
         language="en",
     )
