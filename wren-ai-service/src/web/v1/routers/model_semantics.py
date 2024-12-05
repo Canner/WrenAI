@@ -12,7 +12,7 @@ from src.globals import (
     get_service_metadata,
 )
 from src.web.v1.services import Configuration
-from src.web.v1.services.semantics_description import SemanticsDescription
+from src.web.v1.services.model_semantics import ModelSemantics
 
 router = APIRouter()
 
@@ -113,10 +113,10 @@ async def generate(
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> PostResponse:
     id = str(uuid.uuid4())
-    service = service_container.semantics_description
+    service = service_container.model_semantics
 
-    service[id] = SemanticsDescription.Resource(id=id)
-    input = SemanticsDescription.Input(
+    service[id] = ModelSemantics.Resource(id=id)
+    input = ModelSemantics.Input(
         id=id,
         selected_models=request.selected_models,
         user_prompt=request.user_prompt,
@@ -146,7 +146,7 @@ async def get(
     id: str,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> GetResponse:
-    resource = service_container.semantics_description[id]
+    resource = service_container.model_semantics[id]
 
     def _formatter(response: Optional[dict]) -> Optional[list[dict]]:
         if response is None:

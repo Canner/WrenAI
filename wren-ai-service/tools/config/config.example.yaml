@@ -109,8 +109,8 @@ pipes:
   - name: sql_regeneration
     llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
-  - name: semantics_description
-    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: model_semantics
+    llm: openai_llm.gpt-4o-mini
   - name: relationship_recommendation
     llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
