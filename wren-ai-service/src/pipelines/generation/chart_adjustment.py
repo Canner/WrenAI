@@ -18,6 +18,7 @@ from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.pipelines.common import chart_generation_instructions
 from src.utils import async_timer, timer
+from src.web.v1.services.chart_adjustment import ChartAdjustmentOption
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -42,7 +43,23 @@ Please provide your chain of thought reasoning and the vega-lite schema in JSON 
 
 chart_adjustment_user_prompt_template = """
 ### INPUT ###
-Adjustment Question: {{ adjustment_query }}
+Adjustment Options:
+- Chart Type: {{ adjustment_option.chart_type }}
+{% if adjustment_option.x_axis %}
+- X Axis: {{ adjustment_option.x_axis }}
+{% endif %}
+{% if adjustment_option.y_axis %}
+- Y Axis: {{ adjustment_option.y_axis }}
+{% endif %}
+{% if adjustment_option.x_offset %}
+- X Offset: {{ adjustment_option.x_offset }}
+{% endif %}
+{% if adjustment_option.color %}
+- Color: {{ adjustment_option.color }}
+{% endif %}
+{% if adjustment_option.theta %}
+- Theta: {{ adjustment_option.theta }}
+{% endif %}
 Original Question: {{ query }}
 Original SQL: {{ sql }}
 Original Vega-Lite Schema: {{ chart_schema }}
@@ -97,6 +114,7 @@ class ChartAdjustmentPostProcessor:
             reasoning = generation_result.get("reasoning", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 validate(chart_schema, schema=vega_schema)
+                chart_schema["data"]["values"] = []
                 return {
                     "results": {
                         "chart_schema": chart_schema,
@@ -144,7 +162,7 @@ def preprocess_data(
 def prompt(
     query: str,
     sql: str,
-    adjustment_query: str,
+    adjustment_option: ChartAdjustmentOption,
     chart_schema: dict,
     preprocess_data: dict,
     language: str,
@@ -156,7 +174,7 @@ def prompt(
     return prompt_builder.run(
         query=query,
         sql=sql,
-        adjustment_query=adjustment_query,
+        adjustment_option=adjustment_option,
         chart_schema=chart_schema,
         sample_data=sample_data,
         sample_data_statistics=sample_data_statistics,
@@ -229,7 +247,7 @@ class ChartAdjustment(BasicPipeline):
         self,
         query: str,
         sql: str,
-        adjustment_query: str,
+        adjustment_option: ChartAdjustmentOption,
         chart_schema: dict,
         data: dict,
         language: str,
@@ -244,7 +262,7 @@ class ChartAdjustment(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
-                "adjustment_query": adjustment_query,
+                "adjustment_option": adjustment_option,
                 "chart_schema": chart_schema,
                 "data": data,
                 "language": language,
@@ -261,7 +279,7 @@ class ChartAdjustment(BasicPipeline):
         self,
         query: str,
         sql: str,
-        adjustment_query: str,
+        adjustment_option: ChartAdjustmentOption,
         chart_schema: dict,
         data: dict,
         language: str,
@@ -272,7 +290,7 @@ class ChartAdjustment(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
-                "adjustment_query": adjustment_query,
+                "adjustment_option": adjustment_option,
                 "chart_schema": chart_schema,
                 "data": data,
                 "language": language,
@@ -301,7 +319,7 @@ if __name__ == "__main__":
     pipeline.visualize(
         query="",
         sql="",
-        adjustment_query="",
+        adjustment_option={},
         chart_schema={},
         data={},
         language="",
@@ -310,7 +328,7 @@ if __name__ == "__main__":
         lambda: pipeline.run(
             query="",
             sql="",
-            adjustment_query="",
+            adjustment_option={},
             chart_schema={},
             data={},
             language="",

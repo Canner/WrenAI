@@ -658,6 +658,7 @@ def display_sql_answer(query_id: str):
         placeholder.markdown(markdown_content)
 
 
+@st.cache_data
 def get_sql_answer(
     query: str,
     sql: str,
@@ -896,18 +897,19 @@ def adjust_chart(
     query: str,
     sql: str,
     chart_schema: dict,
-    adjustment_query: str,
+    adjustment_option: dict,
     language: str,
     dataset_type: str,
     manifest: dict,
     limit: int = 100,
 ):
+    chart_schema["data"]["values"] = []
     adjust_chart_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments",
         json={
             "query": query,
             "sql": sql,
-            "adjustment_query": adjustment_query,
+            "adjustment_option": adjustment_option,
             "chart_schema": chart_schema,
             "configurations": {
                 "language": language,
@@ -925,7 +927,7 @@ def adjust_chart(
         and charts_status != "stopped"
     ):
         charts_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments/{query_id}/result"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments/{query_id}"
         )
         assert charts_status_response.status_code == 200
         charts_status = charts_status_response.json()["status"]
@@ -1044,7 +1046,10 @@ def show_chart_adjustment_dialog(
     manifest: dict,
     limit: int = 100,
 ):
-    adjustment_query = st.chat_input("Adjust the chart")
+    adjustment_chart_type = st.selectbox(
+        "Chart Type", ["bar", "grouped_bar", "line", "pie", "stacked_bar", "area"]
+    )
+    adjust_submit_button = st.button("Adjust")
 
     st.markdown("### Question")
     st.markdown(query)
@@ -1060,12 +1065,15 @@ def show_chart_adjustment_dialog(
 
     show_original_chart(chart_schema, reasoning)
 
-    if adjustment_query:
+    if adjust_submit_button:
+        adjustment_option = {
+            "chart_type": adjustment_chart_type,
+        }
         adjust_chart_response = adjust_chart(
             query,
             sql,
             chart_schema,
-            adjustment_query,
+            adjustment_option,
             language,
             dataset_type,
             manifest,

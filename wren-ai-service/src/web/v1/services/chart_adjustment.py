@@ -13,11 +13,20 @@ logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/chart-adjustments
+class ChartAdjustmentOption(BaseModel):
+    chart_type: Literal["bar", "grouped_bar", "line", "pie", "stacked_bar", "area"]
+    x_axis: Optional[str] = None
+    y_axis: Optional[str] = None
+    x_offset: Optional[str] = None
+    color: Optional[str] = None
+    theta: Optional[str] = None
+
+
 class ChartAdjustmentRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
-    adjustment_query: str
+    adjustment_option: ChartAdjustmentOption
     chart_schema: dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
@@ -136,7 +145,7 @@ class ChartAdjustmentService:
             chart_adjustment_result = await self._pipelines["chart_adjustment"].run(
                 query=chart_adjustment_request.query,
                 sql=chart_adjustment_request.sql,
-                adjustment_query=chart_adjustment_request.adjustment_query,
+                adjustment_option=chart_adjustment_request.adjustment_option,
                 chart_schema=chart_adjustment_request.chart_schema,
                 data=sql_data["execute_sql"],
                 language=chart_adjustment_request.configurations.language,

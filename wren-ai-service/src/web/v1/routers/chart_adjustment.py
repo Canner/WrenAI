@@ -59,7 +59,7 @@ async def stop_chart_adjustment(
     return StopChartAdjustmentResponse(query_id=query_id)
 
 
-@router.get("/chart-adjustments/{query_id}/result")
+@router.get("/chart-adjustments/{query_id}")
 async def get_chart_adjustment_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),

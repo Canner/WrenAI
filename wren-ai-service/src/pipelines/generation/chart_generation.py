@@ -95,6 +95,7 @@ class ChartGenerationPostProcessor:
             reasoning = generation_result.get("reasoning", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 validate(chart_schema, schema=vega_schema)
+                chart_schema["data"]["values"] = []
                 return {
                     "results": {
                         "chart_schema": chart_schema,
