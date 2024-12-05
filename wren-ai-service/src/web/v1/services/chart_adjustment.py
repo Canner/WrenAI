@@ -126,10 +126,6 @@ class ChartAdjustmentService:
             query_id = chart_adjustment_request.query_id
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
-                status="understanding"
-            )
-
-            self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
                 status="fetching"
             )
 

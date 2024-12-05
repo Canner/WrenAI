@@ -68,9 +68,7 @@ class ChartResult(BaseModel):
 
 
 class ChartResultResponse(BaseModel):
-    status: Literal[
-        "understanding", "fetching", "generating", "finished", "failed", "stopped"
-    ]
+    status: Literal["fetching", "generating", "finished", "failed", "stopped"]
     response: Optional[ChartResult] = None
     error: Optional[ChartError] = None
 
@@ -113,8 +111,6 @@ class ChartService:
 
         try:
             query_id = chart_request.query_id
-
-            self._chart_results[query_id] = ChartResultResponse(status="understanding")
 
             self._chart_results[query_id] = ChartResultResponse(status="fetching")
 

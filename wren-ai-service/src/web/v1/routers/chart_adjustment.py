@@ -33,7 +33,7 @@ async def chart_adjustment(
     service_container.chart_adjustment_service._chart_adjustment_results[
         query_id
     ] = ChartAdjustmentResultResponse(
-        status="understanding",
+        status="fetching",
     )
 
     background_tasks.add_task(

@@ -31,7 +31,7 @@ async def chart(
     query_id = str(uuid.uuid4())
     chart_request.query_id = query_id
     service_container.chart_service._chart_results[query_id] = ChartResultResponse(
-        status="understanding",
+        status="fetching",
     )
 
     background_tasks.add_task(
