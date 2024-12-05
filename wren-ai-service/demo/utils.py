@@ -871,7 +871,7 @@ def generate_chart(
         and charts_status != "stopped"
     ):
         charts_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/charts/{query_id}/result"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/charts/{query_id}"
         )
         assert charts_status_response.status_code == 200
         charts_status = charts_status_response.json()["status"]

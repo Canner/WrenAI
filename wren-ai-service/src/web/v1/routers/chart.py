@@ -57,7 +57,7 @@ async def stop_chart(
     return StopChartResponse(query_id=query_id)
 
 
-@router.get("/charts/{query_id}/result")
+@router.get("/charts/{query_id}")
 async def get_chart_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
