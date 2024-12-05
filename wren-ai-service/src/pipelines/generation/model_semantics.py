@@ -109,11 +109,11 @@ class SemanticResult(BaseModel):
     models: list[SemanticModel]
 
 
-SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
+MODEL_SEMANTICS_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "semantic_description",
+            "name": "model_semantics",
             "schema": SemanticResult.model_json_schema(),
         },
     }
@@ -180,13 +180,13 @@ Please provide a brief description and alias for the model and each column based
 """
 
 
-class SemanticsDescription(BasicPipeline):
+class ModelSemantics(BasicPipeline):
     def __init__(self, llm_provider: LLMProvider, **_):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(
                 system_prompt=system_prompt,
-                generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
+                generation_kwargs=MODEL_SEMANTICS_KWARGS,
             ),
         }
         self._final = "normalize"
@@ -207,7 +207,7 @@ class SemanticsDescription(BasicPipeline):
 
         self._pipe.visualize_execution(
             [self._final],
-            output_file_path=f"{destination}/semantics_description.dot",
+            output_file_path=f"{destination}/model_semantics.dot",
             inputs={
                 "user_prompt": user_prompt,
                 "mdl": mdl,
@@ -218,14 +218,13 @@ class SemanticsDescription(BasicPipeline):
             orient="LR",
         )
 
-    @observe(name="Semantics Description Generation")
+    @observe(name="Model Semantics Generation")
     async def run(
         self,
         user_prompt: str,
         mdl: dict,
         language: str = "en",
     ) -> dict:
-        logger.info("Semantics Description Generation pipeline is running...")
         return await self._pipe.execute(
             [self._final],
             inputs={
@@ -241,8 +240,8 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        SemanticsDescription,
-        "semantics_description",
+        ModelSemantics,
+        "model_semantics",
         user_prompt="Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
         mdl={},
         selected_models=["*"],

@@ -6,14 +6,13 @@ import toml
 from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
-from src.pipelines import indexing
+from src.pipelines import generation, indexing
 from src.pipelines.generation import (
     data_assistance,
     followup_sql_generation,
     intent_classification,
     question_recommendation,
     relationship_recommendation,
-    semantics_description,
     sql_answer,
     sql_breakdown,
     sql_correction,
@@ -26,9 +25,9 @@ from src.pipelines.generation import (
 from src.pipelines.retrieval import historical_question, preprocess_sql_data, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
+from src.web.v1.services.model_semantics import ModelSemantics
 from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
-from src.web.v1.services.semantics_description import SemanticsDescription
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
@@ -44,7 +43,7 @@ class ServiceContainer:
     ask_details_service: AskDetailsService
     question_recommendation: QuestionRecommendation
     relationship_recommendation: RelationshipRecommendation
-    semantics_description: SemanticsDescription
+    model_semantics: ModelSemantics
     semantics_preparation_service: SemanticsPreparationService
     sql_answer_service: SqlAnswerService
     sql_expansion_service: SqlExpansionService
@@ -67,10 +66,10 @@ def create_service_container(
         "ttl": settings.query_cache_ttl,
     }
     return ServiceContainer(
-        semantics_description=SemanticsDescription(
+        model_semantics=ModelSemantics(
             pipelines={
-                "semantics_description": semantics_description.SemanticsDescription(
-                    **pipe_components["semantics_description"],
+                "model_semantics": generation.ModelSemantics(
+                    **pipe_components["model_semantics"],
                 )
             },
             **query_cache,
