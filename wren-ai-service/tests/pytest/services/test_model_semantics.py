@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import orjson
 import pytest
 
-from src.web.v1.services.semantics_description import SemanticsDescription
+from src.web.v1.services.model_semantics import ModelSemantics
 
 
 @pytest.fixture
@@ -19,16 +19,16 @@ def service():
         }
     }
 
-    pipelines = {"semantics_description": mock_pipeline}
-    return SemanticsDescription(pipelines=pipelines)
+    pipelines = {"model_semantics": mock_pipeline}
+    return ModelSemantics(pipelines=pipelines)
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description(
-    service: SemanticsDescription,
+async def test_generate_model_semantics(
+    service: ModelSemantics,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = ModelSemantics.Resource(id="test_id")
+    request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -50,11 +50,11 @@ async def test_generate_semantics_description(
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description_with_invalid_mdl(
-    service: SemanticsDescription,
+async def test_generate_model_semantics_with_invalid_mdl(
+    service: ModelSemantics,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = ModelSemantics.Resource(id="test_id")
+    request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -72,20 +72,18 @@ async def test_generate_semantics_description_with_invalid_mdl(
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description_with_exception(
-    service: SemanticsDescription,
+async def test_generate_model_semantics_with_exception(
+    service: ModelSemantics,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = ModelSemantics.Resource(id="test_id")
+    request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
         mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
-    service._pipelines["semantics_description"].run.side_effect = Exception(
-        "Test exception"
-    )
+    service._pipelines["model_semantics"].run.side_effect = Exception("Test exception")
 
     await service.generate(request)
     response = service[request.id]
@@ -100,10 +98,10 @@ async def test_generate_semantics_description_with_exception(
     )
 
 
-def test_get_semantics_description_result(
-    service: SemanticsDescription,
+def test_get_model_semantics_result(
+    service: ModelSemantics,
 ):
-    expected_response = SemanticsDescription.Resource(
+    expected_response = ModelSemantics.Resource(
         id="test_id",
         status="finished",
         response={"model1": {"description": "Test description"}},
@@ -115,8 +113,8 @@ def test_get_semantics_description_result(
     assert result == expected_response
 
 
-def test_get_non_existent_semantics_description_result(
-    service: SemanticsDescription,
+def test_get_non_existent_model_semantics_result(
+    service: ModelSemantics,
 ):
     result = service["non_existent_id"]
 
@@ -129,10 +127,10 @@ def test_get_non_existent_semantics_description_result(
 
 @pytest.mark.asyncio
 async def test_batch_processing_with_multiple_models(
-    service: SemanticsDescription,
+    service: ModelSemantics,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = ModelSemantics.Resource(id="test_id")
+    request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3"],
@@ -140,7 +138,7 @@ async def test_batch_processing_with_multiple_models(
     )
 
     # Mock pipeline responses for each chunk
-    service._pipelines["semantics_description"].run.side_effect = [
+    service._pipelines["model_semantics"].run.side_effect = [
         {"normalize": {"model1": {"description": "Description 1"}}},
         {"normalize": {"model2": {"description": "Description 2"}}},
         {"normalize": {"model3": {"description": "Description 3"}}},
@@ -165,10 +163,10 @@ async def test_batch_processing_with_multiple_models(
 
 
 def test_batch_processing_with_custom_chunk_size(
-    service: SemanticsDescription,
+    service: ModelSemantics,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = ModelSemantics.Resource(id="test_id")
+    request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3", "model4"],
@@ -188,10 +186,10 @@ def test_batch_processing_with_custom_chunk_size(
 
 @pytest.mark.asyncio
 async def test_batch_processing_partial_failure(
-    service: SemanticsDescription,
+    service: ModelSemantics,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = ModelSemantics.Resource(id="test_id")
+    request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2"],
@@ -199,7 +197,7 @@ async def test_batch_processing_partial_failure(
     )
 
     # Mock first chunk succeeds, second chunk fails
-    service._pipelines["semantics_description"].run.side_effect = [
+    service._pipelines["model_semantics"].run.side_effect = [
         {"normalize": {"model1": {"description": "Description 1"}}},
         Exception("Failed processing model2"),
     ]
@@ -215,12 +213,12 @@ async def test_batch_processing_partial_failure(
 
 @pytest.mark.asyncio
 async def test_concurrent_updates_no_race_condition(
-    service: SemanticsDescription,
+    service: ModelSemantics,
 ):
     test_id = "concurrent_test"
-    service[test_id] = SemanticsDescription.Resource(id=test_id)
+    service[test_id] = ModelSemantics.Resource(id=test_id)
 
-    request = SemanticsDescription.Input(
+    request = ModelSemantics.Input(
         id=test_id,
         user_prompt="Test concurrent updates",
         selected_models=["model1", "model2", "model3", "model4", "model5"],
@@ -236,7 +234,7 @@ async def test_concurrent_updates_no_race_condition(
             }
         }
 
-    service._pipelines["semantics_description"].run.side_effect = [
+    service._pipelines["model_semantics"].run.side_effect = [
         await delayed_response(1),
         await delayed_response(2),
         await delayed_response(3),

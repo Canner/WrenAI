@@ -5,9 +5,9 @@ from src.web.v1.routers import (
     ask_details,
     chart,
     chart_adjustment,
+    model_semantics,
     question_recommendation,
     relationship_recommendation,
-    semantics_description,
     semantics_preparations,
     sql_answers,
     sql_expansions,
@@ -20,7 +20,7 @@ router.include_router(ask.router)
 router.include_router(ask_details.router)
 router.include_router(question_recommendation.router)
 router.include_router(relationship_recommendation.router)
-router.include_router(semantics_description.router)
+router.include_router(model_semantics.router)
 router.include_router(semantics_preparations.router)
 router.include_router(sql_answers.router)
 router.include_router(sql_expansions.router)

@@ -14,7 +14,7 @@ from src.web.v1.services import Configuration, MetadataTraceable
 logger = logging.getLogger("wren-ai-service")
 
 
-class SemanticsDescription:
+class ModelSemantics:
     class Input(BaseModel):
         id: str
         selected_models: list[str]
@@ -40,7 +40,7 @@ class SemanticsDescription:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._cache: Dict[str, SemanticsDescription.Resource] = TTLCache(
+        self._cache: Dict[str, ModelSemantics.Resource] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
 
@@ -55,7 +55,7 @@ class SemanticsDescription:
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
         )
-        logger.error(error_message)
+        logger.error(f"Project ID: {request.project_id}, {error_message}")
 
     def _chunking(
         self, mdl_dict: dict, request: Input, chunk_size: int = 50
@@ -81,7 +81,7 @@ class SemanticsDescription:
         return [{**template, "mdl": {"models": [chunk]}} for chunk in chunks]
 
     async def _generate_task(self, request_id: str, chunk: dict):
-        resp = await self._pipelines["semantics_description"].run(**chunk)
+        resp = await self._pipelines["model_semantics"].run(**chunk)
         normalize = resp.get("normalize")
 
         current = self[request_id]
@@ -94,10 +94,12 @@ class SemanticsDescription:
 
             current.response[key]["columns"].extend(normalize[key]["columns"])
 
-    @observe(name="Generate Semantics Description")
+    @observe(name="Generate Model Semantics")
     @trace_metadata
     async def generate(self, request: Input, **kwargs) -> Resource:
-        logger.info("Generate Semantics Description pipeline is running...")
+        logger.info(
+            f"Project ID: {request.project_id}, Generate Model Semantics pipeline is running..."
+        )
 
         try:
             mdl_dict = orjson.loads(request.mdl)
@@ -117,7 +119,7 @@ class SemanticsDescription:
         except Exception as e:
             self._handle_exception(
                 request,
-                f"An error occurred during semantics description generation: {str(e)}",
+                f"An error occurred during model semantics generation: {str(e)}",
             )
 
         return self[request.id].with_metadata()
@@ -126,7 +128,7 @@ class SemanticsDescription:
         response = self._cache.get(id)
 
         if response is None:
-            message = f"Semantics Description Resource with ID '{id}' not found."
+            message = f"Model Semantics Resource with ID '{id}' not found."
             logger.exception(message)
             return self.Resource(
                 id=id,
