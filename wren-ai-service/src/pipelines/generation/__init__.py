@@ -1,3 +1,3 @@
-from .model_semantics import ModelSemantics
+from .semantics_enrichment import SemanticsEnrichment
 
-__all__ = ["ModelSemantics"]
+__all__ = ["SemanticsEnrichment"]
