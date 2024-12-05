@@ -13,8 +13,21 @@ def service():
     mock_pipeline.run.return_value = {
         "normalize": {
             "model1": {
-                "columns": [],
-                "properties": {"description": "Test description"},
+                "columns": [
+                    {
+                        "name": "column1",
+                        "type": "varchar",
+                        "notNull": False,
+                        "properties": {
+                            "description": "Test description",
+                            "alias": "column1_alias",
+                        },
+                    }
+                ],
+                "properties": {
+                    "description": "Test description",
+                    "alias": "model1_alias",
+                },
             }
         }
     }
@@ -42,8 +55,21 @@ async def test_generate_model_semantics(
     assert response.status == "finished"
     assert response.response == {
         "model1": {
-            "columns": [],
-            "properties": {"description": "Test description"},
+            "columns": [
+                {
+                    "name": "column1",
+                    "type": "varchar",
+                    "notNull": False,
+                    "properties": {
+                        "description": "Test description",
+                        "alias": "column1_alias",
+                    },
+                }
+            ],
+            "properties": {
+                "description": "Test description",
+                "alias": "model1_alias",
+            },
         }
     }
     assert response.error is None
@@ -93,8 +119,7 @@ async def test_generate_model_semantics_with_exception(
     assert response.response is None
     assert response.error.code == "OTHERS"
     assert (
-        "An error occurred during semantics description generation"
-        in response.error.message
+        "An error occurred during model semantics generation:" in response.error.message
     )
 
 
@@ -159,41 +184,75 @@ async def test_batch_processing_with_multiple_models(
     assert len(chunks) == 3  # Default chunk_size=1
     assert all("user_prompt" in chunk for chunk in chunks)
     assert all("mdl" in chunk for chunk in chunks)
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1]
 
 
 def test_batch_processing_with_custom_chunk_size(
     service: ModelSemantics,
 ):
+    test_mdl = {
+        "models": [
+            {
+                "name": "model1",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model2",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model3",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model4",
+                "columns": [
+                    {"name": "column1", "type": "varchar", "notNull": False},
+                    {"name": "column2", "type": "varchar", "notNull": False},
+                ],
+            },
+        ]
+    }
     service["test_id"] = ModelSemantics.Resource(id="test_id")
     request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3", "model4"],
-        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model4", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
+        mdl=orjson.dumps(test_mdl),
     )
 
     # Test chunking with custom chunk size
-    chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
+    chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=1)
 
-    assert len(chunks) == 4
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1, 1]
-    assert chunks[0]["selected_models"] == ["model1"]
-    assert chunks[1]["selected_models"] == ["model2"]
-    assert chunks[2]["selected_models"] == ["model3"]
-    assert chunks[3]["selected_models"] == ["model4"]
+    assert len(chunks) == 5
+    assert chunks[0]["mdl"]["models"][0]["name"] == "model1"
+    assert chunks[1]["mdl"]["models"][0]["name"] == "model2"
+    assert chunks[2]["mdl"]["models"][0]["name"] == "model3"
+    assert chunks[3]["mdl"]["models"][0]["name"] == "model4"
+    assert chunks[4]["mdl"]["models"][0]["name"] == "model4"
 
 
 @pytest.mark.asyncio
 async def test_batch_processing_partial_failure(
     service: ModelSemantics,
 ):
+    test_mdl = {
+        "models": [
+            {
+                "name": "model1",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model2",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+        ]
+    }
     service["test_id"] = ModelSemantics.Resource(id="test_id")
     request = ModelSemantics.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2"],
-        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
+        mdl=orjson.dumps(test_mdl),
     )
 
     # Mock first chunk succeeds, second chunk fails
