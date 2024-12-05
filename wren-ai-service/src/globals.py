@@ -34,9 +34,9 @@ from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.chart import ChartService
 from src.web.v1.services.chart_adjustment import ChartAdjustmentService
-from src.web.v1.services.model_semantics import ModelSemantics
 from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
+from src.web.v1.services.semantics_enrichment import SemanticsEnrichment
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
@@ -52,7 +52,7 @@ class ServiceContainer:
     ask_details_service: AskDetailsService
     question_recommendation: QuestionRecommendation
     relationship_recommendation: RelationshipRecommendation
-    model_semantics: ModelSemantics
+    semantics_enrichment: SemanticsEnrichment
     semantics_preparation_service: SemanticsPreparationService
     chart_service: ChartService
     chart_adjustment_service: ChartAdjustmentService
@@ -77,10 +77,10 @@ def create_service_container(
         "ttl": settings.query_cache_ttl,
     }
     return ServiceContainer(
-        model_semantics=ModelSemantics(
+        semantics_enrichment=SemanticsEnrichment(
             pipelines={
-                "model_semantics": generation.ModelSemantics(
-                    **pipe_components["model_semantics"],
+                "semantics_enrichment": generation.SemanticsEnrichment(
+                    **pipe_components["semantics_enrichment"],
                 )
             },
             **query_cache,

@@ -14,7 +14,7 @@ from src.web.v1.services import Configuration, MetadataTraceable
 logger = logging.getLogger("wren-ai-service")
 
 
-class ModelSemantics:
+class SemanticsEnrichment:
     class Input(BaseModel):
         id: str
         selected_models: list[str]
@@ -40,7 +40,7 @@ class ModelSemantics:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._cache: Dict[str, ModelSemantics.Resource] = TTLCache(
+        self._cache: Dict[str, SemanticsEnrichment.Resource] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
 
@@ -81,7 +81,7 @@ class ModelSemantics:
         return [{**template, "mdl": {"models": [chunk]}} for chunk in chunks]
 
     async def _generate_task(self, request_id: str, chunk: dict):
-        resp = await self._pipelines["model_semantics"].run(**chunk)
+        resp = await self._pipelines["semantics_enrichment"].run(**chunk)
         normalize = resp.get("normalize")
 
         current = self[request_id]
@@ -94,11 +94,11 @@ class ModelSemantics:
 
             current.response[key]["columns"].extend(normalize[key]["columns"])
 
-    @observe(name="Generate Model Semantics")
+    @observe(name="Enrich Semantics")
     @trace_metadata
     async def generate(self, request: Input, **kwargs) -> Resource:
         logger.info(
-            f"Project ID: {request.project_id}, Generate Model Semantics pipeline is running..."
+            f"Project ID: {request.project_id}, Enrich Semantics pipeline is running..."
         )
 
         try:
@@ -119,7 +119,7 @@ class ModelSemantics:
         except Exception as e:
             self._handle_exception(
                 request,
-                f"An error occurred during model semantics generation: {str(e)}",
+                f"An error occurred during semantics enrichment: {str(e)}",
             )
 
         return self[request.id].with_metadata()
@@ -128,7 +128,7 @@ class ModelSemantics:
         response = self._cache.get(id)
 
         if response is None:
-            message = f"Model Semantics Resource with ID '{id}' not found."
+            message = f"Semantics Enrichment Resource with ID '{id}' not found."
             logger.exception(message)
             return self.Resource(
                 id=id,

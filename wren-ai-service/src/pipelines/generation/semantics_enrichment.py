@@ -108,11 +108,11 @@ class SemanticResult(BaseModel):
     models: list[SemanticModel]
 
 
-MODEL_SEMANTICS_KWARGS = {
+semantics_enrichment_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "model_semantics",
+            "name": "semantics_enrichment",
             "schema": SemanticResult.model_json_schema(),
         },
     }
@@ -179,13 +179,13 @@ Please provide a brief description and alias for the model and each column based
 """
 
 
-class ModelSemantics(BasicPipeline):
+class SemanticsEnrichment(BasicPipeline):
     def __init__(self, llm_provider: LLMProvider, **_):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(
                 system_prompt=system_prompt,
-                generation_kwargs=MODEL_SEMANTICS_KWARGS,
+                generation_kwargs=semantics_enrichment_KWARGS,
             ),
         }
         self._final = "normalize"
@@ -216,8 +216,8 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        ModelSemantics,
-        "model_semantics",
+        SemanticsEnrichment,
+        "semantics_enrichment",
         user_prompt="Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
         mdl={},
         selected_models=["*"],
