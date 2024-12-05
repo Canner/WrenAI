@@ -268,8 +268,6 @@ if st.session_state["asks_results"]:
                 if vega_lite_schema := chart_result["chart_schema"]:
                     st.markdown("### Vega-Lite Schema")
                     st.json(vega_lite_schema, expanded=False)
-                    st.markdown("### Chart Description")
-                    st.markdown(f'{chart_result["description"]}')
                     st.vega_lite_chart(vega_lite_schema, use_container_width=True)
 
                     st.button(
@@ -280,7 +278,6 @@ if st.session_state["asks_results"]:
                             "sql": st.session_state["chosen_query_result"]["sql"],
                             "chart_schema": vega_lite_schema,
                             "language": st.session_state["language"],
-                            "description": chart_result["description"],
                             "reasoning": chart_result["reasoning"],
                             "dataset_type": st.session_state["dataset_type"],
                             "manifest": st.session_state["mdl_json"],

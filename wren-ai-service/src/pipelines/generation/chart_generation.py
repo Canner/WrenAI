@@ -35,8 +35,7 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 Please provide your chain of thought reasoning and the vega-lite schema in JSON format.
 
 {{
-    "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING>,
-    "description": <DESCRIPTION_OF_THE_CHART_IN_STRING>,
+    "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
@@ -94,14 +93,12 @@ class ChartGenerationPostProcessor:
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
-            description = generation_result.get("description", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 validate(chart_schema, schema=vega_schema)
                 return {
                     "results": {
                         "chart_schema": chart_schema,
                         "reasoning": reasoning,
-                        "description": description,
                     }
                 }
 
@@ -109,7 +106,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": reasoning,
-                    "description": description,
                 }
             }
         except ValidationError as e:
@@ -119,7 +115,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
-                    "description": "",
                 }
             }
         except Exception as e:
@@ -129,7 +124,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
-                    "description": "",
                 }
             }
 

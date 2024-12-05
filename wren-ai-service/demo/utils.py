@@ -431,7 +431,6 @@ def on_click_adjust_chart(
     sql: str,
     chart_schema: dict,
     language: str,
-    description: str,
     reasoning: str,
     dataset_type: str,
     manifest: dict,
@@ -442,7 +441,6 @@ def on_click_adjust_chart(
         sql,
         chart_schema,
         language,
-        description,
         reasoning,
         dataset_type,
         manifest,
@@ -833,7 +831,6 @@ def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
                 except ValueError:
                     pass
 
-    print(f"fields: {fields}")
     # Convert DataFrame to list of dicts with just the needed fields
     values = df[fields].to_dict(orient="records")
 
@@ -1026,14 +1023,13 @@ def show_sql_regeneration_results_dialog(
             sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
 
-def show_original_chart(chart_schema: dict, reasoning: str, description: str):
+def show_original_chart(chart_schema: dict, reasoning: str):
     st.markdown("### Original")
     st.markdown("#### Reasoning for making this chart")
     st.markdown(f"{reasoning}")
     st.markdown("#### Vega-Lite Schema")
     st.json(chart_schema, expanded=False)
     st.markdown("#### Chart Description")
-    st.markdown(description)
     st.vega_lite_chart(chart_schema, use_container_width=True)
 
 
@@ -1043,7 +1039,6 @@ def show_chart_adjustment_dialog(
     sql: str,
     chart_schema: dict,
     language: str,
-    description: str,
     reasoning: str,
     dataset_type: str,
     manifest: dict,
@@ -1063,7 +1058,7 @@ def show_chart_adjustment_dialog(
         language="sql",
     )
 
-    show_original_chart(chart_schema, reasoning, description)
+    show_original_chart(chart_schema, reasoning)
 
     if adjustment_query:
         adjust_chart_response = adjust_chart(
@@ -1084,6 +1079,4 @@ def show_chart_adjustment_dialog(
             if vega_lite_schema := adjust_chart_result["chart_schema"]:
                 st.markdown("#### Vega-Lite Schema")
                 st.json(vega_lite_schema, expanded=False)
-                st.markdown("#### Chart Description")
-                st.markdown(f'{adjust_chart_result["description"]}')
                 st.vega_lite_chart(vega_lite_schema, use_container_width=True)

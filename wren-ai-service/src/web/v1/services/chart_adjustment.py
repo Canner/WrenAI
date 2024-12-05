@@ -7,19 +7,12 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/chart-adjustments
-class ChartAdjustmentConfigurations(BaseModel):
-    class Timezone(BaseModel):
-        name: str
-        utc_offset: str
-
-    language: str = "English"
-
-
 class ChartAdjustmentRequest(BaseModel):
     _query_id: str | None = None
     query: str
@@ -28,10 +21,7 @@ class ChartAdjustmentRequest(BaseModel):
     chart_schema: dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
-    user_id: Optional[str] = None
-    configurations: Optional[
-        ChartAdjustmentConfigurations
-    ] = ChartAdjustmentConfigurations()
+    configurations: Optional[Configuration] = Configuration()
 
     @property
     def query_id(self) -> str:
@@ -76,7 +66,6 @@ class ChartAdjustmentResultRequest(BaseModel):
 
 class ChartAdjustmentResult(BaseModel):
     reasoning: str
-    description: str
     chart_schema: dict
 
 

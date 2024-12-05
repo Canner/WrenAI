@@ -451,11 +451,12 @@ chart_generation_instructions = """
 - Chart types: Bar chart, Line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
 - If you think the data is not suitable for visualization, you can return an empty string for the schema
-- The language for the chart, description and reasoning must be the same language provided by the user
+- The language for the chart and reasoning must be the same language provided by the user
 - Please use the current time provided by the user to generate the chart
 - In order to generate the grouped bar chart, you need to follow the given instructions:
     - Disable Stacking: Add "stack": null to the y-encoding.
-    - Use xOffset: Introduce xOffset for subcategories to group bars.
+    - Use xOffset for subcategories to group bars.
+    - Don't use "transform" section.
 - In order to generate the pie chart, you need to follow the given instructions:
     - Add {"type": "arc"} to the mark section.
     - Add "theta" encoding to the encoding section.
@@ -466,9 +467,9 @@ chart_generation_instructions = """
     - For monthly question, the time unit should be "year + month", ex. YYYY-MM.
     - For weekly question, the time unit should be "year + month + day", ex. YYYY-MM-DD.
     - For daily question, the time unit should be "year + month + day", ex. YYYY-MM-DD.
-- Always add tooltip to the chart using the "tooltip" property in the mark section.
-    - The tooltip should be {"content": "data"}
-    
+    - Default time unit is "year + month", ex. YYYY-MM.
+- For each axis, generate the corresponding human-readable title based on the language provided by the user.
+
 ### GUIDELINES TO PLOT CHART ###
 
 1. Understanding Your Data Types
@@ -524,11 +525,11 @@ chart_generation_instructions = """
     
 ### EXAMPLES ###
 
-1. Comparing Sales Across Regions
-- Chart Type: Bar Chart.
+1. Bar Chart
 - Vega-Lite Spec:
 {
     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
     "data": {
         "values": [
             {"Region": "North", "Sales": 100},
@@ -537,17 +538,17 @@ chart_generation_instructions = """
             {"Region": "West", "Sales": 400}
         ]
     },
-    "mark": {"type": "bar", "tooltip": {"content": "data"}},
+    "mark": {"type": "bar"},
     "encoding": {
-        "x": {"field": "Region", "type": "nominal"},
-        "y": {"field": "Sales", "type": "quantitative"}
+        "x": {"field": "Region", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
+        "y": {"field": "Sales", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
     }
 }
-2. Sales Trends Over Time
-- Chart Type: Line Chart.
+2. Line Chart
 - Vega-Lite Spec:
 {
     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
     "data": {
         "values": [
             {"Date": "2022-01-01", "Sales": 100},
@@ -556,17 +557,17 @@ chart_generation_instructions = """
             {"Date": "2022-01-04", "Sales": 400}
         ]
     },
-    "mark": {"type": "line", "tooltip": {"content": "data"}},
+    "mark": {"type": "line"},
     "encoding": {
-        "x": {"field": "Date", "type": "temporal"},
-        "y": {"field": "Sales", "type": "quantitative"}
+        "x": {"field": "Date", "type": "temporal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
+        "y": {"field": "Sales", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
     }
 }
-3. Market Share Distribution
-- Chart Type: Pie Chart.
+3. Pie Chart
 - Vega-Lite Spec:
 {
     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
     "data": {
         "values": [
             {"Company": "Company A", "Market Share": 0.4},
@@ -575,10 +576,78 @@ chart_generation_instructions = """
             {"Company": "Company D", "Market Share": 0.1}
         ]
     },
-    "mark": {"type": "arc", "tooltip": {"content": "data"}},
+    "mark": {"type": "arc"},
     "encoding": {
         "theta": {"field": "Market Share", "type": "quantitative"},
-        "color": {"field": "Company", "type": "nominal"}
+        "color": {"field": "Company", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
+    }
+}
+4. Area Chart
+- Vega-Lite Spec:
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
+    "data": {
+        "values": [
+            {"Date": "2022-01-01", "Sales": 100},
+            {"Date": "2022-01-02", "Sales": 200},
+            {"Date": "2022-01-03", "Sales": 300},
+            {"Date": "2022-01-04", "Sales": 400}
+        ]
+    },
+    "mark": {"type": "area"},
+    "encoding": {
+        "x": {"field": "Date", "type": "temporal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
+    }
+}
+5. Stacked Bar Chart
+- Vega-Lite Spec:
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
+    "data": {
+        "values": [
+            {"Region": "North", "Product": "A", "Sales": 100},
+            {"Region": "North", "Product": "B", "Sales": 150},
+            {"Region": "South", "Product": "A", "Sales": 200},
+            {"Region": "South", "Product": "B", "Sales": 250},
+            {"Region": "East", "Product": "A", "Sales": 300},
+            {"Region": "East", "Product": "B", "Sales": 350},
+            {"Region": "West", "Product": "A", "Sales": 400},
+            {"Region": "West", "Product": "B", "Sales": 450}
+        ]
+    },
+    "mark": {"type": "bar"},
+    "encoding": {
+        "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>", "stack": "zero"},
+        "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
+    }
+}
+6. Grouped Bar Chart
+- Vega-Lite Spec:
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
+    "data": {
+        "values": [
+            {"Region": "North", "Product": "A", "Sales": 100},
+            {"Region": "North", "Product": "B", "Sales": 150},
+            {"Region": "South", "Product": "A", "Sales": 200},
+            {"Region": "South", "Product": "B", "Sales": 250},
+            {"Region": "East", "Product": "A", "Sales": 300},
+            {"Region": "East", "Product": "B", "Sales": 350},
+            {"Region": "West", "Product": "A", "Sales": 400},
+            {"Region": "West", "Product": "B", "Sales": 450}
+        ]
+    },
+    "mark": {"type": "bar"},
+    "encoding": {
+        "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "xOffset": {"field": "Product", "type": "nominal"},
+        "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
     }
 }
 """
