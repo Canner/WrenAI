@@ -1049,6 +1049,29 @@ def show_chart_adjustment_dialog(
     adjustment_chart_type = st.selectbox(
         "Chart Type", ["bar", "grouped_bar", "line", "pie", "stacked_bar", "area"]
     )
+    x_axis = y_axis = color = x_offset = theta = None
+    if adjustment_chart_type == "bar":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+    elif adjustment_chart_type == "grouped_bar":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+        x_offset = st.text_input("X Offset Field")
+    elif adjustment_chart_type == "stacked_bar":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+        color = st.text_input("Stack Groups")
+    elif adjustment_chart_type == "line":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+        color = st.text_input("Line Groups")
+    elif adjustment_chart_type == "pie":
+        theta = st.text_input("Value")
+        color = st.text_input("Category")
+    elif adjustment_chart_type == "area":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+
     adjust_submit_button = st.button("Adjust")
 
     st.markdown("### Question")
@@ -1068,6 +1091,11 @@ def show_chart_adjustment_dialog(
     if adjust_submit_button:
         adjustment_option = {
             "chart_type": adjustment_chart_type,
+            "x_axis": x_axis,
+            "y_axis": y_axis,
+            "color": color,
+            "x_offset": x_offset,
+            "theta": theta,
         }
         adjust_chart_response = adjust_chart(
             query,
