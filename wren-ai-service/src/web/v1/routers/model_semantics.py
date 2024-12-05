@@ -163,7 +163,7 @@ async def get(
                     }
                     for column in model_data["columns"]
                 ],
-                "alias": model_data["properties"].get("alias", ""),
+                "displayName": model_data["properties"].get("alias", ""),
                 "description": model_data["properties"].get("description", ""),
             }
             for model_name, model_data in response.items()
