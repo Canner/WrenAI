@@ -1,3 +1,4 @@
+from .semantics_enrichment import SemanticsEnrichment
 from .chart_adjustment import ChartAdjustment
 from .chart_generation import ChartGeneration
 from .data_assistance import DataAssistance
@@ -39,4 +40,4 @@ __all__ = [
 ]
 from .model_semantics import ModelSemantics
 
-__all__ = ["ModelSemantics"]
+__all__ = ["SemanticsEnrichment"]
