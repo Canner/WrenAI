@@ -301,6 +301,34 @@ TEXT_TO_SQL_RULES = """
     - `=`
     - `<>`
     - `!=`
+- ONLY USE JSON_QUERY for querying fields inside JSON objects, NOT the deprecated JSON_EXTRACT_SCALAR function.
+    - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
+      - LAX_BOOL for boolean fields
+      - LAX_FLOAT64 for double and float fields
+      - LAX_INT64 for bigint fields
+      - LAX_STRING for varchar fields
+    - For Example:
+      DATA SCHEMA:
+      - TABLE user
+        - COLUMN address
+          - {address.city varchar, address.state varchar, address.postcode varchar}
+      To get the city of address in user table use SQL:
+      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
+- ONLY USE JSON_QUERY_ARRAY for querying json_type = JSON_ARRAY columns, NOT the deprecated JSON_EXTRACT_ARRAY.
+    - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
+    - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
+      - For Example: `SELECT item FROM UNNEST(ARRAY[1,2,3]) as my_unnested_table(item)`
+    - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
+      - For Example:
+      DATA SCHEMA:
+        - TABLE my_table
+          - COLUMN elements
+            - json_type: JSON_ARRAY
+            - [{id bigint, name varchar, number bigint, value double}]
+        To get the number of elements in my_table table use SQL:
+        `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
+    - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
+      - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
 """
 
 
