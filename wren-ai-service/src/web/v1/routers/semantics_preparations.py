@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
@@ -21,7 +22,8 @@ router = APIRouter()
 """
 Semantics Preparation Router
 
-This router handles endpoints related to initiating and retrieving the status of semantics preparation processes.
+This router handles endpoints related to initiating and retrieving the status of semantics preparation processes, 
+as well as deleting semantic data.
 
 Endpoints:
 1. POST /semantics-preparations
@@ -50,6 +52,13 @@ Endpoints:
        }
      }
 
+3. DELETE /semantics
+   - Deletes semantic data for a specific project or all projects.
+   - Query parameter: project_id (Optional[str]) 
+      - If provided, deletes semantics only for that project.
+      - If not provided, deletes all semantic data.
+   - Response: HTTP 200 OK or HTTP 500 Internal Server Error if failed to delete semantics.
+
 The semantics preparation process involves indexing the model data and is performed asynchronously.
 The POST endpoint starts the process and returns a unique identifier (`mdl_hash`),
 which can be used to track the status of the preparation through the GET endpoint.
@@ -57,6 +66,7 @@ which can be used to track the status of the preparation through the GET endpoin
 Usage:
 1. Send a POST request to initiate the preparation process.
 2. Use the `mdl_hash` returned by the POST request to check the preparation status via the GET endpoint.
+3. Use the DELETE endpoint to remove semantic data when no longer needed.
 
 Note: The preparation process is handled in the background using FastAPI's BackgroundTasks.
 """
@@ -91,3 +101,11 @@ async def get_prepare_semantics_status(
     return service_container.semantics_preparation_service.get_prepare_semantics_status(
         SemanticsPreparationStatusRequest(mdl_hash=mdl_hash)
     )
+
+
+@router.delete("/semantics")
+async def delete_semantics(
+    project_id: Optional[str] = None,
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> None:
+    await service_container.semantics_preparation_service.delete_semantics(project_id)

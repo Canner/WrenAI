@@ -1,6 +1,11 @@
-from haystack import Document
+import json
+from unittest.mock import AsyncMock
 
-from src.pipelines.indexing.indexing import ViewChunker
+import pytest
+from haystack import Document
+from pytest_mock import MockFixture
+
+from src.pipelines.indexing.historical_question import HistoricalQuestion, ViewChunker
 
 
 def test_empty_views():
@@ -244,3 +249,122 @@ def test_view_with_historical_queries():
         "viewId": "fake-id-1",
     }
     assert document.content == "Retrieve the number of books in taipei in 2020"
+
+
+def test_view_with_project_id():
+    chunker = ViewChunker()
+    project_id = "test-project"
+    mdl = {
+        "views": [
+            {
+                "name": "book",
+                "statement": "SELECT * FROM book",
+                "properties": {
+                    "question": "How many books are there?",
+                    "summary": "Retrieve the number of books",
+                    "viewId": "fake-id-1",
+                },
+            }
+        ]
+    }
+
+    actual = chunker.run(mdl, project_id=project_id)
+    assert len(actual["documents"]) == 1
+
+    document: Document = actual["documents"][0]
+    assert document.meta == {
+        "summary": "Retrieve the number of books",
+        "statement": "SELECT * FROM book",
+        "viewId": "fake-id-1",
+        "project_id": project_id,
+    }
+    assert document.content == "How many books are there?"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_run(mocker: MockFixture):
+    # Mock embedder provider
+    embedder_provider = mocker.patch("src.core.provider.EmbedderProvider")
+    embedder = mocker.Mock()
+    mocker.patch.object(
+        embedder,
+        "run",
+        new_callable=AsyncMock,
+        side_effect=lambda documents: {"documents": documents},
+    )
+    embedder_provider.get_document_embedder.return_value = embedder
+
+    # Mock document store provider
+    document_store = mocker.Mock()
+    mocker.patch.object(
+        document_store, "delete_documents", new_callable=AsyncMock, return_value=None
+    )
+    mocker.patch.object(
+        document_store,
+        "write_documents",
+        new_callable=AsyncMock,
+        side_effect=lambda documents, *_, **__: len(documents),
+    )
+    document_store_provider = mocker.patch("src.core.provider.DocumentStoreProvider")
+    document_store_provider.get_store.return_value = document_store
+
+    pipeline = HistoricalQuestion(
+        embedder_provider=embedder_provider,
+        document_store_provider=document_store_provider,
+    )
+
+    test_mdl = {
+        "models": [],
+        "views": [
+            {
+                "name": "test_view",
+                "statement": "SELECT * FROM test",
+                "properties": {
+                    "question": "Test question?",
+                    "summary": "Test summary",
+                    "viewId": "test-id",
+                },
+            }
+        ],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    result = await pipeline.run(json.dumps(test_mdl), project_id="test-project")
+    assert result is not None
+    assert result == {"write": {"documents_written": 1}}
+
+
+@pytest.mark.asyncio
+async def test_pipeline_run_embedder_error(mocker: MockFixture):
+    # Mock embedder provider
+    embedder_provider = mocker.patch("src.core.provider.EmbedderProvider")
+    embedder = mocker.Mock()
+    mocker.patch.object(
+        embedder, "run", new_callable=AsyncMock, side_effect=Exception("Embedder error")
+    )
+    embedder_provider.get_document_embedder.return_value = embedder
+
+    # Mock document store provider
+    document_store = mocker.Mock()
+    mocker.patch.object(
+        document_store, "delete_documents", new_callable=AsyncMock, return_value=None
+    )
+    mocker.patch.object(
+        document_store,
+        "write_documents",
+        new_callable=AsyncMock,
+        side_effect=lambda documents, *_, **__: len(documents),
+    )
+    document_store_provider = mocker.patch("src.core.provider.DocumentStoreProvider")
+    document_store_provider.get_store.return_value = document_store
+
+    pipeline = HistoricalQuestion(
+        embedder_provider=embedder_provider,
+        document_store_provider=document_store_provider,
+    )
+
+    with pytest.raises(Exception) as excinfo:
+        await pipeline.run(json.dumps({}), project_id="test-project")
+
+    assert str(excinfo.value) == "Embedder error"

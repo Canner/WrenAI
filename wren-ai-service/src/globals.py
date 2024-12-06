@@ -6,31 +6,7 @@ import toml
 from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
-from src.pipelines.generation import (
-    chart_adjustment,
-    chart_generation,
-    data_assistance,
-    followup_sql_generation,
-    intent_classification,
-    question_recommendation,
-    relationship_recommendation,
-    semantics_description,
-    sql_answer,
-    sql_breakdown,
-    sql_correction,
-    sql_expansion,
-    sql_explanation,
-    sql_generation,
-    sql_regeneration,
-    sql_summary,
-)
-from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import (
-    historical_question,
-    preprocess_sql_data,
-    retrieval,
-    sql_executor,
-)
+from src.pipelines import generation, indexing, retrieval
 from src.web.v1.services.ask import AskService
 from src.web.v1.services.ask_details import AskDetailsService
 from src.web.v1.services.chart import ChartService
@@ -80,7 +56,7 @@ def create_service_container(
     return ServiceContainer(
         semantics_description=SemanticsDescription(
             pipelines={
-                "semantics_description": semantics_description.SemanticsDescription(
+                "semantics_description": generation.semantics_description.SemanticsDescription(
                     **pipe_components["semantics_description"],
                 )
             },
@@ -88,40 +64,46 @@ def create_service_container(
         ),
         semantics_preparation_service=SemanticsPreparationService(
             pipelines={
-                "indexing": indexing.Indexing(
-                    **pipe_components["indexing"],
-                    column_indexing_batch_size=settings.column_indexing_batch_size,
+                "db_schema": indexing.DBSchema(
+                    **pipe_components["db_schema_indexing"],
+                    column_batch_size=settings.column_indexing_batch_size,
+                ),
+                "historical_question": indexing.HistoricalQuestion(
+                    **pipe_components["historical_question_indexing"],
+                ),
+                "table_description": indexing.TableDescription(
+                    **pipe_components["table_description_indexing"],
                 ),
             },
             **query_cache,
         ),
         ask_service=AskService(
             pipelines={
-                "intent_classification": intent_classification.IntentClassification(
+                "intent_classification": generation.IntentClassification(
                     **pipe_components["intent_classification"],
                 ),
-                "data_assistance": data_assistance.DataAssistance(
+                "data_assistance": generation.DataAssistance(
                     **pipe_components["data_assistance"]
                 ),
                 "retrieval": retrieval.Retrieval(
-                    **pipe_components["retrieval"],
+                    **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
-                "historical_question": historical_question.HistoricalQuestion(
-                    **pipe_components["historical_question"],
+                "historical_question": retrieval.HistoricalQuestion(
+                    **pipe_components["historical_question_retrieval"],
                 ),
-                "sql_generation": sql_generation.SQLGeneration(
+                "sql_generation": generation.SQLGeneration(
                     **pipe_components["sql_generation"],
                 ),
-                "sql_correction": sql_correction.SQLCorrection(
+                "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
                 ),
-                "followup_sql_generation": followup_sql_generation.FollowUpSQLGeneration(
+                "followup_sql_generation": generation.FollowUpSQLGeneration(
                     **pipe_components["followup_sql_generation"],
                 ),
-                "sql_summary": sql_summary.SQLSummary(
+                "sql_summary": generation.SQLSummary(
                     **pipe_components["sql_summary"],
                 ),
             },
@@ -129,10 +111,10 @@ def create_service_container(
         ),
         chart_service=ChartService(
             pipelines={
-                "sql_executor": sql_executor.SQLExecutor(
+                "sql_executor": retrieval.SQLExecutor(
                     **pipe_components["sql_executor"],
                 ),
-                "chart_generation": chart_generation.ChartGeneration(
+                "chart_generation": generation.ChartGeneration(
                     **pipe_components["chart_generation"],
                 ),
             },
@@ -140,10 +122,10 @@ def create_service_container(
         ),
         chart_adjustment_service=ChartAdjustmentService(
             pipelines={
-                "sql_executor": sql_executor.SQLExecutor(
+                "sql_executor": retrieval.SQLExecutor(
                     **pipe_components["sql_executor"],
                 ),
-                "chart_adjustment": chart_adjustment.ChartAdjustment(
+                "chart_adjustment": generation.ChartAdjustment(
                     **pipe_components["chart_adjustment"],
                 ),
             },
@@ -151,10 +133,10 @@ def create_service_container(
         ),
         sql_answer_service=SqlAnswerService(
             pipelines={
-                "preprocess_sql_data": preprocess_sql_data.PreprocessSqlData(
+                "preprocess_sql_data": retrieval.PreprocessSqlData(
                     **pipe_components["preprocess_sql_data"],
                 ),
-                "sql_answer": sql_answer.SQLAnswer(
+                "sql_answer": generation.SQLAnswer(
                     **pipe_components["sql_answer"],
                 ),
             },
@@ -162,10 +144,10 @@ def create_service_container(
         ),
         ask_details_service=AskDetailsService(
             pipelines={
-                "sql_breakdown": sql_breakdown.SQLBreakdown(
+                "sql_breakdown": generation.SQLBreakdown(
                     **pipe_components["sql_breakdown"],
                 ),
-                "sql_summary": sql_summary.SQLSummary(
+                "sql_summary": generation.SQLSummary(
                     **pipe_components["sql_summary"],
                 ),
             },
@@ -174,17 +156,17 @@ def create_service_container(
         sql_expansion_service=SqlExpansionService(
             pipelines={
                 "retrieval": retrieval.Retrieval(
-                    **pipe_components["retrieval"],
+                    **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                 ),
-                "sql_expansion": sql_expansion.SQLExpansion(
+                "sql_expansion": generation.SQLExpansion(
                     **pipe_components["sql_expansion"],
                 ),
-                "sql_correction": sql_correction.SQLCorrection(
+                "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
                 ),
-                "sql_summary": sql_summary.SQLSummary(
+                "sql_summary": generation.SQLSummary(
                     **pipe_components["sql_summary"],
                 ),
             },
@@ -192,7 +174,7 @@ def create_service_container(
         ),
         sql_explanation_service=SQLExplanationService(
             pipelines={
-                "sql_explanation": sql_explanation.SQLExplanation(
+                "sql_explanation": generation.SQLExplanation(
                     **pipe_components["sql_explanation"],
                 )
             },
@@ -200,7 +182,7 @@ def create_service_container(
         ),
         sql_regeneration_service=SQLRegenerationService(
             pipelines={
-                "sql_regeneration": sql_regeneration.SQLRegeneration(
+                "sql_regeneration": generation.SQLRegeneration(
                     **pipe_components["sql_regeneration"],
                 )
             },
@@ -208,7 +190,7 @@ def create_service_container(
         ),
         relationship_recommendation=RelationshipRecommendation(
             pipelines={
-                "relationship_recommendation": relationship_recommendation.RelationshipRecommendation(
+                "relationship_recommendation": generation.RelationshipRecommendation(
                     **pipe_components["relationship_recommendation"],
                 )
             },
@@ -216,16 +198,16 @@ def create_service_container(
         ),
         question_recommendation=QuestionRecommendation(
             pipelines={
-                "question_recommendation": question_recommendation.QuestionRecommendation(
+                "question_recommendation": generation.QuestionRecommendation(
                     **pipe_components["question_recommendation"],
                 ),
                 "retrieval": retrieval.Retrieval(
-                    **pipe_components["retrieval"],
+                    **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
-                "sql_generation": sql_generation.SQLGeneration(
+                "sql_generation": generation.SQLGeneration(
                     **pipe_components["sql_generation"],
                 ),
             },
