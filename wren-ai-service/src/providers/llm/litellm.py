@@ -1,6 +1,9 @@
 import os
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from haystack.components.generators.openai_utils import (
+    _convert_message_to_openai_format,
+)
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from litellm import acompletion
 from litellm.types.utils import ModelResponse
@@ -56,7 +59,7 @@ class LitellmLLMProvider(LLMProvider):
                 messages = [message]
 
             openai_formatted_messages = [
-                message.to_openai_format() for message in messages
+                _convert_message_to_openai_format(message) for message in messages
             ]
 
             generation_kwargs = {
