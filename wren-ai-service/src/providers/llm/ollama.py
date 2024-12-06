@@ -89,6 +89,9 @@ class AsyncGenerator(OllamaGenerator):
             "options": generation_kwargs,
         }
 
+    async def __call__(self, *args, **kwargs):
+        return await self.run(*args, **kwargs)
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     async def run(
         self,
@@ -135,13 +138,13 @@ class OllamaLLMProvider(LLMProvider):
         **_,
     ):
         self._url = remove_trailing_slash(url)
-        self._generation_model = model
+        self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
 
-        pull_ollama_model(self._url, self._generation_model)
+        pull_ollama_model(self._url, self._model)
 
-        logger.info(f"Using Ollama LLM: {self._generation_model}")
+        logger.info(f"Using Ollama LLM: {self._model}")
         logger.info(f"Using Ollama URL: {self._url}")
         logger.info(f"Using Ollama model kwargs: {self._model_kwargs}")
 
@@ -153,7 +156,7 @@ class OllamaLLMProvider(LLMProvider):
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
         return AsyncGenerator(
-            model=self._generation_model,
+            model=self._model,
             url=f"{self._url}/api/generate",
             generation_kwargs=(
                 {**self._model_kwargs, **generation_kwargs}

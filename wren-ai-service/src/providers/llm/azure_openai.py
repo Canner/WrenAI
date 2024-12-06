@@ -62,6 +62,9 @@ class AsyncGenerator(AzureOpenAIGenerator):
             api_key=api_key.resolve_value(),
         )
 
+    async def __call__(self, *args, **kwargs):
+        return await self.run(*args, **kwargs)
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(
@@ -147,11 +150,11 @@ class AzureOpenAILLMProvider(LLMProvider):
         self._generation_api_key = api_key
         self._generation_api_base = remove_trailing_slash(api_base)
         self._generation_api_version = api_version
-        self._generation_model = model
+        self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
 
-        logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")
+        logger.info(f"Using AzureOpenAI LLM: {self._model}")
         logger.info(f"Using AzureOpenAI LLM with API base: {self._generation_api_base}")
         logger.info(
             f"Using AzureOpenAI LLM with API version: {self._generation_api_version}"
@@ -167,7 +170,7 @@ class AzureOpenAILLMProvider(LLMProvider):
     ):
         return AsyncGenerator(
             api_key=self._generation_api_key,
-            model=self._generation_model,
+            model=self._model,
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,

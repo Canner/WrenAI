@@ -38,6 +38,20 @@ url: http://localhost:11434
 timeout: 120
 
 ---
+type: llm
+provider: litellm_llm
+models:
+- kwargs:
+    max_tokens: 4096
+    n: 1
+    response_format:
+      type: json_object
+    temperature: 0
+  model: gpt-4o-mini
+  api_key_name: LLM_OPENAI_API_KEY
+  timeout: 120
+
+---
 type: embedder
 provider: openai_embedder
 models:
