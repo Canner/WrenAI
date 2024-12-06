@@ -14,7 +14,7 @@ from src.pipelines.generation import (
     sql_correction,
     sql_generation,
 )
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.retrieval import db_schema, historical_question
 from src.providers import init_providers
 from src.web.v1.services.ask import (
     AskRequest,
@@ -51,7 +51,7 @@ def ask_service():
             "data_assistance": data_assistance.DataAssistance(
                 llm_provider=llm_provider,
             ),
-            "retrieval": retrieval.Retrieval(
+            "dbschema_retrieval": db_schema.DBSchemaRetrieval(
                 llm_provider=llm_provider,
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,

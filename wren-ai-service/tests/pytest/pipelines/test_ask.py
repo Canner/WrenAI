@@ -8,7 +8,7 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvid
 from src.pipelines.generation.followup_sql_generation import FollowUpSQLGeneration
 from src.pipelines.generation.sql_correction import SQLCorrection
 from src.pipelines.generation.sql_generation import SQLGeneration
-from src.pipelines.retrieval.retrieval import Retrieval
+from src.pipelines.retrieval.db_schema import DBSchemaRetrieval
 from src.providers import init_providers
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
@@ -55,7 +55,7 @@ async def test_retrieval_pipeline(
     embedder_provider: EmbedderProvider,
     document_store_provider: DocumentStoreProvider,
 ):
-    retrieval_pipeline = Retrieval(
+    retrieval_pipeline = DBSchemaRetrieval(
         llm_provider=llm_provider,
         embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,

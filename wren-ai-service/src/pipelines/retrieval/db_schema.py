@@ -367,14 +367,14 @@ RETRIEVAL_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "matched_schema",
+            "name": "db_schema_retrieval",
             "schema": RetrievalResults.model_json_schema(),
         },
     }
 }
 
 
-class Retrieval(BasicPipeline):
+class DBSchemaRetrieval(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -433,7 +433,7 @@ class Retrieval(BasicPipeline):
 
         self._pipe.visualize_execution(
             ["construct_retrieval_results"],
-            output_file_path=f"{destination}/retrieval.dot",
+            output_file_path=f"{destination}/dbschema_retrieval.dot",
             inputs={
                 "query": query,
                 "id": id or "",
@@ -470,7 +470,7 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        Retrieval,
+        DBSchemaRetrieval,
         "db_schema_retrieval",
         query="this is a test query",
     )

@@ -1,12 +1,12 @@
 from typing import Optional
 
 from src.pipelines.generation import intent_classification, sql_generation, sql_summary
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines.retrieval import db_schema, historical_question
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 
-class RetrievalMock(retrieval.Retrieval):
+class RetrievalMock(db_schema.DBSchemaRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 

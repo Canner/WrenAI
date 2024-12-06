@@ -85,7 +85,7 @@ def create_service_container(
                 "data_assistance": generation.DataAssistance(
                     **pipe_components["data_assistance"]
                 ),
-                "retrieval": retrieval.Retrieval(
+                "db_schema_retrieval": retrieval.DBSchemaRetrieval(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
@@ -155,7 +155,7 @@ def create_service_container(
         ),
         sql_expansion_service=SqlExpansionService(
             pipelines={
-                "retrieval": retrieval.Retrieval(
+                "db_schema_retrieval": retrieval.DBSchemaRetrieval(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
@@ -201,7 +201,7 @@ def create_service_container(
                 "question_recommendation": generation.QuestionRecommendation(
                     **pipe_components["question_recommendation"],
                 ),
-                "retrieval": retrieval.Retrieval(
+                "db_schema_retrieval": retrieval.DBSchemaRetrieval(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,

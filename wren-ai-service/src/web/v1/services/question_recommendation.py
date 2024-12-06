@@ -69,7 +69,7 @@ class QuestionRecommendation:
         project_id: Optional[str] = None,
     ):
         try:
-            retrieval_result = await self._pipelines["retrieval"].run(
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
                 id=project_id,
             )

@@ -184,7 +184,7 @@ class AskService:
                     status="searching",
                 )
 
-                retrieval_result = await self._pipelines["retrieval"].run(
+                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                     query=ask_request.query,
                     history=ask_request.history,
                     id=ask_request.project_id,
