@@ -44,7 +44,10 @@ jobs:
           echo "Generating change log..."
           PREVIOUS_VERSION=release/ai-service/$(poetry version -s)
           echo "Previous version: $PREVIOUS_VERSION"
-          CHANGE_LOG=$(git log --pretty=format:"%s" $PREVIOUS_VERSION..HEAD | grep wren-ai-service)
+
+          # Get the change log from the previous version to the current HEAD
+          # If there is no change log, the command will return an error, so we use || true to ignore the error
+          CHANGE_LOG=$(git log --pretty=format:"%s" $PREVIOUS_VERSION..HEAD | grep wren-ai-service || true)
 
           # Separate the change log into categories
           FEATURES=$(echo "$CHANGE_LOG" | grep "^feat" | sed 's/^/- /')
