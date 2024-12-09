@@ -14,7 +14,7 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
-LLM_OLLAMA_URL = "http://localhost:11434"
+LLM_OLLAMA_API_BASE = "http://localhost:11434"
 GENERATION_MODEL = "gemma2:9b"
 GENERATION_MODEL_KWARGS = {
     "temperature": 0,
@@ -45,7 +45,9 @@ class AsyncGenerator(OllamaGenerator):
             streaming_callback=streaming_callback,
         )
 
-    async def _handle_streaming_response(self, response) -> List[StreamingChunk]:
+    async def _handle_streaming_response(
+        self, response, query_id: Optional[str] = None
+    ) -> List[StreamingChunk]:
         """
         Handles Streaming response cases
         """
@@ -54,7 +56,7 @@ class AsyncGenerator(OllamaGenerator):
             chunk_delta: StreamingChunk = self._build_chunk(chunk)
             chunks.append(chunk_delta)
             if self.streaming_callback is not None:
-                self.streaming_callback(chunk_delta)
+                self.streaming_callback(chunk_delta, query_id)
         return chunks
 
     async def _convert_to_response(
@@ -97,6 +99,7 @@ class AsyncGenerator(OllamaGenerator):
         self,
         prompt: str,
         generation_kwargs: Optional[Dict[str, Any]] = None,
+        query_id: Optional[str] = None,
     ):
         generation_kwargs = {**self.generation_kwargs, **(generation_kwargs or {})}
 
@@ -114,7 +117,8 @@ class AsyncGenerator(OllamaGenerator):
 
             if stream:
                 chunks: List[StreamingChunk] = await self._handle_streaming_response(
-                    response
+                    response,
+                    query_id,
                 )
                 return self._convert_to_streaming_response(chunks)
 
@@ -125,7 +129,8 @@ class AsyncGenerator(OllamaGenerator):
 class OllamaLLMProvider(LLMProvider):
     def __init__(
         self,
-        url: str = os.getenv("LLM_OLLAMA_URL") or LLM_OLLAMA_URL,
+        url: str = os.getenv("LLM_OLLAMA_URL")
+        or LLM_OLLAMA_API_BASE,  # will be deprecated in the future, should use api_base instead
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
         kwargs: Dict[str, Any] = (
             orjson.loads(os.getenv("GENERATION_MODEL_KWARGS"))
@@ -135,9 +140,10 @@ class OllamaLLMProvider(LLMProvider):
         timeout: int = (
             int(os.getenv("LLM_TIMEOUT")) if os.getenv("LLM_TIMEOUT") else 120
         ),
+        api_base: str = os.getenv("LLM_OLLAMA_API_BASE") or LLM_OLLAMA_API_BASE,
         **_,
     ):
-        self._url = remove_trailing_slash(url)
+        self._url = remove_trailing_slash(api_base) or remove_trailing_slash(url)
         self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
