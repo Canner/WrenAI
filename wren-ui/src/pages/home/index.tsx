@@ -47,7 +47,7 @@ const SampleQuestionsInstruction = (props) => {
 };
 
 function RecommendedQuestionsInstruction(props) {
-  const { onSelect } = props;
+  const { onSelect, loading } = props;
 
   const {
     buttonProps,
@@ -65,6 +65,7 @@ function RecommendedQuestionsInstruction(props) {
       <RecommendedQuestionsPrompt
         recommendedQuestions={recommendedQuestions}
         onSelect={onSelect}
+        loading={loading}
       />
       <div className="py-12" />
     </div>
@@ -96,12 +97,14 @@ export default function Home() {
   const { data: suggestedQuestionsData } = useSuggestedQuestionsQuery({
     fetchPolicy: 'cache-and-network',
   });
-  const [createThread] = useCreateThreadMutation({
+  const [createThread, { loading: threadCreating }] = useCreateThreadMutation({
     onCompleted: () => homeSidebar.refetch(),
   });
 
-  const [generateThreadRecommendationQuestions] =
-    useGenerateThreadRecommendationQuestionsMutation();
+  const [
+    generateThreadRecommendationQuestions,
+    { loading: threadRecommendationQuestionsGenerating },
+  ] = useGenerateThreadRecommendationQuestionsMutation();
 
   const { data: settingsResult } = useGetSettingsQuery();
   const settings = settingsResult?.settings;
@@ -144,7 +147,10 @@ export default function Home() {
       )}
 
       {!isSampleDataset && (
-        <RecommendedQuestionsInstruction onSelect={onSelect} />
+        <RecommendedQuestionsInstruction
+          onSelect={onSelect}
+          loading={threadCreating || threadRecommendationQuestionsGenerating}
+        />
       )}
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
     </SiderLayout>

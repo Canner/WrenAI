@@ -40,7 +40,7 @@ def prompt(
 
 @observe(capture_input=False, as_type="generation")
 async def generate(prompt: dict, generator: Any) -> dict:
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)

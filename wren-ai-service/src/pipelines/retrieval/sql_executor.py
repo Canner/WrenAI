@@ -51,8 +51,6 @@ async def execute_sql(
     project_id: str | None = None,
     limit: int = 500,
 ) -> dict:
-    logger.debug(f"Executing SQL: {sql}")
-
     return await data_fetcher.run(sql=sql, project_id=project_id, limit=limit)
 
 

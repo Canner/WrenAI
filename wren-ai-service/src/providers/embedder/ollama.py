@@ -44,8 +44,6 @@ class AsyncTextEmbedder(OllamaTextEmbedder):
         text: str,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
-        logger.debug(f"Running Ollama text embedder with text: {text}")
-
         payload = self._create_json_payload(text, generation_kwargs)
 
         start = time.perf_counter()
@@ -131,8 +129,6 @@ class AsyncDocumentEmbedder(OllamaDocumentEmbedder):
         documents: List[str],
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ):
-        logger.debug(f"Running Ollama document embedder with documents: {documents}")
-
         if (
             not isinstance(documents, list)
             or documents

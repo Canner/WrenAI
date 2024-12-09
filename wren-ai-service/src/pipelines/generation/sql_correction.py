@@ -79,7 +79,7 @@ def prompts(
 async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[dict]:
     tasks = []
     for prompt in prompts:
-        task = asyncio.ensure_future(generator.run(prompt=prompt.get("prompt")))
+        task = asyncio.ensure_future(generator(prompt=prompt.get("prompt")))
         tasks.append(task)
 
     return await asyncio.gather(*tasks)
