@@ -105,7 +105,6 @@ class AsyncGenerator(AzureOpenAIGenerator):
                     "Cannot stream multiple responses , please set n = 1 in AzureAsyncGenerator"
                 )
             chunks: List[StreamingChunk] = []
-            chunk = None
 
             # pylint: disable=not-an-iterable
             for chunk in completion:
