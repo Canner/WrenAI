@@ -8,6 +8,9 @@ import {
   RecommendationQuestion,
   WrenAIError,
   RecommendationQuestionStatus,
+  WrenAILanguage,
+  TextBasedAnswerResult,
+  TextBasedAnswerStatus,
 } from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -15,7 +18,6 @@ import { IThreadRepository, Thread } from '../repositories/threadRepository';
 import {
   IThreadResponseRepository,
   ThreadResponse,
-  ThreadResponseWithThreadContext,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
@@ -36,7 +38,7 @@ const config = getConfig();
 const logger = getLogger('AskingService');
 logger.level = 'debug';
 
-const QUERY_ID_PLACEHOLDER = '0';
+// const QUERY_ID_PLACEHOLDER = '0';
 
 export interface Task {
   id: string;
@@ -78,13 +80,24 @@ export interface InstantRecommendedQuestionsInput {
   previousQuestions?: string[];
 }
 
+export enum ThreadResponseAnswerStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  FETCHING_DATA = 'FETCHING_DATA',
+  PREPROCESSING = 'PREPROCESSING',
+  READY_FOR_STREAMING = 'READY_FOR_STREAMING',
+  STREAMING = 'STREAMING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+  INTERRUPTED = 'INTERRUPTED',
+}
+
 export interface IAskingService {
   /**
    * Asking task.
    */
   createAskingTask(
     input: AskingTaskInput,
-    payload: Pick<AskingPayload, 'threadId' | 'language'>,
+    payload: AskingPayload,
   ): Promise<Task>;
   cancelAskingTask(taskId: string): Promise<void>;
   getAskingTask(taskId: string): Promise<AskResult>;
@@ -92,10 +105,7 @@ export interface IAskingService {
   /**
    * Asking detail task.
    */
-  createThread(
-    input: AskingDetailTaskInput,
-    payload: Pick<AskingPayload, 'language'>,
-  ): Promise<Thread>;
+  createThread(input: AskingDetailTaskInput): Promise<Thread>;
   updateThread(
     threadId: number,
     input: Partial<AskingDetailTaskUpdateInput>,
@@ -104,13 +114,22 @@ export interface IAskingService {
   listThreads(): Promise<Thread[]>;
   createThreadResponse(
     input: AskingDetailTaskInput,
-    payload: Pick<AskingPayload, 'threadId' | 'language'>,
-  ): Promise<ThreadResponse>;
-  getResponsesWithThread(
     threadId: number,
-  ): Promise<ThreadResponseWithThreadContext[]>;
+  ): Promise<ThreadResponse>;
+  getResponsesWithThread(threadId: number): Promise<ThreadResponse[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
-  previewData(
+  generateThreadResponseBreakdown(
+    threadId: number,
+    threadResponseId: number,
+    configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  generateThreadResponseAnswer(
+    threadId: number,
+    threadResponseId: number,
+    configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  previewData(responseId: number, limit?: number): Promise<PreviewDataResponse>;
+  previewBreakdownData(
     responseId: number,
     stepIndex?: number,
     limit?: number,
@@ -192,9 +211,9 @@ export const constructCteSql = (
 };
 
 /**
- * Background tracker to track the status of the asking detail task
+ * Background tracker to track the status of the asking breakdown task
  */
-class BackgroundTracker {
+class BreakdownBackgroundTracker {
   // tasks is a kv pair of task id and thread response
   private tasks: Record<number, ThreadResponse> = {};
   private intervalTime: number;
@@ -232,13 +251,16 @@ class BackgroundTracker {
           // mark the job as running
           this.runningJobs.add(threadResponse.id);
 
+          // get the answer detail
+          const breakdownDetail = threadResponse.breakdownDetail;
+
           // get the latest result from AI service
           const result = await this.wrenAIAdaptor.getAskDetailResult(
-            threadResponse.queryId,
+            breakdownDetail.queryId,
           );
 
           // check if status change
-          if (threadResponse.status === result.status) {
+          if (breakdownDetail.status === result.status) {
             // mark the job as finished
             logger.debug(
               `Job ${threadResponse.id} status not changed, finished`,
@@ -248,11 +270,16 @@ class BackgroundTracker {
           }
 
           // update database
+          const updatedBreakdownDetail = {
+            queryId: breakdownDetail.queryId,
+            status: result?.status,
+            error: result?.error,
+            description: result?.response?.description,
+            steps: result?.response?.steps,
+          };
           logger.debug(`Job ${threadResponse.id} status changed, updating`);
           await this.threadResponseRepository.updateOne(threadResponse.id, {
-            status: result.status,
-            detail: result.response,
-            error: result.error,
+            breakdownDetail: updatedBreakdownDetail,
           });
 
           // remove the task from tracker if it is finalized
@@ -304,6 +331,144 @@ class BackgroundTracker {
   }
 }
 
+class TextBasedAnswerBackgroundTracker {
+  // tasks is a kv pair of task id and thread response
+  private tasks: Record<number, ThreadResponse> = {};
+  private intervalTime: number;
+  private wrenAIAdaptor: IWrenAIAdaptor;
+  private threadResponseRepository: IThreadResponseRepository;
+  private projectService: IProjectService;
+  private deployService: IDeployService;
+  private queryService: IQueryService;
+  private runningJobs = new Set();
+
+  constructor({
+    wrenAIAdaptor,
+    threadResponseRepository,
+    projectService,
+    deployService,
+    queryService,
+  }: {
+    wrenAIAdaptor: IWrenAIAdaptor;
+    threadResponseRepository: IThreadResponseRepository;
+    projectService: IProjectService;
+    deployService: IDeployService;
+    queryService: IQueryService;
+  }) {
+    this.wrenAIAdaptor = wrenAIAdaptor;
+    this.threadResponseRepository = threadResponseRepository;
+    this.projectService = projectService;
+    this.deployService = deployService;
+    this.queryService = queryService;
+    this.intervalTime = 1000;
+    this.start();
+  }
+
+  private start() {
+    setInterval(async () => {
+      const jobs = Object.values(this.tasks).map(
+        (threadResponse) => async () => {
+          if (
+            this.runningJobs.has(threadResponse.id) ||
+            !threadResponse.answerDetail
+          ) {
+            return;
+          }
+          this.runningJobs.add(threadResponse.id);
+
+          // update the status to fetching data
+          await this.threadResponseRepository.updateOne(threadResponse.id, {
+            answerDetail: {
+              ...threadResponse.answerDetail,
+              status: ThreadResponseAnswerStatus.FETCHING_DATA,
+            },
+          });
+
+          // get sql data
+          const project = await this.projectService.getCurrentProject();
+          const deployment = await this.deployService.getLastDeployment(
+            project.id,
+          );
+          const mdl = deployment.manifest;
+          const data = (await this.queryService.preview(threadResponse.sql, {
+            project,
+            manifest: mdl,
+            modelingOnly: false,
+            limit: 500,
+          })) as PreviewDataResponse;
+
+          // request AI service
+          const response = await this.wrenAIAdaptor.createTextBasedAnswer({
+            query: threadResponse.question,
+            sql: threadResponse.sql,
+            sqlData: data,
+            threadId: threadResponse.threadId.toString(),
+            configurations: {
+              language: project.language as WrenAILanguage,
+            },
+          });
+
+          // update the status to preprocessing
+          await this.threadResponseRepository.updateOne(threadResponse.id, {
+            answerDetail: {
+              ...threadResponse.answerDetail,
+              status: ThreadResponseAnswerStatus.PREPROCESSING,
+            },
+          });
+
+          // polling query id to check the status
+          let result: TextBasedAnswerResult;
+          do {
+            result = await this.wrenAIAdaptor.getTextBasedAnswerResult(
+              response.queryId,
+            );
+            if (result.status === TextBasedAnswerStatus.PREPROCESSING) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          } while (result.status === TextBasedAnswerStatus.PREPROCESSING);
+
+          // update the status to final
+          const updatedAnswerDetail = {
+            queryId: response.queryId,
+            status:
+              result.status === TextBasedAnswerStatus.SUCCEEDED
+                ? ThreadResponseAnswerStatus.READY_FOR_STREAMING
+                : ThreadResponseAnswerStatus.FAILED,
+            numRowsUsedInLLM: result.numRowsUsedInLLM,
+            error: result.error,
+          };
+          await this.threadResponseRepository.updateOne(threadResponse.id, {
+            answerDetail: updatedAnswerDetail,
+          });
+
+          delete this.tasks[threadResponse.id];
+
+          // Mark the job as finished
+          this.runningJobs.delete(threadResponse.id);
+        },
+      );
+
+      // Run the jobs
+      Promise.allSettled(jobs.map((job) => job())).then((results) => {
+        // Show reason of rejection
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            logger.error(`Job ${index} failed: ${result.reason}`);
+          }
+        });
+      });
+    }, this.intervalTime);
+  }
+
+  public addTask(threadResponse: ThreadResponse) {
+    this.tasks[threadResponse.id] = threadResponse;
+  }
+
+  public getTasks() {
+    return this.tasks;
+  }
+}
+
 export class AskingService implements IAskingService {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private deployService: IDeployService;
@@ -311,7 +476,8 @@ export class AskingService implements IAskingService {
   private viewRepository: IViewRepository;
   private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
-  private backgroundTracker: BackgroundTracker;
+  private breakdownBackgroundTracker: BreakdownBackgroundTracker;
+  private textBasedAnswerBackgroundTracker: TextBasedAnswerBackgroundTracker;
   private threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: PostHogTelemetry;
@@ -346,11 +512,19 @@ export class AskingService implements IAskingService {
     this.threadResponseRepository = threadResponseRepository;
     this.telemetry = telemetry;
     this.queryService = queryService;
-    this.backgroundTracker = new BackgroundTracker({
+    this.breakdownBackgroundTracker = new BreakdownBackgroundTracker({
       telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
     });
+    this.textBasedAnswerBackgroundTracker =
+      new TextBasedAnswerBackgroundTracker({
+        wrenAIAdaptor,
+        threadResponseRepository,
+        projectService,
+        deployService,
+        queryService,
+      });
     this.threadRecommendQuestionBackgroundTracker =
       new ThreadRecommendQuestionBackgroundTracker({
         telemetry,
@@ -435,15 +609,18 @@ export class AskingService implements IAskingService {
     // list thread responses from database
     // filter status not finalized and put them into background tracker
     const threadResponses = await this.threadResponseRepository.findAll();
-    const unfininshedThreadResponses = threadResponses.filter(
+    const unfininshedBreakdownThreadResponses = threadResponses.filter(
       (threadResponse) =>
-        !isFinalized(threadResponse.status as AskResultStatus),
+        threadResponse?.breakdownDetail?.status &&
+        !isFinalized(
+          threadResponse?.breakdownDetail?.status as AskResultStatus,
+        ),
     );
     logger.info(
-      `Initialization: adding unfininshed thread responses (total: ${unfininshedThreadResponses.length}) to background tracker`,
+      `Initialization: adding unfininshed breakdown thread responses (total: ${unfininshedBreakdownThreadResponses.length}) to background tracker`,
     );
-    for (const threadResponse of unfininshedThreadResponses) {
-      this.backgroundTracker.addTask(threadResponse);
+    for (const threadResponse of unfininshedBreakdownThreadResponses) {
+      this.breakdownBackgroundTracker.addTask(threadResponse);
     }
   }
 
@@ -452,7 +629,7 @@ export class AskingService implements IAskingService {
    */
   public async createAskingTask(
     input: AskingTaskInput,
-    payload: Pick<AskingPayload, 'threadId' | 'language'>,
+    payload: AskingPayload,
   ): Promise<Task> {
     const { threadId, language } = payload;
     const deployId = await this.getDeployId();
@@ -495,27 +672,15 @@ export class AskingService implements IAskingService {
    * If input contains a viewId, simply create a thread from saved properties of the view.
    * Otherwise, create a task on AI service to generate the detail.
    * 1. create a task on AI service to generate the detail
-   * 2. create a thread and the first thread response
-   * 3. put the task into background tracker
+   * 2. create a thread and the first thread response with question and sql
    */
-  public async createThread(
-    input: AskingDetailTaskInput,
-    payload: Pick<AskingPayload, 'language'>,
-  ): Promise<Thread> {
-    const { language } = payload;
+  public async createThread(input: AskingDetailTaskInput): Promise<Thread> {
     // if input contains a viewId, simply create a thread from saved properties of the view
     if (input.viewId) {
       return this.createThreadFromView(input);
     }
 
-    // 1. create a task on AI service to generate the detail
-    const response = await this.wrenAIAdaptor.generateAskDetail({
-      query: input.question,
-      sql: input.sql,
-      configurations: { language },
-    });
-
-    // 2. create a thread and the first thread response
+    // 1. create a thread and the first thread response
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
@@ -523,15 +688,11 @@ export class AskingService implements IAskingService {
       summary: input.question,
     });
 
-    const threadResponse = await this.threadResponseRepository.createOne({
+    await this.threadResponseRepository.createOne({
       threadId: thread.id,
-      queryId: response.queryId,
       question: input.question,
-      status: AskResultStatus.UNDERSTANDING,
+      sql: input.sql,
     });
-
-    // 3. put the task into background tracker
-    this.backgroundTracker.addTask(threadResponse);
 
     // return the task id
     return thread;
@@ -562,9 +723,8 @@ export class AskingService implements IAskingService {
 
   public async createThreadResponse(
     input: AskingDetailTaskInput,
-    payload: AskingPayload,
+    threadId: number,
   ): Promise<ThreadResponse> {
-    const { threadId, language } = payload;
     const thread = await this.threadRepository.findOneBy({
       id: threadId,
     });
@@ -581,31 +741,103 @@ export class AskingService implements IAskingService {
         throw new Error(`View ${input.viewId} not found`);
       }
 
-      const res = await this.createThreadResponseFromView(input, view, thread);
+      const res = await this.createThreadResponseFromView(
+        input.question,
+        input.sql,
+        view,
+        thread,
+      );
       return res;
+    }
+
+    const threadResponse = await this.threadResponseRepository.createOne({
+      threadId: thread.id,
+      question: input.question,
+      sql: input.sql,
+    });
+
+    return threadResponse;
+  }
+
+  public async generateThreadResponseBreakdown(
+    threadId: number,
+    threadResponseId: number,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    const { language } = configurations;
+    const thread = await this.threadRepository.findOneBy({
+      id: threadId,
+    });
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    if (!threadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
     }
 
     // 1. create a task on AI service to generate the detail
     const response = await this.wrenAIAdaptor.generateAskDetail({
-      query: input.question,
-      sql: input.sql,
+      query: threadResponse.question,
+      sql: threadResponse.sql,
       configurations: { language },
     });
 
-    // 2. create a thread and the first thread response
-    // insert question first, another API  all the asked questions to generate the next recommendation questions
-    const threadResponse = await this.threadResponseRepository.createOne({
-      threadId: thread.id,
-      queryId: response.queryId,
-      question: input.question,
-      status: AskResultStatus.UNDERSTANDING,
-    });
+    // 2. update the thread response with breakdown detail
+    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
+      threadResponse.id,
+      {
+        breakdownDetail: {
+          queryId: response.queryId,
+          status: AskResultStatus.UNDERSTANDING,
+        },
+      },
+    );
 
     // 3. put the task into background tracker
-    this.backgroundTracker.addTask(threadResponse);
+    this.breakdownBackgroundTracker.addTask(updatedThreadResponse);
 
     // return the task id
-    return threadResponse;
+    return updatedThreadResponse;
+  }
+
+  public async generateThreadResponseAnswer(
+    threadId: number,
+    threadResponseId: number,
+  ): Promise<ThreadResponse> {
+    const thread = await this.threadRepository.findOneBy({
+      id: threadId,
+    });
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    if (!threadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    // update with initial status
+    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
+      threadResponse.id,
+      {
+        answerDetail: {
+          status: ThreadResponseAnswerStatus.NOT_STARTED,
+        },
+      },
+    );
+
+    // put the task into background tracker
+    this.textBasedAnswerBackgroundTracker.addTask(updatedThreadResponse);
+
+    return updatedThreadResponse;
   }
 
   public async getResponsesWithThread(threadId: number) {
@@ -616,6 +848,34 @@ export class AskingService implements IAskingService {
     return this.threadResponseRepository.findOneBy({ id: responseId });
   }
 
+  public async previewData(responseId: number, limit?: number) {
+    const response = await this.getResponse(responseId);
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+    const project = await this.projectService.getCurrentProject();
+    const deployment = await this.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
+    const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
+    try {
+      const data = (await this.queryService.preview(response.sql, {
+        project,
+        manifest: mdl,
+        limit,
+      })) as PreviewDataResponse;
+      this.telemetry.sendEvent(eventName, { sql: response.sql });
+      return data;
+    } catch (err: any) {
+      this.telemetry.sendEvent(
+        eventName,
+        { sql: response.sql, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+      throw err;
+    }
+  }
+
   /**
    * this function is used to preview the data of a thread response
    * get the target thread response and get the steps
@@ -624,7 +884,7 @@ export class AskingService implements IAskingService {
    * @param stepIndex: the step in the response detail
    * @returns Promise<QueryResponse>
    */
-  public async previewData(
+  public async previewBreakdownData(
     responseId: number,
     stepIndex?: number,
     limit?: number,
@@ -636,7 +896,7 @@ export class AskingService implements IAskingService {
     const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
     const mdl = deployment.manifest;
-    const steps = response.detail.steps;
+    const steps = response?.breakdownDetail?.steps;
     const sql = format(constructCteSql(steps, stepIndex));
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
@@ -707,7 +967,9 @@ export class AskingService implements IAskingService {
     const latestResponse = responses[0];
     return {
       sql: latestResponse.sql,
-      steps: latestResponse.detail.steps,
+      // steps is only available in breakdown detail
+      // if we haven't generated the breakdown detail, use empty array
+      steps: latestResponse.breakdownDetail?.steps || [],
     };
   }
 
@@ -720,31 +982,34 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
+      // todo: remove sql from thread
       sql: view.statement,
       summary: input.question,
     });
 
-    await this.createThreadResponseFromView(input, view, thread);
+    await this.createThreadResponseFromView(
+      input.question,
+      view.statement,
+      view,
+      thread,
+    );
     return thread;
   }
 
   private async createThreadResponseFromView(
-    input: AskingDetailTaskInput,
+    question: string,
+    sql: string,
     view: View,
     thread: Thread,
   ) {
-    const properties = JSON.parse(view.properties) || {};
     return this.threadResponseRepository.createOne({
       threadId: thread.id,
-      queryId: QUERY_ID_PLACEHOLDER,
-      question: input.question,
-      status: AskResultStatus.FINISHED,
-      detail: {
-        ...properties.detail,
-        viewId: view.id,
-      },
+      viewId: view.id,
+      question,
+      sql,
     });
   }
+
   private getThreadRecommendationQuestionsConfig(project: Project) {
     return {
       maxCategories: config.threadRecommendationQuestionMaxCategories,

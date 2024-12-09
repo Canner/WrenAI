@@ -157,3 +157,27 @@ export type RecommendationQuestionsResult = AskResponse<
   },
   RecommendationQuestionStatus
 >;
+
+// text-based answer
+export interface TextBasedAnswerInput {
+  query: string;
+  sql: string;
+  sqlData: any;
+  threadId?: string;
+  userId?: string;
+  configurations: {
+    language: WrenAILanguage;
+  };
+}
+
+export enum TextBasedAnswerStatus {
+  PREPROCESSING = 'PREPROCESSING',
+  SUCCEEDED = 'SUCCEEDED',
+  FAILED = 'FAILED',
+}
+
+export interface TextBasedAnswerResult {
+  status: TextBasedAnswerStatus;
+  numRowsUsedInLLM?: number;
+  error?: WrenAIError;
+}

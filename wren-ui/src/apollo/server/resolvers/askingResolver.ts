@@ -231,13 +231,10 @@ export class AskingResolver {
   ): Promise<Thread> {
     const { data } = args;
 
-    const project = await ctx.projectService.getCurrentProject();
     const askingService = ctx.askingService;
     const eventName = TelemetryEvent.HOME_CREATE_THREAD;
     try {
-      const thread = await askingService.createThread(data, {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
-      });
+      const thread = await askingService.createThread(data);
       ctx.telemetry.sendEvent(eventName, {});
       return thread;
     } catch (err: any) {
@@ -274,9 +271,8 @@ export class AskingResolver {
         acc.responses.push({
           id: response.id,
           question: response.question,
-          status: response.status,
-          detail: response.detail,
-          error: response.error,
+          breakdownDetail: response.breakdownDetail,
+          answerDetail: response.answerDetail,
         });
 
         return acc;
@@ -352,14 +348,10 @@ export class AskingResolver {
   ): Promise<ThreadResponse> {
     const { threadId, data } = args;
 
-    const project = await ctx.projectService.getCurrentProject();
     const askingService = ctx.askingService;
     const eventName = TelemetryEvent.HOME_ASK_FOLLOWUP_QUESTION;
     try {
-      const response = await askingService.createThreadResponse(data, {
-        threadId,
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
-      });
+      const response = await askingService.createThreadResponse(data, threadId);
       ctx.telemetry.sendEvent(eventName, { data });
       return response;
     } catch (err: any) {
@@ -371,6 +363,22 @@ export class AskingResolver {
       );
       throw err;
     }
+  }
+
+  public async generateBreakdownDetail(
+    _root: any,
+    args: { threadId: number; responseId: number },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { threadId, responseId } = args;
+    const askingService = ctx.askingService;
+    const breakdownDetail = await askingService.generateThreadResponseBreakdown(
+      threadId,
+      responseId,
+      { language: WrenAILanguage[project.language] || WrenAILanguage.EN },
+    );
+    return breakdownDetail;
   }
 
   public async getResponse(
@@ -390,9 +398,24 @@ export class AskingResolver {
     args: { where: { responseId: number; stepIndex?: number; limit?: number } },
     ctx: IContext,
   ): Promise<any> {
+    const { responseId, limit } = args.where;
+    const askingService = ctx.askingService;
+    const data = await askingService.previewData(responseId, limit);
+    return data;
+  }
+
+  public async previewBreakdownData(
+    _root: any,
+    args: { where: { responseId: number; stepIndex?: number; limit?: number } },
+    ctx: IContext,
+  ): Promise<any> {
     const { responseId, stepIndex, limit } = args.where;
     const askingService = ctx.askingService;
-    const data = await askingService.previewData(responseId, stepIndex, limit);
+    const data = await askingService.previewBreakdownData(
+      responseId,
+      stepIndex,
+      limit,
+    );
     return data;
   }
 
@@ -425,18 +448,20 @@ export class AskingResolver {
    * Nested resolvers
    */
   public getThreadResponseNestedResolver = () => ({
-    detail: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
-      if (!parent.detail) {
+    breakdownDetail: async (
+      parent: ThreadResponse,
+      _args: any,
+      ctx: IContext,
+    ) => {
+      if (!parent.breakdownDetail) {
         return null;
       }
-      // extend view & sql to detail
-
       // handle sql
-      const sql = format(constructCteSql(parent.detail.steps));
+      const sql = format(constructCteSql(parent.breakdownDetail.steps));
 
       // handle view
       let view = null;
-      const viewId = parent?.detail?.viewId;
+      const viewId = parent.viewId;
       if (viewId) {
         view = await ctx.viewRepository.findOneBy({ id: viewId });
         const displayName = view.properties
@@ -444,7 +469,7 @@ export class AskingResolver {
           : view.name;
         view = { ...view, displayName };
       }
-      return { ...parent.detail, sql, view };
+      return { ...parent.breakdownDetail, sql, view };
     },
   });
 
