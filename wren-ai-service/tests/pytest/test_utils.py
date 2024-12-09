@@ -65,7 +65,6 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
         project_id = "mock-project-id"
         thread_id = "mock-thread-id"
         mdl_hash = "mock-mdl-hash"
-        user_id = "mock-user-id"
         query = "mock-user-query"
 
     @utils.trace_metadata
@@ -75,7 +74,7 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
     asyncio.run(my_function("", Request(), service_metadata=asdict(service_metadata)))
 
     function.assert_called_once_with(
-        user_id="mock-user-id",
+        user_id=None,
         session_id="mock-thread-id",
         release=service_metadata.service_version,
         metadata={

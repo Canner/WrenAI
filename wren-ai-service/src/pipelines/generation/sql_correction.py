@@ -19,7 +19,6 @@ from src.pipelines.common import (
     SQLGenPostProcessor,
     sql_generation_system_prompt,
 )
-from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -56,7 +55,6 @@ Let's think step by step.
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def prompts(
     documents: List[Document],
@@ -74,7 +72,6 @@ def prompts(
     ]
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[dict]:
     tasks = []
@@ -85,7 +82,6 @@ async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[
     return await asyncio.gather(*tasks)
 
 
-@async_timer
 @observe(capture_input=False)
 async def post_process(
     generate_sql_corrections: list[dict],
@@ -167,7 +163,6 @@ class SQLCorrection(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
     @observe(name="SQL Correction")
     async def run(
         self,

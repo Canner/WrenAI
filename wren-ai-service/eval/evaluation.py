@@ -118,8 +118,8 @@ class Evaluator:
     @observe(name="Summary Trace", capture_input=False, capture_output=False)
     def _average_score(self, meta: dict) -> None:
         langfuse_context.update_current_trace(
-            session_id=meta["session_id"],
-            user_id=meta["user_id"],
+            session_id=meta.get("session_id"),
+            user_id=meta.get("user_id"),
             metadata=trace_metadata(meta, type="summary"),
         )
 
