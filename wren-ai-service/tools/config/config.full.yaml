@@ -38,6 +38,20 @@ url: http://localhost:11434
 timeout: 120
 
 ---
+type: llm
+provider: litellm_llm
+models:
+- kwargs:
+    max_tokens: 4096
+    n: 1
+    response_format:
+      type: json_object
+    temperature: 0
+  model: gpt-4o-mini
+  api_key_name: LLM_OPENAI_API_KEY
+  timeout: 120
+
+---
 type: embedder
 provider: openai_embedder
 models:
@@ -95,10 +109,16 @@ recreate_index: false
 ---
 type: pipeline
 pipes:
-  - name: indexing
+  - name: db_schema_indexing
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
-  - name: retrieval
+  - name: historical_question_indexing
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: table_description_indexing
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: db_schema_retrieval
     llm: openai_llm.gpt-4o-mini
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
@@ -135,6 +155,8 @@ pipes:
   - name: relationship_recommendation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
+  - name: question_recommendation
+    llm: openai_llm.gpt-4o-mini
   - name: intent_classification
     llm: openai_llm.gpt-4o-mini
     embedder: openai_embedder.text-embedding-3-large

@@ -211,7 +211,7 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def classify_intent(prompt: dict, generator: Any) -> dict:
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)

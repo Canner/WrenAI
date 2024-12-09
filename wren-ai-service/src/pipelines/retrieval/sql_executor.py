@@ -44,8 +44,6 @@ class DataFetcher:
 async def execute_sql(
     sql: str, data_fetcher: DataFetcher, project_id: str | None = None
 ) -> dict:
-    logger.debug(f"Executing SQL: {sql}")
-
     return await data_fetcher.run(sql=sql, project_id=project_id)
 
 

@@ -7,13 +7,13 @@ import orjson
 import pytest
 
 from src.core.engine import EngineConfig
+from src.pipelines import indexing
 from src.pipelines.generation import (
     data_assistance,
     intent_classification,
     sql_correction,
     sql_generation,
 )
-from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import historical_question_retrieval, retrieval
 from src.providers import init_providers
 from src.web.v1.services.ask import (
@@ -78,7 +78,15 @@ def indexing_service():
 
     return SemanticsPreparationService(
         {
-            "indexing": indexing.Indexing(
+            "db_schema": indexing.DBSchema(
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
+            "historical_question": indexing.HistoricalQuestion(
+                embedder_provider=embedder_provider,
+                document_store_provider=document_store_provider,
+            ),
+            "table_description": indexing.TableDescription(
                 embedder_provider=embedder_provider,
                 document_store_provider=document_store_provider,
             ),

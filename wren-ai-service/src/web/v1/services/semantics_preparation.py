@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
@@ -70,10 +71,18 @@ class SemanticsPreparationService:
 
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            await self._pipelines["indexing"].run(
-                mdl_str=prepare_semantics_request.mdl,
-                id=prepare_semantics_request.project_id,
-            )
+
+            input = {
+                "mdl_str": prepare_semantics_request.mdl,
+                "project_id": prepare_semantics_request.project_id,
+            }
+
+            tasks = [
+                self._pipelines[name].run(**input)
+                for name in ["db_schema", "historical_question", "table_description"]
+            ]
+
+            await asyncio.gather(*tasks)
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.mdl_hash
@@ -118,3 +127,15 @@ class SemanticsPreparationService:
             )
 
         return result
+
+    @observe(name="Delete Semantics Documents")
+    @trace_metadata
+    async def delete_semantics(self, project_id: str):
+        logger.info(f"Project ID: {project_id}, Deleting semantics documents...")
+
+        tasks = [
+            self._pipelines[name].clean(project_id=project_id)
+            for name in ["db_schema", "historical_question", "table_description"]
+        ]
+
+        await asyncio.gather(*tasks)

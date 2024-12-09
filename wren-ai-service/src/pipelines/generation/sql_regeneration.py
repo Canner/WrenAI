@@ -120,7 +120,7 @@ async def generate_sql_regeneration(
     sql_regeneration_prompt: dict,
     generator: Any,
 ) -> dict:
-    return await generator.run(prompt=sql_regeneration_prompt.get("prompt"))
+    return await generator(prompt=sql_regeneration_prompt.get("prompt"))
 
 
 @observe(capture_input=False)

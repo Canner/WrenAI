@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
+import clsx from 'clsx';
 import styled from 'styled-components';
 import { Space, Button, Row, Col } from 'antd';
 import ColumnHeightOutlined from '@ant-design/icons/ColumnHeightOutlined';
 import MinusOutlined from '@ant-design/icons/MinusOutlined';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
+import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import { Logo } from '@/components/Logo';
 import { makeIterable } from '@/utils/iteration';
 import { GroupedQuestion } from '@/hooks/useRecommendedQuestionsInstruction';
@@ -21,8 +23,16 @@ const QuestionBlock = styled.div`
   height: 150px;
   transition: border-color ease 0.2s;
 
-  &:hover {
+  &:hover:not(.is-disabled) {
     border-color: var(--geekblue-6) !important;
+  }
+
+  &.is-active {
+    border-color: var(--geekblue-6) !important;
+  }
+
+  &.is-disabled {
+    opacity: 0.8;
   }
 `;
 
@@ -31,14 +41,37 @@ const MAX_EXPANDED_QUESTIONS = 9;
 interface Props {
   onSelect: (payload: { sql: string; question: string }) => void;
   recommendedQuestions: GroupedQuestion[];
+  loading: boolean;
 }
 
-const QuestionTemplate = ({ category, sql, question, onSelect }) => {
+const QuestionTemplate = ({
+  category,
+  sql,
+  question,
+  onSelect,
+  loading,
+  selectedQuestion,
+}) => {
+  const isSelected = selectedQuestion === question;
+  const isDisabled = loading && !isSelected;
+
+  const onClick = () => {
+    if (loading) return;
+    onSelect({ sql, question });
+  };
+
   return (
     <Col span={8}>
       <QuestionBlock
-        className="border border-gray-5 rounded px-3 pt-3 pb-4 cursor-pointer"
-        onClick={() => onSelect({ sql, question })}
+        className={clsx(
+          'border border-gray-5 rounded px-3 pt-3 pb-4',
+          loading ? 'cursor-wait' : 'cursor-pointer',
+          {
+            'is-active': isSelected,
+            'is-disabled cursor-not-allowed': isDisabled,
+          },
+        )}
+        onClick={onClick}
       >
         <div className="d-flex justify-space-between align-center text-sm mb-3">
           <div
@@ -47,6 +80,7 @@ const QuestionTemplate = ({ category, sql, question, onSelect }) => {
           >
             {category}
           </div>
+          {isSelected && loading && <LoadingOutlined className="ml-1 gray-7" />}
         </div>
         <EllipsisWrapper multipleLine={4} text={question} />
       </QuestionBlock>
@@ -57,9 +91,10 @@ const QuestionTemplate = ({ category, sql, question, onSelect }) => {
 const QuestionColumnIterator = makeIterable(QuestionTemplate);
 
 export default function RecommendedQuestionsPrompt(props: Props) {
-  const { onSelect, recommendedQuestions } = props;
+  const { onSelect, recommendedQuestions, loading } = props;
 
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [selectedQuestion, setSelectedQuestion] = useState<string>('');
 
   const questionList = useMemo(() => {
     return recommendedQuestions.slice(
@@ -71,6 +106,11 @@ export default function RecommendedQuestionsPrompt(props: Props) {
   const onHandleToggle = () => setIsExpanded((prev) => !prev);
 
   const showExpandButton = recommendedQuestions.length > MAX_EXPANDED_QUESTIONS;
+
+  const onSelectQuestion = (payload: { sql: string; question: string }) => {
+    onSelect(payload);
+    setSelectedQuestion(payload.question);
+  };
 
   return (
     <div className="bg-gray-2 px-10 py-6">
@@ -91,7 +131,12 @@ export default function RecommendedQuestionsPrompt(props: Props) {
       >
         <CategorySectionBlock>
           <Row gutter={[16, 16]} className="mt-3">
-            <QuestionColumnIterator data={questionList} onSelect={onSelect} />
+            <QuestionColumnIterator
+              data={questionList}
+              onSelect={onSelectQuestion}
+              loading={loading}
+              selectedQuestion={selectedQuestion}
+            />
           </Row>
           {showExpandButton && (
             <div className="text-right">

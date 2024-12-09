@@ -11,10 +11,10 @@ data:
   WREN_UI_ENDPOINT: http://wren-ui-svc:3000
 
   #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
-  WREN_PRODUCT_VERSION: "0.12.0-rc.1"
+  WREN_PRODUCT_VERSION: "0.12.0"
   WREN_ENGINE_VERSION: "0.12.3"
-  WREN_AI_SERVICE_VERSION: "0.12.0"
-  WREN_UI_VERSION: "0.17.5"
+  WREN_AI_SERVICE_VERSION: "0.12.1"
+  WREN_UI_VERSION: "0.17.6"
 
   # Document store related
   QDRANT_HOST: "wren-qdrant"
@@ -95,14 +95,20 @@ data:
     ---
     type: pipeline
     pipes:
-      - name: indexing
+      - name: db_schema_indexing
         embedder: openai_embedder.text-embedding-3-large
         document_store: qdrant
-      - name: retrieval
+      - name: historical_question_indexing
+        embedder: openai_embedder.text-embedding-3-large
+        document_store: qdrant
+      - name: table_description_indexing
+        embedder: openai_embedder.text-embedding-3-large
+        document_store: qdrant
+      - name: db_schema_retrieval
         llm: openai_llm.gpt-4o-mini
         embedder: openai_embedder.text-embedding-3-large
         document_store: qdrant
-      - name: historical_question
+      - name: historical_question_retrieval
         embedder: openai_embedder.text-embedding-3-large
         document_store: qdrant
       - name: sql_generation

@@ -286,7 +286,7 @@ async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator.run(prompt=prompt.get("prompt"))
+        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
     else:
         return {}
 
@@ -461,6 +461,6 @@ if __name__ == "__main__":
 
     dry_run_pipeline(
         Retrieval,
-        "retrieval",
+        "db_schema_retrieval",
         query="this is a test query",
     )
