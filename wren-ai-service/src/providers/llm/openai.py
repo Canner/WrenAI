@@ -133,7 +133,6 @@ class AsyncGenerator(OpenAIGenerator):
             if num_responses > 1:
                 raise ValueError("Cannot stream multiple responses, please set n=1.")
             chunks: List[StreamingChunk] = []
-            chunk = None
 
             async for chunk in completion:
                 if chunk.choices and self.streaming_callback:
