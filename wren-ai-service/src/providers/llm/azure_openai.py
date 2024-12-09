@@ -71,6 +71,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
         self,
         prompt: str,
         generation_kwargs: Optional[Dict[str, Any]] = None,
+        query_id: Optional[str] = None,
     ):
         logger.info(f"running async azure generator with prompt : {prompt}")
         message = ChatMessage.from_user(prompt)
@@ -104,14 +105,13 @@ class AsyncGenerator(AzureOpenAIGenerator):
                     "Cannot stream multiple responses , please set n = 1 in AzureAsyncGenerator"
                 )
             chunks: List[StreamingChunk] = []
-            chunk = None
 
             # pylint: disable=not-an-iterable
             for chunk in completion:
                 if chunk.choices and self.streaming_callback:
                     chunk_delta: StreamingChunk = self._build_chunk(chunk)
                     chunks.append(chunk_delta)
-                    self.streaming_callback(chunk_delta)
+                    self.streaming_callback(chunk_delta, query_id)
             completions = [self._connect_chunks(chunk, chunks)]
         elif isinstance(completion, ChatCompletion) or isinstance(
             completion, langfuse.openai.LangfuseResponseGeneratorSync

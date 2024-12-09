@@ -86,7 +86,6 @@ class LitellmLLMProvider(LLMProvider):
                         "Cannot stream multiple responses, please set n=1."
                     )
                 chunks: List[StreamingChunk] = []
-                chunk = None
 
                 async for chunk in completion:
                     if chunk.choices and streaming_callback:
