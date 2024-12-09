@@ -28,6 +28,7 @@ class DataFetcher:
         self,
         sql: str,
         project_id: str | None = None,
+        limit: int = 500,
     ):
         async with aiohttp.ClientSession() as session:
             _, data, _ = await self._engine.execute_sql(
@@ -35,6 +36,7 @@ class DataFetcher:
                 session,
                 project_id=project_id,
                 dry_run=False,
+                limit=limit,
             )
 
             return {"results": data}
@@ -44,9 +46,12 @@ class DataFetcher:
 @async_timer
 @observe(capture_input=False)
 async def execute_sql(
-    sql: str, data_fetcher: DataFetcher, project_id: str | None = None
+    sql: str,
+    data_fetcher: DataFetcher,
+    project_id: str | None = None,
+    limit: int = 500,
 ) -> dict:
-    return await data_fetcher.run(sql=sql, project_id=project_id)
+    return await data_fetcher.run(sql=sql, project_id=project_id, limit=limit)
 
 
 ## End of Pipeline
@@ -70,6 +75,7 @@ class SQLExecutor(BasicPipeline):
         self,
         sql: str,
         project_id: str | None = None,
+        limit: int = 500,
     ) -> None:
         destination = "outputs/pipelines/retrieval"
         if not Path(destination).exists():
@@ -78,20 +84,28 @@ class SQLExecutor(BasicPipeline):
         self._pipe.visualize_execution(
             ["execute_sql"],
             output_file_path=f"{destination}/sql_executor.dot",
-            inputs={"sql": sql, "project_id": project_id, **self._components},
+            inputs={
+                "sql": sql,
+                "project_id": project_id,
+                "limit": limit,
+                **self._components,
+            },
             show_legend=True,
             orient="LR",
         )
 
     @async_timer
     @observe(name="SQL Execution")
-    async def run(self, sql: str, project_id: str | None = None) -> dict:
+    async def run(
+        self, sql: str, project_id: str | None = None, limit: int = 500
+    ) -> dict:
         logger.info("SQL Execution pipeline is running...")
         return await self._pipe.execute(
             ["execute_sql"],
             inputs={
                 "sql": sql,
                 "project_id": project_id,
+                "limit": limit,
                 **self._components,
             },
         )

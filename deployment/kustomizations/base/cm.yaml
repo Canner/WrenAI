@@ -151,7 +151,8 @@ data:
         document_store: qdrant
       - name: data_assistance
         llm: openai_llm.gpt-4o-mini
-
+      - name: sql_executor
+        engine: wren_ui
     ---
     settings:
       column_indexing_batch_size: 50

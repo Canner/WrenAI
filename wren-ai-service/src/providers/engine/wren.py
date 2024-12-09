@@ -30,6 +30,7 @@ class WrenUI(Engine):
         project_id: str | None = None,
         dry_run: bool = True,
         timeout: float = 30.0,
+        limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         data = {
@@ -40,7 +41,7 @@ class WrenUI(Engine):
             data["dryRun"] = True
             data["limit"] = 1
         else:
-            data["limit"] = 500
+            data["limit"] = limit
 
         try:
             async with session.post(
@@ -104,13 +105,14 @@ class WrenIbis(Engine):
         session: aiohttp.ClientSession,
         dry_run: bool = True,
         timeout: float = 30.0,
+        limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         api_endpoint = f"{self._endpoint}/v2/connector/{self._source}/query"
         if dry_run:
             api_endpoint += "?dryRun=true&limit=1"
         else:
-            api_endpoint += "?limit=500"
+            api_endpoint += f"?limit={limit}"
 
         try:
             async with session.post(
@@ -166,6 +168,7 @@ class WrenEngine(Engine):
         session: aiohttp.ClientSession,
         dry_run: bool = True,
         timeout: float = 30.0,
+        limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         api_endpoint = (
@@ -178,13 +181,11 @@ class WrenEngine(Engine):
             async with session.get(
                 api_endpoint,
                 json={
-                    "manifest": orjson.loads(
-                        base64.b64decode(self._manifest)
-                    )
+                    "manifest": orjson.loads(base64.b64decode(self._manifest))
                     if self._manifest
                     else {},
                     "sql": remove_limit_statement(sql),
-                    "limit": 1 if dry_run else 500,
+                    "limit": 1 if dry_run else limit,
                 },
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
