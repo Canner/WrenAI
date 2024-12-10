@@ -11,6 +11,8 @@ import {
   WrenAILanguage,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
+  ChartStatus,
+  ChartAdjustmentOption,
 } from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -30,7 +32,11 @@ import {
 import { IViewRepository, Project, View } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
-import { ThreadRecommendQuestionBackgroundTracker } from '../backgrounds';
+import {
+  ThreadRecommendQuestionBackgroundTracker,
+  ChartBackgroundTracker,
+  ChartAdjustmentBackgroundTracker,
+} from '../backgrounds';
 import { getConfig } from '@server/config';
 
 const config = getConfig();
@@ -125,6 +131,17 @@ export interface IAskingService {
   generateThreadResponseAnswer(
     threadId: number,
     threadResponseId: number,
+    configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  generateThreadResponseChart(
+    threadId: number,
+    threadResponseId: number,
+    configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  adjustThreadResponseChart(
+    threadId: number,
+    threadResponseId: number,
+    input: ChartAdjustmentOption,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
   changeThreadResponseAnswerDetailStatus(
@@ -482,6 +499,8 @@ export class AskingService implements IAskingService {
   private threadResponseRepository: IThreadResponseRepository;
   private breakdownBackgroundTracker: BreakdownBackgroundTracker;
   private textBasedAnswerBackgroundTracker: TextBasedAnswerBackgroundTracker;
+  private chartBackgroundTracker: ChartBackgroundTracker;
+  private chartAdjustmentBackgroundTracker: ChartAdjustmentBackgroundTracker;
   private threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: PostHogTelemetry;
@@ -528,6 +547,15 @@ export class AskingService implements IAskingService {
         projectService,
         deployService,
         queryService,
+      });
+    this.chartBackgroundTracker = new ChartBackgroundTracker({
+      wrenAIAdaptor,
+      threadResponseRepository,
+    });
+    this.chartAdjustmentBackgroundTracker =
+      new ChartAdjustmentBackgroundTracker({
+        wrenAIAdaptor,
+        threadResponseRepository,
       });
     this.threadRecommendQuestionBackgroundTracker =
       new ThreadRecommendQuestionBackgroundTracker({
@@ -840,6 +868,97 @@ export class AskingService implements IAskingService {
 
     // put the task into background tracker
     this.textBasedAnswerBackgroundTracker.addTask(updatedThreadResponse);
+
+    return updatedThreadResponse;
+  }
+
+  public async generateThreadResponseChart(
+    threadId: number,
+    threadResponseId: number,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    const thread = await this.threadRepository.findOneBy({
+      id: threadId,
+    });
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    if (!threadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    // 1. create a task on AI service to generate the chart
+    const response = await this.wrenAIAdaptor.generateChart({
+      query: threadResponse.question,
+      sql: threadResponse.sql,
+      configurations,
+    });
+
+    // 2. update the thread response with chart detail
+    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
+      threadResponse.id,
+      {
+        chartDetail: {
+          queryId: response.queryId,
+          status: ChartStatus.FETCHING,
+        },
+      },
+    );
+
+    // 3. put the task into background tracker
+    this.chartBackgroundTracker.addTask(updatedThreadResponse);
+
+    return updatedThreadResponse;
+  }
+
+  public async adjustThreadResponseChart(
+    threadId: number,
+    threadResponseId: number,
+    input: ChartAdjustmentOption,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    const thread = await this.threadRepository.findOneBy({
+      id: threadId,
+    });
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    if (!threadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    // 1. create a task on AI service to adjust the chart
+    const response = await this.wrenAIAdaptor.adjustChart({
+      query: threadResponse.question,
+      sql: threadResponse.sql,
+      adjustmentOption: input,
+      chartSchema: threadResponse.chartDetail?.chartSchema,
+      configurations,
+    });
+
+    // 2. update the thread response with chart detail
+    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
+      threadResponse.id,
+      {
+        chartDetail: {
+          queryId: response.queryId,
+          status: ChartStatus.FETCHING,
+        },
+      },
+    );
+
+    // 3. put the task into background tracker
+    this.chartAdjustmentBackgroundTracker.addTask(updatedThreadResponse);
 
     return updatedThreadResponse;
   }
