@@ -5,7 +5,11 @@ import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
 export type CommonErrorFragment = { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null };
 
-export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null };
+export type CommonBreakdownDetailFragment = { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
+
+export type CommonAnswerDetailFragment = { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
+
+export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null };
 
 export type CommonRecommendedQuestionsTaskFragment = { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, sql: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
 
@@ -31,14 +35,14 @@ export type ThreadQueryVariables = Types.Exact<{
 }>;
 
 
-export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null }> } };
+export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null }> } };
 
 export type ThreadResponseQueryVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
 }>;
 
 
-export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null } };
+export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type CreateAskingTaskMutationVariables = Types.Exact<{
   data: Types.AskingTaskInput;
@@ -67,7 +71,7 @@ export type CreateThreadResponseMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, question: string, status: Types.AskingTaskStatus, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null, detail?: { __typename?: 'ThreadResponseDetail', sql?: string | null, description?: string | null, steps: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }>, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null } | null } };
+export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type UpdateThreadMutationVariables = Types.Exact<{
   where: Types.ThreadUniqueWhereInput;
@@ -84,12 +88,19 @@ export type DeleteThreadMutationVariables = Types.Exact<{
 
 export type DeleteThreadMutation = { __typename?: 'Mutation', deleteThread: boolean };
 
-export type PreviewDataMutationVariables = Types.Exact<{
+export type PreviewTextBasedAnswerDataMutationVariables = Types.Exact<{
   where: Types.PreviewDataInput;
 }>;
 
 
-export type PreviewDataMutation = { __typename?: 'Mutation', previewData: any };
+export type PreviewTextBasedAnswerDataMutation = { __typename?: 'Mutation', previewData: any };
+
+export type PreviewBreakdownDataMutationVariables = Types.Exact<{
+  where: Types.PreviewDataInput;
+}>;
+
+
+export type PreviewBreakdownDataMutation = { __typename?: 'Mutation', previewBreakdownData: any };
 
 export type GetNativeSqlQueryVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
@@ -136,28 +147,22 @@ export type GenerateThreadRecommendationQuestionsMutationVariables = Types.Exact
 
 export type GenerateThreadRecommendationQuestionsMutation = { __typename?: 'Mutation', generateThreadRecommendationQuestions: boolean };
 
-export const CommonResponseFragmentDoc = gql`
-    fragment CommonResponse on ThreadResponse {
-  id
-  question
-  status
-  detail {
-    sql
-    description
-    steps {
-      summary
-      sql
-      cteName
-    }
-    view {
-      id
-      name
-      statement
-      displayName
-    }
-  }
-}
-    `;
+export type GenerateThreadResponseBreakdownMutationVariables = Types.Exact<{
+  threadId: Types.Scalars['Int'];
+  responseId: Types.Scalars['Int'];
+}>;
+
+
+export type GenerateThreadResponseBreakdownMutation = { __typename?: 'Mutation', generateThreadResponseBreakdown: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+
+export type GenerateThreadResponseAnswerMutationVariables = Types.Exact<{
+  threadId: Types.Scalars['Int'];
+  responseId: Types.Scalars['Int'];
+}>;
+
+
+export type GenerateThreadResponseAnswerMutation = { __typename?: 'Mutation', generateThreadResponseAnswer: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
   code
@@ -166,6 +171,53 @@ export const CommonErrorFragmentDoc = gql`
   stacktrace
 }
     `;
+export const CommonBreakdownDetailFragmentDoc = gql`
+    fragment CommonBreakdownDetail on ThreadResponseBreakdownDetail {
+  queryId
+  status
+  description
+  steps {
+    summary
+    sql
+    cteName
+  }
+  error {
+    ...CommonError
+  }
+}
+    ${CommonErrorFragmentDoc}`;
+export const CommonAnswerDetailFragmentDoc = gql`
+    fragment CommonAnswerDetail on ThreadResponseAnswerDetail {
+  queryId
+  status
+  content
+  numRowsUsedInLLM
+  error {
+    ...CommonError
+  }
+}
+    ${CommonErrorFragmentDoc}`;
+export const CommonResponseFragmentDoc = gql`
+    fragment CommonResponse on ThreadResponse {
+  id
+  threadId
+  question
+  sql
+  view {
+    id
+    name
+    statement
+    displayName
+  }
+  breakdownDetail {
+    ...CommonBreakdownDetail
+  }
+  answerDetail {
+    ...CommonAnswerDetail
+  }
+}
+    ${CommonBreakdownDetailFragmentDoc}
+${CommonAnswerDetailFragmentDoc}`;
 export const CommonRecommendedQuestionsTaskFragmentDoc = gql`
     fragment CommonRecommendedQuestionsTask on RecommendedQuestionsTask {
   status
@@ -307,14 +359,10 @@ export const ThreadDocument = gql`
     sql
     responses {
       ...CommonResponse
-      error {
-        ...CommonError
-      }
     }
   }
 }
-    ${CommonResponseFragmentDoc}
-${CommonErrorFragmentDoc}`;
+    ${CommonResponseFragmentDoc}`;
 
 /**
  * __useThreadQuery__
@@ -347,13 +395,9 @@ export const ThreadResponseDocument = gql`
     query ThreadResponse($responseId: Int!) {
   threadResponse(responseId: $responseId) {
     ...CommonResponse
-    error {
-      ...CommonError
-    }
   }
 }
-    ${CommonResponseFragmentDoc}
-${CommonErrorFragmentDoc}`;
+    ${CommonResponseFragmentDoc}`;
 
 /**
  * __useThreadResponseQuery__
@@ -484,12 +528,6 @@ export const CreateThreadResponseDocument = gql`
     mutation CreateThreadResponse($threadId: Int!, $data: CreateThreadResponseInput!) {
   createThreadResponse(threadId: $threadId, data: $data) {
     ...CommonResponse
-    error {
-      code
-      shortMessage
-      message
-      stacktrace
-    }
   }
 }
     ${CommonResponseFragmentDoc}`;
@@ -587,37 +625,68 @@ export function useDeleteThreadMutation(baseOptions?: Apollo.MutationHookOptions
 export type DeleteThreadMutationHookResult = ReturnType<typeof useDeleteThreadMutation>;
 export type DeleteThreadMutationResult = Apollo.MutationResult<DeleteThreadMutation>;
 export type DeleteThreadMutationOptions = Apollo.BaseMutationOptions<DeleteThreadMutation, DeleteThreadMutationVariables>;
-export const PreviewDataDocument = gql`
-    mutation PreviewData($where: PreviewDataInput!) {
+export const PreviewTextBasedAnswerDataDocument = gql`
+    mutation PreviewTextBasedAnswerData($where: PreviewDataInput!) {
   previewData(where: $where)
 }
     `;
-export type PreviewDataMutationFn = Apollo.MutationFunction<PreviewDataMutation, PreviewDataMutationVariables>;
+export type PreviewTextBasedAnswerDataMutationFn = Apollo.MutationFunction<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>;
 
 /**
- * __usePreviewDataMutation__
+ * __usePreviewTextBasedAnswerDataMutation__
  *
- * To run a mutation, you first call `usePreviewDataMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `usePreviewDataMutation` returns a tuple that includes:
+ * To run a mutation, you first call `usePreviewTextBasedAnswerDataMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `usePreviewTextBasedAnswerDataMutation` returns a tuple that includes:
  * - A mutate function that you can call at any time to execute the mutation
  * - An object with fields that represent the current status of the mutation's execution
  *
  * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
  *
  * @example
- * const [previewDataMutation, { data, loading, error }] = usePreviewDataMutation({
+ * const [previewTextBasedAnswerDataMutation, { data, loading, error }] = usePreviewTextBasedAnswerDataMutation({
  *   variables: {
  *      where: // value for 'where'
  *   },
  * });
  */
-export function usePreviewDataMutation(baseOptions?: Apollo.MutationHookOptions<PreviewDataMutation, PreviewDataMutationVariables>) {
+export function usePreviewTextBasedAnswerDataMutation(baseOptions?: Apollo.MutationHookOptions<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<PreviewDataMutation, PreviewDataMutationVariables>(PreviewDataDocument, options);
+        return Apollo.useMutation<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>(PreviewTextBasedAnswerDataDocument, options);
       }
-export type PreviewDataMutationHookResult = ReturnType<typeof usePreviewDataMutation>;
-export type PreviewDataMutationResult = Apollo.MutationResult<PreviewDataMutation>;
-export type PreviewDataMutationOptions = Apollo.BaseMutationOptions<PreviewDataMutation, PreviewDataMutationVariables>;
+export type PreviewTextBasedAnswerDataMutationHookResult = ReturnType<typeof usePreviewTextBasedAnswerDataMutation>;
+export type PreviewTextBasedAnswerDataMutationResult = Apollo.MutationResult<PreviewTextBasedAnswerDataMutation>;
+export type PreviewTextBasedAnswerDataMutationOptions = Apollo.BaseMutationOptions<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>;
+export const PreviewBreakdownDataDocument = gql`
+    mutation PreviewBreakdownData($where: PreviewDataInput!) {
+  previewBreakdownData(where: $where)
+}
+    `;
+export type PreviewBreakdownDataMutationFn = Apollo.MutationFunction<PreviewBreakdownDataMutation, PreviewBreakdownDataMutationVariables>;
+
+/**
+ * __usePreviewBreakdownDataMutation__
+ *
+ * To run a mutation, you first call `usePreviewBreakdownDataMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `usePreviewBreakdownDataMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [previewBreakdownDataMutation, { data, loading, error }] = usePreviewBreakdownDataMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *   },
+ * });
+ */
+export function usePreviewBreakdownDataMutation(baseOptions?: Apollo.MutationHookOptions<PreviewBreakdownDataMutation, PreviewBreakdownDataMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<PreviewBreakdownDataMutation, PreviewBreakdownDataMutationVariables>(PreviewBreakdownDataDocument, options);
+      }
+export type PreviewBreakdownDataMutationHookResult = ReturnType<typeof usePreviewBreakdownDataMutation>;
+export type PreviewBreakdownDataMutationResult = Apollo.MutationResult<PreviewBreakdownDataMutation>;
+export type PreviewBreakdownDataMutationOptions = Apollo.BaseMutationOptions<PreviewBreakdownDataMutation, PreviewBreakdownDataMutationVariables>;
 export const GetNativeSqlDocument = gql`
     query GetNativeSQL($responseId: Int!) {
   nativeSql(responseId: $responseId)
@@ -849,3 +918,71 @@ export function useGenerateThreadRecommendationQuestionsMutation(baseOptions?: A
 export type GenerateThreadRecommendationQuestionsMutationHookResult = ReturnType<typeof useGenerateThreadRecommendationQuestionsMutation>;
 export type GenerateThreadRecommendationQuestionsMutationResult = Apollo.MutationResult<GenerateThreadRecommendationQuestionsMutation>;
 export type GenerateThreadRecommendationQuestionsMutationOptions = Apollo.BaseMutationOptions<GenerateThreadRecommendationQuestionsMutation, GenerateThreadRecommendationQuestionsMutationVariables>;
+export const GenerateThreadResponseBreakdownDocument = gql`
+    mutation GenerateThreadResponseBreakdown($threadId: Int!, $responseId: Int!) {
+  generateThreadResponseBreakdown(threadId: $threadId, responseId: $responseId) {
+    ...CommonResponse
+  }
+}
+    ${CommonResponseFragmentDoc}`;
+export type GenerateThreadResponseBreakdownMutationFn = Apollo.MutationFunction<GenerateThreadResponseBreakdownMutation, GenerateThreadResponseBreakdownMutationVariables>;
+
+/**
+ * __useGenerateThreadResponseBreakdownMutation__
+ *
+ * To run a mutation, you first call `useGenerateThreadResponseBreakdownMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useGenerateThreadResponseBreakdownMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [generateThreadResponseBreakdownMutation, { data, loading, error }] = useGenerateThreadResponseBreakdownMutation({
+ *   variables: {
+ *      threadId: // value for 'threadId'
+ *      responseId: // value for 'responseId'
+ *   },
+ * });
+ */
+export function useGenerateThreadResponseBreakdownMutation(baseOptions?: Apollo.MutationHookOptions<GenerateThreadResponseBreakdownMutation, GenerateThreadResponseBreakdownMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<GenerateThreadResponseBreakdownMutation, GenerateThreadResponseBreakdownMutationVariables>(GenerateThreadResponseBreakdownDocument, options);
+      }
+export type GenerateThreadResponseBreakdownMutationHookResult = ReturnType<typeof useGenerateThreadResponseBreakdownMutation>;
+export type GenerateThreadResponseBreakdownMutationResult = Apollo.MutationResult<GenerateThreadResponseBreakdownMutation>;
+export type GenerateThreadResponseBreakdownMutationOptions = Apollo.BaseMutationOptions<GenerateThreadResponseBreakdownMutation, GenerateThreadResponseBreakdownMutationVariables>;
+export const GenerateThreadResponseAnswerDocument = gql`
+    mutation GenerateThreadResponseAnswer($threadId: Int!, $responseId: Int!) {
+  generateThreadResponseAnswer(threadId: $threadId, responseId: $responseId) {
+    ...CommonResponse
+  }
+}
+    ${CommonResponseFragmentDoc}`;
+export type GenerateThreadResponseAnswerMutationFn = Apollo.MutationFunction<GenerateThreadResponseAnswerMutation, GenerateThreadResponseAnswerMutationVariables>;
+
+/**
+ * __useGenerateThreadResponseAnswerMutation__
+ *
+ * To run a mutation, you first call `useGenerateThreadResponseAnswerMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useGenerateThreadResponseAnswerMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [generateThreadResponseAnswerMutation, { data, loading, error }] = useGenerateThreadResponseAnswerMutation({
+ *   variables: {
+ *      threadId: // value for 'threadId'
+ *      responseId: // value for 'responseId'
+ *   },
+ * });
+ */
+export function useGenerateThreadResponseAnswerMutation(baseOptions?: Apollo.MutationHookOptions<GenerateThreadResponseAnswerMutation, GenerateThreadResponseAnswerMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<GenerateThreadResponseAnswerMutation, GenerateThreadResponseAnswerMutationVariables>(GenerateThreadResponseAnswerDocument, options);
+      }
+export type GenerateThreadResponseAnswerMutationHookResult = ReturnType<typeof useGenerateThreadResponseAnswerMutation>;
+export type GenerateThreadResponseAnswerMutationResult = Apollo.MutationResult<GenerateThreadResponseAnswerMutation>;
+export type GenerateThreadResponseAnswerMutationOptions = Apollo.BaseMutationOptions<GenerateThreadResponseAnswerMutation, GenerateThreadResponseAnswerMutationVariables>;
