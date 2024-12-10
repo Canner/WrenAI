@@ -21,8 +21,10 @@ export default function BreakdownAnswer(
   const { isLastThreadResponse, motion, onInitPreviewDone, threadResponse } =
     props;
 
-  const { error, status } = threadResponse;
-  const { description, sql, steps } = threadResponse?.detail || {};
+  const { sql } = threadResponse;
+  const { description, error, status, steps } =
+    threadResponse?.breakdownDetail || {};
+
   const loading = !getIsFinished(status);
 
   if (error) {
