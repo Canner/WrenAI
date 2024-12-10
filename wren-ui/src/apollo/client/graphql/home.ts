@@ -41,6 +41,18 @@ const COMMON_ANSWER_DETAIL = gql`
   ${COMMON_ERROR}
 `;
 
+const COMMON_CHART_DETAIL = gql`
+  fragment CommonChartDetail on ThreadResponseChartDetail {
+    queryId
+    status
+    description
+    chartSchema
+    error {
+      ...CommonError
+    }
+  }
+`;
+
 const COMMON_RESPONSE = gql`
   fragment CommonResponse on ThreadResponse {
     id
@@ -59,10 +71,14 @@ const COMMON_RESPONSE = gql`
     answerDetail {
       ...CommonAnswerDetail
     }
+    chartDetail {
+      ...CommonChartDetail
+    }
   }
 
   ${COMMON_BREAKDOWN_DETAIL}
   ${COMMON_ANSWER_DETAIL}
+  ${COMMON_CHART_DETAIL}
 `;
 
 const COMMON_RECOMMENDED_QUESTIONS_TASK = gql`
@@ -286,5 +302,31 @@ export const GENERATE_THREAD_RESPONSE_ANSWER = gql`
     }
   }
 
+  ${COMMON_RESPONSE}
+`;
+
+export const GENERATE_THREAD_RESPONSE_CHART = gql`
+  mutation GenerateThreadResponseChart($threadId: Int!, $responseId: Int!) {
+    generateThreadResponseChart(threadId: $threadId, responseId: $responseId) {
+      ...CommonResponse
+    }
+  }
+  ${COMMON_RESPONSE}
+`;
+
+export const ADJUST_THREAD_RESPONSE_CHART = gql`
+  mutation AdjustThreadResponseChart(
+    $threadId: Int!
+    $responseId: Int!
+    $data: AdjustThreadResponseChartInput!
+  ) {
+    adjustThreadResponseChart(
+      threadId: $threadId
+      responseId: $responseId
+      data: $data
+    ) {
+      ...CommonResponse
+    }
+  }
   ${COMMON_RESPONSE}
 `;
