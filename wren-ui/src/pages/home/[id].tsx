@@ -93,7 +93,7 @@ export default function HomeThread() {
     [threadResponseResult.data],
   );
   const isFinished = useMemo(
-    () => getIsFinished(threadResponse?.status),
+    () => getIsFinished(threadResponse?.breakdownDetail?.status),
     [threadResponse],
   );
 
@@ -112,7 +112,7 @@ export default function HomeThread() {
 
   useEffect(() => {
     const unfinishedRespose = (thread?.responses || []).find(
-      (response) => !getIsFinished(response.status),
+      (response) => !getIsFinished(response.breakdownDetail?.status),
     );
 
     if (unfinishedRespose) {

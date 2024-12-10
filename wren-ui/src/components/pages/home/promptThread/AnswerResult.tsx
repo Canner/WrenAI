@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { isEmpty } from 'lodash';
 import clsx from 'clsx';
 import { Typography, Tabs } from 'antd';
 import styled from 'styled-components';
@@ -89,9 +91,8 @@ export default function AnswerResult(props: Props) {
     recommendedQuestionsProps,
   } = props;
 
-  const { question, error } = threadResponse;
-
-  const { view, sql } = threadResponse?.detail || {};
+  const { answerDetail, breakdownDetail, id, question, sql, view } =
+    threadResponse;
 
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
@@ -102,8 +103,10 @@ export default function AnswerResult(props: Props) {
     recommendedQuestionsProps.show,
   );
 
-  // TODO: existing thread response doesn't have a text-based answer
-  const hasTextBasedAnswer = true;
+  const hasTextBasedAnswer = useMemo(() => {
+    // existing thread response's answerDetail is null
+    return isEmpty(breakdownDetail) || !isEmpty(answerDetail);
+  }, [answerDetail, breakdownDetail]);
 
   return (
     <div style={resultStyle} className="adm-answer-result">
@@ -143,17 +146,10 @@ export default function AnswerResult(props: Props) {
           />
         </Tabs.TabPane>
       </StyledTabs>
-      {!error && (
-        <ViewBlock
-          view={view}
-          onClick={() =>
-            onOpenSaveAsViewModal({
-              sql,
-              responseId: threadResponse.id,
-            })
-          }
-        />
-      )}
+      <ViewBlock
+        view={view}
+        onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
+      />
       {renderRecommendedQuestions(
         isLastThreadResponse,
         recommendedQuestionProps,

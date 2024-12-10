@@ -25,7 +25,8 @@ export default function TextBasedAnswer(
   >,
 ) {
   const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
-  const { error, id } = threadResponse;
+  const { id } = threadResponse;
+  const { error } = threadResponse?.answerDetail || {};
 
   const [_, answerStreamTaskResult] = useTextBasedAnswerStreamTask();
 
@@ -57,7 +58,6 @@ export default function TextBasedAnswer(
     }
   }, [isLastThreadResponse, rowsUsed]);
 
-  // TODO: handle error, check error source comes from where
   if (error) {
     return (
       <Alert

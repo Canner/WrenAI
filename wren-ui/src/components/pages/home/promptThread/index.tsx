@@ -130,7 +130,7 @@ export default function PromptThread(props: Props) {
   useEffect(() => {
     motionResponsesRef.current = (data.thread?.responses || []).reduce(
       (result, item) => {
-        result[item.id] = !getIsFinished(item?.status);
+        result[item.id] = !getIsFinished(item?.breakdownDetail?.status);
         return result;
       },
       {},
