@@ -14,10 +14,7 @@ import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
-import {
-  constructCteSql,
-  ThreadRecommendQuestionResult,
-} from '../services/askingService';
+import { ThreadRecommendQuestionResult } from '../services/askingService';
 import {
   SuggestedQuestion,
   SampleDatasetName,
@@ -87,6 +84,10 @@ export class AskingResolver {
 
     this.getThreadRecommendationQuestions =
       this.getThreadRecommendationQuestions.bind(this);
+    this.generateThreadResponseBreakdown =
+      this.generateThreadResponseBreakdown.bind(this);
+    this.generateThreadResponseAnswer =
+      this.generateThreadResponseAnswer.bind(this);
   }
 
   public async generateProjectRecommendationQuestions(
@@ -270,7 +271,10 @@ export class AskingResolver {
 
         acc.responses.push({
           id: response.id,
+          viewId: response.viewId,
+          threadId: response.threadId,
           question: response.question,
+          sql: response.sql,
           breakdownDetail: response.breakdownDetail,
           answerDetail: response.answerDetail,
         });
@@ -365,7 +369,7 @@ export class AskingResolver {
     }
   }
 
-  public async generateBreakdownDetail(
+  public async generateThreadResponseBreakdown(
     _root: any,
     args: { threadId: number; responseId: number },
     ctx: IContext,
@@ -379,6 +383,19 @@ export class AskingResolver {
       { language: WrenAILanguage[project.language] || WrenAILanguage.EN },
     );
     return breakdownDetail;
+  }
+
+  public async generateThreadResponseAnswer(
+    _root: any,
+    args: { threadId: number; responseId: number },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { threadId, responseId } = args;
+    const askingService = ctx.askingService;
+    return askingService.generateThreadResponseAnswer(threadId, responseId, {
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
   }
 
   public async getResponse(
@@ -448,28 +465,14 @@ export class AskingResolver {
    * Nested resolvers
    */
   public getThreadResponseNestedResolver = () => ({
-    breakdownDetail: async (
-      parent: ThreadResponse,
-      _args: any,
-      ctx: IContext,
-    ) => {
-      if (!parent.breakdownDetail) {
-        return null;
-      }
-      // handle sql
-      const sql = format(constructCteSql(parent.breakdownDetail.steps));
-
-      // handle view
-      let view = null;
+    view: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
       const viewId = parent.viewId;
-      if (viewId) {
-        view = await ctx.viewRepository.findOneBy({ id: viewId });
-        const displayName = view.properties
-          ? JSON.parse(view.properties)?.displayName
-          : view.name;
-        view = { ...view, displayName };
-      }
-      return { ...parent.breakdownDetail, sql, view };
+      if (!viewId) return null;
+      const view = await ctx.viewRepository.findOneBy({ id: viewId });
+      const displayName = view.properties
+        ? JSON.parse(view.properties)?.displayName
+        : view.name;
+      return { ...view, displayName };
     },
   });
 

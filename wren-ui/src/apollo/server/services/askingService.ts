@@ -84,7 +84,6 @@ export enum ThreadResponseAnswerStatus {
   NOT_STARTED = 'NOT_STARTED',
   FETCHING_DATA = 'FETCHING_DATA',
   PREPROCESSING = 'PREPROCESSING',
-  READY_FOR_STREAMING = 'READY_FOR_STREAMING',
   STREAMING = 'STREAMING',
   FINISHED = 'FINISHED',
   FAILED = 'FAILED',
@@ -127,6 +126,11 @@ export interface IAskingService {
     threadId: number,
     threadResponseId: number,
     configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  changeThreadResponseAnswerDetailStatus(
+    responseId: number,
+    status: ThreadResponseAnswerStatus,
+    content?: string,
   ): Promise<ThreadResponse>;
   previewData(responseId: number, limit?: number): Promise<PreviewDataResponse>;
   previewBreakdownData(
@@ -432,7 +436,7 @@ class TextBasedAnswerBackgroundTracker {
             queryId: response.queryId,
             status:
               result.status === TextBasedAnswerStatus.SUCCEEDED
-                ? ThreadResponseAnswerStatus.READY_FOR_STREAMING
+                ? ThreadResponseAnswerStatus.STREAMING
                 : ThreadResponseAnswerStatus.FAILED,
             numRowsUsedInLLM: result.numRowsUsedInLLM,
             error: result.error,
@@ -943,6 +947,36 @@ export class AskingService implements IAskingService {
   public async deleteAllByProjectId(projectId: number): Promise<void> {
     // delete all threads
     await this.threadRepository.deleteAllBy({ projectId });
+  }
+
+  public async changeThreadResponseAnswerDetailStatus(
+    responseId: number,
+    status: ThreadResponseAnswerStatus,
+    content?: string,
+  ): Promise<ThreadResponse> {
+    const response = await this.threadResponseRepository.findOneBy({
+      id: responseId,
+    });
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    if (response.answerDetail?.status === status) {
+      return;
+    }
+
+    const updatedResponse = await this.threadResponseRepository.updateOne(
+      responseId,
+      {
+        answerDetail: {
+          ...response.answerDetail,
+          status,
+          content,
+        },
+      },
+    );
+
+    return updatedResponse;
   }
 
   private async getDeployId() {

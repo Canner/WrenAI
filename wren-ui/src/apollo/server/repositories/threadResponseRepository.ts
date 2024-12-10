@@ -4,7 +4,13 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
+import {
+  camelCase,
+  isPlainObject,
+  mapKeys,
+  mapValues,
+  snakeCase,
+} from 'lodash';
 import { AskResultStatus } from '@server/models/adaptor';
 
 export interface DetailStep {
@@ -51,6 +57,8 @@ export class ThreadResponseRepository
   extends BaseRepository<ThreadResponse>
   implements IThreadResponseRepository
 {
+  private readonly jsonbColumns = ['answerDetail', 'breakdownDetail'];
+
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'thread_response' });
   }
@@ -109,7 +117,7 @@ export class ThreadResponseRepository
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const [result] = await executer(this.tableName)
       .where({ id })
-      .update(transformedData)
+      .update(this.transformToDBData(transformedData))
       .returning('*');
     return this.transformFromDBData(result);
   }
@@ -120,7 +128,7 @@ export class ThreadResponseRepository
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
-      if (['answerDetail', 'breakdownDetail'].includes(key)) {
+      if (this.jsonbColumns.includes(key)) {
         // The value from Sqlite will be string type, while the value from PG is JSON object
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;
@@ -131,5 +139,19 @@ export class ThreadResponseRepository
       return value;
     }) as ThreadResponse;
     return formattedData;
+  };
+
+  protected override transformToDBData = (data: any) => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const transformedData = mapValues(data, (value, key) => {
+      if (this.jsonbColumns.includes(key)) {
+        return JSON.stringify(value);
+      } else {
+        return value;
+      }
+    });
+    return mapKeys(transformedData, (_value, key) => snakeCase(key));
   };
 }

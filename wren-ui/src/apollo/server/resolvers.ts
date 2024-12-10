@@ -90,6 +90,13 @@ const resolvers = {
     createThreadResponse: askingResolver.createThreadResponse,
     previewData: askingResolver.previewData,
 
+    // Generate Thread Response Breakdown
+    generateThreadResponseBreakdown:
+      askingResolver.generateThreadResponseBreakdown,
+
+    // Generate Thread Response Answer
+    generateThreadResponseAnswer: askingResolver.generateThreadResponseAnswer,
+
     // Views
     createView: modelResolver.createView,
     deleteView: modelResolver.deleteView,
