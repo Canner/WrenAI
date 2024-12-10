@@ -152,7 +152,7 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 
 	// replace the generation model in config.yaml
 	config := string(content)
-	config = strings.ReplaceAll(config, "openai_llm.gpt-4o-mini", "openai_llm."+generationModel)
+	config = strings.ReplaceAll(config, "litellm_llm.gpt-4o-mini", "litellm_llm."+generationModel)
 
 	// write back to config.yaml
 	err = os.WriteFile(configPath, []byte(config), 0644)
