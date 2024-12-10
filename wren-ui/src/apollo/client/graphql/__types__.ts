@@ -14,6 +14,15 @@ export type Scalars = {
   JSON: any;
 };
 
+export type AdjustThreadResponseChartInput = {
+  chartType: ChartType;
+  color?: InputMaybe<Scalars['String']>;
+  theta?: InputMaybe<Scalars['String']>;
+  xAxis?: InputMaybe<Scalars['String']>;
+  xOffset?: InputMaybe<Scalars['String']>;
+  yAxis?: InputMaybe<Scalars['String']>;
+};
+
 export type AskingTask = {
   __typename?: 'AskingTask';
   candidates: Array<ResultCandidate>;
@@ -55,6 +64,23 @@ export type CalculatedFieldValidationResponse = {
   message?: Maybe<Scalars['String']>;
   valid: Scalars['Boolean'];
 };
+
+export enum ChartTaskStatus {
+  FAILED = 'FAILED',
+  FETCHING = 'FETCHING',
+  FINISHED = 'FINISHED',
+  GENERATING = 'GENERATING',
+  STOPPED = 'STOPPED'
+}
+
+export enum ChartType {
+  AREA = 'AREA',
+  BAR = 'BAR',
+  GROUPED_BAR = 'GROUPED_BAR',
+  LINE = 'LINE',
+  PIE = 'PIE',
+  STACKED_BAR = 'STACKED_BAR'
+}
 
 export type CompactColumn = {
   __typename?: 'CompactColumn';
@@ -428,6 +454,7 @@ export type ModelWhereInput = {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  adjustThreadResponseChart: ThreadResponse;
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
@@ -447,6 +474,7 @@ export type Mutation = {
   generateThreadRecommendationQuestions: Scalars['Boolean'];
   generateThreadResponseAnswer: ThreadResponse;
   generateThreadResponseBreakdown: ThreadResponse;
+  generateThreadResponseChart: ThreadResponse;
   previewData: Scalars['JSON'];
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
@@ -469,6 +497,13 @@ export type Mutation = {
   updateViewMetadata: Scalars['Boolean'];
   validateCalculatedField: CalculatedFieldValidationResponse;
   validateView: ViewValidationResponse;
+};
+
+
+export type MutationAdjustThreadResponseChartArgs = {
+  data: AdjustThreadResponseChartInput;
+  responseId: Scalars['Int'];
+  threadId: Scalars['Int'];
 };
 
 
@@ -560,6 +595,12 @@ export type MutationGenerateThreadResponseAnswerArgs = {
 
 
 export type MutationGenerateThreadResponseBreakdownArgs = {
+  responseId: Scalars['Int'];
+  threadId: Scalars['Int'];
+};
+
+
+export type MutationGenerateThreadResponseChartArgs = {
   responseId: Scalars['Int'];
   threadId: Scalars['Int'];
 };
@@ -963,6 +1004,7 @@ export type ThreadResponse = {
   __typename?: 'ThreadResponse';
   answerDetail?: Maybe<ThreadResponseAnswerDetail>;
   breakdownDetail?: Maybe<ThreadResponseBreakdownDetail>;
+  chartDetail?: Maybe<ThreadResponseChartDetail>;
   id: Scalars['Int'];
   question: Scalars['String'];
   sql: Scalars['String'];
@@ -986,6 +1028,15 @@ export type ThreadResponseBreakdownDetail = {
   queryId?: Maybe<Scalars['String']>;
   status: AskingTaskStatus;
   steps: Array<DetailStep>;
+};
+
+export type ThreadResponseChartDetail = {
+  __typename?: 'ThreadResponseChartDetail';
+  chartSchema?: Maybe<Scalars['JSON']>;
+  description?: Maybe<Scalars['String']>;
+  error?: Maybe<Error>;
+  queryId?: Maybe<Scalars['String']>;
+  status: ChartTaskStatus;
 };
 
 export type ThreadUniqueWhereInput = {
