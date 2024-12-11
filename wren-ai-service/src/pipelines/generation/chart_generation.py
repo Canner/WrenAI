@@ -61,7 +61,7 @@ class ChartDataPreprocessor:
         columns = data.get("results", {}).get("columns", [])
         data = data.get("results", {}).get("data", [])
         sample_data_statistics = {
-            column.get("name", "") if isinstance(column, dict) else column
+            column.get("name", "") if isinstance(column, dict) else column: set()
             for column in columns
         }
         for row in data:

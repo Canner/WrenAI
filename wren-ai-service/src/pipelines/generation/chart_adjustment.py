@@ -77,18 +77,20 @@ class ChartDataPreprocessor:
         results=Dict[str, Any],
     )
     def run(self, data: Dict[str, Any]):
+        columns = data.get("results", {}).get("columns", [])
+        data = data.get("results", {}).get("data", [])
         sample_data_statistics = {
-            column["name"] if isinstance(column, dict) else column: set()
-            for column in data["results"]["columns"]
+            column.get("name", "") if isinstance(column, dict) else column: set()
+            for column in columns
         }
-        for row in data["results"]["data"]:
+        for row in data:
             for column, value in zip(sample_data_statistics.keys(), row):
                 if len(sample_data_statistics[column]) < 10:
                     sample_data_statistics[column].add(value)
 
         sample_data = {
-            "columns": data["results"]["columns"],
-            "data": data["results"]["data"][:10],
+            "columns": columns,
+            "data": data[:10],
         }
 
         return {
