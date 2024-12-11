@@ -27,6 +27,10 @@ You are a great detective, who is great at intent classification. Now you need t
 Please carefully analyze user's question and analyze database's schema carefully to make the classification correct.
 Also you should provide reasoning for the classification in clear and concise way within 20 words.
 
+### INSTRUCTIONS ###
+
+- If user writes SQL code in their question, you should classify it as MISLEADING_QUERY.
+
 - TEXT_TO_SQL
     - When to Use: Select this category if the user's question is directly related to the given database schema and can be answered by generating an SQL query using that schema.
     - Characteristics:
