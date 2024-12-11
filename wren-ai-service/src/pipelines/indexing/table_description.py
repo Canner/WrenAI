@@ -98,12 +98,11 @@ async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
 
 @observe(capture_input=False, capture_output=False)
 async def clean(
-    mdl_str: str,
-    cleaner: DocumentCleaner,
     embedding: Dict[str, Any],
+    cleaner: DocumentCleaner,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    await cleaner.run(mdl=mdl_str, project_id=project_id)
+    await cleaner.run(project_id=project_id)
     return embedding
 
 
