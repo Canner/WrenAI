@@ -16,7 +16,11 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.common import ChartDataPreprocessor, chart_generation_instructions
+from src.pipelines.common import (
+    ChartDataPreprocessor,
+    ChartSchema,
+    chart_generation_instructions,
+)
 from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
@@ -150,7 +154,7 @@ def post_process(
 ## End of Pipeline
 class ChartGenerationResults(BaseModel):
     reasoning: str
-    chart_schema: dict
+    chart_schema: ChartSchema
 
 
 CHART_GENERATION_MODEL_KWARGS = {

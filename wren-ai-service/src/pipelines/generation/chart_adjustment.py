@@ -16,7 +16,11 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
-from src.pipelines.common import ChartDataPreprocessor, chart_generation_instructions
+from src.pipelines.common import (
+    ChartDataPreprocessor,
+    ChartSchema,
+    chart_generation_instructions,
+)
 from src.utils import async_timer, timer
 from src.web.v1.services.chart_adjustment import ChartAdjustmentOption
 
@@ -27,7 +31,7 @@ chart_adjustment_system_prompt = f"""
 
 You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs,
 original question and sql, vega-lite schema and the adjustment query, you need to regenerate vega-lite schema in JSON and provide suitable chart;
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema and a within 20 words description of the chart..
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema.
 
 {chart_generation_instructions}
 
@@ -173,8 +177,7 @@ def post_process(
 ## End of Pipeline
 class ChartAdjustmentResults(BaseModel):
     reasoning: str
-    description: str
-    chart_schema: dict
+    chart_schema: ChartSchema
 
 
 CHART_ADJUSTMENT_MODEL_KWARGS = {

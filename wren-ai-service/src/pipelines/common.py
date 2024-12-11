@@ -1,12 +1,13 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import aiohttp
 import orjson
 import pytz
 from haystack import component
+from pydantic import BaseModel, Field
 
 from src.core.engine import (
     Engine,
@@ -742,3 +743,19 @@ def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
     async_validate(lambda: pipeline.run(**kwargs))
 
     langfuse_context.flush()
+
+
+class ChartSchema(BaseModel):
+    class ChartType(BaseModel):
+        type: Literal["bar", "line", "area", "arc"]
+
+    class ChartData(BaseModel):
+        values: list[dict]
+
+    schema: str = Field(
+        alias="$schema", default="https://vega.github.io/schema/vega-lite/v5.json"
+    )
+    title: str
+    data: ChartData
+    mark: ChartType
+    encoding: dict
