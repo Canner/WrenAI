@@ -11,27 +11,9 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.utils import (
-    async_timer,
-    timer,
-)
+from src.pipelines.common import ScoreFilter
 
 logger = logging.getLogger("wren-ai-service")
-
-
-@component
-class ScoreFilter:
-    @component.output_types(
-        documents=List[Document],
-    )
-    def run(self, documents: List[Document], score: float = 0.9):
-        return {
-            "documents": sorted(
-                filter(lambda document: document.score >= score, documents),
-                key=lambda document: document.score,
-                reverse=True,
-            )
-        }
 
 
 @component
@@ -55,7 +37,6 @@ class OutputFormatter:
 
 
 ## Start of Pipeline
-@async_timer
 @observe(capture_input=False)
 async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) -> int:
     filters = (
@@ -72,7 +53,6 @@ async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) 
     return document_count
 
 
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
     if count_documents:
@@ -81,7 +61,6 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
     return {}
 
 
-@async_timer
 @observe(capture_input=False)
 async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
     if embedding:
@@ -105,16 +84,14 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
     return {}
 
 
-@timer
 @observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     if retrieval:
-        return score_filter.run(documents=retrieval.get("documents"))
+        return score_filter.run(documents=retrieval.get("documents"), score=0.9)
 
     return {}
 
 
-@timer
 @observe(capture_input=False)
 def formatted_output(
     filtered_documents: dict, output_formatter: OutputFormatter
@@ -128,7 +105,7 @@ def formatted_output(
 ## End of Pipeline
 
 
-class HistoricalQuestion(BasicPipeline):
+class HistoricalQuestionRetrieval(BasicPipeline):
     def __init__(
         self,
         embedder_provider: EmbedderProvider,
@@ -162,7 +139,7 @@ class HistoricalQuestion(BasicPipeline):
 
         self._pipe.visualize_execution(
             ["formatted_output"],
-            output_file_path=f"{destination}/historical_question.dot",
+            output_file_path=f"{destination}/historical_question_retrieval.dot",
             inputs={
                 "query": query,
                 "id": id or "",
@@ -172,10 +149,9 @@ class HistoricalQuestion(BasicPipeline):
             orient="LR",
         )
 
-    @async_timer
-    @observe(name="Historical Question")
+    @observe(name="Historical Question Retrieval")
     async def run(self, query: str, id: Optional[str] = None):
-        logger.info("HistoricalQuestion pipeline is running...")
+        logger.info("HistoricalQuestion Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
@@ -190,7 +166,7 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        HistoricalQuestion,
+        HistoricalQuestionRetrieval,
         "historical_question_retrieval",
         query="this is a test query",
     )
