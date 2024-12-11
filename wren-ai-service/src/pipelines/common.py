@@ -103,6 +103,36 @@ class SQLBreakdownGenPostProcessor:
 
 
 @component
+class ChartDataPreprocessor:
+    @component.output_types(
+        results=Dict[str, Any],
+    )
+    def run(self, data: Dict[str, Any]):
+        columns = data.get("results", {}).get("columns", [])
+        data = data.get("results", {}).get("data", [])
+        sample_data_statistics = {
+            column.get("name", "") if isinstance(column, dict) else column: set()
+            for column in columns
+        }
+        for row in data:
+            for column, value in zip(sample_data_statistics.keys(), row):
+                if len(sample_data_statistics[column]) < 10:
+                    sample_data_statistics[column].add(value)
+
+        sample_data = {
+            "columns": columns,
+            "data": data[:10],
+        }
+
+        return {
+            "results": {
+                "sample_data_statistics": sample_data_statistics,
+                "sample_data": sample_data,
+            }
+        }
+
+
+@component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
         self._engine = engine
