@@ -32,6 +32,7 @@ pyyaml = "^6.0.2"
 pydantic-settings = "^2.5.2"
 google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
+jsonschema = "^4.23.0"
 litellm = "^1.52.12"
 
 [tool.poetry.group.dev.dependencies]
