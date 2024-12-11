@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Skeleton, Typography } from 'antd';
+import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
@@ -18,6 +19,7 @@ const StyledSkeleton = styled(Skeleton)`
     margin-bottom: 0;
   }
 `;
+
 export const getAnswerIsFinished = (status: ThreadResponseAnswerStatus) =>
   [
     ThreadResponseAnswerStatus.FINISHED,
@@ -32,18 +34,35 @@ const getIsLoadingFinished = (status: ThreadResponseAnswerStatus) =>
 export default function TextBasedAnswer(
   props: Pick<
     AnswerResultProps,
-    'threadResponse' | 'isLastThreadResponse' | 'onInitPreviewDone'
+    | 'threadResponse'
+    | 'isLastThreadResponse'
+    | 'onInitPreviewDone'
+    | 'onRegenerateTextBasedAnswer'
   >,
 ) {
-  const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
+  const {
+    isLastThreadResponse,
+    onInitPreviewDone,
+    onRegenerateTextBasedAnswer,
+    threadResponse,
+  } = props;
   const { id } = threadResponse;
   const { content, error, numRowsUsedInLLM, status } =
     threadResponse?.answerDetail || {};
+
+  const [textAnswer, setTextAnswer] = useState<string>('');
 
   const [fetchAnswerStreamingTask, answerStreamTaskResult] =
     useTextBasedAnswerStreamTask();
 
   const answerStreamTask = answerStreamTaskResult.data;
+  useEffect(() => {
+    if (status === ThreadResponseAnswerStatus.STREAMING) {
+      setTextAnswer(answerStreamTask);
+    } else {
+      setTextAnswer(content);
+    }
+  }, [answerStreamTask, status, content]);
 
   useEffect(() => {
     if (status === ThreadResponseAnswerStatus.STREAMING) {
@@ -83,6 +102,11 @@ export default function TextBasedAnswer(
 
   const loading = !getIsLoadingFinished(status);
 
+  const onRegenerateAnswer = () => {
+    setTextAnswer('');
+    onRegenerateTextBasedAnswer(id);
+  };
+
   if (error) {
     return (
       <Alert
@@ -103,7 +127,20 @@ export default function TextBasedAnswer(
       title={false}
     >
       <div className="text-md gray-10 p-4 pr-6">
-        <MarkdownBlock content={answerStreamTask} />
+        <MarkdownBlock content={textAnswer} />
+        {status === ThreadResponseAnswerStatus.INTERRUPTED && (
+          <div className="mt-2 text-right">
+            <Button
+              icon={<ReloadOutlined />}
+              size="small"
+              type="link"
+              title="Regenerate answer"
+              onClick={onRegenerateAnswer}
+            >
+              Regenerate
+            </Button>
+          </div>
+        )}
         {allowPreviewData && (
           <div className="mt-6">
             <Button

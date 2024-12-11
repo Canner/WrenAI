@@ -135,6 +135,11 @@ export default function HomeThread() {
     });
   };
 
+  const onRegenerateTextBasedAnswer = async (responseId: number) => {
+    await onGenerateThreadResponseAnswer(threadId, responseId);
+    fetchThreadResponse({ variables: { responseId } });
+  };
+
   const onGenerateThreadResponseBreakdown = async (
     threadId: number,
     responseId: number,
@@ -142,6 +147,7 @@ export default function HomeThread() {
     await generateThreadResponseBreakdown({
       variables: { threadId, responseId },
     });
+    fetchThreadResponse({ variables: { responseId } });
   };
 
   // stop all requests when change thread
@@ -238,6 +244,8 @@ export default function HomeThread() {
         data={result}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
         onSelect={onSelect}
+        onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
+        onGenerateBreakdownAnswer={onGenerateThreadResponseBreakdown}
       />
       <div className="py-12" />
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />

@@ -26,6 +26,8 @@ interface Props {
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
+  onRegenerateTextBasedAnswer: (responseId: number) => void;
+  onGenerateBreakdownAnswer: (threadId: number, responseId: number) => void;
 }
 
 const StyledPromptThread = styled.div`
@@ -53,12 +55,17 @@ const StyledPromptThread = styled.div`
 `;
 
 const AnswerResultTemplate: React.FC<
-  IterableComponent<ThreadResponse> & {
-    motion: boolean;
-    onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
-    onInitPreviewDone: () => void;
-    recommendedQuestionsProps: RecommendedQuestionsProps;
-  }
+  IterableComponent<ThreadResponse> &
+    Pick<
+      Props,
+      | 'onOpenSaveAsViewModal'
+      | 'onRegenerateTextBasedAnswer'
+      | 'onGenerateBreakdownAnswer'
+    > & {
+      motion: boolean;
+      onInitPreviewDone: () => void;
+      recommendedQuestionsProps: RecommendedQuestionsProps;
+    }
 > = ({
   data,
   index,
@@ -66,6 +73,8 @@ const AnswerResultTemplate: React.FC<
   recommendedQuestionsProps,
   onOpenSaveAsViewModal,
   onInitPreviewDone,
+  onGenerateBreakdownAnswer,
+  onRegenerateTextBasedAnswer,
   ...threadResponse
 }) => {
   const { id } = threadResponse;
@@ -82,6 +91,8 @@ const AnswerResultTemplate: React.FC<
         onInitPreviewDone={onInitPreviewDone}
         threadResponse={threadResponse}
         recommendedQuestionsProps={recommendedQuestionsProps}
+        onGenerateBreakdownAnswer={onGenerateBreakdownAnswer}
+        onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
       />
     </div>
   );
@@ -93,7 +104,7 @@ export default function PromptThread(props: Props) {
   const router = useRouter();
   const divRef = useRef<HTMLDivElement>(null);
   const motionResponsesRef = useRef<Record<number, boolean>>({});
-  const { data, onOpenSaveAsViewModal, onSelect } = props;
+  const { data, onSelect, ...restProps } = props;
 
   const responses = useMemo(
     () =>
@@ -146,8 +157,8 @@ export default function PromptThread(props: Props) {
   return (
     <StyledPromptThread className="mt-12" ref={divRef}>
       <AnswerResultIterator
+        {...restProps}
         data={responses}
-        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onInitPreviewDone={onInitPreviewDone}
         recommendedQuestionsProps={{
           data: data.recommendedQuestions,

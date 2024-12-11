@@ -14,6 +14,7 @@ import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
 import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { ThreadResponse } from '@/apollo/client/graphql/__types__';
+import { ANSWER_TAB_KEYS } from '@/utils/enum';
 
 const { Title, Text } = Typography;
 
@@ -50,6 +51,9 @@ export interface Props {
 
   // recommended questions
   recommendedQuestionsProps: RecommendedQuestionsProps;
+
+  onRegenerateTextBasedAnswer: (responseId: number) => void;
+  onGenerateBreakdownAnswer: (threadId: number, responseId: number) => void;
 }
 
 const QuestionTitle = (props) => {
@@ -89,9 +93,11 @@ export default function AnswerResult(props: Props) {
     onOpenSaveAsViewModal,
     onInitPreviewDone,
     recommendedQuestionsProps,
+    onGenerateBreakdownAnswer,
+    onRegenerateTextBasedAnswer,
   } = props;
 
-  const { answerDetail, breakdownDetail, id, question, sql, view } =
+  const { answerDetail, breakdownDetail, id, question, sql, threadId, view } =
     threadResponse;
 
   const resultStyle = isLastThreadResponse
@@ -108,13 +114,22 @@ export default function AnswerResult(props: Props) {
     return isEmpty(breakdownDetail) || !isEmpty(answerDetail);
   }, [answerDetail, breakdownDetail]);
 
+  const onTabClick = (activeKey: string) => {
+    if (
+      activeKey === ANSWER_TAB_KEYS.VIEW_SQL &&
+      !threadResponse.breakdownDetail
+    ) {
+      onGenerateBreakdownAnswer(threadId, id);
+    }
+  };
+
   return (
     <div style={resultStyle} className="adm-answer-result">
       <QuestionTitle className="mb-6" question={question} />
-      <StyledTabs type="card" size="small">
+      <StyledTabs type="card" size="small" onTabClick={onTabClick}>
         {hasTextBasedAnswer && (
           <Tabs.TabPane
-            key="answer"
+            key={ANSWER_TAB_KEYS.ANSWER}
             tab={
               <>
                 <CheckCircleFilled className="mr-2 green-6" />
@@ -126,11 +141,12 @@ export default function AnswerResult(props: Props) {
               threadResponse={threadResponse}
               isLastThreadResponse={isLastThreadResponse}
               onInitPreviewDone={onInitPreviewDone}
+              onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
             />
           </Tabs.TabPane>
         )}
         <Tabs.TabPane
-          key="view-sql"
+          key={ANSWER_TAB_KEYS.VIEW_SQL}
           tab={
             <>
               <CodeFilled className="mr-2 gray-7" />
