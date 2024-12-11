@@ -288,19 +288,9 @@ class DDLChunker:
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def clean_documents(
-    mdl_str: str, cleaner: DocumentCleaner, project_id: Optional[str] = None
-) -> Dict[str, Any]:
-    return await cleaner.run(mdl=mdl_str, project_id=project_id)
-
-
-@observe(capture_input=False, capture_output=False)
 @extract_fields(dict(mdl=Dict[str, Any]))
-def validate_mdl(
-    clean_documents: Dict[str, Any], validator: MDLValidator
-) -> Dict[str, Any]:
-    mdl = clean_documents.get("mdl")
-    res = validator.run(mdl=mdl)
+def validate_mdl(mdl_str: str, validator: MDLValidator) -> Dict[str, Any]:
+    res = validator.run(mdl=mdl_str)
     return dict(mdl=res["mdl"])
 
 
@@ -323,9 +313,20 @@ async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
     return await embedder.run(documents=chunk["documents"])
 
 
+@observe(capture_input=False, capture_output=False)
+async def clean(
+    mdl_str: str,
+    cleaner: DocumentCleaner,
+    embedding: Dict[str, Any],
+    project_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    await cleaner.run(mdl=mdl_str, project_id=project_id)
+    return embedding
+
+
 @observe(capture_input=False)
-async def write(embedding: Dict[str, Any], writer: DocumentWriter) -> None:
-    return await writer.run(documents=embedding["documents"])
+async def write(clean: Dict[str, Any], writer: DocumentWriter) -> None:
+    return await writer.run(documents=clean["documents"])
 
 
 ## End of Pipeline
