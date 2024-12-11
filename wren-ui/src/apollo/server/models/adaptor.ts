@@ -171,9 +171,9 @@ export interface TextBasedAnswerInput {
 }
 
 export enum TextBasedAnswerStatus {
-  PREPROCESSING = 'PREPROCESSING',
-  SUCCEEDED = 'SUCCEEDED',
-  FAILED = 'FAILED',
+  PREPROCESSING = 'preprocessing',
+  SUCCEEDED = 'succeeded',
+  FAILED = 'failed',
 }
 
 export interface TextBasedAnswerResult {

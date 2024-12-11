@@ -66,8 +66,13 @@ export default async function handler(
 
     stream.on('data', (chunk) => {
       // pass the chunk directly to the client
+      const chunkString = chunk.toString('utf-8');
+      let message = '';
+      message = chunkString.includes('message')
+        ? chunkString.split('message":"')[1].split('"')[0]
+        : '';
+      contentMap.appendContent(queryId, message);
       res.write(chunk);
-      contentMap.appendContent(queryId, chunk);
     });
 
     stream.on('end', () => {

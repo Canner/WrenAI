@@ -269,6 +269,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     input: TextBasedAnswerInput,
   ): Promise<AsyncQueryResponse> {
     const body = {
+      query: input.query,
       sql: input.sql,
       sql_data: input.sqlData,
       thread_id: input.threadId,
@@ -312,6 +313,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     try {
       const res = await axios.get(
         `${this.wrenAIBaseEndpoint}/v1/sql-answers/${queryId}/streaming`,
+        { responseType: 'stream' },
       );
       return res.data;
     } catch (err: any) {

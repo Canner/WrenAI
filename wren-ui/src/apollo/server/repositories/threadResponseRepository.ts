@@ -4,13 +4,7 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import {
-  camelCase,
-  isPlainObject,
-  mapKeys,
-  mapValues,
-  snakeCase,
-} from 'lodash';
+import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
 import { AskResultStatus } from '@server/models/adaptor';
 
 export interface DetailStep {
@@ -117,7 +111,7 @@ export class ThreadResponseRepository
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const [result] = await executer(this.tableName)
       .where({ id })
-      .update(this.transformToDBData(transformedData))
+      .update(this.transformToDBData(transformedData as any))
       .returning('*');
     return this.transformFromDBData(result);
   }
@@ -139,19 +133,5 @@ export class ThreadResponseRepository
       return value;
     }) as ThreadResponse;
     return formattedData;
-  };
-
-  protected override transformToDBData = (data: any) => {
-    if (!isPlainObject(data)) {
-      throw new Error('Unexpected dbdata');
-    }
-    const transformedData = mapValues(data, (value, key) => {
-      if (this.jsonbColumns.includes(key)) {
-        return JSON.stringify(value);
-      } else {
-        return value;
-      }
-    });
-    return mapKeys(transformedData, (_value, key) => snakeCase(key));
   };
 }

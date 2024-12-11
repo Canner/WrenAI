@@ -639,7 +639,7 @@ export const typeDefs = gql`
     status: AskingTaskStatus!
     error: Error
     description: String
-    steps: [DetailStep!]!
+    steps: [DetailStep!]
   }
 
   type ThreadResponse {
