@@ -179,9 +179,10 @@ class TableDescription(BasicPipeline):
 
     @observe(name="Clean Documents for Table Description")
     async def clean(self, project_id: Optional[str] = None) -> None:
-        await self._pipe.execute(
-            ["clean_documents"],
-            inputs={"project_id": project_id, "mdl_str": "", **self._components},
+        await clean(
+            embedding={"documents": []},
+            cleaner=self._components["cleaner"],
+            project_id=project_id,
         )
 
 
