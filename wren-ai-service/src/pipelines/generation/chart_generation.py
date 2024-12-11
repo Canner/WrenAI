@@ -60,9 +60,9 @@ class ChartDataPreprocessor:
     def run(self, data: Dict[str, Any]):
         sample_data_statistics = {
             column["name"] if isinstance(column, dict) else column: set()
-            for column in data["results"]["columns"]
+            for column in data.get("results", {}).get("columns", [])
         }
-        for row in data["results"]["data"]:
+        for row in data.get("results", {}).get("data", []):
             for column, value in zip(sample_data_statistics.keys(), row):
                 if len(sample_data_statistics[column]) < 10:
                     sample_data_statistics[column].add(value)
