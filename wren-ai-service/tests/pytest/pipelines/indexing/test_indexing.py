@@ -31,14 +31,12 @@ async def test_document_cleaner():
     cleaner = DocumentCleaner(stores=[store1, store2])
 
     # Test without project_id
-    result = await cleaner.run(mdl="test")
-    assert result["mdl"] == "test"
+    await cleaner.run()
     assert store1.deleted
     assert store2.deleted
 
     # Test with project_id
-    result = await cleaner.run(mdl="test", project_id="123")
-    assert result["mdl"] == "test"
+    await cleaner.run(project_id="123")
     assert store1.deleted
     assert store2.deleted
 
