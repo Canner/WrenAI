@@ -70,6 +70,12 @@ export default function TextBasedAnswer(
     }
   }, [status]);
 
+  useEffect(() => {
+    return () => {
+      answerStreamTaskResult.onReset();
+    };
+  }, []);
+
   const rowsUsed = useMemo(
     () =>
       status === ThreadResponseAnswerStatus.FINISHED ? numRowsUsedInLLM : 0,
