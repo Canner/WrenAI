@@ -4,7 +4,7 @@ import { Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
-import { getIsFinished } from '@/hooks/useAskPrompt';
+import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import {
   DetailedThread,
   RecommendedQuestionsTask,
@@ -141,13 +141,21 @@ export default function PromptThread(props: Props) {
   useEffect(() => {
     motionResponsesRef.current = (data.thread?.responses || []).reduce(
       (result, item) => {
-        result[item.id] = !getIsFinished(item?.breakdownDetail?.status);
+        result[item.id] = !getAnswerIsFinished(item?.answerDetail?.status);
         return result;
       },
       {},
     );
-    const lastResponseMotion = Object.values(motionResponsesRef.current).pop();
-    triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
+
+    if (
+      data.thread?.responses?.length >
+      Object.keys(motionResponsesRef.current).length
+    ) {
+      const lastResponseMotion = Object.values(
+        motionResponsesRef.current,
+      ).pop();
+      triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
+    }
   }, [data.thread?.responses]);
 
   const onInitPreviewDone = () => {
