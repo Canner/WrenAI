@@ -161,17 +161,19 @@ export default function TextBasedAnswer(
               View results
             </Button>
 
-            <div className="mt-2 mb-3">
-              <Text type="secondary" className="text-sm">
-                Considering the limit of context window, we only use {rowsUsed}{' '}
-                rows of results to generate the answer.
-              </Text>
-              <PreviewData
-                error={previewDataResult.error}
-                loading={previewDataResult.loading}
-                previewData={previewDataResult?.data?.previewData}
-              />
-            </div>
+            {previewDataResult?.data?.previewData && (
+              <div className="mt-2 mb-3">
+                <Text type="secondary" className="text-sm">
+                  Considering the limit of context window, we only use{' '}
+                  {rowsUsed} rows of results to generate the answer.
+                </Text>
+                <PreviewData
+                  error={previewDataResult.error}
+                  loading={previewDataResult.loading}
+                  previewData={previewDataResult?.data?.previewData}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
