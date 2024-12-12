@@ -301,7 +301,7 @@ TEXT_TO_SQL_RULES = """
     - `=`
     - `<>`
     - `!=`
-- ONLY USE JSON_QUERY for querying fields inside JSON objects, NOT the deprecated JSON_EXTRACT_SCALAR function.
+- ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
     - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
       - LAX_BOOL for boolean fields
       - LAX_FLOAT64 for double and float fields
@@ -309,22 +309,25 @@ TEXT_TO_SQL_RULES = """
       - LAX_STRING for varchar fields
     - For Example:
       DATA SCHEMA:
-      - TABLE user
-        - COLUMN address
-          - {address.city varchar, address.state varchar, address.postcode varchar}
+        `/* {"displayName":"users","description":"A model representing the users data."} */
+        CREATE TABLE users (
+            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"displayName":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"displayName":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"displayName":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"displayName":"country","description":"ISO code of the country."}}}}
+            address JSON
+        )`
       To get the city of address in user table use SQL:
       `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
-- ONLY USE JSON_QUERY_ARRAY for querying json_type = JSON_ARRAY columns, NOT the deprecated JSON_EXTRACT_ARRAY.
+- ONLY USE JSON_QUERY_ARRAY for querying "json_type":"JSON_ARRAY" is identified in the comment of the column, NOT the deprecated JSON_EXTRACT_ARRAY.
     - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
     - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
       - For Example: `SELECT item FROM UNNEST(ARRAY[1,2,3]) as my_unnested_table(item)`
     - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
       - For Example:
-      DATA SCHEMA:
-        - TABLE my_table
-          - COLUMN elements
-            - json_type: JSON_ARRAY
-            - [{id bigint, name varchar, number bigint, value double}]
+      DATA SCHEMA
+        `/* {"displayName":"my_table","description":"A test my_table"} */
+        CREATE TABLE my_table (
+            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"displayName":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"displayName":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"displayName":"value","description":"data Value."}}}}
+            elements JSON
+        )`
         To get the number of elements in my_table table use SQL:
         `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
     - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
