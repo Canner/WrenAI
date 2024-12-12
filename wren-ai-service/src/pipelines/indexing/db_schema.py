@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 import uuid
@@ -24,7 +25,7 @@ logger = logging.getLogger("wren-ai-service")
 @component
 class DDLChunker:
     @component.output_types(documents=List[Document])
-    def run(
+    async def run(
         self,
         mdl: Dict[str, Any],
         column_batch_size: int,
@@ -43,7 +44,7 @@ class DDLChunker:
                 },
                 "content": chunk["payload"],
             }
-            for chunk in self._get_ddl_commands(
+            for chunk in await self._get_ddl_commands(
                 **mdl, column_batch_size=column_batch_size
             )
         ]
@@ -58,7 +59,7 @@ class DDLChunker:
             ]
         }
 
-    def _model_preprocessor(
+    async def _model_preprocessor(
         self, models: List[Dict[str, Any]], **kwargs
     ) -> List[Dict[str, Any]]:
         def _column_preprocessor(
@@ -76,9 +77,9 @@ class DDLChunker:
                 **addition,
             }
 
-        def _preprocessor(model: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        async def _preprocessor(model: Dict[str, Any], **kwargs) -> Dict[str, Any]:
             addition = {
-                key: helper(model, **kwargs)
+                key: await helper(model, **kwargs)
                 for key, helper in helper.MODEL_PREPROCESSORS.items()
                 if helper.condition(model, **kwargs)
             }
@@ -94,9 +95,11 @@ class DDLChunker:
                 "primaryKey": model.get("primaryKey", ""),
             }
 
-        return [_preprocessor(model, **kwargs) for model in models]
+        tasks = [_preprocessor(model, **kwargs) for model in models]
 
-    def _get_ddl_commands(
+        return await asyncio.gather(*tasks)
+
+    async def _get_ddl_commands(
         self,
         models: List[Dict[str, Any]],
         relationships: List[Dict[str, Any]],
@@ -107,7 +110,7 @@ class DDLChunker:
     ) -> List[dict]:
         return (
             self._convert_models_and_relationships(
-                self._model_preprocessor(models, **kwargs),
+                await self._model_preprocessor(models, **kwargs),
                 relationships,
                 column_batch_size,
             )
@@ -285,30 +288,20 @@ class DDLChunker:
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def clean_documents(
-    mdl_str: str, cleaner: DocumentCleaner, project_id: Optional[str] = None
-) -> Dict[str, Any]:
-    return await cleaner.run(mdl=mdl_str, project_id=project_id)
-
-
-@observe(capture_input=False, capture_output=False)
 @extract_fields(dict(mdl=Dict[str, Any]))
-def validate_mdl(
-    clean_documents: Dict[str, Any], validator: MDLValidator
-) -> Dict[str, Any]:
-    mdl = clean_documents.get("mdl")
-    res = validator.run(mdl=mdl)
+def validate_mdl(mdl_str: str, validator: MDLValidator) -> Dict[str, Any]:
+    res = validator.run(mdl=mdl_str)
     return dict(mdl=res["mdl"])
 
 
 @observe(capture_input=False)
-def chunk(
+async def chunk(
     mdl: Dict[str, Any],
     chunker: DDLChunker,
     column_batch_size: int,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return chunker.run(
+    return await chunker.run(
         mdl=mdl,
         column_batch_size=column_batch_size,
         project_id=project_id,
@@ -320,9 +313,19 @@ async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
     return await embedder.run(documents=chunk["documents"])
 
 
+@observe(capture_input=False, capture_output=False)
+async def clean(
+    embedding: Dict[str, Any],
+    cleaner: DocumentCleaner,
+    project_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    await cleaner.run(project_id=project_id)
+    return embedding
+
+
 @observe(capture_input=False)
-async def write(embedding: Dict[str, Any], writer: DocumentWriter) -> None:
-    return await writer.run(documents=embedding["documents"])
+async def write(clean: Dict[str, Any], writer: DocumentWriter) -> None:
+    return await writer.run(documents=clean["documents"])
 
 
 ## End of Pipeline
@@ -395,9 +398,10 @@ class DBSchema(BasicPipeline):
 
     @observe(name="Clean Documents for DB Schema")
     async def clean(self, project_id: Optional[str] = None) -> None:
-        await self._pipe.execute(
-            ["clean_documents"],
-            inputs={"project_id": project_id, "mdl_str": "", **self._components},
+        await clean(
+            embedding={"documents": []},
+            cleaner=self._components["cleaner"],
+            project_id=project_id,
         )
 
 
