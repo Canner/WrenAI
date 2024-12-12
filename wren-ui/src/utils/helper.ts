@@ -19,3 +19,14 @@ export const parseJson = (data) => {
     return data;
   }
 };
+
+export const attachLoading = (
+  asyncRequest: (...args: any[]) => Promise<void>,
+  setLoading: React.Dispatch<React.SetStateAction<boolean>>,
+) => {
+  return async (...args) => {
+    setLoading(true);
+    await asyncRequest(...args);
+    setLoading(false);
+  };
+};

@@ -1,6 +1,7 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
 import { ComponentRef, useEffect, useMemo, useRef, useState } from 'react';
+import { isEmpty } from 'lodash';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
@@ -14,6 +15,7 @@ import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
+import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
 import {
   useCreateThreadResponseMutation,
   useThreadQuery,
@@ -22,28 +24,41 @@ import {
   useGetThreadRecommendationQuestionsLazyQuery,
   useGenerateThreadResponseAnswerMutation,
   useGenerateThreadResponseBreakdownMutation,
+  useGenerateThreadResponseChartMutation,
+  useAdjustThreadResponseChartMutation,
 } from '@/apollo/client/graphql/home.generated';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 import {
+  AdjustThreadResponseChartInput,
   CreateThreadResponseInput,
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 
 const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
-  const { answerDetail, breakdownDetail } = threadResponse || {};
+  const { answerDetail, breakdownDetail, chartDetail } = threadResponse || {};
+  // it means it's the old data before support text based answer
+  const isBreakdownOnly = answerDetail === null && !isEmpty(breakdownDetail);
 
-  // existing breakdown answer
-  if (!answerDetail) return getIsFinished(breakdownDetail?.status);
+  // false make it keep polling when the text based answer is default needed.
+  let isAnswerFinished = isBreakdownOnly ? null : false;
+  let isBreakdownFinished = null;
+  let isChartFinished = null;
 
-  const isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
-
-  if (!isAnswerFinished) return false;
-
-  // If no breakdown exists yet, we're done
-  if (!breakdownDetail) return true;
-
-  // Check if breakdown is in a final state
-  return getIsFinished(breakdownDetail.status);
+  if (answerDetail?.queryId) {
+    isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
+  }
+  if (breakdownDetail?.queryId) {
+    isBreakdownFinished = getIsFinished(breakdownDetail?.status);
+  }
+  if (chartDetail?.queryId) {
+    isChartFinished = getIsChartFinished(chartDetail?.status);
+  }
+  // if equal false, it means it has task & the task is not finished
+  return (
+    isAnswerFinished !== false &&
+    isBreakdownFinished !== false &&
+    isChartFinished !== false
+  );
 };
 
 export default function HomeThread() {
@@ -116,6 +131,10 @@ export default function HomeThread() {
   const [generateThreadResponseBreakdown] =
     useGenerateThreadResponseBreakdownMutation();
 
+  const [generateThreadResponseChart] =
+    useGenerateThreadResponseChartMutation();
+  const [adjustThreadResponseChart] = useAdjustThreadResponseChartMutation();
+
   const thread = useMemo(() => data?.thread || null, [data]);
   const threadResponse = useMemo(
     () => threadResponseResult.data?.threadResponse || null,
@@ -138,6 +157,25 @@ export default function HomeThread() {
   const onGenerateThreadResponseBreakdown = async (responseId: number) => {
     await generateThreadResponseBreakdown({
       variables: { responseId },
+    });
+    fetchThreadResponse({ variables: { responseId } });
+  };
+
+  const onGenerateThreadResponseChart = async (
+    threadId: number,
+    responseId: number,
+  ) => {
+    await generateThreadResponseChart({ variables: { threadId, responseId } });
+    fetchThreadResponse({ variables: { responseId } });
+  };
+
+  const onAdjustThreadResponseChart = async (
+    threadId: number,
+    responseId: number,
+    data: AdjustThreadResponseChartInput,
+  ) => {
+    await adjustThreadResponseChart({
+      variables: { threadId, responseId, data },
     });
     fetchThreadResponse({ variables: { responseId } });
   };
@@ -233,6 +271,8 @@ export default function HomeThread() {
         onSelect={onSelect}
         onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
         onGenerateBreakdownAnswer={onGenerateThreadResponseBreakdown}
+        onGenerateChartAnswer={onGenerateThreadResponseChart}
+        onAdjustChartAnswer={onAdjustThreadResponseChart}
       />
       <div className="py-12" />
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
