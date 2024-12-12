@@ -141,8 +141,9 @@ def get_data_from_wren_engine(
 
         assert response.status_code == 200, response.json()
 
+        data = response.json()
+
         if return_df:
-            data = response.json()
             column_names = [col["name"] for col in data["columns"]]
 
             return pd.DataFrame(data["data"], columns=column_names)

@@ -758,7 +758,6 @@ class ChartSchema(BaseModel):
         field: str
         type: Literal["temporal", "ordinal", "quantitative", "nominal"]
         title: str
-        stack: Optional[Literal["zero"]]
 
     schema: str = Field(
         alias="$schema", default="https://vega.github.io/schema/vega-lite/v5.json"
@@ -809,13 +808,17 @@ class GroupedBarChartSchema(ChartSchema):
     encoding: GroupedBarChartEncoding
 
 
+class StackedBarChartYEncoding(ChartSchema.ChartEncoding):
+    stack: Literal["zero"]
+
+
 class StackedBarChartSchema(ChartSchema):
     class StackedBarChartMark(BaseModel):
         type: Literal["bar"]
 
     class StackedBarChartEncoding(BaseModel):
         x: ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
+        y: StackedBarChartYEncoding
         color: ChartSchema.ChartEncoding
 
     mark: StackedBarChartMark
