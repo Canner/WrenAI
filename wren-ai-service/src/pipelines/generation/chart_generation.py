@@ -17,8 +17,13 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline, async_validate
 from src.core.provider import LLMProvider
 from src.pipelines.common import (
+    AreaChartSchema,
+    BarChartSchema,
     ChartDataPreprocessor,
-    ChartSchema,
+    GroupedBarChartSchema,
+    LineChartSchema,
+    PieChartSchema,
+    StackedBarChartSchema,
     chart_generation_instructions,
 )
 from src.utils import async_timer, timer
@@ -154,7 +159,14 @@ def post_process(
 ## End of Pipeline
 class ChartGenerationResults(BaseModel):
     reasoning: str
-    chart_schema: ChartSchema
+    chart_schema: (
+        LineChartSchema
+        | BarChartSchema
+        | PieChartSchema
+        | GroupedBarChartSchema
+        | StackedBarChartSchema
+        | AreaChartSchema
+    )
 
 
 CHART_GENERATION_MODEL_KWARGS = {

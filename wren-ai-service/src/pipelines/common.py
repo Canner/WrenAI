@@ -677,7 +677,7 @@ chart_generation_instructions = """
     "encoding": {
         "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
         "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "xOffset": {"field": "Product", "type": "nominal"},
+        "xOffset": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
         "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
     }
 }
@@ -754,6 +754,12 @@ class ChartSchema(BaseModel):
     class ChartData(BaseModel):
         values: list[dict]
 
+    class ChartEncoding(BaseModel):
+        field: str
+        type: Literal["temporal", "ordinal", "quantitative", "nominal"]
+        title: str
+        stack: Optional[Literal["zero"]]
+
     schema: str = Field(
         alias="$schema", default="https://vega.github.io/schema/vega-lite/v5.json"
     )
@@ -761,3 +767,80 @@ class ChartSchema(BaseModel):
     data: ChartData
     mark: ChartType
     encoding: dict
+
+
+class LineChartSchema(ChartSchema):
+    class LineChartMark(BaseModel):
+        type: Literal["line"]
+
+    class LineChartEncoding(BaseModel):
+        x: ChartSchema.ChartEncoding
+        y: ChartSchema.ChartEncoding
+        color: ChartSchema.ChartEncoding
+
+    mark: LineChartMark
+    encoding: LineChartEncoding
+
+
+class BarChartSchema(ChartSchema):
+    class BarChartMark(BaseModel):
+        type: Literal["bar"]
+
+    class BarChartEncoding(BaseModel):
+        x: ChartSchema.ChartEncoding
+        y: ChartSchema.ChartEncoding
+        color: ChartSchema.ChartEncoding
+
+    mark: BarChartMark
+    encoding: BarChartEncoding
+
+
+class GroupedBarChartSchema(ChartSchema):
+    class GroupedBarChartMark(BaseModel):
+        type: Literal["bar"]
+
+    class GroupedBarChartEncoding(BaseModel):
+        x: ChartSchema.ChartEncoding
+        y: ChartSchema.ChartEncoding
+        xOffset: ChartSchema.ChartEncoding
+        color: ChartSchema.ChartEncoding
+
+    mark: GroupedBarChartMark
+    encoding: GroupedBarChartEncoding
+
+
+class StackedBarChartSchema(ChartSchema):
+    class StackedBarChartMark(BaseModel):
+        type: Literal["bar"]
+
+    class StackedBarChartEncoding(BaseModel):
+        x: ChartSchema.ChartEncoding
+        y: ChartSchema.ChartEncoding
+        color: ChartSchema.ChartEncoding
+
+    mark: StackedBarChartMark
+    encoding: StackedBarChartEncoding
+
+
+class PieChartSchema(ChartSchema):
+    class PieChartMark(BaseModel):
+        type: Literal["arc"]
+
+    class PieChartEncoding(BaseModel):
+        theta: ChartSchema.ChartEncoding
+        color: ChartSchema.ChartEncoding
+
+    mark: PieChartMark
+    encoding: PieChartEncoding
+
+
+class AreaChartSchema(ChartSchema):
+    class AreaChartMark(BaseModel):
+        type: Literal["area"]
+
+    class AreaChartEncoding(BaseModel):
+        x: ChartSchema.ChartEncoding
+        y: ChartSchema.ChartEncoding
+
+    mark: AreaChartMark
+    encoding: AreaChartEncoding
