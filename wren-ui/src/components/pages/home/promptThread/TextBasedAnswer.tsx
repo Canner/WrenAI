@@ -96,13 +96,15 @@ export default function TextBasedAnswer(
   const autoTriggerPreviewDataButton = async () => {
     await nextTick();
     await onPreviewData();
-    await nextTick();
-    onInitPreviewDone();
   };
 
   useEffect(() => {
-    if (isLastThreadResponse && allowPreviewData) {
-      autoTriggerPreviewDataButton();
+    if (isLastThreadResponse) {
+      if (allowPreviewData) {
+        autoTriggerPreviewDataButton();
+      }
+
+      onInitPreviewDone();
     }
   }, [isLastThreadResponse, allowPreviewData]);
 
