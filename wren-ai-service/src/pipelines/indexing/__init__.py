@@ -11,6 +11,7 @@ from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 logger = logging.getLogger("wren-ai-service")
 
 
+@component
 class DocumentCleaner:
     """
     This component is used to clear all the documents in the specified document store(s).
@@ -20,6 +21,7 @@ class DocumentCleaner:
     def __init__(self, stores: List[DocumentStore]) -> None:
         self._stores = stores
 
+    @component.output_types()
     async def run(self, project_id: Optional[str] = None) -> None:
         async def _clear_documents(
             store: DocumentStore, project_id: Optional[str] = None
