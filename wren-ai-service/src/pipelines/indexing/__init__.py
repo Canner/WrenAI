@@ -21,8 +21,8 @@ class DocumentCleaner:
     def __init__(self, stores: List[DocumentStore]) -> None:
         self._stores = stores
 
-    @component.output_types(mdl=str)
-    async def run(self, mdl: str, project_id: Optional[str] = None) -> str:
+    @component.output_types()
+    async def run(self, project_id: Optional[str] = None) -> None:
         async def _clear_documents(
             store: DocumentStore, project_id: Optional[str] = None
         ) -> None:
@@ -45,7 +45,6 @@ class DocumentCleaner:
         await asyncio.gather(
             *[_clear_documents(store, project_id) for store in self._stores]
         )
-        return {"mdl": mdl}
 
 
 @component
