@@ -105,9 +105,9 @@ We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
 
 > Wren AI makes it easy to onboard your data. Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
 
-### 2. Personalized answers without exposing data to LLM
+### 2. Secure SQL Generation
 
-> Your sensitive information remains protected, with no risk of being trained to public LLMs, giving you secure, personalized insights while maintaining full control of your data.
+> We use RAG architecture to leverage your schema and context, generating SQL queries without requiring you to expose or upload your data to LLM models.
 
 ### 3. Open-source End-to-end Solution
 

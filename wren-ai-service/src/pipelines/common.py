@@ -733,7 +733,9 @@ def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
     from src.config import settings
     from src.core.pipeline import async_validate
     from src.providers import generate_components
-    from src.utils import init_langfuse
+    from src.utils import init_langfuse, setup_custom_logger
+
+    setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
 
     pipe_components = generate_components(settings.components)
     pipeline = pipeline_cls(**pipe_components[pipeline_name])
