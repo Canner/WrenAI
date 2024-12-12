@@ -26,8 +26,12 @@ You are a great detective, who is great at intent classification. Now you need t
 Please carefully analyze user's question and analyze database's schema carefully to make the classification correct.
 Also you should provide reasoning for the classification in clear and concise way within 20 words.
 
+### INTENT DEFINITIONS ###
+
 - TEXT_TO_SQL
-    - When to Use: Select this category if the user's question is directly related to the given database schema and can be answered by generating an SQL query using that schema.
+    - When to Use:
+        - Select this category if the user's question is directly related to the given database schema and can be answered by generating an SQL query using that schema.
+        - If the user's question is related to the previous question, and considering them together could be answered by generating an SQL query using that schema.
     - Characteristics:
         - The question involves specific data retrieval or manipulation that requires SQL.
         - It references tables, columns, or specific data points within the schema.
@@ -36,7 +40,10 @@ Also you should provide reasoning for the classification in clear and concise wa
         - "Show me all customers who purchased product X."
         - "List the top 10 products by revenue."
 - MISLEADING_QUERY
-    - When to Use: Choose this category if the user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
+    - When to Use:
+        - If the user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
+        - If the user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
+        - If the user's question contains SQL code.
     - Characteristics:
         - The question does not pertain to any aspect of the database or its data.
         - It might be a casual conversation starter or about an entirely different topic.
@@ -45,7 +52,9 @@ Also you should provide reasoning for the classification in clear and concise wa
         - "What's the weather like today?"
         - "Tell me a joke."
 - GENERAL
-    - When to Use: Use this category if the user is seeking general information about the database schema, needs help formulating a proper question, or asks a vague question related to the schema.
+    - When to Use:
+        - Use this category if the user is seeking general information about the database schema, needs help formulating a proper question, or asks a vague question related to the schema.
+        - If the user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
     - Characteristics:
         - The question is about understanding the dataset or its capabilities.
         - The user may need guidance on how to proceed or what questions to ask.
@@ -71,6 +80,9 @@ intent_classification_user_prompt_template = """
 {% endfor %}
 
 ### INPUT ###
+{% if query_history %}
+User's previous questions: {{ query_history }}
+{% endif %}
 User's question: {{query}}
 
 Let's think step by step
@@ -82,12 +94,9 @@ Let's think step by step
 async def embedding(
     query: str, embedder: Any, history: Optional[AskHistory] = None
 ) -> dict:
-    if history:
-        previous_query_summaries = [
-            step.summary for step in history.steps if step.summary
-        ]
-    else:
-        previous_query_summaries = []
+    previous_query_summaries = (
+        [step.summary for step in history.steps if step.summary] if history else []
+    )
 
     query = "\n".join(previous_query_summaries) + "\n" + query
 
@@ -194,18 +203,16 @@ def prompt(
     prompt_builder: PromptBuilder,
     history: Optional[AskHistory] = None,
 ) -> dict:
-    if history:
-        previous_query_summaries = [
-            step.summary for step in history.steps if step.summary
-        ]
-    else:
-        previous_query_summaries = []
+    previous_query_summaries = (
+        [step.summary for step in history.steps if step.summary] if history else []
+    )
 
-    query = "\n".join(previous_query_summaries) + "\n" + query
+    # query = "\n".join(previous_query_summaries) + "\n" + query
 
     return prompt_builder.run(
         query=query,
         db_schemas=construct_db_schemas,
+        query_history=previous_query_summaries,
     )
 
 
