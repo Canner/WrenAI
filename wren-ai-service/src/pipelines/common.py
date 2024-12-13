@@ -765,17 +765,17 @@ class ChartSchema(BaseModel):
     title: str
     data: ChartData
     mark: ChartType
-    encoding: dict
+    encoding: ChartEncoding
 
 
 class TemporalChartEncoding(ChartSchema.ChartEncoding):
-    type: Literal["temporal"]
-    timeUnit: str
+    type: Literal["temporal"] = Field(default="temporal")
+    timeUnit: str = Field(default="yearmonth")
 
 
 class LineChartSchema(ChartSchema):
     class LineChartMark(BaseModel):
-        type: Literal["line"]
+        type: Literal["line"] = Field(default="line")
 
     class LineChartEncoding(BaseModel):
         x: TemporalChartEncoding | ChartSchema.ChartEncoding
@@ -788,7 +788,7 @@ class LineChartSchema(ChartSchema):
 
 class BarChartSchema(ChartSchema):
     class BarChartMark(BaseModel):
-        type: Literal["bar"]
+        type: Literal["bar"] = Field(default="bar")
 
     class BarChartEncoding(BaseModel):
         x: TemporalChartEncoding | ChartSchema.ChartEncoding
@@ -801,7 +801,7 @@ class BarChartSchema(ChartSchema):
 
 class GroupedBarChartSchema(ChartSchema):
     class GroupedBarChartMark(BaseModel):
-        type: Literal["bar"]
+        type: Literal["bar"] = Field(default="bar")
 
     class GroupedBarChartEncoding(BaseModel):
         x: TemporalChartEncoding | ChartSchema.ChartEncoding
@@ -814,12 +814,12 @@ class GroupedBarChartSchema(ChartSchema):
 
 
 class StackedBarChartYEncoding(ChartSchema.ChartEncoding):
-    stack: Literal["zero"]
+    stack: Literal["zero"] = Field(default="zero")
 
 
 class StackedBarChartSchema(ChartSchema):
     class StackedBarChartMark(BaseModel):
-        type: Literal["bar"]
+        type: Literal["bar"] = Field(default="bar")
 
     class StackedBarChartEncoding(BaseModel):
         x: TemporalChartEncoding | ChartSchema.ChartEncoding
@@ -832,7 +832,7 @@ class StackedBarChartSchema(ChartSchema):
 
 class PieChartSchema(ChartSchema):
     class PieChartMark(BaseModel):
-        type: Literal["arc"]
+        type: Literal["arc"] = Field(default="arc")
 
     class PieChartEncoding(BaseModel):
         theta: ChartSchema.ChartEncoding
@@ -844,7 +844,7 @@ class PieChartSchema(ChartSchema):
 
 class AreaChartSchema(ChartSchema):
     class AreaChartMark(BaseModel):
-        type: Literal["area"]
+        type: Literal["area"] = Field(default="area")
 
     class AreaChartEncoding(BaseModel):
         x: TemporalChartEncoding | ChartSchema.ChartEncoding
