@@ -35,10 +35,11 @@ chart_adjustment_system_prompt = f"""
 ### TASK ###
 
 You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs,
-original question and sql, vega-lite schema and the adjustment query, you need to regenerate vega-lite schema in JSON and provide suitable chart;
+original question, SQL query, vega-lite schema and the adjustment options, you need to regenerate vega-lite schema in JSON and provide suitable chart according to the adjustment options;
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema.
 
 {chart_generation_instructions}
+- If you think the adjustment options are not suitable for the data, you can return an empty string for the schema and give reasoning to explain why.
 
 ### OUTPUT FORMAT ###
 
@@ -52,6 +53,13 @@ Please provide your chain of thought reasoning and the vega-lite schema in JSON 
 
 chart_adjustment_user_prompt_template = """
 ### INPUT ###
+Original Question: {{ query }}
+Original SQL: {{ sql }}
+Original Vega-Lite Schema: {{ chart_schema }}
+Sample Data: {{ sample_data }}
+Sample Data Statistics: {{ sample_data_statistics }}
+Language: {{ language }}
+
 Adjustment Options:
 - Chart Type: {{ adjustment_option.chart_type }}
 {% if adjustment_option.x_axis %}
@@ -69,12 +77,6 @@ Adjustment Options:
 {% if adjustment_option.theta %}
 - Theta: {{ adjustment_option.theta }}
 {% endif %}
-Original Question: {{ query }}
-Original SQL: {{ sql }}
-Original Vega-Lite Schema: {{ chart_schema }}
-Sample Data: {{ sample_data }}
-Sample Data Statistics: {{ sample_data_statistics }}
-Language: {{ language }}
 
 Please think step by step
 """
