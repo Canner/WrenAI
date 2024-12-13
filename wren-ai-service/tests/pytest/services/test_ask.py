@@ -48,10 +48,10 @@ def ask_service():
                 **pipe_components["data_assistance"],
             ),
             "retrieval": retrieval.Retrieval(
-                **pipe_components["retrieval"],
+                **pipe_components["db_schema_retrieval"],
             ),
             "historical_question": historical_question.HistoricalQuestion(
-                **pipe_components["historical_question"],
+                **pipe_components["historical_question_retrieval"],
             ),
             "sql_generation": sql_generation.SQLGeneration(
                 **pipe_components["sql_generation"],
@@ -70,13 +70,13 @@ def indexing_service():
     return SemanticsPreparationService(
         {
             "db_schema": indexing.DBSchema(
-                **pipe_components["db_schema"],
+                **pipe_components["db_schema_indexing"],
             ),
             "historical_question": indexing.HistoricalQuestion(
-                **pipe_components["historical_question"],
+                **pipe_components["historical_question_indexing"],
             ),
             "table_description": indexing.TableDescription(
-                **pipe_components["table_description"],
+                **pipe_components["table_description_indexing"],
             ),
         }
     )

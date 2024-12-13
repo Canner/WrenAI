@@ -35,7 +35,7 @@ def pipeline_components():
 )
 @pytest.mark.asyncio
 async def test_retrieval_pipeline(pipeline_components):
-    retrieval_pipeline = Retrieval(**pipeline_components["retrieval"])
+    retrieval_pipeline = Retrieval(**pipeline_components["db_schema_retrieval"])
 
     retrieval_result = await retrieval_pipeline.run(
         "How many books are there?",
