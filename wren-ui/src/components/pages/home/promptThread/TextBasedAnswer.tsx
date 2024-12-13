@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Skeleton, Typography } from 'antd';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
+import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
@@ -56,19 +57,25 @@ export default function TextBasedAnswer(
     useTextBasedAnswerStreamTask();
 
   const answerStreamTask = answerStreamTaskResult.data;
+
+  const isStreaming = useMemo(
+    () => status === ThreadResponseAnswerStatus.STREAMING,
+    [status],
+  );
+
   useEffect(() => {
-    if (status === ThreadResponseAnswerStatus.STREAMING) {
+    if (isStreaming) {
       setTextAnswer(answerStreamTask);
     } else {
       setTextAnswer(content);
     }
-  }, [answerStreamTask, status, content]);
+  }, [answerStreamTask, isStreaming, content]);
 
   useEffect(() => {
-    if (status === ThreadResponseAnswerStatus.STREAMING) {
+    if (isStreaming) {
       fetchAnswerStreamingTask(id);
     }
-  }, [status]);
+  }, [isStreaming, id]);
 
   useEffect(() => {
     return () => {
@@ -136,6 +143,7 @@ export default function TextBasedAnswer(
     >
       <div className="text-md gray-10 p-4 pr-6">
         <MarkdownBlock content={textAnswer} />
+        {isStreaming && <LoadingOutlined className="geekblue-6" spin />}
         {status === ThreadResponseAnswerStatus.INTERRUPTED && (
           <div className="mt-2 text-right">
             <Button
