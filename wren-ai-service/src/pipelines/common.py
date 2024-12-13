@@ -494,11 +494,11 @@ chart_generation_instructions = """
     - Add "color" encoding to the encoding section.
     - Don't add "innerRadius" to the mark section.
 - If the x-axis of the chart is a temporal field, the time unit should be the same as the question user asked.
-    - For yearly question, the time unit should be "year", ex. YYYY.
-    - For monthly question, the time unit should be "year + month", ex. YYYY-MM.
-    - For weekly question, the time unit should be "year + month + day", ex. YYYY-MM-DD.
-    - For daily question, the time unit should be "year + month + day", ex. YYYY-MM-DD.
-    - Default time unit is "year + month", ex. YYYY-MM.
+    - For yearly question, the time unit should be "year".
+    - For monthly question, the time unit should be "yearmonth".
+    - For weekly question, the time unit should be "yearmonthdate".
+    - For daily question, the time unit should be "yearmonthdate".
+    - Default time unit is "yearmonth".
 - For each axis, generate the corresponding human-readable title based on the language provided by the user.
 
 ### GUIDELINES TO PLOT CHART ###
@@ -756,7 +756,7 @@ class ChartSchema(BaseModel):
 
     class ChartEncoding(BaseModel):
         field: str
-        type: Literal["temporal", "ordinal", "quantitative", "nominal"]
+        type: Literal["ordinal", "quantitative", "nominal"]
         title: str
 
     schema: str = Field(
@@ -768,12 +768,17 @@ class ChartSchema(BaseModel):
     encoding: dict
 
 
+class TemporalChartEncoding(ChartSchema.ChartEncoding):
+    type: Literal["temporal"]
+    timeUnit: str
+
+
 class LineChartSchema(ChartSchema):
     class LineChartMark(BaseModel):
         type: Literal["line"]
 
     class LineChartEncoding(BaseModel):
-        x: ChartSchema.ChartEncoding
+        x: TemporalChartEncoding | ChartSchema.ChartEncoding
         y: ChartSchema.ChartEncoding
         color: ChartSchema.ChartEncoding
 
@@ -786,7 +791,7 @@ class BarChartSchema(ChartSchema):
         type: Literal["bar"]
 
     class BarChartEncoding(BaseModel):
-        x: ChartSchema.ChartEncoding
+        x: TemporalChartEncoding | ChartSchema.ChartEncoding
         y: ChartSchema.ChartEncoding
         color: ChartSchema.ChartEncoding
 
@@ -799,7 +804,7 @@ class GroupedBarChartSchema(ChartSchema):
         type: Literal["bar"]
 
     class GroupedBarChartEncoding(BaseModel):
-        x: ChartSchema.ChartEncoding
+        x: TemporalChartEncoding | ChartSchema.ChartEncoding
         y: ChartSchema.ChartEncoding
         xOffset: ChartSchema.ChartEncoding
         color: ChartSchema.ChartEncoding
@@ -817,7 +822,7 @@ class StackedBarChartSchema(ChartSchema):
         type: Literal["bar"]
 
     class StackedBarChartEncoding(BaseModel):
-        x: ChartSchema.ChartEncoding
+        x: TemporalChartEncoding | ChartSchema.ChartEncoding
         y: StackedBarChartYEncoding
         color: ChartSchema.ChartEncoding
 
@@ -842,7 +847,7 @@ class AreaChartSchema(ChartSchema):
         type: Literal["area"]
 
     class AreaChartEncoding(BaseModel):
-        x: ChartSchema.ChartEncoding
+        x: TemporalChartEncoding | ChartSchema.ChartEncoding
         y: ChartSchema.ChartEncoding
 
     mark: AreaChartMark
