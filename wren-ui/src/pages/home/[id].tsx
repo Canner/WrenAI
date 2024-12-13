@@ -13,15 +13,38 @@ import useAskPrompt, {
 import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
+import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import {
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
   useGenerateThreadRecommendationQuestionsMutation,
   useGetThreadRecommendationQuestionsLazyQuery,
+  useGenerateThreadResponseAnswerMutation,
+  useGenerateThreadResponseBreakdownMutation,
 } from '@/apollo/client/graphql/home.generated';
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
-import { CreateThreadResponseInput } from '@/apollo/client/graphql/__types__';
+import {
+  CreateThreadResponseInput,
+  ThreadResponse,
+} from '@/apollo/client/graphql/__types__';
+
+const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
+  const { answerDetail, breakdownDetail } = threadResponse || {};
+
+  // existing breakdown answer
+  if (!answerDetail) return getIsFinished(breakdownDetail?.status);
+
+  const isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
+
+  if (!isAnswerFinished) return false;
+
+  // If no breakdown exists yet, we're done
+  if (!breakdownDetail) return true;
+
+  // Check if breakdown is in a final state
+  return getIsFinished(breakdownDetail.status);
+};
 
 export default function HomeThread() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
@@ -87,15 +110,39 @@ export default function HomeThread() {
     pollInterval: 1000,
   });
 
+  const [generateThreadResponseAnswer] =
+    useGenerateThreadResponseAnswerMutation();
+
+  const [generateThreadResponseBreakdown] =
+    useGenerateThreadResponseBreakdownMutation();
+
   const thread = useMemo(() => data?.thread || null, [data]);
   const threadResponse = useMemo(
     () => threadResponseResult.data?.threadResponse || null,
     [threadResponseResult.data],
   );
   const isFinished = useMemo(
-    () => getIsFinished(threadResponse?.breakdownDetail?.status),
+    () => getThreadResponseIsFinished(threadResponse),
     [threadResponse],
   );
+
+  const onGenerateThreadResponseAnswer = async (
+    threadId: number,
+    responseId: number,
+  ) => {
+    await generateThreadResponseAnswer({
+      variables: { threadId, responseId },
+    });
+  };
+
+  const onGenerateThreadResponseBreakdown = async (
+    threadId: number,
+    responseId: number,
+  ) => {
+    await generateThreadResponseBreakdown({
+      variables: { threadId, responseId },
+    });
+  };
 
   // stop all requests when change thread
   useEffect(() => {
@@ -112,10 +159,17 @@ export default function HomeThread() {
 
   useEffect(() => {
     const unfinishedRespose = (thread?.responses || []).find(
-      (response) => !getIsFinished(response.breakdownDetail?.status),
+      (response) => !getThreadResponseIsFinished(response),
     );
 
     if (unfinishedRespose) {
+      if (unfinishedRespose.answerDetail?.status === null) {
+        onGenerateThreadResponseAnswer(
+          unfinishedRespose.threadId,
+          unfinishedRespose.id,
+        );
+      }
+
       fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
     }
 
@@ -156,19 +210,23 @@ export default function HomeThread() {
   const onSelect = async (payload: CreateThreadResponseInput) => {
     try {
       askPrompt.onStopPolling();
+
+      const threadId = thread.id;
       const response = await createThreadResponse({
-        variables: { threadId: thread.id, data: payload },
+        variables: { threadId, data: payload },
       });
       setShowRecommendedQuestions(false);
-      await generateThreadRecommendationQuestions({
-        variables: { threadId: thread.id },
-      });
-      await fetchThreadResponse({
-        variables: { responseId: response.data.createThreadResponse.id },
-      });
-      fetchThreadRecommendationQuestions({
-        variables: { threadId: thread.id },
-      });
+
+      const responseId = response.data.createThreadResponse.id;
+      await Promise.all([
+        generateThreadResponseAnswer({
+          variables: { threadId, responseId },
+        }),
+        generateThreadRecommendationQuestions({ variables: { threadId } }),
+        fetchThreadResponse({ variables: { responseId } }),
+      ]);
+
+      fetchThreadRecommendationQuestions({ variables: { threadId } });
     } catch (error) {
       console.error(error);
     }

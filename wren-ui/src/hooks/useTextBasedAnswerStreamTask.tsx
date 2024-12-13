@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 
 type TextBasedAnswerStreamTaskReturn = [
-  (queryId: string) => void,
+  (responseId: number) => void,
   {
     data: string;
     loading: boolean;
@@ -9,11 +9,6 @@ type TextBasedAnswerStreamTaskReturn = [
   },
 ];
 
-/**
- * TODO:
- * 1. call /sql-answers API with polling way to obtain the result and status, when the status is preprocessing,
- *    trigger fetchAnswerStreamingTask function to get streaming data.
- */
 export default function useTextBasedAnswerStreamTask() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -27,7 +22,7 @@ export default function useTextBasedAnswerStreamTask() {
     setData('');
   };
 
-  const fetchAnswerStreamingTask = (responseId: string) => {
+  const fetchAnswerStreamingTask = (responseId: number) => {
     setLoading(true);
     onReset();
 

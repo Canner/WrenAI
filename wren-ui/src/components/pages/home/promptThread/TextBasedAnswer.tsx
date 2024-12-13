@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Alert, Button, Empty, Skeleton, Typography } from 'antd';
+import { useEffect, useMemo } from 'react';
+import { Alert, Button, Skeleton, Typography } from 'antd';
 import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
@@ -7,7 +7,8 @@ import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
+import { usePreviewTextBasedAnswerDataMutation } from '@/apollo/client/graphql/home.generated';
+import { ThreadResponseAnswerStatus } from '@/apollo/client/graphql/__types__';
 
 const { Text } = Typography;
 
@@ -17,6 +18,16 @@ const StyledSkeleton = styled(Skeleton)`
     margin-bottom: 0;
   }
 `;
+export const getAnswerIsFinished = (status: ThreadResponseAnswerStatus) =>
+  [
+    ThreadResponseAnswerStatus.FINISHED,
+    ThreadResponseAnswerStatus.FAILED,
+    ThreadResponseAnswerStatus.INTERRUPTED,
+  ].includes(status);
+
+const getIsLoadingFinished = (status: ThreadResponseAnswerStatus) =>
+  getAnswerIsFinished(status) ||
+  status === ThreadResponseAnswerStatus.STREAMING;
 
 export default function TextBasedAnswer(
   props: Pick<
@@ -26,23 +37,35 @@ export default function TextBasedAnswer(
 ) {
   const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
   const { id } = threadResponse;
-  const { error } = threadResponse?.answerDetail || {};
+  const { content, error, numRowsUsedInLLM, status } =
+    threadResponse?.answerDetail || {};
 
-  const [_, answerStreamTaskResult] = useTextBasedAnswerStreamTask();
+  const [fetchAnswerStreamingTask, answerStreamTaskResult] =
+    useTextBasedAnswerStreamTask();
 
   const answerStreamTask = answerStreamTaskResult.data;
 
-  // TODO: num_rows_used_in_llm is 0 then don't show preview data with button
-  const rowsUsed = 0;
+  useEffect(() => {
+    if (status === ThreadResponseAnswerStatus.STREAMING) {
+      fetchAnswerStreamingTask(id);
+    }
+  }, [status]);
 
-  const [previewData, previewDataResult] = usePreviewDataMutation({
-    onError: (error) => console.error(error),
-  });
+  const rowsUsed = useMemo(
+    () =>
+      status === ThreadResponseAnswerStatus.FINISHED ? numRowsUsedInLLM : 0,
+    [numRowsUsedInLLM, status],
+  );
+
+  const allowPreviewData = useMemo(() => Boolean(rowsUsed > 0), [rowsUsed]);
+
+  const [previewData, previewDataResult] =
+    usePreviewTextBasedAnswerDataMutation({
+      onError: (error) => console.error(error),
+    });
 
   const onPreviewData = async () => {
-    await previewData({
-      variables: { where: { responseId: id } },
-    });
+    await previewData({ variables: { where: { responseId: id } } });
   };
 
   const autoTriggerPreviewDataButton = async () => {
@@ -53,10 +76,12 @@ export default function TextBasedAnswer(
   };
 
   useEffect(() => {
-    if (isLastThreadResponse && rowsUsed > 0) {
+    if (isLastThreadResponse && allowPreviewData) {
       autoTriggerPreviewDataButton();
     }
-  }, [isLastThreadResponse, rowsUsed]);
+  }, [isLastThreadResponse, allowPreviewData]);
+
+  const loading = !getIsLoadingFinished(status);
 
   if (error) {
     return (
@@ -73,13 +98,13 @@ export default function TextBasedAnswer(
   return (
     <StyledSkeleton
       active
-      loading={false}
+      loading={loading}
       paragraph={{ rows: 4 }}
       title={false}
     >
       <div className="text-md gray-10 p-4 pr-6">
         <MarkdownBlock content={answerStreamTask} />
-        {rowsUsed > 0 && (
+        {allowPreviewData && (
           <div className="mt-6">
             <Button
               size="small"
@@ -108,14 +133,6 @@ export default function TextBasedAnswer(
                 error={previewDataResult.error}
                 loading={previewDataResult.loading}
                 previewData={previewDataResult?.data?.previewData}
-                locale={{
-                  emptyText: (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="Sorry, we couldn't find any records that match your search criteria."
-                    />
-                  ),
-                }}
               />
             </div>
           </div>
