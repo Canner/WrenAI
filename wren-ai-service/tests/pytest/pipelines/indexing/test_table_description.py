@@ -37,7 +37,7 @@ def test_single_table_description():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.meta == {"type": "TABLE_DESCRIPTION"}
+    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
     assert document.content == str(
         {
             "name": "user",
@@ -71,6 +71,7 @@ def test_multiple_table_descriptions():
     document_1: Document = actual["documents"][0]
     assert document_1.meta == {
         "type": "TABLE_DESCRIPTION",
+        "name": "user",
     }
     assert document_1.content == str(
         {
@@ -81,7 +82,7 @@ def test_multiple_table_descriptions():
     )
 
     document_2: Document = actual["documents"][1]
-    assert document_2.meta == {"type": "TABLE_DESCRIPTION"}
+    assert document_2.meta == {"type": "TABLE_DESCRIPTION", "name": "order"}
     assert document_2.content == str(
         {
             "name": "order",
@@ -121,7 +122,7 @@ def test_table_description_missing_description():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.meta == {"type": "TABLE_DESCRIPTION"}
+    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
     assert document.content == str(
         {"name": "user", "mdl_type": "MODEL", "description": ""}
     )
