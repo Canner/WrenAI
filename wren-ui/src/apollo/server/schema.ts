@@ -626,9 +626,19 @@ export const typeDefs = gql`
     cteName: String
   }
 
+  enum ThreadResponseAnswerStatus {
+    NOT_STARTED
+    FETCHING_DATA
+    PREPROCESSING
+    STREAMING
+    FINISHED
+    FAILED
+    INTERRUPTED
+  }
+
   type ThreadResponseAnswerDetail {
     queryId: String
-    status: String
+    status: ThreadResponseAnswerStatus
     error: Error
     numRowsUsedInLLM: Int
     content: String
