@@ -6,40 +6,42 @@ from src.config import Settings
 
 
 def test_settings_default_values():
-    settings = Settings()
-    assert settings.host == "127.0.0.1"
-    assert settings.port == 5556
+    with patch("src.config.Settings.config_loader", return_value=[]):
+        settings = Settings()
+        assert settings.host == "127.0.0.1"
+        assert settings.port == 5556
 
-    assert settings.column_indexing_batch_size == 50
-    assert settings.table_retrieval_size == 10
-    assert settings.table_column_retrieval_size == 1000
+        assert settings.column_indexing_batch_size == 50
+        assert settings.table_retrieval_size == 10
+        assert settings.table_column_retrieval_size == 1000
 
-    assert settings.query_cache_ttl == 3600
-    assert settings.query_cache_maxsize == 1_000_000
+        assert settings.query_cache_ttl == 3600
+        assert settings.query_cache_maxsize == 1_000_000
 
-    assert settings.langfuse_host == "https://cloud.langfuse.com"
-    assert settings.langfuse_enable is True
+        assert settings.langfuse_host == "https://cloud.langfuse.com"
+        assert settings.langfuse_enable is True
 
-    assert settings.logging_level == "INFO"
-    assert settings.enable_timer is False
-    assert settings.development is False
+        assert settings.logging_level == "INFO"
+        assert settings.enable_timer is False
+        assert settings.development is False
 
-    assert settings.config_path == "config.yaml"
+        assert settings.config_path == "config.yaml"
 
 
 def test_settings_env_var_override():
-    with patch.dict(
-        "os.environ",
-        {
-            "WREN_AI_SERVICE_HOST": "0.0.0.0",
-            "WREN_AI_SERVICE_PORT": "8000",
-            "LOGGING_LEVEL": "DEBUG",
-        },
+    env_vars = {
+        "WREN_AI_SERVICE_HOST": "0.0.0.0",
+        "WREN_AI_SERVICE_PORT": "8000",
+        "LOGGING_LEVEL": "DEBUG",
+    }
+
+    with patch("src.config.Settings.config_loader", return_value=[]), patch.dict(
+        "os.environ", env_vars
     ):
         settings = Settings()
-        assert settings.host == "0.0.0.0"
-        assert settings.port == 8000
-        assert settings.logging_level == "DEBUG"
+        assert settings.host == env_vars["WREN_AI_SERVICE_HOST"]
+        assert settings.port == int(env_vars["WREN_AI_SERVICE_PORT"])
+        assert settings.logging_level == env_vars["LOGGING_LEVEL"]
 
 
 def test_settings_env_dev_override():
@@ -51,7 +53,9 @@ def test_settings_env_dev_override():
     """
 
     # Mock the load_dotenv function
-    with patch("src.config.load_dotenv") as mock_load_dotenv:
+    with patch("src.config.Settings.config_loader", return_value=[]), patch(
+        "src.config.load_dotenv"
+    ) as mock_load_dotenv:
         # Set up the mock to load our custom environment variables
         def side_effect(path, override):
             import os

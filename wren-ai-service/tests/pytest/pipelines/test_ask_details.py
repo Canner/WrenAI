@@ -1,16 +1,16 @@
 import pytest
 
-from src.core.engine import EngineConfig
+from src.config import settings
 from src.pipelines.generation import sql_breakdown
-from src.providers import init_providers
+from src.providers import generate_components
 
 
 @pytest.mark.asyncio
 async def test_generation_pipeline_producing_executable_sqls():
-    llm_provider, _, _, engine = init_providers(EngineConfig())
+    pipeline_components = generate_components(settings.components)
+
     generation_pipeline = sql_breakdown.SQLBreakdown(
-        llm_provider=llm_provider,
-        engine=engine,
+        **pipeline_components["sql_breakdown"]
     )
 
     candidate_sql_queries = [
