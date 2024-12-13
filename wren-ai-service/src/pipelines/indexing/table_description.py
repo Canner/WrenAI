@@ -31,6 +31,7 @@ class TableDescriptionChunker:
                 "id": str(uuid.uuid4()),
                 "meta": {
                     "type": "TABLE_DESCRIPTION",
+                    "name": chunk["name"],
                     **_additional_meta(),
                 },
                 "content": str(chunk),
