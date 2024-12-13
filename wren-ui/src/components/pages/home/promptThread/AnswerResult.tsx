@@ -109,9 +109,10 @@ export default function AnswerResult(props: Props) {
     recommendedQuestionsProps.show,
   );
 
-  const hasTextBasedAnswer = useMemo(() => {
-    // existing thread response's answerDetail is null
-    return isEmpty(breakdownDetail) || !isEmpty(answerDetail);
+  const isBreakdownOnly = useMemo(() => {
+    // we support rendering different types of answers now, so we need to check if it's old data.
+    // existing thread response's answerDetail is null.
+    return answerDetail === null && !isEmpty(breakdownDetail);
   }, [answerDetail, breakdownDetail]);
 
   const onTabClick = (activeKey: string) => {
@@ -127,7 +128,7 @@ export default function AnswerResult(props: Props) {
     <div style={resultStyle} className="adm-answer-result">
       <QuestionTitle className="mb-6" question={question} />
       <StyledTabs type="card" size="small" onTabClick={onTabClick}>
-        {hasTextBasedAnswer && (
+        {!isBreakdownOnly && (
           <Tabs.TabPane
             key={ANSWER_TAB_KEYS.ANSWER}
             tab={
