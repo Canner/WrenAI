@@ -474,6 +474,20 @@ export class AskingResolver {
         : view.name;
       return { ...view, displayName };
     },
+    answerDetail: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
+      const content = parent?.answerDetail?.content
+        ? parent?.answerDetail?.content
+            // replace the \\n to \n
+            .replace(/\\n/g, '\n')
+            // replace the \\\" to \",
+            .replace(/\\"/g, '"')
+        : parent?.answerDetail?.content;
+
+      return {
+        ...parent.answerDetail,
+        content,
+      };
+    },
   });
 
   public getDetailStepNestedResolver = () => ({

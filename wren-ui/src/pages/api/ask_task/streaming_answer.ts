@@ -68,9 +68,12 @@ export default async function handler(
       // pass the chunk directly to the client
       const chunkString = chunk.toString('utf-8');
       let message = '';
-      message = chunkString.includes('message')
-        ? chunkString.split('message":"')[1].split('"')[0]
-        : '';
+      const match = chunkString.match(/data: {"message":"([\s\S]*?)"}/);
+      if (match && match[1]) {
+        message = match[1];
+      } else {
+        console.log(`not able to match: ${chunkString}`);
+      }
       contentMap.appendContent(queryId, message);
       res.write(chunk);
     });
