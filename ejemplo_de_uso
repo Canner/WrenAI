@@ -1,0 +1,14 @@
+import { useTranslation } from 'react-i18next';
+
+function MyComponent() {
+  const { t } = useTranslation();
+
+  return (
+    <div>
+      <h1>{t('common.welcome')}</h1>
+      <button>{t('common.login')}</button>
+    </div>
+  );
+}
+
+export default MyComponent; 
