@@ -999,11 +999,18 @@ export class AskingService implements IAskingService {
     }
 
     const latestResponse = responses[0];
+    // steps is only available in breakdown detail
+    // if we haven't generated the breakdown detail, fallback to use the question & sql
+    const steps = latestResponse.breakdownDetail?.steps || [
+      {
+        summary: latestResponse.question,
+        cteName: '',
+        sql: latestResponse.sql,
+      },
+    ];
     return {
       sql: latestResponse.sql,
-      // steps is only available in breakdown detail
-      // if we haven't generated the breakdown detail, use empty array
-      steps: latestResponse.breakdownDetail?.steps || [],
+      steps,
     };
   }
 
