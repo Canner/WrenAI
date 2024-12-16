@@ -75,7 +75,7 @@ class SQLRegenerationResultResponse(BaseModel):
     error: Optional[SQLRegenerationError] = None
 
 
-class SQLRegenerationService:
+class SqlRegenerationService:
     def __init__(
         self,
         pipelines: Dict[str, Pipeline],

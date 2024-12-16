@@ -162,7 +162,12 @@ data:
       - name: sql_pairs_retrieval
         document_store: qdrant
         embedder: openai_embedder.text-embedding-3-large
-
+      - name: sql_executor
+        engine: wren_ui
+      - name: chart_generation
+        llm: litellm_llm.gpt-4o-mini
+      - name: chart_adjustment
+        llm: litellm_llm.gpt-4o-mini
     ---
     settings:
       column_indexing_batch_size: 50

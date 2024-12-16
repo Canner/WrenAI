@@ -1,7 +1,6 @@
 from dataclasses import asdict
-from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from src.globals import (
     ServiceContainer,
@@ -104,7 +103,9 @@ async def get_prepare_semantics_status(
 
 @router.delete("/semantics")
 async def delete_semantics(
-    project_id: Optional[str] = None,
+    project_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> None:
+    if not project_id:
+        raise HTTPException(status_code=400, detail="Project ID is required")
     await service_container.semantics_preparation_service.delete_semantics(project_id)

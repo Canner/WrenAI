@@ -112,6 +112,14 @@ class SqlPairsCleaner:
 # Put the pipelines imports here to avoid circular imports and make them accessible directly to the rest of packages
 from .db_schema import DBSchema  # noqa: E402
 from .historical_question import HistoricalQuestion  # noqa: E402
+from .sql_pairs_deletion import SqlPairsDeletion  # noqa: E402
+from .sql_pairs_preparation import SqlPairsPreparation  # noqa: E402
 from .table_description import TableDescription  # noqa: E402
 
-__all__ = ["DBSchema", "TableDescription", "HistoricalQuestion"]
+__all__ = [
+    "DBSchema",
+    "TableDescription",
+    "HistoricalQuestion",
+    "SqlPairsDeletion",
+    "SqlPairsPreparation",
+]

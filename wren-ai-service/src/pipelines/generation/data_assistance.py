@@ -8,7 +8,6 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -79,10 +78,6 @@ async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
 
 
 ## End of Pipeline
-
-
-class DataAssistanceResult(BaseModel):
-    results: str
 
 
 DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}

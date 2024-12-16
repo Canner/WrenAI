@@ -52,7 +52,7 @@ class SQLExplanationResultResponse(BaseModel):
     error: Optional[SQLExplanationResultError] = None
 
 
-class SQLExplanationService:
+class SqlExplanationService:
     def __init__(
         self,
         pipelines: Dict[str, Pipeline],

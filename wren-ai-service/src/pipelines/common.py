@@ -385,7 +385,7 @@ Dimensions are used as table columns in the querying process. Querying a dimensi
 3. Measures
 Measures are numerical or quantitative statistics calculated from the data. Measures are key results or outputs derived from data aggregation functions like SUM, COUNT, or AVG.
 Measures are used as table columns in the querying process, and are the main querying items in the metric structure.
-The expression of a measure represents the definition of the statistics that users are intrested in. Make sure to understand the meaning of measures from their expressions.
+The expression of a measure represents the definition of the  that users are intrested in. Make sure to understand the meaning of measures from their expressions.
 4. Time Grain
 Time Grain specifies the granularity of time-based data aggregation, such as daily, monthly, or yearly, facilitating trend analysis over specified periods.
 

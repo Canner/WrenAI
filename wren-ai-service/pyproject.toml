@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.13.0"
+version = "0.13.1"
 description = ""
 authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
 license = "AGPL-3.0"
@@ -32,6 +32,7 @@ pyyaml = "^6.0.2"
 pydantic-settings = "^2.5.2"
 google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
+jsonschema = "^4.23.0"
 litellm = "^1.52.12"
 
 [tool.poetry.group.dev.dependencies]
