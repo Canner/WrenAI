@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import (
+from src.pipelines.generation.utils.chart import (
     AreaChartSchema,
     BarChartSchema,
     ChartDataPreprocessor,
