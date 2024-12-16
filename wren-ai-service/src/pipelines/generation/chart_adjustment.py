@@ -57,7 +57,6 @@ Original Question: {{ query }}
 Original SQL: {{ sql }}
 Original Vega-Lite Schema: {{ chart_schema }}
 Sample Data: {{ sample_data }}
-Sample Data Statistics: {{ sample_data_statistics }}
 Language: {{ language }}
 
 Adjustment Options:
@@ -152,7 +151,6 @@ def prompt(
     prompt_builder: PromptBuilder,
 ) -> dict:
     sample_data = preprocess_data["results"]["sample_data"]
-    sample_data_statistics = preprocess_data["results"]["sample_data_statistics"]
 
     return prompt_builder.run(
         query=query,
@@ -160,7 +158,6 @@ def prompt(
         adjustment_option=adjustment_option,
         chart_schema=chart_schema,
         sample_data=sample_data,
-        sample_data_statistics=sample_data_statistics,
         language=language,
     )
 

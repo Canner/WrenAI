@@ -54,7 +54,6 @@ chart_generation_user_prompt_template = """
 Question: {{ query }}
 SQL: {{ sql }}
 Sample Data: {{ sample_data }}
-Sample Data Statistics: {{ sample_data_statistics }}
 Language: {{ language }}
 
 Please think step by step
@@ -129,13 +128,11 @@ def prompt(
     prompt_builder: PromptBuilder,
 ) -> dict:
     sample_data = preprocess_data["results"]["sample_data"]
-    sample_data_statistics = preprocess_data["results"]["sample_data_statistics"]
 
     return prompt_builder.run(
         query=query,
         sql=sql,
         sample_data=sample_data,
-        sample_data_statistics=sample_data_statistics,
         language=language,
     )
 

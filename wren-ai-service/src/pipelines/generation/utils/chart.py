@@ -1,5 +1,6 @@
 from typing import Any, Dict, Literal
 
+import pandas as pd
 from haystack import component
 from pydantic import BaseModel, Field
 
@@ -218,25 +219,20 @@ class ChartDataPreprocessor:
         results=Dict[str, Any],
     )
     def run(self, data: Dict[str, Any]):
-        columns = data.get("results", {}).get("columns", [])
+        columns = [
+            column.get("name", "") if isinstance(column, dict) else column
+            for column in data.get("results", {}).get("columns", [])
+        ]
         data = data.get("results", {}).get("data", [])
-        sample_data_statistics = {
-            column.get("name", "") if isinstance(column, dict) else column: set()
-            for column in columns
-        }
-        for row in data:
-            for column, value in zip(sample_data_statistics.keys(), row):
-                if len(sample_data_statistics[column]) < 10:
-                    sample_data_statistics[column].add(value)
 
-        sample_data = {
-            "columns": columns,
-            "data": data[:10],
-        }
+        df = pd.DataFrame(data, columns=columns)
+        if len(df) > 10:
+            sample_data = df.sample(n=10).to_dict(orient="records")
+        else:
+            sample_data = df.to_dict(orient="records")
 
         return {
             "results": {
-                "sample_data_statistics": sample_data_statistics,
                 "sample_data": sample_data,
             }
         }
@@ -254,7 +250,7 @@ class ChartSchema(BaseModel):
         type: Literal["ordinal", "quantitative", "nominal"]
         title: str
 
-    schema: str = Field(
+    chart_schema: str = Field(
         alias="$schema", default="https://vega.github.io/schema/vega-lite/v5.json"
     )
     title: str
