@@ -14,7 +14,7 @@ from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import (
     AreaChartSchema,
@@ -257,22 +257,13 @@ class ChartGeneration(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = ChartGeneration(
-        llm_provider=llm_provider,
+    dry_run_pipeline(
+        ChartGeneration,
+        "chart_generation",
+        query="show me the dataset",
+        sql="",
+        data={},
+        language="English",
     )
-
-    pipeline.visualize(query="", sql="", data={})
-    async_validate(lambda: pipeline.run(query="", sql="", data={}))
-
-    langfuse_context.flush()
