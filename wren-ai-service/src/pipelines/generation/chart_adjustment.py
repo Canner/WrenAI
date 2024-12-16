@@ -160,7 +160,7 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def generate_chart_adjustment(prompt: dict, generator: Any) -> dict:
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)
@@ -169,7 +169,7 @@ def post_process(
     vega_schema: Dict[str, Any],
     post_processor: ChartAdjustmentPostProcessor,
 ) -> dict:
-    return post_processor.run(generate_chart_adjustment.get("replies"), vega_schema)
+    return post_processor(generate_chart_adjustment.get("replies"), vega_schema)
 
 
 ## End of Pipeline

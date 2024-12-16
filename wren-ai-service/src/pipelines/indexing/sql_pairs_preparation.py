@@ -105,7 +105,7 @@ async def generate_sql_intention(
     sql_intention_generator: Any,
 ) -> List[dict]:
     async def _task(prompt: str, generator: Any):
-        return await generator.run(prompt=prompt.get("prompt"))
+        return await generator(prompt=prompt.get("prompt"))
 
     tasks = [_task(prompt, sql_intention_generator) for prompt in prompts]
     return await asyncio.gather(*tasks)
