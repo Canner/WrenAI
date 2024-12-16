@@ -119,9 +119,9 @@ Output all questions in the following JSON format:
 
 3. **If a User Question is Provided:**
 
-   - Generate questions related to or expanding upon the user’s query.
-   - Use **random category selection** to provide diverse perspectives on the user’s question.
-   - Apply the analysis techniques above to offer deeper insights.
+   - Generate questions that are closely related to the user’s previous question, ensuring that the new questions build upon or provide deeper insights into the original query.
+   - Use **random category selection** to introduce diverse perspectives while maintaining a focus on the context of the previous question.
+   - Apply the analysis techniques above to enhance the relevance and depth of the generated questions.
 
 4. **If No User Question is Provided:**
 
@@ -204,8 +204,10 @@ Output all questions in the following JSON format:
 """
 
 user_prompt_template = """
+{% if mdl %}
 Data Model Specification:
-{{models}}
+{{mdl}}
+{% endif %}
 
 {% if previous_questions %}
 Previous Questions: {{previous_questions}}
