@@ -66,7 +66,7 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_answer(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator.run(prompt=prompt.get("prompt"), query_id=query_id)
+    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
 
 
 ## End of Pipeline
