@@ -747,7 +747,7 @@ export class AskingService implements IAskingService {
 
       const res = await this.createThreadResponseFromView(
         input.question,
-        input.sql,
+        view.statement,
         view,
         thread,
       );
