@@ -871,6 +871,7 @@ export const typeDefs = gql`
       data: CreateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+    previewBreakdownData(where: PreviewDataInput!): JSON!
 
     # Generate Thread Response Breakdown
     generateThreadResponseBreakdown(

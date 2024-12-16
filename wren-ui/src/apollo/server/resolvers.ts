@@ -89,6 +89,7 @@ const resolvers = {
     deleteThread: askingResolver.deleteThread,
     createThreadResponse: askingResolver.createThreadResponse,
     previewData: askingResolver.previewData,
+    previewBreakdownData: askingResolver.previewBreakdownData,
 
     // Generate Thread Response Breakdown
     generateThreadResponseBreakdown:

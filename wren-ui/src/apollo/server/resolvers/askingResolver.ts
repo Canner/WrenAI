@@ -72,6 +72,7 @@ export class AskingResolver {
     this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.previewData = this.previewData.bind(this);
+    this.previewBreakdownData = this.previewBreakdownData.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
     this.createInstantRecommendedQuestions =
       this.createInstantRecommendedQuestions.bind(this);
