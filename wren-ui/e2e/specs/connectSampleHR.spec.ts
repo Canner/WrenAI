@@ -28,7 +28,6 @@ test.describe('Test HR sample dataset', () => {
     // select first suggested question
     await homeHelper.askSuggestionQuestionTest({
       page,
-      baseURL,
       suggestedQuestion: suggestedQuestions[1].question,
     });
   });
