@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any, Dict
 
 import orjson
-import requests
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import component
@@ -219,12 +218,13 @@ class ChartAdjustment(BasicPipeline):
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartAdjustmentPostProcessor(),
         }
-        self._configs = {
-            "vega_schema": requests.get(
-                "https://vega.github.io/schema/vega-lite/v5.json"
-            ).json(),
-        }
 
+        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
+            _vega_schema = orjson.loads(f.read())
+
+        self._configs = {
+            "vega_schema": _vega_schema,
+        }
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
