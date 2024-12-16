@@ -305,6 +305,10 @@ def init_providers(
     engine_config: EngineConfig,
 ) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
     # DEPRECATED: use generate_components instead
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     logger.info("Initializing providers...")
     loader.import_mods()
 

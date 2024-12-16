@@ -108,6 +108,10 @@ pipes:
     engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.gpt-4o-mini
+  - name: chart_generation
+    llm: litellm_llm.gpt-4o-mini
+  - name: chart_adjustment
+    llm: litellm_llm.gpt-4o-mini
   - name: intent_classification
     llm: litellm_llm.gpt-4o-mini
     embedder: openai_embedder.text-embedding-3-large
@@ -116,6 +120,8 @@ pipes:
     llm: litellm_llm.gpt-4o-mini
   - name: preprocess_sql_data
     llm: litellm_llm.gpt-4o-mini
+  - name: sql_executor
+    engine: wren_ui
 ---
 settings:
   host: 127.0.0.1
