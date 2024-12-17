@@ -72,8 +72,9 @@ export default function Chart(props: VegaLiteProps) {
         message={
           <div className="d-flex align-center justify-space-between">
             <div>
-              Too many categories, please try to reduce the number of
-              categories.
+              There are too many categories to display effectively. Click 'Show
+              top 25' to view the top results, or ask a follow-up question to
+              focus on a specific group or filter results.
             </div>
             <Button
               size="small"
