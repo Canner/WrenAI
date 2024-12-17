@@ -28,6 +28,9 @@ Second, you need to use rephrased user's question to classify user's intent base
 Also you should provide reasoning for the classification clearly and concisely within 20 words.
 
 ### INSTRUCTIONS ###
+- Steps to rephrase the user's question:
+    - First, try to recognize adjectives in the user's question that are important to the user's intent.
+    - Second, change the adjectives to more specific and clear ones that can be matched to columns in the database schema.
 - MUST use the rephrased user's question to make the intent classification.
 - MUST put the rephrased user's question in the rephrased_question output.
 - REASONING MUST be within 20 words.
@@ -225,8 +228,6 @@ def prompt(
         [step.summary for step in history.steps if step.summary] if history else []
     )
 
-    # query = "\n".join(previous_query_summaries) + "\n" + query
-
     return prompt_builder.run(
         query=query,
         db_schemas=construct_db_schemas,
@@ -244,13 +245,20 @@ async def classify_intent(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
     try:
-        intent = orjson.loads(classify_intent.get("replies")[0])["results"]
+        results = orjson.loads(classify_intent.get("replies")[0])
         return {
-            "intent": intent,
+            "intent": results["results"],
+            "rephrased_question": results["rephrased_question"],
+            "reasoning": results["reasoning"],
             "db_schemas": construct_db_schemas,
         }
     except Exception:
-        return {"intent": "TEXT_TO_SQL", "db_schemas": construct_db_schemas}
+        return {
+            "intent": "TEXT_TO_SQL",
+            "rephrased_question": "",
+            "reasoning": "",
+            "db_schemas": construct_db_schemas,
+        }
 
 
 ## End of Pipeline
@@ -258,6 +266,8 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 class IntentClassificationResult(BaseModel):
     results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL"]
+    rephrased_question: str
+    reasoning: str
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {
