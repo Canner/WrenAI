@@ -5,6 +5,11 @@ import {
   ThreadResponse,
 } from '@server/repositories';
 import { getLogger } from '@server/utils/logger';
+import {
+  PostHogTelemetry,
+  TelemetryEvent,
+  WrenService,
+} from '@server/telemetry/telemetry';
 
 const logger = getLogger('ChartBackgroundTracker');
 logger.level = 'debug';
@@ -23,14 +28,18 @@ export class ChartBackgroundTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
   private runningJobs = new Set();
+  private telemetry: PostHogTelemetry;
 
   constructor({
+    telemetry,
     wrenAIAdaptor,
     threadResponseRepository,
   }: {
+    telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
   }) {
+    this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
     this.intervalTime = 1000;
@@ -85,6 +94,23 @@ export class ChartBackgroundTracker {
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
+            const eventProperties = {
+              question: threadResponse.question,
+              error: result.error,
+            };
+            if (result.status === ChartStatus.FINISHED) {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_ANSWER_CHART,
+                eventProperties,
+              );
+            } else {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_ANSWER_CHART,
+                eventProperties,
+                WrenService.AI,
+                false,
+              );
+            }
             logger.debug(
               `Job ${threadResponse.id} chart is finalized, removing`,
             );
@@ -123,14 +149,18 @@ export class ChartAdjustmentBackgroundTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
   private runningJobs = new Set();
+  private telemetry: PostHogTelemetry;
 
   constructor({
+    telemetry,
     wrenAIAdaptor,
     threadResponseRepository,
   }: {
+    telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
   }) {
+    this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
     this.intervalTime = 1000;
@@ -185,6 +215,23 @@ export class ChartAdjustmentBackgroundTracker {
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
+            const eventProperties = {
+              question: threadResponse.question,
+              error: result.error,
+            };
+            if (result.status === ChartStatus.FINISHED) {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_ANSWER_ADJUST_CHART,
+                eventProperties,
+              );
+            } else {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_ANSWER_ADJUST_CHART,
+                eventProperties,
+                WrenService.AI,
+                false,
+              );
+            }
             logger.debug(
               `Job ${threadResponse.id} chart is finalized, removing`,
             );

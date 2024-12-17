@@ -407,11 +407,13 @@ export class AskingService implements IAskingService {
         queryService,
       });
     this.chartBackgroundTracker = new ChartBackgroundTracker({
+      telemetry,
       wrenAIAdaptor,
       threadResponseRepository,
     });
     this.chartAdjustmentBackgroundTracker =
       new ChartAdjustmentBackgroundTracker({
+        telemetry,
         wrenAIAdaptor,
         threadResponseRepository,
       });
