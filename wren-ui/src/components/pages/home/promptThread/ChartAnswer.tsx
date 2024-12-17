@@ -203,13 +203,13 @@ export default function ChartAnswer(props: Props) {
     onResetState();
   };
 
-  const regeneratedContent = (
+  const regeneratedContent = !!dataValues.length ? (
     <div className="text-center mt-4">
-      <Button onClick={onRegenerate}>
-        Regenerate <ReloadOutlined />
+      <Button icon={<ReloadOutlined />} onClick={onRegenerate}>
+        Regenerate
       </Button>
     </div>
-  );
+  ) : null;
 
   if (error) {
     return (
