@@ -45,6 +45,8 @@ export enum TelemetryEvent {
   HOME_ASK_CANDIDATE = 'home_ask_candidate',
   HOME_CREATE_THREAD = 'home_create_thread',
   HOME_ANSWER_QUESTION = 'home_answer_question',
+  HOME_ANSWER_QUESTION_INTERRUPTED = 'home_answer_question_interrupted',
+  HOME_ANSWER_BREAKDOWN = 'home_answer_breakdown',
   HOME_ASK_FOLLOWUP_QUESTION = 'home_ask_followup_question',
   HOME_CANCEL_ASK = 'home_cancel_ask',
   HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS = 'home_generate_project_recommendation_questions',

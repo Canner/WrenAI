@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ThreadResponseAnswerStatus } from '@/apollo/server/services/askingService';
+import { TelemetryEvent } from '@/apollo/server/telemetry/telemetry';
 
-const { wrenAIAdaptor, askingService } = components;
+const { wrenAIAdaptor, askingService, telemetry } = components;
 
 class ContentMap {
   private contentMap: { [key: string]: string } = {};
@@ -97,6 +98,9 @@ export default async function handler(
             'Thread response answer detail status updated to FINISHED',
           );
           contentMap.remove(queryId);
+          telemetry.sendEvent(TelemetryEvent.HOME_ANSWER_QUESTION, {
+            question: response.question,
+          });
         })
         .catch((error) => {
           console.error(
@@ -104,6 +108,15 @@ export default async function handler(
             error,
           );
           contentMap.remove(queryId);
+          telemetry.sendEvent(
+            TelemetryEvent.HOME_ANSWER_QUESTION,
+            {
+              question: response.question,
+              error: error,
+            },
+            null,
+            false,
+          );
         });
     });
 
@@ -121,6 +134,9 @@ export default async function handler(
             'Thread response answer detail status updated to INTERRUPTED',
           );
           contentMap.remove(queryId);
+          telemetry.sendEvent(TelemetryEvent.HOME_ANSWER_QUESTION_INTERRUPTED, {
+            question: response.question,
+          });
         })
         .catch((error) => {
           console.error(
@@ -128,6 +144,15 @@ export default async function handler(
             error,
           );
           contentMap.remove(queryId);
+          telemetry.sendEvent(
+            TelemetryEvent.HOME_ANSWER_QUESTION_INTERRUPTED,
+            {
+              question: response.question,
+              error: error,
+            },
+            null,
+            false,
+          );
         });
     });
   } catch (error) {

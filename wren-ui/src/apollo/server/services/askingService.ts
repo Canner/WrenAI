@@ -290,12 +290,12 @@ class BreakdownBackgroundTracker {
             };
             if (result.status === AskResultStatus.FINISHED) {
               this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_QUESTION,
+                TelemetryEvent.HOME_ANSWER_BREAKDOWN,
                 eventProperties,
               );
             } else {
               this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_QUESTION,
+                TelemetryEvent.HOME_ANSWER_BREAKDOWN,
                 eventProperties,
                 WrenService.AI,
                 false,
