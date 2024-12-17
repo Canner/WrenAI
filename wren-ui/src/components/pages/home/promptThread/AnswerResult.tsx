@@ -98,12 +98,8 @@ export interface Props {
 
   onRegenerateTextBasedAnswer: (responseId: number) => void;
   onGenerateBreakdownAnswer: (responseId: number) => void;
-  onGenerateChartAnswer: (
-    threadId: number,
-    responseId: number,
-  ) => Promise<void>;
+  onGenerateChartAnswer: (responseId: number) => Promise<void>;
   onAdjustChartAnswer: (
-    threadId: number,
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
@@ -179,7 +175,7 @@ export default function AnswerResult(props: Props) {
     }
 
     if (activeKey === ANSWER_TAB_KEYS.CHART && !threadResponse.chartDetail) {
-      onGenerateChartAnswer(threadId, id);
+      onGenerateChartAnswer(id);
     }
   };
 

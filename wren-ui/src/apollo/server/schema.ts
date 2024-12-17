@@ -915,14 +915,10 @@ export const typeDefs = gql`
     generateThreadResponseAnswer(responseId: Int!): ThreadResponse!
 
     # Generate Thread Response Chart
-    generateThreadResponseChart(
-      threadId: Int!
-      responseId: Int!
-    ): ThreadResponse!
+    generateThreadResponseChart(responseId: Int!): ThreadResponse!
 
     # Adjust Thread Response Chart
     adjustThreadResponseChart(
-      threadId: Int!
       responseId: Int!
       data: AdjustThreadResponseChartInput!
     ): ThreadResponse!

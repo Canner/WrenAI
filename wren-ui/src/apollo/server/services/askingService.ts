@@ -130,12 +130,10 @@ export interface IAskingService {
     configurations: { language: string },
   ): Promise<ThreadResponse>;
   generateThreadResponseChart(
-    threadId: number,
     threadResponseId: number,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
   adjustThreadResponseChart(
-    threadId: number,
     threadResponseId: number,
     input: ChartAdjustmentOption,
     configurations: { language: string },
@@ -717,20 +715,12 @@ export class AskingService implements IAskingService {
   }
 
   public async generateThreadResponseChart(
-    threadId: number,
     threadResponseId: number,
     configurations: { language: string },
   ): Promise<ThreadResponse> {
-    const thread = await this.threadRepository.findOneBy({
-      id: threadId,
-    });
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
     });
-
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
 
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
@@ -761,21 +751,13 @@ export class AskingService implements IAskingService {
   }
 
   public async adjustThreadResponseChart(
-    threadId: number,
     threadResponseId: number,
     input: ChartAdjustmentOption,
     configurations: { language: string },
   ): Promise<ThreadResponse> {
-    const thread = await this.threadRepository.findOneBy({
-      id: threadId,
-    });
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
     });
-
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
 
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);

@@ -161,21 +161,17 @@ export default function HomeThread() {
     fetchThreadResponse({ variables: { responseId } });
   };
 
-  const onGenerateThreadResponseChart = async (
-    threadId: number,
-    responseId: number,
-  ) => {
-    await generateThreadResponseChart({ variables: { threadId, responseId } });
+  const onGenerateThreadResponseChart = async (responseId: number) => {
+    await generateThreadResponseChart({ variables: { responseId } });
     fetchThreadResponse({ variables: { responseId } });
   };
 
   const onAdjustThreadResponseChart = async (
-    threadId: number,
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => {
     await adjustThreadResponseChart({
-      variables: { threadId, responseId, data },
+      variables: { responseId, data },
     });
     fetchThreadResponse({ variables: { responseId } });
   };

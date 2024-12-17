@@ -307,8 +307,8 @@ export const GENERATE_THREAD_RESPONSE_ANSWER = gql`
 `;
 
 export const GENERATE_THREAD_RESPONSE_CHART = gql`
-  mutation GenerateThreadResponseChart($threadId: Int!, $responseId: Int!) {
-    generateThreadResponseChart(threadId: $threadId, responseId: $responseId) {
+  mutation GenerateThreadResponseChart($responseId: Int!) {
+    generateThreadResponseChart(responseId: $responseId) {
       ...CommonResponse
     }
   }
@@ -317,15 +317,10 @@ export const GENERATE_THREAD_RESPONSE_CHART = gql`
 
 export const ADJUST_THREAD_RESPONSE_CHART = gql`
   mutation AdjustThreadResponseChart(
-    $threadId: Int!
     $responseId: Int!
     $data: AdjustThreadResponseChartInput!
   ) {
-    adjustThreadResponseChart(
-      threadId: $threadId
-      responseId: $responseId
-      data: $data
-    ) {
+    adjustThreadResponseChart(responseId: $responseId, data: $data) {
       ...CommonResponse
     }
   }

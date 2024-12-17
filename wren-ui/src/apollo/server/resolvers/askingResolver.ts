@@ -405,26 +405,26 @@ export class AskingResolver {
 
   public async generateThreadResponseChart(
     _root: any,
-    args: { threadId: number; responseId: number },
+    args: { responseId: number },
     ctx: IContext,
   ): Promise<ThreadResponse> {
     const project = await ctx.projectService.getCurrentProject();
-    const { threadId, responseId } = args;
+    const { responseId } = args;
     const askingService = ctx.askingService;
-    return askingService.generateThreadResponseChart(threadId, responseId, {
+    return askingService.generateThreadResponseChart(responseId, {
       language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
   }
 
   public async adjustThreadResponseChart(
     _root: any,
-    args: { threadId: number; responseId: number; data: ChartAdjustmentOption },
+    args: { responseId: number; data: ChartAdjustmentOption },
     ctx: IContext,
   ): Promise<ThreadResponse> {
     const project = await ctx.projectService.getCurrentProject();
-    const { threadId, responseId, data } = args;
+    const { responseId, data } = args;
     const askingService = ctx.askingService;
-    return askingService.adjustThreadResponseChart(threadId, responseId, data, {
+    return askingService.adjustThreadResponseChart(responseId, data, {
       language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
   }

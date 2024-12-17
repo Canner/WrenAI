@@ -29,12 +29,8 @@ interface Props {
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
   onRegenerateTextBasedAnswer: (responseId: number) => void;
   onGenerateBreakdownAnswer: (responseId: number) => void;
-  onGenerateChartAnswer: (
-    threadId: number,
-    responseId: number,
-  ) => Promise<void>;
+  onGenerateChartAnswer: (responseId: number) => Promise<void>;
   onAdjustChartAnswer: (
-    threadId: number,
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;

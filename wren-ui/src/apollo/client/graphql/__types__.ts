@@ -504,7 +504,6 @@ export type Mutation = {
 export type MutationAdjustThreadResponseChartArgs = {
   data: AdjustThreadResponseChartInput;
   responseId: Scalars['Int'];
-  threadId: Scalars['Int'];
 };
 
 
@@ -601,7 +600,6 @@ export type MutationGenerateThreadResponseBreakdownArgs = {
 
 export type MutationGenerateThreadResponseChartArgs = {
   responseId: Scalars['Int'];
-  threadId: Scalars['Int'];
 };
 
 

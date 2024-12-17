@@ -164,7 +164,6 @@ export type GenerateThreadResponseAnswerMutationVariables = Types.Exact<{
 export type GenerateThreadResponseAnswerMutation = { __typename?: 'Mutation', generateThreadResponseAnswer: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type GenerateThreadResponseChartMutationVariables = Types.Exact<{
-  threadId: Types.Scalars['Int'];
   responseId: Types.Scalars['Int'];
 }>;
 
@@ -172,7 +171,6 @@ export type GenerateThreadResponseChartMutationVariables = Types.Exact<{
 export type GenerateThreadResponseChartMutation = { __typename?: 'Mutation', generateThreadResponseChart: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type AdjustThreadResponseChartMutationVariables = Types.Exact<{
-  threadId: Types.Scalars['Int'];
   responseId: Types.Scalars['Int'];
   data: Types.AdjustThreadResponseChartInput;
 }>;
@@ -1017,8 +1015,8 @@ export type GenerateThreadResponseAnswerMutationHookResult = ReturnType<typeof u
 export type GenerateThreadResponseAnswerMutationResult = Apollo.MutationResult<GenerateThreadResponseAnswerMutation>;
 export type GenerateThreadResponseAnswerMutationOptions = Apollo.BaseMutationOptions<GenerateThreadResponseAnswerMutation, GenerateThreadResponseAnswerMutationVariables>;
 export const GenerateThreadResponseChartDocument = gql`
-    mutation GenerateThreadResponseChart($threadId: Int!, $responseId: Int!) {
-  generateThreadResponseChart(threadId: $threadId, responseId: $responseId) {
+    mutation GenerateThreadResponseChart($responseId: Int!) {
+  generateThreadResponseChart(responseId: $responseId) {
     ...CommonResponse
   }
 }
@@ -1038,7 +1036,6 @@ export type GenerateThreadResponseChartMutationFn = Apollo.MutationFunction<Gene
  * @example
  * const [generateThreadResponseChartMutation, { data, loading, error }] = useGenerateThreadResponseChartMutation({
  *   variables: {
- *      threadId: // value for 'threadId'
  *      responseId: // value for 'responseId'
  *   },
  * });
@@ -1051,12 +1048,8 @@ export type GenerateThreadResponseChartMutationHookResult = ReturnType<typeof us
 export type GenerateThreadResponseChartMutationResult = Apollo.MutationResult<GenerateThreadResponseChartMutation>;
 export type GenerateThreadResponseChartMutationOptions = Apollo.BaseMutationOptions<GenerateThreadResponseChartMutation, GenerateThreadResponseChartMutationVariables>;
 export const AdjustThreadResponseChartDocument = gql`
-    mutation AdjustThreadResponseChart($threadId: Int!, $responseId: Int!, $data: AdjustThreadResponseChartInput!) {
-  adjustThreadResponseChart(
-    threadId: $threadId
-    responseId: $responseId
-    data: $data
-  ) {
+    mutation AdjustThreadResponseChart($responseId: Int!, $data: AdjustThreadResponseChartInput!) {
+  adjustThreadResponseChart(responseId: $responseId, data: $data) {
     ...CommonResponse
   }
 }
@@ -1076,7 +1069,6 @@ export type AdjustThreadResponseChartMutationFn = Apollo.MutationFunction<Adjust
  * @example
  * const [adjustThreadResponseChartMutation, { data, loading, error }] = useAdjustThreadResponseChartMutation({
  *   variables: {
- *      threadId: // value for 'threadId'
  *      responseId: // value for 'responseId'
  *      data: // value for 'data'
  *   },

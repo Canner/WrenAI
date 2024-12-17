@@ -61,12 +61,8 @@ const Toolbar = styled.div`
 
 interface Props {
   threadResponse: ThreadResponse;
-  onRegenerateChartAnswer: (
-    threadId: number,
-    responseId: number,
-  ) => Promise<void>;
+  onRegenerateChartAnswer: (responseId: number) => Promise<void>;
   onAdjustChartAnswer: (
-    threadId: number,
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
@@ -168,10 +164,7 @@ export default function ChartAnswer(props: Props) {
   };
 
   const onRegenerate = () => {
-    attachLoading(onRegenerateChartAnswer, setRegenerating)(
-      threadResponse.threadId,
-      threadResponse.id,
-    );
+    attachLoading(onRegenerateChartAnswer, setRegenerating)(threadResponse.id);
     onResetState();
   };
 
@@ -199,7 +192,6 @@ export default function ChartAnswer(props: Props) {
 
   const onAdjustChart = async () => {
     attachLoading(onAdjustChartAnswer, setRegenerating)(
-      threadResponse.threadId,
       threadResponse.id,
       form.getFieldsValue(),
     );
