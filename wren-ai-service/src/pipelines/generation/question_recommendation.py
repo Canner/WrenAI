@@ -28,8 +28,14 @@ def prompt(
     max_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    """
+    If previous_questions is provided, the MDL is omitted to allow the LLM to focus on
+    generating recommendations based on the question history. This helps provide more
+    contextually relevant questions that build on previous questions.
+    """
+
     return prompt_builder.run(
-        models=mdl.get("models", []),
+        models=[] if previous_questions else mdl.get("models", []),
         previous_questions=previous_questions,
         language=language,
         current_date=current_date,
@@ -204,9 +210,9 @@ Output all questions in the following JSON format:
 """
 
 user_prompt_template = """
-{% if mdl %}
+{% if models %}
 Data Model Specification:
-{{mdl}}
+{{models}}
 {% endif %}
 
 {% if previous_questions %}
