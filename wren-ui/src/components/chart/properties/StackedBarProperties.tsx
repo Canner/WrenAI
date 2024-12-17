@@ -8,9 +8,9 @@ import {
 } from './BasicProperties';
 
 export default function StackedBarProperties(props: PropertiesProps) {
-  const { columns } = props;
+  const { columns, titleMap } = props;
   const chartTypeOptions = getChartTypeOptions();
-  const columnOptions = getColumnOptions(columns);
+  const columnOptions = getColumnOptions(columns, titleMap);
   return (
     <>
       <Row className="mb-2" gutter={16}>

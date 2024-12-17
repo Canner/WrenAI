@@ -9,9 +9,12 @@ export const getChartTypeOptions = () => {
   }));
 };
 
-export const getColumnOptions = (columns: { name: string; type: string }[]) => {
+export const getColumnOptions = (
+  columns: { name: string; type: string }[],
+  titleMap?: Record<string, string>,
+) => {
   return (columns || []).map((column) => ({
-    label: column.name,
+    label: titleMap?.[column.name] || column.name,
     value: column.name,
   }));
 };
@@ -49,12 +52,13 @@ export function AxisProperty(props: {
 
 export interface PropertiesProps {
   columns: { name: string; type: string }[];
+  titleMap: Record<string, string>;
 }
 
 export default function BasicProperties(props: PropertiesProps) {
-  const { columns } = props;
+  const { columns, titleMap } = props;
   const chartTypeOptions = getChartTypeOptions();
-  const columnOptions = getColumnOptions(columns);
+  const columnOptions = getColumnOptions(columns, titleMap);
   return (
     <>
       <Row className="mb-2" gutter={16}>

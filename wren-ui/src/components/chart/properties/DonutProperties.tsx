@@ -7,9 +7,9 @@ import {
 } from './BasicProperties';
 
 export default function DonutProperties(props: PropertiesProps) {
-  const { columns } = props;
+  const { columns, titleMap } = props;
   const chartTypeOptions = getChartTypeOptions();
-  const columnOptions = getColumnOptions(columns);
+  const columnOptions = getColumnOptions(columns, titleMap);
   return (
     <>
       <Row gutter={16} className="mb-2">

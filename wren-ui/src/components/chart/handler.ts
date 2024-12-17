@@ -474,3 +474,15 @@ export const getChartSpecOptionValues = (spec: TopLevelSpec) => {
     theta,
   };
 };
+
+export const getChartSpecFieldTitleMap = (encoding: EncodingSpec) => {
+  if (!encoding) return {};
+  const allFields = ['x', 'y', 'xOffset', 'color'].reduce((result, key) => {
+    const axis = encoding[key] as any;
+    if (axis?.field && axis?.title) {
+      result[axis?.field] = axis?.title;
+    }
+    return result;
+  }, {});
+  return allFields;
+};

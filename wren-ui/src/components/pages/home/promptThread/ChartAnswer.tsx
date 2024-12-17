@@ -20,6 +20,7 @@ import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 import { isEmpty, isEqual } from 'lodash';
 import {
   convertToChartType,
+  getChartSpecFieldTitleMap,
   getChartSpecOptionValues,
 } from '@/components/chart/handler';
 
@@ -129,6 +130,10 @@ export default function ChartAnswer(props: Props) {
 
   const chartOptionValues = useMemo(() => {
     return getChartSpecOptionValues(chartSpec);
+  }, [chartSpec]);
+
+  const chartSpecFieldTitleMap = useMemo(() => {
+    return getChartSpecFieldTitleMap(chartSpec?.encoding);
   }, [chartSpec]);
 
   useEffect(() => {
@@ -246,7 +251,10 @@ export default function ChartAnswer(props: Props) {
               >
                 <div className="d-flex justify-content-between align-center">
                   <div className="flex-grow-1">
-                    <DynamicProperties columns={dataColumns} />
+                    <DynamicProperties
+                      columns={dataColumns}
+                      titleMap={chartSpecFieldTitleMap}
+                    />
                   </div>
                   {isAdjusted && (
                     <div className="d-flex flex-column">
