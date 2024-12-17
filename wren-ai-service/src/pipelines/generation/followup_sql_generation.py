@@ -11,11 +11,11 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import (
+from src.pipelines.common import show_current_time
+from src.pipelines.generation.utils.sql import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
-    show_current_time,
     sql_generation_system_prompt,
 )
 from src.utils import async_timer, timer
