@@ -116,12 +116,10 @@ export interface IAskingService {
   getResponsesWithThread(threadId: number): Promise<ThreadResponse[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   generateThreadResponseBreakdown(
-    threadId: number,
     threadResponseId: number,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
   generateThreadResponseAnswer(
-    threadId: number,
     threadResponseId: number,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
@@ -624,21 +622,13 @@ export class AskingService implements IAskingService {
   }
 
   public async generateThreadResponseBreakdown(
-    threadId: number,
     threadResponseId: number,
     configurations: { language: string },
   ): Promise<ThreadResponse> {
     const { language } = configurations;
-    const thread = await this.threadRepository.findOneBy({
-      id: threadId,
-    });
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
     });
-
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
 
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
@@ -670,19 +660,11 @@ export class AskingService implements IAskingService {
   }
 
   public async generateThreadResponseAnswer(
-    threadId: number,
     threadResponseId: number,
   ): Promise<ThreadResponse> {
-    const thread = await this.threadRepository.findOneBy({
-      id: threadId,
-    });
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
     });
-
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
 
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);

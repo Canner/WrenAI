@@ -372,14 +372,13 @@ export class AskingResolver {
 
   public async generateThreadResponseBreakdown(
     _root: any,
-    args: { threadId: number; responseId: number },
+    args: { responseId: number },
     ctx: IContext,
   ): Promise<ThreadResponse> {
     const project = await ctx.projectService.getCurrentProject();
-    const { threadId, responseId } = args;
+    const { responseId } = args;
     const askingService = ctx.askingService;
     const breakdownDetail = await askingService.generateThreadResponseBreakdown(
-      threadId,
       responseId,
       { language: WrenAILanguage[project.language] || WrenAILanguage.EN },
     );
@@ -388,13 +387,13 @@ export class AskingResolver {
 
   public async generateThreadResponseAnswer(
     _root: any,
-    args: { threadId: number; responseId: number },
+    args: { responseId: number },
     ctx: IContext,
   ): Promise<ThreadResponse> {
     const project = await ctx.projectService.getCurrentProject();
-    const { threadId, responseId } = args;
+    const { responseId } = args;
     const askingService = ctx.askingService;
-    return askingService.generateThreadResponseAnswer(threadId, responseId, {
+    return askingService.generateThreadResponseAnswer(responseId, {
       language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
   }
