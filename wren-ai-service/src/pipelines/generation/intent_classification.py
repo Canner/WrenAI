@@ -23,7 +23,7 @@ logger = logging.getLogger("wren-ai-service")
 intent_classification_system_prompt = """
 ### TASK ###
 You are a great detective, who is great at intent classification.
-First, try to rephrase the user's question to make it more specific, clear and relevant to the database schema before making the intent classification.
+First, rephrase the user's question to make it more specific, clear and relevant to the database schema before making the intent classification.
 Second, you need to use rephrased user's question to classify user's intent based on given database schema to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
 Also you should provide reasoning for the classification clearly and concisely within 20 words.
 
@@ -34,15 +34,16 @@ Also you should provide reasoning for the classification clearly and concisely w
 - MUST use the rephrased user's question to make the intent classification.
 - MUST put the rephrased user's question in the rephrased_question output.
 - REASONING MUST be within 20 words.
+- If the rephrased user's question is vague and doesn't specify which table or property to analyze, classify it as MISLEADING_QUERY.
 
 ### INTENT DEFINITIONS ###
 - TEXT_TO_SQL
     - When to Use:
         - Select this category if the user's question is directly related to the given database schema and can be answered by generating an SQL query using that schema.
-        - If the user's question is related to the previous question, and considering them together could be answered by generating an SQL query using that schema.
+        - If the rephrasedd user's question is related to the previous question, and considering them together could be answered by generating an SQL query using that schema.
     - Characteristics:
-        - The question involves specific data retrieval or manipulation that requires SQL.
-        - It references tables, columns, or specific data points within the schema.
+        - The rephrasedd user's question involves specific data retrieval or manipulation that requires SQL.
+        - The rephrasedd user's question references tables, columns, or specific data points within the schema.
     - Instructions:
         - MUST include table and column names that should be used in the SQL query according to the database schema in the reasoning output.
         - MUST include phrases from the user's question that are explicitly related to the database schema in the reasoning output.
@@ -52,27 +53,28 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "List the top 10 products by revenue."
 - MISLEADING_QUERY
     - When to Use:
-        - If the user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
-        - If the user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
-        - If the user's question contains SQL code.
+        - If the rephrasedd user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
+        - If the rephrasedd user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
+        - If the rephrasedd user's question contains SQL code.
     - Characteristics:
-        - The question does not pertain to any aspect of the database or its data.
-        - It might be a casual conversation starter or about an entirely different topic.
+        - The rephrasedd user's question does not pertain to any aspect of the database or its data.
+        - The rephrasedd user's question might be a casual conversation starter or about an entirely different topic.
+        - The rephrasedd user's question is vague and doesn't specify which table or property to analyze.
     - Instructions:
-        - MUST explicitly add phrases from the user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the user's question to be MISLEADING_QUERY.
+        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be MISLEADING_QUERY.
     - Examples:
         - "How are you?"
         - "What's the weather like today?"
         - "Tell me a joke."
 - GENERAL
     - When to Use:
-        - Use this category if the user is seeking general information about the database schema, needs help formulating a proper question, or asks a vague question related to the schema.
-        - If the user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
+        - Use this category if the user is seeking general information about the database schema.
+        - If the rephrasedd user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
     - Characteristics:
         - The question is about understanding the dataset or its capabilities.
         - The user may need guidance on how to proceed or what questions to ask.
     - Instructions:
-        - MUST explicitly add phrases from the user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the user's question to be GENERAL.
+        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be GENERAL.
     - Examples:
         - "What is the dataset about?"
         - "Tell me more about the database."
@@ -83,8 +85,8 @@ Also you should provide reasoning for the classification clearly and concisely w
 Please provide your response as a JSON object, structured as follows:
 
 {
-    "reasoning": "<CHAIN_OF_THOUGHT_REASONING_IN_STRING_FORMAT>",
     "rephrased_question": "<REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
+    "reasoning": "<CHAIN_OF_THOUGHT_REASONING_BASED_ON_REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
     "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL"
 }
 """
