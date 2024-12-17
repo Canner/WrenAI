@@ -137,8 +137,8 @@ export enum DataSourceName {
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES',
-  TRINO = 'TRINO',
   SNOWFLAKE = 'SNOWFLAKE',
+  TRINO = 'TRINO'
 }
 
 export type DetailStep = {
@@ -445,6 +445,9 @@ export type Mutation = {
   deploy: Scalars['JSON'];
   generateProjectRecommendationQuestions: Scalars['Boolean'];
   generateThreadRecommendationQuestions: Scalars['Boolean'];
+  generateThreadResponseAnswer: ThreadResponse;
+  generateThreadResponseBreakdown: ThreadResponse;
+  previewBreakdownData: Scalars['JSON'];
   previewData: Scalars['JSON'];
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
@@ -548,6 +551,21 @@ export type MutationDeployArgs = {
 
 export type MutationGenerateThreadRecommendationQuestionsArgs = {
   threadId: Scalars['Int'];
+};
+
+
+export type MutationGenerateThreadResponseAnswerArgs = {
+  responseId: Scalars['Int'];
+};
+
+
+export type MutationGenerateThreadResponseBreakdownArgs = {
+  responseId: Scalars['Int'];
+};
+
+
+export type MutationPreviewBreakdownDataArgs = {
+  where: PreviewDataInput;
 };
 
 
@@ -947,19 +965,41 @@ export type Thread = {
 
 export type ThreadResponse = {
   __typename?: 'ThreadResponse';
-  detail?: Maybe<ThreadResponseDetail>;
-  error?: Maybe<Error>;
+  answerDetail?: Maybe<ThreadResponseAnswerDetail>;
+  breakdownDetail?: Maybe<ThreadResponseBreakdownDetail>;
   id: Scalars['Int'];
   question: Scalars['String'];
-  status: AskingTaskStatus;
+  sql: Scalars['String'];
+  threadId: Scalars['Int'];
+  view?: Maybe<ViewInfo>;
 };
 
-export type ThreadResponseDetail = {
-  __typename?: 'ThreadResponseDetail';
+export type ThreadResponseAnswerDetail = {
+  __typename?: 'ThreadResponseAnswerDetail';
+  content?: Maybe<Scalars['String']>;
+  error?: Maybe<Error>;
+  numRowsUsedInLLM?: Maybe<Scalars['Int']>;
+  queryId?: Maybe<Scalars['String']>;
+  status?: Maybe<ThreadResponseAnswerStatus>;
+};
+
+export enum ThreadResponseAnswerStatus {
+  FAILED = 'FAILED',
+  FETCHING_DATA = 'FETCHING_DATA',
+  FINISHED = 'FINISHED',
+  INTERRUPTED = 'INTERRUPTED',
+  NOT_STARTED = 'NOT_STARTED',
+  PREPROCESSING = 'PREPROCESSING',
+  STREAMING = 'STREAMING'
+}
+
+export type ThreadResponseBreakdownDetail = {
+  __typename?: 'ThreadResponseBreakdownDetail';
   description?: Maybe<Scalars['String']>;
-  sql?: Maybe<Scalars['String']>;
-  steps: Array<DetailStep>;
-  view?: Maybe<ViewInfo>;
+  error?: Maybe<Error>;
+  queryId?: Maybe<Scalars['String']>;
+  status: AskingTaskStatus;
+  steps?: Maybe<Array<DetailStep>>;
 };
 
 export type ThreadUniqueWhereInput = {

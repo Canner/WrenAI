@@ -874,16 +874,10 @@ export const typeDefs = gql`
     previewBreakdownData(where: PreviewDataInput!): JSON!
 
     # Generate Thread Response Breakdown
-    generateThreadResponseBreakdown(
-      threadId: Int!
-      responseId: Int!
-    ): ThreadResponse!
+    generateThreadResponseBreakdown(responseId: Int!): ThreadResponse!
 
     # Generate Thread Response Answer
-    generateThreadResponseAnswer(
-      threadId: Int!
-      responseId: Int!
-    ): ThreadResponse!
+    generateThreadResponseAnswer(responseId: Int!): ThreadResponse!
 
     # Settings
     resetCurrentProject: Boolean!

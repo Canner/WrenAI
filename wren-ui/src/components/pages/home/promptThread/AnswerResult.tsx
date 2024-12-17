@@ -1,43 +1,48 @@
+import { useMemo } from 'react';
+import { isEmpty } from 'lodash';
 import clsx from 'clsx';
-import Link from 'next/link';
-import { Button, Skeleton, Typography, Alert } from 'antd';
+import { Typography, Tabs } from 'antd';
 import styled from 'styled-components';
-import { Path } from '@/utils/enum';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
+import CodeFilled from '@ant-design/icons/CodeFilled';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
-import SaveOutlined from '@ant-design/icons/SaveOutlined';
-import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
-import StepContent from '@/components/pages/home/promptThread/StepContent';
-import { getIsFinished } from '@/hooks/useAskPrompt';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
+import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
+import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
+import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { ThreadResponse } from '@/apollo/client/graphql/__types__';
+import { ANSWER_TAB_KEYS } from '@/utils/enum';
 
 const { Title, Text } = Typography;
 
-const StyledAnswer = styled(Typography)`
-  position: relative;
-  border: 1px var(--gray-4) solid;
-  border-radius: 4px;
+const StyledTabs = styled(Tabs)`
+  .ant-tabs-nav {
+    margin-bottom: 0;
+  }
 
-  .adm-answer-title {
-    font-weight: 500;
-    position: absolute;
-    top: -13px;
-    left: 8px;
-    background: white;
+  .ant-tabs-content-holder {
+    border-left: 1px var(--gray-4) solid;
+    border-right: 1px var(--gray-4) solid;
+    border-bottom: 1px var(--gray-4) solid;
+  }
+
+  .ant-tabs-tab {
+    .ant-typography {
+      color: var(--gray-6);
+    }
+
+    &.ant-tabs-tab-active {
+      .ant-typography {
+        color: var(--gray-8);
+      }
+    }
   }
 `;
 
-const StyledSkeleton = styled(Skeleton)`
-  .ant-skeleton-title {
-    margin-top: 0;
-  }
-`;
-
-interface Props {
+export interface Props {
   motion: boolean;
   threadResponse: ThreadResponse;
   isLastThreadResponse: boolean;
@@ -46,6 +51,9 @@ interface Props {
 
   // recommended questions
   recommendedQuestionsProps: RecommendedQuestionsProps;
+
+  onRegenerateTextBasedAnswer: (responseId: number) => void;
+  onGenerateBreakdownAnswer: (responseId: number) => void;
 }
 
 const QuestionTitle = (props) => {
@@ -85,15 +93,12 @@ export default function AnswerResult(props: Props) {
     onOpenSaveAsViewModal,
     onInitPreviewDone,
     recommendedQuestionsProps,
+    onGenerateBreakdownAnswer,
+    onRegenerateTextBasedAnswer,
   } = props;
 
-  const { question, status, error } = threadResponse;
-
-  const { steps, description, view, sql } = threadResponse?.detail || {};
-
-  const loading = !getIsFinished(status);
-
-  const isViewSaved = !!view;
+  const { answerDetail, breakdownDetail, id, question, sql, view } =
+    threadResponse;
 
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
@@ -104,82 +109,68 @@ export default function AnswerResult(props: Props) {
     recommendedQuestionsProps.show,
   );
 
+  const isBreakdownOnly = useMemo(() => {
+    // we support rendering different types of answers now, so we need to check if it's old data.
+    // existing thread response's answerDetail is null.
+    return answerDetail === null && !isEmpty(breakdownDetail);
+  }, [answerDetail, breakdownDetail]);
+
+  const onTabClick = (activeKey: string) => {
+    if (
+      activeKey === ANSWER_TAB_KEYS.VIEW_SQL &&
+      !threadResponse.breakdownDetail
+    ) {
+      onGenerateBreakdownAnswer(id);
+    }
+  };
+
   return (
     <div style={resultStyle} className="adm-answer-result">
-      <QuestionTitle className="mb-9" question={question} />
-      {error ? (
-        <>
-          <Alert
-            message={error.shortMessage}
-            description={error.message}
-            type="error"
-            showIcon
-          />
-          {renderRecommendedQuestions(
-            isLastThreadResponse,
-            recommendedQuestionProps,
-            recommendedQuestionsProps.onSelect,
-          )}
-        </>
-      ) : (
-        <StyledSkeleton active loading={loading}>
-          <div className={clsx({ 'promptThread-answer': motion })}>
-            <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
-              <Text className="adm-answer-title px-2">
+      <QuestionTitle className="mb-6" question={question} />
+      <StyledTabs type="card" size="small" onTabClick={onTabClick}>
+        {!isBreakdownOnly && (
+          <Tabs.TabPane
+            key={ANSWER_TAB_KEYS.ANSWER}
+            tab={
+              <>
                 <CheckCircleFilled className="mr-2 green-6" />
-                Summary
-              </Text>
-              <div className="pl-7 pb-5">{description}</div>
-              {(steps || []).map((step, index) => (
-                <StepContent
-                  isLastStep={index === steps.length - 1}
-                  key={`${step.summary}-${index}`}
-                  sql={step.sql}
-                  fullSql={sql}
-                  stepIndex={index}
-                  summary={step.summary}
-                  threadResponseId={threadResponse.id}
-                  onInitPreviewDone={onInitPreviewDone}
-                  isLastThreadResponse={isLastThreadResponse}
-                />
-              ))}
-            </StyledAnswer>
-            {isViewSaved ? (
-              <div className="mt-2 gray-6 text-medium">
-                <FileDoneOutlined className="mr-2" />
-                Generated from saved view{' '}
-                <Link
-                  className="gray-7"
-                  href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {view.displayName}
-                </Link>
-              </div>
-            ) : (
-              <Button
-                className="mt-2 gray-6"
-                type="text"
-                size="small"
-                icon={<SaveOutlined />}
-                onClick={() =>
-                  onOpenSaveAsViewModal({
-                    sql,
-                    responseId: threadResponse.id,
-                  })
-                }
-              >
-                Save as View
-              </Button>
-            )}
-            {renderRecommendedQuestions(
-              isLastThreadResponse,
-              recommendedQuestionProps,
-              recommendedQuestionsProps.onSelect,
-            )}
-          </div>
-        </StyledSkeleton>
+                <Text>Answer</Text>
+              </>
+            }
+          >
+            <TextBasedAnswer
+              threadResponse={threadResponse}
+              isLastThreadResponse={isLastThreadResponse}
+              onInitPreviewDone={onInitPreviewDone}
+              onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
+            />
+          </Tabs.TabPane>
+        )}
+        <Tabs.TabPane
+          key={ANSWER_TAB_KEYS.VIEW_SQL}
+          tab={
+            <>
+              <CodeFilled className="mr-2 gray-7" />
+              <Text>View SQL</Text>
+            </>
+          }
+        >
+          <BreakdownAnswer
+            motion={motion}
+            threadResponse={threadResponse}
+            isLastThreadResponse={isLastThreadResponse}
+            onInitPreviewDone={onInitPreviewDone}
+          />
+        </Tabs.TabPane>
+      </StyledTabs>
+      <ViewBlock
+        view={view}
+        onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
+      />
+      {renderRecommendedQuestions(
+        isLastThreadResponse,
+        recommendedQuestionProps,
+        recommendedQuestionsProps.onSelect,
       )}
     </div>
   );
