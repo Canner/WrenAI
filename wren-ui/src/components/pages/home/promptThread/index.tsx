@@ -6,6 +6,7 @@ import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import {
+  AdjustThreadResponseChartInput,
   DetailedThread,
   RecommendedQuestionsTask,
   ThreadResponse,
@@ -28,6 +29,11 @@ interface Props {
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
   onRegenerateTextBasedAnswer: (responseId: number) => void;
   onGenerateBreakdownAnswer: (responseId: number) => void;
+  onGenerateChartAnswer: (responseId: number) => Promise<void>;
+  onAdjustChartAnswer: (
+    responseId: number,
+    data: AdjustThreadResponseChartInput,
+  ) => Promise<void>;
 }
 
 const StyledPromptThread = styled.div`
@@ -61,6 +67,8 @@ const AnswerResultTemplate: React.FC<
       | 'onOpenSaveAsViewModal'
       | 'onRegenerateTextBasedAnswer'
       | 'onGenerateBreakdownAnswer'
+      | 'onGenerateChartAnswer'
+      | 'onAdjustChartAnswer'
     > & {
       motion: boolean;
       onInitPreviewDone: () => void;
@@ -75,6 +83,8 @@ const AnswerResultTemplate: React.FC<
   onInitPreviewDone,
   onGenerateBreakdownAnswer,
   onRegenerateTextBasedAnswer,
+  onGenerateChartAnswer,
+  onAdjustChartAnswer,
   ...threadResponse
 }) => {
   const { id } = threadResponse;
@@ -93,6 +103,8 @@ const AnswerResultTemplate: React.FC<
         recommendedQuestionsProps={recommendedQuestionsProps}
         onGenerateBreakdownAnswer={onGenerateBreakdownAnswer}
         onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
+        onGenerateChartAnswer={onGenerateChartAnswer}
+        onAdjustChartAnswer={onAdjustChartAnswer}
       />
     </div>
   );

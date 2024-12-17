@@ -98,6 +98,12 @@ const resolvers = {
     // Generate Thread Response Answer
     generateThreadResponseAnswer: askingResolver.generateThreadResponseAnswer,
 
+    // Generate Thread Response Chart
+    generateThreadResponseChart: askingResolver.generateThreadResponseChart,
+
+    // Adjust Thread Response Chart
+    adjustThreadResponseChart: askingResolver.adjustThreadResponseChart,
+
     // Views
     createView: modelResolver.createView,
     deleteView: modelResolver.deleteView,

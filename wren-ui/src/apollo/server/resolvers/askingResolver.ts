@@ -4,6 +4,7 @@ import {
   AskResultStatus,
   AskResultType,
   RecommendationQuestionStatus,
+  ChartAdjustmentOption,
 } from '@server/models/adaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
@@ -89,6 +90,9 @@ export class AskingResolver {
       this.generateThreadResponseBreakdown.bind(this);
     this.generateThreadResponseAnswer =
       this.generateThreadResponseAnswer.bind(this);
+    this.generateThreadResponseChart =
+      this.generateThreadResponseChart.bind(this);
+    this.adjustThreadResponseChart = this.adjustThreadResponseChart.bind(this);
   }
 
   public async generateProjectRecommendationQuestions(
@@ -278,6 +282,7 @@ export class AskingResolver {
           sql: response.sql,
           breakdownDetail: response.breakdownDetail,
           answerDetail: response.answerDetail,
+          chartDetail: response.chartDetail,
         });
 
         return acc;
@@ -394,6 +399,32 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     return askingService.generateThreadResponseAnswer(responseId, {
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
+  }
+
+  public async generateThreadResponseChart(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { responseId } = args;
+    const askingService = ctx.askingService;
+    return askingService.generateThreadResponseChart(responseId, {
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
+  }
+
+  public async adjustThreadResponseChart(
+    _root: any,
+    args: { responseId: number; data: ChartAdjustmentOption },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { responseId, data } = args;
+    const askingService = ctx.askingService;
+    return askingService.adjustThreadResponseChart(responseId, data, {
       language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
   }

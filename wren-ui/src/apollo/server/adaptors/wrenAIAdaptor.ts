@@ -17,6 +17,11 @@ import {
   AskInput,
   TextBasedAnswerInput,
   TextBasedAnswerResult,
+  ChartInput,
+  ChartAdjustmentInput,
+  ChartResult,
+  ChartStatus,
+  TextBasedAnswerStatus,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -24,7 +29,7 @@ import * as Errors from '@server/utils/error';
 const logger = getLogger('WrenAIAdaptor');
 logger.level = 'debug';
 
-const getAISerciceError = (error: any) => {
+const getAIServiceError = (error: any) => {
   const { data } = error.response || {};
   return data?.detail
     ? `${error.message}, detail: ${data.detail}`
@@ -72,6 +77,16 @@ export interface IWrenAIAdaptor {
   ): Promise<AsyncQueryResponse>;
   getTextBasedAnswerResult(queryId: string): Promise<TextBasedAnswerResult>;
   streamTextBasedAnswer(queryId: string): Promise<Readable>;
+
+  /**
+   * Chart related APIs
+   */
+  generateChart(input: ChartInput): Promise<AsyncQueryResponse>;
+  getChartResult(queryId: string): Promise<ChartResult>;
+  cancelChart(queryId: string): Promise<void>;
+  adjustChart(input: ChartAdjustmentInput): Promise<AsyncQueryResponse>;
+  getChartAdjustmentResult(queryId: string): Promise<ChartResult>;
+  cancelChartAdjustment(queryId: string): Promise<void>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -96,7 +111,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
-      logger.debug(`Got error when asking wren AI: ${getAISerciceError(err)}`);
+      logger.debug(`Got error when asking wren AI: ${getAIServiceError(err)}`);
       throw err;
     }
   }
@@ -108,7 +123,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         status: 'stopped',
       });
     } catch (err: any) {
-      logger.debug(`Got error when canceling ask: ${getAISerciceError(err)}`);
+      logger.debug(`Got error when canceling ask: ${getAIServiceError(err)}`);
       throw err;
     }
   }
@@ -122,7 +137,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return this.transformAskResult(res.data);
     } catch (err: any) {
       logger.debug(
-        `Got error when getting ask result: ${getAISerciceError(err)}`,
+        `Got error when getting ask result: ${getAIServiceError(err)}`,
       );
       // throw err;
       throw Errors.create(Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR, {
@@ -141,7 +156,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return res.data;
     } catch (err: any) {
       logger.debug(
-        `Got error when getting ask streaming result: ${getAISerciceError(err)}`,
+        `Got error when getting ask streaming result: ${getAIServiceError(err)}`,
       );
       // throw err;
       throw Errors.create(Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR, {
@@ -165,7 +180,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(
-        `Got error when generating ask detail: ${getAISerciceError(err)}`,
+        `Got error when generating ask detail: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -180,7 +195,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return this.transformAskDetailResult(res.data);
     } catch (err: any) {
       logger.debug(
-        `Got error when getting ask detail result: ${getAISerciceError(err)}`,
+        `Got error when getting ask detail result: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -243,7 +258,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return { queryId: res.data.id };
     } catch (err: any) {
       logger.debug(
-        `Got error when generating recommendation questions: ${getAISerciceError(err)}`,
+        `Got error when generating recommendation questions: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -259,7 +274,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return this.transformRecommendationQuestionsResult(res.data);
     } catch (err: any) {
       logger.debug(
-        `Got error when getting recommendation questions result: ${getAISerciceError(err)}`,
+        `Got error when getting recommendation questions result: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -285,7 +300,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(
-        `Got error when creating text-based answer: ${getAISerciceError(err)}`,
+        `Got error when creating text-based answer: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -302,7 +317,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return this.transformTextBasedAnswerResult(res.data);
     } catch (err: any) {
       logger.debug(
-        `Got error when getting text-based answer result: ${getAISerciceError(err)}`,
+        `Got error when getting text-based answer result: ${getAIServiceError(err)}`,
       );
       throw err;
     }
@@ -318,17 +333,130 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return res.data;
     } catch (err: any) {
       logger.debug(
-        `Got error when getting text-based answer streaming result: ${getAISerciceError(err)}`,
+        `Got error when getting text-based answer streaming result: ${getAIServiceError(err)}`,
       );
       throw err;
     }
   }
 
-  private transformTextBasedAnswerResult(body: any): TextBasedAnswerResult {
+  public async generateChart(input: ChartInput): Promise<AsyncQueryResponse> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/charts`,
+        input,
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(`Got error when creating chart: ${getAIServiceError(err)}`);
+      throw err;
+    }
+  }
+
+  public async getChartResult(queryId: string): Promise<ChartResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/charts/${queryId}`,
+      );
+      return this.transformChartResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting chart result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async cancelChart(queryId: string): Promise<void> {
+    try {
+      await axios.patch(`${this.wrenAIBaseEndpoint}/v1/charts/${queryId}`, {
+        status: 'stopped',
+      });
+    } catch (err: any) {
+      logger.debug(`Got error when canceling chart: ${getAIServiceError(err)}`);
+      throw err;
+    }
+  }
+
+  public async adjustChart(
+    input: ChartAdjustmentInput,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/chart-adjustments`,
+        this.transformChartAdjustmentInput(input),
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(`Got error when adjusting chart: ${getAIServiceError(err)}`);
+      throw err;
+    }
+  }
+
+  public async getChartAdjustmentResult(queryId: string): Promise<ChartResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/chart-adjustments/${queryId}`,
+      );
+      return this.transformChartResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting chart adjustment result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async cancelChartAdjustment(queryId: string): Promise<void> {
+    try {
+      await axios.patch(
+        `${this.wrenAIBaseEndpoint}/v1/chart-adjustments/${queryId}`,
+        {
+          status: 'stopped',
+        },
+      );
+    } catch (err: any) {
+      logger.debug(
+        `Got error when canceling chart adjustment: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  private transformChartAdjustmentInput(input: ChartAdjustmentInput) {
+    const { query, sql, adjustmentOption, chartSchema } = input;
     return {
-      status: body.status,
+      query,
+      sql,
+      adjustment_option: {
+        chart_type: adjustmentOption.chartType.toLowerCase(),
+        x_axis: adjustmentOption.xAxis,
+        y_axis: adjustmentOption.yAxis,
+        x_offset: adjustmentOption.xOffset,
+        color: adjustmentOption.color,
+        theta: adjustmentOption.theta,
+      },
+      chart_schema: chartSchema,
+    };
+  }
+
+  private transformChartResult(body: any): ChartResult {
+    const { status, error } = this.transformStatusAndError(body);
+    return {
+      status: status as ChartStatus,
+      error,
+      response: {
+        reasoning: body.response?.reasoning,
+        chartSchema: body.response?.chart_schema,
+      },
+    };
+  }
+
+  private transformTextBasedAnswerResult(body: any): TextBasedAnswerResult {
+    const { status, error } = this.transformStatusAndError(body);
+    return {
+      status: status as TextBasedAnswerStatus,
       numRowsUsedInLLM: body.num_rows_used_in_llm,
-      error: body.error,
+      error,
     };
   }
 
@@ -387,7 +515,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
     return {
       type,
-      status,
+      status: status as AskResultStatus,
       error,
       response: candidates,
     };
@@ -417,7 +545,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
     return {
       type,
-      status,
+      status: status as AskResultStatus,
       error,
       response: {
         description: body?.response?.description,
@@ -427,7 +555,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformStatusAndError(body: any): {
-    status: AskResultStatus;
+    status: AskResultStatus | TextBasedAnswerStatus | ChartStatus;
     error?: {
       code: Errors.GeneralErrorCodes;
       message: string;
@@ -435,9 +563,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     } | null;
   } {
     // transform status to enum
-    const status = AskResultStatus[
-      body?.status?.toUpperCase()
-    ] as AskResultStatus;
+    const status = body?.status?.toUpperCase();
 
     if (!status) {
       throw new Error(`Unknown ask status: ${body?.status}`);

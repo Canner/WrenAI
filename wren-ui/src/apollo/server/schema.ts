@@ -549,6 +549,23 @@ export const typeDefs = gql`
     MISLEADING_QUERY
   }
 
+  enum ChartTaskStatus {
+    FETCHING
+    GENERATING
+    FINISHED
+    FAILED
+    STOPPED
+  }
+
+  enum ChartType {
+    BAR
+    PIE
+    LINE
+    AREA
+    GROUPED_BAR
+    STACKED_BAR
+  }
+
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
@@ -611,6 +628,15 @@ export const typeDefs = gql`
     summary: String
   }
 
+  input AdjustThreadResponseChartInput {
+    chartType: ChartType!
+    xAxis: String
+    yAxis: String
+    xOffset: String
+    color: String
+    theta: String
+  }
+
   input PreviewDataInput {
     responseId: Int!
     # Optional, only used for preview data of a single step
@@ -652,6 +678,14 @@ export const typeDefs = gql`
     steps: [DetailStep!]
   }
 
+  type ThreadResponseChartDetail {
+    queryId: String
+    status: ChartTaskStatus!
+    error: Error
+    description: String
+    chartSchema: JSON
+  }
+
   type ThreadResponse {
     id: Int!
     threadId: Int!
@@ -660,6 +694,7 @@ export const typeDefs = gql`
     view: ViewInfo
     breakdownDetail: ThreadResponseBreakdownDetail
     answerDetail: ThreadResponseAnswerDetail
+    chartDetail: ThreadResponseChartDetail
   }
 
   # Thread only consists of basic information of a thread
@@ -878,6 +913,15 @@ export const typeDefs = gql`
 
     # Generate Thread Response Answer
     generateThreadResponseAnswer(responseId: Int!): ThreadResponse!
+
+    # Generate Thread Response Chart
+    generateThreadResponseChart(responseId: Int!): ThreadResponse!
+
+    # Adjust Thread Response Chart
+    adjustThreadResponseChart(
+      responseId: Int!
+      data: AdjustThreadResponseChartInput!
+    ): ThreadResponse!
 
     # Settings
     resetCurrentProject: Boolean!

@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { isEmpty } from 'lodash';
 import clsx from 'clsx';
-import { Typography, Tabs } from 'antd';
+import { Typography, Tabs, Tag } from 'antd';
 import styled from 'styled-components';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import CodeFilled from '@ant-design/icons/CodeFilled';
+import PieChartFilled from '@ant-design/icons/PieChartFilled';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
@@ -13,7 +14,11 @@ import RecommendedQuestions, {
 import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
 import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
-import { ThreadResponse } from '@/apollo/client/graphql/__types__';
+import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
+import {
+  AdjustThreadResponseChartInput,
+  ThreadResponse,
+} from '@/apollo/client/graphql/__types__';
 import { ANSWER_TAB_KEYS } from '@/utils/enum';
 
 const { Title, Text } = Typography;
@@ -34,10 +39,49 @@ const StyledTabs = styled(Tabs)`
       color: var(--gray-6);
     }
 
+    [aria-label='check-circle'] {
+      color: var(--gray-5);
+    }
+
+    [aria-label='code'] {
+      color: var(--gray-5);
+    }
+
+    [aria-label='pie-chart'] {
+      color: var(--gray-5);
+    }
+
     &.ant-tabs-tab-active {
       .ant-typography {
         color: var(--gray-8);
       }
+
+      [aria-label='check-circle'] {
+        color: var(--green-5);
+      }
+
+      [aria-label='code'] {
+        color: var(--geekblue-5);
+      }
+
+      [aria-label='pie-chart'] {
+        color: var(--gold-6);
+      }
+
+      .adm-beta-tag {
+        background-color: var(--geekblue-2);
+        color: var(--geekblue-5);
+      }
+    }
+
+    .adm-beta-tag {
+      padding: 0 4px;
+      line-height: 18px;
+      margin: 0 0 0 6px;
+      border-radius: 2px;
+      background-color: var(--gray-5);
+      color: white;
+      border: none;
     }
   }
 `;
@@ -54,6 +98,11 @@ export interface Props {
 
   onRegenerateTextBasedAnswer: (responseId: number) => void;
   onGenerateBreakdownAnswer: (responseId: number) => void;
+  onGenerateChartAnswer: (responseId: number) => Promise<void>;
+  onAdjustChartAnswer: (
+    responseId: number,
+    data: AdjustThreadResponseChartInput,
+  ) => Promise<void>;
 }
 
 const QuestionTitle = (props) => {
@@ -95,6 +144,8 @@ export default function AnswerResult(props: Props) {
     recommendedQuestionsProps,
     onGenerateBreakdownAnswer,
     onRegenerateTextBasedAnswer,
+    onGenerateChartAnswer,
+    onAdjustChartAnswer,
   } = props;
 
   const { answerDetail, breakdownDetail, id, question, sql, view } =
@@ -122,6 +173,10 @@ export default function AnswerResult(props: Props) {
     ) {
       onGenerateBreakdownAnswer(id);
     }
+
+    if (activeKey === ANSWER_TAB_KEYS.CHART && !threadResponse.chartDetail) {
+      onGenerateChartAnswer(id);
+    }
   };
 
   return (
@@ -133,7 +188,7 @@ export default function AnswerResult(props: Props) {
             key={ANSWER_TAB_KEYS.ANSWER}
             tab={
               <>
-                <CheckCircleFilled className="mr-2 green-6" />
+                <CheckCircleFilled className="mr-2" />
                 <Text>Answer</Text>
               </>
             }
@@ -150,7 +205,7 @@ export default function AnswerResult(props: Props) {
           key={ANSWER_TAB_KEYS.VIEW_SQL}
           tab={
             <>
-              <CodeFilled className="mr-2 gray-7" />
+              <CodeFilled className="mr-2" />
               <Text>View SQL</Text>
             </>
           }
@@ -160,6 +215,23 @@ export default function AnswerResult(props: Props) {
             threadResponse={threadResponse}
             isLastThreadResponse={isLastThreadResponse}
             onInitPreviewDone={onInitPreviewDone}
+          />
+        </Tabs.TabPane>
+        <Tabs.TabPane
+          key="chart"
+          tab={
+            <>
+              <PieChartFilled className="mr-2" />
+              <Text>
+                Chart<Tag className="adm-beta-tag">Beta</Tag>
+              </Text>
+            </>
+          }
+        >
+          <ChartAnswer
+            threadResponse={threadResponse}
+            onRegenerateChartAnswer={onGenerateChartAnswer}
+            onAdjustChartAnswer={onAdjustChartAnswer}
           />
         </Tabs.TabPane>
       </StyledTabs>

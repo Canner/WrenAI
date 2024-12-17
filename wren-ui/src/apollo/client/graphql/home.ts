@@ -41,6 +41,18 @@ const COMMON_ANSWER_DETAIL = gql`
   ${COMMON_ERROR}
 `;
 
+const COMMON_CHART_DETAIL = gql`
+  fragment CommonChartDetail on ThreadResponseChartDetail {
+    queryId
+    status
+    description
+    chartSchema
+    error {
+      ...CommonError
+    }
+  }
+`;
+
 const COMMON_RESPONSE = gql`
   fragment CommonResponse on ThreadResponse {
     id
@@ -59,10 +71,14 @@ const COMMON_RESPONSE = gql`
     answerDetail {
       ...CommonAnswerDetail
     }
+    chartDetail {
+      ...CommonChartDetail
+    }
   }
 
   ${COMMON_BREAKDOWN_DETAIL}
   ${COMMON_ANSWER_DETAIL}
+  ${COMMON_CHART_DETAIL}
 `;
 
 const COMMON_RECOMMENDED_QUESTIONS_TASK = gql`
@@ -200,8 +216,9 @@ export const DELETE_THREAD = gql`
   }
 `;
 
-export const PREVIEW_TEXT_BASED_ANSWER = gql`
-  mutation PreviewTextBasedAnswerData($where: PreviewDataInput!) {
+// For text-based answer & chart-based answer
+export const PREVIEW_DATA = gql`
+  mutation PreviewData($where: PreviewDataInput!) {
     previewData(where: $where)
   }
 `;
@@ -286,5 +303,26 @@ export const GENERATE_THREAD_RESPONSE_ANSWER = gql`
     }
   }
 
+  ${COMMON_RESPONSE}
+`;
+
+export const GENERATE_THREAD_RESPONSE_CHART = gql`
+  mutation GenerateThreadResponseChart($responseId: Int!) {
+    generateThreadResponseChart(responseId: $responseId) {
+      ...CommonResponse
+    }
+  }
+  ${COMMON_RESPONSE}
+`;
+
+export const ADJUST_THREAD_RESPONSE_CHART = gql`
+  mutation AdjustThreadResponseChart(
+    $responseId: Int!
+    $data: AdjustThreadResponseChartInput!
+  ) {
+    adjustThreadResponseChart(responseId: $responseId, data: $data) {
+      ...CommonResponse
+    }
+  }
   ${COMMON_RESPONSE}
 `;

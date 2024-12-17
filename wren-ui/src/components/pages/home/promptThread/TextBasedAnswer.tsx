@@ -9,7 +9,7 @@ import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { usePreviewTextBasedAnswerDataMutation } from '@/apollo/client/graphql/home.generated';
+import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 import { ThreadResponseAnswerStatus } from '@/apollo/client/graphql/__types__';
 
 const { Text } = Typography;
@@ -91,10 +91,9 @@ export default function TextBasedAnswer(
 
   const allowPreviewData = useMemo(() => Boolean(rowsUsed > 0), [rowsUsed]);
 
-  const [previewData, previewDataResult] =
-    usePreviewTextBasedAnswerDataMutation({
-      onError: (error) => console.error(error),
-    });
+  const [previewData, previewDataResult] = usePreviewDataMutation({
+    onError: (error) => console.error(error),
+  });
 
   const onPreviewData = async () => {
     await previewData({ variables: { where: { responseId: id } } });

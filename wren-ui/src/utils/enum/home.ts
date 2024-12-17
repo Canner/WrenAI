@@ -18,4 +18,5 @@ export enum PROCESS_STATE {
 export enum ANSWER_TAB_KEYS {
   ANSWER = 'answer',
   VIEW_SQL = 'view-sql',
+  CHART = 'chart',
 }
