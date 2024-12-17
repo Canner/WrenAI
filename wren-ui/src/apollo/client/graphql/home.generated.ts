@@ -90,12 +90,12 @@ export type DeleteThreadMutationVariables = Types.Exact<{
 
 export type DeleteThreadMutation = { __typename?: 'Mutation', deleteThread: boolean };
 
-export type PreviewTextBasedAnswerDataMutationVariables = Types.Exact<{
+export type PreviewDataMutationVariables = Types.Exact<{
   where: Types.PreviewDataInput;
 }>;
 
 
-export type PreviewTextBasedAnswerDataMutation = { __typename?: 'Mutation', previewData: any };
+export type PreviewDataMutation = { __typename?: 'Mutation', previewData: any };
 
 export type PreviewBreakdownDataMutationVariables = Types.Exact<{
   where: Types.PreviewDataInput;
@@ -657,37 +657,37 @@ export function useDeleteThreadMutation(baseOptions?: Apollo.MutationHookOptions
 export type DeleteThreadMutationHookResult = ReturnType<typeof useDeleteThreadMutation>;
 export type DeleteThreadMutationResult = Apollo.MutationResult<DeleteThreadMutation>;
 export type DeleteThreadMutationOptions = Apollo.BaseMutationOptions<DeleteThreadMutation, DeleteThreadMutationVariables>;
-export const PreviewTextBasedAnswerDataDocument = gql`
-    mutation PreviewTextBasedAnswerData($where: PreviewDataInput!) {
+export const PreviewDataDocument = gql`
+    mutation PreviewData($where: PreviewDataInput!) {
   previewData(where: $where)
 }
     `;
-export type PreviewTextBasedAnswerDataMutationFn = Apollo.MutationFunction<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>;
+export type PreviewDataMutationFn = Apollo.MutationFunction<PreviewDataMutation, PreviewDataMutationVariables>;
 
 /**
- * __usePreviewTextBasedAnswerDataMutation__
+ * __usePreviewDataMutation__
  *
- * To run a mutation, you first call `usePreviewTextBasedAnswerDataMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `usePreviewTextBasedAnswerDataMutation` returns a tuple that includes:
+ * To run a mutation, you first call `usePreviewDataMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `usePreviewDataMutation` returns a tuple that includes:
  * - A mutate function that you can call at any time to execute the mutation
  * - An object with fields that represent the current status of the mutation's execution
  *
  * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
  *
  * @example
- * const [previewTextBasedAnswerDataMutation, { data, loading, error }] = usePreviewTextBasedAnswerDataMutation({
+ * const [previewDataMutation, { data, loading, error }] = usePreviewDataMutation({
  *   variables: {
  *      where: // value for 'where'
  *   },
  * });
  */
-export function usePreviewTextBasedAnswerDataMutation(baseOptions?: Apollo.MutationHookOptions<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>) {
+export function usePreviewDataMutation(baseOptions?: Apollo.MutationHookOptions<PreviewDataMutation, PreviewDataMutationVariables>) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>(PreviewTextBasedAnswerDataDocument, options);
+        return Apollo.useMutation<PreviewDataMutation, PreviewDataMutationVariables>(PreviewDataDocument, options);
       }
-export type PreviewTextBasedAnswerDataMutationHookResult = ReturnType<typeof usePreviewTextBasedAnswerDataMutation>;
-export type PreviewTextBasedAnswerDataMutationResult = Apollo.MutationResult<PreviewTextBasedAnswerDataMutation>;
-export type PreviewTextBasedAnswerDataMutationOptions = Apollo.BaseMutationOptions<PreviewTextBasedAnswerDataMutation, PreviewTextBasedAnswerDataMutationVariables>;
+export type PreviewDataMutationHookResult = ReturnType<typeof usePreviewDataMutation>;
+export type PreviewDataMutationResult = Apollo.MutationResult<PreviewDataMutation>;
+export type PreviewDataMutationOptions = Apollo.BaseMutationOptions<PreviewDataMutation, PreviewDataMutationVariables>;
 export const PreviewBreakdownDataDocument = gql`
     mutation PreviewBreakdownData($where: PreviewDataInput!) {
   previewBreakdownData(where: $where)

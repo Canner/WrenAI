@@ -216,8 +216,9 @@ export const DELETE_THREAD = gql`
   }
 `;
 
-export const PREVIEW_TEXT_BASED_ANSWER = gql`
-  mutation PreviewTextBasedAnswerData($where: PreviewDataInput!) {
+// For text-based answer & chart-based answer
+export const PREVIEW_DATA = gql`
+  mutation PreviewData($where: PreviewDataInput!) {
     previewData(where: $where)
   }
 `;
