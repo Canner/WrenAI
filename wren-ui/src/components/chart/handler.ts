@@ -272,6 +272,16 @@ export default class ChartSpecHandler {
       if ('stack' in this.encoding.y) {
         this.encoding.y.stack = this.options.stack;
       }
+
+      if ('xOffset' in this.encoding) {
+        const xOffset = this.encoding.xOffset as any;
+        let title = xOffset?.title;
+        // find xOffset title if not provided
+        if (!title) {
+          title = this.findFieldTitleInEncoding(this.encoding, xOffset?.field);
+        }
+        this.encoding.xOffset = { ...xOffset, title };
+      }
     }
 
     this.addHoverHighlight(this.encoding);
@@ -319,7 +329,7 @@ export default class ChartSpecHandler {
   private addHoverHighlight(encoding: EncodingSpec) {
     const category = (
       encoding.color?.condition ? encoding.color.condition : encoding.color
-    ) as { type: any; field: string };
+    ) as { type: any; field: string; title?: string };
     if (!category?.field || !category?.type) return;
 
     // Define the hover parameter correctly
@@ -335,8 +345,15 @@ export default class ChartSpecHandler {
       value: 0.3,
     };
 
+    let title = category?.title;
+    // find color title if not provided
+    if (!title) {
+      title = this.findFieldTitleInEncoding(this.encoding, category?.field);
+    }
+
     // basic color properties
     let colorProperties = {
+      title,
       field: category?.field,
       type: category?.type,
       scale: {
@@ -397,6 +414,13 @@ export default class ChartSpecHandler {
     const uniqueCategoryValues = uniq(categoryValues);
 
     return uniqueCategoryValues;
+  }
+
+  private findFieldTitleInEncoding(encoding: EncodingSpec, field: string) {
+    const axis = ['x', 'y', 'xOffset', 'color'].find(
+      (axis) => encoding[axis]?.field === field && encoding[axis]?.title,
+    ) as any;
+    return encoding[axis]?.title || undefined;
   }
 }
 
