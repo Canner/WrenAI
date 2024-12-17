@@ -97,7 +97,7 @@ export default function AnswerResult(props: Props) {
     onRegenerateTextBasedAnswer,
   } = props;
 
-  const { answerDetail, breakdownDetail, id, question, sql, threadId, view } =
+  const { answerDetail, breakdownDetail, id, question, sql, view } =
     threadResponse;
 
   const resultStyle = isLastThreadResponse
