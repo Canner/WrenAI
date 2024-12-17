@@ -1,4 +1,4 @@
-import logging  # noqa: I001
+import logging
 from dataclasses import asdict, dataclass
 
 import toml
