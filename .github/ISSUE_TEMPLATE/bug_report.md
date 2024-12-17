@@ -35,3 +35,12 @@ If applicable, add screenshots to help explain your problem.
 
 **Additional context**
 Add any other context about the problem here.
+
+**Relevant log output**
+Please share your logs with us with the following command:
+```bash
+docker logs wrenai-wren-ui-1 >& wrenai-wren-ui.log && \
+docker logs wrenai-wren-ai-service-1 >& wrenai-wren-ai-service.log && \
+docker logs wrenai-wren-engine-1 >& wrenai-wren-engine.log && \
+docker logs wrenai-ibis-server-1 >& wrenai-ibis-server.log
+```
