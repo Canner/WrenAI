@@ -21,6 +21,7 @@ import {
   ChartAdjustmentInput,
   ChartResult,
   ChartStatus,
+  TextBasedAnswerStatus,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -439,9 +440,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformChartResult(body: any): ChartResult {
+    const { status, error } = this.transformStatusAndError(body);
     return {
-      status: body.status.toUpperCase() as ChartStatus,
-      error: body.error,
+      status: status as ChartStatus,
+      error,
       response: {
         reasoning: body.response?.reasoning,
         chartSchema: body.response?.chart_schema,
@@ -450,10 +452,11 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformTextBasedAnswerResult(body: any): TextBasedAnswerResult {
+    const { status, error } = this.transformStatusAndError(body);
     return {
-      status: body.status,
+      status: status as TextBasedAnswerStatus,
       numRowsUsedInLLM: body.num_rows_used_in_llm,
-      error: body.error,
+      error,
     };
   }
 
@@ -512,7 +515,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
     return {
       type,
-      status,
+      status: status as AskResultStatus,
       error,
       response: candidates,
     };
@@ -542,7 +545,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
     return {
       type,
-      status,
+      status: status as AskResultStatus,
       error,
       response: {
         description: body?.response?.description,
@@ -552,7 +555,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformStatusAndError(body: any): {
-    status: AskResultStatus;
+    status: AskResultStatus | TextBasedAnswerStatus | ChartStatus;
     error?: {
       code: Errors.GeneralErrorCodes;
       message: string;
@@ -560,9 +563,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     } | null;
   } {
     // transform status to enum
-    const status = AskResultStatus[
-      body?.status?.toUpperCase()
-    ] as AskResultStatus;
+    const status = body?.status?.toUpperCase();
 
     if (!status) {
       throw new Error(`Unknown ask status: ${body?.status}`);
