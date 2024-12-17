@@ -270,11 +270,8 @@ export const GENERATE_THREAD_RECOMMENDATION_QUESTIONS = gql`
 `;
 
 export const GENERATE_THREAD_RESPONSE_BREAKDOWN = gql`
-  mutation GenerateThreadResponseBreakdown($threadId: Int!, $responseId: Int!) {
-    generateThreadResponseBreakdown(
-      threadId: $threadId
-      responseId: $responseId
-    ) {
+  mutation GenerateThreadResponseBreakdown($responseId: Int!) {
+    generateThreadResponseBreakdown(responseId: $responseId) {
       ...CommonResponse
     }
   }
@@ -283,8 +280,8 @@ export const GENERATE_THREAD_RESPONSE_BREAKDOWN = gql`
 `;
 
 export const GENERATE_THREAD_RESPONSE_ANSWER = gql`
-  mutation GenerateThreadResponseAnswer($threadId: Int!, $responseId: Int!) {
-    generateThreadResponseAnswer(threadId: $threadId, responseId: $responseId) {
+  mutation GenerateThreadResponseAnswer($responseId: Int!) {
+    generateThreadResponseAnswer(responseId: $responseId) {
       ...CommonResponse
     }
   }

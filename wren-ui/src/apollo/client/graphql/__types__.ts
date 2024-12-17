@@ -556,13 +556,11 @@ export type MutationGenerateThreadRecommendationQuestionsArgs = {
 
 export type MutationGenerateThreadResponseAnswerArgs = {
   responseId: Scalars['Int'];
-  threadId: Scalars['Int'];
 };
 
 
 export type MutationGenerateThreadResponseBreakdownArgs = {
   responseId: Scalars['Int'];
-  threadId: Scalars['Int'];
 };
 
 

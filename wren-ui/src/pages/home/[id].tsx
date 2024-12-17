@@ -126,26 +126,18 @@ export default function HomeThread() {
     [threadResponse],
   );
 
-  const onGenerateThreadResponseAnswer = async (
-    threadId: number,
-    responseId: number,
-  ) => {
-    await generateThreadResponseAnswer({
-      variables: { threadId, responseId },
-    });
+  const onGenerateThreadResponseAnswer = async (responseId: number) => {
+    await generateThreadResponseAnswer({ variables: { responseId } });
   };
 
   const onRegenerateTextBasedAnswer = async (responseId: number) => {
-    await onGenerateThreadResponseAnswer(threadId, responseId);
+    await onGenerateThreadResponseAnswer(responseId);
     fetchThreadResponse({ variables: { responseId } });
   };
 
-  const onGenerateThreadResponseBreakdown = async (
-    threadId: number,
-    responseId: number,
-  ) => {
+  const onGenerateThreadResponseBreakdown = async (responseId: number) => {
     await generateThreadResponseBreakdown({
-      variables: { threadId, responseId },
+      variables: { responseId },
     });
     fetchThreadResponse({ variables: { responseId } });
   };
@@ -170,10 +162,7 @@ export default function HomeThread() {
 
     if (unfinishedRespose) {
       if (unfinishedRespose.answerDetail?.status === null) {
-        onGenerateThreadResponseAnswer(
-          unfinishedRespose.threadId,
-          unfinishedRespose.id,
-        );
+        onGenerateThreadResponseAnswer(unfinishedRespose.id);
       }
 
       fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
@@ -225,9 +214,7 @@ export default function HomeThread() {
 
       const responseId = response.data.createThreadResponse.id;
       await Promise.all([
-        generateThreadResponseAnswer({
-          variables: { threadId, responseId },
-        }),
+        generateThreadResponseAnswer({ variables: { responseId } }),
         generateThreadRecommendationQuestions({ variables: { threadId } }),
         fetchThreadResponse({ variables: { responseId } }),
       ]);

@@ -148,7 +148,6 @@ export type GenerateThreadRecommendationQuestionsMutationVariables = Types.Exact
 export type GenerateThreadRecommendationQuestionsMutation = { __typename?: 'Mutation', generateThreadRecommendationQuestions: boolean };
 
 export type GenerateThreadResponseBreakdownMutationVariables = Types.Exact<{
-  threadId: Types.Scalars['Int'];
   responseId: Types.Scalars['Int'];
 }>;
 
@@ -156,7 +155,6 @@ export type GenerateThreadResponseBreakdownMutationVariables = Types.Exact<{
 export type GenerateThreadResponseBreakdownMutation = { __typename?: 'Mutation', generateThreadResponseBreakdown: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type GenerateThreadResponseAnswerMutationVariables = Types.Exact<{
-  threadId: Types.Scalars['Int'];
   responseId: Types.Scalars['Int'];
 }>;
 
@@ -919,8 +917,8 @@ export type GenerateThreadRecommendationQuestionsMutationHookResult = ReturnType
 export type GenerateThreadRecommendationQuestionsMutationResult = Apollo.MutationResult<GenerateThreadRecommendationQuestionsMutation>;
 export type GenerateThreadRecommendationQuestionsMutationOptions = Apollo.BaseMutationOptions<GenerateThreadRecommendationQuestionsMutation, GenerateThreadRecommendationQuestionsMutationVariables>;
 export const GenerateThreadResponseBreakdownDocument = gql`
-    mutation GenerateThreadResponseBreakdown($threadId: Int!, $responseId: Int!) {
-  generateThreadResponseBreakdown(threadId: $threadId, responseId: $responseId) {
+    mutation GenerateThreadResponseBreakdown($responseId: Int!) {
+  generateThreadResponseBreakdown(responseId: $responseId) {
     ...CommonResponse
   }
 }
@@ -940,7 +938,6 @@ export type GenerateThreadResponseBreakdownMutationFn = Apollo.MutationFunction<
  * @example
  * const [generateThreadResponseBreakdownMutation, { data, loading, error }] = useGenerateThreadResponseBreakdownMutation({
  *   variables: {
- *      threadId: // value for 'threadId'
  *      responseId: // value for 'responseId'
  *   },
  * });
@@ -953,8 +950,8 @@ export type GenerateThreadResponseBreakdownMutationHookResult = ReturnType<typeo
 export type GenerateThreadResponseBreakdownMutationResult = Apollo.MutationResult<GenerateThreadResponseBreakdownMutation>;
 export type GenerateThreadResponseBreakdownMutationOptions = Apollo.BaseMutationOptions<GenerateThreadResponseBreakdownMutation, GenerateThreadResponseBreakdownMutationVariables>;
 export const GenerateThreadResponseAnswerDocument = gql`
-    mutation GenerateThreadResponseAnswer($threadId: Int!, $responseId: Int!) {
-  generateThreadResponseAnswer(threadId: $threadId, responseId: $responseId) {
+    mutation GenerateThreadResponseAnswer($responseId: Int!) {
+  generateThreadResponseAnswer(responseId: $responseId) {
     ...CommonResponse
   }
 }
@@ -974,7 +971,6 @@ export type GenerateThreadResponseAnswerMutationFn = Apollo.MutationFunction<Gen
  * @example
  * const [generateThreadResponseAnswerMutation, { data, loading, error }] = useGenerateThreadResponseAnswerMutation({
  *   variables: {
- *      threadId: // value for 'threadId'
  *      responseId: // value for 'responseId'
  *   },
  * });

@@ -27,7 +27,7 @@ interface Props {
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
   onRegenerateTextBasedAnswer: (responseId: number) => void;
-  onGenerateBreakdownAnswer: (threadId: number, responseId: number) => void;
+  onGenerateBreakdownAnswer: (responseId: number) => void;
 }
 
 const StyledPromptThread = styled.div`

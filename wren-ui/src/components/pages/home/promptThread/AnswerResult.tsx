@@ -53,7 +53,7 @@ export interface Props {
   recommendedQuestionsProps: RecommendedQuestionsProps;
 
   onRegenerateTextBasedAnswer: (responseId: number) => void;
-  onGenerateBreakdownAnswer: (threadId: number, responseId: number) => void;
+  onGenerateBreakdownAnswer: (responseId: number) => void;
 }
 
 const QuestionTitle = (props) => {
@@ -120,7 +120,7 @@ export default function AnswerResult(props: Props) {
       activeKey === ANSWER_TAB_KEYS.VIEW_SQL &&
       !threadResponse.breakdownDetail
     ) {
-      onGenerateBreakdownAnswer(threadId, id);
+      onGenerateBreakdownAnswer(id);
     }
   };
 
