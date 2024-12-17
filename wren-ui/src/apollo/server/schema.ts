@@ -626,19 +626,40 @@ export const typeDefs = gql`
     cteName: String
   }
 
-  type ThreadResponseDetail {
-    view: ViewInfo
-    sql: String
+  enum ThreadResponseAnswerStatus {
+    NOT_STARTED
+    FETCHING_DATA
+    PREPROCESSING
+    STREAMING
+    FINISHED
+    FAILED
+    INTERRUPTED
+  }
+
+  type ThreadResponseAnswerDetail {
+    queryId: String
+    status: ThreadResponseAnswerStatus
+    error: Error
+    numRowsUsedInLLM: Int
+    content: String
+  }
+
+  type ThreadResponseBreakdownDetail {
+    queryId: String
+    status: AskingTaskStatus!
+    error: Error
     description: String
-    steps: [DetailStep!]!
+    steps: [DetailStep!]
   }
 
   type ThreadResponse {
     id: Int!
+    threadId: Int!
     question: String!
-    status: AskingTaskStatus!
-    detail: ThreadResponseDetail
-    error: Error
+    sql: String!
+    view: ViewInfo
+    breakdownDetail: ThreadResponseBreakdownDetail
+    answerDetail: ThreadResponseAnswerDetail
   }
 
   # Thread only consists of basic information of a thread
@@ -850,6 +871,19 @@ export const typeDefs = gql`
       data: CreateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+    previewBreakdownData(where: PreviewDataInput!): JSON!
+
+    # Generate Thread Response Breakdown
+    generateThreadResponseBreakdown(
+      threadId: Int!
+      responseId: Int!
+    ): ThreadResponse!
+
+    # Generate Thread Response Answer
+    generateThreadResponseAnswer(
+      threadId: Int!
+      responseId: Int!
+    ): ThreadResponse!
 
     # Settings
     resetCurrentProject: Boolean!

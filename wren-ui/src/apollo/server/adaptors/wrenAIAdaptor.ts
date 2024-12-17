@@ -15,6 +15,8 @@ import {
   WrenAIDeployResponse,
   DeployData,
   AskInput,
+  TextBasedAnswerInput,
+  TextBasedAnswerResult,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -61,6 +63,15 @@ export interface IWrenAIAdaptor {
   getRecommendationQuestionsResult(
     queryId: string,
   ): Promise<RecommendationQuestionsResult>;
+
+  /**
+   * Get text-based answer from SQL
+   */
+  createTextBasedAnswer(
+    input: TextBasedAnswerInput,
+  ): Promise<AsyncQueryResponse>;
+  getTextBasedAnswerResult(queryId: string): Promise<TextBasedAnswerResult>;
+  streamTextBasedAnswer(queryId: string): Promise<Readable>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -237,6 +248,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       throw err;
     }
   }
+
   public async getRecommendationQuestionsResult(
     queryId: string,
   ): Promise<RecommendationQuestionsResult> {
@@ -251,6 +263,73 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       throw err;
     }
+  }
+
+  public async createTextBasedAnswer(
+    input: TextBasedAnswerInput,
+  ): Promise<AsyncQueryResponse> {
+    const body = {
+      query: input.query,
+      sql: input.sql,
+      sql_data: input.sqlData,
+      thread_id: input.threadId,
+      user_id: input.userId,
+      configurations: input.configurations,
+    };
+    // make POST request /v1/sql-answers to create text-based answer
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/sql-answers`,
+        body,
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when creating text-based answer: ${getAISerciceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getTextBasedAnswerResult(
+    queryId: string,
+  ): Promise<TextBasedAnswerResult> {
+    // make GET request /v1/sql-answers/:query_id to get the result
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/sql-answers/${queryId}`,
+      );
+      return this.transformTextBasedAnswerResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting text-based answer result: ${getAISerciceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async streamTextBasedAnswer(queryId: string): Promise<Readable> {
+    // make GET request /v1/sql-answers/:query_id/streaming to get the streaming result
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/sql-answers/${queryId}/streaming`,
+        { responseType: 'stream' },
+      );
+      return res.data;
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting text-based answer streaming result: ${getAISerciceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  private transformTextBasedAnswerResult(body: any): TextBasedAnswerResult {
+    return {
+      status: body.status,
+      numRowsUsedInLLM: body.num_rows_used_in_llm,
+      error: body.error,
+    };
   }
 
   private async waitDeployFinished(deployId: string): Promise<boolean> {
