@@ -9,7 +9,7 @@ export const getChartTypeOptions = () => {
   }));
 };
 
-export const getColumnOptions = (columns: {name: string; type: string}[]) => {
+export const getColumnOptions = (columns: { name: string; type: string }[]) => {
   return (columns || []).map((column) => ({
     label: column.name,
     value: column.name,
@@ -48,7 +48,7 @@ export function AxisProperty(props: {
 }
 
 export interface PropertiesProps {
-  columns: {name: string; type: string}[];
+  columns: { name: string; type: string }[];
 }
 
 export default function BasicProperties(props: PropertiesProps) {
