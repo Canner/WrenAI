@@ -7,7 +7,6 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
-from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -72,7 +71,7 @@ class ChartGenerationPostProcessor:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
             if chart_schema := generation_result.get("chart_schema", {}):
-                validate(chart_schema, schema=vega_schema)
+                # validate(chart_schema, schema=vega_schema)
                 chart_schema["data"]["values"] = []
                 return {
                     "results": {
