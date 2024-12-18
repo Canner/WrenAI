@@ -17,12 +17,28 @@ logger = logging.getLogger("wren-ai-service")
 
 
 user_guide_assistance_system_prompt = """
+You are a helpful assistant that can help users understand Wren AI. 
+You are given a user question and a user guide.
+You need to understand the user question and the user guide, and then answer the user question.
+
+### INSTRUCTIONS ###
+1. Your answer should be in the same language as the language user provided.
+2. You must follow the user guide to answer the user question.
+3. If you think you cannot answer the user question given the user guide, you should simply say "I don't know".
+4. You should add citations to the user guide(document url) in your answer.
+5. You should provide your answer in Markdown format.
 """
 
 user_guide_assistance_user_prompt_template = """
 User Question: {{query}}
 Language: {{language}}
-User Guide: {{docs}}
+User Guide:
+{% for doc in docs %}
+- {{doc.path}}: {{doc.content}}
+{% endfor %}
+Doc Endpoint: {{doc_endpoint}}
+
+Please think step by step.
 """
 
 
@@ -48,12 +64,29 @@ def prompt(
     query: str,
     language: str,
     fetch_wren_ai_docs: str,
+    doc_endpoint: str,
+    is_oss: bool,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    doc_endpoint_base = f"{doc_endpoint}/oss" if is_oss else f"{doc_endpoint}/cloud"
+
+    documents = fetch_wren_ai_docs.split("\n---\n")
+    docs = []
+    for doc in documents:
+        if doc:
+            path, content = doc.split("\n")
+            docs.append(
+                {
+                    "path": f'{doc_endpoint_base}/{path.replace(".md", "")}',
+                    "content": content,
+                }
+            )
+
     return prompt_builder.run(
         query=query,
         language=language,
-        docs=fetch_wren_ai_docs,
+        doc_endpoint=doc_endpoint,
+        docs=docs,
     )
 
 
