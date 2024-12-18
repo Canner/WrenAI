@@ -8,6 +8,7 @@ export enum GeneralErrorCodes {
   NO_RELEVANT_SQL = 'NO_RELEVANT_SQL',
   RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
   MDL_PARSE_ERROR = 'MDL_PARSE_ERROR',
+  NO_CHART = 'NO_CHART',
 
   // Exception error for AI service (e.g., network connection error)
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
@@ -44,6 +45,8 @@ export const errorMessages = {
     'I can’t find the exact data you’re looking for, but feel free to ask about other available topics.',
   [GeneralErrorCodes.NO_RELEVANT_SQL]:
     "Could you please provide more details or specify the information you're seeking?",
+  [GeneralErrorCodes.NO_CHART]:
+    'The chart couldn’t be generated this time. Please try regenerating the chart or rephrasing your question for better results.',
 
   // Connector errors
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to data source',
@@ -79,6 +82,7 @@ export const shortMessages = {
   [GeneralErrorCodes.INTERNAL_SERVER_ERROR]: 'Internal server error',
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'Try a different query',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'Clarification needed',
+  [GeneralErrorCodes.NO_CHART]: 'Chart not available',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
   [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Data connection error',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',
