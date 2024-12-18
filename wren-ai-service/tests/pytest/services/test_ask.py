@@ -13,6 +13,7 @@ from src.pipelines.generation import (
     intent_classification,
     sql_correction,
     sql_generation,
+    user_guide_assistance,
 )
 from src.pipelines.retrieval import historical_question, retrieval
 from src.providers import generate_components
@@ -46,6 +47,9 @@ def ask_service():
             ),
             "data_assistance": data_assistance.DataAssistance(
                 **pipe_components["data_assistance"],
+            ),
+            "user_guide_assistance": user_guide_assistance.UserGuideAssistance(
+                **pipe_components["user_guide_assistance"],
             ),
             "retrieval": retrieval.Retrieval(
                 **pipe_components["db_schema_retrieval"],
