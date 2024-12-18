@@ -24,6 +24,7 @@ from src.pipelines.generation import (
     sql_generation,
     sql_regeneration,
     sql_summary,
+    user_guide_assistance,
 )
 from src.pipelines.retrieval import (
     historical_question,
@@ -108,6 +109,11 @@ def create_service_container(
                 ),
                 "data_assistance": data_assistance.DataAssistance(
                     **pipe_components["data_assistance"]
+                ),
+                "user_guide_assistance": user_guide_assistance.UserGuideAssistance(
+                    **pipe_components["user_guide_assistance"],
+                    is_oss=settings.is_oss,
+                    doc_endpoint=settings.doc_endpoint,
                 ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["db_schema_retrieval"],
