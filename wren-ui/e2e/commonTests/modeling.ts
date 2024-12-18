@@ -49,9 +49,11 @@ export const executeModelCRUD = async (
   page: Page,
   {
     modelDisplayName,
+    modelReferenceName,
     primaryKeyColumn,
   }: {
     modelDisplayName: string;
+    modelReferenceName: string;
     primaryKeyColumn: string;
   },
 ) => {
@@ -103,7 +105,7 @@ export const executeModelCRUD = async (
   // select resource table and some columns
   await page.getByLabel('Select a table').click();
   await page
-    .getByTitle(modelDisplayName, { exact: true })
+    .getByTitle(modelReferenceName, { exact: true })
     .locator('div')
     .click();
 
@@ -129,16 +131,16 @@ export const executeModelCRUD = async (
   await expect(
     page
       .getByRole('complementary')
-      .getByText(modelDisplayName, { exact: true }),
+      .getByText(modelReferenceName, { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByTestId(`diagram__model-node__${modelDisplayName}`),
+    page.getByTestId(`diagram__model-node__${modelReferenceName}`),
   ).toBeVisible();
 
   // update columns
   await page
     .locator('div')
-    .filter({ hasText: new RegExp(`^${modelDisplayName}$`) })
+    .filter({ hasText: new RegExp(`^${modelReferenceName}$`) })
     .getByRole('button')
     .click();
   await page.getByText('Update Columns').click();
@@ -339,6 +341,9 @@ export const updateModelMetadata = async (
   // click node to open metadata drawer
   await page.getByTestId(`diagram__model-node__${modelDisplayName}`).click();
 
+  const modelDescriptionString = modelDescription || '-';
+  const newModelDescriptionString = newModelDescription || '-';
+
   // check metadata drawer info
   await expect(page.locator('.ant-drawer-mask')).toBeVisible();
   await expect(page.getByLabel('Close', { exact: true })).toBeVisible();
@@ -355,7 +360,7 @@ export const updateModelMetadata = async (
   );
   await expect(
     page.getByTestId('metadata__description').locator('div'),
-  ).toHaveText(modelDescription);
+  ).toHaveText(modelDescriptionString);
 
   // click edit metadata button
   await page.getByRole('button', { name: 'Edit' }).click();
@@ -382,7 +387,7 @@ export const updateModelMetadata = async (
   // update description
   await page
     .getByTestId('edit-metadata__description')
-    .getByText(modelDescription, { exact: true })
+    .getByText(modelDescriptionString, { exact: true })
     .click();
   await page.locator('#description').press('ControlOrMeta+a');
   await page.locator('#description').fill(newModelDescription);
@@ -411,7 +416,7 @@ export const updateModelMetadata = async (
   );
   await expect(
     page.getByTestId('metadata__description').locator('div'),
-  ).toHaveText(newModelDescription || '-');
+  ).toHaveText(newModelDescriptionString);
 
   // close metadata drawer
   await page
