@@ -128,6 +128,8 @@ pipes:
 
 ---
 settings:
+  doc_endpoint: https://getwren.ai
+  is_oss: true
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100

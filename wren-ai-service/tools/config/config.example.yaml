@@ -143,6 +143,8 @@ pipes:
 settings:
   host: 127.0.0.1
   port: 5556
+  doc_endpoint: https://getwren.ai
+  is_oss: true
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
