@@ -82,6 +82,8 @@ settings:
   host: 127.0.0.1
   port: 5556
   column_indexing_batch_size: 50
+  doc_endpoint: https://getwren.ai
+  is_oss: true
   table_retrieval_size: 10
   table_column_retrieval_size: 1000
   query_cache_maxsize: 1000
