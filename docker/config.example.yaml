@@ -108,6 +108,9 @@ pipes:
     llm: litellm_llm.gpt-4o-mini
   - name: chart_adjustment
     llm: litellm_llm.gpt-4o-mini
+  - name: user_guide_assistance
+    llm: litellm_llm.gpt-4o-mini
+
 ---
 settings:
   column_indexing_batch_size: 50
