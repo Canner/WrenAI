@@ -85,6 +85,10 @@ class UserGuideAssistance(BasicPipeline):
                 template=user_guide_assistance_user_prompt_template
             ),
         }
+        self._configs = {
+            "is_oss": kwargs.get("is_oss", True),
+            "doc_endpoint": kwargs.get("doc_endpoint", "https://docs.getwren.ai"),
+        }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -131,8 +135,6 @@ class UserGuideAssistance(BasicPipeline):
         query: str,
         language: str,
         query_id: Optional[str] = None,
-        is_oss: Optional[bool] = True,
-        doc_endpoint: Optional[str] = "https://docs.getwren.ai",
     ) -> None:
         logger.info("User Guide Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -140,10 +142,9 @@ class UserGuideAssistance(BasicPipeline):
             inputs={
                 "query": query,
                 "language": language,
-                "is_oss": is_oss,
-                "doc_endpoint": doc_endpoint,
                 "query_id": query_id or "",
                 **self._components,
+                **self._configs,
             },
         )
 
