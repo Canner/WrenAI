@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Optional
 
 from hamilton import base
@@ -139,33 +138,6 @@ class DataAssistance(BasicPipeline):
                     self._streaming_results = ""  # Clear after yielding
             except TimeoutError:
                 break
-
-    def visualize(
-        self,
-        query: str,
-        db_schemas: list[str],
-        language: str,
-        query_id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["data_assistance"],
-            output_file_path=f"{destination}/data_assistance.dot",
-            inputs={
-                "query": query,
-                "db_schemas": db_schemas,
-                "language": language,
-                "query_id": query_id or "",
-                "history": history,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
-        )
 
     @observe(name="Data Assistance")
     async def run(

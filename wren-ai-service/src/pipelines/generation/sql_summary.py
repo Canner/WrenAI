@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any, List
 
 import orjson
@@ -137,29 +136,6 @@ class SQLSummary(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        query: str,
-        sqls: List[str],
-        language: str,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/sql_summary.dot",
-            inputs={
-                "query": query,
-                "sqls": sqls,
-                "language": language,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="SQL Summary")

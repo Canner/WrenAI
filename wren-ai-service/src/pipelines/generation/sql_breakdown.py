@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any
 
 from hamilton import base
@@ -187,32 +186,6 @@ class SQLBreakdown(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        query: str,
-        sql: str,
-        language: str = "English",
-        project_id: str | None = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/sql_breakdown.dot",
-            inputs={
-                "query": query,
-                "sql": sql,
-                "project_id": project_id,
-                "language": language,
-                **self._components,
-                **self._configs,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="SQL Breakdown Generation")

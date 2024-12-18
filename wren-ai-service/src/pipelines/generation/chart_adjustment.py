@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict
 
 import orjson
@@ -222,36 +221,6 @@ class ChartAdjustment(BasicPipeline):
         }
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        query: str,
-        sql: str,
-        adjustment_option: ChartAdjustmentOption,
-        chart_schema: dict,
-        data: dict,
-        language: str,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/chart_adjustment.dot",
-            inputs={
-                "query": query,
-                "sql": sql,
-                "adjustment_option": adjustment_option,
-                "chart_schema": chart_schema,
-                "data": data,
-                "language": language,
-                **self._components,
-                **self._configs,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Chart Adjustment")

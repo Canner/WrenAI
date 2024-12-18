@@ -1,7 +1,6 @@
 import ast
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Literal, Optional
 
 import orjson
@@ -282,29 +281,6 @@ class IntentClassification(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        query: str,
-        id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/intent_classification.dot",
-            inputs={
-                "query": query,
-                "id": id or "",
-                "history": history,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Intent Classification")

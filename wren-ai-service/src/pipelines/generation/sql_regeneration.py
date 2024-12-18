@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List
 
 from hamilton import base
@@ -181,29 +180,6 @@ class SQLRegeneration(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        description: str,
-        steps: List[SQLExplanationWithUserCorrections],
-        project_id: str | None = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["sql_regeneration_post_process"],
-            output_file_path=f"{destination}/sql_regeneration.dot",
-            inputs={
-                "description": description,
-                "steps": steps,
-                "project_id": project_id,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="SQL-Regeneration Generation")

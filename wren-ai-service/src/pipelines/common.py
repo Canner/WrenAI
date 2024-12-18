@@ -517,7 +517,6 @@ def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
     pipeline = pipeline_cls(**pipe_components[pipeline_name])
     init_langfuse()
 
-    pipeline.visualize(**kwargs)
     async_validate(lambda: pipeline.run(**kwargs))
 
     langfuse_context.flush()

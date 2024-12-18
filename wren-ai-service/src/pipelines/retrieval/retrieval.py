@@ -1,7 +1,6 @@
 import ast
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Optional
 
 import orjson
@@ -410,30 +409,6 @@ class Retrieval(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        query: str,
-        id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
-    ) -> None:
-        destination = "outputs/pipelines/retrieval"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["construct_retrieval_results"],
-            output_file_path=f"{destination}/retrieval.dot",
-            inputs={
-                "query": query,
-                "id": id or "",
-                "history": history,
-                **self._components,
-                **self._configs,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Ask Retrieval")

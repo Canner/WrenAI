@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any, List
 
 from hamilton import base
@@ -125,33 +124,6 @@ class SQLExpansion(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        query: str,
-        contexts: List[str],
-        history: AskHistory,
-        timezone: Configuration.Timezone,
-        project_id: str | None = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/sql_expansion.dot",
-            inputs={
-                "query": query,
-                "documents": contexts,
-                "history": history,
-                "project_id": project_id,
-                "timezone": timezone,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Sql Expansion Generation")

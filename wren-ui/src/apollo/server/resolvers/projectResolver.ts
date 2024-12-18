@@ -106,8 +106,10 @@ export class ProjectResolver {
       language,
     });
 
-    // update project recommendation questions
-    await ctx.projectService.generateProjectRecommendationQuestions();
+    // only generating for user's data source
+    if (project.sampleDataset === null) {
+      await ctx.projectService.generateProjectRecommendationQuestions();
+    }
     return true;
   }
 
@@ -623,7 +625,10 @@ export class ProjectResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(manifest, project.id);
 
-    await ctx.projectService.generateProjectRecommendationQuestions();
+    // only generating for user's data source
+    if (project.sampleDataset === null) {
+      await ctx.projectService.generateProjectRecommendationQuestions();
+    }
     return deployRes;
   }
 

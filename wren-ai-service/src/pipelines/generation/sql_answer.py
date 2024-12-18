@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Optional
 
 from hamilton import base
@@ -128,33 +127,6 @@ class SQLAnswer(BasicPipeline):
                     self._streaming_results = ""  # Clear after yielding
             except TimeoutError:
                 break
-
-    def visualize(
-        self,
-        query: str,
-        sql: str,
-        sql_data: dict,
-        language: str,
-        query_id: Optional[str] = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["generate_answer"],
-            output_file_path=f"{destination}/sql_answer.dot",
-            inputs={
-                "query": query,
-                "sql": sql,
-                "sql_data": sql_data,
-                "language": language,
-                "query_id": query_id,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
-        )
 
     @observe(name="SQL Answer Generation")
     async def run(

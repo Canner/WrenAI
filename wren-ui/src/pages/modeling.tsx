@@ -69,8 +69,8 @@ export default function Modeling() {
     },
   });
 
-  // TODO: No matter which operation is performed, we must re-fetch the latest deploy status
   const deployStatusQueryResult = useDeployStatusQuery({
+    pollInterval: 1000,
     fetchPolicy: 'no-cache',
   });
 

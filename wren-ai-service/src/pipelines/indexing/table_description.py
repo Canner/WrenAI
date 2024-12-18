@@ -1,7 +1,6 @@
 import logging
 import sys
 import uuid
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hamilton import base
@@ -140,24 +139,6 @@ class TableDescription(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(self, mdl_str: str, project_id: Optional[str] = None) -> None:
-        destination = "outputs/pipelines/indexing"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            [self._final],
-            output_file_path=f"{destination}/table_description.dot",
-            inputs={
-                "mdl_str": mdl_str,
-                "project_id": project_id,
-                **self._components,
-                **self._configs,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Table Description Indexing")
