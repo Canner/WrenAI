@@ -22,7 +22,7 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### TASK ###
-You are a great detective, who is great at intent classification. Now you need to classify user's intent based on given database schema and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
+You are a great detective, who is great at intent classification. Now you need to classify user's intent based on given database schema and user's question to one of four conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL, USER_GUIDE. 
 Please carefully analyze user's question and analyze database's schema carefully to make the classification correct.
 Also you should provide reasoning for the classification in clear and concise way within 20 words.
 
@@ -61,15 +61,24 @@ Also you should provide reasoning for the classification in clear and concise wa
     - Examples:
         - "What is the dataset about?"
         - "Tell me more about the database."
-        - "What can Wren AI do?"
         - "How can I analyze customer behavior with this data?"
-
+- USER_GUIDE
+    - When to Use:
+        - If the user's question is about Wren AI's features, capabilities, or how to use Wren AI.
+    - Characteristics:
+        - The question is about Wren AI's features, capabilities, or how to use Wren AI.
+    - Examples:
+        - "What can Wren AI do?"
+        - "How can I reset project?"
+        - "How can I delete project?"
+        - "How can I connect to other databases?"
+        
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
     "reasoning": "<CHAIN_OF_THOUGHT_REASONING_IN_STRING_FORMAT>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL"
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
 }
 """
 
@@ -244,7 +253,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 
 class IntentClassificationResult(BaseModel):
-    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL"]
+    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {
