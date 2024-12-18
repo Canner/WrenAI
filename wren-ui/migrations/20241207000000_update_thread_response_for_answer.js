@@ -111,11 +111,9 @@ exports.down = async function (knex) {
     table.dropColumn('answer_detail');
   });
 
-  const threadResponses = await knex('thread_response').select(
-    'id',
-    'breakdown_detail',
-    'view_id',
-  );
+  const threadResponses = await knex('thread_response')
+    .select('id', 'breakdown_detail', 'view_id')
+    .whereNotNull('breakdown_detail');
 
   for (const response of threadResponses) {
     // Parse the breakdown_detail field from the response
@@ -138,7 +136,7 @@ exports.down = async function (knex) {
     await knex('thread_response')
       .where('id', response.id)
       .update({
-        query_id: detail.query_id,
+        query_id: detail.queryId,
         status: detail.status,
         error: errorString,
         breakdown_detail: JSON.stringify({

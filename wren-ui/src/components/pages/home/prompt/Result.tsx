@@ -57,7 +57,10 @@ interface Props {
 
 const Wrapper = ({ children }) => {
   return (
-    <StyledResult className="border border-gray-3 rounded p-4">
+    <StyledResult
+      className="border border-gray-3 rounded p-4"
+      data-testid="prompt__result"
+    >
       {children}
     </StyledResult>
   );
