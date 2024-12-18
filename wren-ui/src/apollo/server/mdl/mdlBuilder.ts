@@ -7,9 +7,15 @@ import {
   RelationInfo,
   View,
 } from '../repositories';
-import { Manifest, ModelMDL, TableReference } from './type';
+import {
+  Manifest,
+  ModelMDL,
+  TableReference,
+  WrenEngineDataSourceType,
+} from './type';
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
+import { DataSourceName } from '../types';
 
 const logger = getLogger('MDLBuilder');
 logger.level = 'debug';
@@ -329,6 +335,10 @@ export class MDLBuilder implements IMDLBuilder {
   public addProject(): void {
     this.manifest.schema = this.project.schema;
     this.manifest.catalog = this.project.catalog;
+    const dataSource = this.buildDataSource();
+    if (dataSource) {
+      this.manifest.dataSource = dataSource;
+    }
   }
 
   protected addRelationColumn(
@@ -475,5 +485,33 @@ export class MDLBuilder implements IMDLBuilder {
   }
   private useRustWrenEngine(): boolean {
     return !!config.experimentalEngineRustVersion;
+  }
+  private buildDataSource(): WrenEngineDataSourceType {
+    const type = this.project.type;
+    if (!type) {
+      return;
+    }
+    switch (type) {
+      case DataSourceName.BIG_QUERY:
+        return WrenEngineDataSourceType.BIGQUERY;
+      case DataSourceName.DUCKDB:
+        return WrenEngineDataSourceType.DUCKDB;
+      case DataSourceName.POSTGRES:
+        return WrenEngineDataSourceType.POSTGRES;
+      case DataSourceName.MYSQL:
+        return WrenEngineDataSourceType.MYSQL;
+      case DataSourceName.MSSQL:
+        return WrenEngineDataSourceType.MSSQL;
+      case DataSourceName.CLICK_HOUSE:
+        return WrenEngineDataSourceType.CLICKHOUSE;
+      case DataSourceName.TRINO:
+        return WrenEngineDataSourceType.TRINO;
+      case DataSourceName.SNOWFLAKE:
+        return WrenEngineDataSourceType.SNOWFLAKE;
+      default:
+        throw new Error(
+          `Unsupported data source type: ${type} found when building manifest`,
+        );
+    }
   }
 }

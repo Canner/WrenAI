@@ -79,7 +79,7 @@ export const waitingForThreadResponse = async (page: Page, baseURL: string) => {
         response.status() === 200 &&
         responseBody &&
         [AskingTaskStatus.FAILED, AskingTaskStatus.FINISHED].includes(
-          responseData?.status,
+          responseData?.breakdownDetail?.status,
         )
       );
     },

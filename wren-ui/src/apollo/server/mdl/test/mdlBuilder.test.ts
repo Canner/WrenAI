@@ -757,4 +757,40 @@ describe('MDLBuilder', () => {
       'sum(order.payment."amount")',
     );
   });
+
+  it.each(Object.values(DataSourceName))(
+    `should return correct data source type`,
+    (type) => {
+      const project = {
+        id: 1,
+        type,
+        displayName: 'my project',
+        connectionInfo: {
+          projectId: 'bq-project-id',
+          datasetId: 'bq-project-id.my-dataset',
+          credentials: 'my-credential',
+        } as BIG_QUERY_CONNECTION_INFO,
+        catalog: 'wrenai',
+        schema: 'public',
+        sampleDataset: null,
+      } as Project;
+      const models = [] as Model[];
+      const columns = [] as ModelColumn[];
+      const nestedColumns = [] as ModelNestedColumn[];
+      const relations = [] as RelationInfo[];
+      const views = [] as View[];
+      const builderOptions = {
+        project,
+        models,
+        columns,
+        nestedColumns,
+        relations,
+        views,
+      } as MDLBuilderBuildFromOptions;
+      mdlBuilder = new MDLBuilder(builderOptions);
+      const manifest = mdlBuilder.build();
+      expect(manifest.dataSource).toBeDefined();
+      expect(manifest.dataSource).not.toBeNull();
+    },
+  );
 });

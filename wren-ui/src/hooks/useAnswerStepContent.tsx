@@ -3,7 +3,7 @@ import copy from 'copy-to-clipboard';
 import { message } from 'antd';
 import { COLLAPSE_CONTENT_TYPE } from '@/utils/enum';
 import useNativeSQL from '@/hooks/useNativeSQL';
-import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
+import { usePreviewBreakdownDataMutation } from '@/apollo/client/graphql/home.generated';
 
 const getTextButton = (isActive: boolean) => ({
   type: 'text',
@@ -65,7 +65,7 @@ export default function useAnswerStepContent({
   const [collapseContentType, setCollapseContentType] =
     useState<COLLAPSE_CONTENT_TYPE>(COLLAPSE_CONTENT_TYPE.NONE);
 
-  const [previewData, previewDataResult] = usePreviewDataMutation({
+  const [previewData, previewDataResult] = usePreviewBreakdownDataMutation({
     onError: (error) => console.error(error),
   });
 
@@ -122,7 +122,7 @@ export default function useAnswerStepContent({
       previewDataResult: {
         error: previewDataResult.error,
         loading: previewDataLoading,
-        previewData: previewDataResult?.data?.previewData,
+        previewData: previewDataResult?.data?.previewBreakdownData,
       },
       nativeSQLResult,
       onCopyFullSQL,

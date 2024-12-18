@@ -549,6 +549,23 @@ export const typeDefs = gql`
     MISLEADING_QUERY
   }
 
+  enum ChartTaskStatus {
+    FETCHING
+    GENERATING
+    FINISHED
+    FAILED
+    STOPPED
+  }
+
+  enum ChartType {
+    BAR
+    PIE
+    LINE
+    AREA
+    GROUPED_BAR
+    STACKED_BAR
+  }
+
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
@@ -611,6 +628,15 @@ export const typeDefs = gql`
     summary: String
   }
 
+  input AdjustThreadResponseChartInput {
+    chartType: ChartType!
+    xAxis: String
+    yAxis: String
+    xOffset: String
+    color: String
+    theta: String
+  }
+
   input PreviewDataInput {
     responseId: Int!
     # Optional, only used for preview data of a single step
@@ -626,19 +652,49 @@ export const typeDefs = gql`
     cteName: String
   }
 
-  type ThreadResponseDetail {
-    view: ViewInfo
-    sql: String
+  enum ThreadResponseAnswerStatus {
+    NOT_STARTED
+    FETCHING_DATA
+    PREPROCESSING
+    STREAMING
+    FINISHED
+    FAILED
+    INTERRUPTED
+  }
+
+  type ThreadResponseAnswerDetail {
+    queryId: String
+    status: ThreadResponseAnswerStatus
+    error: Error
+    numRowsUsedInLLM: Int
+    content: String
+  }
+
+  type ThreadResponseBreakdownDetail {
+    queryId: String
+    status: AskingTaskStatus!
+    error: Error
     description: String
-    steps: [DetailStep!]!
+    steps: [DetailStep!]
+  }
+
+  type ThreadResponseChartDetail {
+    queryId: String
+    status: ChartTaskStatus!
+    error: Error
+    description: String
+    chartSchema: JSON
   }
 
   type ThreadResponse {
     id: Int!
+    threadId: Int!
     question: String!
-    status: AskingTaskStatus!
-    detail: ThreadResponseDetail
-    error: Error
+    sql: String!
+    view: ViewInfo
+    breakdownDetail: ThreadResponseBreakdownDetail
+    answerDetail: ThreadResponseAnswerDetail
+    chartDetail: ThreadResponseChartDetail
   }
 
   # Thread only consists of basic information of a thread
@@ -850,6 +906,22 @@ export const typeDefs = gql`
       data: CreateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
+    previewBreakdownData(where: PreviewDataInput!): JSON!
+
+    # Generate Thread Response Breakdown
+    generateThreadResponseBreakdown(responseId: Int!): ThreadResponse!
+
+    # Generate Thread Response Answer
+    generateThreadResponseAnswer(responseId: Int!): ThreadResponse!
+
+    # Generate Thread Response Chart
+    generateThreadResponseChart(responseId: Int!): ThreadResponse!
+
+    # Adjust Thread Response Chart
+    adjustThreadResponseChart(
+      responseId: Int!
+      data: AdjustThreadResponseChartInput!
+    ): ThreadResponse!
 
     # Settings
     resetCurrentProject: Boolean!

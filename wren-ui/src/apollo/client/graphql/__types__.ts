@@ -14,6 +14,15 @@ export type Scalars = {
   JSON: any;
 };
 
+export type AdjustThreadResponseChartInput = {
+  chartType: ChartType;
+  color?: InputMaybe<Scalars['String']>;
+  theta?: InputMaybe<Scalars['String']>;
+  xAxis?: InputMaybe<Scalars['String']>;
+  xOffset?: InputMaybe<Scalars['String']>;
+  yAxis?: InputMaybe<Scalars['String']>;
+};
+
 export type AskingTask = {
   __typename?: 'AskingTask';
   candidates: Array<ResultCandidate>;
@@ -55,6 +64,23 @@ export type CalculatedFieldValidationResponse = {
   message?: Maybe<Scalars['String']>;
   valid: Scalars['Boolean'];
 };
+
+export enum ChartTaskStatus {
+  FAILED = 'FAILED',
+  FETCHING = 'FETCHING',
+  FINISHED = 'FINISHED',
+  GENERATING = 'GENERATING',
+  STOPPED = 'STOPPED'
+}
+
+export enum ChartType {
+  AREA = 'AREA',
+  BAR = 'BAR',
+  GROUPED_BAR = 'GROUPED_BAR',
+  LINE = 'LINE',
+  PIE = 'PIE',
+  STACKED_BAR = 'STACKED_BAR'
+}
 
 export type CompactColumn = {
   __typename?: 'CompactColumn';
@@ -137,8 +163,8 @@ export enum DataSourceName {
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES',
-  TRINO = 'TRINO',
   SNOWFLAKE = 'SNOWFLAKE',
+  TRINO = 'TRINO'
 }
 
 export type DetailStep = {
@@ -428,6 +454,7 @@ export type ModelWhereInput = {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  adjustThreadResponseChart: ThreadResponse;
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
@@ -445,6 +472,10 @@ export type Mutation = {
   deploy: Scalars['JSON'];
   generateProjectRecommendationQuestions: Scalars['Boolean'];
   generateThreadRecommendationQuestions: Scalars['Boolean'];
+  generateThreadResponseAnswer: ThreadResponse;
+  generateThreadResponseBreakdown: ThreadResponse;
+  generateThreadResponseChart: ThreadResponse;
+  previewBreakdownData: Scalars['JSON'];
   previewData: Scalars['JSON'];
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
@@ -467,6 +498,12 @@ export type Mutation = {
   updateViewMetadata: Scalars['Boolean'];
   validateCalculatedField: CalculatedFieldValidationResponse;
   validateView: ViewValidationResponse;
+};
+
+
+export type MutationAdjustThreadResponseChartArgs = {
+  data: AdjustThreadResponseChartInput;
+  responseId: Scalars['Int'];
 };
 
 
@@ -548,6 +585,26 @@ export type MutationDeployArgs = {
 
 export type MutationGenerateThreadRecommendationQuestionsArgs = {
   threadId: Scalars['Int'];
+};
+
+
+export type MutationGenerateThreadResponseAnswerArgs = {
+  responseId: Scalars['Int'];
+};
+
+
+export type MutationGenerateThreadResponseBreakdownArgs = {
+  responseId: Scalars['Int'];
+};
+
+
+export type MutationGenerateThreadResponseChartArgs = {
+  responseId: Scalars['Int'];
+};
+
+
+export type MutationPreviewBreakdownDataArgs = {
+  where: PreviewDataInput;
 };
 
 
@@ -947,19 +1004,51 @@ export type Thread = {
 
 export type ThreadResponse = {
   __typename?: 'ThreadResponse';
-  detail?: Maybe<ThreadResponseDetail>;
-  error?: Maybe<Error>;
+  answerDetail?: Maybe<ThreadResponseAnswerDetail>;
+  breakdownDetail?: Maybe<ThreadResponseBreakdownDetail>;
+  chartDetail?: Maybe<ThreadResponseChartDetail>;
   id: Scalars['Int'];
   question: Scalars['String'];
-  status: AskingTaskStatus;
+  sql: Scalars['String'];
+  threadId: Scalars['Int'];
+  view?: Maybe<ViewInfo>;
 };
 
-export type ThreadResponseDetail = {
-  __typename?: 'ThreadResponseDetail';
+export type ThreadResponseAnswerDetail = {
+  __typename?: 'ThreadResponseAnswerDetail';
+  content?: Maybe<Scalars['String']>;
+  error?: Maybe<Error>;
+  numRowsUsedInLLM?: Maybe<Scalars['Int']>;
+  queryId?: Maybe<Scalars['String']>;
+  status?: Maybe<ThreadResponseAnswerStatus>;
+};
+
+export enum ThreadResponseAnswerStatus {
+  FAILED = 'FAILED',
+  FETCHING_DATA = 'FETCHING_DATA',
+  FINISHED = 'FINISHED',
+  INTERRUPTED = 'INTERRUPTED',
+  NOT_STARTED = 'NOT_STARTED',
+  PREPROCESSING = 'PREPROCESSING',
+  STREAMING = 'STREAMING'
+}
+
+export type ThreadResponseBreakdownDetail = {
+  __typename?: 'ThreadResponseBreakdownDetail';
   description?: Maybe<Scalars['String']>;
-  sql?: Maybe<Scalars['String']>;
-  steps: Array<DetailStep>;
-  view?: Maybe<ViewInfo>;
+  error?: Maybe<Error>;
+  queryId?: Maybe<Scalars['String']>;
+  status: AskingTaskStatus;
+  steps?: Maybe<Array<DetailStep>>;
+};
+
+export type ThreadResponseChartDetail = {
+  __typename?: 'ThreadResponseChartDetail';
+  chartSchema?: Maybe<Scalars['JSON']>;
+  description?: Maybe<Scalars['String']>;
+  error?: Maybe<Error>;
+  queryId?: Maybe<Scalars['String']>;
+  status: ChartTaskStatus;
 };
 
 export type ThreadUniqueWhereInput = {

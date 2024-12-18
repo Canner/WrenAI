@@ -14,3 +14,9 @@ export enum PROCESS_STATE {
   FAILED,
   NO_RESULT,
 }
+
+export enum ANSWER_TAB_KEYS {
+  ANSWER = 'answer',
+  VIEW_SQL = 'view-sql',
+  CHART = 'chart',
+}
