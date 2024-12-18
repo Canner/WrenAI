@@ -90,7 +90,9 @@ class AskResultResponse(BaseModel):
         "failed",
         "stopped",
     ]
-    type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
+    type: Optional[
+        Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL", "USER_GUIDE"]
+    ] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -161,6 +163,13 @@ class AskService:
                         type="MISLEADING_QUERY",
                     )
                     results["metadata"]["type"] = "MISLEADING_QUERY"
+                    return results
+                elif intent == "USER_GUIDE":
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="USER_GUIDE",
+                    )
+                    results["metadata"]["type"] = "USER_GUIDE"
                     return results
                 elif intent == "GENERAL":
                     asyncio.create_task(
