@@ -70,6 +70,7 @@ export interface ViewMDL {
 export interface Manifest {
   catalog?: string; // eg: "test-catalog"
   schema?: string; // eg: "test-schema"
+  dataSource?: WrenEngineDataSourceType;
   models?: Partial<ModelMDL>[]; // use partial since Rust version doesn't support null values, we need to remove all the null values
   relationships?: Partial<RelationMDL>[]; // use partial since Rust version doesn't support null values, we need to remove all the null values
   enumDefinitions?: Partial<EnumDefinition>[]; // use partial since Rust version doesn't support null values, we need to remove all the null values
@@ -80,4 +81,18 @@ export interface TableReference {
   schema?: string;
   catalog?: string;
   table: string;
+}
+
+export enum WrenEngineDataSourceType {
+  BIGQUERY = 'BIGQUERY',
+  CANNER = 'CANNER',
+  CLICKHOUSE = 'CLICKHOUSE',
+  MSSQL = 'MSSQL',
+  MYSQL = 'MYSQL',
+  POSTGRES = 'POSTGRES',
+  SNOWFLAKE = 'SNOWFLAKE',
+  TRINO = 'TRINO',
+  DUCKDB = 'DUCKDB',
+  // accepted by the wren engine, but not supported by the wren ui
+  DATAFUSION = 'DATAFUSION',
 }

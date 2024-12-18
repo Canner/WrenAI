@@ -4,8 +4,9 @@ import { Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
-import { getIsFinished } from '@/hooks/useAskPrompt';
+import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import {
+  AdjustThreadResponseChartInput,
   DetailedThread,
   RecommendedQuestionsTask,
   ThreadResponse,
@@ -26,6 +27,13 @@ interface Props {
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
+  onRegenerateTextBasedAnswer: (responseId: number) => void;
+  onGenerateBreakdownAnswer: (responseId: number) => void;
+  onGenerateChartAnswer: (responseId: number) => Promise<void>;
+  onAdjustChartAnswer: (
+    responseId: number,
+    data: AdjustThreadResponseChartInput,
+  ) => Promise<void>;
 }
 
 const StyledPromptThread = styled.div`
@@ -53,12 +61,19 @@ const StyledPromptThread = styled.div`
 `;
 
 const AnswerResultTemplate: React.FC<
-  IterableComponent<ThreadResponse> & {
-    motion: boolean;
-    onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
-    onInitPreviewDone: () => void;
-    recommendedQuestionsProps: RecommendedQuestionsProps;
-  }
+  IterableComponent<ThreadResponse> &
+    Pick<
+      Props,
+      | 'onOpenSaveAsViewModal'
+      | 'onRegenerateTextBasedAnswer'
+      | 'onGenerateBreakdownAnswer'
+      | 'onGenerateChartAnswer'
+      | 'onAdjustChartAnswer'
+    > & {
+      motion: boolean;
+      onInitPreviewDone: () => void;
+      recommendedQuestionsProps: RecommendedQuestionsProps;
+    }
 > = ({
   data,
   index,
@@ -66,6 +81,10 @@ const AnswerResultTemplate: React.FC<
   recommendedQuestionsProps,
   onOpenSaveAsViewModal,
   onInitPreviewDone,
+  onGenerateBreakdownAnswer,
+  onRegenerateTextBasedAnswer,
+  onGenerateChartAnswer,
+  onAdjustChartAnswer,
   ...threadResponse
 }) => {
   const { id } = threadResponse;
@@ -82,6 +101,10 @@ const AnswerResultTemplate: React.FC<
         onInitPreviewDone={onInitPreviewDone}
         threadResponse={threadResponse}
         recommendedQuestionsProps={recommendedQuestionsProps}
+        onGenerateBreakdownAnswer={onGenerateBreakdownAnswer}
+        onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
+        onGenerateChartAnswer={onGenerateChartAnswer}
+        onAdjustChartAnswer={onAdjustChartAnswer}
       />
     </div>
   );
@@ -93,7 +116,7 @@ export default function PromptThread(props: Props) {
   const router = useRouter();
   const divRef = useRef<HTMLDivElement>(null);
   const motionResponsesRef = useRef<Record<number, boolean>>({});
-  const { data, onOpenSaveAsViewModal, onSelect } = props;
+  const { data, onSelect, ...restProps } = props;
 
   const responses = useMemo(
     () =>
@@ -130,13 +153,21 @@ export default function PromptThread(props: Props) {
   useEffect(() => {
     motionResponsesRef.current = (data.thread?.responses || []).reduce(
       (result, item) => {
-        result[item.id] = !getIsFinished(item?.status);
+        result[item.id] = !getAnswerIsFinished(item?.answerDetail?.status);
         return result;
       },
       {},
     );
-    const lastResponseMotion = Object.values(motionResponsesRef.current).pop();
-    triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
+
+    if (
+      data.thread?.responses?.length >
+      Object.keys(motionResponsesRef.current).length
+    ) {
+      const lastResponseMotion = Object.values(
+        motionResponsesRef.current,
+      ).pop();
+      triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
+    }
   }, [data.thread?.responses]);
 
   const onInitPreviewDone = () => {
@@ -146,8 +177,8 @@ export default function PromptThread(props: Props) {
   return (
     <StyledPromptThread className="mt-12" ref={divRef}>
       <AnswerResultIterator
+        {...restProps}
         data={responses}
-        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onInitPreviewDone={onInitPreviewDone}
         recommendedQuestionsProps={{
           data: data.recommendedQuestions,

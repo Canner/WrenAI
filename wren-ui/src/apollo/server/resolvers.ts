@@ -89,6 +89,20 @@ const resolvers = {
     deleteThread: askingResolver.deleteThread,
     createThreadResponse: askingResolver.createThreadResponse,
     previewData: askingResolver.previewData,
+    previewBreakdownData: askingResolver.previewBreakdownData,
+
+    // Generate Thread Response Breakdown
+    generateThreadResponseBreakdown:
+      askingResolver.generateThreadResponseBreakdown,
+
+    // Generate Thread Response Answer
+    generateThreadResponseAnswer: askingResolver.generateThreadResponseAnswer,
+
+    // Generate Thread Response Chart
+    generateThreadResponseChart: askingResolver.generateThreadResponseChart,
+
+    // Adjust Thread Response Chart
+    adjustThreadResponseChart: askingResolver.adjustThreadResponseChart,
 
     // Views
     createView: modelResolver.createView,
