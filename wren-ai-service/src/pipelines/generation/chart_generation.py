@@ -71,7 +71,11 @@ class ChartGenerationPostProcessor:
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
-            if chart_schema := orjson.loads(generation_result.get("chart_schema", {})):
+            if chart_schema := generation_result.get("chart_schema", {}):
+                # sometimes the chart_schema is still in string format
+                if isinstance(chart_schema, str):
+                    chart_schema = orjson.loads(chart_schema)
+
                 validate(chart_schema, schema=vega_schema)
                 chart_schema["data"]["values"] = []
                 return {
@@ -168,7 +172,7 @@ CHART_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "matched_schema",
+            "name": "chart_generation_schema",
             "schema": ChartGenerationResults.model_json_schema(),
         },
     }
