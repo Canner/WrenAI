@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any
 
 import orjson
@@ -204,31 +203,6 @@ class SemanticsDescription(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        user_prompt: str,
-        selected_models: list[str],
-        mdl: dict,
-        language: str = "en",
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            [self._final],
-            output_file_path=f"{destination}/semantics_description.dot",
-            inputs={
-                "user_prompt": user_prompt,
-                "selected_models": selected_models,
-                "mdl": mdl,
-                "language": language,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Semantics Description Generation")

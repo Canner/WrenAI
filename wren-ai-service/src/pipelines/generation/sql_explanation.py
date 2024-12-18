@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
@@ -609,29 +608,6 @@ class SQLExplanation(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        question: str,
-        step_with_analysis_results: StepWithAnalysisResult,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/sql_explanation.dot",
-            inputs={
-                "question": question,
-                "sql": step_with_analysis_results.sql,
-                "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
-                "sql_summary": step_with_analysis_results.summary,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @async_timer

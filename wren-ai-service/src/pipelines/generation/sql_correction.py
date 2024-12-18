@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List
 
 from hamilton import base
@@ -141,30 +140,6 @@ class SQLCorrection(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        contexts: List[Document],
-        invalid_generation_results: List[Dict[str, str]],
-        project_id: str | None = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/sql_correction.dot",
-            inputs={
-                "invalid_generation_results": invalid_generation_results,
-                "documents": contexts,
-                "project_id": project_id,
-                **self._components,
-                **self._configs,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @async_timer

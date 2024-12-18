@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -69,29 +68,6 @@ class SQLExecutor(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        sql: str,
-        project_id: str | None = None,
-        limit: int = 500,
-    ) -> None:
-        destination = "outputs/pipelines/retrieval"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["execute_sql"],
-            output_file_path=f"{destination}/sql_executor.dot",
-            inputs={
-                "sql": sql,
-                "project_id": project_id,
-                "limit": limit,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @async_timer

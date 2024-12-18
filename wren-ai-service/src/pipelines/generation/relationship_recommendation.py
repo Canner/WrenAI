@@ -1,7 +1,6 @@
 import logging
 import sys
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import orjson
@@ -186,27 +185,6 @@ class RelationshipRecommendation(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        mdl: dict,
-        language: str = "English",
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            [self._final],
-            output_file_path=f"{destination}/relationship_recommendation.dot",
-            inputs={
-                "mdl": mdl,
-                "language": language,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Relationship Recommendation")
