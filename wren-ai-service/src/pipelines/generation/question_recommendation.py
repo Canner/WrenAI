@@ -1,7 +1,6 @@
 import logging
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import orjson
@@ -173,38 +172,6 @@ class QuestionRecommendation(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        mdl: dict,
-        previous_questions: list[str] = [],
-        categories: list[str] = [],
-        language: str = "en",
-        current_date: str = datetime.now(),
-        max_questions: int = 5,
-        max_categories: int = 3,
-        **_,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            [self._final],
-            output_file_path=f"{destination}/question_recommendation.dot",
-            inputs={
-                "mdl": mdl,
-                "previous_questions": previous_questions,
-                "categories": categories,
-                "language": language,
-                "current_date": current_date,
-                "max_questions": max_questions,
-                "max_categories": max_categories,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="Question Recommendation")

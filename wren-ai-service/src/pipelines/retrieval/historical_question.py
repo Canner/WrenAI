@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hamilton import base
@@ -149,27 +148,6 @@ class HistoricalQuestion(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(
-        self,
-        query: str,
-        id: Optional[str] = None,
-    ) -> None:
-        destination = "outputs/pipelines/retrieval"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["formatted_output"],
-            output_file_path=f"{destination}/historical_question.dot",
-            inputs={
-                "query": query,
-                "id": id or "",
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @async_timer
