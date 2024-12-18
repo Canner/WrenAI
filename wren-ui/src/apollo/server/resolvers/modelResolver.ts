@@ -226,7 +226,11 @@ export class ModelResolver {
       project.id,
       args.force,
     );
-    await ctx.projectService.generateProjectRecommendationQuestions();
+
+    // only generating for user's data source
+    if (project.sampleDataset === null) {
+      await ctx.projectService.generateProjectRecommendationQuestions();
+    }
     return deployRes;
   }
 
