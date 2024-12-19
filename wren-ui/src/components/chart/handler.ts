@@ -102,6 +102,7 @@ const config: Config = {
     labelColor: COLOR.GRAY_8,
     labelFont: ' Roboto, Arial, Noto Sans, sans-serif',
   },
+  axisX: { labelAngle: -45 },
   line: {
     color: DEFAULT_COLOR,
   },
