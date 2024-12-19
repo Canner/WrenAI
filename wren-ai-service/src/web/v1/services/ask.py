@@ -90,7 +90,9 @@ class AskResultResponse(BaseModel):
         "failed",
         "stopped",
     ]
-    type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
+    type: Optional[
+        Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL", "USER_GUIDE"]
+    ] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -106,6 +108,10 @@ class AskService:
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._ask_result_type_to_pipeline = {
+            "GENERAL": self._pipelines["data_assistance"],
+            "USER_GUIDE": self._pipelines["user_guide_assistance"],
+        }
 
     def _is_stopped(self, query_id: str):
         if (
@@ -161,6 +167,21 @@ class AskService:
                         type="MISLEADING_QUERY",
                     )
                     results["metadata"]["type"] = "MISLEADING_QUERY"
+                    return results
+                elif intent == "USER_GUIDE":
+                    asyncio.create_task(
+                        self._pipelines["user_guide_assistance"].run(
+                            query=ask_request.query,
+                            language=ask_request.configurations.language,
+                            query_id=ask_request.query_id,
+                        )
+                    )
+
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="USER_GUIDE",
+                    )
+                    results["metadata"]["type"] = "USER_GUIDE"
                     return results
                 elif intent == "GENERAL":
                     asyncio.create_task(
@@ -372,13 +393,10 @@ class AskService:
         self,
         query_id: str,
     ):
-        if (
-            self._ask_results.get(query_id)
-            and self._ask_results.get(query_id).type == "GENERAL"
+        if (ask_result := self._ask_results.get(query_id)) and (
+            pipeline := self._ask_result_type_to_pipeline.get(ask_result.type)
         ):
-            async for chunk in self._pipelines["data_assistance"].get_streaming_results(
-                query_id
-            ):
+            async for chunk in pipeline.get_streaming_results(query_id):
                 event = SSEEvent(
                     data=SSEEvent.SSEEventMessage(message=chunk),
                 )

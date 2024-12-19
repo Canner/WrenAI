@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         """,
     )
 
+    # user guide config
+    is_oss: bool = Field(default=True)
+    doc_endpoint: str = Field(default="https://docs.getwren.ai")
+
     # langfuse config
     langfuse_host: str = Field(default="https://cloud.langfuse.com")
     langfuse_enable: bool = Field(default=True)
