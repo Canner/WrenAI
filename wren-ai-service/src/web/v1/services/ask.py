@@ -91,6 +91,7 @@ class AskResultResponse(BaseModel):
         "stopped",
     ]
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
+    retrieval_response: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -190,6 +191,8 @@ class AskService:
                     id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
+                table_names = [document.get("table_name") for document in documents]
+                table_ddls = [document.get("table_ddl") for document in documents]
 
                 if not documents:
                     logger.exception(
@@ -211,6 +214,7 @@ class AskService:
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
                     status="generating",
+                    retrieval_response=table_names,
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
@@ -241,7 +245,7 @@ class AskService:
                             "followup_sql_generation"
                         ].run(
                             query=ask_request.query,
-                            contexts=documents,
+                            contexts=table_ddls,
                             history=ask_request.history,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
@@ -251,7 +255,7 @@ class AskService:
                             "sql_generation"
                         ].run(
                             query=ask_request.query,
-                            contexts=documents,
+                            contexts=table_ddls,
                             exclude=historical_question_result,
                             project_id=ask_request.project_id,
                             configuration=ask_request.configurations,
@@ -280,7 +284,7 @@ class AskService:
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
-                            contexts=documents,
+                            contexts=table_ddls,
                             invalid_generation_results=failed_dry_run_results,
                             project_id=ask_request.project_id,
                         )
@@ -304,8 +308,10 @@ class AskService:
                             status="finished",
                             type="TEXT_TO_SQL",
                             response=api_results,
+                            retrieval_response=table_names,
                         )
-                    results["ask_result"] = api_results
+                    results["ask_result"]["generation_results"] = api_results
+                    results["ask_result"]["retrieval_results"] = table_names
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                 else:
                     logger.exception(
@@ -320,6 +326,7 @@ class AskService:
                                 message="No relevant SQL",
                             ),
                         )
+
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
 
