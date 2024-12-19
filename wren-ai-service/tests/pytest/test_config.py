@@ -22,7 +22,6 @@ def test_settings_default_values():
         assert settings.langfuse_enable is True
 
         assert settings.logging_level == "INFO"
-        assert settings.enable_timer is False
         assert settings.development is False
 
         assert settings.config_path == "config.yaml"

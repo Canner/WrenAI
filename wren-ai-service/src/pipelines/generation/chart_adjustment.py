@@ -24,7 +24,6 @@ from src.pipelines.generation.utils.chart import (
     StackedBarChartSchema,
     chart_generation_instructions,
 )
-from src.utils import async_timer, timer
 from src.web.v1.services.chart_adjustment import ChartAdjustmentOption
 
 logger = logging.getLogger("wren-ai-service")
@@ -133,7 +132,6 @@ class ChartAdjustmentPostProcessor:
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def preprocess_data(
     data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
@@ -141,7 +139,6 @@ def preprocess_data(
     return chart_data_preprocessor.run(data)
 
 
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -164,20 +161,18 @@ def prompt(
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_chart_adjustment(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
 
-@timer
 @observe(capture_input=False)
 def post_process(
     generate_chart_adjustment: dict,
     vega_schema: Dict[str, Any],
     post_processor: ChartAdjustmentPostProcessor,
 ) -> dict:
-    return post_processor.run(generate_chart_adjustment.get("replies"), vega_schema)
+    return post_processor(generate_chart_adjustment.get("replies"), vega_schema)
 
 
 ## End of Pipeline
@@ -232,7 +227,6 @@ class ChartAdjustment(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="Chart Adjustment")
     async def run(
         self,

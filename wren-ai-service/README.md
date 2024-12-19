@@ -98,10 +98,6 @@ For a comprehensive understanding of how to evaluate the pipelines, please refer
 
 ### Estimate the Speed of the Pipeline
 
-- to evaluate the speed of the pipeline, you can enable the timer
-  - add environment variables `ENABLE_TIMER=1` in `.env.dev`
-  - restart wren ai service
-  - check the logs in the terminal
 - to run the load test
   - setup `DATASET_NAME` in `.env.dev`
   - adjust test config if needed

@@ -32,7 +32,6 @@ Endpoints:
        "mdl": "model_data_string",                # String representing the model data to be indexed
        "mdl_hash": "unique_hash",                 # Unique identifier for the model (hash or ID)
        "project_id": "optional_project_id",       # Optional project identifier
-       "user_id": "optional_user_id"              # Optional user identifier
      }
    - Response: SemanticsPreparationResponse
      {
