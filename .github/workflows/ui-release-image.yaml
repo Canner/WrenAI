@@ -46,7 +46,7 @@ jobs:
       - name: Prepare platform
         run: |
           platform=${{ matrix.arch.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "PLATFORM_PAIR=${platform}" >> $GITHUB_ENV
       - name: Build and push image
         env:
           TAG_NAME: ${{ steps.tag-preparation.outputs.TAG_NAME }}
