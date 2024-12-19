@@ -7,6 +7,9 @@ on:
         description: Docker image tag name (optional, default branch name/tag name replaced with hyphens)
         type: string
 
+env:
+  WREN_UI_IMAGE: ghcr.io/canner/wren-ui
+
 defaults:
   run:
     working-directory: wren-ui
@@ -54,9 +57,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: ${{ matrix.arch.platform }}
-          labels: ghcr.io/canner/wren-ui
+          labels: ${{ env.WREN_UI_IMAGE }}
           context: ./wren-ui
-          outputs: type=image,name=ghcr.io/canner/wren-ui,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.WREN_UI_IMAGE }},push-by-digest=true,name-canonical=true,push=true
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
@@ -85,7 +88,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/canner/wren-ui
+          images: ${{ env.WREN_UI_IMAGE }}
           tags: |
             ${{ needs.build-image.outputs.tag_name }}
       - name: Login to GitHub Container Registry
@@ -99,8 +102,5 @@ jobs:
         run: |
           TAGS=$(echo "${{ steps.meta.outputs.tags }}" | awk '{printf "--tag %s ", $0}')
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/canner/wren-ui@sha256:%s ' *) \
+            $(printf '${{ env.WREN_UI_IMAGE }}@sha256:%s ' *) \
             $TAGS
-      - name: Inspect image
-        run: |
-          docker buildx imagetools inspect ${{ steps.meta.outputs.tags }}
