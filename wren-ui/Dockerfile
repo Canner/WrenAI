@@ -1,6 +1,8 @@
 FROM node:18-bookworm-slim AS base
 
-# Install dependencies only when needed
+# Install curl
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 FROM base AS deps
 WORKDIR /app
 
