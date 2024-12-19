@@ -179,8 +179,8 @@ export default function TextBasedAnswer(
             {previewDataResult?.data?.previewData && (
               <div className="mt-2 mb-3">
                 <Text type="secondary" className="text-sm">
-                  Considering the limit of context window, we only use{' '}
-                  {rowsUsed} rows of results to generate the answer.
+                  Considering the limit of the context window, we retrieve up to
+                  500 rows of results to generate the answer.
                 </Text>
                 <PreviewData
                   error={previewDataResult.error}
