@@ -102,6 +102,7 @@ const config: Config = {
     labelColor: COLOR.GRAY_8,
     labelFont: ' Roboto, Arial, Noto Sans, sans-serif',
   },
+  axisX: { labelAngle: -45 },
   line: {
     color: DEFAULT_COLOR,
   },
@@ -127,6 +128,7 @@ export default class ChartSpecHandler {
   public config: Config;
   public options: ChartOptions;
   public $schema: string;
+  public title: string;
   public data: DataSpec;
   public encoding: EncodingSpec;
   public mark: MarkSpec;
@@ -187,6 +189,7 @@ export default class ChartSpecHandler {
 
     return {
       $schema: this.$schema,
+      title: this.title,
       data: this.data,
       mark: this.mark,
       width: this.options.width,
@@ -199,6 +202,7 @@ export default class ChartSpecHandler {
 
   private parseSpec(spec: TopLevelSpec) {
     this.$schema = spec.$schema;
+    this.title = spec.title as string;
 
     if ('mark' in spec) {
       const mark =
@@ -376,29 +380,42 @@ export default class ChartSpecHandler {
   }
 
   private filterTopCategories(encoding: EncodingSpec) {
-    const nominalAxis = ['xOffset', 'color', 'x', 'y'].find(
+    const nominalKeys = ['xOffset', 'color', 'x', 'y'].filter(
       (axis) => encoding[axis]?.type === 'nominal',
     );
-    if (!nominalAxis) return;
-    const quantitativeAxis = ['theta', 'x', 'y'].find(
+    const quantitativeKeys = ['theta', 'x', 'y'].filter(
       (axis) => encoding[axis]?.type === 'quantitative',
     );
-    if (!quantitativeAxis) return;
+    if (!nominalKeys.length || !quantitativeKeys.length) return;
 
     const clonedValues = cloneDeep((this.data as any).values);
 
+    const quantitativeAxis = quantitativeKeys[0];
     const quanAxis = encoding[quantitativeAxis] as any;
-    const nomiAxis = encoding[nominalAxis] as any;
     const sortedValues = sortBy(clonedValues, (val) => val[quanAxis.field]);
-    const categoryValues = sortedValues.map((val) => val[nomiAxis.field]);
-    const uniqueCategoryValues = uniq(categoryValues);
-    const topCategories = uniqueCategoryValues.slice(
-      0,
-      this.options.categoriesLimit,
-    );
 
+    // nominal values probably have different length, so we need to filter them
+    const filteredNominals = [];
+    for (const nominalKey of nominalKeys) {
+      const nomiAxis = encoding[nominalKey] as any;
+      if (filteredNominals.some((val) => val.field === nomiAxis.field)) {
+        continue;
+      }
+      const nominalValues = sortedValues.map((val) => val[nomiAxis.field]);
+      const uniqueNominalValues = uniq(nominalValues);
+      const topNominalValues = uniqueNominalValues.slice(
+        0,
+        this.options.categoriesLimit,
+      );
+      filteredNominals.push({
+        field: nomiAxis.field,
+        values: topNominalValues,
+      });
+    }
     const values = clonedValues.filter((val) =>
-      topCategories.includes(val[nomiAxis.field]),
+      filteredNominals.every((nominal) =>
+        nominal.values.includes(val[nominal.field]),
+      ),
     );
     return { values };
   }
