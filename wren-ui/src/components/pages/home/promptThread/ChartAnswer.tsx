@@ -203,14 +203,6 @@ export default function ChartAnswer(props: Props) {
     onResetState();
   };
 
-  const regeneratedContent = !!dataValues.length ? (
-    <div className="text-center mt-4">
-      <Button icon={<ReloadOutlined />} onClick={onRegenerate}>
-        Regenerate
-      </Button>
-    </div>
-  ) : null;
-
   if (error) {
     return (
       <div className="py-6 px-4">
@@ -220,7 +212,11 @@ export default function ChartAnswer(props: Props) {
           type="error"
           showIcon
         />
-        {regeneratedContent}
+        <div className="text-center mt-4">
+          <Button icon={<ReloadOutlined />} onClick={onRegenerate}>
+            Regenerate
+          </Button>
+        </div>
       </div>
     );
   }
@@ -234,7 +230,7 @@ export default function ChartAnswer(props: Props) {
     >
       <div className="text-md gray-10 py-6 px-4">
         {chartDetail?.description}
-        {chartSpec ? (
+        {chartSpec && (
           <ChartWrapper
             className={clsx(
               'border border-gray-4 rounded mt-4 pb-3 overflow-hidden',
@@ -281,8 +277,6 @@ export default function ChartAnswer(props: Props) {
               onReload={onReload}
             />
           </ChartWrapper>
-        ) : (
-          regeneratedContent
         )}
       </div>
     </StyledSkeleton>

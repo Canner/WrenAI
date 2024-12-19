@@ -7,6 +7,7 @@ import { message } from 'antd';
 export const ERROR_CODES = {
   INVALID_CALCULATED_FIELD: 'INVALID_CALCULATED_FIELD',
   CONNECTION_REFUSED: 'CONNECTION_REFUSED',
+  NO_CHART: 'NO_CHART',
 };
 
 /**
