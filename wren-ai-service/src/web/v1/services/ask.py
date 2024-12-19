@@ -90,6 +90,8 @@ class AskResultResponse(BaseModel):
         "failed",
         "stopped",
     ]
+    rephrased_question: Optional[str] = None
+    intent_reasoning: Optional[str] = None
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
@@ -137,11 +139,13 @@ class AskService:
             },
         }
 
+        query_id = ask_request.query_id
+        rephrased_question = None
+        intent_reasoning = None
+
         try:
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
-            query_id = ask_request.query_id
-
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
@@ -155,17 +159,28 @@ class AskService:
                     )
                 ).get("post_process", {})
                 intent = intent_classification_result.get("intent")
+                rephrased_question = intent_classification_result.get(
+                    "rephrased_question"
+                )
+                intent_reasoning = intent_classification_result.get("reasoning")
+
+                user_query = (
+                    ask_request.query if not rephrased_question else rephrased_question
+                )
+
                 if intent == "MISLEADING_QUERY":
                     self._ask_results[query_id] = AskResultResponse(
                         status="finished",
                         type="MISLEADING_QUERY",
+                        rephrased_question=rephrased_question,
+                        intent_reasoning=intent_reasoning,
                     )
                     results["metadata"]["type"] = "MISLEADING_QUERY"
                     return results
                 elif intent == "GENERAL":
                     asyncio.create_task(
                         self._pipelines["data_assistance"].run(
-                            query=ask_request.query,
+                            query=user_query,
                             history=ask_request.history,
                             db_schemas=intent_classification_result.get("db_schemas"),
                             language=ask_request.configurations.language,
@@ -174,27 +189,38 @@ class AskService:
                     )
 
                     self._ask_results[query_id] = AskResultResponse(
-                        status="finished", type="GENERAL"
+                        status="finished",
+                        type="GENERAL",
+                        rephrased_question=rephrased_question,
+                        intent_reasoning=intent_reasoning,
                     )
                     results["metadata"]["type"] = "GENERAL"
                     return results
+                else:
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="understanding",
+                        type="TEXT_TO_SQL",
+                        rephrased_question=rephrased_question,
+                        intent_reasoning=intent_reasoning,
+                    )
 
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
                 )
 
                 retrieval_result = await self._pipelines["retrieval"].run(
-                    query=ask_request.query,
+                    query=user_query,
                     history=ask_request.history,
                     id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
 
                 if not documents:
-                    logger.exception(
-                        f"ask pipeline - NO_RELEVANT_DATA: {ask_request.query}"
-                    )
+                    logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
@@ -203,6 +229,8 @@ class AskService:
                                 code="NO_RELEVANT_DATA",
                                 message="No relevant data",
                             ),
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -211,10 +239,13 @@ class AskService:
             if not self._is_stopped(query_id):
                 self._ask_results[query_id] = AskResultResponse(
                     status="generating",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=ask_request.query,
+                    query=user_query,
                     id=ask_request.project_id,
                 )
 
@@ -240,7 +271,7 @@ class AskService:
                         text_to_sql_generation_results = await self._pipelines[
                             "followup_sql_generation"
                         ].run(
-                            query=ask_request.query,
+                            query=user_query,
                             contexts=documents,
                             history=ask_request.history,
                             project_id=ask_request.project_id,
@@ -250,7 +281,7 @@ class AskService:
                         text_to_sql_generation_results = await self._pipelines[
                             "sql_generation"
                         ].run(
-                            query=ask_request.query,
+                            query=user_query,
                             contexts=documents,
                             exclude=historical_question_result,
                             project_id=ask_request.project_id,
@@ -304,13 +335,13 @@ class AskService:
                             status="finished",
                             type="TEXT_TO_SQL",
                             response=api_results,
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
                         )
                     results["ask_result"] = api_results
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                 else:
-                    logger.exception(
-                        f"ask pipeline - NO_RELEVANT_SQL: {ask_request.query}"
-                    )
+                    logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
                     if not self._is_stopped(query_id):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
@@ -319,6 +350,8 @@ class AskService:
                                 code="NO_RELEVANT_SQL",
                                 message="No relevant SQL",
                             ),
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -327,13 +360,15 @@ class AskService:
         except Exception as e:
             logger.exception(f"ask pipeline - OTHERS: {e}")
 
-            self._ask_results[ask_request.query_id] = AskResultResponse(
+            self._ask_results[query_id] = AskResultResponse(
                 status="failed",
                 type="TEXT_TO_SQL",
                 error=AskError(
                     code="OTHERS",
                     message=str(e),
                 ),
+                rephrased_question=rephrased_question,
+                intent_reasoning=intent_reasoning,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
