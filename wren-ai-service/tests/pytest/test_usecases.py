@@ -147,6 +147,7 @@ if __name__ == "__main__":
     usecase_to_dataset_type = {
         "hubspot": "bigquery",
         "ga4": "bigquery",
+        "woocommerce": "bigquery",
         "ecommerce": "duckdb",
         "hr": "duckdb",
     }
@@ -157,12 +158,12 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         default=["all"],
-        choices=["all", "hubspot", "ga4", "ecommerce", "hr"],
+        choices=["all", "hubspot", "ga4", "ecommerce", "hr", "woocommerce"],
     )
     args = parser.parse_args()
 
     if "all" in args.usecases:
-        usecases = ["hubspot", "ga4", "ecommerce", "hr"]
+        usecases = ["hubspot", "ga4", "ecommerce", "hr", "woocommerce"]
     else:
         usecases = args.usecases
 
