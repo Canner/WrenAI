@@ -1,4 +1,4 @@
-FROM node:18-bullseye AS base
+FROM node:18-bookworm-slim AS base
 
 # Install curl
 RUN apt-get update && apt-get install -y curl python3 cmake g++ && rm -rf /var/lib/apt/lists/*
@@ -8,9 +8,7 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* ./
-RUN yarn cache clean
-RUN yarn config delete proxy
-RUN yarn config delete https-proxy
+RUN yarn set version stable
 RUN yarn install --frozen-lockfile --network-timeout 100000
 
 # Rebuild the source code only when needed
