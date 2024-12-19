@@ -11,7 +11,7 @@ from src.utils import trace_metadata
 logger = logging.getLogger("wren-ai-service")
 
 
-# POST /v1/sql-pairs-preparations
+# POST /v1/sql-pairs
 class SqlPair(BaseModel):
     sql: str
     id: str
@@ -35,7 +35,7 @@ class SqlPairsPreparationResponse(BaseModel):
     sql_pairs_preparation_id: str
 
 
-# DELETE /v1/sql-pairs-preparations
+# DELETE /v1/sql-pairs
 class DeleteSqlPairsRequest(BaseModel):
     _query_id: str | None = None
     ids: List[str]
@@ -54,7 +54,7 @@ class DeleteSqlPairsResponse(BaseModel):
     sql_pairs_preparation_id: str
 
 
-# GET /v1/sql-pairs-preparations/{sql_pairs_preparation_id}/status
+# GET /v1/sql-pairs/{sql_pairs_preparation_id}
 class SqlPairsPreparationStatusRequest(BaseModel):
     sql_pairs_preparation_id: str
 

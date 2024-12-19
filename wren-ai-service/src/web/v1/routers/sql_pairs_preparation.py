@@ -27,7 +27,7 @@ Sql Pairs Preparation Router
 This router manages the endpoints related to users uploading SQL pairs and retrieving their status.
 
 Endpoints:
-1. **POST /sql-pairs-preparations**
+1. **POST /sql-pairs**
    - Initiates the preparation of SQL pairs for processing.
    - **Request Body**: SqlPairsPreparationRequest
      - `sql_pairs`: List of SQL pairs, each containing:
@@ -37,7 +37,7 @@ Endpoints:
    - **Response**: SqlPairsPreparationResponse
      - `sql_pairs_preparation_id`: A unique identifier (UUID) for tracking the preparation process
 
-2. **DELETE /sql-pairs-preparations**
+2. **DELETE /sql-pairs**
    - Deletes specified SQL pairs.
    - **Request Body**: DeleteSqlPairsRequest
      - `ids`: List of SQL pair IDs to delete
@@ -45,7 +45,7 @@ Endpoints:
    - **Response**: DeleteSqlPairsResponse
      - `sql_pairs_preparation_id`: A unique identifier (UUID) for tracking the deletion process
 
-3. **GET /sql-pairs-preparations/{sql_pairs_preparation_id}/status**
+3. **GET /sql-pairs/{sql_pairs_preparation_id}**
    - Retrieves the current status of a SQL pairs preparation or deletion process.
    - **Path Parameter**:
      - `sql_pairs_preparation_id`: The unique identifier of the process
@@ -65,7 +65,7 @@ via the GET endpoint. Results are cached with a TTL of 120 seconds.
 """
 
 
-@router.post("/sql-pairs-preparations")
+@router.post("/sql-pairs")
 async def prepare_sql_pairs(
     prepare_sql_pairs_request: SqlPairsPreparationRequest,
     background_tasks: BackgroundTasks,
@@ -88,7 +88,7 @@ async def prepare_sql_pairs(
     return SqlPairsPreparationResponse(sql_pairs_preparation_id=id)
 
 
-@router.delete("/sql-pairs-preparations")
+@router.delete("/sql-pairs")
 async def delete_sql_pairs(
     delete_sql_pairs_request: DeleteSqlPairsRequest,
     background_tasks: BackgroundTasks,
@@ -111,7 +111,7 @@ async def delete_sql_pairs(
     return DeleteSqlPairsResponse(sql_pairs_preparation_id=id)
 
 
-@router.get("/sql-pairs-preparations/{sql_pairs_preparation_id}/status")
+@router.get("/sql-pairs/{sql_pairs_preparation_id}")
 async def get_sql_pairs_preparation_status(
     sql_pairs_preparation_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
