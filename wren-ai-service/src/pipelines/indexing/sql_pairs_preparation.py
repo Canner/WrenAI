@@ -78,24 +78,12 @@ class SqlPairsDescriptionConverter:
 
 
 ## Start of Pipeline
-@observe(capture_input=False, capture_output=False)
-async def delete_sql_pairs(
-    sql_pairs_cleaner: SqlPairsCleaner,
-    sql_pairs: List[SqlPair],
-    id: Optional[str] = None,
-) -> List[SqlPair]:
-    sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
-    await sql_pairs_cleaner.run(sql_pair_ids=sql_pair_ids, id=id)
-
-    return sql_pairs
-
-
 @observe(capture_input=False)
 def prompts(
-    delete_sql_pairs: List[SqlPair],
+    sql_pairs: List[SqlPair],
     prompt_builder: PromptBuilder,
 ) -> List[dict]:
-    return [prompt_builder.run(sql=sql_pair.sql) for sql_pair in delete_sql_pairs]
+    return [prompt_builder.run(sql=sql_pair.sql) for sql_pair in sql_pairs]
 
 
 @observe(as_type="generation", capture_input=False)
@@ -143,6 +131,19 @@ async def embed_sql_pairs(
     return await document_embedder.run(
         documents=convert_sql_pairs_to_documents["documents"]
     )
+
+
+@observe(capture_input=False, capture_output=False)
+async def delete_sql_pairs(
+    sql_pairs_cleaner: SqlPairsCleaner,
+    sql_pairs: List[SqlPair],
+    embed_sql_pairs: Dict[str, Any],
+    id: Optional[str] = None,
+) -> List[SqlPair]:
+    sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
+    await sql_pairs_cleaner.run(sql_pair_ids=sql_pair_ids, id=id)
+
+    return embed_sql_pairs
 
 
 @observe(capture_input=False)
