@@ -48,32 +48,59 @@ jobs:
       - name: Prepare platform
         run: |
           platform=${{ matrix.arch.platform }}
-          echo "PLATFORM_PAIR=${platform}" >> $GITHUB_ENV
-      - name: Build and push image
-        uses: docker/build-push-action@v5
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
         with:
-          context: wren-ui
-          file: wren-ui/Dockerfile
-          platforms: ${{ env.PLATFORM_PAIR }}
-          push: true
-          tags: ghcr.io/canner/wren-ui:${{ steps.tag-preparation.outputs.TAG_NAME }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-  create-manifest:
-    needs: build-image
+          platforms: ${{ matrix.arch.platform }}
+          labels: ghcr.io/canner/wren-ui
+          context: ./wren-ui
+          outputs: type=image,name=ghcr.io/canner/wren-ui,push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+  merge:
     runs-on: ubuntu-latest
+    needs: [ build-image ]
     steps:
-      - uses: actions/checkout@v4
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/canner/wren-ui
+          tags: |
+            ${{ needs.build-image.outputs.tag_name }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create and push manifest
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
         run: |
-          TAG_NAME=${{ needs.build-image.outputs.tag_name }}
-          docker manifest create ghcr.io/canner/wren-ui:$TAG_NAME \
-            ghcr.io/canner/wren-ui:$TAG_NAME-amd64 \
-            ghcr.io/canner/wren-ui:$TAG_NAME-arm64
-          docker manifest push ghcr.io/canner/wren-ui:$TAG_NAME
+          TAGS=$(echo "${{ steps.meta.outputs.tags }}" | awk '{printf "--tag %s ", $0}')
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/canner/wren-ui@sha256:%s ' *) \
+            $TAGS
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ steps.meta.outputs.tags }}
