@@ -8,7 +8,10 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json yarn.lock* ./
-RUN  yarn install --frozen-lockfile --network-timeout 100000
+RUN yarn cache clean
+RUN yarn config delete proxy
+RUN yarn config delete https-proxy
+RUN yarn install --frozen-lockfile --network-timeout 100000
 
 # Rebuild the source code only when needed
 FROM base AS builder
