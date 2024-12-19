@@ -92,7 +92,7 @@ class SqlPairsCleaner:
     def __init__(self, sql_pairs_store: DocumentStore) -> None:
         self._sql_pairs_store = sql_pairs_store
 
-    @component.output_types(documents=List[Document])
+    @component.output_types()
     async def run(self, sql_pair_ids: List[str], id: Optional[str] = None) -> None:
         filters = {
             "operator": "AND",
