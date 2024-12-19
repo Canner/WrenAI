@@ -34,7 +34,6 @@ Endpoints:
      - `project_id`: (Optional) Identifier for the project to fetch relevant data.
      - `mdl_hash`: (Optional) Hash or ID related to the model to be used for the query.
      - `thread_id`: (Optional) Thread identifier for the query.
-     - `user_id`: (Optional) User identifier.
      - `history`: (Optional) Query history (SQL steps).
      - `configurations`: (Optional) Configuration such as fiscal year.
    - **Response**:

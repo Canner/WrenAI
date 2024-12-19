@@ -23,7 +23,7 @@ GLOBAL_DATA = {
 }
 
 
-def test_semantics_preparations(app):
+def test_semantics_preparation(app):
     with TestClient(app) as client:
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
 

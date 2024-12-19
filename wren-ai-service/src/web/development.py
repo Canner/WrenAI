@@ -6,7 +6,6 @@ import uuid
 
 from fastapi import APIRouter, BackgroundTasks
 
-from src.utils import async_timer
 from src.web.v1.services.ask import (
     AskError,
     AskRequest,
@@ -20,7 +19,6 @@ router = APIRouter()
 test_ask_results = {}
 
 
-@async_timer
 async def dummy_ask_task(ask_request: AskRequest):
     """
     settings:
