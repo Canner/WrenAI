@@ -108,8 +108,13 @@ pipes:
     llm: litellm_llm.gpt-4o-mini
   - name: chart_adjustment
     llm: litellm_llm.gpt-4o-mini
+  - name: user_guide_assistance
+    llm: litellm_llm.gpt-4o-mini
+
 ---
 settings:
+  doc_endpoint: https://docs.getwren.ai
+  is_oss: true
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
