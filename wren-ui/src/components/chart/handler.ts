@@ -1,5 +1,5 @@
 import { ChartType } from '@/apollo/client/graphql/__types__';
-import { isNil, cloneDeep, uniq, sortBy, omit } from 'lodash';
+import { isNil, cloneDeep, uniq, sortBy, omit, isNumber } from 'lodash';
 import { Config, TopLevelSpec } from 'vega-lite';
 import { PositionFieldDef } from 'vega-lite/build/src/channeldef';
 
@@ -392,7 +392,10 @@ export default class ChartSpecHandler {
 
     const quantitativeAxis = quantitativeKeys[0];
     const quanAxis = encoding[quantitativeAxis] as any;
-    const sortedValues = sortBy(clonedValues, (val) => val[quanAxis.field]);
+    const sortedValues = sortBy(clonedValues, (val) => {
+      const value = val[quanAxis.field];
+      return isNumber(value) ? -value : 0;
+    });
 
     // nominal values probably have different length, so we need to filter them
     const filteredNominals = [];
