@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hamilton import base
@@ -41,23 +40,6 @@ class SqlPairsDeletion(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(self, sql_pair_ids: List[str], id: Optional[str] = None) -> None:
-        destination = "outputs/pipelines/indexing"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["delete_sql_pairs"],
-            output_file_path=f"{destination}/sql_pairs_deletion.dot",
-            inputs={
-                "sql_pair_ids": sql_pair_ids,
-                "id": id or "",
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="SQL Pairs Deletion")

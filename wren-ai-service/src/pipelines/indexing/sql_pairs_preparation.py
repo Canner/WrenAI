@@ -2,7 +2,6 @@ import asyncio
 import logging
 import sys
 import uuid
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
@@ -199,23 +198,6 @@ class SqlPairsPreparation(BasicPipeline):
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
-
-    def visualize(self, sql_pairs: List[SqlPair], id: Optional[str] = None) -> None:
-        destination = "outputs/pipelines/indexing"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["write_sql_pairs"],
-            output_file_path=f"{destination}/sql_pairs_preparation.dot",
-            inputs={
-                "sql_pairs": sql_pairs,
-                "id": id or "",
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
         )
 
     @observe(name="SQL Pairs Preparation")
