@@ -13,6 +13,8 @@ defaults:
 
 jobs:
   build-image:
+    outputs:
+      tag_name: ${{ steps.tag-preparation.outputs.TAG_NAME }}
     strategy:
       fail-fast: false
       matrix:
