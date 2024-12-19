@@ -156,7 +156,7 @@ export default function TextBasedAnswer(
             </Button>
           </div>
         )}
-        {allowPreviewData && (
+        {allowPreviewData ? (
           <div className="mt-6">
             <Button
               size="small"
@@ -190,6 +190,16 @@ export default function TextBasedAnswer(
               </div>
             )}
           </div>
+        ) : (
+          <Alert
+            message={
+              <>
+                Click <b>View SQL</b> to review the step-by-step query logic and
+                verify why the data is unavailable.
+              </>
+            }
+            type="info"
+          />
         )}
       </div>
     </StyledSkeleton>
