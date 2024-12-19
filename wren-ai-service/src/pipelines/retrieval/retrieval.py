@@ -357,7 +357,7 @@ RETRIEVAL_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "matched_schema",
+            "name": "retrieval_schema",
             "schema": RetrievalResults.model_json_schema(),
         },
     }

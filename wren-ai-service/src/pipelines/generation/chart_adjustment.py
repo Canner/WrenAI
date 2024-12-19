@@ -92,6 +92,10 @@ class ChartAdjustmentPostProcessor:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
             if chart_schema := generation_result.get("chart_schema", {}):
+                # sometimes the chart_schema is still in string format
+                if isinstance(chart_schema, str):
+                    chart_schema = orjson.loads(chart_schema)
+
                 validate(chart_schema, schema=vega_schema)
                 chart_schema["data"]["values"] = []
                 return {
