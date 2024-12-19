@@ -22,14 +22,39 @@ export const resetDatabase = async () => {
   await db.table('project').del();
   await db.table('model').del();
   await db.table('model_column').del();
+  await db.table('model_nested_column').del();
   await db.table('relation').del();
   await db.table('thread').del();
   await db.table('thread_response').del();
   await db.table('view').del();
+
+  // insert learning table data to skip guide
+  await db.table('learning').insert({
+    paths: JSON.stringify(['DATA_MODELING_GUIDE', 'SWITCH_PROJECT_LANGUAGE']),
+  });
 };
 
-export const waitForGraphQLResponse = (page: Page) => {
-  return page.waitForResponse(
-    (resp) => resp.url().includes('/api/graphql') && resp.status() === 200,
+export const waitForGraphQLResponse = async (
+  { page }: { page: Page },
+  queryKey: string,
+  validateResponseData = (data: any) => data !== undefined,
+) => {
+  await page.waitForResponse(
+    async (response) => {
+      try {
+        const responseBody = await response.json();
+        const responseData = responseBody?.data?.[queryKey];
+
+        return (
+          response.url().includes('/api/graphql') &&
+          response.status() === 200 &&
+          responseBody &&
+          validateResponseData(responseData)
+        );
+      } catch (error) {
+        console.error('Error fetching response body:', error);
+      }
+    },
+    { timeout: 100000 },
   );
 };
