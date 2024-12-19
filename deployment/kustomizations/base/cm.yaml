@@ -175,7 +175,7 @@ data:
         llm: litellm_llm.gpt-4o-mini-2024-07-18
     ---
     settings:
-      doc_endpoint: https://getwren.ai
+      doc_endpoint: https://docs.getwren.ai
       is_oss: true
       column_indexing_batch_size: 50
       table_retrieval_size: 10
