@@ -7,8 +7,7 @@ FROM base AS deps
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* ./
-RUN yarn set version stable
+COPY package.json yarn.lock* .yarn/releases/yarn-4.5.3.cjs .yarnrc.yml ./
 RUN yarn install --frozen-lockfile --network-timeout 100000
 
 # Rebuild the source code only when needed
