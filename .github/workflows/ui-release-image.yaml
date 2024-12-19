@@ -50,8 +50,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: wren-ui
+          file: wren-ui/Dockerfile
           platforms: ${{ env.PLATFORM_PAIR }}
           push: true
           tags: ghcr.io/canner/wren-ui:${{ steps.tag-preparation.outputs.TAG_NAME }}
