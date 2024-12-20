@@ -15,7 +15,10 @@ import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
-import { ThreadRecommendQuestionResult } from '../services/askingService';
+import {
+  constructCteSql,
+  ThreadRecommendQuestionResult,
+} from '../services/askingService';
 import {
   SuggestedQuestion,
   SampleDatasetName,
@@ -518,6 +521,13 @@ export class AskingResolver {
         ...parent.answerDetail,
         content,
       };
+    },
+    sql: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
+      if (parent.breakdownDetail && parent.breakdownDetail.steps) {
+        // construct sql from breakdownDetail
+        return format(constructCteSql(parent.breakdownDetail.steps));
+      }
+      return format(parent.sql);
     },
   });
 
