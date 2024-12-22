@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/common-nighthawk/go-figure"
 	"github.com/manifoldco/promptui"
 	"github.com/pterm/pterm"
+	openai "github.com/sashabaranov/go-openai"
 )
 
 func prepareProjectDir() string {
@@ -186,6 +188,12 @@ func Launch() {
 		// if openaiApiKey is not provided, ask for it
 		// ask for OpenAI API key
 		openaiApiKey, shouldReturn = getOpenaiApiKey()
+		if shouldReturn {
+			return
+		}
+
+		// check if OpenAI API key is valid
+		shouldReturn = validateOpenaiApiKey(openaiApiKey)
 		if shouldReturn {
 			return
 		}
@@ -364,4 +372,31 @@ func getLLMProvider() (string, bool) {
 		}
 	}
 	return llmProvider, false
+}
+
+func validateOpenaiApiKey(apiKey string) bool {
+	// validate if input api key is valid by sending a hello request
+	pterm.Info.Println("Sending a hello request to OpenAI...")
+	client := openai.NewClient(apiKey)
+	resp, err := client.CreateChatCompletion(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4oMini20240718,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: "Hello!",
+				},
+			},
+		},
+	)
+
+	// insufficient credit balance error
+	if err != nil {
+		pterm.Error.Println("Invalid API key", err)
+		return true
+	}
+
+	pterm.Info.Println("Valid API key, Response:", resp.Choices[0].Message.Content)
+	return false
 }

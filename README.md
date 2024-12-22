@@ -36,7 +36,7 @@
 
 ## 🕶 Try it yourself!
 
-https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
+https://github.com/user-attachments/assets/e4e78006-0088-4094-b58f-8868689bf787
 
 👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
@@ -89,7 +89,15 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-insight.png" style="max-width: 700px"/>
 </p>
 
-### 6. Easily Export and Visualize Your Data
+### 6. AI-Powered Insights & Visuals
+
+> AI-generated summaries that deliver key insights alongside SQL queries, making complex data easier to understand. Instantly transform results into AI-generated charts, turning raw data into clear, actionable visuals – empowering faster, smarter decisions.
+
+<p align="center">
+  <img src="./misc/wren-visual.png" style="max-width: 700px"/>
+</p>
+
+### 7. Easily Export and Visualize Your Data
 
 > Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as [Excel](https://docs.getwren.ai/oss/guide/integrations/excel-add-in/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Google Sheets](https://docs.getwren.ai/oss/guide/integrations/google-add-on/?utm_source=github&utm_medium=content&utm_campaign=readme). This way, your insights remain accessible, allowing for further analysis using the tools you know best.
 

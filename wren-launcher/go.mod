@@ -8,6 +8,7 @@ require (
 	github.com/docker/docker v26.1.5+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/manifoldco/promptui v0.9.0
+	github.com/sashabaranov/go-openai v1.36.0
 )
 
 require (
