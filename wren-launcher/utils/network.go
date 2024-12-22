@@ -23,7 +23,7 @@ func FindAvailablePort(defaultPort int) int {
 		if !ifPortUsed(port) {
 			// Return the port if it's not used
 			return port
-		} else if IfPortUsedByWrenUI(port) {
+		} else if IfPortUsedByWrenUI(port) || IfPortUsedByAIService(port) {
 			// Return the port if it's used, but used by wrenAI
 			return port
 		}
