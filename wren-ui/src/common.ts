@@ -24,8 +24,13 @@ import {
   ProjectService,
   DeployService,
   AskingService,
+  MDLService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
+import {
+  ProjectRecommendQuestionBackgroundTracker,
+  ThreadRecommendQuestionBackgroundTracker,
+} from './apollo/server/backgrounds';
 
 export const serverConfig = getConfig();
 
@@ -67,10 +72,6 @@ export const initComponents = () => {
     ibisAdaptor,
     wrenEngineAdaptor,
   });
-  const projectService = new ProjectService({
-    projectRepository,
-    metadataService,
-  });
   const queryService = new QueryService({
     ibisAdaptor,
     wrenEngineAdaptor,
@@ -79,6 +80,21 @@ export const initComponents = () => {
   const deployService = new DeployService({
     wrenAIAdaptor,
     deployLogRepository,
+    telemetry,
+  });
+  const mdlService = new MDLService({
+    projectRepository,
+    modelRepository,
+    modelColumnRepository,
+    modelNestedColumnRepository,
+    relationRepository,
+    viewRepository,
+  });
+  const projectService = new ProjectService({
+    projectRepository,
+    metadataService,
+    mdlService,
+    wrenAIAdaptor,
     telemetry,
   });
   const askingService = new AskingService({
@@ -90,7 +106,22 @@ export const initComponents = () => {
     threadRepository,
     threadResponseRepository,
     queryService,
+    mdlService,
   });
+
+  // background trackers
+  const projectRecommendQuestionBackgroundTracker =
+    new ProjectRecommendQuestionBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      projectRepository,
+    });
+  const threadRecommendQuestionBackgroundTracker =
+    new ThreadRecommendQuestionBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      threadRepository,
+    });
 
   return {
     knex,
@@ -120,6 +151,10 @@ export const initComponents = () => {
     queryService,
     deployService,
     askingService,
+    mdlService,
+    // background trackers
+    projectRecommendQuestionBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
   };
 };
 

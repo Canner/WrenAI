@@ -1,162 +1,249 @@
-import { useState } from 'react';
-import Link from 'next/link';
-import { Col, Button, Row, Skeleton, Typography } from 'antd';
+import { useMemo } from 'react';
+import { isEmpty } from 'lodash';
+import clsx from 'clsx';
+import { Typography, Tabs, Tag } from 'antd';
 import styled from 'styled-components';
-import { Path } from '@/utils/enum';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
-import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
-import SaveOutlined from '@ant-design/icons/SaveOutlined';
-import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
-import StepContent from '@/components/pages/home/promptThread/StepContent';
+import CodeFilled from '@ant-design/icons/CodeFilled';
+import PieChartFilled from '@ant-design/icons/PieChartFilled';
+import MessageOutlined from '@ant-design/icons/MessageOutlined';
+import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
+import RecommendedQuestions, {
+  getRecommendedQuestionProps,
+} from '@/components/pages/home/RecommendedQuestions';
+import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
+import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
+import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
+import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
+import {
+  AdjustThreadResponseChartInput,
+  ThreadResponse,
+} from '@/apollo/client/graphql/__types__';
+import { ANSWER_TAB_KEYS } from '@/utils/enum';
 
 const { Title, Text } = Typography;
 
-const StyledAnswer = styled(Typography)`
-  position: relative;
-  border: 1px var(--gray-4) solid;
-  border-radius: 4px;
+const StyledTabs = styled(Tabs)`
+  .ant-tabs-nav {
+    margin-bottom: 0;
+  }
 
-  .adm-answer-title {
-    font-weight: 500;
-    position: absolute;
-    top: -13px;
-    left: 8px;
-    background: white;
+  .ant-tabs-content-holder {
+    border-left: 1px var(--gray-4) solid;
+    border-right: 1px var(--gray-4) solid;
+    border-bottom: 1px var(--gray-4) solid;
+  }
+
+  .ant-tabs-tab {
+    .ant-typography {
+      color: var(--gray-6);
+    }
+
+    [aria-label='check-circle'] {
+      color: var(--gray-5);
+    }
+
+    [aria-label='code'] {
+      color: var(--gray-5);
+    }
+
+    [aria-label='pie-chart'] {
+      color: var(--gray-5);
+    }
+
+    &.ant-tabs-tab-active {
+      .ant-typography {
+        color: var(--gray-8);
+      }
+
+      [aria-label='check-circle'] {
+        color: var(--green-5);
+      }
+
+      [aria-label='code'] {
+        color: var(--geekblue-5);
+      }
+
+      [aria-label='pie-chart'] {
+        color: var(--gold-6);
+      }
+
+      .adm-beta-tag {
+        background-color: var(--geekblue-2);
+        color: var(--geekblue-5);
+      }
+    }
+
+    .adm-beta-tag {
+      padding: 0 4px;
+      line-height: 18px;
+      margin: 0 0 0 6px;
+      border-radius: 2px;
+      background-color: var(--gray-5);
+      color: white;
+      border: none;
+    }
   }
 `;
 
-const StyledQuestion = styled(Row)`
-  padding: 4px 8px;
-  border-radius: 4px;
-  color: var(--gray-6);
-  background-color: var(--gray-3);
-  margin-bottom: 8px;
-  font-size: 14px;
-
-  &:hover {
-    background-color: var(--gray-4) !important;
-    cursor: pointer;
-  }
-`;
-
-const StyledSkeleton = styled(Skeleton)`
-  .ant-skeleton-title {
-    margin-top: 0;
-  }
-`;
-
-interface Props {
+export interface Props {
   motion: boolean;
-  loading: boolean;
-  question: string;
-  description: string;
-  answerResultSteps: Array<{
-    summary: string;
-    sql: string;
-  }>;
-  fullSql: string;
-  threadResponseId: number;
+  threadResponse: ThreadResponse;
   isLastThreadResponse: boolean;
-  summary: string;
-  view?: {
-    id: number;
-    displayName: string;
-  };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onInitPreviewDone: () => void;
+
+  // recommended questions
+  recommendedQuestionsProps: RecommendedQuestionsProps;
+
+  onRegenerateTextBasedAnswer: (responseId: number) => void;
+  onGenerateBreakdownAnswer: (responseId: number) => void;
+  onGenerateChartAnswer: (responseId: number) => Promise<void>;
+  onAdjustChartAnswer: (
+    responseId: number,
+    data: AdjustThreadResponseChartInput,
+  ) => Promise<void>;
 }
+
+const QuestionTitle = (props) => {
+  const { question, className } = props;
+  return (
+    <Title
+      className={clsx('d-flex bg-gray-1 rounded mt-0', className)}
+      level={4}
+    >
+      <MessageOutlined className="geekblue-5 mt-1 mr-3" />
+      <Text className="text-medium gray-8">{question}</Text>
+    </Title>
+  );
+};
+
+const renderRecommendedQuestions = (
+  isLastThreadResponse: boolean,
+  recommendedQuestionProps,
+  onSelect: RecommendedQuestionsProps['onSelect'],
+) => {
+  if (!isLastThreadResponse || !recommendedQuestionProps.show) return null;
+
+  return (
+    <RecommendedQuestions
+      className="mt-5 mb-4"
+      {...recommendedQuestionProps.state}
+      onSelect={onSelect}
+    />
+  );
+};
 
 export default function AnswerResult(props: Props) {
   const {
     motion,
-    loading,
-    question,
-    description,
-    answerResultSteps,
-    fullSql,
-    threadResponseId,
+    threadResponse,
     isLastThreadResponse,
     onOpenSaveAsViewModal,
     onInitPreviewDone,
-    summary,
-    view,
+    recommendedQuestionsProps,
+    onGenerateBreakdownAnswer,
+    onRegenerateTextBasedAnswer,
+    onGenerateChartAnswer,
+    onAdjustChartAnswer,
   } = props;
-  const isViewSaved = !!view;
 
-  const [ellipsis, setEllipsis] = useState(true);
+  const { answerDetail, breakdownDetail, id, question, sql, view } =
+    threadResponse;
+
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
     : null;
 
+  const recommendedQuestionProps = getRecommendedQuestionProps(
+    recommendedQuestionsProps.data,
+    recommendedQuestionsProps.show,
+  );
+
+  const isBreakdownOnly = useMemo(() => {
+    // we support rendering different types of answers now, so we need to check if it's old data.
+    // existing thread response's answerDetail is null.
+    return answerDetail === null && !isEmpty(breakdownDetail);
+  }, [answerDetail, breakdownDetail]);
+
+  const onTabClick = (activeKey: string) => {
+    if (
+      activeKey === ANSWER_TAB_KEYS.VIEW_SQL &&
+      !threadResponse.breakdownDetail
+    ) {
+      onGenerateBreakdownAnswer(id);
+    }
+
+    if (activeKey === ANSWER_TAB_KEYS.CHART && !threadResponse.chartDetail) {
+      onGenerateChartAnswer(id);
+    }
+  };
+
   return (
-    <div style={resultStyle}>
-      <StyledQuestion wrap={false} onClick={() => setEllipsis(!ellipsis)}>
-        <Col className="text-center" flex="96px">
-          <QuestionCircleOutlined className="mr-2 gray-6" />
-          <Text className="gray-6 text-base text-medium">Question:</Text>
-        </Col>
-        <Col flex="auto">
-          <Text className="gray-6" ellipsis={ellipsis}>
-            {question}
-          </Text>
-        </Col>
-      </StyledQuestion>
-      <Title className="mb-6 text-bold gray-10" level={3}>
-        {summary}
-      </Title>
-      <StyledSkeleton active loading={loading}>
-        <div className={motion ? 'promptThread-answer' : ''}>
-          <StyledAnswer className="text-md gray-10 p-3 pr-10 pt-6">
-            <Text className="adm-answer-title px-2">
-              <CheckCircleFilled className="mr-2 green-6" />
-              Summary
-            </Text>
-            <div className="pl-7 pb-5">{description}</div>
-            {(answerResultSteps || []).map((step, index) => (
-              <StepContent
-                isLastStep={index === answerResultSteps.length - 1}
-                key={`${step.summary}-${index}`}
-                sql={step.sql}
-                fullSql={fullSql}
-                stepIndex={index}
-                summary={step.summary}
-                threadResponseId={threadResponseId}
-                onInitPreviewDone={onInitPreviewDone}
-                isLastThreadResponse={isLastThreadResponse}
-              />
-            ))}
-          </StyledAnswer>
-          {isViewSaved ? (
-            <div className="mt-2 gray-6 text-medium">
-              <FileDoneOutlined className="mr-2" />
-              Generated from saved view{' '}
-              <Link
-                className="gray-7"
-                href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                {view.displayName}
-              </Link>
-            </div>
-          ) : (
-            <Button
-              className="mt-2 gray-6"
-              type="text"
-              size="small"
-              icon={<SaveOutlined />}
-              onClick={() =>
-                onOpenSaveAsViewModal({
-                  sql: fullSql,
-                  responseId: threadResponseId,
-                })
-              }
-            >
-              Save as View
-            </Button>
-          )}
-        </div>
-      </StyledSkeleton>
+    <div style={resultStyle} className="adm-answer-result">
+      <QuestionTitle className="mb-6" question={question} />
+      <StyledTabs type="card" size="small" onTabClick={onTabClick}>
+        {!isBreakdownOnly && (
+          <Tabs.TabPane
+            key={ANSWER_TAB_KEYS.ANSWER}
+            tab={
+              <>
+                <CheckCircleFilled className="mr-2" />
+                <Text>Answer</Text>
+              </>
+            }
+          >
+            <TextBasedAnswer
+              threadResponse={threadResponse}
+              isLastThreadResponse={isLastThreadResponse}
+              onInitPreviewDone={onInitPreviewDone}
+              onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
+            />
+          </Tabs.TabPane>
+        )}
+        <Tabs.TabPane
+          key={ANSWER_TAB_KEYS.VIEW_SQL}
+          tab={
+            <>
+              <CodeFilled className="mr-2" />
+              <Text>View SQL</Text>
+            </>
+          }
+        >
+          <BreakdownAnswer
+            motion={motion}
+            threadResponse={threadResponse}
+            isLastThreadResponse={isLastThreadResponse}
+            onInitPreviewDone={onInitPreviewDone}
+          />
+        </Tabs.TabPane>
+        <Tabs.TabPane
+          key="chart"
+          tab={
+            <>
+              <PieChartFilled className="mr-2" />
+              <Text>
+                Chart<Tag className="adm-beta-tag">Beta</Tag>
+              </Text>
+            </>
+          }
+        >
+          <ChartAnswer
+            threadResponse={threadResponse}
+            onRegenerateChartAnswer={onGenerateChartAnswer}
+            onAdjustChartAnswer={onAdjustChartAnswer}
+          />
+        </Tabs.TabPane>
+      </StyledTabs>
+      <ViewBlock
+        view={view}
+        onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
+      />
+      {renderRecommendedQuestions(
+        isLastThreadResponse,
+        recommendedQuestionProps,
+        recommendedQuestionsProps.onSelect,
+      )}
     </div>
   );
 }

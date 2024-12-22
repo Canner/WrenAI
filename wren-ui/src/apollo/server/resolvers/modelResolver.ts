@@ -15,11 +15,9 @@ import {
 } from '../types';
 import { getLogger, transformInvalidColumnName } from '@server/utils';
 import { DeployResponse } from '../services/deployService';
-import { constructCteSql } from '../services/askingService';
 import { format } from 'sql-formatter';
 import { isEmpty, isNil } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
-import * as Errors from '@server/utils/error';
 import { Model, ModelColumn } from '../repositories';
 import {
   findColumnsToUpdate,
@@ -221,9 +219,19 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const { id } = await ctx.projectService.getCurrentProject();
+    const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    return await ctx.deployService.deploy(manifest, id, args.force);
+    const deployRes = await ctx.deployService.deploy(
+      manifest,
+      project.id,
+      args.force,
+    );
+
+    // only generating for user's data source
+    if (project.sampleDataset === null) {
+      await ctx.projectService.generateProjectRecommendationQuestions();
+    }
+    return deployRes;
   }
 
   public async getMDL(_root: any, args: { hash: string }, ctx: IContext) {
@@ -805,8 +813,7 @@ export class ModelResolver {
     }
 
     // construct cte sql and format it
-    const steps = response.detail.steps;
-    const statement = format(constructCteSql(steps));
+    const statement = format(response.sql);
 
     // describe columns
     const { columns } = await ctx.queryService.describeStatement(statement, {
@@ -820,14 +827,6 @@ export class ModelResolver {
       throw new Error('Failed to describe statement');
     }
 
-    // if the response contains error, throw error
-    // this is to prevent creating view from a response with error
-    if (response.error) {
-      throw Errors.create(Errors.GeneralErrorCodes.INVALID_VIEW_CREATION, {
-        customMessage: 'Cannot create view from a thread response with error',
-      });
-    }
-
     // properties
     const properties = {
       displayName,
@@ -836,9 +835,6 @@ export class ModelResolver {
       // properties from the thread response
       responseId, // helpful for mapping back to the thread response
       question: response.question,
-      summary: response.summary,
-      // detail is not going to send to AI service for indexing, but useful if we want display on UI
-      detail: response.detail,
     };
 
     const eventName = TelemetryEvent.HOME_CREATE_VIEW;
@@ -923,6 +919,8 @@ export class ModelResolver {
     return data;
   }
 
+  // Notice: this is used by AI service.
+  // any change to this resolver should be synced with AI service.
   public async previewSql(
     _root: any,
     args: { data: PreviewSQLData },
@@ -963,22 +961,22 @@ export class ModelResolver {
     }
 
     // construct cte sql and format it
-    const steps = response.detail.steps;
-    const sql = format(constructCteSql(steps));
+    let nativeSql: string;
     if (project.type === DataSourceName.DUCKDB) {
       logger.info(`Getting native sql from wren engine`);
-      return await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
+      nativeSql = await ctx.wrenEngineAdaptor.getNativeSQL(response.sql, {
         manifest,
         modelingOnly: false,
       });
     } else {
       logger.info(`Getting native sql from ibis server`);
-      return await ctx.ibisServerAdaptor.getNativeSql({
+      nativeSql = await ctx.ibisServerAdaptor.getNativeSql({
         dataSource: project.type,
-        sql,
+        sql: response.sql,
         mdl: manifest,
       });
     }
+    return format(nativeSql);
   }
 
   public async updateViewMetadata(

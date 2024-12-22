@@ -1,41 +1,25 @@
 type: llm
-provider: openai_llm
-models:
-  - model: gpt-4o-mini
-    kwargs:
-      {
-        "temperature": 0,
-        "n": 1,
-        "max_tokens": 4096,
-        "response_format": { "type": "json_object" },
-      }
-api_base: https://api.openai.com/v1
+provider: litellm_llm
 timeout: 120
-
----
-type: llm
-provider: azure_openai_llm
 models:
-  - model: gpt-4o
-    kwargs:
-      {
-        "temperature": 0,
-        "n": 1,
-        "max_tokens": 4096,
-        "response_format": { "type": "json_object" },
-      }
-api_base: https://<your-endpoint>.openai.azure.com/
-api_version: "2024-05-13"
-timeout: 120
-
----
-type: llm
-provider: ollama_llm
-models:
-  - model: gemma2:9b
-    kwargs: { "temperature": 0 }
-url: http://localhost:11434
-timeout: 120
+- model: gpt-4o-mini
+  api_base: https://api.openai.com/v1
+  api_key_name: LLM_OPENAI_API_KEY
+  kwargs:
+    temperature: 0
+    n: 1
+    max_tokens: 4096
+    response_format:
+      type: json_object
+- model: gpt-4o
+  api_base: https://api.openai.com/v1
+  api_key_name: LLM_OPENAI_API_KEY
+  kwargs:
+    temperature: 0
+    n: 1
+    max_tokens: 4096
+    response_format:
+      type: json_object
 
 ---
 type: embedder
@@ -95,52 +79,68 @@ recreate_index: false
 ---
 type: pipeline
 pipes:
-  - name: indexing
+  - name: db_schema_indexing
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
-  - name: retrieval
-    llm: openai_llm.gpt-4o-mini
+  - name: historical_question_indexing
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
-  - name: historical_question
+  - name: table_description_indexing
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: db_schema_retrieval
+    llm: litellm_llm.gpt-4o-mini
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: historical_question_retrieval
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: sql_generation
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
   - name: sql_correction
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
   - name: followup_sql_generation
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
   - name: sql_summary
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
   - name: sql_answer
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
   - name: sql_breakdown
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
   - name: sql_expansion
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
   - name: sql_explanation
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
   - name: sql_regeneration
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
   - name: semantics_description
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
   - name: relationship_recommendation
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     engine: wren_ui
+  - name: question_recommendation
+    llm: litellm_llm.gpt-4o-mini
+  - name: chart_generation
+    llm: litellm_llm.gpt-4o-mini
+  - name: chart_adjustment
+    llm: litellm_llm.gpt-4o-mini
   - name: intent_classification
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: data_assistance
-    llm: openai_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini
+  - name: sql_executor
+    engine: wren_ui
+  - name: preprocess_sql_data
+    llm: litellm_llm.gpt-4o-mini
 
 ---
 settings:

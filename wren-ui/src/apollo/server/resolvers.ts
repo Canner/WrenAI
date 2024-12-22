@@ -27,6 +27,7 @@ const resolvers = {
     // Ask
     askingTask: askingResolver.getAskingTask,
     suggestedQuestions: askingResolver.getSuggestedQuestions,
+    instantRecommendedQuestions: askingResolver.getInstantRecommendedQuestions,
 
     // Thread
     thread: askingResolver.getThread,
@@ -44,6 +45,12 @@ const resolvers = {
 
     // Learning
     learningRecord: learningResolver.getLearningRecord,
+
+    // Recommendation questions
+    getThreadRecommendationQuestions:
+      askingResolver.getThreadRecommendationQuestions,
+    getProjectRecommendationQuestions:
+      projectResolver.getProjectRecommendationQuestions,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -73,6 +80,8 @@ const resolvers = {
     // Ask
     createAskingTask: askingResolver.createAskingTask,
     cancelAskingTask: askingResolver.cancelAskingTask,
+    createInstantRecommendedQuestions:
+      askingResolver.createInstantRecommendedQuestions,
 
     // Thread
     createThread: askingResolver.createThread,
@@ -80,6 +89,20 @@ const resolvers = {
     deleteThread: askingResolver.deleteThread,
     createThreadResponse: askingResolver.createThreadResponse,
     previewData: askingResolver.previewData,
+    previewBreakdownData: askingResolver.previewBreakdownData,
+
+    // Generate Thread Response Breakdown
+    generateThreadResponseBreakdown:
+      askingResolver.generateThreadResponseBreakdown,
+
+    // Generate Thread Response Answer
+    generateThreadResponseAnswer: askingResolver.generateThreadResponseAnswer,
+
+    // Generate Thread Response Chart
+    generateThreadResponseChart: askingResolver.generateThreadResponseChart,
+
+    // Adjust Thread Response Chart
+    adjustThreadResponseChart: askingResolver.adjustThreadResponseChart,
 
     // Views
     createView: modelResolver.createView,
@@ -98,6 +121,12 @@ const resolvers = {
 
     // Learning
     saveLearningRecord: learningResolver.saveLearningRecord,
+
+    // Recommendation questions
+    generateThreadRecommendationQuestions:
+      askingResolver.generateThreadRecommendationQuestions,
+    generateProjectRecommendationQuestions:
+      askingResolver.generateProjectRecommendationQuestions,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

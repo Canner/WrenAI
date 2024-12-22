@@ -1,17 +1,15 @@
 import logging
 import sys
-from pathlib import Path
 from typing import Any
 
-import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.engine import Engine
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import TEXT_TO_SQL_RULES, SQLBreakdownGenPostProcessor
 from src.utils import (
@@ -125,10 +123,6 @@ def prompt(
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(f"language: {language}")
-    logger.debug(f"text_to_sql_rules: {text_to_sql_rules}")
     return prompt_builder.run(
         query=query, sql=sql, language=language, text_to_sql_rules=text_to_sql_rules
     )
@@ -137,8 +131,7 @@ def prompt(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_details(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @async_timer
@@ -148,9 +141,6 @@ async def post_process(
     post_processor: SQLBreakdownGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_details: {orjson.dumps(generate_sql_details, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return await post_processor.run(
         generate_sql_details.get("replies"), project_id=project_id
     )
@@ -205,32 +195,6 @@ class SQLBreakdown(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(
-        self,
-        query: str,
-        sql: str,
-        language: str = "English",
-        project_id: str | None = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/sql_breakdown.dot",
-            inputs={
-                "query": query,
-                "sql": sql,
-                "project_id": project_id,
-                "language": language,
-                **self._components,
-                **self._configs,
-            },
-            show_legend=True,
-            orient="LR",
-        )
-
     @async_timer
     @observe(name="SQL Breakdown Generation")
     async def run(
@@ -255,23 +219,12 @@ class SQLBreakdown(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, engine = init_providers(EngineConfig())
-    pipeline = SQLBreakdown(
-        llm_provider=llm_provider,
-        engine=engine,
+    dry_run_pipeline(
+        SQLBreakdown,
+        "sql_breakdown",
+        query="query",
+        sql="SELECT * FROM table_name",
+        language="English",
     )
-
-    pipeline.visualize("", "SELECT * FROM table_name")
-    async_validate(lambda: pipeline.run("", "SELECT * FROM table_name"))
-
-    langfuse_context.flush()

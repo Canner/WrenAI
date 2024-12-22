@@ -69,8 +69,8 @@ export default function Modeling() {
     },
   });
 
-  // TODO: No matter which operation is performed, we must re-fetch the latest deploy status
   const deployStatusQueryResult = useDeployStatusQuery({
+    pollInterval: 1000,
     fetchPolicy: 'no-cache',
   });
 
@@ -101,14 +101,15 @@ export default function Modeling() {
       }),
     );
 
-  const [updateCalculatedField] = useUpdateCalculatedFieldMutation(
-    getBaseOptions({
-      onError: null,
-      onCompleted: () => {
-        message.success('Successfully updated calculated field.');
-      },
-    }),
-  );
+  const [updateCalculatedField, { loading: calculatedFieldUpdating }] =
+    useUpdateCalculatedFieldMutation(
+      getBaseOptions({
+        onError: null,
+        onCompleted: () => {
+          message.success('Successfully updated calculated field.');
+        },
+      }),
+    );
 
   const [deleteCalculatedField] = useDeleteCalculatedFieldMutation(
     getBaseOptions({
@@ -118,14 +119,15 @@ export default function Modeling() {
     }),
   );
 
-  const [createModelMutation, createModelResult] = useCreateModelMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('Successfully created model.');
-      },
-      refetchQueries: refetchQueriesForModel,
-    }),
-  );
+  const [createModelMutation, { loading: modelCreating }] =
+    useCreateModelMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully created model.');
+        },
+        refetchQueries: refetchQueriesForModel,
+      }),
+    );
 
   const [deleteModelMutation] = useDeleteModelMutation(
     getBaseOptions({
@@ -136,14 +138,15 @@ export default function Modeling() {
     }),
   );
 
-  const [updateModelMutation, updateModelResult] = useUpdateModelMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('Successfully updated model.');
-      },
-      refetchQueries: refetchQueriesForModel,
-    }),
-  );
+  const [updateModelMutation, { loading: modelUpdating }] =
+    useUpdateModelMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully updated model.');
+        },
+        refetchQueries: refetchQueriesForModel,
+      }),
+    );
 
   const [deleteViewMutation] = useDeleteViewMutation(
     getBaseOptions({
@@ -153,21 +156,23 @@ export default function Modeling() {
     }),
   );
 
-  const [updateModelMetadata] = useUpdateModelMetadataMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('Successfully updated model metadata.');
-      },
-    }),
-  );
+  const [updateModelMetadata, { loading: modelMetadataUpdating }] =
+    useUpdateModelMetadataMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully updated model metadata.');
+        },
+      }),
+    );
 
-  const [createRelationshipMutation] = useCreateRelationshipMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('Successfully created relationship.');
-      },
-    }),
-  );
+  const [createRelationshipMutation, { loading: relationshipCreating }] =
+    useCreateRelationshipMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully created relationship.');
+        },
+      }),
+    );
 
   const [deleteRelationshipMutation] = useDeleteRelationshipMutation(
     getBaseOptions({
@@ -177,21 +182,23 @@ export default function Modeling() {
     }),
   );
 
-  const [updateRelationshipMutation] = useUpdateRelationshipMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('Successfully updated relationship.');
-      },
-    }),
-  );
+  const [updateRelationshipMutation, { loading: relationshipUpdating }] =
+    useUpdateRelationshipMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully updated relationship.');
+        },
+      }),
+    );
 
-  const [updateViewMetadata] = useUpdateViewMetadataMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('Successfully updated view metadata.');
-      },
-    }),
-  );
+  const [updateViewMetadata, { loading: viewMetadataUpdating }] =
+    useUpdateViewMetadataMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully updated view metadata.');
+        },
+      }),
+    );
 
   const diagramData = useMemo(() => {
     if (!data) return null;
@@ -364,7 +371,11 @@ export default function Modeling() {
     }
   };
 
-  const calculatedFieldLoading = calculatedFieldCreating;
+  const calculatedFieldLoading =
+    calculatedFieldCreating || calculatedFieldUpdating;
+  const editMetadataLoading = modelMetadataUpdating || viewMetadataUpdating;
+  const modelLoading = modelCreating || modelUpdating;
+  const relationshipLoading = relationshipUpdating || relationshipCreating;
 
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
@@ -393,6 +404,7 @@ export default function Modeling() {
         <EditMetadataModal
           {...editMetadataModal.state}
           onClose={editMetadataModal.closeModal}
+          loading={editMetadataLoading}
           onSubmit={async ({ nodeType, data }) => {
             const { modelId, viewId, ...metadata } = data;
             switch (nodeType) {
@@ -419,7 +431,7 @@ export default function Modeling() {
         <ModelDrawer
           {...modelDrawer.state}
           onClose={modelDrawer.closeDrawer}
-          submitting={createModelResult.loading || updateModelResult.loading}
+          submitting={modelLoading}
           onSubmit={async ({ id, data }) => {
             if (id) {
               await updateModelMutation({ variables: { where: { id }, data } });
@@ -445,6 +457,7 @@ export default function Modeling() {
         <RelationModal
           {...relationshipModal.state}
           onClose={relationshipModal.onClose}
+          loading={relationshipLoading}
           onSubmit={async (
             values: RelationFormValues & { relationId?: number },
           ) => {

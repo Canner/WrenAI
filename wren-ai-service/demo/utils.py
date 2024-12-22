@@ -123,6 +123,8 @@ def get_data_from_wren_engine(
     sql: str,
     dataset_type: str,
     manifest: dict,
+    limit: int = 100,
+    return_df: bool = True,
 ):
     if dataset_type == "duckdb":
         quoted_sql, no_error = add_quotes(sql)
@@ -133,35 +135,43 @@ def get_data_from_wren_engine(
             json={
                 "sql": quoted_sql,
                 "manifest": manifest,
-                "limit": 100,
+                "limit": limit,
             },
         )
 
         assert response.status_code == 200, response.json()
 
         data = response.json()
-        column_names = [f'{i}_{col['name']}' for i, col in enumerate(data["columns"])]
 
-        return pd.DataFrame(data["data"], columns=column_names)
+        if return_df:
+            column_names = [col["name"] for col in data["columns"]]
+
+            return pd.DataFrame(data["data"], columns=column_names)
+        else:
+            return data
     else:
         quoted_sql, no_error = add_quotes(sql)
         assert no_error, f"Error in adding quotes to SQL: {sql}"
         response = requests.post(
-            f"{WREN_IBIS_API_URL}/v2/connector/{dataset_type}/query?limit=100",
+            f"{WREN_IBIS_API_URL}/v2/connector/{dataset_type}/query?limit={limit}",
             json={
                 "sql": quoted_sql,
                 "manifestStr": base64.b64encode(orjson.dumps(manifest)).decode(),
                 "connectionInfo": _get_connection_info(dataset_type),
-                "limit": 100,
+                "limit": limit,
             },
         )
 
         assert response.status_code == 200, response.json()
 
         data = response.json()
-        column_names = [f"{i}_{col}" for i, col in enumerate(data["columns"])]
 
-        return pd.DataFrame(data["data"], columns=column_names)
+        if return_df:
+            column_names = [col for col in data["columns"]]
+
+            return pd.DataFrame(data["data"], columns=column_names)
+        else:
+            return data
 
 
 # ui related
@@ -188,18 +198,17 @@ def show_query_history():
 
 
 def show_asks_results():
-    st.markdown(f'## Query: {st.session_state['query']}')
-
     show_query_history()
 
-    st.markdown("### Query Results")
+    st.markdown("### Query")
+    st.markdown(f"{st.session_state['query']}")
+
+    st.markdown("### Query Result")
     if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
         asks_result_count = len(st.session_state["asks_results"])
         ask_result_cols = st.columns(asks_result_count)
-        choose_result_n = [False] * asks_result_count
         for i, ask_result_col in enumerate(ask_result_cols):
             with ask_result_col:
-                st.markdown(f"Result {i+1}")
                 st.code(
                     body=sqlparse.format(
                         st.session_state["asks_results"][i]["sql"],
@@ -208,161 +217,74 @@ def show_asks_results():
                     ),
                     language="sql",
                 )
-                choose_result_n[i] = st.button(f"Choose Result {i+1}")
 
-        for i, choose_result in enumerate(choose_result_n):
-            if choose_result:
-                sql = st.session_state["asks_results"][i]["sql"]
+        sql = st.session_state["asks_results"][0]["sql"]
 
-                st.session_state["chosen_query_result"] = {
-                    "index": i,
-                    "query": st.session_state["query"],
-                    "sql": sql,
-                }
+        st.session_state["chosen_query_result"] = {
+            "index": 0,
+            "query": st.session_state["query"],
+            "sql": sql,
+        }
 
-                # reset relevant session_states
-                st.session_state["asks_details_result"] = None
-                st.session_state["preview_data_button_index"] = None
-                st.session_state["preview_sql"] = None
-
-                break
+        # reset relevant session_states
+        st.session_state["asks_details_result"] = None
+        st.session_state["preview_data_button_index"] = None
+        st.session_state["preview_sql"] = None
     elif st.session_state["asks_results_type"] == "MISLEADING_QUERY":
         st.markdown(
             "Misleading query detected. Please try again with a different query."
         )
 
 
-def show_asks_details_results(query: str):
-    col1, col2 = st.columns([4, 2])
-    with col1:
-        with st.container(height=1000):
-            st.markdown(
-                f'### Details of Result {st.session_state['chosen_query_result']['index'] + 1}'
-            )
-            st.markdown(
-                f'Description: {st.session_state['asks_details_result']["description"]}'
-            )
+def show_asks_details_results():
+    st.markdown("### SQL Details of Result")
+    st.markdown(
+        f'Description: {st.session_state['asks_details_result']["description"]}'
+    )
 
-            sqls_with_cte = []
-            sqls = []
-            summaries = []
-            for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
-                st.markdown(f"#### Step {i + 1}")
-                st.markdown(f'Summary: {step["summary"]}')
+    sqls_with_cte = []
+    sqls = []
+    summaries = []
+    for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
+        st.markdown(f"#### Step {i + 1}")
+        st.markdown(f'Summary: {step["summary"]}')
 
-                sql = ""
-                if sqls_with_cte:
-                    sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
-                sql += step["sql"]
-                sqls.append(sql)
-                summaries.append(step["summary"])
+        sql = ""
+        if sqls_with_cte:
+            sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
+        sql += step["sql"]
+        sqls.append(sql)
+        summaries.append(step["summary"])
 
-                st.code(
-                    body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
-                    language="sql",
-                )
-                sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
-
-                if (
-                    st.session_state["sql_analysis_results"]
-                    and st.session_state["sql_explanation_results"]
-                ):
-                    _col1, _col2 = st.columns(2)
-                    with _col1:
-                        st.markdown("**SQL Analysis Results With Cte Removed**")
-                        st.json(
-                            list(
-                                filter(
-                                    lambda analysis_result: not analysis_result[
-                                        "isSubqueryOrCte"
-                                    ],
-                                    st.session_state["sql_analysis_results"][i],
-                                )
-                            ),
-                            expanded=False,
-                        )
-                    with _col2:
-                        st.markdown("**SQL Explanation Results**")
-                        st.json(
-                            st.session_state["sql_explanation_results"][i],
-                            expanded=False,
-                        )
-
-                st.button(
-                    label="Preview Data",
-                    key=f"preview_data_btn_{i}",
-                    on_click=on_click_preview_data_button,
-                    args=[i, sqls],
-                )
-
-                if (
-                    st.session_state["preview_data_button_index"] is not None
-                    and st.session_state["preview_sql"] is not None
-                    and i == st.session_state["preview_data_button_index"]
-                ):
-                    st.markdown(
-                        f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
-                    )
-
-                    st.dataframe(
-                        get_data_from_wren_engine(
-                            st.session_state["preview_sql"],
-                            st.session_state["dataset_type"],
-                            st.session_state["mdl_json"],
-                        )
-                    )
-
-            st.markdown("### Answer")
-            st.markdown(
-                get_sql_answer(
-                    st.session_state["chosen_query_result"]["query"],
-                    st.session_state["chosen_query_result"]["sql"],
-                )
-            )
-
-        st.markdown("---")
-        st.button(
-            label="SQL Explanation",
-            key="sql_explanation_btn",
-            on_click=on_click_sql_explanation_button,
-            args=[query, sqls, summaries, st.session_state["mdl_json"]],
-            use_container_width=True,
+        st.code(
+            body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
+            language="sql",
         )
+        sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
-    with col2:
-        with st.container(height=600):
-            st.markdown("### SQL Generation Feedback")
+        # st.button(
+        #     label="Preview Data",
+        #     key=f"preview_data_btn_{i}",
+        #     on_click=on_click_preview_data_button,
+        #     args=[i, sqls],
+        # )
 
-            for i, _ in enumerate(st.session_state["asks_details_result"]["steps"]):
-                st.markdown(f"#### Step {i + 1}")
-                if st.session_state["sql_explanation_results"]:
-                    for j, explanation_result in enumerate(
-                        st.session_state["sql_explanation_results"][i]
-                    ):
-                        st.json(explanation_result)
-                        st.text_input(
-                            "User Correction",
-                            key=f"user_correction_{i}_{j}",
-                            on_change=on_change_user_correction,
-                            args=[i, j, explanation_result],
-                        )
+        # if (
+        #     st.session_state["preview_data_button_index"] is not None
+        #     and st.session_state["preview_sql"] is not None
+        #     and i == st.session_state["preview_data_button_index"]
+        # ):
+        #     st.markdown(
+        #         f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
+        #     )
 
-        with st.container(height=400):
-            st.markdown("#### Adjustments")
-            st.json(st.session_state["sql_user_corrections_by_step"])
-
-        st.markdown("---")
-
-        st.button(
-            label="SQL Regeneration",
-            key="sql_regeneration_btn",
-            on_click=on_click_sql_regeneration_button,
-            args=[
-                st.session_state["asks_details_result"],
-                st.session_state["sql_user_corrections_by_step"],
-            ],
-            use_container_width=True,
-        )
+        #     st.dataframe(
+        #         get_data_from_wren_engine(
+        #             st.session_state["preview_sql"],
+        #             st.session_state["dataset_type"],
+        #             st.session_state["mdl_json"],
+        #         )
+        #     )
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
@@ -505,6 +427,28 @@ def on_click_sql_regeneration_button(
     show_sql_regeneration_results_dialog(sql_user_corrections_by_step)
 
 
+def on_click_adjust_chart(
+    query: str,
+    sql: str,
+    chart_schema: dict,
+    language: str,
+    reasoning: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
+):
+    show_chart_adjustment_dialog(
+        query,
+        sql,
+        chart_schema,
+        language,
+        reasoning,
+        dataset_type,
+        manifest,
+        limit,
+    )
+
+
 # ai service api related
 def generate_mdl_metadata(mdl_model_json: dict):
     identifiers = [mdl_model_json["name"]]
@@ -636,7 +580,7 @@ def prepare_semantics(mdl_json: dict):
         st.toast("Semantics is prepared successfully", icon="🎉")
 
 
-def ask(query: str, query_history: Optional[dict] = None):
+def ask(query: str, timezone: str, query_history: Optional[dict] = None):
     st.session_state["query"] = query
     asks_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/asks",
@@ -646,6 +590,10 @@ def ask(query: str, query_history: Optional[dict] = None):
             "history": query_history,
             "configurations": {
                 "language": st.session_state["language"],
+                "timezone": {
+                    "name": timezone,
+                    "utc_offset": "",
+                },
             },
         },
     )
@@ -697,15 +645,40 @@ def display_general_response(query_id: str):
         placeholder.markdown(markdown_content)
 
 
+def display_sql_answer(query_id: str):
+    url = f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/streaming"
+    headers = {"Accept": "text/event-stream"}
+    response = with_requests(url, headers)
+    client = sseclient.SSEClient(response)
+
+    markdown_content = ""
+    placeholder = st.empty()
+
+    for event in client.events():
+        markdown_content += orjson.loads(event.data)["message"]
+        placeholder.markdown(markdown_content)
+
+
+@st.cache_data
 def get_sql_answer(
     query: str,
     sql: str,
+    dataset_type: str,
+    mdl_json: dict,
 ):
+    sql_data = get_data_from_wren_engine(
+        sql,
+        dataset_type,
+        mdl_json,
+        return_df=False,
+    )
+
     sql_answer_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers",
         json={
             "query": query,
             "sql": sql,
+            "sql_data": sql_data,
             "configurations": {
                 "language": st.session_state["language"],
             },
@@ -717,18 +690,17 @@ def get_sql_answer(
     sql_answer_status = None
 
     while not sql_answer_status or (
-        sql_answer_status != "finished" and sql_answer_status != "failed"
+        sql_answer_status != "succeeded" and sql_answer_status != "failed"
     ):
         sql_answer_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}/result"
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-answers/{query_id}"
         )
         assert sql_answer_status_response.status_code == 200
         sql_answer_status = sql_answer_status_response.json()["status"]
-        st.toast(f"The query processing status: {sql_answer_status}")
         time.sleep(POLLING_INTERVAL)
 
-    if sql_answer_status == "finished":
-        return sql_answer_status_response.json()["response"]
+    if sql_answer_status == "succeeded":
+        display_sql_answer(query_id)
     elif sql_answer_status == "failed":
         st.error(
             f'An error occurred while processing the query: {sql_answer_status_response.json()['error']}',
@@ -736,12 +708,16 @@ def get_sql_answer(
         )
 
 
+@st.cache_data
 def ask_details():
     asks_details_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details",
         json={
             "query": st.session_state["chosen_query_result"]["query"],
             "sql": st.session_state["chosen_query_result"]["sql"],
+            "configurations": {
+                "language": st.session_state["language"],
+            },
         },
     )
 
@@ -757,22 +733,9 @@ def ask_details():
         )
         assert asks_details_status_response.status_code == 200
         asks_details_status = asks_details_status_response.json()["status"]
-        st.toast(f"The query processing status: {asks_details_status}")
         time.sleep(POLLING_INTERVAL)
 
-    if asks_details_status == "finished":
-        st.session_state["asks_details_result"] = asks_details_status_response.json()[
-            "response"
-        ]
-        st.session_state["sql_explanation_question"] = None
-        st.session_state["sql_explanation_steps_with_analysis"] = None
-        st.session_state["sql_analysis_results"] = None
-        st.session_state["sql_explanation_results"] = None
-    elif asks_details_status == "failed":
-        st.error(
-            f'An error occurred while processing the query: {asks_details_status_response.json()['error']}',
-            icon="🚨",
-        )
+    return asks_details_status_response.json()
 
 
 def sql_explanation():
@@ -840,6 +803,150 @@ def sql_regeneration(sql_regeneration_data: dict):
             icon="🚨",
         )
         return None
+
+
+@st.cache_data
+def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
+    """Fill Vega-Lite schema values from pandas DataFrame based on x/y encodings.
+
+    Args:
+        vega_lite_schema: Original Vega-Lite schema
+        df: Pandas DataFrame containing the data
+
+    Returns:
+        Updated Vega-Lite schema with values from DataFrame
+    """
+    # Create a copy to avoid modifying original
+    schema = copy.deepcopy(vega_lite_schema)
+
+    # Get field names from encoding
+    fields = []
+    for key in schema["encoding"].keys():
+        fields.append(schema["encoding"][key]["field"])
+
+    fields = list(set(fields))
+    if transforms := schema.get("transform"):
+        for transform in transforms:
+            for _fold, _as in zip(transform.get("fold", []), transform.get("as", [])):
+                try:
+                    fields[fields.index(_as)] = _fold
+                except ValueError:
+                    pass
+
+    # Convert DataFrame to list of dicts with just the needed fields
+    values = df[fields].to_dict(orient="records")
+
+    # Update schema values
+    schema["data"]["values"] = values
+
+    return schema
+
+
+@st.cache_data
+def generate_chart(
+    query: str,
+    sql: str,
+    language: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
+):
+    chart_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/charts",
+        json={
+            "query": query,
+            "sql": sql,
+            "configurations": {
+                "language": language,
+            },
+        },
+    )
+
+    assert chart_response.status_code == 200
+    query_id = chart_response.json()["query_id"]
+    charts_status = None
+
+    while not charts_status or (
+        charts_status != "finished"
+        and charts_status != "failed"
+        and charts_status != "stopped"
+    ):
+        charts_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/charts/{query_id}"
+        )
+        assert charts_status_response.status_code == 200
+        charts_status = charts_status_response.json()["status"]
+        time.sleep(POLLING_INTERVAL)
+
+    sql_data_df = get_data_from_wren_engine(
+        sql,
+        dataset_type,
+        manifest,
+        limit,
+    )
+    chart_response = charts_status_response.json()
+    if chart_result := chart_response.get("response"):
+        if schema := chart_result.get("chart_schema"):
+            filled_vega_lite_schema = fill_vega_lite_values(schema, sql_data_df)
+            chart_response["response"]["chart_schema"] = filled_vega_lite_schema
+
+    return chart_response
+
+
+@st.cache_data
+def adjust_chart(
+    query: str,
+    sql: str,
+    chart_schema: dict,
+    adjustment_option: dict,
+    language: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
+):
+    chart_schema["data"]["values"] = []
+    adjust_chart_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments",
+        json={
+            "query": query,
+            "sql": sql,
+            "adjustment_option": adjustment_option,
+            "chart_schema": chart_schema,
+            "configurations": {
+                "language": language,
+            },
+        },
+    )
+
+    assert adjust_chart_response.status_code == 200
+    query_id = adjust_chart_response.json()["query_id"]
+    charts_status = None
+
+    while not charts_status or (
+        charts_status != "finished"
+        and charts_status != "failed"
+        and charts_status != "stopped"
+    ):
+        charts_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/chart-adjustments/{query_id}"
+        )
+        assert charts_status_response.status_code == 200
+        charts_status = charts_status_response.json()["status"]
+        time.sleep(POLLING_INTERVAL)
+
+    sql_data_df = get_data_from_wren_engine(
+        sql,
+        dataset_type,
+        manifest,
+        limit,
+    )
+    chart_response = charts_status_response.json()
+    if chart_result := chart_response.get("response"):
+        if schema := chart_result.get("chart_schema"):
+            filled_vega_lite_schema = fill_vega_lite_values(schema, sql_data_df)
+            chart_response["response"]["chart_schema"] = filled_vega_lite_schema
+
+    return chart_response
 
 
 @st.dialog(
@@ -917,3 +1024,96 @@ def show_sql_regeneration_results_dialog(
                 language="sql",
             )
             sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
+
+
+def show_original_chart(chart_schema: dict, reasoning: str):
+    st.markdown("### Original")
+    st.markdown("#### Reasoning for making this chart")
+    st.markdown(f"{reasoning}")
+    st.markdown("#### Vega-Lite Schema")
+    st.json(chart_schema, expanded=False)
+    st.markdown("#### Chart Description")
+    st.vega_lite_chart(chart_schema, use_container_width=True)
+
+
+@st.dialog("Adjust Chart", width="large")
+def show_chart_adjustment_dialog(
+    query: str,
+    sql: str,
+    chart_schema: dict,
+    language: str,
+    reasoning: str,
+    dataset_type: str,
+    manifest: dict,
+    limit: int = 100,
+):
+    adjustment_chart_type = st.selectbox(
+        "Chart Type", ["bar", "grouped_bar", "line", "pie", "stacked_bar", "area"]
+    )
+    x_axis = y_axis = color = x_offset = theta = None
+    if adjustment_chart_type == "bar":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+    elif adjustment_chart_type == "grouped_bar":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+        x_offset = st.text_input("X Offset Field")
+    elif adjustment_chart_type == "stacked_bar":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+        color = st.text_input("Stack Groups")
+    elif adjustment_chart_type == "line":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+        color = st.text_input("Line Groups")
+    elif adjustment_chart_type == "pie":
+        theta = st.text_input("Value")
+        color = st.text_input("Category")
+    elif adjustment_chart_type == "area":
+        x_axis = st.text_input("X Axis Field")
+        y_axis = st.text_input("Y Axis Field")
+
+    adjust_submit_button = st.button("Adjust")
+
+    st.markdown("### Question")
+    st.markdown(query)
+    st.markdown("### SQL")
+    st.code(
+        body=sqlparse.format(
+            sql,
+            reindent=True,
+            keyword_case="upper",
+        ),
+        language="sql",
+    )
+
+    show_original_chart(chart_schema, reasoning)
+
+    if adjust_submit_button:
+        adjustment_option = {
+            "chart_type": adjustment_chart_type,
+            "x_axis": x_axis,
+            "y_axis": y_axis,
+            "color": color,
+            "x_offset": x_offset,
+            "theta": theta,
+        }
+        adjust_chart_response = adjust_chart(
+            query,
+            sql,
+            chart_schema,
+            adjustment_option,
+            language,
+            dataset_type,
+            manifest,
+            limit,
+        )
+        if adjust_chart_result := adjust_chart_response.get("response"):
+            st.markdown("### Adjusted")
+            if reasoning := adjust_chart_result["reasoning"]:
+                st.markdown("#### Reasoning for making this chart")
+                st.markdown(f"{reasoning}")
+            if vega_lite_schema := adjust_chart_result["chart_schema"]:
+                st.markdown("#### Vega-Lite Schema")
+                st.json(vega_lite_schema, expanded=False)
+                st.vega_lite_chart(vega_lite_schema, use_container_width=True)

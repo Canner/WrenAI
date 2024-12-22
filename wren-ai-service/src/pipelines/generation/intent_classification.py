@@ -1,12 +1,11 @@
 import ast
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Literal, Optional
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
@@ -14,30 +13,63 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import _build_table_ddl
+from src.pipelines.common import build_table_ddl
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
 
 intent_classification_system_prompt = """
 ### TASK ###
-You are a great detective, who is great at intent classification. Now you need to classify user's intent given database schema
-and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. Please read user's question and
-database's schema carefully to make the classification correct. Please analyze the question for each condition(MISLEADING_QUERY, TEXT_TO_SQL, GENERAL) in order one by one
+You are a great detective, who is great at intent classification. Now you need to classify user's intent based on given database schema and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
+Please carefully analyze user's question and analyze database's schema carefully to make the classification correct.
+Also you should provide reasoning for the classification in clear and concise way within 20 words.
 
-- TEXT_TO_SQL: if user's question is related to the given database schema and specific enough that you think
-it can be answered using the database schema
-- GENERAL: if user's question is related to the given database schema or user wants you to help guide ask proper questions; however, it's too general.
-For example, user might asked "what is the dataset about?", "tell me more about dataset", "what can Wren AI do"
-- MISLEADING_QUERY: if user's question is irrelevant to the given database schema.
-For example, if the given database schema is related to e-commerce, but user asked "how are you"
+### INTENT DEFINITIONS ###
+
+- TEXT_TO_SQL
+    - When to Use:
+        - Select this category if the user's question is directly related to the given database schema and can be answered by generating an SQL query using that schema.
+        - If the user's question is related to the previous question, and considering them together could be answered by generating an SQL query using that schema.
+    - Characteristics:
+        - The question involves specific data retrieval or manipulation that requires SQL.
+        - It references tables, columns, or specific data points within the schema.
+    - Examples:
+        - "What is the total sales for last quarter?"
+        - "Show me all customers who purchased product X."
+        - "List the top 10 products by revenue."
+- MISLEADING_QUERY
+    - When to Use:
+        - If the user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
+        - If the user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
+        - If the user's question contains SQL code.
+    - Characteristics:
+        - The question does not pertain to any aspect of the database or its data.
+        - It might be a casual conversation starter or about an entirely different topic.
+    - Examples:
+        - "How are you?"
+        - "What's the weather like today?"
+        - "Tell me a joke."
+- GENERAL
+    - When to Use:
+        - Use this category if the user is seeking general information about the database schema, needs help formulating a proper question, or asks a vague question related to the schema.
+        - If the user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
+    - Characteristics:
+        - The question is about understanding the dataset or its capabilities.
+        - The user may need guidance on how to proceed or what questions to ask.
+    - Examples:
+        - "What is the dataset about?"
+        - "Tell me more about the database."
+        - "What can Wren AI do?"
+        - "How can I analyze customer behavior with this data?"
 
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" 
+    "reasoning": "<CHAIN_OF_THOUGHT_REASONING_IN_STRING_FORMAT>",
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL"
 }
 """
 
@@ -48,17 +80,27 @@ intent_classification_user_prompt_template = """
 {% endfor %}
 
 ### INPUT ###
+{% if query_history %}
+User's previous questions: {{ query_history }}
+{% endif %}
 User's question: {{query}}
 
-Please think step by step
+Let's think step by step
 """
 
 
 ## Start of Pipeline
 @async_timer
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any) -> dict:
-    logger.debug(f"query: {query}")
+async def embedding(
+    query: str, embedder: Any, history: Optional[AskHistory] = None
+) -> dict:
+    previous_query_summaries = (
+        [step.summary for step in history.steps if step.summary] if history else []
+    )
+
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
     return await embedder.run(query)
 
 
@@ -150,7 +192,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
             db_schemas_in_ddl.append(
-                _build_table_ddl(
+                build_table_ddl(
                     table_schema,
                 )
             )
@@ -164,28 +206,30 @@ def prompt(
     query: str,
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
+    history: Optional[AskHistory] = None,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"db_schemas: {construct_db_schemas}")
+    previous_query_summaries = (
+        [step.summary for step in history.steps if step.summary] if history else []
+    )
 
-    return prompt_builder.run(query=query, db_schemas=construct_db_schemas)
+    # query = "\n".join(previous_query_summaries) + "\n" + query
+
+    return prompt_builder.run(
+        query=query,
+        db_schemas=construct_db_schemas,
+        query_history=previous_query_summaries,
+    )
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def classify_intent(prompt: dict, generator: Any) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @timer
 @observe(capture_input=False)
 def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
-    logger.debug(
-        f"classify_intent: {orjson.dumps(classify_intent, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     try:
         intent = orjson.loads(classify_intent.get("replies")[0])["results"]
         return {
@@ -247,61 +291,28 @@ class IntentClassification(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(
-        self,
-        query: str,
-        id: Optional[str] = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/intent_classification.dot",
-            inputs={
-                "query": query,
-                "id": id or "",
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
-        )
-
     @async_timer
     @observe(name="Intent Classification")
-    async def run(self, query: str, id: Optional[str] = None):
+    async def run(
+        self, query: str, id: Optional[str] = None, history: Optional[AskHistory] = None
+    ):
         logger.info("Intent Classification pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
                 "id": id or "",
+                "history": history,
                 **self._components,
             },
         )
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, document_store_provider, _ = init_providers(
-        engine_config=EngineConfig()
+    dry_run_pipeline(
+        IntentClassification,
+        "intent_classification",
+        query="show me the dataset",
     )
-    pipeline = IntentClassification(
-        document_store_provider=document_store_provider,
-        llm_provider=llm_provider,
-    )
-
-    pipeline.visualize("this is a query")
-    async_validate(lambda: pipeline.run("this is a query"))
-
-    langfuse_context.flush()

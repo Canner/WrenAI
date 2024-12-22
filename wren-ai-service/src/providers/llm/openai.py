@@ -10,6 +10,9 @@ import openai
 import orjson
 from haystack import component
 from haystack.components.generators import OpenAIGenerator
+from haystack.components.generators.openai_utils import (
+    _convert_message_to_openai_format,
+)
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from haystack.utils import Secret
 from openai import AsyncOpenAI, AsyncStream
@@ -87,6 +90,9 @@ class AsyncGenerator(OpenAIGenerator):
             logger.info("Vertex AI token is refreshed")
         return getattr(self.client, name)
 
+    async def __call__(self, *args, **kwargs):
+        return await self.run(*args, **kwargs)
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.OpenAIError, max_time=60.0, max_tries=3)
     async def run(
@@ -95,7 +101,6 @@ class AsyncGenerator(OpenAIGenerator):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         query_id: Optional[str] = None,
     ):
-        logger.debug(f"Running AsyncOpenAI generator with prompt: {prompt}")
         message = ChatMessage.from_user(prompt)
         if self.system_prompt:
             # updated from_system to from_assistent as the new openai api is not accepting system prompts anymore, only user and assistant.
@@ -107,7 +112,9 @@ class AsyncGenerator(OpenAIGenerator):
         generation_kwargs = {**self.generation_kwargs, **(generation_kwargs or {})}
 
         # adapt ChatMessage(s) to the format expected by the OpenAI API
-        openai_formatted_messages = [message.to_openai_format() for message in messages]
+        openai_formatted_messages = [
+            _convert_message_to_openai_format(message) for message in messages
+        ]
 
         completion: Union[
             AsyncStream[ChatCompletionChunk], ChatCompletion
@@ -126,7 +133,6 @@ class AsyncGenerator(OpenAIGenerator):
             if num_responses > 1:
                 raise ValueError("Cannot stream multiple responses, please set n=1.")
             chunks: List[StreamingChunk] = []
-            chunk = None
 
             async for chunk in completion:
                 if chunk.choices and self.streaming_callback:
@@ -157,7 +163,7 @@ class AsyncGenerator(OpenAIGenerator):
 class OpenAILLMProvider(LLMProvider):
     def __init__(
         self,
-        api_key: str = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_OPENAI_API_KEY"),
+        api_key: str = os.getenv("LLM_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_OPENAI_API_BASE") or LLM_OPENAI_API_BASE,
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
         kwargs: Dict[str, Any] = (
@@ -172,16 +178,16 @@ class OpenAILLMProvider(LLMProvider):
     ):
         self._api_key = Secret.from_token(api_key)
         self._api_base = remove_trailing_slash(api_base)
-        self._generation_model = model
+        self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
 
         logger.info(f"Using OpenAILLM provider with API base: {self._api_base}")
         if self._api_base == LLM_OPENAI_API_BASE:
-            logger.info(f"Using OpenAI LLM: {self._generation_model}")
+            logger.info(f"Using OpenAI LLM: {self._model}")
             logger.info(f"Using OpenAI LLM model kwargs: {self._model_kwargs}")
         else:
-            logger.info(f"Using OpenAI API-compatible LLM: {self._generation_model}")
+            logger.info(f"Using OpenAI API-compatible LLM: {self._model}")
             logger.info(
                 f"Using OpenAI API-compatible LLM model kwargs: {self._model_kwargs}"
             )
@@ -196,7 +202,7 @@ class OpenAILLMProvider(LLMProvider):
         return AsyncGenerator(
             api_key=self._api_key,
             api_base_url=self._api_base,
-            model=self._generation_model,
+            model=self._model,
             system_prompt=system_prompt,
             # merge model args with the shared args related to response_format
             generation_kwargs=(

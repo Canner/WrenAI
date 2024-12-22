@@ -8,6 +8,9 @@ import openai
 import orjson
 from haystack import component
 from haystack.components.generators import AzureOpenAIGenerator
+from haystack.components.generators.openai_utils import (
+    _convert_message_to_openai_format,
+)
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from haystack.utils import Secret
 from openai import AsyncAzureOpenAI, AsyncStream
@@ -59,12 +62,16 @@ class AsyncGenerator(AzureOpenAIGenerator):
             api_key=api_key.resolve_value(),
         )
 
+    async def __call__(self, *args, **kwargs):
+        return await self.run(*args, **kwargs)
+
     @component.output_types(replies=List[str], meta=List[Dict[str, Any]])
     @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(
         self,
         prompt: str,
         generation_kwargs: Optional[Dict[str, Any]] = None,
+        query_id: Optional[str] = None,
     ):
         logger.info(f"running async azure generator with prompt : {prompt}")
         message = ChatMessage.from_user(prompt)
@@ -75,7 +82,9 @@ class AsyncGenerator(AzureOpenAIGenerator):
 
         generation_kwargs = {**self.generation_kwargs, **(generation_kwargs or {})}
 
-        openai_formatted_messages = [message.to_openai_format() for message in messages]
+        openai_formatted_messages = [
+            _convert_message_to_openai_format(message) for message in messages
+        ]
 
         completion: Union[
             AsyncStream[ChatCompletionChunk], ChatCompletion
@@ -96,14 +105,13 @@ class AsyncGenerator(AzureOpenAIGenerator):
                     "Cannot stream multiple responses , please set n = 1 in AzureAsyncGenerator"
                 )
             chunks: List[StreamingChunk] = []
-            chunk = None
 
             # pylint: disable=not-an-iterable
             for chunk in completion:
                 if chunk.choices and self.streaming_callback:
                     chunk_delta: StreamingChunk = self._build_chunk(chunk)
                     chunks.append(chunk_delta)
-                    self.streaming_callback(chunk_delta)
+                    self.streaming_callback(chunk_delta, query_id)
             completions = [self._connect_chunks(chunk, chunks)]
         elif isinstance(completion, ChatCompletion) or isinstance(
             completion, langfuse.openai.LangfuseResponseGeneratorSync
@@ -125,8 +133,7 @@ class AsyncGenerator(AzureOpenAIGenerator):
 class AzureOpenAILLMProvider(LLMProvider):
     def __init__(
         self,
-        api_key: Secret = Secret.from_env_var("AZURE_OPENAI_API_KEY")
-        or Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
+        api_key: Secret = Secret.from_env_var("LLM_AZURE_OPENAI_API_KEY"),
         api_base: str = os.getenv("LLM_AZURE_OPENAI_API_BASE"),
         api_version: str = os.getenv("LLM_AZURE_OPENAI_VERSION"),
         model: str = os.getenv("GENERATION_MODEL") or GENERATION_MODEL,
@@ -143,11 +150,11 @@ class AzureOpenAILLMProvider(LLMProvider):
         self._generation_api_key = api_key
         self._generation_api_base = remove_trailing_slash(api_base)
         self._generation_api_version = api_version
-        self._generation_model = model
+        self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
 
-        logger.info(f"Using AzureOpenAI LLM: {self._generation_model}")
+        logger.info(f"Using AzureOpenAI LLM: {self._model}")
         logger.info(f"Using AzureOpenAI LLM with API base: {self._generation_api_base}")
         logger.info(
             f"Using AzureOpenAI LLM with API version: {self._generation_api_version}"
@@ -163,7 +170,7 @@ class AzureOpenAILLMProvider(LLMProvider):
     ):
         return AsyncGenerator(
             api_key=self._generation_api_key,
-            model=self._generation_model,
+            model=self._model,
             api_base=self._generation_api_base,
             api_version=self._generation_api_version,
             system_prompt=system_prompt,

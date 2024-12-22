@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from pprint import pformat
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -14,7 +13,8 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
-from src.web.v1.services.ask import AskConfigurations
+from src.core.pipeline import BasicPipeline
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -57,8 +57,6 @@ class SQLBreakdownGenPostProcessor:
                 }
 
         sql = self._build_cte_query(steps)
-        logger.debug(f": steps: {pformat(steps)}")
-        logger.debug(f"SQLBreakdownGenPostProcessor: final sql: {sql}")
 
         if not await self._check_if_sql_executable(sql, project_id=project_id):
             return {
@@ -372,7 +370,7 @@ Dimensions are used as table columns in the querying process. Querying a dimensi
 3. Measures
 Measures are numerical or quantitative statistics calculated from the data. Measures are key results or outputs derived from data aggregation functions like SUM, COUNT, or AVG.
 Measures are used as table columns in the querying process, and are the main querying items in the metric structure.
-The expression of a measure represents the definition of the statistics that users are intrested in. Make sure to understand the meaning of measures from their expressions.
+The expression of a measure represents the definition of the  that users are intrested in. Make sure to understand the meaning of measures from their expressions.
 4. Time Grain
 Time Grain specifies the granularity of time-based data aggregation, such as daily, monthly, or yearly, facilitating trend analysis over specified periods.
 
@@ -447,16 +445,16 @@ Learn about the usage of the schema structures and generate SQL based on them.
 """
 
 
-def construct_instructions(configurations: AskConfigurations | None):
+def construct_instructions(configuration: Configuration | None):
     instructions = ""
-    if configurations:
-        if configurations.fiscal_year:
-            instructions += f"- For calendar year related computation, it should be started from {configurations.fiscal_year.start} to {configurations.fiscal_year.end}"
+    if configuration:
+        if configuration.fiscal_year:
+            instructions += f"- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
 
     return instructions
 
 
-def show_current_time(timezone: AskConfigurations.Timezone):
+def show_current_time(timezone: Configuration.Timezone):
     # Get the current time in the specified timezone
     tz = pytz.timezone(
         timezone.name
@@ -466,7 +464,7 @@ def show_current_time(timezone: AskConfigurations.Timezone):
     return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
 
 
-def _build_table_ddl(
+def build_table_ddl(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> str:
     columns_ddl = []
@@ -488,3 +486,22 @@ def _build_table_ddl(
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
+
+
+def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
+    from langfuse.decorators import langfuse_context
+
+    from src.config import settings
+    from src.core.pipeline import async_validate
+    from src.providers import generate_components
+    from src.utils import init_langfuse, setup_custom_logger
+
+    setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
+
+    pipe_components = generate_components(settings.components)
+    pipeline = pipeline_cls(**pipe_components[pipeline_name])
+    init_langfuse()
+
+    async_validate(lambda: pipeline.run(**kwargs))
+
+    langfuse_context.flush()

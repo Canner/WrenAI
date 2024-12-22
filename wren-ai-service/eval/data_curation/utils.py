@@ -22,7 +22,7 @@ from eval.utils import (
     get_ddl_commands,
     get_documents_given_contexts,
 )
-from src.pipelines.indexing.indexing import DDLConverter
+from src.pipelines.indexing.db_schema import DDLChunker
 
 load_dotenv()
 
@@ -30,7 +30,7 @@ WREN_IBIS_ENDPOINT = os.getenv("WREN_IBIS_ENDPOINT", "http://localhost:8000")
 WREN_ENGINE_ENDPOINT = os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080")
 DATA_SOURCES = ["bigquery", "duckdb"]
 TIMEOUT_SECONDS = 60
-ddl_converter = DDLConverter()
+ddl_converter = DDLChunker()
 
 
 async def is_sql_valid(

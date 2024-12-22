@@ -70,12 +70,16 @@ def llm_processor(entry: dict) -> dict:
     """
     others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
-    for model in entry["models"]:
-        model_name = f"{entry['provider']}.{model['model']}"
+    for model in entry.get("models", []):
+        model_name = f"{entry.get('provider')}.{model.get('model')}"
+        model_additional_params = {
+            k: v for k, v in model.items() if k not in ["model", "kwargs"]
+        }
         returned[model_name] = {
             "provider": entry["provider"],
             "model": model["model"],
             "kwargs": model["kwargs"],
+            **model_additional_params,
             **others,
         }
     return returned
@@ -301,6 +305,10 @@ def init_providers(
     engine_config: EngineConfig,
 ) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
     # DEPRECATED: use generate_components instead
+    from src.utils import load_env_vars
+
+    load_env_vars()
+
     logger.info("Initializing providers...")
     loader.import_mods()
 

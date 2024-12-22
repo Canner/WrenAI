@@ -1,19 +1,17 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Optional
 
-import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -29,6 +27,7 @@ using the Markdown format. Your goal is to help guide user understand its databa
 - Answer must be in the same language user specified.
 - There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
 - If the language is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
+- MUST NOT add SQL code in your response.
 
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format.
@@ -56,27 +55,31 @@ def prompt(
     db_schemas: list[str],
     language: str,
     prompt_builder: PromptBuilder,
+    history: Optional[AskHistory] = None,
 ) -> dict:
-    logger.debug(f"query: {query}")
-    logger.debug(f"db_schemas: {db_schemas}")
-    logger.debug(f"language: {language}")
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
 
-    return prompt_builder.run(query=query, db_schemas=db_schemas, language=language)
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
+    return prompt_builder.run(
+        query=query,
+        db_schemas=db_schemas,
+        language=language,
+    )
 
 
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
-    logger.debug(f"prompt: {orjson.dumps(prompt, option=orjson.OPT_INDENT_2).decode()}")
-
-    return await generator.run(prompt=prompt.get("prompt"), query_id=query_id)
+    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
 
 
 ## End of Pipeline
-
-
-class DataAssistanceResult(BaseModel):
-    results: str
 
 
 DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
@@ -111,48 +114,33 @@ class DataAssistance(BasicPipeline):
             ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
-        if chunk.meta.get("finish_reason") == "stop":
+        if chunk.meta.get("finish_reason"):
             asyncio.create_task(self._user_queues[query_id].put("<DONE>"))
 
     async def get_streaming_results(self, query_id):
+        async def _get_streaming_results(query_id):
+            return await self._user_queues[query_id].get()
+
         if query_id not in self._user_queues:
             self._user_queues[
                 query_id
             ] = asyncio.Queue()  # Ensure the user's queue exists
         while True:
-            # Wait for an item from the user's queue
-            self._streaming_results = await self._user_queues[query_id].get()
-            if self._streaming_results == "<DONE>":  # Check for end-of-stream signal
-                del self._user_queues[query_id]
+            try:
+                # Wait for an item from the user's queue
+                self._streaming_results = await asyncio.wait_for(
+                    _get_streaming_results(query_id), timeout=120
+                )
+                if (
+                    self._streaming_results == "<DONE>"
+                ):  # Check for end-of-stream signal
+                    del self._user_queues[query_id]
+                    break
+                if self._streaming_results:  # Check if there are results to yield
+                    yield self._streaming_results
+                    self._streaming_results = ""  # Clear after yielding
+            except TimeoutError:
                 break
-            if self._streaming_results:  # Check if there are results to yield
-                yield self._streaming_results
-                self._streaming_results = ""  # Clear after yielding
-
-    def visualize(
-        self,
-        query: str,
-        db_schemas: list[str],
-        language: str,
-        query_id: Optional[str] = None,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["data_assistance"],
-            output_file_path=f"{destination}/data_assistance.dot",
-            inputs={
-                "query": query,
-                "db_schemas": db_schemas,
-                "language": language,
-                "query_id": query_id or "",
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
-        )
 
     @async_timer
     @observe(name="Data Assistance")
@@ -162,6 +150,7 @@ class DataAssistance(BasicPipeline):
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
     ):
         logger.info("Data Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -171,28 +160,19 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
+                "history": history,
                 **self._components,
             },
         )
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, _ = init_providers(engine_config=EngineConfig())
-    pipeline = DataAssistance(
-        llm_provider=llm_provider,
+    dry_run_pipeline(
+        DataAssistance,
+        "data_assistance",
+        query="show me the dataset",
+        db_schemas=[],
+        language="English",
     )
-
-    pipeline.visualize("show me the dataset", [], "English")
-    async_validate(lambda: pipeline.run("show me the dataset", [], "English"))
-
-    langfuse_context.flush()

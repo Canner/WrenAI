@@ -1,13 +1,12 @@
 import ast
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Optional
 
 import orjson
 import tiktoken
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
@@ -15,8 +14,9 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import _build_table_ddl
+from src.pipelines.common import build_table_ddl
 from src.utils import async_timer, timer
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -117,8 +117,18 @@ def _build_view_ddl(content: dict) -> str:
 ## Start of Pipeline
 @async_timer
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any) -> dict:
-    logger.debug(f"query: {query}")
+async def embedding(
+    query: str, embedder: Any, history: Optional[AskHistory] = None
+) -> dict:
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
+    else:
+        previous_query_summaries = []
+
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
     return await embedder.run(query)
 
 
@@ -153,8 +163,6 @@ async def dbschema_retrieval(
     for table in tables:
         content = ast.literal_eval(table.content)
         table_names.append(content["name"])
-
-    logger.debug(f"dbschema_retrieval with table_names: {table_names}")
 
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
@@ -222,7 +230,7 @@ def check_using_db_schemas_without_pruning(
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
             retrieval_results.append(
-                _build_table_ddl(
+                build_table_ddl(
                     table_schema,
                 )
             )
@@ -255,18 +263,25 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
+    history: Optional[AskHistory] = None,
 ) -> dict:
-    logger.debug(f"db_schemas: {construct_db_schemas}")
-
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         logger.info(
             "db_schemas token count is greater than 100,000, so we will prune columns"
         )
         db_schemas = [
-            _build_table_ddl(construct_db_schema)
+            build_table_ddl(construct_db_schema)
             for construct_db_schema in construct_db_schemas
         ]
 
+        if history:
+            previous_query_summaries = [
+                step.summary for step in history.steps if step.summary
+            ]
+        else:
+            previous_query_summaries = []
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
         return prompt_builder.run(question=query, db_schemas=db_schemas)
     else:
         return {}
@@ -277,10 +292,8 @@ def prompt(
 async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any
 ) -> dict:
-    logger.debug(f"prompt: {prompt}")
-
     if prompt:
-        return await table_columns_selection_generator.run(prompt=prompt.get("prompt"))
+        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
     else:
         return {}
 
@@ -297,7 +310,6 @@ def construct_retrieval_results(
         columns_and_tables_needed = orjson.loads(
             filter_columns_in_tables["replies"][0]
         )["results"]
-        logger.debug(f"columns_and_tables_needed: {columns_and_tables_needed}")
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
@@ -311,7 +323,7 @@ def construct_retrieval_results(
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
                 retrieval_results.append(
-                    _build_table_ddl(
+                    build_table_ddl(
                         table_schema,
                         columns=set(
                             columns_and_tables_needed[table_schema["name"]]["columns"]
@@ -330,8 +342,6 @@ def construct_retrieval_results(
                     retrieval_results.append(_build_view_ddl(content))
     else:
         retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
-
-    logger.debug(f"retrieval_results: {retrieval_results}")
 
     return retrieval_results
 
@@ -356,7 +366,7 @@ RETRIEVAL_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "matched_schema",
+            "name": "retrieval_schema",
             "schema": RetrievalResults.model_json_schema(),
         },
     }
@@ -410,37 +420,21 @@ class Retrieval(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(
+    @async_timer
+    @observe(name="Ask Retrieval")
+    async def run(
         self,
         query: str,
         id: Optional[str] = None,
-    ) -> None:
-        destination = "outputs/pipelines/retrieval"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["construct_retrieval_results"],
-            output_file_path=f"{destination}/retrieval.dot",
-            inputs={
-                "query": query,
-                "id": id or "",
-                **self._components,
-                **self._configs,
-            },
-            show_legend=True,
-            orient="LR",
-        )
-
-    @async_timer
-    @observe(name="Ask Retrieval")
-    async def run(self, query: str, id: Optional[str] = None):
+        history: Optional[AskHistory] = None,
+    ):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["construct_retrieval_results"],
             inputs={
                 "query": query,
                 "id": id or "",
+                "history": history,
                 **self._components,
                 **self._configs,
             },
@@ -448,25 +442,10 @@ class Retrieval(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    _, embedder_provider, document_store_provider, _ = init_providers(
-        engine_config=EngineConfig()
+    dry_run_pipeline(
+        Retrieval,
+        "db_schema_retrieval",
+        query="this is a test query",
     )
-    pipeline = Retrieval(
-        embedder_provider=embedder_provider,
-        document_store_provider=document_store_provider,
-    )
-
-    pipeline.visualize("this is a query")
-    async_validate(lambda: pipeline.run("this is a query"))
-
-    langfuse_context.flush()

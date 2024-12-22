@@ -59,8 +59,6 @@ class AsyncTextEmbedder(OpenAITextEmbedder):
                 "In case you want to embed a list of Documents, please use the OpenAIDocumentEmbedder."
             )
 
-        logger.debug(f"Running Async OpenAI text embedder with text: {text}")
-
         text_to_embed = self.prefix + text + self.suffix
 
         # copied from OpenAI embedding_utils (https://github.com/openai/openai-python/blob/main/openai/embeddings_utils.py)
@@ -163,10 +161,6 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
                 "In case you want to embed a string, please use the OpenAITextEmbedder."
             )
 
-        logger.debug(
-            f"Running Async OpenAI document embedder with documents: {documents}"
-        )
-
         texts_to_embed = self._prepare_texts_to_embed(documents=documents)
 
         embeddings, meta = await self._embed_batch(
@@ -183,8 +177,7 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
 class OpenAIEmbedderProvider(EmbedderProvider):
     def __init__(
         self,
-        api_key: str = os.getenv("OPENAI_API_KEY")
-        or os.getenv("EMBEDDER_OPENAI_API_KEY"),
+        api_key: str = os.getenv("EMBEDDER_OPENAI_API_KEY"),
         api_base: str = os.getenv("EMBEDDER_OPENAI_API_BASE")
         or EMBEDDER_OPENAI_API_BASE,
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,

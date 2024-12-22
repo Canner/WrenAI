@@ -7,6 +7,7 @@ import { message } from 'antd';
 export const ERROR_CODES = {
   INVALID_CALCULATED_FIELD: 'INVALID_CALCULATED_FIELD',
   CONNECTION_REFUSED: 'CONNECTION_REFUSED',
+  NO_CHART: 'NO_CHART',
 };
 
 /**
@@ -106,6 +107,24 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create thread response.';
+    }
+  }
+}
+
+class GenerateThreadResponseAnswerErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to generate thread response answer.';
+    }
+  }
+}
+
+class GenerateThreadResponseBreakdownErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to generate thread response breakdown SQL answer.';
     }
   }
 }
@@ -258,6 +277,16 @@ errorHandlers.set(
   'CreateThreadResponse',
   new CreateThreadResponseErrorHandler(),
 );
+
+errorHandlers.set(
+  'GenerateThreadResponseAnswer',
+  new GenerateThreadResponseAnswerErrorHandler(),
+);
+errorHandlers.set(
+  'GenerateThreadResponseBreakdown',
+  new GenerateThreadResponseBreakdownErrorHandler(),
+);
+
 errorHandlers.set('CreateView', new CreateViewErrorHandler());
 errorHandlers.set('UpdateDataSource', new UpdateDataSourceErrorHandler());
 errorHandlers.set('CreateModel', new CreateModelErrorHandler());

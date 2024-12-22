@@ -1,12 +1,11 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
@@ -340,10 +339,6 @@ class SQLExplanationGenerationPostProcessor:
                         "results"
                     ]
 
-                    logger.debug(
-                        f"sql_explanation_results: {orjson.dumps(sql_explanation_results, option=orjson.OPT_INDENT_2).decode()}"
-                    )
-
                     if preprocessed_sql_analysis_results.get(
                         "filter", {}
                     ) and sql_explanation_results.get("filter", {}):
@@ -477,9 +472,6 @@ class SQLExplanationGenerationPostProcessor:
 def preprocess(
     sql_analysis_results: List[dict], pre_processor: SQLAnalysisPreprocessor
 ) -> dict:
-    logger.debug(
-        f"sql_analysis_results: {orjson.dumps(sql_analysis_results, option=orjson.OPT_INDENT_2).decode()}"
-    )
     return pre_processor.run(sql_analysis_results)
 
 
@@ -492,13 +484,6 @@ def prompts(
     sql_summary: str,
     prompt_builder: PromptBuilder,
 ) -> List[dict]:
-    logger.debug(f"question: {question}")
-    logger.debug(f"sql: {sql}")
-    logger.debug(
-        f"preprocess: {orjson.dumps(preprocess, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    logger.debug(f"sql_summary: {sql_summary}")
-
     preprocessed_sql_analysis_results_with_values = []
     for preprocessed_sql_analysis_result in preprocess[
         "preprocessed_sql_analysis_results"
@@ -534,10 +519,6 @@ def prompts(
                         }
                     )
 
-    logger.debug(
-        f"preprocessed_sql_analysis_results_with_values: {orjson.dumps(preprocessed_sql_analysis_results_with_values, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return [
         prompt_builder.run(
             question=question,
@@ -552,12 +533,8 @@ def prompts(
 @async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_explanation(prompts: List[dict], generator: Any) -> List[dict]:
-    logger.debug(
-        f"prompts: {orjson.dumps(prompts, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     async def _task(prompt: str, generator: Any):
-        return await generator.run(prompt=prompt.get("prompt"))
+        return await generator(prompt=prompt.get("prompt"))
 
     tasks = [_task(prompt, generator) for prompt in prompts]
     return await asyncio.gather(*tasks)
@@ -570,13 +547,6 @@ def post_process(
     preprocess: dict,
     post_processor: SQLExplanationGenerationPostProcessor,
 ) -> dict:
-    logger.debug(
-        f"generate_sql_explanation: {orjson.dumps(generate_sql_explanation, option=orjson.OPT_INDENT_2).decode()}"
-    )
-    logger.debug(
-        f"preprocess: {orjson.dumps(preprocess, option=orjson.OPT_INDENT_2).decode()}"
-    )
-
     return post_processor.run(
         generate_sql_explanation,
         preprocess["preprocessed_sql_analysis_results"],
@@ -640,29 +610,6 @@ class SQLExplanation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(
-        self,
-        question: str,
-        step_with_analysis_results: StepWithAnalysisResult,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            ["post_process"],
-            output_file_path=f"{destination}/sql_explanation.dot",
-            inputs={
-                "question": question,
-                "sql": step_with_analysis_results.sql,
-                "sql_analysis_results": step_with_analysis_results.sql_analysis_results,
-                "sql_summary": step_with_analysis_results.summary,
-                **self._components,
-            },
-            show_legend=True,
-            orient="LR",
-        )
-
     @async_timer
     @observe(name="SQL Explanation Generation")
     async def run(
@@ -685,38 +632,13 @@ class SQLExplanation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = SQLExplanation(
-        llm_provider=llm_provider,
-    )
-
-    pipeline.visualize(
-        "this is a test question",
-        StepWithAnalysisResult(
-            sql="xxx",
-            summary="xxx",
-            sql_analysis_results=[],
+    dry_run_pipeline(
+        SQLExplanation,
+        "sql_explanation",
+        question="this is a test question",
+        step_with_analysis_results=StepWithAnalysisResult(
+            sql="xxx", summary="xxx", sql_analysis_results=[]
         ),
     )
-    async_validate(
-        lambda: pipeline.run(
-            "this is a test question",
-            StepWithAnalysisResult(
-                sql="xxx",
-                summary="xxx",
-                sql_analysis_results=[],
-            ),
-        )
-    )
-
-    langfuse_context.flush()

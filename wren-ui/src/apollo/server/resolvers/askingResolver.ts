@@ -2,7 +2,10 @@ import {
   WrenAIError,
   WrenAILanguage,
   AskResultStatus,
-} from '../adaptors/wrenAIAdaptor';
+  AskResultType,
+  RecommendationQuestionStatus,
+  ChartAdjustmentOption,
+} from '@server/models/adaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
   DetailStep,
@@ -12,7 +15,10 @@ import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
-import { constructCteSql } from '../services/askingService';
+import {
+  constructCteSql,
+  ThreadRecommendQuestionResult,
+} from '../services/askingService';
 import {
   SuggestedQuestion,
   SampleDatasetName,
@@ -32,10 +38,10 @@ export interface Task {
 }
 
 export interface AskingTask {
+  type: AskResultType | null;
   status: AskResultStatus;
   candidates: Array<{
     sql: string;
-    summary: string;
   }>;
   error: WrenAIError | null;
 }
@@ -44,8 +50,17 @@ export interface AskingTask {
 export interface DetailedThread {
   id: number; // ID
   sql: string; // SQL
-  summary: string; // Thread summary
   responses: ThreadResponse[];
+}
+
+export interface RecommendedQuestionsTask {
+  questions: {
+    question: string;
+    category: string;
+    sql: string;
+  }[];
+  status: RecommendationQuestionStatus;
+  error: WrenAIError | null;
 }
 
 export class AskingResolver {
@@ -60,7 +75,57 @@ export class AskingResolver {
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
+    this.previewData = this.previewData.bind(this);
+    this.previewBreakdownData = this.previewBreakdownData.bind(this);
     this.getSuggestedQuestions = this.getSuggestedQuestions.bind(this);
+    this.createInstantRecommendedQuestions =
+      this.createInstantRecommendedQuestions.bind(this);
+    this.getInstantRecommendedQuestions =
+      this.getInstantRecommendedQuestions.bind(this);
+    this.generateThreadRecommendationQuestions =
+      this.generateThreadRecommendationQuestions.bind(this);
+    this.generateProjectRecommendationQuestions =
+      this.generateProjectRecommendationQuestions.bind(this);
+
+    this.getThreadRecommendationQuestions =
+      this.getThreadRecommendationQuestions.bind(this);
+    this.generateThreadResponseBreakdown =
+      this.generateThreadResponseBreakdown.bind(this);
+    this.generateThreadResponseAnswer =
+      this.generateThreadResponseAnswer.bind(this);
+    this.generateThreadResponseChart =
+      this.generateThreadResponseChart.bind(this);
+    this.adjustThreadResponseChart = this.adjustThreadResponseChart.bind(this);
+  }
+
+  public async generateProjectRecommendationQuestions(
+    _root: any,
+    _args: any,
+    ctx: IContext,
+  ): Promise<boolean> {
+    await ctx.projectService.generateProjectRecommendationQuestions();
+    return true;
+  }
+
+  public async generateThreadRecommendationQuestions(
+    _root: any,
+    args: { threadId: number },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { threadId } = args;
+    const askingService = ctx.askingService;
+    await askingService.generateThreadRecommendationQuestions(threadId);
+    return true;
+  }
+
+  public async getThreadRecommendationQuestions(
+    _root: any,
+    args: { threadId: number },
+    ctx: IContext,
+  ): Promise<ThreadRecommendQuestionResult> {
+    const { threadId } = args;
+    const askingService = ctx.askingService;
+    return askingService.getThreadRecommendationQuestions(threadId);
   }
 
   public async getSuggestedQuestions(
@@ -149,13 +214,13 @@ export class AskingResolver {
         return {
           type: response.type,
           sql: response.sql,
-          summary: response.summary,
           view,
         };
       }),
     );
 
     return {
+      type: askResult.type,
       status: askResult.status,
       error: askResult.error,
       candidates,
@@ -168,7 +233,6 @@ export class AskingResolver {
       data: {
         question?: string;
         sql?: string;
-        summary?: string;
         viewId?: number;
       };
     },
@@ -176,13 +240,10 @@ export class AskingResolver {
   ): Promise<Thread> {
     const { data } = args;
 
-    const project = await ctx.projectService.getCurrentProject();
     const askingService = ctx.askingService;
     const eventName = TelemetryEvent.HOME_CREATE_THREAD;
     try {
-      const thread = await askingService.createThread(data, {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
-      });
+      const thread = await askingService.createThread(data);
       ctx.telemetry.sendEvent(eventName, {});
       return thread;
     } catch (err: any) {
@@ -213,23 +274,18 @@ export class AskingResolver {
         if (!acc.id) {
           acc.id = response.threadId;
           acc.sql = response.sql;
-          acc.summary = response.threadSummary;
           acc.responses = [];
         }
 
         acc.responses.push({
           id: response.id,
+          viewId: response.viewId,
+          threadId: response.threadId,
           question: response.question,
-
-          // we added summary in version 0.3.0.
-          // if summary is not available, we use description and question instead.
-          summary:
-            response.summary ||
-            response.detail?.description ||
-            response.question,
-          status: response.status,
-          detail: response.detail,
-          error: response.error,
+          sql: response.sql,
+          breakdownDetail: response.breakdownDetail,
+          answerDetail: response.answerDetail,
+          chartDetail: response.chartDetail,
         });
 
         return acc;
@@ -298,7 +354,6 @@ export class AskingResolver {
       data: {
         question?: string;
         sql?: string;
-        summary?: string;
         viewId?: number;
       };
     },
@@ -306,14 +361,10 @@ export class AskingResolver {
   ): Promise<ThreadResponse> {
     const { threadId, data } = args;
 
-    const project = await ctx.projectService.getCurrentProject();
     const askingService = ctx.askingService;
     const eventName = TelemetryEvent.HOME_ASK_FOLLOWUP_QUESTION;
     try {
-      const response = await askingService.createThreadResponse(data, {
-        threadId,
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
-      });
+      const response = await askingService.createThreadResponse(data, threadId);
       ctx.telemetry.sendEvent(eventName, { data });
       return response;
     } catch (err: any) {
@@ -327,6 +378,60 @@ export class AskingResolver {
     }
   }
 
+  public async generateThreadResponseBreakdown(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { responseId } = args;
+    const askingService = ctx.askingService;
+    const breakdownDetail = await askingService.generateThreadResponseBreakdown(
+      responseId,
+      { language: WrenAILanguage[project.language] || WrenAILanguage.EN },
+    );
+    return breakdownDetail;
+  }
+
+  public async generateThreadResponseAnswer(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { responseId } = args;
+    const askingService = ctx.askingService;
+    return askingService.generateThreadResponseAnswer(responseId, {
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
+  }
+
+  public async generateThreadResponseChart(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { responseId } = args;
+    const askingService = ctx.askingService;
+    return askingService.generateThreadResponseChart(responseId, {
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
+  }
+
+  public async adjustThreadResponseChart(
+    _root: any,
+    args: { responseId: number; data: ChartAdjustmentOption },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const project = await ctx.projectService.getCurrentProject();
+    const { responseId, data } = args;
+    const askingService = ctx.askingService;
+    return askingService.adjustThreadResponseChart(responseId, data, {
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
+  }
+
   public async getResponse(
     _root: any,
     args: { responseId: number },
@@ -336,13 +441,7 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
 
-    // we added summary in version 0.3.0.
-    // if summary is not available, we use description and question instead.
-    return {
-      ...response,
-      summary:
-        response.summary || response.detail?.description || response.question,
-    };
+    return response;
   }
 
   public async previewData(
@@ -350,36 +449,85 @@ export class AskingResolver {
     args: { where: { responseId: number; stepIndex?: number; limit?: number } },
     ctx: IContext,
   ): Promise<any> {
+    const { responseId, limit } = args.where;
+    const askingService = ctx.askingService;
+    const data = await askingService.previewData(responseId, limit);
+    return data;
+  }
+
+  public async previewBreakdownData(
+    _root: any,
+    args: { where: { responseId: number; stepIndex?: number; limit?: number } },
+    ctx: IContext,
+  ): Promise<any> {
     const { responseId, stepIndex, limit } = args.where;
     const askingService = ctx.askingService;
-    const data = await askingService.previewData(responseId, stepIndex, limit);
+    const data = await askingService.previewBreakdownData(
+      responseId,
+      stepIndex,
+      limit,
+    );
     return data;
+  }
+
+  public async createInstantRecommendedQuestions(
+    _root: any,
+    args: { data: { previousQuestions?: string[] } },
+    ctx: IContext,
+  ): Promise<Task> {
+    const { data } = args;
+    const askingService = ctx.askingService;
+    return askingService.createInstantRecommendedQuestions(data);
+  }
+
+  public async getInstantRecommendedQuestions(
+    _root: any,
+    args: { taskId: string },
+    ctx: IContext,
+  ): Promise<RecommendedQuestionsTask> {
+    const { taskId } = args;
+    const askingService = ctx.askingService;
+    const result = await askingService.getInstantRecommendedQuestions(taskId);
+    return {
+      questions: result.response?.questions || [],
+      status: result.status,
+      error: result.error,
+    };
   }
 
   /**
    * Nested resolvers
    */
   public getThreadResponseNestedResolver = () => ({
-    detail: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
-      if (!parent.detail) {
-        return null;
-      }
-      // extend view & sql to detail
+    view: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
+      const viewId = parent.viewId;
+      if (!viewId) return null;
+      const view = await ctx.viewRepository.findOneBy({ id: viewId });
+      const displayName = view.properties
+        ? JSON.parse(view.properties)?.displayName
+        : view.name;
+      return { ...view, displayName };
+    },
+    answerDetail: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
+      const content = parent?.answerDetail?.content
+        ? parent?.answerDetail?.content
+            // replace the \\n to \n
+            .replace(/\\n/g, '\n')
+            // replace the \\\" to \",
+            .replace(/\\"/g, '"')
+        : parent?.answerDetail?.content;
 
-      // handle sql
-      const sql = format(constructCteSql(parent.detail.steps));
-
-      // handle view
-      let view = null;
-      const viewId = parent?.detail?.viewId;
-      if (viewId) {
-        view = await ctx.viewRepository.findOneBy({ id: viewId });
-        const displayName = view.properties
-          ? JSON.parse(view.properties)?.displayName
-          : view.name;
-        view = { ...view, displayName };
+      return {
+        ...parent.answerDetail,
+        content,
+      };
+    },
+    sql: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
+      if (parent.breakdownDetail && parent.breakdownDetail.steps) {
+        // construct sql from breakdownDetail
+        return format(constructCteSql(parent.breakdownDetail.steps));
       }
-      return { ...parent.detail, sql, view };
+      return format(parent.sql);
     },
   });
 

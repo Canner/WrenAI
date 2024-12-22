@@ -42,12 +42,12 @@ const defaultTestConfig = {
     database: 'sqlserver-database',
   },
   trino: {
-    host: "trino-host",
-    port: "8081",
-    catalog: "trino-catalog",
-    schema: "trino-schema",
-    username: "trino-username",
-    password: "trino-password"
+    host: 'trino-host',
+    port: '8081',
+    catalog: 'trino-catalog',
+    schema: 'trino-schema',
+    username: 'trino-username',
+    password: 'trino-password',
   },
   clickhouse: {
     host: 'clickhouse-host',
@@ -56,6 +56,13 @@ const defaultTestConfig = {
     password: 'clickhouse-password',
     database: 'clickhouse-database',
     ssl: false,
+  },
+  snowflake: {
+    username: 'snowflake-username',
+    password: 'snowflake-password',
+    account: 'snowflake-account',
+    database: 'snowflake-database',
+    schema: 'snowflake-schema',
   },
 };
 

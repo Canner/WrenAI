@@ -11,19 +11,23 @@ test.describe('Test HR sample dataset', () => {
     await helper.resetDatabase();
   });
 
-  test('Select HR dataset and check suggested questions', async ({ page }) => {
+  test('Starting HR dataset successfully', async ({ page }) => {
     await page.goto('/setup/connection');
     await page.getByRole('button', { name: 'Human Resource' }).click();
-    await expect(page).toHaveURL('/home', { timeout: 60000 });
+    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  });
+
+  test('Check suggested questions', async ({ page }) => {
+    await page.goto('/home');
     for (const suggestedQuestion of suggestedQuestions) {
       await expect(page.getByText(suggestedQuestion.question)).toBeVisible();
     }
   });
 
-  test('Ask first suggested question', async ({ page, baseURL }) => {
+  test('Use suggestion question', async ({ page, baseURL }) => {
+    // select first suggested question
     await homeHelper.askSuggestionQuestionTest({
       page,
-      baseURL,
       suggestedQuestion: suggestedQuestions[1].question,
     });
   });

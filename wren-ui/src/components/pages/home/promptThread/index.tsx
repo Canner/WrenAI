@@ -1,18 +1,39 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef } from 'react';
-import { Alert, Divider } from 'antd';
+import { Divider } from 'antd';
 import styled from 'styled-components';
 import AnswerResult from './AnswerResult';
-import { makeIterable } from '@/utils/iteration';
+import { makeIterable, IterableComponent } from '@/utils/iteration';
+import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import {
-  AskingTaskStatus,
+  AdjustThreadResponseChartInput,
   DetailedThread,
+  RecommendedQuestionsTask,
+  ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
-import { getIsFinished } from '@/hooks/useAskPrompt';
+import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
+
+export interface RecommendedQuestionsProps {
+  data: RecommendedQuestionsTask;
+  show: boolean;
+  onSelect: ({ question, sql }: SelectQuestionProps) => void;
+}
 
 interface Props {
-  data: DetailedThread;
+  data: {
+    thread: DetailedThread;
+    recommendedQuestions: RecommendedQuestionsTask;
+    showRecommendedQuestions: boolean;
+  };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
+  onSelect: ({ question, sql }: SelectQuestionProps) => void;
+  onRegenerateTextBasedAnswer: (responseId: number) => void;
+  onGenerateBreakdownAnswer: (responseId: number) => void;
+  onGenerateChartAnswer: (responseId: number) => Promise<void>;
+  onAdjustChartAnswer: (
+    responseId: number,
+    data: AdjustThreadResponseChartInput,
+  ) => Promise<void>;
 }
 
 const StyledPromptThread = styled.div`
@@ -39,49 +60,52 @@ const StyledPromptThread = styled.div`
   }
 `;
 
-const AnswerResultTemplate = ({
-  id,
+const AnswerResultTemplate: React.FC<
+  IterableComponent<ThreadResponse> &
+    Pick<
+      Props,
+      | 'onOpenSaveAsViewModal'
+      | 'onRegenerateTextBasedAnswer'
+      | 'onGenerateBreakdownAnswer'
+      | 'onGenerateChartAnswer'
+      | 'onAdjustChartAnswer'
+    > & {
+      motion: boolean;
+      onInitPreviewDone: () => void;
+      recommendedQuestionsProps: RecommendedQuestionsProps;
+    }
+> = ({
   data,
   index,
-  error,
-  status,
-  detail,
-  summary,
-  question,
   motion,
-  // callbacks
+  recommendedQuestionsProps,
   onOpenSaveAsViewModal,
   onInitPreviewDone,
+  onGenerateBreakdownAnswer,
+  onRegenerateTextBasedAnswer,
+  onGenerateChartAnswer,
+  onAdjustChartAnswer,
+  ...threadResponse
 }) => {
+  const { id } = threadResponse;
   const lastResponseId = data[data.length - 1].id;
   const isLastThreadResponse = id === lastResponseId;
 
   return (
     <div key={`${id}-${index}`}>
       {index > 0 && <Divider />}
-      {error ? (
-        <Alert
-          message={error.shortMessage}
-          description={error.message}
-          type="error"
-          showIcon
-        />
-      ) : (
-        <AnswerResult
-          motion={motion}
-          answerResultSteps={detail?.steps}
-          description={detail?.description}
-          loading={status !== AskingTaskStatus.FINISHED}
-          question={question}
-          summary={summary}
-          view={detail?.view}
-          fullSql={detail?.sql}
-          threadResponseId={id}
-          onOpenSaveAsViewModal={onOpenSaveAsViewModal}
-          onInitPreviewDone={onInitPreviewDone}
-          isLastThreadResponse={isLastThreadResponse}
-        />
-      )}
+      <AnswerResult
+        motion={motion}
+        isLastThreadResponse={isLastThreadResponse}
+        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
+        onInitPreviewDone={onInitPreviewDone}
+        threadResponse={threadResponse}
+        recommendedQuestionsProps={recommendedQuestionsProps}
+        onGenerateBreakdownAnswer={onGenerateBreakdownAnswer}
+        onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
+        onGenerateChartAnswer={onGenerateChartAnswer}
+        onAdjustChartAnswer={onAdjustChartAnswer}
+      />
     </div>
   );
 };
@@ -92,26 +116,29 @@ export default function PromptThread(props: Props) {
   const router = useRouter();
   const divRef = useRef<HTMLDivElement>(null);
   const motionResponsesRef = useRef<Record<number, boolean>>({});
-  const { data, onOpenSaveAsViewModal } = props;
+  const { data, onSelect, ...restProps } = props;
 
   const responses = useMemo(
     () =>
-      (data?.responses || []).map((response) => ({
+      (data.thread?.responses || []).map((response) => ({
         ...response,
         motion: motionResponsesRef.current[response.id],
       })),
-    [data?.responses],
+    [data.thread?.responses],
   );
 
   const triggerScrollToBottom = (behavior?: ScrollBehavior) => {
-    if ((data?.responses || []).length <= 1) return;
+    if ((data.thread?.responses || []).length <= 1) return;
     const contentLayout = divRef.current?.parentElement;
-    const lastChild = divRef.current?.lastElementChild as HTMLElement;
-    const lastChildElement = lastChild?.lastElementChild as HTMLElement;
+    const allElements = (divRef.current?.querySelectorAll(
+      '.adm-answer-result',
+    ) || []) as HTMLElement[];
+    const lastAnswerResult = allElements[allElements.length - 1];
+
     const dividerSpace = 48;
-    if (contentLayout && lastChildElement) {
+    if (contentLayout && lastAnswerResult) {
       contentLayout.scrollTo({
-        top: lastChildElement.offsetTop - dividerSpace,
+        top: lastAnswerResult.offsetTop - dividerSpace,
         behavior,
       });
     }
@@ -124,16 +151,24 @@ export default function PromptThread(props: Props) {
   }, [router.query]);
 
   useEffect(() => {
-    motionResponsesRef.current = (data?.responses || []).reduce(
+    motionResponsesRef.current = (data.thread?.responses || []).reduce(
       (result, item) => {
-        result[item.id] = !getIsFinished(item?.status);
+        result[item.id] = !getAnswerIsFinished(item?.answerDetail?.status);
         return result;
       },
       {},
     );
-    const lastResponseMotion = Object.values(motionResponsesRef.current).pop();
-    triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
-  }, [data?.responses]);
+
+    if (
+      data.thread?.responses?.length >
+      Object.keys(motionResponsesRef.current).length
+    ) {
+      const lastResponseMotion = Object.values(
+        motionResponsesRef.current,
+      ).pop();
+      triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
+    }
+  }, [data.thread?.responses]);
 
   const onInitPreviewDone = () => {
     triggerScrollToBottom();
@@ -142,9 +177,14 @@ export default function PromptThread(props: Props) {
   return (
     <StyledPromptThread className="mt-12" ref={divRef}>
       <AnswerResultIterator
+        {...restProps}
         data={responses}
-        onOpenSaveAsViewModal={onOpenSaveAsViewModal}
         onInitPreviewDone={onInitPreviewDone}
+        recommendedQuestionsProps={{
+          data: data.recommendedQuestions,
+          show: data.showRecommendedQuestions,
+          onSelect,
+        }}
       />
     </StyledPromptThread>
   );

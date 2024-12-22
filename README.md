@@ -36,7 +36,7 @@
 
 ## 🕶 Try it yourself!
 
-https://github.com/user-attachments/assets/737bbf1f-f9f0-483b-afb3-2c622c9b91ba
+https://github.com/user-attachments/assets/e4e78006-0088-4094-b58f-8868689bf787
 
 👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
@@ -57,7 +57,15 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-lang.png" style="max-width: 700px"/>
 </p>
 
-### 2. Semantic Indexing with a Well-Crafted UI/UX
+### 2. AI-powered Data Exploration Features
+
+> Beyond just retrieving data from your databases, Wren AI now answers exploratory questions like “What data do I have?” or “What are the columns in my customer tables?” Additionally, our AI dynamically generates recommended questions and intelligent follow-up queries tailored to your context, making data exploration smarter, faster, and more intuitive. Empower your team to unlock deeper insights effortlessly with AI.
+
+<p align="center">
+  <img src="./misc/AI-generated-understanding_recommend_questions.png" style="max-width: 700px"/>
+</p>
+
+### 3. Semantic Indexing with a Well-Crafted UI/UX
 
 > Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture/?utm_source=github&utm_medium=content&utm_campaign=readme) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
@@ -65,7 +73,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-modeling.png" style="max-width: 700px"/>
 </p>
 
-### 3. Generate SQL Queries with Context
+### 4. Generate SQL Queries with Context
 
 > With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/oss/engine/concept/what_is_mdl/?utm_source=github&utm_medium=content&utm_campaign=readme), reducing duplicate coding and simplifying data joins.
 
@@ -73,7 +81,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-context.png" style="max-width: 700px"/>
 </p>
 
-### 4. Get Insights without Writing Code
+### 5. Get Insights without Writing Code
 
 > When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates the most relevant question for the user. You can also ask follow-up questions to get deeper insights.
 
@@ -81,7 +89,15 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-insight.png" style="max-width: 700px"/>
 </p>
 
-### 5. Easily Export and Visualize Your Data
+### 6. AI-Powered Insights & Visuals
+
+> AI-generated summaries that deliver key insights alongside SQL queries, making complex data easier to understand. Instantly transform results into AI-generated charts, turning raw data into clear, actionable visuals – empowering faster, smarter decisions.
+
+<p align="center">
+  <img src="./misc/wren-visual.png" style="max-width: 700px"/>
+</p>
+
+### 7. Easily Export and Visualize Your Data
 
 > Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as [Excel](https://docs.getwren.ai/oss/guide/integrations/excel-add-in/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Google Sheets](https://docs.getwren.ai/oss/guide/integrations/google-add-on/?utm_source=github&utm_medium=content&utm_campaign=readme). This way, your insights remain accessible, allowing for further analysis using the tools you know best.
 
@@ -97,9 +113,9 @@ We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
 
 > Wren AI makes it easy to onboard your data. Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
 
-### 2. Personalized answers without exposing data to LLM
+### 2. Secure SQL Generation
 
-> Your sensitive information remains protected, with no risk of being trained to public LLMs, giving you secure, personalized insights while maintaining full control of your data.
+> We use RAG architecture to leverage your schema and context, generating SQL queries without requiring you to expose or upload your data to LLM models.
 
 ### 3. Open-source End-to-end Solution
 

@@ -8,7 +8,7 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import async_timer, trace_metadata
-from src.web.v1.services import SSEEvent
+from src.web.v1.services import Configuration, SSEEvent
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
@@ -17,20 +17,6 @@ logger = logging.getLogger("wren-ai-service")
 class AskHistory(BaseModel):
     sql: str
     steps: List[SQLBreakdown]
-
-
-class AskConfigurations(BaseModel):
-    class FiscalYear(BaseModel):
-        start: str
-        end: str
-
-    class Timezone(BaseModel):
-        name: str
-        utc_offset: str
-
-    fiscal_year: Optional[FiscalYear] = None
-    language: Optional[str] = "English"
-    timezone: Optional[Timezone] = Timezone(name="Asia/Taipei", utc_offset="+8:00")
 
 
 # POST /v1/asks
@@ -45,7 +31,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
     history: Optional[AskHistory] = None
-    configurations: Optional[AskConfigurations] = AskConfigurations()
+    configurations: Optional[Configuration] = Configuration()
 
     @property
     def query_id(self) -> str:
@@ -164,6 +150,7 @@ class AskService:
                 intent_classification_result = (
                     await self._pipelines["intent_classification"].run(
                         query=ask_request.query,
+                        history=ask_request.history,
                         id=ask_request.project_id,
                     )
                 ).get("post_process", {})
@@ -179,6 +166,7 @@ class AskService:
                     asyncio.create_task(
                         self._pipelines["data_assistance"].run(
                             query=ask_request.query,
+                            history=ask_request.history,
                             db_schemas=intent_classification_result.get("db_schemas"),
                             language=ask_request.configurations.language,
                             query_id=ask_request.query_id,
@@ -198,6 +186,7 @@ class AskService:
 
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=ask_request.query,
+                    history=ask_request.history,
                     id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
@@ -255,7 +244,7 @@ class AskService:
                             contexts=documents,
                             history=ask_request.history,
                             project_id=ask_request.project_id,
-                            configurations=ask_request.configurations,
+                            configuration=ask_request.configurations,
                         )
                     else:
                         text_to_sql_generation_results = await self._pipelines[
@@ -265,7 +254,7 @@ class AskService:
                             contexts=documents,
                             exclude=historical_question_result,
                             project_id=ask_request.project_id,
-                            configurations=ask_request.configurations,
+                            configuration=ask_request.configurations,
                         )
 
                     if sql_valid_results := text_to_sql_generation_results[
@@ -285,6 +274,9 @@ class AskService:
                             "invalid_generation_results"
                         ]
                     ):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="correcting",
+                        )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(

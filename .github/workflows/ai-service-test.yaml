@@ -47,17 +47,12 @@ jobs:
         uses: extractions/setup-just@v2
         with:
           just-version: "1.36.0"
+      - name: Initialize the config
+        run: |
+          just init --non-dev
       - name: Prepare testing environment and Run tests
         run: |
           just test
         env:
-          ENV: dev
-          LLM_PROVIDER: openai_llm
-          EMBEDDER_PROVIDER: openai_embedder
-          DOCUMENT_STORE_PROVIDER: qdrant
           LLM_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           EMBEDDER_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GENERATION_MODEL: gpt-4o-mini
-          WREN_ENGINE_ENDPOINT: http://localhost:8080
-          WREN_UI_ENDPOINT: http://localhost:3000
-          QDRANT_HOST: localhost

@@ -4,7 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
+from hamilton.driver import Driver
 from haystack import Pipeline
 
 from src.core.engine import Engine
@@ -12,7 +13,7 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvid
 
 
 class BasicPipeline(metaclass=ABCMeta):
-    def __init__(self, pipe: Pipeline | AsyncDriver):
+    def __init__(self, pipe: Pipeline | AsyncDriver | Driver):
         self._pipe = pipe
 
     @abstractmethod

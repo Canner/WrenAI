@@ -1,18 +1,16 @@
-import json
 import logging
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import orjson
 from hamilton import base
-from hamilton.experimental.h_async import AsyncDriver
+from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
-from src.core.pipeline import BasicPipeline, async_validate
+from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 
 logger = logging.getLogger("wren-ai-service")
@@ -29,8 +27,14 @@ def prompt(
     max_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    """
+    If previous_questions is provided, the MDL is omitted to allow the LLM to focus on
+    generating recommendations based on the question history. This helps provide more
+    contextually relevant questions that build on previous questions.
+    """
+
     return prompt_builder.run(
-        models=mdl["models"],
+        models=[] if previous_questions else mdl.get("models", []),
         previous_questions=previous_questions,
         language=language,
         current_date=current_date,
@@ -41,7 +45,7 @@ def prompt(
 
 @observe(capture_input=False, as_type="generation")
 async def generate(prompt: dict, generator: Any) -> dict:
-    return await generator.run(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)
@@ -85,7 +89,11 @@ QUESTION_RECOMMENDATION_MODEL_KWARGS = {
 system_prompt = """
 You are an expert in data analysis and SQL query generation. Given a data model specification, optionally a user's question, and a list of categories, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
 
-Output all questions in the following JSON structure:
+### JSON Output Structure
+
+Output all questions in the following JSON format:
+
+```json
 {
     "questions": [
         {
@@ -95,52 +103,116 @@ Output all questions in the following JSON structure:
         ...
     ]
 }
+```
 
-When generating questions, consider the following guidelines:
+### Guidelines for Generating Questions
 
-1. If categories are provided:
-   - Generate questions specifically for each provided category
-   - Ensure questions align well with the category's focus area
-   - Distribute questions evenly across all provided categories
-   - Make sure each question clearly relates to its assigned category
+1. **If Categories Are Provided:**
 
-2. For each category, incorporate diverse data analysis techniques such as:
-   a. Drill-down: Ask questions that delve into more detailed levels of data
-   b. Roll-up: Generate questions that aggregate data to higher levels
-   c. Slice and dice: Create questions that analyze data from different perspectives
-   d. Trend analysis: Formulate questions about patterns or changes over time
-   e. Comparative analysis: Develop questions that compare different segments
+   - **Randomly select categories** from the list and ensure no single category dominates the output.
+   - Ensure a balanced distribution of questions across all provided categories.
+   - For each generated question, **randomize the category selection** to avoid a fixed order.
 
-3. If a user question is provided:
-   - Generate questions that are directly related to or expand upon the user's question
-   - Create questions that explore specific aspects or implications of the user's query
-   - Use the above techniques to generate deeper insights related to the user's question
-   - Consider adding time-based filters or durations to the questions
+2. **Incorporate Diverse Analysis Techniques:**
 
-4. If no user question is provided:
-   - Generate questions that cover various specific aspects of the data model
-   - Focus on questions that highlight concrete relationships between different models
-   - Create questions that could provide specific, actionable insights
+   - Use a mix of the following analysis techniques for each category:
+     - **Drill-down:** Delve into detailed levels of data.
+     - **Roll-up:** Aggregate data to higher levels.
+     - **Slice and Dice:** Analyze data from different perspectives.
+     - **Trend Analysis:** Identify patterns or changes over time.
+     - **Comparative Analysis:** Compare segments, groups, or time periods.
 
-5. General guidelines for all questions:
-   - Ensure all questions can be answered using the provided data model
-   - Provide a mix of simple and complex questions
-   - Avoid open-ended questions - each should have a definite answer
-   - Include time-based analysis where relevant
-   - Focus on concrete data points rather than subjective interpretations
-   - Combine multiple analysis techniques when appropriate for deeper insights
+3. **If a User Question is Provided:**
 
-Remember to:
-- Strictly use only the provided categories when they are given
-- Generate the exact number of questions requested per category
-- Ensure questions are specific and answerable from the data model
-- Balance complexity across questions while maintaining relevance to each category
-- Use time-based perspectives when they add value to the analysis
+   - Generate questions that are closely related to the user’s previous question, ensuring that the new questions build upon or provide deeper insights into the original query.
+   - Use **random category selection** to introduce diverse perspectives while maintaining a focus on the context of the previous question.
+   - Apply the analysis techniques above to enhance the relevance and depth of the generated questions.
+
+4. **If No User Question is Provided:**
+
+   - Ensure questions cover different aspects of the data model.
+   - Randomly distribute questions across all categories to ensure variety.
+
+5. **General Guidelines for All Questions:**
+   - Ensure questions can be answered using the data model.
+   - Mix simple and complex questions.
+   - Avoid open-ended questions – each should have a definite answer.
+   - Incorporate time-based analysis where relevant.
+   - Combine multiple analysis techniques when appropriate for deeper insights.
+
+### Categories of Questions
+
+1. **Descriptive Questions**  
+   Summarize historical data.
+
+   - Example: _"What was the total sales volume for each product last quarter?"_
+
+2. **Segmentation Questions**  
+   Identify meaningful data segments.
+
+   - Example: _"Which customer segments contributed most to revenue growth?"_
+
+3. **Comparative Questions**  
+   Compare data across segments or periods.
+
+   - Example: _"How did Product A perform compared to Product B last year?"_
+
+4. **Data Quality/Accuracy Questions**  
+   Assess data reliability and completeness.
+
+   - Example: _"Are there inconsistencies in the sales records for Q1?"_
+
+---
+
+### Example JSON Output
+
+```json
+{
+  "questions": [
+    {
+      "question": "What was the total revenue generated by each region in the last year?",
+      "category": "Descriptive Questions"
+    },
+    {
+      "question": "How do customer preferences differ between age groups?",
+      "category": "Segmentation Questions"
+    },
+    {
+      "question": "How does the conversion rate vary across different lead sources?",
+      "category": "Comparative Questions"
+    },
+    {
+      "question": "What percentage of contacts have incomplete or missing key properties (e.g., email, lifecycle stage, or deal association)",
+      "category": "Data Quality/Accuracy Questions"
+    }
+  ]
+}
+```
+
+---
+
+### Additional Instructions for Randomization
+
+- **Randomize Category Order:**  
+  Ensure that categories are selected in a random order for each question generation session.
+
+- **Avoid Repetition:**  
+  Ensure the same category doesn’t dominate the list by limiting the number of questions from any single category unless specified otherwise.
+
+- **Diversity of Analysis:**  
+  Combine different analysis techniques (drill-down, roll-up, etc.) within the selected categories for richer insights.
+
+- **Shuffle Categories:**  
+  If possible, shuffle the list of categories internally before generating questions to ensure varied selection.
+
+
 """
 
 user_prompt_template = """
+{% if models %}
 Data Model Specification:
 {{models}}
+{% endif %}
 
 {% if previous_questions %}
 Previous Questions: {{previous_questions}}
@@ -151,9 +223,8 @@ Categories: {{categories}}
 {% endif %}
 
 Current Date: {{current_date}}
-Language: {{language}}
 
-Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model{% if user_question %} and the user's question{% endif %}.
+Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model. Both the questions and category names should be translated into {{language}}{% if user_question %} and be related to the user's question{% endif %}. The output format should maintain the structure but with localized text.
 """
 
 
@@ -177,45 +248,14 @@ class QuestionRecommendation(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    def visualize(
-        self,
-        mdl: dict,
-        previous_questions: list[str] = [],
-        categories: list[str] = [],
-        language: str = "English",
-        current_date: str = datetime.now(),
-        max_questions: int = 5,
-        max_categories: int = 3,
-        **_,
-    ) -> None:
-        destination = "outputs/pipelines/generation"
-        if not Path(destination).exists():
-            Path(destination).mkdir(parents=True, exist_ok=True)
-
-        self._pipe.visualize_execution(
-            [self._final],
-            output_file_path=f"{destination}/question_recommendation.dot",
-            inputs={
-                "mdl": mdl,
-                "previous_questions": previous_questions,
-                "categories": categories,
-                "language": language,
-                "current_date": current_date,
-                "max_questions": max_questions,
-                "max_categories": max_categories,
-            },
-            show_legend=True,
-            orient="LR",
-        )
-
     @observe(name="Question Recommendation")
     async def run(
         self,
         mdl: dict,
         previous_questions: list[str] = [],
         categories: list[str] = [],
-        language: str = "English",
-        current_date: str = datetime.now(),
+        language: str = "en",
+        current_date: str = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
         max_questions: int = 5,
         max_categories: int = 3,
         **_,
@@ -237,32 +277,16 @@ class QuestionRecommendation(BasicPipeline):
 
 
 if __name__ == "__main__":
-    from langfuse.decorators import langfuse_context
+    from src.pipelines.common import dry_run_pipeline
 
-    from src.core.engine import EngineConfig
-    from src.core.pipeline import async_validate
-    from src.providers import init_providers
-    from src.utils import init_langfuse, load_env_vars
-
-    load_env_vars()
-    init_langfuse()
-
-    llm_provider, _, _, _ = init_providers(EngineConfig())
-    pipeline = QuestionRecommendation(llm_provider=llm_provider)
-
-    with open("sample/ecommerce_duckdb_mdl.json", "r") as file:
-        mdl = json.load(file)
-
-    input = {
-        "mdl": mdl,
-        "previous_questions": [],
-        "categories": ["Customer Insights", "Product Performance"],
-        "language": "English",
-        "max_questions": 5,
-        "max_categories": 2,
-    }
-
-    # pipeline.visualize(**input)
-    async_validate(lambda: pipeline.run(**input))
-
-    langfuse_context.flush()
+    dry_run_pipeline(
+        QuestionRecommendation,
+        "question_recommendation",
+        mdl={},
+        previous_questions=[],
+        categories=[],
+        language="en",
+        current_date=datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
+        max_questions=5,
+        max_categories=3,
+    )

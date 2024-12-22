@@ -2,12 +2,9 @@ import { test, expect } from '@playwright/test';
 import * as helper from '../helper';
 import * as homeHelper from '../commonTests/home';
 import * as modelingHelper from '../commonTests/modeling';
+import { sampleDatasets } from '@/apollo/server/data';
 
-const suggestedQuestions = [
-  'What are the top 3 value for orders placed by customers in each city?',
-  'What is the average score of reviews submitted for orders placed by customers in each city?',
-  'What is the total value of payments made by customers from each state?',
-];
+const suggestedQuestions = sampleDatasets.ecommerce.questions;
 
 test.describe('Test E-commerce sample dataset', () => {
   test.beforeAll(async () => {
@@ -17,10 +14,13 @@ test.describe('Test E-commerce sample dataset', () => {
   test('Starting E-commerce dataset successfully', async ({ page }) => {
     await page.goto('/setup/connection');
     await page.getByRole('button', { name: 'E-commerce' }).click();
-    await expect(page).toHaveURL('/home', { timeout: 60000 });
+    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  });
 
-    for (const question of suggestedQuestions) {
-      await expect(page.getByText(question)).toBeVisible();
+  test('Check suggested questions', async ({ page }) => {
+    await page.goto('/home');
+    for (const suggestedQuestion of suggestedQuestions) {
+      await expect(page.getByText(suggestedQuestion.question)).toBeVisible();
     }
   });
 
@@ -29,28 +29,35 @@ test.describe('Test E-commerce sample dataset', () => {
     modelingHelper.checkDeploySynced,
   );
 
-  test('Use suggestion question', async ({ page, baseURL }) => {
+  test('Use suggestion question', async ({ page }) => {
     // select first suggested question
     await homeHelper.askSuggestionQuestionTest({
       page,
-      baseURL,
-      suggestedQuestion: suggestedQuestions[1],
+      suggestedQuestion: suggestedQuestions[1].question,
     });
   });
 
-  test('Follow up question', async ({ page, baseURL }) => {
+  test('Follow up question', async ({ page }) => {
     await homeHelper.followUpQuestionTest({
       page,
-      baseURL,
-      question:
-        'What are the total sales values for each quarter of each year?',
+      question: suggestedQuestions[2].question,
     });
   });
 
   test('Model CRUD successfully', async ({ page }) => {
     await modelingHelper.executeModelCRUD(page, {
       modelDisplayName: 'customers',
-      primaryKeyColumn: 'Id',
+      modelReferenceName: 'olist_customers_dataset',
+      primaryKeyColumn: 'customer_id',
+    });
+  });
+
+  test('Update model metadata successfully', async ({ page }) => {
+    await modelingHelper.updateModelMetadata(page, {
+      modelDisplayName: 'olist_customers_dataset',
+      modelDescription: '',
+      newModelDisplayName: 'customers',
+      newModelDescription: '',
     });
   });
 
@@ -61,9 +68,9 @@ test.describe('Test E-commerce sample dataset', () => {
     // Following the previous test, we assume the customers model is created, and it's have not any relationships
     await modelingHelper.addRelationship(page, {
       fromFieldModelDisplayName: 'customers',
-      fromFieldColumnDisplayName: 'Id',
+      fromFieldColumnDisplayName: 'customer_id',
       toFieldModelDisplayName: 'orders',
-      toFieldColumnDisplayName: 'CustomerId',
+      toFieldColumnDisplayName: 'customer_id',
       relationshipType: 'One-to-many',
     });
   });
@@ -76,19 +83,10 @@ test.describe('Test E-commerce sample dataset', () => {
   test('Relationship CRUD successfully', async ({ page }) => {
     await modelingHelper.executeRelationshipCRUD(page, {
       fromFieldModelDisplayName: 'customers',
-      fromFieldColumnDisplayName: 'Id',
+      fromFieldColumnDisplayName: 'customer_id',
       toFieldModelDisplayName: 'orders',
-      toFieldColumnDisplayName: 'CustomerId',
+      toFieldColumnDisplayName: 'customer_id',
       relationshipType: 'One-to-many',
-    });
-  });
-
-  test('Update model metadata successfully', async ({ page }) => {
-    await modelingHelper.updateModelMetadata(page, {
-      modelDisplayName: 'orders',
-      modelDescription: 'A model representing the orders data.',
-      newModelDisplayName: 'Orders',
-      newModelDescription: '',
     });
   });
 
@@ -101,13 +99,11 @@ test.describe('Test E-commerce sample dataset', () => {
   });
 
   test('Save as view successfully', async ({ page, baseURL }) => {
-    await page.goto('/modeling');
-    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
-
     await homeHelper.saveAsView(
       { page, baseURL },
       {
-        question: suggestedQuestions[1],
+        question:
+          'What are the total sales values for each quarter of each year?',
         viewName: 'avg review score by city',
       },
     );
@@ -130,16 +126,16 @@ test.describe('Test E-commerce sample dataset', () => {
     await page.goto('/modeling');
     await expect(page).toHaveURL('/modeling', { timeout: 60000 });
 
-    const modelDisplayName = 'Orders';
+    const modelDisplayName = 'orders';
     const calculatedFieldName = 'Sum of review scores';
     const expression = 'Sum';
-    const toFieldModelDisplayName = 'reviews';
-    const toFieldColumnDisplayName = 'Score';
+    const toFieldModelDisplayName = 'order reviews';
+    const toFieldColumnDisplayName = 'review_score';
 
     const newCfName = 'total product items';
     const newExpression = 'COUNT';
-    const newToFieldModelDisplayName = 'order_items';
-    const newToFieldColumnDisplayName = 'OrderId';
+    const newToFieldModelDisplayName = 'order items';
+    const newToFieldColumnDisplayName = 'order_id';
 
     await modelingHelper.addCalculatedField(page, {
       calculatedFieldName,

@@ -2,6 +2,7 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi.responses import StreamingResponse
 
 from src.globals import (
     ServiceContainer,
@@ -30,6 +31,7 @@ Endpoints:
      {
        "query": "user's question",
        "sql": "SELECT * FROM table_name WHERE condition",      # Actual SQL statement
+       "sql_data": <dictionary>,                                   # Preprocessed SQL data
        "thread_id": "unique-thread-id",                        # Optional thread identifier for tracking
        "user_id": "user-id"                                   # Optional user identifier for tracking
      }
@@ -38,30 +40,26 @@ Endpoints:
        "query_id": "unique-uuid"                              # Unique identifier for the initiated SQL operation
      }
 
-2. GET /sql-answers/{query_id}/result
-   - Retrieves the status and result of an SQL answer operation
+2. GET /sql-answers/{query_id}
+   - Retrieves the status and result of a SQL answer operation
    - Path parameter: query_id (str)
    - Response: SqlAnswerResultResponse
      {
        "query_id": "unique-uuid",                             # Unique identifier of the SQL answer operation
-       "status": "understanding" | "processing" | "finished" | "failed",
-       "response": {                                          # Present only if status is "finished"
-         "answer": "Result of the SQL query execution.",     # The answer from the SQL operation
-         "reasoning": "Explanation of how the answer was derived." # Explanation of the result
-       },
+       "status": "preprocessing" | "succeeded" | "failed",
+       "num_rows_used_in_llm": int | None,
        "error": {                                             # Present only if status is "failed"
          "code": "OTHERS",
          "message": "Error description"
        }
      }
 
-The SQL answer generation is an asynchronous process. The POST endpoint
-initiates the operation and returns immediately with a query ID. The GET endpoint can
-then be used to check the status and retrieve the result when it's ready.
-
-Usage:
-1. Send a POST request to start the SQL answer operation.
-2. Use the returned query ID to poll the GET endpoint until the status is "finished" or "failed".
+3. **GET /sql-answers/{query_id}/streaming**
+   - Retrieves the streaming result of a SQL answer.
+   - **Path Parameter**:
+     - `query_id`: The unique identifier of the query.
+   - **Response**:
+     - Streaming response with the SQL answer.
 
 Note: The actual SQL processing is performed in the background using FastAPI's BackgroundTasks.
 """
@@ -79,7 +77,7 @@ async def sql_answer(
     service_container.sql_answer_service._sql_answer_results[
         query_id
     ] = SqlAnswerResultResponse(
-        status="understanding",
+        status="preprocessing",
     )
 
     background_tasks.add_task(
@@ -90,11 +88,22 @@ async def sql_answer(
     return SqlAnswerResponse(query_id=query_id)
 
 
-@router.get("/sql-answers/{query_id}/result")
+@router.get("/sql-answers/{query_id}")
 async def get_sql_answer_result(
     query_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> SqlAnswerResultResponse:
     return service_container.sql_answer_service.get_sql_answer_result(
         SqlAnswerResultRequest(query_id=query_id)
+    )
+
+
+@router.get("/sql-answers/{query_id}/streaming")
+async def get_sql_answer_streaming_result(
+    query_id: str,
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> StreamingResponse:
+    return StreamingResponse(
+        service_container.sql_answer_service.get_sql_answer_streaming_result(query_id),
+        media_type="text/event-stream",
     )
