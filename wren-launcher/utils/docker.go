@@ -30,6 +30,11 @@ const (
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
 )
 
+var generationModelToModelName = map[string]string{
+	"gpt-4o-mini": "gpt-4o-mini-2024-07-18",
+	"gpt-4o":      "gpt-4o-2024-08-06",
+}
+
 func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool) string {
 	// replace PROJECT_DIR
 	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
@@ -152,7 +157,7 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 
 	// replace the generation model in config.yaml
 	config := string(content)
-	config = strings.ReplaceAll(config, "litellm_llm.gpt-4o-mini", "litellm_llm."+generationModel)
+	config = strings.ReplaceAll(config, "litellm_llm.gpt-4o-mini-2024-07-18", "litellm_llm."+generationModelToModelName[generationModel])
 
 	// write back to config.yaml
 	err = os.WriteFile(configPath, []byte(config), 0644)
