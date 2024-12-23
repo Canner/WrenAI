@@ -233,7 +233,7 @@ func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
 	return envFileContent, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -242,54 +242,66 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		return err
 	}
 
-	userUUID, err := prepareUserUUID(projectDir)
-	if err != nil {
-		return err
-	}
+	if strings.ToLower(llmProvider) == "openai" {
+		userUUID, err := prepareUserUUID(projectDir)
+		if err != nil {
+			return err
+		}
 
-	// download env file
-	envExampleFile := path.Join(projectDir, ".env.example")
-	pterm.Info.Println("Downloading env file to", envExampleFile)
-	err = downloadFile(envExampleFile, DOCKER_COMPOSE_ENV_URL)
-	if err != nil {
-		return err
-	}
+		// download env file
+		envExampleFile := path.Join(projectDir, ".env.example")
+		pterm.Info.Println("Downloading env file to", envExampleFile)
+		err = downloadFile(envExampleFile, DOCKER_COMPOSE_ENV_URL)
+		if err != nil {
+			return err
+		}
 
-	// read the file
-	envExampleFileContent, err := os.ReadFile(envExampleFile)
-	if err != nil {
-		return err
-	}
+		// read the file
+		envExampleFileContent, err := os.ReadFile(envExampleFile)
+		if err != nil {
+			return err
+		}
 
-	// replace the content with regex
-	envFileContent := replaceEnvFileContent(
-		string(envExampleFileContent),
-		projectDir,
-		openaiApiKey,
-		openaiGenerationModel,
-		hostPort,
-		aiPort,
-		userUUID,
-		telemetryEnabled,
-	)
-	newEnvFile := getEnvFilePath(projectDir)
+		// replace the content with regex
+		envFileContent := replaceEnvFileContent(
+			string(envExampleFileContent),
+			projectDir,
+			openaiApiKey,
+			openaiGenerationModel,
+			hostPort,
+			aiPort,
+			userUUID,
+			telemetryEnabled,
+		)
+		newEnvFile := getEnvFilePath(projectDir)
 
-	// merge the env file content with the existing env file
-	envFileContent, err = mergeEnvContent(newEnvFile, envFileContent)
-	if err != nil {
-		return err
-	}
+		// merge the env file content with the existing env file
+		envFileContent, err = mergeEnvContent(newEnvFile, envFileContent)
+		if err != nil {
+			return err
+		}
 
-	// write the file
-	err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
-	if err != nil {
-		return err
-	}
+		// write the file
+		err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
+		if err != nil {
+			return err
+		}
 
-	// remove the old env file
-	err = os.Remove(envExampleFile)
-	if err != nil {
-		return err
+		// remove the old env file
+		err = os.Remove(envExampleFile)
+		if err != nil {
+			return err
+		}
+	} else if strings.ToLower(llmProvider) == "custom" {
+		// if .env file does not exist, return error
+		if _, err := os.Stat(getEnvFilePath(projectDir)); os.IsNotExist(err) {
+			return fmt.Errorf(".env file does not exist, please download the env file from %s to ~/.wrenai, rename it to .env and fill in the required information", DOCKER_COMPOSE_ENV_URL)
+		}
+
+		// if config.yaml file does not exist, return error
+		if _, err := os.Stat(getConfigFilePath(projectDir)); os.IsNotExist(err) {
+			return fmt.Errorf("config.yaml file does not exist, please download the config.yaml file from %s to ~/.wrenai, rename it to config.yaml and fill in the required information", AI_SERVICE_CONFIG_URL)
+		}
 	}
 
 	return nil
@@ -297,6 +309,10 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 
 func getEnvFilePath(projectDir string) string {
 	return path.Join(projectDir, ".env")
+}
+
+func getConfigFilePath(projectDir string) string {
+	return path.Join(projectDir, "config.yaml")
 }
 
 func RunDockerCompose(projectName string, projectDir string, llmProvider string) error {
@@ -346,6 +362,22 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 		return err
 	}
 
+	if strings.ToLower(llmProvider) == "custom" {
+		// Create up options for force recreating only wren-ai-service
+		upOptions := api.UpOptions{
+			Create: api.CreateOptions{
+				Recreate: api.RecreateForce,
+				Services: []string{"wren-ai-service"},
+			},
+		}
+		
+		// Run the up command with specific options for wren-ai-service
+		err = apiService.Up(ctx, projectType, upOptions)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -389,8 +421,38 @@ func findWrenUIContainer() (types.Container, error) {
 	return types.Container{}, fmt.Errorf("WrenUI container not found")
 }
 
+func findAIServiceContainer() (types.Container, error) {
+	containers, err := listProcess()
+	if err != nil {
+		return types.Container{}, err
+	}
+
+	for _, container := range containers {
+		if container.Labels["com.docker.compose.project"] == "wrenai" && container.Labels["com.docker.compose.service"] == "wren-ai-service" {
+			return container, nil
+		}
+	}
+
+	return types.Container{}, fmt.Errorf("WrenAI service container not found")
+}
+
 func IfPortUsedByWrenUI(port int) bool {
 	container, err := findWrenUIContainer()
+	if err != nil {
+		return false
+	}
+
+	for _, containerPort := range container.Ports {
+		if containerPort.PublicPort == uint16(port) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func IfPortUsedByAIService(port int) bool {
+	container, err := findAIServiceContainer()
 	if err != nil {
 		return false
 	}
@@ -418,9 +480,8 @@ func CheckUIServiceStarted(url string) error {
 	return nil
 }
 
-func CheckAIServiceStarted(port int) error {
+func CheckAIServiceStarted(url string) error {
 	// health check
-	url := fmt.Sprintf("http://localhost:%d/health", port)
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
