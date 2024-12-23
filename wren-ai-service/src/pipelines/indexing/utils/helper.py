@@ -38,7 +38,7 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
     if nested:
         column_properties["nested_columns"] = nested
 
-    if props.get("json_type", "") == "JSON":
+    if props.get("json_type", "") in ["JSON", "JSON_ARRAY"]:
         json_fields = {
             k: v for k, v in column["properties"].items() if re.match(r".*json.*", k)
         }
