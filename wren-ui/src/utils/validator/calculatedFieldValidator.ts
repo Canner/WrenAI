@@ -55,6 +55,7 @@ export const checkNumberFunctionAllowType = makeCheckAllowType(mathFunctions, [
   COLUMN_TYPE.INTEGER,
   COLUMN_TYPE.INT8,
   COLUMN_TYPE.BIGINT,
+  COLUMN_TYPE.INT64,
   COLUMN_TYPE.NUMERIC,
   COLUMN_TYPE.DECIMAL,
   COLUMN_TYPE.FLOAT4,
