@@ -2,7 +2,7 @@ type: llm
 provider: litellm_llm
 timeout: 120
 models:
-- model: gpt-4o-mini
+- model: gpt-4o-mini-2024-07-18
   api_base: https://api.openai.com/v1
   api_key_name: LLM_OPENAI_API_KEY
   kwargs:
@@ -11,7 +11,7 @@ models:
     max_tokens: 4096
     response_format:
       type: json_object
-- model: gpt-4o
+- model: gpt-4o-2024-08-06
   api_base: https://api.openai.com/v1
   api_key_name: LLM_OPENAI_API_KEY
   kwargs:
@@ -56,58 +56,58 @@ pipes:
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: db_schema_retrieval
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: historical_question_retrieval
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: sql_generation
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: sql_correction
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: followup_sql_generation
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: sql_summary
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_answer
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: sql_breakdown
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: sql_expansion
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: sql_explanation
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_regeneration
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: semantics_description
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: relationship_recommendation
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: question_recommendation
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: intent_classification
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: data_assistance
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: preprocess_sql_data
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_executor
     engine: wren_ui
   - name: chart_generation
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: chart_adjustment
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
 ---
 settings:
   column_indexing_batch_size: 50
