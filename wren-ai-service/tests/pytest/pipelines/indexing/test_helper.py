@@ -78,7 +78,10 @@ def test_properties_comment_helper():
 
     test_column = {
         "name": "test_column",
-        "properties": {"displayName": "Test Column", "description": "Test description"},
+        "properties": {
+            "displayName": "Test Column",
+            "description": "Test description",
+        },
     }
 
     assert helper.condition(test_column) is True
