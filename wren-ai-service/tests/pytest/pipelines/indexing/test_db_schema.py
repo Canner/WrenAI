@@ -154,6 +154,7 @@ async def test_column_with_properties():
                         "properties": {
                             "displayName": "iid",
                             "description": "The unique identifier for a user.",
+                            "json_type": "",
                         },
                     }
                 ],
@@ -175,7 +176,7 @@ async def test_column_with_properties():
             "columns": [
                 {
                     "type": "COLUMN",
-                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user."}\n  ',
+                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user.","json_type":""}}\n  ',
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
@@ -209,6 +210,7 @@ async def test_column_with_nested_columns():
                         "properties": {
                             "displayName": "iid",
                             "description": "The unique identifier for a user.",
+                            "json_type": "",
                             "nested.address": {"name": "address", "type": "VARCHAR"},
                             "nested.orders": {"name": "orders", "type": "ARRAY"},
                         },
@@ -232,7 +234,7 @@ async def test_column_with_nested_columns():
             "columns": [
                 {
                     "type": "COLUMN",
-                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user.","nested_columns":{"nested.address":{"name":"address","type":"VARCHAR"},"nested.orders":{"name":"orders","type":"ARRAY"}}}\n  ',
+                    "comment": '-- {"alias":"iid","description":"The unique identifier for a user.","json_type":"","nested_columns":{"nested.address":{"name":"address","type":"VARCHAR"},"nested.orders":{"name":"orders","type":"ARRAY"}}}\n  ',
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
