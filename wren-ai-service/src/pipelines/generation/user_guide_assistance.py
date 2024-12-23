@@ -105,6 +105,8 @@ class UserGuideAssistance(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        is_oss: bool,
+        doc_endpoint: str,
         **kwargs,
     ):
         self._user_queues = {}
@@ -119,8 +121,8 @@ class UserGuideAssistance(BasicPipeline):
             ),
         }
         self._configs = {
-            "is_oss": kwargs.get("is_oss", True),
-            "doc_endpoint": kwargs.get("doc_endpoint", "https://docs.getwren.ai"),
+            "is_oss": is_oss,
+            "doc_endpoint": doc_endpoint,
         }
 
         super().__init__(
