@@ -42,6 +42,8 @@ def ask_service():
             ),
             "user_guide_assistance": generation.UserGuideAssistance(
                 **pipe_components["user_guide_assistance"],
+                is_oss=settings.is_oss,
+                doc_endpoint=settings.doc_endpoint,
             ),
             "retrieval": retrieval.Retrieval(
                 **pipe_components["db_schema_retrieval"],
