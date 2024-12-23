@@ -31,7 +31,6 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
     column_properties = {
         "alias": props.get("displayName", ""),
         "description": props.get("description", ""),
-        "json_type": props.get("json_type", ""),
     }
 
     # Add any nested columns if they exist
@@ -39,13 +38,13 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
     if nested:
         column_properties["nested_columns"] = nested
 
-    json_fields = {
-        k: v
-        for k, v in column["properties"].items()
-        if re.match(r".*json.*", k)
-    }
-    if json_fields:
-        column_properties["json_fields"] = json_fields
+    if props.get("json_type", "") == "JSON":
+        json_fields = {
+            k: v for k, v in column["properties"].items() if re.match(r".*json.*", k)
+        }
+        if json_fields:
+            column_properties["json_type"] = "JSON"
+            column_properties["json_fields"] = json_fields
 
     return f"-- {orjson.dumps(column_properties).decode('utf-8')}\n  "
 
