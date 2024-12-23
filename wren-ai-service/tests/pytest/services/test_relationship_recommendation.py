@@ -27,7 +27,7 @@ async def test_recommend_success(relationship_recommendation_service, mock_pipel
     assert response.id == "test_id"
     assert response.status == "finished"
     assert response.response == {"test": "data"}
-    mock_pipeline.run.assert_called_once_with(mdl={"key": "value"}, language="en")
+    mock_pipeline.run.assert_called_once_with(mdl={"key": "value"}, language="English")
 
 
 @pytest.mark.asyncio
