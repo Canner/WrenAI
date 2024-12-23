@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/common-nighthawk/go-figure"
 	"github.com/manifoldco/promptui"
 	"github.com/pterm/pterm"
+	openai "github.com/sashabaranov/go-openai"
 )
 
 func prepareProjectDir() string {
@@ -119,18 +121,6 @@ func askForGenerationModel() (string, error) {
 	return result, nil
 }
 
-func isConfigFileValidForCustomLLM(projectDir string) error {
-	// validate if config.yaml file exists in ~/.wrenai
-	configFilePath := path.Join(projectDir, "config.yaml")
-
-	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
-		errMessage := fmt.Sprintf("Please create a config.yaml file in %s first, more details at https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store", projectDir)
-		return errors.New(errMessage)
-	}
-
-	return nil
-}
-
 func Launch() {
 	// recover from panic
 	defer func() {
@@ -190,6 +180,12 @@ func Launch() {
 			return
 		}
 
+		// check if OpenAI API key is valid
+		shouldReturn = validateOpenaiApiKey(openaiApiKey)
+		if shouldReturn {
+			return
+		}
+
 		// ask for OpenAI generation model
 		pterm.Print("\n")
 		openaiGenerationModel, shouldReturn = getOpenaiGenerationModel()
@@ -199,12 +195,6 @@ func Launch() {
 
 		// prepare config.yaml file for OpenAI
 		err := utils.PrepareConfigFileForOpenAI(projectDir, openaiGenerationModel)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		// check if config.yaml file exists
-		err := isConfigFileValidForCustomLLM(projectDir)
 		if err != nil {
 			panic(err)
 		}
@@ -242,7 +232,7 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
-	err = utils.PrepareDockerFiles(openaiApiKey, openaiGenerationModel, uiPort, aiPort, projectDir, telemetryEnabled)
+	err = utils.PrepareDockerFiles(openaiApiKey, openaiGenerationModel, uiPort, aiPort, projectDir, telemetryEnabled, llmProvider)
 	if err != nil {
 		panic(err)
 	}
@@ -256,10 +246,8 @@ func Launch() {
 	}
 
 	pterm.Info.Println("Wren AI is starting, please wait for a moment...")
-	if llmProvider == "Custom" {
-		pterm.Info.Println("If you choose Ollama as LLM provider, please make sure you have started the Ollama service first. Also, Wren AI will automatically pull your chosen models if you have not done so. You can check the progress by executing `docker logs -f wrenai-wren-ai-service-1` in the terminal.")
-	}
-	url := fmt.Sprintf("http://localhost:%d", uiPort)
+	uiUrl := fmt.Sprintf("http://localhost:%d", uiPort)
+	aiUrl := fmt.Sprintf("http://localhost:%d", aiPort)
 	// wait until checking if CheckUIServiceStarted return without error
 	// if timeout 2 minutes, panic
 	timeoutTime := time.Now().Add(2 * time.Minute)
@@ -269,7 +257,7 @@ func Launch() {
 		}
 
 		// check if ui is ready
-		err := utils.CheckUIServiceStarted(url)
+		err := utils.CheckUIServiceStarted(uiUrl)
 		if err == nil {
 			pterm.Info.Println("UI Service is ready")
 			break
@@ -286,7 +274,7 @@ func Launch() {
 		}
 
 		// check if ai service is ready
-		err := utils.CheckAIServiceStarted(aiPort)
+		err := utils.CheckAIServiceStarted(aiUrl)
 		if err == nil {
 			pterm.Info.Println("AI Service is Ready")
 			break
@@ -296,7 +284,7 @@ func Launch() {
 
 	// open browser
 	pterm.Info.Println("Opening browser")
-	utils.Openbrowser(url)
+	utils.Openbrowser(uiUrl)
 
 	pterm.Info.Println("You can now safely close this terminal window")
 	fmt.Scanf("h")
@@ -364,4 +352,31 @@ func getLLMProvider() (string, bool) {
 		}
 	}
 	return llmProvider, false
+}
+
+func validateOpenaiApiKey(apiKey string) bool {
+	// validate if input api key is valid by sending a hello request
+	pterm.Info.Println("Sending a hello request to OpenAI...")
+	client := openai.NewClient(apiKey)
+	resp, err := client.CreateChatCompletion(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model: openai.GPT4oMini20240718,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: "Hello!",
+				},
+			},
+		},
+	)
+
+	// insufficient credit balance error
+	if err != nil {
+		pterm.Error.Println("Invalid API key", err)
+		return true
+	}
+
+	pterm.Info.Println("Valid API key, Response:", resp.Choices[0].Message.Content)
+	return false
 }
