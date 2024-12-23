@@ -162,6 +162,7 @@ def _ask_service_ttl_mock(query: str):
                     f"mock document 2 for {query}",
                 ]
             ),
+            "data_assistance": "",
             "user_guide_assistance": "",
             "historical_question": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
