@@ -87,9 +87,7 @@ def test_properties_comment_helper():
 
     assert helper.condition(test_column) is True
 
-    expected_comment = (
-        '-- {"alias":"Test Column","description":"Test description","json_type":""}\n  '
-    )
+    expected_comment = '-- {"alias":"Test Column","description":"Test description","json_fields":{"json_type":""}}\n  '
     assert helper(test_column) == expected_comment
 
 
