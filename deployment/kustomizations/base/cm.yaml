@@ -171,6 +171,8 @@ data:
         llm: litellm_llm.gpt-4o-mini-2024-07-18
       - name: chart_adjustment
         llm: litellm_llm.gpt-4o-mini-2024-07-18
+      - name: user_guide_assistance
+        llm: litellm_llm.gpt-4o-mini-2024-07-18
     ---
     settings:
       column_indexing_batch_size: 50
