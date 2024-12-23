@@ -11,7 +11,10 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import TEXT_TO_SQL_RULES, SQLBreakdownGenPostProcessor
+from src.pipelines.generation.utils.sql import (
+    TEXT_TO_SQL_RULES,
+    SQLBreakdownGenPostProcessor,
+)
 from src.utils import (
     async_timer,
     timer,
