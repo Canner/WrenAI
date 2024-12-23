@@ -77,8 +77,6 @@ pipes:
     engine: wren_ui
   - name: user_guide_assistance
     llm: openai_llm.gpt-4o-mini
-    engine: wren_ui
-
 ---
 settings:
   host: 127.0.0.1
