@@ -94,6 +94,8 @@ pipes:
     engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: question_rephrasing
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: intent_classification
     llm: litellm_llm.gpt-4o-mini-2024-07-18
     embedder: openai_embedder.text-embedding-3-large
