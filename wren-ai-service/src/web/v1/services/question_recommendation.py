@@ -85,7 +85,7 @@ class QuestionRecommendation:
             )
 
             generated_sql = await self._pipelines["sql_generation"].run(
-                query=rephrased["question"],
+                query=rephrased["output"],
                 contexts=documents,
                 exclude=[],
                 configuration=configuration,
