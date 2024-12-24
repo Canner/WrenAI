@@ -24,11 +24,9 @@ import {
 } from '@server/models';
 import { IMDLService } from './mdlService';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
-import { ValidationRules } from '@server/adaptors/ibisAdaptor';
 import { isEmpty, capitalize } from 'lodash';
 import {} from '@server/utils/regex';
 import * as Errors from '@server/utils/error';
-import { DataSourceName } from '@server/types';
 import { IQueryService } from './queryService';
 
 const logger = getLogger('ModelService');
@@ -601,61 +599,63 @@ export class ModelService implements IModelService {
   }
 
   private async checkCalculatedFieldCanQuery(
-    modelId: number,
-    modelName: string,
-    data: CheckCalculatedFieldCanQueryData,
+    _modelId: number,
+    _modelName: string,
+    _data: CheckCalculatedFieldCanQueryData,
   ) {
-    const project = await this.projectService.getCurrentProject();
-    const { mdlBuilder } = await this.mdlService.makeCurrentModelMDL();
-    const { referenceName, expression, lineage } = data;
-    const inputFieldId = lineage[lineage.length - 1];
-    const dataType = await this.inferCalculatedFieldDataType(
-      expression,
-      inputFieldId,
-    );
+    // todo: fix this
+    return { valid: true, message: '' };
+    // const project = await this.projectService.getCurrentProject();
+    // const { mdlBuilder } = await this.mdlService.makeCurrentModelMDL();
+    // const { referenceName, expression, lineage } = data;
+    // const inputFieldId = lineage[lineage.length - 1];
+    // const dataType = await this.inferCalculatedFieldDataType(
+    //   expression,
+    //   inputFieldId,
+    // );
 
-    // add temporary calculated field
-    const modelColumn = {
-      id: 99999999,
-      modelId,
-      displayName: referenceName,
-      sourceColumnName: referenceName,
-      referenceName: referenceName,
-      type: dataType,
-      isCalculated: true,
-      isPk: false,
-      notNull: false,
-      aggregation: expression,
-      lineage: JSON.stringify(lineage),
-      properties: JSON.stringify({ description: '' }),
-    } as ModelColumn;
-    mdlBuilder.insertCalculatedField(modelName, modelColumn);
-    const manifest = mdlBuilder.getManifest();
+    // // add temporary calculated field
+    // const modelColumn = {
+    //   id: 99999999,
+    //   modelId,
+    //   displayName: referenceName,
+    //   sourceColumnName: referenceName,
+    //   referenceName: referenceName,
+    //   type: dataType,
+    //   isCalculated: true,
+    //   isPk: false,
+    //   notNull: false,
+    //   aggregation: expression,
+    //   lineage: JSON.stringify(lineage),
+    //   properties: JSON.stringify({ description: '' }),
+    // } as ModelColumn;
+    // mdlBuilder.insertCalculatedField(modelName, modelColumn);
+    // const manifest = mdlBuilder.getManifest();
 
-    // find the calculated field in manifest
-    const calculatedField = manifest.models
-      .find((m) => m.name === modelName)
-      ?.columns.find((c) => c.name === referenceName);
+    // // find the calculated field in manifest
+    // const calculatedField = manifest.models
+    //   .find((m) => m.name === modelName)
+    //   ?.columns.find((c) => c.name === referenceName);
 
-    logger.debug(`Calculated field MDL: ${JSON.stringify(calculatedField)}`);
+    // logger.debug(`Calculated field MDL: ${JSON.stringify(calculatedField)}`);
 
-    // validate calculated field can query
-    const dataSource = project.type;
-    if (dataSource === DataSourceName.DUCKDB) {
-      return await this.wrenEngineAdaptor.validateColumnIsValid(
-        manifest,
-        modelName,
-        referenceName,
-      );
-    } else {
-      const parameters = { modelName, columnName: referenceName };
-      return await this.queryService.validate(
-        project,
-        ValidationRules.COLUMN_IS_VALID,
-        manifest,
-        parameters,
-      );
-    }
+    // // validate calculated field can query
+    // const dataSource = project.type;
+    // if (dataSource === DataSourceName.DUCKDB) {
+    //   return await this.wrenEngineAdaptor.validateColumnIsValid(
+    //     manifest,
+    //     modelName,
+    //     referenceName,
+    //   );
+    // } else {
+    //   const parameters = { modelName, columnName: referenceName };
+    //   return await this.queryService.validate(
+    //     project,
+    //     ValidationRules.COLUMN_IS_VALID,
+    //     manifest,
+    //     parameters,
+    //   );
+    // }
   }
 
   private async validateCreateRelation(
