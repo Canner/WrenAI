@@ -71,15 +71,14 @@ async def generate(prompt: dict, generator: Any) -> dict:
 
 @observe(capture_input=False)
 def normalized(generate: dict) -> dict:
-    def wrapper(text: str) -> list:
+    def wrapper(text: str) -> dict:
         text = text.replace("\n", " ")
         text = " ".join(text.split())
         try:
-            text_list = orjson.loads(text.strip())
-            return text_list
+            return orjson.loads(text.strip())
         except orjson.JSONDecodeError as e:
             logger.error(f"Error decoding JSON: {e}")
-            return []  # Return an empty list if JSON decoding fails
+            return {}  # Return an empty string if JSON decoding fails
 
     reply = generate.get("replies")[0]  # Expecting only one reply
     normalized = wrapper(reply)
