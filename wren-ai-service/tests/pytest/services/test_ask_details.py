@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from src.config import settings
-from src.pipelines.generation import sql_breakdown, sql_summary
+from src.pipelines import generation
 from src.providers import generate_components
 from src.web.v1.services.ask_details import (
     AskDetailsRequest,
@@ -17,10 +17,10 @@ def ask_details_service():
     pipe_components = generate_components(settings.components)
     return AskDetailsService(
         {
-            "sql_breakdown": sql_breakdown.SQLBreakdown(
+            "sql_breakdown": generation.SQLBreakdown(
                 **pipe_components["sql_breakdown"],
             ),
-            "sql_summary": sql_summary.SQLSummary(
+            "sql_summary": generation.SQLSummary(
                 **pipe_components["sql_summary"],
             ),
         }

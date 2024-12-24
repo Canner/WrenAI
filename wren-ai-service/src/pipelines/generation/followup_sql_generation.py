@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, List
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -18,7 +18,6 @@ from src.pipelines.common import (
     show_current_time,
     sql_generation_system_prompt,
 )
-from src.utils import async_timer, timer
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -105,6 +104,16 @@ Current Time: {{ current_time }}
 Instructions: {{ instructions }}
 {% endif %}
 
+{% if sql_samples %}
+### SQL SAMPLES ###
+{% for sample in sql_samples %}
+Summary:
+{{sample.summary}}
+SQL:
+{{sample.sql}}
+{% endfor %}
+{% endif %}
+
 ### INPUT ###
 User's Follow-up Question: {{ query }}
 
@@ -113,7 +122,6 @@ Let's think step by step.
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -122,6 +130,7 @@ def prompt(
     alert: str,
     configuration: Configuration,
     prompt_builder: PromptBuilder,
+    sql_samples: List[Dict] | None = None,
 ) -> dict:
     previous_query_summaries = [step.summary for step in history.steps if step.summary]
 
@@ -133,16 +142,15 @@ def prompt(
         alert=alert,
         instructions=construct_instructions(configuration),
         current_time=show_current_time(configuration.timezone),
+        sql_samples=sql_samples,
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_in_followup(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
 
-@async_timer
 @observe(capture_input=False)
 async def post_process(
     generate_sql_in_followup: dict,
@@ -202,7 +210,6 @@ class FollowUpSQLGeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="Follow-Up SQL Generation")
     async def run(
         self,
@@ -210,6 +217,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         contexts: List[str],
         history: AskHistory,
         configuration: Configuration = Configuration(),
+        sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
@@ -221,6 +229,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "history": history,
                 "project_id": project_id,
                 "configuration": configuration,
+                "sql_samples": sql_samples,
                 **self._components,
                 **self._configs,
             },

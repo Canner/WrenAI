@@ -12,10 +12,6 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import TEXT_TO_SQL_RULES, SQLBreakdownGenPostProcessor
-from src.utils import (
-    async_timer,
-    timer,
-)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -114,7 +110,6 @@ Let's think step by step.
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -128,13 +123,11 @@ def prompt(
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_details(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
 
-@async_timer
 @observe(capture_input=False)
 async def post_process(
     generate_sql_details: dict,
@@ -195,7 +188,6 @@ class SQLBreakdown(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="SQL Breakdown Generation")
     async def run(
         self,

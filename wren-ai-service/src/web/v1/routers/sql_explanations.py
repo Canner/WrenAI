@@ -39,7 +39,6 @@ Endpoints:
        "mdl_hash": "hash_value",                             # Optional hash for the model used
        "thread_id": "thread-123",                            # Optional identifier for the thread
        "project_id": "project-456",                          # Optional identifier for the project
-       "user_id": "user-789"                                 # Optional identifier for the user
      }
    - Response: SQLExplanationResponse
      {
