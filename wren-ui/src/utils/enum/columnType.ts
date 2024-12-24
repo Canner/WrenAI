@@ -17,6 +17,8 @@ export enum COLUMN_TYPE {
   INT8 = 'INT8',
   BIGINT = 'BIGINT', // alias for INT8
 
+  INT64 = 'INT64',
+
   NUMERIC = 'NUMERIC',
   DECIMAL = 'DECIMAL',
 
@@ -53,6 +55,7 @@ export enum COLUMN_TYPE {
 
   // Binary Data Types
   BYTEA = 'BYTEA',
+  VARBINARY = 'VARBINARY',
 
   // UUID Type
   UUID = 'UUID',

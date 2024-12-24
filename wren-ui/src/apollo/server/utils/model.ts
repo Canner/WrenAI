@@ -6,6 +6,12 @@ import {
 import { replaceAllowableSyntax } from './regex';
 import { CompactColumn } from '@server/services/metadataService';
 
+export function getPreviewColumnsStr(modelColumns: ModelColumn[]) {
+  if (modelColumns.length === 0) return '*';
+  const columns = modelColumns.map((column) => `"${column.sourceColumnName}"`);
+  return columns.join(',');
+}
+
 export function transformInvalidColumnName(columnName: string) {
   let referenceName = replaceAllowableSyntax(columnName);
   // If the reference name does not start with a letter, add a prefix
