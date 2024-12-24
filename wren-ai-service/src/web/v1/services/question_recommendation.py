@@ -67,6 +67,7 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
+        configuration: Optional[Configuration] = Configuration(),
     ):
         try:
             retrieval_result = await self._pipelines["retrieval"].run(
@@ -74,11 +75,20 @@ class QuestionRecommendation:
                 id=project_id,
             )
             documents = retrieval_result.get("construct_retrieval_results", [])
+
+            rephrased = await self._pipelines["question_rephrase"].run(
+                question=candidate["question"],
+                contexts=documents,
+                language=configuration.language,
+                current_date=configuration.show_current_time(),
+                project_id=project_id,
+            )
+
             generated_sql = await self._pipelines["sql_generation"].run(
-                query=candidate["question"],
+                query=rephrased["question"],
                 contexts=documents,
                 exclude=[],
-                configuration=Configuration(),
+                configuration=configuration,
                 project_id=project_id,
             )
 
@@ -122,6 +132,7 @@ class QuestionRecommendation:
                 input.max_questions,
                 input.max_categories,
                 input.project_id,
+                input.configuration,
             )
             for question in questions
         ]
