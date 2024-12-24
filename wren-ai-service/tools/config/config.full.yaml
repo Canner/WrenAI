@@ -131,6 +131,8 @@ pipes:
     engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: question_rephrasing
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: chart_generation
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: chart_adjustment

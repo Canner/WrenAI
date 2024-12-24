@@ -76,7 +76,7 @@ class QuestionRecommendation:
             )
             documents = retrieval_result.get("construct_retrieval_results", [])
 
-            rephrased = await self._pipelines["question_rephrase"].run(
+            rephrased = await self._pipelines["question_rephrasing"].run(
                 question=candidate["question"],
                 contexts=documents,
                 language=configuration.language,

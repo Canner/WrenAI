@@ -14,6 +14,7 @@ from src.pipelines.generation import (
     followup_sql_generation,
     intent_classification,
     question_recommendation,
+    question_rephrasing,
     relationship_recommendation,
     semantics_description,
     sql_answer,
@@ -233,6 +234,9 @@ def create_service_container(
                 ),
                 "sql_generation": sql_generation.SQLGeneration(
                     **pipe_components["sql_generation"],
+                ),
+                "question_rephrasing": question_rephrasing.QuestionRephrasing(
+                    **pipe_components["question_rephrasing"],
                 ),
             },
             **query_cache,
