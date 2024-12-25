@@ -8,6 +8,7 @@ models:
   kwargs:
     temperature: 0
     n: 1
+    seed: 0
     max_tokens: 4096
     response_format:
       type: json_object
@@ -17,6 +18,7 @@ models:
   kwargs:
     temperature: 0
     n: 1
+    seed: 0
     max_tokens: 4096
     response_format:
       type: json_object
