@@ -10,6 +10,7 @@ import {
   RecommendationQuestionStatus,
   ChartStatus,
   ChartAdjustmentOption,
+  WrenAILanguage,
 } from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -1001,7 +1002,7 @@ export class AskingService implements IAskingService {
       maxCategories: config.threadRecommendationQuestionMaxCategories,
       maxQuestions: config.threadRecommendationQuestionsMaxQuestions,
       configuration: {
-        language: project.language,
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     };
   }

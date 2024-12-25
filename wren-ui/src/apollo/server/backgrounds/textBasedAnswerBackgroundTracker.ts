@@ -90,7 +90,7 @@ export class TextBasedAnswerBackgroundTracker {
             sqlData: data,
             threadId: threadResponse.threadId.toString(),
             configurations: {
-              language: project.language as WrenAILanguage,
+              language: WrenAILanguage[project.language] || WrenAILanguage.EN,
             },
           });
 
