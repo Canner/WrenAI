@@ -19,6 +19,9 @@ reviews:
     ignore_title_keywords:
       - "wip"
       - "draft"
+    labels:
+      - "ci/ai-service"
+      - "module/ai-service"
     drafts: false
 chat:
   auto_reply: true
