@@ -26,7 +26,7 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_generation_user_prompt_template = """
 ### TASK ###
-Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and
+Given a user query, your task is to interpret the query based on the database schema and
 generate one SQL statement that best potentially answer user's query.
 
 ### DATABASE SCHEMA ###
