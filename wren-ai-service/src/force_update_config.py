@@ -19,7 +19,8 @@ def update_config():
     with open("config.yaml", "w") as file:
         yaml.safe_dump_all(documents, file, default_flow_style=False)
 
+    print("Successfully updated engine names to 'wren_ui' in all pipelines")
+
 
 if __name__ == "__main__":
     update_config()
-    print("Successfully updated engine names to 'wren_ui' in all pipelines")
