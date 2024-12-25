@@ -21,8 +21,5 @@ def update_config():
 
 
 if __name__ == "__main__":
-    try:
-        update_config()
-        print("Successfully updated engine names to 'wren_ui' in all pipelines")
-    except Exception as e:
-        print(f"Error updating config: {str(e)}")
+    update_config()
+    print("Successfully updated engine names to 'wren_ui' in all pipelines")
