@@ -1,0 +1,24 @@
+language: "en-US"
+early_access: false
+enable_free_tier: true
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: true
+  review_status: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  related_issues: true
+  related_prs: true
+  path_filters:
+    - "wren-ai-service/**"
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - "wip"
+      - "draft"
+    drafts: false
+chat:
+  auto_reply: true
