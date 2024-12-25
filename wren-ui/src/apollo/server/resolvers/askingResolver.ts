@@ -509,17 +509,21 @@ export class AskingResolver {
       return { ...view, displayName };
     },
     answerDetail: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
-      const content = parent?.answerDetail?.content
-        ? parent?.answerDetail?.content
-            // replace the \\n to \n
-            .replace(/\\n/g, '\n')
-            // replace the \\\" to \",
-            .replace(/\\"/g, '"')
-        : parent?.answerDetail?.content;
+      if (!parent?.answerDetail) return null;
+
+      const { content, ...rest } = parent.answerDetail;
+
+      if (!content) return parent.answerDetail;
+
+      const formattedContent = content
+        // replace the \\n to \n
+        .replace(/\\n/g, '\n')
+        // replace the \\\" to \",
+        .replace(/\\"/g, '"');
 
       return {
-        ...parent.answerDetail,
-        content,
+        ...rest,
+        content: formattedContent,
       };
     },
     sql: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
