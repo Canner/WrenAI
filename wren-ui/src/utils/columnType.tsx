@@ -26,6 +26,7 @@ export const getColumnTypeIcon = (payload: { type: string }, attrs?: any) => {
       return <TextIcon {...attrs} />;
 
     case COLUMN_TYPE.BYTEA:
+    case COLUMN_TYPE.VARBINARY:
       return <BinaryIcon {...attrs} />;
 
     case COLUMN_TYPE.UUID:
@@ -39,6 +40,7 @@ export const getColumnTypeIcon = (payload: { type: string }, attrs?: any) => {
     case COLUMN_TYPE.INTEGER:
     case COLUMN_TYPE.INT8:
     case COLUMN_TYPE.BIGINT:
+    case COLUMN_TYPE.INT64:
     case COLUMN_TYPE.NUMERIC:
     case COLUMN_TYPE.DECIMAL:
     case COLUMN_TYPE.FLOAT4:

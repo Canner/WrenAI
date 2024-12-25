@@ -14,6 +14,7 @@ import {
   RecommendationQuestion,
   RecommendationQuestionStatus,
   WrenAIError,
+  WrenAILanguage,
 } from '@server/models/adaptor';
 import { encryptConnectionInfo } from '../dataSource';
 import { IWrenAIAdaptor } from '../adaptors';
@@ -240,7 +241,7 @@ export class ProjectService implements IProjectService {
       maxQuestions: config.projectRecommendationQuestionsMaxQuestions,
       regenerate: true,
       configuration: {
-        language: project.language,
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     };
   }
