@@ -106,7 +106,9 @@ export const getLineageOptions = (data: {
   const convertor = (field) => {
     const value = compactObject(getFieldValue(field));
     const isRelationship = field.nodeType === NODE_TYPE.RELATION;
-
+    // check if source model's calculated field
+    const isSourceModelCalculatedField =
+      isSourceModel && field.nodeType === NODE_TYPE.CALCULATED_FIELD;
     // check if user select aggregation functions, then the source model fields cannot be selected
     const isSourceModelFieldsWithAggregation =
       aggregations.includes(expression) && isSourceModel && !isRelationship;
@@ -133,6 +135,7 @@ export const getLineageOptions = (data: {
     const disabled =
       isSourceModelFieldsWithAggregation ||
       isRelationshipWithoutPrimaryKey ||
+      isSourceModelCalculatedField ||
       isInUsedRelationship ||
       isInvalidType;
 
@@ -143,6 +146,8 @@ export const getLineageOptions = (data: {
     } else if (isRelationshipWithoutPrimaryKey) {
       title =
         'Please set a primary key within this model to use it in a calculated field.';
+    } else if (isSourceModelCalculatedField) {
+      title = 'Calculated field from the source model is not supported.';
     } else if (isInUsedRelationship) {
       title = 'This relationship is in use.';
     } else if (isInvalidType) {
