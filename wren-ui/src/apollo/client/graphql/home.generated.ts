@@ -37,7 +37,7 @@ export type ThreadQueryVariables = Types.Exact<{
 }>;
 
 
-export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, sql: string, responses: Array<{ __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null }> } };
+export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, responses: Array<{ __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null }> } };
 
 export type ThreadResponseQueryVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
@@ -65,7 +65,7 @@ export type CreateThreadMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateThreadMutation = { __typename?: 'Mutation', createThread: { __typename?: 'Thread', id: number, sql: string } };
+export type CreateThreadMutation = { __typename?: 'Mutation', createThread: { __typename?: 'Thread', id: number } };
 
 export type CreateThreadResponseMutationVariables = Types.Exact<{
   threadId: Types.Scalars['Int'];
@@ -81,7 +81,7 @@ export type UpdateThreadMutationVariables = Types.Exact<{
 }>;
 
 
-export type UpdateThreadMutation = { __typename?: 'Mutation', updateThread: { __typename?: 'Thread', id: number, sql: string, summary: string } };
+export type UpdateThreadMutation = { __typename?: 'Mutation', updateThread: { __typename?: 'Thread', id: number, summary: string } };
 
 export type DeleteThreadMutationVariables = Types.Exact<{
   where: Types.ThreadUniqueWhereInput;
@@ -386,7 +386,6 @@ export const ThreadDocument = gql`
     query Thread($threadId: Int!) {
   thread(threadId: $threadId) {
     id
-    sql
     responses {
       ...CommonResponse
     }
@@ -524,7 +523,6 @@ export const CreateThreadDocument = gql`
     mutation CreateThread($data: CreateThreadInput!) {
   createThread(data: $data) {
     id
-    sql
   }
 }
     `;
@@ -592,7 +590,6 @@ export const UpdateThreadDocument = gql`
     mutation UpdateThread($where: ThreadUniqueWhereInput!, $data: UpdateThreadInput!) {
   updateThread(where: $where, data: $data) {
     id
-    sql
     summary
   }
 }

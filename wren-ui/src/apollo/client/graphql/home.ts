@@ -144,7 +144,6 @@ export const THREAD = gql`
   query Thread($threadId: Int!) {
     thread(threadId: $threadId) {
       id
-      sql
       responses {
         ...CommonResponse
       }
@@ -180,7 +179,6 @@ export const CREATE_THREAD = gql`
   mutation CreateThread($data: CreateThreadInput!) {
     createThread(data: $data) {
       id
-      sql
     }
   }
 `;
@@ -204,7 +202,6 @@ export const UPDATE_THREAD = gql`
   ) {
     updateThread(where: $where, data: $data) {
       id
-      sql
       summary
     }
   }
