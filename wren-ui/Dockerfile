@@ -53,6 +53,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY migrations ./migrations
 COPY knexfile.js ./knexfile.js
+RUN yarn global add knex
 
 EXPOSE 3000
 
@@ -60,5 +61,4 @@ ENV PORT 3000
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
-# use yarn dlx to run package without installing it
-CMD yarn dlx knex migrate:latest && HOSTNAME="0.0.0.0" node server.js
+CMD yarn knex migrate:latest && HOSTNAME="0.0.0.0" node server.js
