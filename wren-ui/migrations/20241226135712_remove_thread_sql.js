@@ -3,16 +3,15 @@
  * @returns { Promise<void> }
  */
 exports.up = async function (knex) {
-  // drop foreign key constraint before altering column type to prevent data loss
-  await knex.schema.alterTable('thread_response', (table) => {
-    table.dropForeign('thread_id');
-  });
-  await knex.schema.alterTable('thread', (table) => {
-    table.dropColumn('sql');
-  });
-  await knex.schema.alterTable('thread_response', (table) => {
-    table.foreign('thread_id').references('thread.id').onDelete('CASCADE');
-  });
+  const trx = await knex.transaction();
+  try {
+    await trx.raw('PRAGMA foreign_keys = OFF');
+    await trx.raw('ALTER TABLE thread DROP COLUMN sql');
+    await trx.commit();
+  } catch (e) {
+    await trx.rollback();
+    throw e;
+  }
 };
 
 /**
