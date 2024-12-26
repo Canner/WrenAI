@@ -51,7 +51,7 @@ def main():
                     manifest=mdl_json,
                     limit=10,
                 )
-                print(df.to_string())
+                print(f"\nExecution result:\n{df.to_string()}\n")
             except Exception as e:
                 print(f"Error executing query: {str(e)}")
         else:
