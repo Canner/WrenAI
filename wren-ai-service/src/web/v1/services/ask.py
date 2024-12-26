@@ -245,7 +245,7 @@ class AskService:
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=user_query,
+                    query=ask_request.query,
                     id=ask_request.project_id,
                 )
 
