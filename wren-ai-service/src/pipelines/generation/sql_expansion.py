@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import SQLGenPostProcessor, show_current_time
+from src.pipelines.common import show_current_time
+from src.pipelines.generation.utils.sql import SQLGenPostProcessor
 from src.utils import async_timer, timer
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory

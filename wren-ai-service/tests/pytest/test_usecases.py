@@ -10,6 +10,7 @@ from datetime import datetime
 import aiohttp
 import orjson
 import requests
+import yaml
 
 from demo.utils import (
     _get_connection_info,
@@ -34,16 +35,16 @@ def test_load_mdl_and_questions(usecases: list[str]):
             with open(f"tests/data/usecases/{usecase}/mdl.json", "r") as f:
                 mdl_str = orjson.dumps(json.load(f)).decode("utf-8")
 
-            with open(f"tests/data/usecases/{usecase}/questions.json", "r") as f:
-                questions = json.load(f)
+            with open(f"tests/data/usecases/{usecase}/questions.yaml", "r") as f:
+                questions = yaml.safe_load(f)
 
             mdls_and_questions[usecase] = {
                 "mdl_str": mdl_str,
-                "questions": questions,
+                "questions": [question["question"] for question in questions],
             }
         except FileNotFoundError:
             raise Exception(
-                f"tests/data/usecases/{usecase}/mdl.json or tests/data/usecases/{usecase}/questions.json not found"
+                f"tests/data/usecases/{usecase}/mdl.json or tests/data/usecases/{usecase}/questions.yaml not found"
             )
 
     return mdls_and_questions
