@@ -41,7 +41,7 @@ export default function useHomeSidebar() {
   };
 
   return {
-    data: threads,
+    data: { threads },
     onSelect,
     onRename,
     onDelete,

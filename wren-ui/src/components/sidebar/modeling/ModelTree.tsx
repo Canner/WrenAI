@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
-import dayJs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { DataNode } from 'antd/es/tree';
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
-import { createTreeGroupNode, getColumnNode } from '@/components/sidebar/utils';
+import {
+  createTreeGroupNode,
+  getColumnNode,
+  GroupActionButton,
+} from '@/components/sidebar/utils';
 import useModalAction from '@/hooks/useModalAction';
 import LabelTitle from '@/components/sidebar/LabelTitle';
-import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
+import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
@@ -25,9 +26,7 @@ import {
 } from '@/apollo/client/graphql/dataSource.generated';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
 import { LIST_MODELS } from '@/apollo/client/graphql/model';
-
-dayJs.extend(utc);
-dayJs.extend(relativeTime);
+import { getRelativeTime } from '@/utils/time';
 
 interface Props {
   [key: string]: any;
@@ -96,7 +95,7 @@ export default function ModelTree(props: Props) {
   const getModelGroupNode = createTreeGroupNode({
     groupName: 'Models',
     groupKey: 'models',
-    icons: [
+    actions: [
       {
         key: 'trigger-schema-detection',
         disabled: isDetecting,
@@ -105,7 +104,7 @@ export default function ModelTree(props: Props) {
             spin={isDetecting}
             title={
               schemaChangeData?.schemaChange.lastSchemaChangeTime
-                ? `Last refresh ${dayJs.utc(schemaChangeData?.schemaChange.lastSchemaChangeTime).fromNow()}`
+                ? `Last refresh ${getRelativeTime(schemaChangeData?.schemaChange.lastSchemaChangeTime)}`
                 : ''
             }
             onClick={() => triggerDataSourceDetection()}
@@ -114,12 +113,16 @@ export default function ModelTree(props: Props) {
       },
       {
         key: 'add-model',
-        icon: () => (
-          <PlusSquareOutlined
+        render: () => (
+          <GroupActionButton
             data-guideid="add-model"
             data-testid="add-model"
+            icon={<PlusOutlined />}
+            size="small"
             onClick={() => onOpenModelDrawer()}
-          />
+          >
+            New
+          </GroupActionButton>
         ),
       },
     ],

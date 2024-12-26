@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { useState } from 'react';
 import styled, { css } from 'styled-components';
 import { Tree, TreeProps } from 'antd';
@@ -186,6 +187,38 @@ const StyledTree = styled(Tree)`
         }
       }
     }
+  }
+`;
+
+export const sidebarCommonStyle = css`
+  .ant-tree-title {
+    flex-grow: 1;
+    display: inline-flex;
+    align-items: center;
+    span:first-child,
+    .adm-treeTitle__title {
+      flex-grow: 1;
+    }
+  }
+`;
+
+export const StyledTreeNodeLink = styled(Link)`
+  display: block;
+  cursor: pointer;
+  user-select: none;
+  margin-top: 16px;
+  padding: 0 16px;
+  line-height: 28px;
+  color: var(--gray-8);
+  &:hover {
+    background-color: var(--gray-4);
+  }
+  &:active {
+    background-color: var(--gray-6);
+  }
+  &.adm-treeNode--selected {
+    background-color: var(--gray-4);
+    color: var(--geekblue-6);
   }
 `;
 
