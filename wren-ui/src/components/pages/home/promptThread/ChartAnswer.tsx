@@ -96,7 +96,7 @@ export default function ChartAnswer(props: Props) {
 
   const [form] = Form.useForm();
   const { chartDetail } = threadResponse;
-  const { error, status } = chartDetail || {};
+  const { error, status, adjustment } = chartDetail || {};
 
   const [previewData, previewDataResult] = usePreviewDataMutation({
     onError: (error) => console.error(error),
@@ -203,6 +203,14 @@ export default function ChartAnswer(props: Props) {
     onResetState();
   };
 
+  const regenerateBtn = (
+    <div className="text-center mt-4">
+      <Button icon={<ReloadOutlined />} onClick={onReload}>
+        Regenerate
+      </Button>
+    </div>
+  );
+
   if (error) {
     return (
       <div className="py-6 px-4">
@@ -212,14 +220,12 @@ export default function ChartAnswer(props: Props) {
           type="error"
           showIcon
         />
-        <div className="text-center mt-4">
-          <Button icon={<ReloadOutlined />} onClick={onRegenerate}>
-            Regenerate
-          </Button>
-        </div>
+        {regenerateBtn}
       </div>
     );
   }
+
+  const chartRegenerateBtn = adjustment ? regenerateBtn : null;
 
   return (
     <StyledSkeleton
@@ -230,7 +236,7 @@ export default function ChartAnswer(props: Props) {
     >
       <div className="text-md gray-10 py-6 px-4">
         {chartDetail?.description}
-        {chartSpec && (
+        {chartSpec ? (
           <ChartWrapper
             className={clsx(
               'border border-gray-4 rounded mt-4 pb-3 overflow-hidden',
@@ -277,6 +283,8 @@ export default function ChartAnswer(props: Props) {
               onReload={onReload}
             />
           </ChartWrapper>
+        ) : (
+          chartRegenerateBtn
         )}
       </div>
     </StyledSkeleton>

@@ -684,6 +684,7 @@ export const typeDefs = gql`
     error: Error
     description: String
     chartSchema: JSON
+    adjustment: Boolean
   }
 
   type ThreadResponse {
@@ -700,20 +701,12 @@ export const typeDefs = gql`
   # Thread only consists of basic information of a thread
   type Thread {
     id: Int!
-    sql: String!
-      @deprecated(
-        reason: "Doesn't seem to be reasonable to put a sql in a thread"
-      )
     summary: String!
   }
 
   # Detailed thread consists of thread and thread responses
   type DetailedThread {
     id: Int!
-    sql: String!
-      @deprecated(
-        reason: "Doesn't seem to be reasonable to put a sql in a thread"
-      )
     responses: [ThreadResponse!]!
   }
 
