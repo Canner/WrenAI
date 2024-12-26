@@ -257,8 +257,6 @@ export type DetailedThread = {
   __typename?: 'DetailedThread';
   id: Scalars['Int'];
   responses: Array<ThreadResponse>;
-  /** @deprecated Doesn't seem to be reasonable to put a sql in a thread */
-  sql: Scalars['String'];
 };
 
 export type Diagram = {
@@ -997,8 +995,6 @@ export type Task = {
 export type Thread = {
   __typename?: 'Thread';
   id: Scalars['Int'];
-  /** @deprecated Doesn't seem to be reasonable to put a sql in a thread */
-  sql: Scalars['String'];
   summary: Scalars['String'];
 };
 
@@ -1044,6 +1040,7 @@ export type ThreadResponseBreakdownDetail = {
 
 export type ThreadResponseChartDetail = {
   __typename?: 'ThreadResponseChartDetail';
+  adjustment?: Maybe<Scalars['Boolean']>;
   chartSchema?: Maybe<Scalars['JSON']>;
   description?: Maybe<Scalars['String']>;
   error?: Maybe<Error>;

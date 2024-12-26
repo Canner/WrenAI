@@ -21,6 +21,7 @@ import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 import { Model, ModelColumn } from '../repositories';
 import {
   findColumnsToUpdate,
+  getPreviewColumnsStr,
   handleNestedColumns,
   replaceInvalidReferenceName,
   updateModelPrimaryKey,
@@ -890,7 +891,10 @@ export class ModelResolver {
     }
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const sql = `select * from "${model.referenceName}"`;
+    const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
+      model.id,
+    ]);
+    const sql = `select ${getPreviewColumnsStr(modelColumns)} from "${model.referenceName}"`;
 
     const data = (await ctx.queryService.preview(sql, {
       project,

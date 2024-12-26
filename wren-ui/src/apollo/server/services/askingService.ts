@@ -10,6 +10,7 @@ import {
   RecommendationQuestionStatus,
   ChartStatus,
   ChartAdjustmentOption,
+  WrenAILanguage,
 } from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -574,7 +575,6 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
-      sql: input.sql,
       summary: input.question,
     });
 
@@ -779,6 +779,7 @@ export class AskingService implements IAskingService {
         chartDetail: {
           queryId: response.queryId,
           status: ChartStatus.FETCHING,
+          adjustment: true,
         },
       },
     );
@@ -968,8 +969,6 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
-      // todo: remove sql from thread
-      sql: view.statement,
       summary: input.question,
     });
 
@@ -1001,7 +1000,7 @@ export class AskingService implements IAskingService {
       maxCategories: config.threadRecommendationQuestionMaxCategories,
       maxQuestions: config.threadRecommendationQuestionsMaxQuestions,
       configuration: {
-        language: project.language,
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     };
   }

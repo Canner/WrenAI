@@ -659,7 +659,6 @@ def display_sql_answer(query_id: str):
         placeholder.markdown(markdown_content)
 
 
-@st.cache_data
 def get_sql_answer(
     query: str,
     sql: str,
@@ -708,7 +707,6 @@ def get_sql_answer(
         )
 
 
-@st.cache_data
 def ask_details():
     asks_details_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-details",
@@ -842,7 +840,6 @@ def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
     return schema
 
 
-@st.cache_data
 def generate_chart(
     query: str,
     sql: str,
@@ -893,7 +890,6 @@ def generate_chart(
     return chart_response
 
 
-@st.cache_data
 def adjust_chart(
     query: str,
     sql: str,

@@ -22,42 +22,60 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### TASK ###
-You are a great detective, who is great at intent classification. Now you need to classify user's intent based on given database schema and user's question to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
-Please carefully analyze user's question and analyze database's schema carefully to make the classification correct.
-Also you should provide reasoning for the classification in clear and concise way within 20 words.
+You are a great detective, who is great at intent classification.
+First, rephrase the user's question to make it more specific, clear and relevant to the database schema before making the intent classification.
+Second, you need to use rephrased user's question to classify user's intent based on given database schema to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
+Also you should provide reasoning for the classification clearly and concisely within 20 words.
+
+### INSTRUCTIONS ###
+- Steps to rephrase the user's question:
+    - First, try to recognize adjectives in the user's question that are important to the user's intent.
+    - Second, change the adjectives to more specific and clear ones that can be matched to columns in the database schema.
+    - Third, if the user's question is related to time/date, add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
+- MUST use the rephrased user's question to make the intent classification.
+- MUST put the rephrased user's question in the rephrased_question output.
+- REASONING MUST be within 20 words.
+- If the rephrased user's question is vague and doesn't specify which table or property to analyze, classify it as MISLEADING_QUERY.
 
 ### INTENT DEFINITIONS ###
-
 - TEXT_TO_SQL
     - When to Use:
         - Select this category if the user's question is directly related to the given database schema and can be answered by generating an SQL query using that schema.
-        - If the user's question is related to the previous question, and considering them together could be answered by generating an SQL query using that schema.
+        - If the rephrasedd user's question is related to the previous question, and considering them together could be answered by generating an SQL query using that schema.
     - Characteristics:
-        - The question involves specific data retrieval or manipulation that requires SQL.
-        - It references tables, columns, or specific data points within the schema.
+        - The rephrasedd user's question involves specific data retrieval or manipulation that requires SQL.
+        - The rephrasedd user's question references tables, columns, or specific data points within the schema.
+    - Instructions:
+        - MUST include table and column names that should be used in the SQL query according to the database schema in the reasoning output.
+        - MUST include phrases from the user's question that are explicitly related to the database schema in the reasoning output.
     - Examples:
         - "What is the total sales for last quarter?"
         - "Show me all customers who purchased product X."
         - "List the top 10 products by revenue."
 - MISLEADING_QUERY
     - When to Use:
-        - If the user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
-        - If the user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
-        - If the user's question contains SQL code.
+        - If the rephrasedd user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
+        - If the rephrasedd user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
+        - If the rephrasedd user's question contains SQL code.
     - Characteristics:
-        - The question does not pertain to any aspect of the database or its data.
-        - It might be a casual conversation starter or about an entirely different topic.
+        - The rephrasedd user's question does not pertain to any aspect of the database or its data.
+        - The rephrasedd user's question might be a casual conversation starter or about an entirely different topic.
+        - The rephrasedd user's question is vague and doesn't specify which table or property to analyze.
+    - Instructions:
+        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be MISLEADING_QUERY.
     - Examples:
         - "How are you?"
         - "What's the weather like today?"
         - "Tell me a joke."
 - GENERAL
     - When to Use:
-        - Use this category if the user is seeking general information about the database schema, needs help formulating a proper question, or asks a vague question related to the schema.
-        - If the user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
+        - Use this category if the user is seeking general information about the database schema.
+        - If the rephrasedd user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
     - Characteristics:
         - The question is about understanding the dataset or its capabilities.
         - The user may need guidance on how to proceed or what questions to ask.
+    - Instructions:
+        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be GENERAL.
     - Examples:
         - "What is the dataset about?"
         - "Tell me more about the database."
@@ -68,7 +86,8 @@ Also you should provide reasoning for the classification in clear and concise wa
 Please provide your response as a JSON object, structured as follows:
 
 {
-    "reasoning": "<CHAIN_OF_THOUGHT_REASONING_IN_STRING_FORMAT>",
+    "rephrased_question": "<REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
+    "reasoning": "<CHAIN_OF_THOUGHT_REASONING_BASED_ON_REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
     "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL"
 }
 """
@@ -212,8 +231,6 @@ def prompt(
         [step.summary for step in history.steps if step.summary] if history else []
     )
 
-    # query = "\n".join(previous_query_summaries) + "\n" + query
-
     return prompt_builder.run(
         query=query,
         db_schemas=construct_db_schemas,
@@ -231,13 +248,20 @@ async def classify_intent(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
     try:
-        intent = orjson.loads(classify_intent.get("replies")[0])["results"]
+        results = orjson.loads(classify_intent.get("replies")[0])
         return {
-            "intent": intent,
+            "intent": results["results"],
+            "rephrased_question": results["rephrased_question"],
+            "reasoning": results["reasoning"],
             "db_schemas": construct_db_schemas,
         }
     except Exception:
-        return {"intent": "TEXT_TO_SQL", "db_schemas": construct_db_schemas}
+        return {
+            "intent": "TEXT_TO_SQL",
+            "rephrased_question": "",
+            "reasoning": "",
+            "db_schemas": construct_db_schemas,
+        }
 
 
 ## End of Pipeline
@@ -245,6 +269,8 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 class IntentClassificationResult(BaseModel):
     results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL"]
+    rephrased_question: str
+    reasoning: str
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {

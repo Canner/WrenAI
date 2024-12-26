@@ -1,6 +1,7 @@
 import importlib
 import logging
 import pkgutil
+import re
 import sys
 from typing import Any, Callable, Dict
 
@@ -36,6 +37,17 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
     nested = {k: v for k, v in props.items() if k.startswith("nested")}
     if nested:
         column_properties["nested_columns"] = nested
+
+    if (json_type := props.get("json_type", "")) and json_type in [
+        "JSON",
+        "JSON_ARRAY",
+    ]:
+        json_fields = {
+            k: v for k, v in column["properties"].items() if re.match(r".*json.*", k)
+        }
+        if json_fields:
+            column_properties["json_type"] = json_type
+            column_properties["json_fields"] = json_fields
 
     return f"-- {orjson.dumps(column_properties).decode('utf-8')}\n  "
 
