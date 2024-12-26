@@ -423,7 +423,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformChartAdjustmentInput(input: ChartAdjustmentInput) {
-    const { query, sql, adjustmentOption, chartSchema } = input;
+    const { query, sql, adjustmentOption, chartSchema, configurations } = input;
     return {
       query,
       sql,
@@ -436,6 +436,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         theta: adjustmentOption.theta,
       },
       chart_schema: chartSchema,
+      configurations,
     };
   }
 

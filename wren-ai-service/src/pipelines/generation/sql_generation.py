@@ -11,11 +11,11 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import (
+from src.pipelines.common import show_current_time
+from src.pipelines.generation.utils.sql import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
-    show_current_time,
     sql_generation_system_prompt,
 )
 from src.web.v1.services import Configuration
@@ -25,7 +25,7 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_generation_user_prompt_template = """
 ### TASK ###
-Given a user query that is ambiguous in nature, your task is to interpret the query in various plausible ways and
+Given a user query, your task is to interpret the query based on the database schema and
 generate one SQL statement that best potentially answer user's query.
 
 ### DATABASE SCHEMA ###
