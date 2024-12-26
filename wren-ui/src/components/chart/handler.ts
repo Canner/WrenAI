@@ -1,7 +1,6 @@
 import { ChartType } from '@/apollo/client/graphql/__types__';
 import { isNil, cloneDeep, uniq, sortBy, omit, isNumber } from 'lodash';
 import { Config, TopLevelSpec } from 'vega-lite';
-import { PositionFieldDef } from 'vega-lite/build/src/channeldef';
 
 enum MarkType {
   ARC = 'arc',
@@ -234,7 +233,6 @@ export default class ChartSpecHandler {
 
   private addEncoding(encoding: EncodingSpec) {
     this.encoding = encoding;
-    const { x, y } = this.getAxisDomain();
 
     // fill color by x field if AI not provide color(category) field
     if (isNil(this.encoding.color)) {
@@ -253,26 +251,6 @@ export default class ChartSpecHandler {
 
     // handle scale on bar chart
     if (this.mark.type === MarkType.BAR) {
-      if (y) {
-        this.encoding.y = {
-          ...this.encoding.y,
-          scale: {
-            domain: y,
-            nice: false,
-          },
-        };
-      }
-
-      if (x) {
-        this.encoding.x = {
-          ...this.encoding.x,
-          scale: {
-            domain: x,
-            nice: false,
-          },
-        };
-      }
-
       if ('stack' in this.encoding.y) {
         this.encoding.y.stack = this.options.stack;
       }
@@ -289,45 +267,6 @@ export default class ChartSpecHandler {
     }
 
     this.addHoverHighlight(this.encoding);
-  }
-
-  private getAxisDomain() {
-    const xField = this.encoding.x as PositionFieldDef<any>;
-    const yField = this.encoding.y as PositionFieldDef<any>;
-    const calculateMaxDomain = (field: PositionFieldDef<any>) => {
-      if (field?.type !== 'quantitative') return null;
-      const fieldValue = field.field;
-      const values = (this.data as any).values.map((d) => d[fieldValue]);
-
-      const maxValue = Math.max(...values);
-
-      // Get the magnitude (e.g., 1, 10, 100, 1000)
-      const magnitude = Math.pow(10, Math.floor(Math.log10(maxValue)));
-
-      // Get number between 1-10
-      const normalizedValue = maxValue / magnitude;
-      let niceNumber;
-
-      if (normalizedValue <= 1.2) niceNumber = 1.2;
-      else if (normalizedValue <= 1.5) niceNumber = 1.5;
-      else if (normalizedValue <= 2) niceNumber = 2;
-      else if (normalizedValue <= 2.5) niceNumber = 2.5;
-      else if (normalizedValue <= 3) niceNumber = 3;
-      else if (normalizedValue <= 4) niceNumber = 4;
-      else if (normalizedValue <= 5) niceNumber = 5;
-      else if (normalizedValue <= 7.5) niceNumber = 7.5;
-      else if (normalizedValue <= 8) niceNumber = 8;
-      else niceNumber = 10;
-
-      const domainMax = niceNumber * magnitude;
-      return [0, domainMax];
-    };
-    const xDomain = calculateMaxDomain(xField);
-    const yDomain = calculateMaxDomain(yField);
-    return {
-      x: xDomain,
-      y: yDomain,
-    };
   }
 
   private addHoverHighlight(encoding: EncodingSpec) {

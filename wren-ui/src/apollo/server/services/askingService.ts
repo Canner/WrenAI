@@ -575,7 +575,6 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
-      sql: input.sql,
       summary: input.question,
     });
 
@@ -780,6 +779,7 @@ export class AskingService implements IAskingService {
         chartDetail: {
           queryId: response.queryId,
           status: ChartStatus.FETCHING,
+          adjustment: true,
         },
       },
     );
@@ -969,8 +969,6 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
       projectId: id,
-      // todo: remove sql from thread
-      sql: view.statement,
       summary: input.question,
     });
 
