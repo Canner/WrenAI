@@ -1,7 +1,6 @@
 import { ChartType } from '@/apollo/client/graphql/__types__';
 import { isNil, cloneDeep, uniq, sortBy, omit, isNumber } from 'lodash';
 import { Config, TopLevelSpec } from 'vega-lite';
-import { PositionFieldDef } from 'vega-lite/build/src/channeldef';
 
 enum MarkType {
   ARC = 'arc',
