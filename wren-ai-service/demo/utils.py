@@ -64,7 +64,7 @@ def _update_wren_engine_configs(configs: list[dict]):
     assert response.status_code == 200
 
 
-def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: str):
+def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: Optional[str] = None):
     assert dataset_type in DATA_SOURCES
 
     SOURCE = dataset_type
