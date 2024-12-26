@@ -7,6 +7,7 @@ exports.up = async function (knex) {
   try {
     await trx.raw('PRAGMA foreign_keys = OFF');
     await trx.raw('ALTER TABLE thread DROP COLUMN sql');
+    await trx.raw('PRAGMA foreign_keys = ON');
     await trx.commit();
   } catch (e) {
     await trx.rollback();
