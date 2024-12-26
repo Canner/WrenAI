@@ -779,6 +779,7 @@ export class AskingService implements IAskingService {
         chartDetail: {
           queryId: response.queryId,
           status: ChartStatus.FETCHING,
+          adjustment: true,
         },
       },
     );

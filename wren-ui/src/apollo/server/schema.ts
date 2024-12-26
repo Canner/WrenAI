@@ -684,6 +684,7 @@ export const typeDefs = gql`
     error: Error
     description: String
     chartSchema: JSON
+    adjustment: Boolean
   }
 
   type ThreadResponse {
