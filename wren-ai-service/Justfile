@@ -68,4 +68,4 @@ use-wren-ui-as-engine:
 	poetry run python -m src.force_update_config
 
 run-sql mdl_path="" data_source="" sameple_dataset="":
-	poetry run python demo/test_sql.py --mdl-path "{{mdl_path}}" --data-source "{{data_source}}" --sample-dataset "{{sameple_dataset}}"
+	poetry run python demo/run_sql.py --mdl-path "{{mdl_path}}" --data-source "{{data_source}}" --sample-dataset "{{sameple_dataset}}"
