@@ -17,35 +17,39 @@ def main():
     )
 
     parser.add_argument(
-        "--dataset-type",
+        "--data-source",
         type=str,
         default="bigquery",
         choices=["bigquery", "duckdb"],
-        help="Dataset type (default: bigquery)",
+        help="Data source (default: bigquery)",
     )
 
     parser.add_argument(
-        "--dataset",
+        "--sample-dataset",
         type=str,
         default="ecommerce",
         choices=["ecommerce", "hr", ""],
-        help="Dataset (default: ecommerce)",
+        help="Sample dataset (default: ecommerce)",
     )
 
     args = parser.parse_args()
 
+    mdl_path = args.mdl_path
+    data_source = args.data_source
+    sample_dataset = args.sample_dataset
+
     # Load MDL JSON file
     try:
-        with open(args.mdl_path, "r") as f:
+        with open(mdl_path, "r") as f:
             mdl_json = json.load(f)
     except FileNotFoundError:
-        print(f"Error: MDL file not found at {args.mdl_path}")
+        print(f"Error: MDL file not found at {mdl_path}")
         return
     except json.JSONDecodeError:
-        print(f"Error: Invalid JSON in MDL file {args.mdl_path}")
+        print(f"Error: Invalid JSON in MDL file {mdl_path}")
         return
 
-    rerun_wren_engine(mdl_json, args.dataset_type, args.dataset)
+    rerun_wren_engine(mdl_json, data_source, sample_dataset)
 
     # Execute query
     print("Enter SQL query (end with semicolon on a new line to execute, 'q' to quit):")
@@ -60,13 +64,13 @@ def main():
             try:
                 df = get_data_from_wren_engine(
                     sql=command,
-                    dataset_type=args.dataset_type,
+                    dataset_type=data_source,
                     manifest=mdl_json,
                     limit=10,
                 )
                 print(f"\nExecution result:\n{df.to_string()}\n")
             except Exception as e:
-                print(f"Error executing query: {str(e)}")
+                print(f"\nError executing query: {str(e)}")
         else:
             lines.append(line)
 

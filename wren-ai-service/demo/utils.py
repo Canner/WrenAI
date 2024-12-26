@@ -118,7 +118,6 @@ def get_mdl_json(database_name: str):
     return mdl_json
 
 
-@st.cache_data
 def get_data_from_wren_engine(
     sql: str,
     dataset_type: str,
@@ -139,7 +138,7 @@ def get_data_from_wren_engine(
             },
         )
 
-        assert response.status_code == 200, response.json()
+        assert response.status_code == 200, response.text
 
         data = response.json()
 
@@ -162,7 +161,7 @@ def get_data_from_wren_engine(
             },
         )
 
-        assert response.status_code == 200, response.json()
+        assert response.status_code == 200, response.text
 
         data = response.json()
 
@@ -803,7 +802,6 @@ def sql_regeneration(sql_regeneration_data: dict):
         return None
 
 
-@st.cache_data
 def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
     """Fill Vega-Lite schema values from pandas DataFrame based on x/y encodings.
 

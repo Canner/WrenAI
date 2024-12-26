@@ -67,5 +67,5 @@ prepare-wren-engine:
 use-wren-ui-as-engine:
 	poetry run python -m src.force_update_config
 
-test-sql mdl_path="" dataset_type="bigquery" dataset="":
-	poetry run python demo/test_sql.py --mdl-path "{{mdl_path}}" --dataset-type "{{dataset_type}}" --dataset "{{dataset}}"
+run-sql mdl_path="" data_source="" sameple_dataset="":
+	poetry run python demo/test_sql.py --mdl-path "{{mdl_path}}" --data-source "{{data_source}}" --sample-dataset "{{sameple_dataset}}"
