@@ -35,6 +35,7 @@ export interface ThreadResponseChartDetail {
   error?: object;
   description?: string;
   chartSchema?: Record<string, any>;
+  adjustment?: boolean;
 }
 
 export interface ThreadResponse {

@@ -50,6 +50,7 @@ const COMMON_CHART_DETAIL = gql`
     error {
       ...CommonError
     }
+    adjustment
   }
 `;
 

@@ -1040,6 +1040,7 @@ export type ThreadResponseBreakdownDetail = {
 
 export type ThreadResponseChartDetail = {
   __typename?: 'ThreadResponseChartDetail';
+  adjustment?: Maybe<Scalars['Boolean']>;
   chartSchema?: Maybe<Scalars['JSON']>;
   description?: Maybe<Scalars['String']>;
   error?: Maybe<Error>;

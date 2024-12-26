@@ -205,6 +205,7 @@ export class ChartAdjustmentBackgroundTracker {
             error: result?.error,
             description: result?.response?.reasoning,
             chartSchema: result?.response?.chartSchema,
+            adjustment: true,
           };
           logger.debug(
             `Job ${threadResponse.id} chart status changed, updating`,
