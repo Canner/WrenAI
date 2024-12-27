@@ -111,7 +111,7 @@ const config: Config = {
   legend: {
     symbolLimit: 15,
     columns: 1,
-    labelFontSize: 12,
+    labelFontSize: 10,
     labelColor: COLOR.GRAY_8,
     titleColor: COLOR.GRAY_9,
     titleFontSize: 14,
@@ -119,8 +119,12 @@ const config: Config = {
   range: {
     category: colorScheme,
     ordinal: colorScheme,
+    diverging: colorScheme,
+    symbol: colorScheme,
+    heatmap: colorScheme,
+    ramp: colorScheme,
   },
-  point: { size: 60 },
+  point: { size: 60, color: DEFAULT_COLOR },
 };
 
 export default class ChartSpecHandler {
@@ -151,7 +155,7 @@ export default class ChartSpecHandler {
     // default options
     this.options = {
       width: isNil(options?.width) ? 'container' : options.width,
-      height: isNil(options?.height) ? 280 : options.height,
+      height: isNil(options?.height) ? 320 : options.height,
       stack: isNil(options?.stack) ? 'zero' : options.stack,
       point: isNil(options?.point) ? true : options.point,
       donutInner: isNil(options?.donutInner) ? 60 : options.donutInner,
@@ -295,7 +299,7 @@ export default class ChartSpecHandler {
     }
 
     // basic color properties
-    let colorProperties = {
+    const colorProperties = {
       title,
       field: category?.field,
       type: category?.type,
@@ -303,11 +307,6 @@ export default class ChartSpecHandler {
         range: colorScheme,
       },
     } as any;
-    if (this.mark.type === MarkType.LINE) {
-      colorProperties = {
-        value: DEFAULT_COLOR,
-      };
-    }
 
     this.encoding.color = {
       ...colorProperties,
