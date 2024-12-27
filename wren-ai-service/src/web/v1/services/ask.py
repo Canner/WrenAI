@@ -91,7 +91,9 @@ class AskResultResponse(BaseModel):
     ]
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
-    type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
+    type: Optional[
+        Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL", "USER_GUIDE"]
+    ] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -221,6 +223,13 @@ class AskService:
                             intent_reasoning=intent_reasoning,
                         )
                         results["metadata"]["type"] = "GENERAL"
+                        return results
+                    elif intent == "USER_GUIDE":
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            type="USER_GUIDE",
+                        )
+                        results["metadata"]["type"] = "USER_GUIDE"
                         return results
                     else:
                         self._ask_results[query_id] = AskResultResponse(
