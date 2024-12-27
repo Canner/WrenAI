@@ -53,7 +53,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY migrations ./migrations
 COPY knexfile.js ./knexfile.js
-RUN yarn global add knex
+RUN yarn add knex
 
 EXPOSE 3000
 
