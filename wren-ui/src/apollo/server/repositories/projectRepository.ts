@@ -30,6 +30,10 @@ export interface MYSQL_CONNECTION_INFO {
   user: string;
   password: string;
   database: string;
+  ssl: boolean;
+  certAuthority?: string; // SSL cert authority file
+  clientKey?: string;     // SSL client key file
+  clientCert?: string;    // SSL client cert file
 }
 
 export interface MS_SQL_CONNECTION_INFO {

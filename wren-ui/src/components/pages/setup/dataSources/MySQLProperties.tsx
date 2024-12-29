@@ -1,4 +1,5 @@
-import { Form, Input } from 'antd';
+import { useState } from 'react';
+import { Form, Input, Switch } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
@@ -10,6 +11,7 @@ interface Props {
 export default function MySQLProperties(props: Props) {
   const { mode } = props;
   const isEditMode = mode === FORM_MODE.EDIT;
+  const [sslActive, setSslActive] = useState<boolean>(false);
   return (
     <>
       <Form.Item
@@ -88,6 +90,27 @@ export default function MySQLProperties(props: Props) {
         ]}
       >
         <Input placeholder="MySQL database name" disabled={isEditMode} />
+      </Form.Item>
+      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
+        <Switch checked={sslActive} onChange={setSslActive} />
+      </Form.Item>
+      <Form.Item
+        label="SSL CA File"
+        name="certAuthority"
+      >
+        <Input placeholder="Path to Certificate Authority file for SSL" disabled={isEditMode || !sslActive} />
+      </Form.Item>
+      <Form.Item
+        label="SSL Key File"
+        name="clientKey"
+      >
+        <Input placeholder="Path to Client Key file for SSL" disabled={isEditMode || !sslActive} />
+      </Form.Item>
+      <Form.Item
+        label="SSL CERT File"
+        name="clientCert"
+      >
+        <Input placeholder="Path to Client Certificate file for SSL" disabled={isEditMode || !sslActive} />
       </Form.Item>
     </>
   );
