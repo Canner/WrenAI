@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, remove_sql_summary_duplicates, trace_metadata
+from src.utils import async_timer, trace_metadata
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskError, AskHistory
 from src.web.v1.services.ask_details import SQLBreakdown
@@ -196,10 +196,6 @@ class SqlExpansionService:
                     valid_sql_summary_results = sql_summary_results["post_process"][
                         "sql_summary_results"
                     ]
-                    # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
-                    valid_sql_summary_results = remove_sql_summary_duplicates(
-                        valid_sql_summary_results
-                    )
 
                 if not valid_sql_summary_results:
                     logger.exception(
