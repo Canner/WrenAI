@@ -251,6 +251,10 @@ def create_service_metadata(
     pipe_components: dict[str, PipelineComponent],
     pyproject_path: str = "pyproject.toml",
 ) -> ServiceMetadata:
+    """
+    This service metadata is used for logging purposes and will be sent to Langfuse.
+    """
+
     def _get_version_from_pyproject() -> str:
         with open(pyproject_path, "r") as f:
             pyproject = toml.load(f)
