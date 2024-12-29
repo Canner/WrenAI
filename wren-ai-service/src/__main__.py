@@ -52,7 +52,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(routers.router, prefix="/v1", tags=["v1"])
-# deprecated, it was used for load testing using locust only
+# TODO: deprecated, it was used for load testing using locust only. should be removed in the future
 if settings.development:
     from src.web import development
 
