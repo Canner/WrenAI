@@ -277,7 +277,7 @@ def create_service_metadata(
         embedding_metadata = (
             {
                 "embedding_model": embedder_provider.get_model(),
-                "embedding_model_dim": embedder_provider.get_dimensions(),
+                "embedding_model_dim": embedder_provider.get_model_dimension(),
             }
             if embedder_provider
             else {}
