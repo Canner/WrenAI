@@ -135,10 +135,21 @@ def gen_report(
 
 
 def save_report(report_by_release: dict):
-    with open(
-        f"outputs/report_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json", "w"
-    ) as f:
-        json.dump(report_by_release, f)
+    if not report_by_release:
+        raise ValueError("Empty report data")
+
+    output_dir = "outputs"
+    os.makedirs(output_dir, exist_ok=True)
+
+    output_file = os.path.join(
+        output_dir, f"report_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+    )
+
+    try:
+        with open(output_file, "w") as f:
+            json.dump(report_by_release, f)
+    except IOError as e:
+        raise RuntimeError(f"Failed to save report: {e}")
 
 
 async def main():
