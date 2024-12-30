@@ -216,7 +216,7 @@ class SqlExpansionService:
                     description="",
                     steps=[
                         {
-                            "sql": valid_generation_results[0]["sql"],
+                            "sql": valid_sql_summary_results[0]["sql"],
                             "summary": valid_sql_summary_results[0]["summary"],
                             "cte_name": "",
                         }
