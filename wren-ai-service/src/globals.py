@@ -93,7 +93,7 @@ def create_service_container(
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
-                "historical_question_retrieval": retrieval.HistoricalQuestionRetrieval(
+                "historical_question": retrieval.HistoricalQuestionRetrieval(
                     **pipe_components["historical_question_retrieval"],
                 ),
                 "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
