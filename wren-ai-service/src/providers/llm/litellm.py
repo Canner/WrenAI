@@ -16,6 +16,7 @@ from src.providers.llm import (
     connect_chunks,
 )
 from src.providers.loader import provider
+from src.utils import remove_trailing_slash
 
 
 @provider("litellm_llm")
@@ -34,7 +35,7 @@ class LitellmLLMProvider(LLMProvider):
     ):
         self._model = model
         self._api_key = os.getenv(api_key_name) if api_key_name else None
-        self._api_base = api_base
+        self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._api_version = api_version
         self._model_kwargs = kwargs
         self._timeout = timeout

@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import show_current_time
 from src.pipelines.generation.utils.sql import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
@@ -132,7 +131,7 @@ def prompt(
         previous_query_summaries=previous_query_summaries,
         alert=alert,
         instructions=construct_instructions(configuration),
-        current_time=show_current_time(configuration.timezone),
+        current_time=configuration.show_current_time(),
     )
 
 

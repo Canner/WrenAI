@@ -261,15 +261,6 @@ def pipeline_processor(entry: dict) -> dict:
     }
 
 
-_TYPE_TO_PROCESSOR = {
-    "llm": llm_processor,
-    "embedder": embedder_processor,
-    "document_store": document_store_processor,
-    "engine": engine_processor,
-    "pipeline": pipeline_processor,
-}
-
-
 @dataclass
 class Configuration:
     providers: dict
@@ -277,6 +268,14 @@ class Configuration:
 
 
 def transform(config: list[dict]) -> Configuration:
+    _TYPE_TO_PROCESSOR = {
+        "llm": llm_processor,
+        "embedder": embedder_processor,
+        "document_store": document_store_processor,
+        "engine": engine_processor,
+        "pipeline": pipeline_processor,
+    }
+
     returned = {
         "embedder": {},
         "llm": {},
@@ -301,10 +300,10 @@ def transform(config: list[dict]) -> Configuration:
     )
 
 
+# TODO: DEPRECATED: use generate_components instead
 def init_providers(
     engine_config: EngineConfig,
 ) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
-    # DEPRECATED: use generate_components instead
     from src.utils import load_env_vars
 
     load_env_vars()
@@ -378,7 +377,7 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
     """
     loader.import_mods()
 
-    # DEPRECATED: remove this fallback in the future
+    # TODO:DEPRECATED: remove this fallback in the future
     if not configs:
         message = """
         Warning: No configuration provided. Falling back to environment variables for settings.
@@ -399,19 +398,21 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
         for type, configs in config.providers.items()
     }
 
-    def get(type: str, components: dict):
+    def get(type: str, components: dict, instantiated_providers: dict):
         identifier = components.get(type)
         return instantiated_providers[type].get(identifier)
 
-    def componentize(components: dict):
+    def componentize(components: dict, instantiated_providers: dict):
         return PipelineComponent(
-            embedder_provider=get("embedder", components),
-            llm_provider=get("llm", components),
-            document_store_provider=get("document_store", components),
-            engine=get("engine", components),
+            embedder_provider=get("embedder", components, instantiated_providers),
+            llm_provider=get("llm", components, instantiated_providers),
+            document_store_provider=get(
+                "document_store", components, instantiated_providers
+            ),
+            engine=get("engine", components, instantiated_providers),
         )
 
     return {
-        pipe_name: componentize(components)
+        pipe_name: componentize(components, instantiated_providers)
         for pipe_name, components in config.pipelines.items()
     }
