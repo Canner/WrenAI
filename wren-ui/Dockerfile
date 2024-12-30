@@ -21,7 +21,6 @@ FROM base AS deps
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-# RUN NODE_ENV=production yarn install --immutable
 RUN yarn install --immutable
 
 # Rebuild the source code only when needed
@@ -53,6 +52,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY migrations ./migrations
 COPY knexfile.js ./knexfile.js
+RUN yarn add knex
 
 EXPOSE 3000
 
@@ -60,4 +60,4 @@ ENV PORT 3000
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
-CMD yarn dlx knex migrate:latest && HOSTNAME="0.0.0.0" node server.js
+CMD yarn knex migrate:latest && HOSTNAME="0.0.0.0" node server.js
