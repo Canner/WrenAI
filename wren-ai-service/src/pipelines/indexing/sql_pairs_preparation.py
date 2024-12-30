@@ -163,7 +163,7 @@ SQL_INTENTION_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "matched_schema",
+            "name": "sql_intention_results",
             "schema": SqlIntentionGenerationResult.model_json_schema(),
         },
     }

@@ -128,11 +128,6 @@ data:
       - name: sql_answer
         llm: litellm_llm.gpt-4o-mini-2024-07-18
         engine: wren_ui
-<<<<<<< HEAD
-=======
-      - name: preprocess_sql_data
-        llm: litellm_llm.gpt-4o-mini-2024-07-18
->>>>>>> main
       - name: sql_breakdown
         llm: litellm_llm.gpt-4o-mini-2024-07-18
         engine: wren_ui
