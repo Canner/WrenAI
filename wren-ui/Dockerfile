@@ -1,7 +1,7 @@
 FROM node:18-bookworm-slim AS base
 
 # Install required packages
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl git && rm -rf /var/lib/apt/lists/*
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
@@ -21,6 +21,7 @@ FROM base AS deps
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
+# RUN NODE_ENV=production yarn install --immutable
 RUN yarn install --immutable
 
 # Rebuild the source code only when needed
@@ -52,6 +53,20 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY migrations ./migrations
 COPY knexfile.js ./knexfile.js
+
+# Copy knex from builder to runner
+COPY --from=builder /app/node_modules/knex ./node_modules/knex
+COPY --from=builder /app/node_modules/rechoir ./node_modules/rechoir
+COPY --from=builder /app/node_modules/resolve ./node_modules/resolve
+COPY --from=builder /app/node_modules/is-core-module ./node_modules/is-core-module
+COPY --from=builder /app/node_modules/hasown ./node_modules/hasown
+COPY --from=builder /app/node_modules/function-bind ./node_modules/function-bind
+COPY --from=builder /app/node_modules/interpret ./node_modules/interpret
+COPY --from=builder /app/node_modules/resolve-from ./node_modules/resolve-from
+COPY --from=builder /app/node_modules/tildify ./node_modules/tildify
+COPY --from=builder /app/node_modules/getopts ./node_modules/getopts
+COPY --from=builder /app/node_modules/escalade/sync ./node_modules/escalade/sync
+COPY --from=builder /app/node_modules/.yarn-state.yml ./node_modules/.yarn-state.yml
 
 EXPOSE 3000
 
