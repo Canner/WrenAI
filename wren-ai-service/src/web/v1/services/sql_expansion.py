@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.utils import remove_sql_summary_duplicates, trace_metadata
+from src.utils import trace_metadata
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskError, AskHistory
 from src.web.v1.services.ask_details import SQLBreakdown
@@ -159,7 +159,7 @@ class SqlExpansionService:
                     contexts=documents,
                     history=sql_expansion_request.history,
                     project_id=sql_expansion_request.project_id,
-                    timezone=sql_expansion_request.configurations.timezone,
+                    configuration=sql_expansion_request.configurations,
                 )
 
                 valid_generation_results = []
@@ -194,10 +194,6 @@ class SqlExpansionService:
                     valid_sql_summary_results = sql_summary_results["post_process"][
                         "sql_summary_results"
                     ]
-                    # remove duplicates of valid_sql_summary_results, which consists of a sql and a summary
-                    valid_sql_summary_results = remove_sql_summary_duplicates(
-                        valid_sql_summary_results
-                    )
 
                 if not valid_sql_summary_results:
                     logger.exception(
@@ -218,7 +214,7 @@ class SqlExpansionService:
                     description="",
                     steps=[
                         {
-                            "sql": valid_generation_results[0]["sql"],
+                            "sql": valid_sql_summary_results[0]["sql"],
                             "summary": valid_sql_summary_results[0]["summary"],
                             "cte_name": "",
                         }

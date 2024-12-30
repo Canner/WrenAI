@@ -1,20 +1,6 @@
-from datetime import datetime
 from typing import Optional
 
-import pytz
-
 from src.core.pipeline import BasicPipeline
-from src.web.v1.services import Configuration
-
-
-def show_current_time(timezone: Configuration.Timezone):
-    # Get the current time in the specified timezone
-    tz = pytz.timezone(
-        timezone.name
-    )  # Assuming timezone.name contains the timezone string
-    current_time = datetime.now(tz)
-
-    return f'{current_time.strftime("%Y-%m-%d %A %H:%M:%S")}'  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
 
 
 def build_table_ddl(

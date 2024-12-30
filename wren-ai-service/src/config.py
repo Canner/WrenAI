@@ -23,16 +23,16 @@ class Settings(BaseSettings):
     """
 
     host: str = Field(default="127.0.0.1", alias="WREN_AI_SERVICE_HOST")
-    port: int = Field(default=5556, alias="WREN_AI_SERVICE_PORT")
+    port: int = Field(default=5555, alias="WREN_AI_SERVICE_PORT")
 
     # indexing and retrieval config
     column_indexing_batch_size: int = Field(default=50)
     table_retrieval_size: int = Field(default=10)
-    table_column_retrieval_size: int = Field(default=1000)
+    table_column_retrieval_size: int = Field(default=100)
     allow_using_db_schemas_without_pruning: bool = Field(default=False)
 
     # service config
-    query_cache_ttl: int = Field(default=3600)
+    query_cache_ttl: int = Field(default=3600)  # unit: seconds
     query_cache_maxsize: int = Field(
         default=1_000_000,
         comment="""
@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     )
 
     # langfuse config
+    # in order to use langfuse, we also need to set the LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY in the .env or .env.dev file
     langfuse_host: str = Field(default="https://cloud.langfuse.com")
     langfuse_enable: bool = Field(default=True)
 

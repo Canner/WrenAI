@@ -243,6 +243,10 @@ def create_service_metadata(
     pipe_components: dict[str, PipelineComponent],
     pyproject_path: str = "pyproject.toml",
 ) -> ServiceMetadata:
+    """
+    This service metadata is used for logging purposes and will be sent to Langfuse.
+    """
+
     def _get_version_from_pyproject() -> str:
         with open(pyproject_path, "r") as f:
             pyproject = toml.load(f)
@@ -265,7 +269,7 @@ def create_service_metadata(
         embedding_metadata = (
             {
                 "embedding_model": embedder_provider.get_model(),
-                "embedding_model_dim": embedder_provider.get_dimensions(),
+                "embedding_model_dim": embedder_provider.get_model_dimension(),
             }
             if embedder_provider
             else {}

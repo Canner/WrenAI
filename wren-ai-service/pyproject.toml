@@ -34,6 +34,7 @@ google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
 litellm = "^1.52.12"
+boto3 = "^1.35.90"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"

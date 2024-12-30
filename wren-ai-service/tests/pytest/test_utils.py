@@ -26,7 +26,7 @@ def _mock(mocker: MockFixture) -> tuple:
         return_value="mock-embedding-model",
     )
     mocker.patch(
-        "src.core.provider.EmbedderProvider.get_dimensions",
+        "src.core.provider.EmbedderProvider.get_model_dimension",
         return_value=768,
     )
 
