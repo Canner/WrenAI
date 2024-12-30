@@ -161,7 +161,7 @@ class SqlExpansionService:
                     contexts=documents,
                     history=sql_expansion_request.history,
                     project_id=sql_expansion_request.project_id,
-                    timezone=sql_expansion_request.configurations.timezone,
+                    configuration=sql_expansion_request.configurations,
                 )
 
                 valid_generation_results = []
