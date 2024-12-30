@@ -37,7 +37,7 @@ jobs:
         id: changelog
         run: |
           echo "Generating change log..."
-          PREVIOUS_VERSION=release/ui/$(grep '"version"' package.json | head -1 | awk -F'"' '{print $4}')
+          PREVIOUS_VERSION=release/ui/$(jq -r '.version' package.json)
           echo "Previous version: $PREVIOUS_VERSION"
           echo "================ change log ================"
           CHANGE_LOG=$(git log --pretty=format:"%s" $PREVIOUS_VERSION..HEAD | grep wren-ui)
