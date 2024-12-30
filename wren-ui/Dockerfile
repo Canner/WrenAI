@@ -21,7 +21,6 @@ FROM base AS deps
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-# RUN NODE_ENV=production yarn install --immutable
 RUN yarn install --immutable
 
 # Rebuild the source code only when needed
