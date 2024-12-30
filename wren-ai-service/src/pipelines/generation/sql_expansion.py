@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import show_current_time
 from src.pipelines.generation.utils.sql import SQLGenPostProcessor
 from src.utils import async_timer, timer
 from src.web.v1.services import Configuration
@@ -58,14 +57,14 @@ def prompt(
     query: str,
     documents: List[str],
     history: AskHistory,
-    timezone: Configuration.Timezone,
+    configuration: Configuration,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
         query=query,
         documents=documents,
         sql=history.sql,
-        current_time=show_current_time(timezone),
+        current_time=configuration.show_current_time(),
     )
 
 
@@ -138,7 +137,7 @@ class SQLExpansion(BasicPipeline):
         query: str,
         contexts: List[str],
         history: AskHistory,
-        timezone: Configuration.Timezone = Configuration().timezone,
+        configuration: Configuration = Configuration(),
         project_id: str | None = None,
     ):
         logger.info("Sql Expansion Generation pipeline is running...")
@@ -149,7 +148,7 @@ class SQLExpansion(BasicPipeline):
                 "documents": contexts,
                 "history": history,
                 "project_id": project_id,
-                "timezone": timezone,
+                "configuration": configuration,
                 **self._components,
             },
         )
