@@ -26,7 +26,11 @@ class IntentClassificationMock(generation.IntentClassification):
         self._intent = intent
 
     async def run(
-        self, query: str, id: Optional[str] = None, history: Optional[AskHistory] = None
+        self,
+        query: str,
+        id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
+        configuration: Configuration | None = None,
     ):
         return {"post_process": {"intent": self._intent, "db_schemas": []}}
 
