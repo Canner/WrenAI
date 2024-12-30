@@ -29,6 +29,12 @@ def get_langfuse_client() -> AsyncFernLangfuse:
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
     host = os.getenv("LANGFUSE_HOST")
+
+    if not public_key or not secret_key or not host:
+        raise ValueError(
+            "Missing required Langfuse environment variables: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST"
+        )
+
     return init_langfuse_api_client(
         public_key=public_key,
         secret_key=secret_key,
@@ -104,7 +110,7 @@ def gen_report(
                 return trace_url
             case "Generate Relationship Recommendation":
                 return trace_url
-            case "Genereate Chart":
+            case "Generate Chart":
                 return trace_url
             case "Adjust Chart":
                 return trace_url
@@ -114,11 +120,16 @@ def gen_report(
                 return None
 
     if only_errors:
-        return [
-            _get_output(trace, trace_name)
-            for trace in traces
-            if json.loads(trace.output).get("metadata", {}).get("error_type", "")
-        ]
+        valid_traces = []
+        for trace in traces:
+            try:
+                output_data = json.loads(trace.output)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if output_data.get("metadata", {}).get("error_type", ""):
+                valid_traces.append(_get_output(trace, trace_name))
+        return valid_traces
     else:
         return [_get_output(trace, trace_name) for trace in traces]
 
@@ -144,7 +155,7 @@ async def main():
         "Generate Semantics Description",
         "Generate Relationship Recommendation",
         # chart
-        "Genereate Chart",
+        "Generate Chart",
         "Adjust Chart",
         # others
         "Generate Question Recommendation",
