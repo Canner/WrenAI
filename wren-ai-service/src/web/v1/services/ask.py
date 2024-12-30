@@ -179,6 +179,7 @@ class AskService:
                             query=ask_request.query,
                             history=ask_request.history,
                             id=ask_request.project_id,
+                            configuration=ask_request.configurations,
                         )
                     ).get("post_process", {})
                     intent = intent_classification_result.get("intent")
