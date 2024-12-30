@@ -60,4 +60,4 @@ ENV PORT 3000
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
-CMD yarn dlxknex migrate:latest && HOSTNAME="0.0.0.0" node server.js
+CMD yarn dlx knex migrate:latest && HOSTNAME="0.0.0.0" node server.js
