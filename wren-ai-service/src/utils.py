@@ -197,27 +197,3 @@ def trace_metadata(func):
         return results
 
     return wrapper
-
-
-def remove_sql_summary_duplicates(dicts):
-    """
-    Removes duplicates from a list of dictionaries based on 'sql' and 'summary' fields.
-
-    Args:
-    dicts (list of dict): The list of dictionaries to be deduplicated.
-
-    Returns:
-    list of dict: A list of dictionaries after removing duplicates.
-    """
-    # Convert each dictionary to a tuple of (sql, summary) to make them hashable
-    seen = set()
-    unique_dicts = []
-    for d in dicts:
-        identifier = (
-            d["sql"],
-            d["summary"],
-        )  # This assumes 'sql' and 'summary' always exist
-        if identifier not in seen:
-            seen.add(identifier)
-            unique_dicts.append(d)
-    return unique_dicts

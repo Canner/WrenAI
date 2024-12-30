@@ -26,7 +26,6 @@ setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-
     pipe_components = generate_components(settings.components)
     app.state.service_container = create_service_container(pipe_components, settings)
     app.state.service_metadata = create_service_metadata(pipe_components)
@@ -53,6 +52,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(routers.router, prefix="/v1", tags=["v1"])
+# TODO: deprecated, it was used for load testing using locust only. should be removed in the future
 if settings.development:
     from src.web import development
 

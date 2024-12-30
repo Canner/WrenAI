@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import build_table_ddl, show_current_time
+from src.pipelines.common import build_table_ddl
 from src.utils import async_timer, timer
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
@@ -238,7 +238,7 @@ def prompt(
         query=query,
         db_schemas=construct_db_schemas,
         query_history=previous_query_summaries,
-        current_time=show_current_time(configuration.timezone),
+        current_time=configuration.show_current_time(),
     )
 
 

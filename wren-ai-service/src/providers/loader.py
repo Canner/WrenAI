@@ -101,6 +101,7 @@ def get_default_embedding_model_dim(embedder_provider: str):
     ).EMBEDDING_MODEL_DIMENSION
 
 
+# TODO: remove this function after litellm provider is stable; users should pull the model themselves. Make the solution simpler.
 def pull_ollama_model(url: str, model_name: str):
     client = Client(host=url)
     models = [model["name"] for model in client.list()["models"]]
