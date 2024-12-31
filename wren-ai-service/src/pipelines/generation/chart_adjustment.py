@@ -54,19 +54,21 @@ Language: {{ language }}
 
 Adjustment Options:
 - Chart Type: {{ adjustment_option.chart_type }}
+{% if adjustment_option.chart_type != "pie" %}
 {% if adjustment_option.x_axis %}
 - X Axis: {{ adjustment_option.x_axis }}
 {% endif %}
 {% if adjustment_option.y_axis %}
 - Y Axis: {{ adjustment_option.y_axis }}
 {% endif %}
-{% if adjustment_option.x_offset %}
+{% endif %}
+{% if adjustment_option.x_offset and adjustment_option.chart_type == "grouped_bar" %}
 - X Offset: {{ adjustment_option.x_offset }}
 {% endif %}
-{% if adjustment_option.color %}
+{% if adjustment_option.color and adjustment_option.chart_type != "area" %}
 - Color: {{ adjustment_option.color }}
 {% endif %}
-{% if adjustment_option.theta %}
+{% if adjustment_option.theta and adjustment_option.chart_type == "pie" %}
 - Theta: {{ adjustment_option.theta }}
 {% endif %}
 
