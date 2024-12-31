@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, Literal
+from typing import Any, Dict
 
 import orjson
 from hamilton import base
@@ -10,18 +10,12 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
-    AreaChartSchema,
-    BarChartSchema,
     ChartDataPreprocessor,
-    GroupedBarChartSchema,
-    LineChartSchema,
-    PieChartSchema,
-    StackedBarChartSchema,
+    ChartGenerationResults,
     chart_generation_instructions,
 )
 from src.utils import async_timer, timer
@@ -162,19 +156,6 @@ def post_process(
 
 
 ## End of Pipeline
-class ChartGenerationResults(BaseModel):
-    reasoning: str
-    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area"]
-    chart_schema: (
-        LineChartSchema
-        | BarChartSchema
-        | PieChartSchema
-        | GroupedBarChartSchema
-        | StackedBarChartSchema
-        | AreaChartSchema
-    )
-
-
 CHART_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",

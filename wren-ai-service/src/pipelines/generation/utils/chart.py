@@ -345,3 +345,16 @@ class AreaChartSchema(ChartSchema):
 
     mark: AreaChartMark
     encoding: AreaChartEncoding
+
+
+class ChartGenerationResults(BaseModel):
+    reasoning: str
+    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area"]
+    chart_schema: (
+        LineChartSchema
+        | BarChartSchema
+        | PieChartSchema
+        | GroupedBarChartSchema
+        | StackedBarChartSchema
+        | AreaChartSchema
+    )
