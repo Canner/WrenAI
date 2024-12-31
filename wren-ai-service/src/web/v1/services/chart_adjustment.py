@@ -75,6 +75,7 @@ class ChartAdjustmentResultRequest(BaseModel):
 
 class ChartAdjustmentResult(BaseModel):
     reasoning: str
+    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area"]
     chart_schema: dict
 
 

@@ -262,6 +262,8 @@ if st.session_state["asks_results"]:
                 limit=500,
             )
             if chart_result := chart_response.get("response"):
+                if chart_type := chart_result["chart_type"]:
+                    st.markdown(f"### Chart Type: {chart_type}")
                 if reasoning := chart_result["reasoning"]:
                     st.markdown("### Reasoning for making this chart")
                     st.markdown(f"{reasoning}")
@@ -277,6 +279,7 @@ if st.session_state["asks_results"]:
                             "query": st.session_state["chosen_query_result"]["query"],
                             "sql": st.session_state["chosen_query_result"]["sql"],
                             "chart_schema": vega_lite_schema,
+                            "chart_type": chart_type,
                             "language": st.session_state["language"],
                             "reasoning": chart_result["reasoning"],
                             "dataset_type": st.session_state["dataset_type"],

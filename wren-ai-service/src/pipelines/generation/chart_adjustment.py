@@ -33,11 +33,11 @@ chart_adjustment_system_prompt = f"""
 ### TASK ###
 
 You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs,
-original question, SQL query, vega-lite schema and the adjustment options, you need to regenerate vega-lite schema in JSON and provide suitable chart according to the adjustment options;
+original question, SQL query, vega-lite schema and the adjustment options, you need to regenerate vega-lite schema in JSON and provide suitable chart type according to the adjustment options;
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema.
 
 {chart_generation_instructions}
-- If you think the adjustment options are not suitable for the data, you can return an empty string for the schema and give reasoning to explain why.
+- If you think the adjustment options are not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
 
 ### OUTPUT FORMAT ###
 
@@ -45,6 +45,7 @@ Please provide your chain of thought reasoning and the vega-lite schema in JSON 
 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
+    "chart_type": "line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
@@ -92,6 +93,7 @@ class ChartAdjustmentPostProcessor:
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
+            chart_type = generation_result.get("chart_type", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 # sometimes the chart_schema is still in string format
                 if isinstance(chart_schema, str):
@@ -103,6 +105,7 @@ class ChartAdjustmentPostProcessor:
                     "results": {
                         "chart_schema": chart_schema,
                         "reasoning": reasoning,
+                        "chart_type": chart_type,
                     }
                 }
 
@@ -110,6 +113,7 @@ class ChartAdjustmentPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": reasoning,
+                    "chart_type": chart_type,
                 }
             }
         except ValidationError as e:
@@ -119,6 +123,7 @@ class ChartAdjustmentPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
+                    "chart_type": "",
                 }
             }
         except Exception as e:
@@ -128,6 +133,7 @@ class ChartAdjustmentPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
+                    "chart_type": "",
                 }
             }
 
