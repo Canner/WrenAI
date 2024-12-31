@@ -6,6 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.generation.utils.chart import ChartGenerationResults
 from src.utils import async_timer, trace_metadata
 from src.web.v1.services import Configuration
 
@@ -62,15 +63,9 @@ class ChartResultRequest(BaseModel):
     query_id: str
 
 
-class ChartResult(BaseModel):
-    reasoning: str
-    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area"]
-    chart_schema: dict
-
-
 class ChartResultResponse(BaseModel):
     status: Literal["fetching", "generating", "finished", "failed", "stopped"]
-    response: Optional[ChartResult] = None
+    response: Optional[ChartGenerationResults] = None
     error: Optional[ChartError] = None
 
 
@@ -144,7 +139,7 @@ class ChartService:
             else:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="finished",
-                    response=ChartResult(**chart_result),
+                    response=ChartGenerationResults(**chart_result),
                 )
                 results["chart_result"] = chart_result
 

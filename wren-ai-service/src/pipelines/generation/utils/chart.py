@@ -349,7 +349,7 @@ class AreaChartSchema(ChartSchema):
 
 class ChartGenerationResults(BaseModel):
     reasoning: str
-    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area"]
+    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""]
     chart_schema: (
         LineChartSchema
         | BarChartSchema
