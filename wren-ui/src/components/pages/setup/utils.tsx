@@ -29,6 +29,12 @@ type SetupStep = {
   maxWidth?: number;
 };
 
+export enum SupportedSSLMode {
+  DISABLE = 'Disable',
+  REQUIRE = 'Require',
+  VERIFY_CA = 'Verify CA',
+}
+
 export type ButtonOption = {
   label: string;
   logo?: string;
