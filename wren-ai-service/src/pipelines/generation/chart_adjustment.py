@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 
 import orjson
 from hamilton import base
@@ -189,6 +189,7 @@ def post_process(
 ## End of Pipeline
 class ChartAdjustmentResults(BaseModel):
     reasoning: str
+    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area"]
     chart_schema: (
         LineChartSchema
         | BarChartSchema
