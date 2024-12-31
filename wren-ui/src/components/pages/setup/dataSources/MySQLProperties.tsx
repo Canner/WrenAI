@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Form, Input, Switch } from 'antd';
+import { Form, Input, Select } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
+import { SupportedSSLMode } from '../utils';
 
 interface Props {
   mode?: FORM_MODE;
@@ -11,7 +12,8 @@ interface Props {
 export default function MySQLProperties(props: Props) {
   const { mode } = props;
   const isEditMode = mode === FORM_MODE.EDIT;
-  const [sslActive, setSslActive] = useState<boolean>(false);
+  const [sslMode, setSSLMode] = useState<string>(SupportedSSLMode.DISABLE);
+  const onSSLModeChange = (value: string) => setSSLMode(value)
   return (
     <>
       <Form.Item
@@ -91,27 +93,31 @@ export default function MySQLProperties(props: Props) {
       >
         <Input placeholder="MySQL database name" disabled={isEditMode} />
       </Form.Item>
-      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
-        <Switch checked={sslActive} onChange={setSslActive} />
+      <Form.Item label="SSL mode" name="sslMode">
+        <Select
+          defaultValue={SupportedSSLMode.DISABLE}
+          style={{ width: 120 }}
+          onChange={onSSLModeChange}
+          disabled={isEditMode}
+          options={[
+            { value: SupportedSSLMode.DISABLE },
+            { value: SupportedSSLMode.REQUIRE },
+            { value: SupportedSSLMode.VERIFY_CA },
+          ]}
+        />
       </Form.Item>
-      <Form.Item
-        label="SSL CA File"
-        name="certAuthority"
-      >
-        <Input placeholder="Path to Certificate Authority file for SSL" disabled={isEditMode || !sslActive} />
-      </Form.Item>
-      <Form.Item
-        label="SSL Key File"
-        name="clientKey"
-      >
-        <Input placeholder="Path to Client Key file for SSL" disabled={isEditMode || !sslActive} />
-      </Form.Item>
-      <Form.Item
-        label="SSL CERT File"
-        name="clientCert"
-      >
-        <Input placeholder="Path to Client Certificate file for SSL" disabled={isEditMode || !sslActive} />
-      </Form.Item>
+      {
+        sslMode === SupportedSSLMode.VERIFY_CA &&
+        <Form.Item
+          label="SSL CA File"
+          name="ca"
+        >
+          <Input
+            placeholder="Path to Certificate Authority file for SSL"
+            disabled={isEditMode}
+          />
+        </Form.Item>
+      }
     </>
   );
 }
