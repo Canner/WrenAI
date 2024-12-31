@@ -160,7 +160,7 @@ def _ask_service_ttl_mock(query: str):
                     f"mock document 2 for {query}",
                 ]
             ),
-            "historical_question_retrieval": HistoricalQuestionMock(),
+            "historical_question": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
                 valid=[{"sql": "select count(*) from books"}],
             ),
