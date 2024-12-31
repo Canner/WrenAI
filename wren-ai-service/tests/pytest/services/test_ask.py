@@ -43,7 +43,7 @@ def ask_service():
             "retrieval": retrieval.Retrieval(
                 **pipe_components["db_schema_retrieval"],
             ),
-            "historical_question_retrieval": retrieval.HistoricalQuestionRetrieval(
+            "historical_question": retrieval.HistoricalQuestionRetrieval(
                 **pipe_components["historical_question_retrieval"],
             ),
             "sql_generation": generation.SQLGeneration(
