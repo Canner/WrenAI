@@ -6,7 +6,6 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.generation.utils.chart import ChartGenerationResults
 from src.utils import async_timer, trace_metadata
 from src.web.v1.services import Configuration
 
@@ -74,11 +73,17 @@ class ChartAdjustmentResultRequest(BaseModel):
     query_id: str
 
 
+class ChartAdjustmentResult(BaseModel):
+    reasoning: str
+    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""]
+    chart_schema: dict
+
+
 class ChartAdjustmentResultResponse(BaseModel):
     status: Literal[
         "understanding", "fetching", "generating", "finished", "failed", "stopped"
     ]
-    response: Optional[ChartGenerationResults] = None
+    response: Optional[ChartAdjustmentResult] = None
     error: Optional[ChartAdjustmentError] = None
 
 
@@ -162,7 +167,7 @@ class ChartAdjustmentService:
                     query_id
                 ] = ChartAdjustmentResultResponse(
                     status="finished",
-                    response=ChartGenerationResults(**chart_result),
+                    response=ChartAdjustmentResult(**chart_result),
                 )
                 results["chart_adjustment_result"] = chart_result
 
