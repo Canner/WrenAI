@@ -53,7 +53,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY migrations ./migrations
 COPY knexfile.js ./knexfile.js
 
-# Copy knex from builder to runner
+# Copy knex and its dependencies from builder to runner
 COPY --from=builder /app/node_modules/knex ./node_modules/knex
 COPY --from=builder /app/node_modules/rechoir ./node_modules/rechoir
 COPY --from=builder /app/node_modules/resolve ./node_modules/resolve
