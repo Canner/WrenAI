@@ -76,6 +76,9 @@ def create_service_container(
                 "table_description": indexing.TableDescription(
                     **pipe_components["table_description_indexing"],
                 ),
+                "sql_pairs_preparation": indexing.SqlPairsPreparation(
+                    **pipe_components["sql_pairs_preparation"],
+                ),
             },
             **query_cache,
         ),
