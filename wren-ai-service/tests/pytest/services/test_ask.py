@@ -156,14 +156,12 @@ def _ask_service_ttl_mock(query: str):
     return AskService(
         {
             "intent_classification": IntentClassificationMock(),
-            "data_assistance": "",
             "retrieval": RetrievalMock(
                 [
                     f"mock document 1 for {query}",
                     f"mock document 2 for {query}",
                 ]
             ),
-            "user_guide_assistance": "",
             "historical_question": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
                 valid=[{"sql": "select count(*) from books"}],
