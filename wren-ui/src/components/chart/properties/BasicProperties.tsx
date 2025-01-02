@@ -25,7 +25,7 @@ export function ChartTypeProperty(props: {
   const { options } = props;
   return (
     <Form.Item className="mb-0" label="Chart type" name="chartType">
-      <Select size="small" options={options} />
+      <Select size="small" options={options} placeholder="Select chart type" />
     </Form.Item>
   );
 }
@@ -38,12 +38,12 @@ export function AxisProperty(props: {
     <Row gutter={16}>
       <Col span={12}>
         <Form.Item className="mb-0" label="X-axis" name="xAxis">
-          <Select size="small" options={options} />
+          <Select size="small" options={options} placeholder="Select x-axis" />
         </Form.Item>
       </Col>
       <Col span={12}>
         <Form.Item className="mb-0" label="Y-axis" name="yAxis">
-          <Select size="small" options={options} />
+          <Select size="small" options={options} placeholder="Select y-axis" />
         </Form.Item>
       </Col>
     </Row>
@@ -53,6 +53,7 @@ export function AxisProperty(props: {
 export interface PropertiesProps {
   columns: { name: string; type: string }[];
   titleMap: Record<string, string>;
+  onChartTypeChange: (chartType: ChartType) => void;
 }
 
 export default function BasicProperties(props: PropertiesProps) {
