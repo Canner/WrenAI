@@ -33,7 +33,6 @@ Endpoints:
        "mdl_hash": "optional-hash",             # Optional model hash for reference
        "thread_id": "optional-thread-id",       # Optional thread identifier
        "project_id": "optional-project-id",     # Optional project identifier
-       "user_id": "optional-user-id"            # Optional user identifier
      }
    - Response: AskDetailsResponse
      {

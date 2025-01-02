@@ -1,7 +1,6 @@
 from typing import Optional
 
-from src.pipelines.generation import intent_classification, sql_generation, sql_summary
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines import generation, retrieval
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -14,7 +13,7 @@ class RetrievalMock(retrieval.Retrieval):
         return {"construct_retrieval_results": self._documents}
 
 
-class HistoricalQuestionMock(historical_question.HistoricalQuestion):
+class HistoricalQuestionMock(retrieval.HistoricalQuestionRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
@@ -22,7 +21,7 @@ class HistoricalQuestionMock(historical_question.HistoricalQuestion):
         return {"formatted_output": {"documents": self._documents}}
 
 
-class IntentClassificationMock(intent_classification.IntentClassification):
+class IntentClassificationMock(generation.IntentClassification):
     def __init__(self, intent: str = "MISLEADING_QUERY"):
         self._intent = intent
 
@@ -36,7 +35,7 @@ class IntentClassificationMock(intent_classification.IntentClassification):
         return {"post_process": {"intent": self._intent, "db_schemas": []}}
 
 
-class GenerationMock(sql_generation.SQLGeneration):
+class GenerationMock(generation.SQLGeneration):
     def __init__(self, valid: list = [], invalid: list = []):
         self._valid = valid
         self._invalid = invalid
@@ -57,7 +56,7 @@ class GenerationMock(sql_generation.SQLGeneration):
         }
 
 
-class SQLSummaryMock(sql_summary.SQLSummary):
+class SQLSummaryMock(generation.SQLSummary):
     """
     Example for the results:
      [

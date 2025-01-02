@@ -10,23 +10,9 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.pipelines.common import ScoreFilter
 
 logger = logging.getLogger("wren-ai-service")
-
-
-@component
-class ScoreFilter:
-    @component.output_types(
-        documents=List[Document],
-    )
-    def run(self, documents: List[Document], score: float = 0.9):
-        return {
-            "documents": sorted(
-                filter(lambda document: document.score >= score, documents),
-                key=lambda document: document.score,
-                reverse=True,
-            )
-        }
 
 
 @component
@@ -39,10 +25,8 @@ class OutputFormatter:
 
         for doc in documents:
             formatted = {
-                "question": doc.content,
-                "summary": doc.meta.get("summary"),
-                "statement": doc.meta.get("statement"),
-                "viewId": doc.meta.get("viewId"),
+                "summary": doc.content,
+                "sql": doc.meta.get("sql"),
             }
             list.append(formatted)
 
@@ -100,7 +84,7 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
 @observe(capture_input=False)
 def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     if retrieval:
-        return score_filter.run(documents=retrieval.get("documents"))
+        return score_filter.run(documents=retrieval.get("documents"), score=0.7)
 
     return {}
 
@@ -118,14 +102,14 @@ def formatted_output(
 ## End of Pipeline
 
 
-class HistoricalQuestion(BasicPipeline):
+class SqlPairsRetrieval(BasicPipeline):
     def __init__(
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
-        store = document_store_provider.get_store(dataset_name="view_questions")
+        store = document_store_provider.get_store(dataset_name="sql_pairs")
         self._components = {
             "store": store,
             "embedder": embedder_provider.get_text_embedder(),
@@ -141,9 +125,9 @@ class HistoricalQuestion(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(name="Historical Question")
+    @observe(name="SqlPairs Retrieval")
     async def run(self, query: str, id: Optional[str] = None):
-        logger.info("HistoricalQuestion pipeline is running...")
+        logger.info("SqlPairs Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
@@ -158,7 +142,7 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        HistoricalQuestion,
-        "historical_question_retrieval",
+        SqlPairsRetrieval,
+        "sql_pairs_retrieval",
         query="this is a test query",
     )

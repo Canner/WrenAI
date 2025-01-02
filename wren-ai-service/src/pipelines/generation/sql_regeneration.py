@@ -13,7 +13,6 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import SQLBreakdownGenPostProcessor
-from src.utils import async_timer, timer
 from src.web.v1.services.sql_regeneration import (
     SQLExplanationWithUserCorrections,
 )
@@ -95,7 +94,6 @@ class SQLRegenerationPreprocesser:
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def preprocess(
     description: str,
@@ -108,7 +106,6 @@ def preprocess(
     )
 
 
-@timer
 @observe(capture_input=False)
 def sql_regeneration_prompt(
     preprocess: Dict[str, Any],
@@ -117,7 +114,6 @@ def sql_regeneration_prompt(
     return prompt_builder.run(results=preprocess["results"])
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_regeneration(
     sql_regeneration_prompt: dict,
@@ -126,7 +122,6 @@ async def generate_sql_regeneration(
     return await generator(prompt=sql_regeneration_prompt.get("prompt"))
 
 
-@async_timer
 @observe(capture_input=False)
 async def sql_regeneration_post_process(
     generate_sql_regeneration: dict,
@@ -187,7 +182,6 @@ class SQLRegeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="SQL-Regeneration Generation")
     async def run(
         self,

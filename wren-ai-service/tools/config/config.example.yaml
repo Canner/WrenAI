@@ -122,6 +122,17 @@ pipes:
     document_store: qdrant
   - name: data_assistance
     llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_pairs_preparation
+    document_store: qdrant
+    embedder: openai_embedder.text-embedding-3-large
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_pairs_deletion
+    document_store: qdrant
+    embedder: openai_embedder.text-embedding-3-large 
+  - name: sql_pairs_retrieval
+    document_store: qdrant
+    embedder: openai_embedder.text-embedding-3-large
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: preprocess_sql_data
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_executor
@@ -138,6 +149,5 @@ settings:
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
   langfuse_enable: true
-  enable_timer: false
   logging_level: DEBUG
   development: true

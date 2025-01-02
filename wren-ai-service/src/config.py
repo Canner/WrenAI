@@ -47,9 +47,6 @@ class Settings(BaseSettings):
     langfuse_enable: bool = Field(default=True)
 
     # debug config
-    enable_timer: bool = Field(
-        default=False
-    )  # TODO: deprecated, will be removed in the future
     logging_level: str = Field(default="INFO")
     development: bool = Field(default=False)
 
