@@ -174,7 +174,7 @@ def post_process(
     vega_schema: Dict[str, Any],
     post_processor: ChartAdjustmentPostProcessor,
 ) -> dict:
-    return post_processor(generate_chart_adjustment.get("replies"), vega_schema)
+    return post_processor.run(generate_chart_adjustment.get("replies"), vega_schema)
 
 
 ## End of Pipeline
