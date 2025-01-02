@@ -6,17 +6,13 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.indexing.sql_pairs_preparation import SqlPair
 from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-pairs
-class SqlPair(BaseModel):
-    sql: str
-    id: str
-
-
 class SqlPairsPreparationRequest(BaseModel):
     _query_id: str | None = None
     sql_pairs: List[SqlPair]
