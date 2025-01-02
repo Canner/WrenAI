@@ -97,7 +97,7 @@ class SqlPairsPreparationService:
         try:
             await self._pipelines["sql_pairs_preparation"].run(
                 sql_pairs=prepare_sql_pairs_request.sql_pairs,
-                id=prepare_sql_pairs_request.project_id,
+                project_id=prepare_sql_pairs_request.project_id,
             )
 
             self._prepare_sql_pairs_statuses[

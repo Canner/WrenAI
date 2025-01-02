@@ -21,7 +21,7 @@ from src.web.v1.services.sql_pairs_preparation import SqlPair
 logger = logging.getLogger("wren-ai-service")
 
 
-sql_intention_generation_system_prompt = """
+_system_prompt = """
 ### TASK ###
 
 You are a data analyst great at generating the concise and readable summary of a SQL query.
@@ -40,7 +40,7 @@ You need to output a JSON object as following:
 }
 """
 
-sql_intention_generation_user_prompt_template = """
+_user_prompt_template = """
 ### INPUT ###
 SQL: {{sql}}
 
@@ -49,27 +49,22 @@ Please think step by step
 
 
 @component
-class SqlPairsDescriptionConverter:
+class SqlPairsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, sql_pairs: List[Dict[str, Any]], id: Optional[str] = None):
-        logger.info("Converting SQL pairs to documents...")
+    def run(self, sql_pairs: List[Dict[str, Any]], project_id: Optional[str] = ""):
+        logger.info(f"Project ID: {project_id} Converting SQL pairs to documents...")
+
+        addition = {"project_id": project_id} if project_id else {}
 
         return {
             "documents": [
                 Document(
-                    id=str(uuid.uuid4()),
-                    meta=(
-                        {
-                            "sql_pair_id": sql_pair.get("id"),
-                            "project_id": id,
-                            "sql": sql_pair.get("sql"),
-                        }
-                        if id
-                        else {
-                            "sql_pair_id": sql_pair.get("id"),
-                            "sql": sql_pair.get("sql"),
-                        }
-                    ),
+                    id=sql_pair.get("id", str(uuid.uuid4())),
+                    meta={
+                        "sql_pair_id": sql_pair.get("id"),
+                        "sql": sql_pair.get("sql"),
+                        **addition,
+                    },
                     content=sql_pair.get("intention"),
                 )
                 for sql_pair in sql_pairs
@@ -89,16 +84,16 @@ def prompts(
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_intention(
     prompts: List[dict],
-    sql_intention_generator: Any,
+    generator: Any,
 ) -> List[dict]:
     async def _task(prompt: str, generator: Any):
         return await generator(prompt=prompt.get("prompt"))
 
-    tasks = [_task(prompt, sql_intention_generator) for prompt in prompts]
+    tasks = [_task(prompt, generator) for prompt in prompts]
     return await asyncio.gather(*tasks)
 
 
-@observe()
+@observe(capture_input=False)
 def post_process(
     generate_sql_intention: List[dict],
     sql_pairs: List[SqlPair],
@@ -115,56 +110,54 @@ def post_process(
 
 
 @observe(capture_input=False)
-def convert_sql_pairs_to_documents(
+def to_documents(
     post_process: List[Dict[str, Any]],
-    sql_pairs_description_converter: SqlPairsDescriptionConverter,
-    id: Optional[str] = None,
+    document_converter: SqlPairsConverter,
+    project_id: Optional[str] = "",
 ) -> Dict[str, Any]:
-    return sql_pairs_description_converter.run(sql_pairs=post_process, id=id)
+    return document_converter.run(sql_pairs=post_process, project_id=project_id)
 
 
 @observe(capture_input=False, capture_output=False)
-async def embed_sql_pairs(
-    convert_sql_pairs_to_documents: Dict[str, Any],
-    document_embedder: Any,
+async def embedding(
+    to_documents: Dict[str, Any],
+    embedder: Any,
 ) -> Dict[str, Any]:
-    return await document_embedder.run(
-        documents=convert_sql_pairs_to_documents["documents"]
-    )
+    return await embedder.run(documents=to_documents["documents"])
 
 
 @observe(capture_input=False, capture_output=False)
-async def delete_sql_pairs(
-    sql_pairs_cleaner: SqlPairsCleaner,
+async def clean(
+    cleaner: SqlPairsCleaner,
     sql_pairs: List[SqlPair],
-    embed_sql_pairs: Dict[str, Any],
-    id: Optional[str] = None,
-) -> List[SqlPair]:
+    embedding: Dict[str, Any],
+    project_id: Optional[str] = "",
+) -> Dict[str, Any]:
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
-    await sql_pairs_cleaner.run(sql_pair_ids=sql_pair_ids, id=id)
+    await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
 
-    return embed_sql_pairs
+    return embedding
 
 
 @observe(capture_input=False)
-async def write_sql_pairs(
-    embed_sql_pairs: Dict[str, Any],
-    sql_pairs_writer: AsyncDocumentWriter,
+async def write(
+    clean: Dict[str, Any],
+    writer: AsyncDocumentWriter,
 ) -> None:
-    return await sql_pairs_writer.run(documents=embed_sql_pairs["documents"])
+    return await writer.run(documents=clean["documents"])
 
 
 ## End of Pipeline
-class SqlIntentionGenerationResult(BaseModel):
+class SqlIntentionResult(BaseModel):
     intention: str
 
 
-SQL_INTENTION_GENERATION_MODEL_KWARGS = {
+_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "sql_intention_results",
-            "schema": SqlIntentionGenerationResult.model_json_schema(),
+            "schema": SqlIntentionResult.model_json_schema(),
         },
     }
 }
@@ -178,21 +171,19 @@ class SqlPairsPreparation(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
-        sql_pairs_store = document_store_provider.get_store(dataset_name="sql_pairs")
+        store = document_store_provider.get_store(dataset_name="sql_pairs")
 
         self._components = {
-            "sql_pairs_cleaner": SqlPairsCleaner(sql_pairs_store),
-            "prompt_builder": PromptBuilder(
-                template=sql_intention_generation_user_prompt_template
+            "cleaner": SqlPairsCleaner(store),
+            "prompt_builder": PromptBuilder(template=_user_prompt_template),
+            "generator": llm_provider.get_generator(
+                system_prompt=_system_prompt,
+                generation_kwargs=_GENERATION_MODEL_KWARGS,
             ),
-            "sql_intention_generator": llm_provider.get_generator(
-                system_prompt=sql_intention_generation_system_prompt,
-                generation_kwargs=SQL_INTENTION_GENERATION_MODEL_KWARGS,
-            ),
-            "document_embedder": embedder_provider.get_document_embedder(),
-            "sql_pairs_description_converter": SqlPairsDescriptionConverter(),
-            "sql_pairs_writer": AsyncDocumentWriter(
-                document_store=sql_pairs_store,
+            "embedder": embedder_provider.get_document_embedder(),
+            "document_converter": SqlPairsConverter(),
+            "writer": AsyncDocumentWriter(
+                document_store=store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
@@ -203,14 +194,17 @@ class SqlPairsPreparation(BasicPipeline):
 
     @observe(name="SQL Pairs Preparation")
     async def run(
-        self, sql_pairs: List[SqlPair], id: Optional[str] = None
+        self, sql_pairs: List[SqlPair], project_id: Optional[str] = ""
     ) -> Dict[str, Any]:
-        logger.info("SQL Pairs Preparation pipeline is running...")
+        logger.info(
+            f"Project ID: {project_id} SQL Pairs Preparation pipeline is running..."
+        )
+
         return await self._pipe.execute(
-            ["write_sql_pairs"],
+            ["write"],
             inputs={
                 "sql_pairs": sql_pairs,
-                "id": id or "",
+                "project_id": project_id,
                 **self._components,
             },
         )
