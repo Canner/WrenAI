@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
-import ProjectOutlined from '@ant-design/icons/ProjectOutlined';
+import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
 import SidebarTree, {
   StyledTreeNodeLink,
   useSidebarTreeState,
@@ -73,7 +73,7 @@ export default function Home(props: Props) {
         })}
         href="/home/dashboard"
       >
-        <ProjectOutlined className="mr-2" />
+        <FundViewOutlined className="mr-2" />
         <span className="text-medium">Dashboard</span>
       </StyledTreeNodeLink>
       <ThreadTree
