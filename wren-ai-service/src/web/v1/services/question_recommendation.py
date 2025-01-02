@@ -74,9 +74,10 @@ class QuestionRecommendation:
                 id=project_id,
             )
             documents = retrieval_result.get("construct_retrieval_results", [])
+            table_ddls = [document.get("table_ddl") for document in documents]
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
-                contexts=documents,
+                contexts=table_ddls,
                 exclude=[],
                 configuration=Configuration(),
                 project_id=project_id,

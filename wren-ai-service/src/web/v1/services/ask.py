@@ -92,6 +92,7 @@ class AskResultResponse(BaseModel):
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
+    retrieval_response: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -243,6 +244,8 @@ class AskService:
                     id=ask_request.project_id,
                 )
                 documents = retrieval_result.get("construct_retrieval_results", [])
+                table_names = [document.get("table_name") for document in documents]
+                table_ddls = [document.get("table_ddl") for document in documents]
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -267,6 +270,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
+                    retrieval_response=table_names,
                 )
 
                 sql_samples = (
@@ -322,7 +326,7 @@ class AskService:
                     sql_correction_results = await self._pipelines[
                         "sql_correction"
                     ].run(
-                        contexts=documents,
+                        contexts=table_ddls,
                         invalid_generation_results=failed_dry_run_results,
                         project_id=ask_request.project_id,
                     )
@@ -348,6 +352,7 @@ class AskService:
                         response=api_results,
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
+                        retrieval_response=table_names,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -363,6 +368,7 @@ class AskService:
                         ),
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
+                        retrieval_response=table_names,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                 results["metadata"]["type"] = "TEXT_TO_SQL"
