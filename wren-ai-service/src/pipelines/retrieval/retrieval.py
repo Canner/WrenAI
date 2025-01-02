@@ -224,20 +224,36 @@ def check_using_db_schemas_without_pruning(
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
             retrieval_results.append(
-                build_table_ddl(
-                    table_schema,
-                )
+                {
+                    "table_name": table_schema["name"],
+                    "table_ddl": build_table_ddl(
+                        table_schema,
+                    ),
+                }
             )
 
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
 
         if content["type"] == "METRIC":
-            retrieval_results.append(_build_metric_ddl(content))
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_metric_ddl(content),
+                }
+            )
         elif content["type"] == "VIEW":
-            retrieval_results.append(_build_view_ddl(content))
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_view_ddl(content),
+                }
+            )
 
-    _token_count = len(encoding.encode(" ".join(retrieval_results)))
+    table_ddls = [
+        retrieval_result["table_ddl"] for retrieval_result in retrieval_results
+    ]
+    _token_count = len(encoding.encode(" ".join(table_ddls)))
     if _token_count > 100_000 or not allow_using_db_schemas_without_pruning:
         return {
             "db_schemas": [],
@@ -296,7 +312,7 @@ def construct_retrieval_results(
     filter_columns_in_tables: dict,
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
-) -> list[str]:
+) -> list[dict]:
     if filter_columns_in_tables:
         columns_and_tables_needed = orjson.loads(
             filter_columns_in_tables["replies"][0]
@@ -314,13 +330,18 @@ def construct_retrieval_results(
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
                 retrieval_results.append(
-                    build_table_ddl(
-                        table_schema,
-                        columns=set(
-                            columns_and_tables_needed[table_schema["name"]]["columns"]
+                    {
+                        "table_name": table_schema["name"],
+                        "table_ddl": build_table_ddl(
+                            table_schema,
+                            columns=set(
+                                columns_and_tables_needed[table_schema["name"]][
+                                    "columns"
+                                ]
+                            ),
+                            tables=tables,
                         ),
-                        tables=tables,
-                    )
+                    }
                 )
 
         for document in dbschema_retrieval:
@@ -328,9 +349,19 @@ def construct_retrieval_results(
                 content = ast.literal_eval(document.content)
 
                 if content["type"] == "METRIC":
-                    retrieval_results.append(_build_metric_ddl(content))
+                    retrieval_results.append(
+                        {
+                            "table_name": content["name"],
+                            "table_ddl": _build_metric_ddl(content),
+                        }
+                    )
                 elif content["type"] == "VIEW":
-                    retrieval_results.append(_build_view_ddl(content))
+                    retrieval_results.append(
+                        {
+                            "table_name": content["name"],
+                            "table_ddl": _build_view_ddl(content),
+                        }
+                    )
     else:
         retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
 
