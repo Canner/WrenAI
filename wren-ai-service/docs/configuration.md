@@ -134,7 +134,6 @@ The configuration file (`config.yaml`) is structured into several sections, each
      query_cache_ttl: <cache_ttl_in_seconds>
      langfuse_host: <langfuse_endpoint>
      langfuse_enable: <true/false>
-     enable_timer: <true/false>
      logging_level: <log_level>
      development: <true/false>
    ```

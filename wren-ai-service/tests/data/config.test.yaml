@@ -42,7 +42,7 @@ pipes:
     llm: openai_llm.gpt-4o-mini
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
-  - name: historical_question
+  - name: historical_question_retrieval
     embedder: openai_embedder.text-embedding-3-large
     document_store: qdrant
   - name: sql_generation
@@ -87,6 +87,5 @@ settings:
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
   langfuse_enable: false
-  enable_timer: false
   logging_level: INFO
   development: false

@@ -7,14 +7,7 @@ import orjson
 import pytest
 
 from src.config import settings
-from src.pipelines import indexing
-from src.pipelines.generation import (
-    data_assistance,
-    intent_classification,
-    sql_correction,
-    sql_generation,
-)
-from src.pipelines.retrieval import historical_question, retrieval
+from src.pipelines import generation, indexing, retrieval
 from src.providers import generate_components
 from src.web.v1.services.ask import (
     AskRequest,
@@ -41,22 +34,22 @@ def ask_service():
 
     return AskService(
         {
-            "intent_classification": intent_classification.IntentClassification(
+            "intent_classification": generation.IntentClassification(
                 **pipe_components["intent_classification"],
             ),
-            "data_assistance": data_assistance.DataAssistance(
+            "data_assistance": generation.DataAssistance(
                 **pipe_components["data_assistance"],
             ),
             "retrieval": retrieval.Retrieval(
                 **pipe_components["db_schema_retrieval"],
             ),
-            "historical_question": historical_question.HistoricalQuestion(
+            "historical_question": retrieval.HistoricalQuestionRetrieval(
                 **pipe_components["historical_question_retrieval"],
             ),
-            "sql_generation": sql_generation.SQLGeneration(
+            "sql_generation": generation.SQLGeneration(
                 **pipe_components["sql_generation"],
             ),
-            "sql_correction": sql_correction.SQLCorrection(
+            "sql_correction": generation.SQLCorrection(
                 **pipe_components["sql_correction"],
             ),
         }

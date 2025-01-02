@@ -7,7 +7,7 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, trace_metadata
+from src.utils import trace_metadata
 from src.web.v1.services import Configuration, SSEEvent
 from src.web.v1.services.ask_details import SQLBreakdown
 
@@ -29,7 +29,6 @@ class AskRequest(BaseModel):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
-    user_id: Optional[str] = None
     history: Optional[AskHistory] = None
     configurations: Optional[Configuration] = Configuration()
 
@@ -122,7 +121,6 @@ class AskService:
             filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
         )
 
-    @async_timer
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
@@ -271,6 +269,13 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                 )
 
+                sql_samples = (
+                    await self._pipelines["sql_pairs_retrieval"].run(
+                        query=ask_request.query,
+                        id=ask_request.project_id,
+                    )
+                )["formatted_output"].get("documents", [])
+
                 if ask_request.history:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_sql_generation"
@@ -280,6 +285,7 @@ class AskService:
                         history=ask_request.history,
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
+                        sql_samples=sql_samples,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -290,6 +296,7 @@ class AskService:
                         exclude=historical_question_result,
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
+                        sql_samples=sql_samples,
                     )
 
                 if sql_valid_results := text_to_sql_generation_results["post_process"][

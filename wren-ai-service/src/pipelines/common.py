@@ -1,4 +1,6 @@
-from typing import Optional
+from typing import List, Optional
+
+from haystack import Document, component
 
 from src.core.pipeline import BasicPipeline
 
@@ -44,3 +46,18 @@ def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
     async_validate(lambda: pipeline.run(**kwargs))
 
     langfuse_context.flush()
+
+
+@component
+class ScoreFilter:
+    @component.output_types(
+        documents=List[Document],
+    )
+    def run(self, documents: List[Document], score: float = 0.9):
+        return {
+            "documents": sorted(
+                filter(lambda document: document.score >= score, documents),
+                key=lambda document: document.score,
+                reverse=True,
+            )
+        }

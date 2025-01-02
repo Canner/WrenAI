@@ -142,8 +142,8 @@ class Eval:
         }
 
         langfuse_context.update_current_trace(
-            session_id=self._meta["session_id"],
-            user_id=self._meta["user_id"],
+            session_id=self._meta.get("session_id"),
+            user_id=self._meta.get("user_id"),
             metadata=trace_metadata(self._meta, type=prediction["type"]),
         )
 
@@ -159,8 +159,8 @@ class Eval:
 
         langfuse_context.update_current_trace(
             name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
-            session_id=self._meta["session_id"],
-            user_id=self._meta["user_id"],
+            session_id=self._meta.get("session_id"),
+            user_id=self._meta.get("user_id"),
             metadata={
                 **trace_metadata(self._meta, type=prediction["type"]),
                 "source_trace_id": prediction["source_trace_id"],
