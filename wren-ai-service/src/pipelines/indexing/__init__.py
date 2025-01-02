@@ -93,7 +93,9 @@ class SqlPairsCleaner:
         self._sql_pairs_store = sql_pairs_store
 
     @component.output_types()
-    async def run(self, sql_pair_ids: List[str], id: Optional[str] = None) -> None:
+    async def run(
+        self, sql_pair_ids: List[str], project_id: Optional[str] = None
+    ) -> None:
         filters = {
             "operator": "AND",
             "conditions": [
@@ -101,9 +103,9 @@ class SqlPairsCleaner:
             ],
         }
 
-        if id:
+        if project_id:
             filters["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": id}
+                {"field": "project_id", "operator": "==", "value": project_id}
             )
 
         return await self._sql_pairs_store.delete_documents(filters)
