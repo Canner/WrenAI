@@ -63,7 +63,7 @@ class SqlPairsConverter:
         return {
             "documents": [
                 Document(
-                    id=sql_pair.get("id", str(uuid.uuid4())),
+                    id=str(uuid.uuid4()),
                     meta={
                         "sql_pair_id": sql_pair.get("id"),
                         "sql": sql_pair.get("sql"),
