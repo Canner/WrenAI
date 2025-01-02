@@ -19,7 +19,6 @@ import {
 import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 import { isEmpty, isEqual } from 'lodash';
 import {
-  convertToChartType,
   getChartSpecFieldTitleMap,
   getChartSpecOptionValues,
 } from '@/components/chart/handler';
@@ -95,6 +94,7 @@ export default function ChartAnswer(props: Props) {
   const [newValues, setNewValues] = useState(null);
 
   const [form] = Form.useForm();
+  const chartType = Form.useWatch('chartType', form);
   const { chartDetail } = threadResponse;
   const { error, status, adjustment } = chartDetail || {};
 
@@ -118,16 +118,6 @@ export default function ChartAnswer(props: Props) {
     return chartDetail.chartSchema;
   }, [chartDetail]);
 
-  const chartType = useMemo(() => {
-    if (!chartDetail?.chartSchema?.mark) return null;
-    const mark = chartDetail.chartSchema?.mark;
-    const encoding = chartDetail.chartSchema?.encoding;
-    return convertToChartType(
-      typeof mark === 'string' ? mark : mark.type,
-      encoding,
-    );
-  }, [chartSpec]);
-
   const chartOptionValues = useMemo(() => {
     return getChartSpecOptionValues(chartSpec);
   }, [chartSpec]);
@@ -141,7 +131,7 @@ export default function ChartAnswer(props: Props) {
   }, [chartOptionValues]);
 
   const isAdjusted = useMemo(() => {
-    return newValues !== null ? !isEqual(chartOptionValues, newValues) : false;
+    return newValues !== null && !isEqual(chartOptionValues, newValues);
   }, [chartOptionValues, newValues]);
 
   const dataValues = useMemo(() => {
@@ -162,7 +152,7 @@ export default function ChartAnswer(props: Props) {
   const loading =
     previewDataResult.loading || !getIsChartFinished(status) || regenerating;
 
-  const DynamicProperties = getDynamicProperties(chartType);
+  const DynamicProperties = getDynamicProperties(chartType as ChartType);
 
   const onFormChange = () => {
     setNewValues(form.getFieldsValue());

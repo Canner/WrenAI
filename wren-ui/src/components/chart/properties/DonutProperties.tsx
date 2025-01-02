@@ -18,14 +18,22 @@ export default function DonutProperties(props: PropertiesProps) {
         </Col>
         <Col span={12}>
           <Form.Item className="mb-0" label="Category" name="color">
-            <Select size="small" options={columnOptions} />
+            <Select
+              size="small"
+              options={columnOptions}
+              placeholder="Select category"
+            />
           </Form.Item>
         </Col>
       </Row>
       <Row gutter={16}>
         <Col span={12}>
           <Form.Item className="mb-0" label="Value" name="theta">
-            <Select size="small" options={columnOptions} />
+            <Select
+              size="small"
+              options={columnOptions}
+              placeholder="Select value"
+            />
           </Form.Item>
         </Col>
         <Col span={12}></Col>
