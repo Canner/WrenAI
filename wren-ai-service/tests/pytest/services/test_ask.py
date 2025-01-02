@@ -40,6 +40,9 @@ def ask_service():
             "data_assistance": generation.DataAssistance(
                 **pipe_components["data_assistance"],
             ),
+            "user_guide_assistance": generation.UserGuideAssistance(
+                **pipe_components["user_guide_assistance"],
+            ),
             "retrieval": retrieval.Retrieval(
                 **pipe_components["db_schema_retrieval"],
             ),
