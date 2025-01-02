@@ -18,7 +18,6 @@ from src.pipelines.generation.utils.chart import (
     ChartGenerationResults,
     chart_generation_instructions,
 )
-from src.utils import async_timer, timer
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -112,7 +111,6 @@ class ChartGenerationPostProcessor:
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def preprocess_data(
     data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
@@ -120,7 +118,6 @@ def preprocess_data(
     return chart_data_preprocessor.run(data)
 
 
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -139,13 +136,11 @@ def prompt(
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_chart(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
 
-@timer
 @observe(capture_input=False)
 def post_process(
     generate_chart: dict,
@@ -196,7 +191,6 @@ class ChartGeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="Chart Generation")
     async def run(
         self,

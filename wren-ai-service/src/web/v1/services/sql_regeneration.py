@@ -5,7 +5,6 @@ from cachetools import TTLCache
 from haystack import Pipeline
 from pydantic import BaseModel
 
-from src.utils import async_timer
 from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
@@ -43,7 +42,6 @@ class SQLRegenerationRequest(BaseModel):
     mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     project_id: Optional[str] = None
-    user_id: Optional[str] = None
 
     @property
     def query_id(self) -> str:
@@ -77,7 +75,7 @@ class SQLRegenerationResultResponse(BaseModel):
     error: Optional[SQLRegenerationError] = None
 
 
-class SQLRegenerationService:
+class SqlRegenerationService:
     def __init__(
         self,
         pipelines: Dict[str, Pipeline],
@@ -89,7 +87,6 @@ class SQLRegenerationService:
             str, SQLRegenerationResultResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
-    @async_timer
     async def sql_regeneration(
         self,
         sql_regeneration_request: SQLRegenerationRequest,

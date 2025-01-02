@@ -1,8 +1,6 @@
-import asyncio
 import functools
 import logging
 import os
-import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -59,54 +57,6 @@ def load_env_vars() -> str:
         return "dev"
 
     return "prod"
-
-
-def timer(func):
-    @functools.wraps(func)
-    def wrapper_timer(*args, **kwargs):
-        from src.config import settings
-
-        if settings.enable_timer:
-            startTime = time.perf_counter()
-            result = func(*args, **kwargs)
-            endTime = time.perf_counter()
-            elapsed_time = endTime - startTime
-
-            logger.info(
-                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
-            )
-
-            return result
-
-        return func(*args, **kwargs)
-
-    return wrapper_timer
-
-
-def async_timer(func):
-    async def process(func, *args, **kwargs):
-        assert asyncio.iscoroutinefunction(func)
-        return await func(*args, **kwargs)
-
-    @functools.wraps(func)
-    async def wrapper_timer(*args, **kwargs):
-        from src.config import settings
-
-        if settings.enable_timer:
-            startTime = time.perf_counter()
-            result = await process(func, *args, **kwargs)
-            endTime = time.perf_counter()
-            elapsed_time = endTime - startTime
-
-            logger.info(
-                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
-            )
-
-            return result
-
-        return await process(func, *args, **kwargs)
-
-    return wrapper_timer
 
 
 def remove_trailing_slash(endpoint: str) -> str:

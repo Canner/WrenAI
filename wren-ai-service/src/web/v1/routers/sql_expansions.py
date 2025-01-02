@@ -36,7 +36,6 @@ Endpoints:
        "project_id": "project-identifier",      # Identifier for the project
        "mdl_hash": "hash-of-model",              # Hash of the model (if applicable)
        "thread_id": "thread-identifier",        # Identifier for the thread (if applicable)
-       "user_id": "user-identifier"             # Identifier for the user making the request
      }
    - Response: SqlExpansionResponse
      {

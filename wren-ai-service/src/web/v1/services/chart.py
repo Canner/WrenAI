@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.utils import async_timer, trace_metadata
+from src.utils import trace_metadata
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -94,7 +94,6 @@ class ChartService:
 
         return False
 
-    @async_timer
     @observe(name="Generate Chart")
     @trace_metadata
     async def chart(

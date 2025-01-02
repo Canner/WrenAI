@@ -12,7 +12,6 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import SQLGenPostProcessor
-from src.utils import async_timer, timer
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -51,7 +50,6 @@ Current Time: {{ current_time }}
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -68,13 +66,11 @@ def prompt(
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_expansion(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
 
-@async_timer
 @observe(capture_input=False)
 async def post_process(
     generate_sql_expansion: dict,
@@ -130,7 +126,6 @@ class SQLExpansion(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="Sql Expansion Generation")
     async def run(
         self,
