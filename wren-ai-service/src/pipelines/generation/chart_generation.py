@@ -10,18 +10,12 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
-    AreaChartSchema,
-    BarChartSchema,
     ChartDataPreprocessor,
-    GroupedBarChartSchema,
-    LineChartSchema,
-    PieChartSchema,
-    StackedBarChartSchema,
+    ChartGenerationResults,
     chart_generation_instructions,
 )
 
@@ -31,17 +25,18 @@ chart_generation_system_prompt = f"""
 ### TASK ###
 
 You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs, 
-you need to generate vega-lite schema in JSON and provide suitable chart; we will also give you the question and sql to understand the data.
+you need to generate vega-lite schema in JSON and provide suitable chart type; we will also give you the question and sql to understand the data.
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema and a within 20 words description of the chart.
 
 {chart_generation_instructions}
 
 ### OUTPUT FORMAT ###
 
-Please provide your chain of thought reasoning and the vega-lite schema in JSON format.
+Please provide your chain of thought reasoning, the vega-lite schema in JSON format and the chart type.
 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
+    "chart_type": "line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
@@ -70,6 +65,7 @@ class ChartGenerationPostProcessor:
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
+            chart_type = generation_result.get("chart_type", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 # sometimes the chart_schema is still in string format
                 if isinstance(chart_schema, str):
@@ -81,6 +77,7 @@ class ChartGenerationPostProcessor:
                     "results": {
                         "chart_schema": chart_schema,
                         "reasoning": reasoning,
+                        "chart_type": chart_type,
                     }
                 }
 
@@ -88,6 +85,7 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": reasoning,
+                    "chart_type": chart_type,
                 }
             }
         except ValidationError as e:
@@ -97,6 +95,7 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
+                    "chart_type": "",
                 }
             }
         except Exception as e:
@@ -106,6 +105,7 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
+                    "chart_type": "",
                 }
             }
 
@@ -151,18 +151,6 @@ def post_process(
 
 
 ## End of Pipeline
-class ChartGenerationResults(BaseModel):
-    reasoning: str
-    chart_schema: (
-        LineChartSchema
-        | BarChartSchema
-        | PieChartSchema
-        | GroupedBarChartSchema
-        | StackedBarChartSchema
-        | AreaChartSchema
-    )
-
-
 CHART_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",

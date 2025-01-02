@@ -430,6 +430,7 @@ def on_click_adjust_chart(
     query: str,
     sql: str,
     chart_schema: dict,
+    chart_type: str,
     language: str,
     reasoning: str,
     dataset_type: str,
@@ -440,6 +441,7 @@ def on_click_adjust_chart(
         query,
         sql,
         chart_schema,
+        chart_type,
         language,
         reasoning,
         dataset_type,
@@ -1020,8 +1022,9 @@ def show_sql_regeneration_results_dialog(
             sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
 
-def show_original_chart(chart_schema: dict, reasoning: str):
+def show_original_chart(chart_schema: dict, reasoning: str, chart_type: str):
     st.markdown("### Original")
+    st.markdown(f"#### Chart Type: {chart_type}")
     st.markdown("#### Reasoning for making this chart")
     st.markdown(f"{reasoning}")
     st.markdown("#### Vega-Lite Schema")
@@ -1035,6 +1038,7 @@ def show_chart_adjustment_dialog(
     query: str,
     sql: str,
     chart_schema: dict,
+    chart_type: str,
     language: str,
     reasoning: str,
     dataset_type: str,
@@ -1081,7 +1085,7 @@ def show_chart_adjustment_dialog(
         language="sql",
     )
 
-    show_original_chart(chart_schema, reasoning)
+    show_original_chart(chart_schema, reasoning, chart_type)
 
     if adjust_submit_button:
         adjustment_option = {
@@ -1104,6 +1108,8 @@ def show_chart_adjustment_dialog(
         )
         if adjust_chart_result := adjust_chart_response.get("response"):
             st.markdown("### Adjusted")
+            if chart_type := adjust_chart_result["chart_type"]:
+                st.markdown(f"#### Chart Type: {chart_type}")
             if reasoning := adjust_chart_result["reasoning"]:
                 st.markdown("#### Reasoning for making this chart")
                 st.markdown(f"{reasoning}")
