@@ -14,6 +14,7 @@ from .sql_explanation import SQLExplanation
 from .sql_generation import SQLGeneration
 from .sql_regeneration import SQLRegeneration
 from .sql_summary import SQLSummary
+from .user_guide_assistance import UserGuideAssistance
 
 __all__ = [
     "SQLRegeneration",
@@ -32,4 +33,5 @@ __all__ = [
     "SQLExplanation",
     "SQLGeneration",
     "SQLSummary",
+    "UserGuideAssistance",
 ]
