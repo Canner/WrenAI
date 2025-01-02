@@ -138,7 +138,7 @@ pipes:
   - name: sql_executor
     engine: wren_ui
   - name: user_guide_assistance
-    llm: litellm_llm.gpt-4o-mini
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
 ---
 settings:
   host: 127.0.0.1
