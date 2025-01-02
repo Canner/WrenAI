@@ -25,7 +25,7 @@ async def test_sql_pairs_preparation_saving_to_document_store():
             SqlPair(sql="SELECT * FROM book", id="1"),
             SqlPair(sql="SELECT * FROM author", id="2"),
         ],
-        id="fake-id",
+        project_id="fake-id",
     )
 
     assert await store.count_documents() == 2
@@ -56,7 +56,7 @@ async def test_sql_pairs_preparation_saving_to_document_store_with_multiple_proj
             SqlPair(sql="SELECT * FROM book", id="1"),
             SqlPair(sql="SELECT * FROM author", id="2"),
         ],
-        id="fake-id",
+        project_id="fake-id",
     )
 
     await sql_pairs_preparation.run(
@@ -64,7 +64,7 @@ async def test_sql_pairs_preparation_saving_to_document_store_with_multiple_proj
             SqlPair(sql="SELECT * FROM book", id="1"),
             SqlPair(sql="SELECT * FROM author", id="2"),
         ],
-        id="fake-id-2",
+        project_id="fake-id-2",
     )
 
     assert await store.count_documents() == 4

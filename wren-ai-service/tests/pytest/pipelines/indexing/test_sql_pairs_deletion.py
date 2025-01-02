@@ -27,7 +27,7 @@ async def test_sql_pairs_deletion():
     )
     await sql_pairs_preparation.run(
         sql_pairs=sql_pairs,
-        id="fake-id",
+        project_id="fake-id",
     )
 
     sql_pairs_deletion = SqlPairsDeletion(**pipe_components["sql_pairs_deletion"])
