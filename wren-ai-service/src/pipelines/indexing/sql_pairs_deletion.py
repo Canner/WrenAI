@@ -20,7 +20,7 @@ async def delete_sql_pairs(
     sql_pair_ids: List[str],
     id: Optional[str] = None,
 ) -> None:
-    return await sql_pairs_cleaner.run(sql_pair_ids=sql_pair_ids, id=id)
+    return await sql_pairs_cleaner.run(sql_pair_ids=sql_pair_ids, project_id=id)
 
 
 ## End of Pipeline
