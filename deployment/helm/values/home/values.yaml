@@ -1,0 +1,33 @@
+fullnameOverride: wren
+
+commonLabels:
+  env: home
+  service: wren
+
+credentials:
+  name: registry-credentials
+  type: kubernetes.io/dockerconfigjson
+
+
+serviceAccount:
+  create: true
+  name: wren
+
+resources:
+  frontend:
+    limits:
+      memory: 256Mi
+      cpu: 200m
+    requests:
+      memory: 128Mi
+      cpu: 100m
+  api:
+    limits:
+      memory: 512Mi
+      cpu: 1000m
+      # nvidia.com/gpu: "1"
+    requests:
+      memory: 128Mi
+      cpu: 300m
+      # nvidia.com/gpu: "1"
+

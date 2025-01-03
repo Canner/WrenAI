@@ -1,0 +1,10 @@
+apiVersion: v2
+name: wren
+type: application
+version: 1.0.0
+
+dependencies:
+- name: postgresql
+  version: "=16.0.3"
+  repository: "https://charts.bitnami.com/bitnami"
+  condition: postgres.enabled
