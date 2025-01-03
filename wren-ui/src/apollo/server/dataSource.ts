@@ -119,7 +119,7 @@ const dataSource = {
         DataSourceName.MYSQL,
         connectionInfo,
       );
-      const { host, port, database, user, password, ssl, ...sslConfig } =
+      const { host, port, database, user, password, ...ssl } =
         decryptedConnectionInfo as MYSQL_CONNECTION_INFO;
       return {
         host,
@@ -127,13 +127,8 @@ const dataSource = {
         database,
         user,
         password,
-        ...(ssl && {
-          kwargs: {
-            ssl_ca: sslConfig.certAuthority,
-            ssl_key: sslConfig.clientKey,
-            ssl_cert: sslConfig.clientCert
-          },
-        }),
+        sslMode: ssl.sslMode,
+        ...(ssl.sslCA && { sslCA: ssl.sslCA }),
       };
     },
   } as IDataSourceConnectionInfo<
