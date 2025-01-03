@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { Form, Input, Select } from 'antd';
+import { useEffect, useState } from 'react';
+import { Form, Input, Select, Button, Upload } from 'antd';
+import UploadOutlined from '@ant-design/icons/UploadOutlined';
+import { UploadFile } from 'antd/lib/upload/interface';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE, SSL_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
@@ -7,6 +9,58 @@ import { hostValidator } from '@/utils/validator';
 interface Props {
   mode?: FORM_MODE;
 }
+
+const UploadSSL = (props) => {
+  const { onChange, value } = props;
+
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+
+  useEffect(() => {
+    if (!value) setFileList([]);
+  }, [value]);
+
+  const readFileContent = (file: any, callback: (value: string) => void) => {
+    const reader = new FileReader();
+    reader.onloadend = (_e) => {
+      const result = reader.result;
+
+      if (result) {
+        const fileContent = String(result);
+        callback(fileContent);
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  const onUploadChange = (info) => {
+    const { file, fileList } = info;
+    if (fileList.length) {
+      const uploadFile = fileList[0];
+      readFileContent(file.originFileObj, (fileContent: string) => {
+        onChange && onChange(fileContent);
+      });
+      setFileList([uploadFile]);
+    }
+  };
+
+  const onRemove = () => {
+    setFileList([]);
+    onChange && onChange(undefined);
+  };
+
+  return (
+    <Upload
+      accept=".pem,.crt,.key"
+      fileList={fileList}
+      onChange={onUploadChange}
+      onRemove={onRemove}
+      maxCount={1}
+    >
+      <Button icon={<UploadOutlined />}>Click to upload SSL cert file</Button>
+    </Upload>
+  );
+};
 
 export default function MySQLProperties(props: Props) {
   const { mode } = props;
@@ -107,7 +161,7 @@ export default function MySQLProperties(props: Props) {
       {
         sslMode === SSL_MODE.VERIFY_CA &&
         <Form.Item
-          label="SSL CA File"
+          label="SSL CA file"
           name="sslCA"
           required
           rules={[
@@ -117,10 +171,7 @@ export default function MySQLProperties(props: Props) {
             },
           ]}
         >
-          <Input
-            placeholder="Path to Certificate Authority file for SSL"
-            disabled={isEditMode}
-          />
+          <UploadSSL />
         </Form.Item>
       }
     </>
