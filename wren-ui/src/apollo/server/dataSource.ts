@@ -102,7 +102,7 @@ const dataSource = {
 
   // mysql
   [DataSourceName.MYSQL]: {
-    sensitiveProps: ['password'],
+    sensitiveProps: ['password', 'sslCA'],
     toIbisConnectionInfo(connectionInfo) {
       const decryptedConnectionInfo = decryptConnectionInfo(
         DataSourceName.MYSQL,
