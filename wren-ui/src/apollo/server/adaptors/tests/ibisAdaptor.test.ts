@@ -6,7 +6,7 @@ import {
   IbisQueryResponse,
   ValidationRules,
 } from '../ibisAdaptor';
-import { DataSourceName } from '../../types';
+import { DataSourceName, SSLMode } from '../../types';
 import { Manifest } from '../../mdl/type';
 import {
   BIG_QUERY_CONNECTION_INFO,
@@ -45,6 +45,8 @@ describe('IbisAdaptor', () => {
     database: 'my-database',
     user: 'my-user',
     password: 'my-password',
+    sslMode: SSLMode.VERIFY_CA,
+    sslCA: 'encrypted-certificate-string',
   };
 
   const mockPostgresConnectionInfo: POSTGRES_CONNECTION_INFO = {
@@ -175,17 +177,28 @@ describe('IbisAdaptor', () => {
     mockedAxios.post.mockResolvedValue(mockResponse);
     // mock decrypt method in Encryptor to return the same password
     mockedEncryptor.prototype.decrypt.mockReturnValue(
-      JSON.stringify({ password: mockMySQLConnectionInfo.password }),
+      JSON.stringify({
+        password: mockMySQLConnectionInfo.password,
+        ...(mockMySQLConnectionInfo.sslCA && { sslCA: mockMySQLConnectionInfo.sslCA })
+      }),
     );
 
     const result = await ibisAdaptor.getConstraints(
       DataSourceName.MYSQL,
       mockMySQLConnectionInfo,
     );
-    const expectConnectionInfo = Object.entries(mockMySQLConnectionInfo).reduce(
-      (acc, [key, value]) => ((acc[snakeCase(key)] = value), acc),
-      {},
-    );
+    const expectConnectionInfo = Object.entries(
+      mockMySQLConnectionInfo,
+    ).reduce((acc, [key, value]) => {
+      if (key === 'sslCA') {
+        acc['sslCA'] = Buffer
+          .from(mockMySQLConnectionInfo.sslCA)
+          .toString('base64');
+      } else {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
