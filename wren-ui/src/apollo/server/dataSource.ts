@@ -128,7 +128,11 @@ const dataSource = {
         user,
         password,
         sslMode: ssl.sslMode,
-        ...(ssl.sslCA && { sslCA: ssl.sslCA }),
+        ...(ssl.sslCA && {
+          sslCA: Buffer.from(
+            ssl.sslCA,
+          ).toString('base64')
+        }),
       };
     },
   } as IDataSourceConnectionInfo<
