@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Form, Input, Select } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
-import { FORM_MODE } from '@/utils/enum';
+import { FORM_MODE, SSL_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
-import { SupportedSSLMode } from '../utils';
 
 interface Props {
   mode?: FORM_MODE;
@@ -12,7 +11,7 @@ interface Props {
 export default function MySQLProperties(props: Props) {
   const { mode } = props;
   const isEditMode = mode === FORM_MODE.EDIT;
-  const [sslMode, setSSLMode] = useState<string>(SupportedSSLMode.DISABLE);
+  const [sslMode, setSSLMode] = useState<string>(SSL_MODE.DISABLE);
   const onSSLModeChange = (value: string) => setSSLMode(value)
   return (
     <>
@@ -93,24 +92,30 @@ export default function MySQLProperties(props: Props) {
       >
         <Input placeholder="MySQL database name" disabled={isEditMode} />
       </Form.Item>
-      <Form.Item label="SSL mode" name="sslMode">
+      <Form.Item label="SSL mode" name="sslMode" initialValue={SSL_MODE.DISABLE}>
         <Select
-          defaultValue={SupportedSSLMode.DISABLE}
           style={{ width: 120 }}
           onChange={onSSLModeChange}
           disabled={isEditMode}
           options={[
-            { value: SupportedSSLMode.DISABLE },
-            { value: SupportedSSLMode.REQUIRE },
-            { value: SupportedSSLMode.VERIFY_CA },
+            { value: SSL_MODE.DISABLE },
+            { value: SSL_MODE.REQUIRE },
+            { value: SSL_MODE.VERIFY_CA },
           ]}
         />
       </Form.Item>
       {
-        sslMode === SupportedSSLMode.VERIFY_CA &&
+        sslMode === SSL_MODE.VERIFY_CA &&
         <Form.Item
           label="SSL CA File"
-          name="ca"
+          name="sslCA"
+          required
+          rules={[
+            {
+              required: true,
+              message: ERROR_TEXTS.CONNECTION.SSL_CERT.REQUIRED,
+            },
+          ]}
         >
           <Input
             placeholder="Path to Certificate Authority file for SSL"
