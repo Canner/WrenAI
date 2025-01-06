@@ -475,7 +475,7 @@ WHERE
 Finally, you will learn from the sample SQL queries provided in the input. These samples demonstrate best practices and common patterns for querying this specific database.
 
 For each sample, you should:
-1. Study the summary that explains what the query aims to accomplish
+1. Study the question that explains what the query aims to accomplish
 2. Analyze the SQL implementation to understand:
    - Table structures and relationships used
    - Specific functions and operators employed

@@ -35,8 +35,8 @@ generate one SQL statement that best potentially answer user's query.
 {% if sql_samples %}
 ### SAMPLES ###
 {% for sample in sql_samples %}
-Summary:
-{{sample.summary}}
+Question:
+{{sample.question}}
 SQL:
 {{sample.sql}}
 {% endfor %}

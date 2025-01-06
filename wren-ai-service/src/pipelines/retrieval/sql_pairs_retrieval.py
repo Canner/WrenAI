@@ -25,7 +25,8 @@ class OutputFormatter:
 
         for doc in documents:
             formatted = {
-                "summary": doc.content,
+                "question": doc.content,
+                "intention": doc.meta.get("intention"),
                 "sql": doc.meta.get("sql"),
             }
             list.append(formatted)

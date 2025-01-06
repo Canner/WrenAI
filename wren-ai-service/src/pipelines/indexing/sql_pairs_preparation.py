@@ -48,8 +48,9 @@ Please think step by step
 
 
 class SqlPair(BaseModel):
-    sql: str
     id: str
+    sql: str
+    question: str
 
 
 @component
@@ -67,9 +68,10 @@ class SqlPairsConverter:
                     meta={
                         "sql_pair_id": sql_pair.get("id"),
                         "sql": sql_pair.get("sql"),
+                        "intention": sql_pair.get("intention"),
                         **addition,
                     },
-                    content=sql_pair.get("intention"),
+                    content=sql_pair.get("question"),
                 )
                 for sql_pair in sql_pairs
             ]
@@ -108,7 +110,12 @@ def post_process(
     ]
 
     return [
-        {"id": sql_pair.id, "sql": sql_pair.sql, "intention": intention}
+        {
+            "id": sql_pair.id,
+            "sql": sql_pair.sql,
+            "question": sql_pair.question,
+            "intention": intention,
+        }
         for sql_pair, intention in zip(sql_pairs, intentions)
     ]
 
