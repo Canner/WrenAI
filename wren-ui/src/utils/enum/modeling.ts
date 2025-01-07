@@ -7,4 +7,6 @@ export enum MORE_ACTION {
   EDIT = 'edit',
   DELETE = 'delete',
   UPDATE_COLUMNS = 'update_columns',
+  REFRESH = 'refresh',
+  HIDE_CATEGORY = 'hide_category',
 }

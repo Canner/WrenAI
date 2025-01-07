@@ -267,6 +267,33 @@ class ResolveSchemaChangeErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateDashboardItemErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create dashboard item.';
+    }
+  }
+}
+
+class UpdateDashboardItemLayoutsErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update dashboard item layouts.';
+    }
+  }
+}
+
+class DeleteDashboardItemErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete dashboard item.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -318,6 +345,14 @@ errorHandlers.set(
   new TriggerDataSourceDetectionErrorHandler(),
 );
 errorHandlers.set('ResolveSchemaChange', new ResolveSchemaChangeErrorHandler());
+
+// Dashboard
+errorHandlers.set('CreateDashboardItem', new CreateDashboardItemErrorHandler());
+errorHandlers.set(
+  'UpdateDashboardItemLayouts',
+  new UpdateDashboardItemLayoutsErrorHandler(),
+);
+errorHandlers.set('DeleteDashboardItem', new DeleteDashboardItemErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   // networkError

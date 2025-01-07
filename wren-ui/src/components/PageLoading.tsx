@@ -1,4 +1,4 @@
-import { Spin } from 'antd';
+import { Spin, Typography } from 'antd';
 import styled from 'styled-components';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 
@@ -17,6 +17,13 @@ const Wrapper = styled.div`
   }
 `;
 
+const Container = styled.div`
+  .ant-spin-nested-loading > div > .ant-spin .ant-spin-text {
+    padding-top: 24px;
+    white-space: nowrap;
+  }
+`;
+
 interface Props {
   visible?: boolean;
 }
@@ -26,6 +33,7 @@ interface LoadingProps {
   spinning?: boolean;
   loading?: boolean;
   tip?: string;
+  width?: number;
 }
 
 export const defaultIndicator = (
@@ -47,13 +55,14 @@ export default function PageLoading(props: Props) {
 }
 
 export const FlexLoading = (props) => {
-  const { height } = props;
+  const { height, tip } = props;
   return (
     <div
-      className="d-flex align-center justify-center geekblue-6"
+      className="d-flex align-center justify-center flex-column geekblue-6"
       style={{ height: height || '100%' }}
     >
       {defaultIndicator}
+      {tip && <span className="mt-2">{tip}</span>}
     </div>
   );
 };
@@ -64,7 +73,15 @@ export const Loading = ({
   loading = false,
   tip,
 }: LoadingProps) => (
-  <Spin indicator={defaultIndicator} spinning={spinning || loading} tip={tip}>
-    {children}
-  </Spin>
+  <Container>
+    <Spin indicator={defaultIndicator} spinning={spinning || loading} tip={tip}>
+      {children}
+    </Spin>
+  </Container>
 );
+
+export const LoadingWrapper = (props) => {
+  const { loading, tip, children } = props;
+  if (loading) return <FlexLoading tip={tip} />;
+  return children;
+};

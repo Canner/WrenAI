@@ -8,6 +8,7 @@ import ChartSpecHandler from './handler';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
+import PushPinOutlined from '@ant-design/icons/PushpinOutlined';
 
 const embedOptions: EmbedOptions = {
   mode: 'vega-lite',
@@ -20,15 +21,39 @@ const embedOptions: EmbedOptions = {
 };
 
 interface VegaLiteProps {
+  className?: string;
   width?: number | string;
+  height?: number | string;
   spec?: TopLevelSpec;
   values?: Record<string, any>[];
+  autoFilter?: boolean;
+  hideActions?: boolean;
+  hideTitle?: boolean;
+  hideLegend?: boolean;
+  forceUpdate?: number;
   onReload?: () => void;
   onEdit?: () => void;
+  onPin?: () => void;
 }
 
 export default function Chart(props: VegaLiteProps) {
-  const { spec, values, width = 600, onReload, onEdit } = props;
+  const {
+    className,
+    spec,
+    values,
+    width = 600,
+    height = 320,
+    autoFilter,
+    hideActions,
+    hideTitle,
+    hideLegend,
+    forceUpdate,
+    onReload,
+    onEdit,
+    onPin,
+  } = props;
+
+  const [donutInner, setDonutInner] = useState(null);
   const [isShowTopCategories, setIsShowTopCategories] = useState(false);
   const $view = useRef<Result>(null);
   const $container = useRef<HTMLDivElement>(null);
@@ -39,7 +64,12 @@ export default function Chart(props: VegaLiteProps) {
         ...spec,
         data: { values },
       },
-      { isShowTopCategories },
+      {
+        donutInner,
+        isShowTopCategories: autoFilter || isShowTopCategories,
+        isHideLegend: hideLegend,
+        isHideTitle: hideTitle,
+      },
     );
     const chartSpec = specHandler.getChartSpec();
     const isDataEmpty = isEmpty((chartSpec?.data as any)?.values);
@@ -47,7 +77,7 @@ export default function Chart(props: VegaLiteProps) {
     return compile(chartSpec, {
       config: specHandler.config,
     }).spec;
-  }, [spec, values, isShowTopCategories]);
+  }, [spec, values, isShowTopCategories, donutInner, forceUpdate]);
 
   // initial vega view
   useEffect(() => {
@@ -59,13 +89,20 @@ export default function Chart(props: VegaLiteProps) {
     return () => {
       if ($view.current) $view.current.finalize();
     };
-  }, [vegaSpec]);
+  }, [vegaSpec, forceUpdate]);
+
+  useEffect(() => {
+    if ($container.current) {
+      setDonutInner($container.current.clientHeight * 0.15);
+    }
+  }, []);
 
   const onShowTopCategories = () => {
     setIsShowTopCategories(!isShowTopCategories);
   };
 
   if (vegaSpec === null) {
+    if (values.length === 0) return <div>No available data</div>;
     return (
       <Alert
         className="mt-6 mb-4 mx-4"
@@ -90,10 +127,17 @@ export default function Chart(props: VegaLiteProps) {
     );
   }
 
-  const isAdditionalShow = !!onReload || !!onEdit;
+  const isAdditionalShow = !!onReload || !!onEdit || !!onPin;
 
   return (
-    <div className={clsx('adm-chart')} style={{ width }}>
+    <div
+      className={clsx(
+        'adm-chart',
+        { 'adm-chart--no-actions': hideActions },
+        className,
+      )}
+      style={{ width }}
+    >
       {isAdditionalShow && (
         <div className="adm-chart-additional d-flex justify-content-between align-center">
           {!!onReload && (
@@ -110,9 +154,16 @@ export default function Chart(props: VegaLiteProps) {
               </button>
             </Tooltip>
           )}
+          {!!onPin && (
+            <Tooltip title="Pin chart to dashboard">
+              <button onClick={onPin}>
+                <PushPinOutlined />
+              </button>
+            </Tooltip>
+          )}
         </div>
       )}
-      <div style={{ width }} ref={$container} />
+      <div style={{ width, height }} ref={$container} />
     </div>
   );
 }

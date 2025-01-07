@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import dynamic from 'next/dynamic';
 import styled from 'styled-components';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Form, Button, Skeleton, Modal } from 'antd';
+import { Alert, Form, Button, Skeleton, Modal, message } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import { ReloadOutlined } from '@ant-design/icons';
 import BasicProperties from '@/components/chart/properties/BasicProperties';
@@ -22,6 +22,8 @@ import {
   getChartSpecFieldTitleMap,
   getChartSpecOptionValues,
 } from '@/components/chart/handler';
+import { useCreateDashboardItemMutation } from '@/apollo/client/graphql/dashboard.generated';
+import { DashboardItemType } from '@/apollo/server/repositories';
 
 const Chart = dynamic(() => import('@/components/chart'), {
   ssr: false,
@@ -102,6 +104,13 @@ export default function ChartAnswer(props: Props) {
     onError: (error) => console.error(error),
   });
 
+  const [createDashboardItem] = useCreateDashboardItemMutation({
+    onError: (error) => console.error(error),
+    onCompleted: () => {
+      message.success('Successfully pinned chart to dashboard.');
+    },
+  });
+
   // initial trigger when render
   useEffect(() => {
     previewData({
@@ -178,6 +187,23 @@ export default function ChartAnswer(props: Props) {
 
   const onEdit = () => {
     setIsEditMode(!isEditMode);
+  };
+
+  const onPin = () => {
+    Modal.confirm({
+      title: 'Are you sure you want to pin this chart to the dashboard?',
+      okText: 'Save',
+      onOk: async () =>
+        await createDashboardItem({
+          variables: {
+            data: {
+              // DashboardItemType is compatible with ChartType
+              itemType: chartType as unknown as DashboardItemType,
+              responseId: threadResponse.id,
+            },
+          },
+        }),
+    });
   };
 
   const onResetAdjustment = () => {
@@ -271,6 +297,7 @@ export default function ChartAnswer(props: Props) {
               values={dataValues}
               onEdit={onEdit}
               onReload={onReload}
+              onPin={onPin}
             />
           </ChartWrapper>
         ) : (
