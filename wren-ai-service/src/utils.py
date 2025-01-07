@@ -10,26 +10,31 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class CustomFormatter(logging.Formatter):
-    grey = "\x1b[38;20m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-    format = (
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-    )
+    # grey = "\x1b[38;20m"
+    # yellow = "\x1b[33;20m"
+    # red = "\x1b[31;20m"
+    # bold_red = "\x1b[31;1m"
+    # reset = "\x1b[0m"
+    # format = (
+    #     "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    # )
 
-    FORMATS = {
-        logging.DEBUG: yellow + format + reset,
-        logging.INFO: grey + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset,
-    }
+    # FORMATS = {
+    #     logging.DEBUG: yellow + format + reset,
+    #     logging.INFO: grey + format + reset,
+    #     logging.WARNING: yellow + format + reset,
+    #     logging.ERROR: red + format + reset,
+    #     logging.CRITICAL: bold_red + format + reset,
+    # }
+    logging_format = (
+        "{levelname:<.1}{asctime}.{msecs}000 {process} {name}:{lineno}] {message}"
+    )
+    date_format = "%Y-%m-%d %H:%M:%S"
 
     def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt)
+        formatter = logging.Formatter(
+            fmt=self.logging_format, datefmt=self.date_format, style="{"
+        )
         return formatter.format(record)
 
 
