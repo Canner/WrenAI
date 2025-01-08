@@ -9,7 +9,7 @@ import {
 } from 'lodash';
 
 export enum DashboardItemType {
-  // AI chart types
+  // AI chart types, refer to ChartType in adaptor.ts
   AREA = 'AREA',
   BAR = 'BAR',
   GROUPED_BAR = 'GROUPED_BAR',

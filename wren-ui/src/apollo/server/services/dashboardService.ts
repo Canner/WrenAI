@@ -25,7 +25,7 @@ export type UpdateDashboardItemLayouts = (DashboardItemLayout & {
 })[];
 
 export interface IDashboardService {
-  initDashboard(dashboard: Dashboard): Promise<Dashboard>;
+  initDashboard(): Promise<Dashboard>;
   getCurrentDashboard(): Promise<Dashboard>;
   getDashboardItem(dashboardItemId: number): Promise<DashboardItem>;
   getDashboardItems(dashboardId: number): Promise<DashboardItem[]>;
@@ -57,6 +57,10 @@ export class DashboardService implements IDashboardService {
 
   public async initDashboard(): Promise<Dashboard> {
     const project = await this.projectService.getCurrentProject();
+    const existingDashboard = await this.dashboardRepository.findOneBy({
+      projectId: project.id,
+    });
+    if (existingDashboard) return existingDashboard;
     // only support one dashboard for oss
     return await this.dashboardRepository.createOne({
       name: 'Dashboard',

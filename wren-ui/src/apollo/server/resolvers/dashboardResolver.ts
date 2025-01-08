@@ -1,4 +1,5 @@
 import { IContext } from '@server/types';
+import { ChartType } from '@server/models/adaptor';
 import {
   UpdateDashboardItemLayouts,
   PreviewDataResponse,
@@ -7,7 +8,7 @@ import {
 import { DashboardItem, DashboardItemType } from '@server/repositories';
 import { getLogger } from '@server/utils';
 
-const logger = getLogger('DiagramResolver');
+const logger = getLogger('DashboardResolver');
 logger.level = 'debug';
 
 export class DashboardResolver {
@@ -17,6 +18,7 @@ export class DashboardResolver {
     this.deleteDashboardItem = this.deleteDashboardItem.bind(this);
     this.updateDashboardItemLayouts =
       this.updateDashboardItemLayouts.bind(this);
+    this.previewItemSQL = this.previewItemSQL.bind(this);
   }
 
   public async getDashboardItems(
@@ -36,6 +38,21 @@ export class DashboardResolver {
     const { responseId, itemType } = args.data;
     const dashboard = await ctx.dashboardService.getCurrentDashboard();
     const response = await ctx.askingService.getResponse(responseId);
+
+    if (!response) {
+      throw new Error(`Thread response not found. responseId: ${responseId}`);
+    }
+
+    // if including AI chart type it means the item comes from a thread chart
+    if (
+      Object.keys(ChartType).includes(itemType) &&
+      !response.chartDetail?.chartSchema
+    ) {
+      throw new Error(
+        `Chart schema not found in thread response. responseId: ${responseId}`,
+      );
+    }
+
     return await ctx.dashboardService.createDashboardItem({
       dashboardId: dashboard.id,
       type: itemType,
@@ -68,23 +85,28 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<Record<string, any>[]> {
     const { itemId, limit } = args.data;
-    const item = await ctx.dashboardService.getDashboardItem(itemId);
-    const project = await ctx.projectService.getCurrentProject();
-    const deployment = await ctx.deployService.getLastDeployment(project.id);
-    const mdl = deployment.manifest;
-    const data = (await ctx.queryService.preview(item.detail.sql, {
-      project,
-      manifest: mdl,
-      limit: limit || DEFAULT_PREVIEW_LIMIT,
-    })) as PreviewDataResponse;
+    try {
+      const item = await ctx.dashboardService.getDashboardItem(itemId);
+      const project = await ctx.projectService.getCurrentProject();
+      const deployment = await ctx.deployService.getLastDeployment(project.id);
+      const mdl = deployment.manifest;
+      const data = (await ctx.queryService.preview(item.detail.sql, {
+        project,
+        manifest: mdl,
+        limit: limit || DEFAULT_PREVIEW_LIMIT,
+      })) as PreviewDataResponse;
 
-    // handle data to [{ column1: value1, column2: value2, ... }]
-    const values = data.data.map((val) => {
-      return data.columns.reduce((acc, col, index) => {
-        acc[col.name] = val[index];
-        return acc;
-      }, {});
-    });
-    return values;
+      // handle data to [{ column1: value1, column2: value2, ... }]
+      const values = data.data.map((val) => {
+        return data.columns.reduce((acc, col, index) => {
+          acc[col.name] = val[index];
+          return acc;
+        }, {});
+      });
+      return values;
+    } catch (error) {
+      logger.error(`Error previewing SQL item ${itemId}: ${error}`);
+      throw error;
+    }
   }
 }
