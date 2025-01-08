@@ -75,12 +75,14 @@ type ParamsSpec = {
 
 type ChartOptions = {
   width?: number | string;
-  height?: number;
+  height?: number | string;
   stack?: 'zero' | 'normalize';
   point?: boolean;
   donutInner?: number | false;
   categoriesLimit?: number;
   isShowTopCategories?: boolean;
+  isHideLegend?: boolean;
+  isHideTitle?: boolean;
 };
 
 const config: Config = {
@@ -89,12 +91,16 @@ const config: Config = {
   padding: {
     top: 30,
     bottom: 20,
+    left: 0,
+    right: 0,
   },
   title: {
     color: COLOR.GRAY_10,
     fontSize: 14,
   },
   axis: {
+    labelPadding: 0,
+    labelOffset: 0,
     labelFontSize: 10,
     gridColor: COLOR.GRAY_5,
     titleColor: COLOR.GRAY_9,
@@ -155,7 +161,7 @@ export default class ChartSpecHandler {
     // default options
     this.options = {
       width: isNil(options?.width) ? 'container' : options.width,
-      height: isNil(options?.height) ? 320 : options.height,
+      height: isNil(options?.height) ? 'container' : options.height,
       stack: isNil(options?.stack) ? 'zero' : options.stack,
       point: isNil(options?.point) ? true : options.point,
       donutInner: isNil(options?.donutInner) ? 60 : options.donutInner,
@@ -165,6 +171,8 @@ export default class ChartSpecHandler {
       isShowTopCategories: isNil(options?.isShowTopCategories)
         ? false
         : options?.isShowTopCategories,
+      isHideLegend: isNil(options?.isHideLegend) ? false : options.isHideLegend,
+      isHideTitle: isNil(options?.isHideTitle) ? false : options.isHideTitle,
     };
 
     // avoid mutating the original spec
@@ -188,6 +196,17 @@ export default class ChartSpecHandler {
           range: pickedColorScheme,
         },
       } as any;
+    }
+
+    if (this.options.isHideLegend) {
+      this.encoding.color = {
+        ...this.encoding.color,
+        legend: null,
+      };
+    }
+
+    if (this.options.isHideTitle) {
+      this.title = null;
     }
 
     return {
