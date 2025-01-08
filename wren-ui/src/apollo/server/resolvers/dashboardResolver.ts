@@ -45,12 +45,10 @@ export class DashboardResolver {
     if (!response) {
       throw new Error(`Thread response not found. responseId: ${responseId}`);
     }
-
-    // if including AI chart type it means the item comes from a thread chart
-    if (
-      Object.keys(ChartType).includes(itemType) &&
-      !response.chartDetail?.chartSchema
-    ) {
+    if (!Object.keys(ChartType).includes(itemType)) {
+      throw new Error(`Chart type not supported. responseId: ${responseId}`);
+    }
+    if (!response.chartDetail?.chartSchema) {
       throw new Error(
         `Chart schema not found in thread response. responseId: ${responseId}`,
       );
