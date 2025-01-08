@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     pipe_components = generate_components(settings.components)
     app.state.service_container = create_service_container(pipe_components, settings)
     app.state.service_metadata = create_service_metadata(pipe_components)
-    init_langfuse()
+    init_langfuse(settings)
 
     yield
 

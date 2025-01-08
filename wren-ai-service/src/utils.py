@@ -6,6 +6,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
+from src.config import Settings
+
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -67,9 +69,7 @@ def remove_trailing_slash(endpoint: str) -> str:
     return endpoint.rstrip("/") if endpoint.endswith("/") else endpoint
 
 
-def init_langfuse():
-    from src.config import settings
-
+def init_langfuse(settings: Settings):
     langfuse_context.configure(
         enabled=settings.langfuse_enable,
         host=settings.langfuse_host,
