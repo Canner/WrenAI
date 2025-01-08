@@ -153,7 +153,7 @@ def save_report(report_by_release: dict):
 
 
 async def main():
-    RELEASES = ["0.15.3", "0.14.2"]
+    RELEASES = ["0.15.4", "0.15.3", "0.14.2"]
     TRACE_NAMES = [
         # indexing
         "Prepare Semantics",

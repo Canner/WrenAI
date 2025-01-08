@@ -41,7 +41,7 @@ def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
 
     pipe_components = generate_components(settings.components)
     pipeline = pipeline_cls(**pipe_components[pipeline_name])
-    init_langfuse()
+    init_langfuse(settings)
 
     async_validate(lambda: pipeline.run(**kwargs))
 
