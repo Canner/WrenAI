@@ -202,7 +202,7 @@ export default class ChartSpecHandler {
       this.encoding.color = {
         ...this.encoding.color,
         legend: null,
-      };
+      } as any;
     }
 
     if (this.options.isHideTitle) {
