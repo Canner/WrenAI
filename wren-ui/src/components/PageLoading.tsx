@@ -17,13 +17,6 @@ const Wrapper = styled.div`
   }
 `;
 
-const Container = styled.div`
-  .ant-spin-nested-loading > div > .ant-spin .ant-spin-text {
-    padding-top: 24px;
-    white-space: nowrap;
-  }
-`;
-
 interface Props {
   visible?: boolean;
 }
@@ -73,11 +66,9 @@ export const Loading = ({
   loading = false,
   tip,
 }: LoadingProps) => (
-  <Container>
-    <Spin indicator={defaultIndicator} spinning={spinning || loading} tip={tip}>
-      {children}
-    </Spin>
-  </Container>
+  <Spin indicator={defaultIndicator} spinning={spinning || loading} tip={tip}>
+    {children}
+  </Spin>
 );
 
 interface LoadingWrapperProps {

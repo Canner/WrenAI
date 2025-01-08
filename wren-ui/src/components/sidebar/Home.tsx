@@ -53,7 +53,7 @@ export default function Home(props: Props) {
   const onDeleteThread = async (threadId: string) => {
     await onDelete(threadId);
     if (params?.id == threadId) {
-      router.push('/home');
+      router.push(Path.Home);
     }
   };
 
@@ -71,7 +71,7 @@ export default function Home(props: Props) {
         className={clsx({
           'adm-treeNode--selected': router.pathname === Path.HomeDashboard,
         })}
-        href="/home/dashboard"
+        href={Path.HomeDashboard}
       >
         <FundViewOutlined className="mr-2" />
         <span className="text-medium">Dashboard</span>

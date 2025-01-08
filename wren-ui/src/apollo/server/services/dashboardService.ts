@@ -166,7 +166,7 @@ export class DashboardService implements IDashboardService {
     const halfLayoutX = columnCount / 2;
     // the current max y is the current row
     const maxY = Math.max(...allLayouts.map((layout) => layout.y));
-    // the current max x is the current column
+
     const latestLayout = allLayouts.filter((layout) => layout.y === maxY);
     const isNextRow =
       latestLayout.reduce((acc, layout) => acc + layout.x + layout.w, 0) >

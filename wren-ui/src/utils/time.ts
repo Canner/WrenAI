@@ -9,17 +9,17 @@ export const nextTick = (ms = 1) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 export const getRelativeTime = (time: string) => {
-  return dayJs(time).fromNow();
+  return dayJs(time).utc().fromNow();
 };
 
 export const getAbsoluteTime = (time: string) => {
-  return dayJs(time).format('YYYY-MM-DD HH:mm:ss');
+  return dayJs(time).utc().format('YYYY-MM-DD HH:mm:ss');
 };
 
 export const getFullNameDate = (time: string) => {
-  return dayJs(time).format('MMMM DD, YYYY');
+  return dayJs(time).utc().format('MMMM DD, YYYY');
 };
 
 export const getShortDate = (time: string) => {
-  return dayJs(time).format('MMM DD');
+  return dayJs(time).utc().format('MMM DD');
 };
