@@ -95,7 +95,7 @@ export default function Chart(props: VegaLiteProps) {
     if ($container.current) {
       setDonutInner($container.current.clientHeight * 0.15);
     }
-  }, []);
+  }, [forceUpdate]);
 
   const onShowTopCategories = () => {
     setIsShowTopCategories(!isShowTopCategories);

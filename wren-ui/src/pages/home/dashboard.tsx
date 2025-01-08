@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { message } from 'antd';
+import { Path } from '@/utils/enum';
+import { useRouter } from 'next/router';
 import { Logo } from '@/components/Logo';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
@@ -36,14 +38,23 @@ const EmptyDashboard = (props: {
 };
 
 export default function Dashboard() {
+  const router = useRouter();
   const homeSidebar = useHomeSidebar();
 
   const { data, refetch } = useDashboardItemsQuery({
     fetchPolicy: 'cache-and-network',
+    onError: () => {
+      message.error('Failed to fetch dashboard items.');
+      router.push(Path.Home);
+    },
   });
   const dashboardItems = useMemo(() => data?.dashboardItems || [], [data]);
 
-  const [updateDashboardItemLayouts] = useUpdateDashboardItemLayoutsMutation();
+  const [updateDashboardItemLayouts] = useUpdateDashboardItemLayoutsMutation({
+    onError: () => {
+      message.error('Failed to update dashboard item layouts.');
+    },
+  });
   const [deleteDashboardItem] = useDeleteDashboardItemMutation({
     onCompleted: () => {
       message.success('Successfully deleted dashboard item.');
@@ -53,7 +64,7 @@ export default function Dashboard() {
 
   const onUpdateChange = async (layouts: ItemLayoutInput[]) => {
     if (layouts && layouts.length > 0) {
-      updateDashboardItemLayouts({ variables: { data: { layouts } } });
+      await updateDashboardItemLayouts({ variables: { data: { layouts } } });
     }
   };
 

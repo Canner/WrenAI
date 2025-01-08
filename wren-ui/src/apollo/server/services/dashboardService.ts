@@ -118,6 +118,17 @@ export class DashboardService implements IDashboardService {
     layouts: UpdateDashboardItemLayouts,
   ): Promise<DashboardItem[]> {
     const updatedItems: DashboardItem[] = [];
+    const isValidLayouts = layouts.every(
+      (layout) =>
+        layout.itemId &&
+        layout.x >= 0 &&
+        layout.y >= 0 &&
+        layout.w > 0 &&
+        layout.h > 0,
+    );
+    if (!isValidLayouts) {
+      throw new Error('Invalid layouts boundaries.');
+    }
     await Promise.all(
       layouts.map(async (layout) => {
         const updatedItem = await this.dashboardItemRepository.updateOne(

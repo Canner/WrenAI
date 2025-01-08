@@ -27,6 +27,9 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<DashboardItem[]> {
     const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    if (!dashboard) {
+      throw new Error('Dashboard not found.');
+    }
     return await ctx.dashboardService.getDashboardItems(dashboard.id);
   }
 
@@ -67,6 +70,10 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<boolean> {
     const { id } = args.where;
+    const item = await ctx.dashboardService.getDashboardItem(id);
+    if (!item) {
+      throw new Error(`Dashboard item not found. id: ${id}`);
+    }
     return await ctx.dashboardService.deleteDashboardItem(id);
   }
 
@@ -76,6 +83,9 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<DashboardItem[]> {
     const { layouts } = args.data;
+    if (layouts.length === 0) {
+      throw new Error('Layouts are required.');
+    }
     return await ctx.dashboardService.updateDashboardItemLayouts(layouts);
   }
 

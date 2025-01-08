@@ -2,12 +2,12 @@ import { Fragment } from 'react';
 import Icon from '@ant-design/icons';
 
 export type ActionType = {
-  icon?: any;
+  icon?: React.ComponentType<{ className?: string }>;
   key: React.Key;
   className?: string;
   style?: React.CSSProperties;
   disabled?: boolean;
-  render?: (props: { key: React.Key }) => React.ReactNode;
+  render?: (props: { key: React.Key; disabled: boolean }) => React.ReactNode;
 };
 
 interface GroupTitleProps {
@@ -30,7 +30,7 @@ const Actions = ({ actions }: { actions: ActionType[] }) => {
           {...restProps}
         />
       ) : render ? (
-        <Fragment key={key}>{render({ key })}</Fragment>
+        <Fragment key={key}>{render({ key, disabled })}</Fragment>
       ) : null,
   );
 

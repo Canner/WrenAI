@@ -1,4 +1,4 @@
-import { Spin, Typography } from 'antd';
+import { Spin } from 'antd';
 import styled from 'styled-components';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 
@@ -80,7 +80,13 @@ export const Loading = ({
   </Container>
 );
 
-export const LoadingWrapper = (props) => {
+interface LoadingWrapperProps {
+  loading: boolean;
+  tip?: string;
+  children: React.ReactElement;
+}
+
+export const LoadingWrapper = (props: LoadingWrapperProps) => {
   const { loading, tip, children } = props;
   if (loading) return <FlexLoading tip={tip} />;
   return children;

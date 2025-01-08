@@ -164,7 +164,7 @@ export default function DashboardGrid(props: Props) {
     return () => {
       window.removeEventListener('resize', renderColumnSize);
     };
-  }, [$container, items]);
+  }, [$container]);
 
   const onLayoutChange = (layouts: Layout[]) => {
     onUpdateChange(layouts.map((layout) => getLayoutToUpdateItem(layout)));
@@ -201,7 +201,7 @@ export function PinnedItem(props: {
 
   useEffect(() => {
     previewItemSQL({ variables: { data: { itemId: item.id } } });
-  }, []);
+  }, [item.id]);
 
   useEffect(() => {
     setForceLoading(true);
