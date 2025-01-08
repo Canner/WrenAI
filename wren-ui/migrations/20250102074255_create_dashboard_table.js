@@ -5,23 +5,28 @@
 exports.up = async function (knex) {
   await knex.schema.createTable('dashboard', (table) => {
     table.increments('id').primary();
-    table.integer('project_id').comment('Reference to project.id');
-    table.string('name').comment('The dashboard name');
+    table
+      .integer('project_id')
+      .notNullable()
+      .comment('Reference to project.id');
+    table.string('name').notNullable().comment('The dashboard name');
 
+    table.foreign('project_id').references('project.id').onDelete('CASCADE');
+    table.index(['project_id']);
     table.timestamps(true, true);
   });
 
-  // select all existing projects, should be only one project though
-  const projects = await knex('project');
-  if (projects.length > 0) {
-    // create a dashboard for each project
-    for (const project of projects) {
-      await knex('dashboard').insert({
+  await knex.transaction(async (trx) => {
+    // select all existing projects, should be only one project though
+    const projects = await knex('project').forUpdate();
+    if (projects.length > 0) {
+      const dashboards = projects.map((project) => ({
         project_id: project.id,
         name: 'Dashboard',
-      });
+      }));
+      await trx('dashboard').insert(dashboards);
     }
-  }
+  });
 };
 
 /**
