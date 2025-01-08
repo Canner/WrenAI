@@ -5118,7 +5118,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"axios@npm:^1.6.2, axios@npm:^1.7.4":
+"axios@npm:^1.7.4":
   version: 1.7.4
   resolution: "axios@npm:1.7.4"
   dependencies:
@@ -6129,6 +6129,13 @@ __metadata:
   dependencies:
     toggle-selection: "npm:^1.0.6"
   checksum: 10c0/3ebf5e8ee00601f8c440b83ec08d838e8eabb068c1fae94a9cda6b42f288f7e1b552f3463635f419af44bf7675afc8d0390d30876cf5c2d5d35f86d9c56a3e5f
+  languageName: node
+  linkType: hard
+
+"core-js@npm:^3.38.1":
+  version: 3.40.0
+  resolution: "core-js@npm:3.40.0"
+  checksum: 10c0/db7946ada881e845d8b157061945b1187618fa45cf162f392a151e8a497962aed2da688c982eaa1d444c864be97a70f8be4d73385294b515d224dd164d19f1d4
   languageName: node
   linkType: hard
 
@@ -12502,23 +12509,25 @@ __metadata:
   languageName: node
   linkType: hard
 
-"posthog-js@npm:^1.121.1":
-  version: 1.128.1
-  resolution: "posthog-js@npm:1.128.1"
+"posthog-js@npm:^1.205.0":
+  version: 1.205.0
+  resolution: "posthog-js@npm:1.205.0"
   dependencies:
+    core-js: "npm:^3.38.1"
     fflate: "npm:^0.4.8"
     preact: "npm:^10.19.3"
-  checksum: 10c0/2522e07a6e29c322872b163d8ab954b117dd24780a701d3b6240944ec7dbf3cb3968ae3c73206fa622b7ba9e75c584680dfb103a1718af77b732fa5f43835128
+    web-vitals: "npm:^4.2.0"
+  checksum: 10c0/07788b4b66f38befdfc7fad8c958ae463a13ff2b0bfca7cff65d989be22b6196ac63d9b31523cbbfc2482705341314ea8bb8ad3e47ab091ec88688d8dd78aab2
   languageName: node
   linkType: hard
 
-"posthog-node@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "posthog-node@npm:4.0.0"
+"posthog-node@npm:^4.3.2":
+  version: 4.3.2
+  resolution: "posthog-node@npm:4.3.2"
   dependencies:
-    axios: "npm:^1.6.2"
+    axios: "npm:^1.7.4"
     rusha: "npm:^0.8.14"
-  checksum: 10c0/f455a9fb785ea7016ec8e59b8d5d6e885b0557c7cf38989bd1a0ac604d7729e8d0ad2423bc500b1af9b925fd1c2cb5e446f133503b7e3a7dd49f3c8d0c0b1253
+  checksum: 10c0/ce805bee7f30d9beec133363c01bb4fe383fd90c9e9f24ed15b787a972e1fcba77ee05351c70f3984d73c46d91399ba0392cd7d37cf56d81ce951133d5e7e2b2
   languageName: node
   linkType: hard
 
@@ -15311,23 +15320,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:~4.6.2":
-  version: 4.6.4
-  resolution: "typescript@npm:4.6.4"
+"typescript@npm:5.2.2":
+  version: 5.2.2
+  resolution: "typescript@npm:5.2.2"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/92e2c0328485a4f7bd7435f5b105f03addff32f867e241dc3be8c372ed801a138c732d9a55697696d2f82a80dd6ad4bddff1ad6b0d1884bf4a24b92e71094c44
+  checksum: 10c0/91ae3e6193d0ddb8656d4c418a033f0f75dec5e077ebbc2bd6d76439b93f35683936ee1bdc0e9cf94ec76863aa49f27159b5788219b50e1cd0cd6d110aa34b07
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A~4.6.2#optional!builtin<compat/typescript>":
-  version: 4.6.4
-  resolution: "typescript@patch:typescript@npm%3A4.6.4#optional!builtin<compat/typescript>::version=4.6.4&hash=5d3a66"
+"typescript@patch:typescript@npm%3A5.2.2#optional!builtin<compat/typescript>":
+  version: 5.2.2
+  resolution: "typescript@patch:typescript@npm%3A5.2.2#optional!builtin<compat/typescript>::version=5.2.2&hash=f3b441"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/0e3fa814d454942a689daf4c00f82328d323e7ecd4077e3265d45375e64642611631f4c882a71be87774468ba03793e9b8ff4bccfac3018194a9e36d8f72c251
+  checksum: 10c0/062c1cee1990e6b9419ce8a55162b8dc917eb87f807e4de0327dbc1c2fa4e5f61bc0dd4e034d38ff541d1ed0479b53bcee8e4de3a4075c51a1724eb6216cb6f5
   languageName: node
   linkType: hard
 
@@ -16108,6 +16117,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"web-vitals@npm:^4.2.0":
+  version: 4.2.4
+  resolution: "web-vitals@npm:4.2.4"
+  checksum: 10c0/383c9281d5b556bcd190fde3c823aeb005bb8cf82e62c75b47beb411014a4ed13fa5c5e0489ed0f1b8d501cd66b0bebcb8624c1a75750bd5df13e2a3b1b2d194
+  languageName: node
+  linkType: hard
+
 "webcrypto-core@npm:^1.7.8":
   version: 1.7.8
   resolution: "webcrypto-core@npm:1.7.8"
@@ -16338,8 +16354,8 @@ __metadata:
     next-with-less: "npm:^3.0.1"
     pg: "npm:^8.8.0"
     pg-cursor: "npm:^2.7.4"
-    posthog-js: "npm:^1.121.1"
-    posthog-node: "npm:^4.0.0"
+    posthog-js: "npm:^1.205.0"
+    posthog-node: "npm:^4.3.2"
     prettier: "npm:^3.2.5"
     react: "npm:18.2.0"
     react-ace: "npm:^10.1.0"
@@ -16355,7 +16371,7 @@ __metadata:
     ts-essentials: "npm:^9.1.2"
     ts-jest: "npm:29.1.1"
     ts-node: "npm:9.1.1"
-    typescript: "npm:~4.6.2"
+    typescript: "npm:5.2.2"
     uuid: "npm:^9.0.1"
     vega: "npm:^5.30.0"
     vega-embed: "npm:^6.29.0"

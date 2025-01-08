@@ -31,7 +31,7 @@
     "next": "14.2.21",
     "pg": "^8.8.0",
     "pg-cursor": "^2.7.4",
-    "posthog-node": "^4.0.0",
+    "posthog-node": "^4.3.2",
     "sql-formatter": "^15.3.0",
     "uuid": "^9.0.1"
   },
@@ -73,7 +73,7 @@
     "less": "^4.2.0",
     "less-loader": "^12.2.0",
     "next-with-less": "^3.0.1",
-    "posthog-js": "^1.121.1",
+    "posthog-js": "^1.205.0",
     "prettier": "^3.2.5",
     "react": "18.2.0",
     "react-ace": "^10.1.0",
@@ -88,7 +88,7 @@
     "ts-essentials": "^9.1.2",
     "ts-jest": "29.1.1",
     "ts-node": "9.1.1",
-    "typescript": "~4.6.2",
+    "typescript": "5.2.2",
     "vega": "^5.30.0",
     "vega-embed": "^6.29.0",
     "vega-lite": "^5.21.0"
