@@ -24,7 +24,7 @@ class CustomFormatter(logging.Formatter):
         # Python logging module. By default this captures all logs
         # at INFO level and higher
         client.setup_logging()
-    except ImportError:
+    except Exception:
         pass
     finally:
         _LOGGING_FORMAT = "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
