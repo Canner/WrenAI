@@ -2,13 +2,11 @@ import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
-import orjson
 from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.indexing.sql_pairs_preparation import SqlPair
 from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
@@ -57,17 +55,6 @@ class SemanticsPreparationService:
             str, SemanticsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
-    def _sql_pairs(self, input: dict) -> asyncio.Task:
-        sql_pairs = [
-            SqlPair(**pair)
-            for pair in orjson.loads(input["mdl_str"]).get("sqlPairs", [])
-        ]
-
-        return self._pipelines["sql_pairs_preparation"].run(
-            sql_pairs=sql_pairs,
-            project_id=input["project_id"],
-        )
-
     @observe(name="Prepare Semantics")
     @trace_metadata
     async def prepare_semantics(
@@ -92,13 +79,13 @@ class SemanticsPreparationService:
 
             tasks = [
                 self._pipelines[name].run(**input)
-                for name in ["db_schema", "historical_question", "table_description"]
+                for name in [
+                    "db_schema",
+                    "historical_question",
+                    "table_description",
+                    "sql_pairs",
+                ]
             ]
-
-            if "sqlPairs" in input["mdl_str"]:
-                # this is a temporary usage for embedding some sql pairs at MDL level
-                # will expect to remove or refactor this in the future
-                tasks.append(self._sql_pairs(input))
 
             await asyncio.gather(*tasks)
 

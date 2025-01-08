@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.indexing.sql_pairs_preparation import SqlPair
+from src.pipelines.indexing.sql_pairs import SqlPair
 from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
