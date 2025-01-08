@@ -91,6 +91,7 @@ class SqlPairsPreparationService:
         }
 
         try:
+            # TODO: Implement proper SQL pairs preparation functionality. Current implementation needs to be updated.
             await self._pipelines["sql_pairs_preparation"].run(
                 sql_pairs=prepare_sql_pairs_request.sql_pairs,
                 project_id=prepare_sql_pairs_request.project_id,
