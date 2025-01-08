@@ -26,7 +26,6 @@ interface LoadingProps {
   spinning?: boolean;
   loading?: boolean;
   tip?: string;
-  width?: number;
 }
 
 export const defaultIndicator = (
