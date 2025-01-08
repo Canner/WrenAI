@@ -58,7 +58,8 @@ export class DashboardItemRepository
     if (!isPlainObject(data)) {
       throw new Error('Unexpected dbdata');
     }
-    const transformData = mapValues(data, (value, key) => {
+    const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
+    const transformData = mapValues(camelCaseData, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;
@@ -68,9 +69,7 @@ export class DashboardItemRepository
       }
       return value;
     });
-    return mapKeys(transformData, (_value, key) =>
-      camelCase(key),
-    ) as DashboardItem;
+    return transformData as DashboardItem;
   };
 
   protected override transformToDBData = (data: any) => {
