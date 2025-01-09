@@ -26,6 +26,7 @@ async def delete_sql_pairs(
 ## End of Pipeline
 
 
+# TODO: consider removing this pipeline and using the function in the sql_pairs_indexing pipeline instead like other indexing pipelines
 class SqlPairsDeletion(BasicPipeline):
     def __init__(
         self,
