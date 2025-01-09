@@ -19,7 +19,9 @@ from src.utils import (
 )
 from src.web.v1 import routers
 
-setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
+setup_custom_logger(
+    "wren-ai-service", level_str=settings.logging_level, is_dev=settings.development
+)
 
 
 # https://fastapi.tiangolo.com/advanced/events/#lifespan
