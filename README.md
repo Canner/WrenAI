@@ -1,4 +1,6 @@
 
+https://github.com/user-attachments/assets/0ca0ec57-4f07-45e5-8f7f-024f8066ab88
+
 
 <p align="center" id="top">
   <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
@@ -36,7 +38,15 @@
 
 ## 🕶 Try it yourself!
 
+#### Ask any questions
+
 https://github.com/user-attachments/assets/e4e78006-0088-4094-b58f-8868689bf787
+
+#### GenBI
+
+https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b
+
+
 
 👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
