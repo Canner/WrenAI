@@ -65,7 +65,7 @@ def boilerplates(
 
 @observe(capture_input=False)
 def sql_pairs(
-    boilerplates: List[str],
+    boilerplates: Set[str],
     external_pairs: Dict[str, Any],
 ) -> List[SqlPair]:
     return [

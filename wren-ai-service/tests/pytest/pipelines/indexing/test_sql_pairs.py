@@ -35,7 +35,7 @@ async def test_sql_pairs_indexing_saving_to_document_store():
 
 
 @pytest.mark.asyncio
-async def test_sql_pairs_preparation_saving_to_document_store_with_multiple_project_ids():
+async def test_sql_pairs_indexing_saving_to_document_store_with_multiple_project_ids():
     pipe_components = generate_components(settings.components)
     document_store_provider: DocumentStoreProvider = pipe_components[
         "sql_pairs_indexing"
