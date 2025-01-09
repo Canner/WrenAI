@@ -24,7 +24,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION    string = "0.13.2"
+	WREN_PRODUCT_VERSION    string = "0.14.0-rc.1"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
@@ -370,7 +370,7 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 				Services: []string{"wren-ai-service"},
 			},
 		}
-		
+
 		// Run the up command with specific options for wren-ai-service
 		err = apiService.Up(ctx, projectType, upOptions)
 		if err != nil {
