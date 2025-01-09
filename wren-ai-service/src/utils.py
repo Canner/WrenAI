@@ -12,11 +12,6 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class CustomFormatter(logging.Formatter):
-    _LOGGING_FORMAT = (
-        "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
-    )
-    _DATE_FMT = "%m%d %H:%M:%S"
-
     def __init__(self, is_dev: bool):
         super().__init__()
         self.is_dev = is_dev
@@ -38,9 +33,12 @@ class CustomFormatter(logging.Formatter):
             logger.warning(f"Failed to setup cloud logging: {str(e)}")
 
     def format(self, record):
+        _LOGGING_FORMAT = "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
+        _DATE_FMT = "%m%d %H:%M:%S"
+
         formatter = logging.Formatter(
-            fmt=self._LOGGING_FORMAT,
-            datefmt=self._DATE_FMT,
+            fmt=_LOGGING_FORMAT,
+            datefmt=_DATE_FMT,
             style="{",
         )
         return formatter.format(record)
