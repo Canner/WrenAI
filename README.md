@@ -1,5 +1,4 @@
 
-
 <p align="center" id="top">
   <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
     <picture>
@@ -36,7 +35,15 @@
 
 ## 🕶 Try it yourself!
 
+#### Ask any questions
+
 https://github.com/user-attachments/assets/e4e78006-0088-4094-b58f-8868689bf787
+
+#### GenBI
+
+https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b
+
+
 
 👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
@@ -89,12 +96,12 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-insight.png" style="max-width: 700px"/>
 </p>
 
-### 6. AI-Powered Insights & Visuals
+### 6. GenBI
 
-> AI-generated summaries that deliver key insights alongside SQL queries, making complex data easier to understand. Instantly transform results into AI-generated charts, turning raw data into clear, actionable visuals – empowering faster, smarter decisions.
+> The GenBI feature empowers users with AI-generated summaries that provide key insights alongside SQL queries, simplifying complex data. Instantly convert query results into AI-generated reports, charts, transforming raw data into clear, actionable visuals. With GenBI, you can make faster, smarter decisions with ease.
 
 <p align="center">
-  <img src="./misc/wren-visual.png" style="max-width: 700px"/>
+  <img src="./misc/wren-genbi.png" style="max-width: 700px"/>
 </p>
 
 ### 7. Easily Export and Visualize Your Data
