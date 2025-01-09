@@ -12,34 +12,39 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class CustomFormatter(logging.Formatter):
-    try:
-        # Imports the Cloud Logging client library
-        import google.cloud.logging
+    def __init__(self, is_dev: bool):
+        super().__init__()
+        self.is_dev = is_dev
 
-        # Instantiates a client
-        client = google.cloud.logging.Client()
+        try:
+            if not self.is_dev:
+                # Imports the Cloud Logging client library
+                import google.cloud.logging
 
-        # Retrieves a Cloud Logging handler based on the environment
-        # you're running in and integrates the handler with the
-        # Python logging module. By default this captures all logs
-        # at INFO level and higher
-        client.setup_logging()
-    except Exception:
-        pass
-    finally:
-        _LOGGING_FORMAT = "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
-        _DATE_FMT = "%m%d %H:%M:%S"
+                # Instantiates a client
+                client = google.cloud.logging.Client()
 
-        def format(self, record):
-            formatter = logging.Formatter(
-                fmt=self._LOGGING_FORMAT,
-                datefmt=self._DATE_FMT,
-                style="{",
-            )
-            return formatter.format(record)
+                # Retrieves a Cloud Logging handler based on the environment
+                # you're running in and integrates the handler with the
+                # Python logging module. By default this captures all logs
+                # at INFO level and higher
+                client.setup_logging()
+        except Exception:
+            pass
+        finally:
+            _LOGGING_FORMAT = "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
+            _DATE_FMT = "%m%d %H:%M:%S"
+
+            def format(self, record):
+                formatter = logging.Formatter(
+                    fmt=self._LOGGING_FORMAT,
+                    datefmt=self._DATE_FMT,
+                    style="{",
+                )
+                return formatter.format(record)
 
 
-def setup_custom_logger(name, level_str: str):
+def setup_custom_logger(name, level_str: str, is_dev: bool):
     level_str = level_str.upper()
 
     if level_str not in logging._nameToLevel:
@@ -48,7 +53,7 @@ def setup_custom_logger(name, level_str: str):
     level = logging._nameToLevel[level_str]
 
     handler = logging.StreamHandler()
-    handler.setFormatter(CustomFormatter())
+    handler.setFormatter(CustomFormatter(is_dev))
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
