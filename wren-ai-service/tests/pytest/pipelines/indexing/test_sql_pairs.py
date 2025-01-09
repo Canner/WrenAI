@@ -2,7 +2,7 @@ import pytest
 
 from src.config import settings
 from src.core.provider import DocumentStoreProvider
-from src.pipelines.indexing.sql_pairs import SqlPair, SqlPairs
+from src.pipelines.indexing import SqlPairs
 from src.providers import generate_components
 
 
@@ -17,12 +17,11 @@ async def test_sql_pairs_indexing_saving_to_document_store():
         recreate_index=True,
     )
 
-    sql_pairs = SqlPairs(**pipe_components["sql_pairs_indexing"])
+    sql_pairs = SqlPairs(
+        **pipe_components["sql_pairs_indexing"], sql_pairs_path="tests/data/pairs.json"
+    )
     await sql_pairs.run(
-        sql_pairs=[
-            SqlPair(sql="SELECT * FROM book", id="1", question="What is the book?"),
-            SqlPair(sql="SELECT * FROM author", id="2", question="What is the author?"),
-        ],
+        mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
         project_id="fake-id",
     )
 
@@ -46,20 +45,16 @@ async def test_sql_pairs_preparation_saving_to_document_store_with_multiple_proj
         recreate_index=True,
     )
 
-    sql_pairs = SqlPairs(**pipe_components["sql_pairs_indexing"])
+    sql_pairs = SqlPairs(
+        **pipe_components["sql_pairs_indexing"], sql_pairs_path="tests/data/pairs.json"
+    )
     await sql_pairs.run(
-        sql_pairs=[
-            SqlPair(sql="SELECT * FROM book", id="1", question="What is the book?"),
-            SqlPair(sql="SELECT * FROM author", id="2", question="What is the author?"),
-        ],
+        mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
         project_id="fake-id",
     )
 
     await sql_pairs.run(
-        sql_pairs=[
-            SqlPair(sql="SELECT * FROM book", id="1", question="What is the book?"),
-            SqlPair(sql="SELECT * FROM author", id="2", question="What is the author?"),
-        ],
+        mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
         project_id="fake-id-2",
     )
 
