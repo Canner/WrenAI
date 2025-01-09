@@ -1,3 +1,5 @@
+import argparse
+
 import orjson
 
 
@@ -38,8 +40,6 @@ def _args():
 
 
 if __name__ == "__main__":
-    import argparse
-
     args = _args()
     mdl = orjson.loads(open(args.path).read())
     print(to_str(mdl))

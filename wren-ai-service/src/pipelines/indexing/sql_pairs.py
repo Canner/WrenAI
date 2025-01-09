@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import orjson
 from hamilton import base
@@ -53,7 +53,7 @@ class SqlPairsConverter:
 @observe(capture_input=False)
 def boilerplates(
     mdl_str: str,
-) -> List[str]:
+) -> Set[str]:
     mdl = orjson.loads(mdl_str)
 
     return {
@@ -129,8 +129,12 @@ def _load_sql_pairs(sql_pairs_path: str) -> Dict[str, Any]:
         logger.warning(f"SQL pairs file not found: {sql_pairs_path}")
         return {}
 
-    with open(sql_pairs_path, "r") as file:
-        return orjson.loads(file.read())
+    try:
+        with open(sql_pairs_path, "r") as file:
+            return orjson.loads(file.read())
+    except Exception as e:
+        logger.error(f"Error loading SQL pairs file: {e}")
+        return {}
 
 
 class SqlPairs(BasicPipeline):
