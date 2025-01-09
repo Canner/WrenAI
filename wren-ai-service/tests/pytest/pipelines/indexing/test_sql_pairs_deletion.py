@@ -2,8 +2,8 @@ import pytest
 
 from src.config import settings
 from src.core.provider import DocumentStoreProvider
+from src.pipelines.indexing.sql_pairs import SqlPair, SqlPairs
 from src.pipelines.indexing.sql_pairs_deletion import SqlPairsDeletion
-from src.pipelines.indexing.sql_pairs_preparation import SqlPair, SqlPairsPreparation
 from src.providers import generate_components
 
 
@@ -11,7 +11,7 @@ from src.providers import generate_components
 async def test_sql_pairs_deletion():
     pipe_components = generate_components(settings.components)
     document_store_provider: DocumentStoreProvider = pipe_components[
-        "sql_pairs_preparation"
+        "sql_pairs_indexing"
     ]["document_store_provider"]
     store = document_store_provider.get_store(
         dataset_name="sql_pairs",
@@ -19,13 +19,11 @@ async def test_sql_pairs_deletion():
     )
 
     sql_pairs = [
-        SqlPair(sql="SELECT * FROM book", id="1"),
-        SqlPair(sql="SELECT * FROM author", id="2"),
+        SqlPair(sql="SELECT * FROM book", id="1", question="What is the book?"),
+        SqlPair(sql="SELECT * FROM author", id="2", question="What is the author?"),
     ]
-    sql_pairs_preparation = SqlPairsPreparation(
-        **pipe_components["sql_pairs_preparation"]
-    )
-    await sql_pairs_preparation.run(
+    sql_pairs = SqlPairs(**pipe_components["sql_pairs_indexing"])
+    await sql_pairs.run(
         sql_pairs=sql_pairs,
         project_id="fake-id",
     )
