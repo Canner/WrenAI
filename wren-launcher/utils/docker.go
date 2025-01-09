@@ -24,7 +24,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION    string = "0.14.0-rc.1"
+	WREN_PRODUCT_VERSION    string = "0.14.0"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
@@ -328,7 +328,8 @@ func getConfigFilePath(projectDir string) string {
 // Supports both default and custom LLM provider configurations.
 //
 // Example:
-//   err := RunDockerCompose("wren", "/path/to/project", "openai")
+//
+//	err := RunDockerCompose("wren", "/path/to/project", "openai")
 func RunDockerCompose(projectName string, projectDir string, llmProvider string) error {
 	ctx := context.Background()
 	composeFilePath := path.Join(projectDir, "docker-compose.yaml")
