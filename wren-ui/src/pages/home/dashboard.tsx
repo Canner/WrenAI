@@ -2,40 +2,16 @@ import { useMemo } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import { useRouter } from 'next/router';
-import { Logo } from '@/components/Logo';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import DashboardGrid from '@/components/pages/home/dashboardGrid';
+import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
 import {
   useDashboardItemsQuery,
   useDeleteDashboardItemMutation,
   useUpdateDashboardItemLayoutsMutation,
 } from '@/apollo/client/graphql/dashboard.generated';
 import { ItemLayoutInput } from '@/apollo/client/graphql/__types__';
-
-const EmptyDashboard = (props: {
-  show: boolean;
-  children: React.ReactNode;
-}) => {
-  const { show, children } = props;
-  if (show) {
-    return (
-      <div
-        className="d-flex align-center justify-center flex-column -mt-8"
-        style={{ height: '100%' }}
-      >
-        <Logo size={48} color="var(--gray-8)" />
-        <div className="text-lg text-medium text-center gray-8 mt-3">
-          No items in this dashboard
-        </div>
-        <div className="gray-7">
-          Pin charts from your thread to fill your dashboard with insights.
-        </div>
-      </div>
-    );
-  }
-  return <>{children}</>;
-};
 
 export default function Dashboard() {
   const router = useRouter();
