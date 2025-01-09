@@ -14,10 +14,9 @@ logger = logging.getLogger("wren-ai-service")
 class CustomFormatter(logging.Formatter):
     def __init__(self, is_dev: bool):
         super().__init__()
-        self.is_dev = is_dev
 
         try:
-            if not self.is_dev:
+            if not is_dev:
                 # Imports the Cloud Logging client library
                 import google.cloud.logging
 
@@ -29,8 +28,8 @@ class CustomFormatter(logging.Formatter):
                 # Python logging module. By default this captures all logs
                 # at INFO level and higher
                 client.setup_logging()
-        except Exception as e:
-            logger.warning(f"Failed to setup cloud logging: {str(e)}")
+        except Exception:
+            pass
 
     def format(self, record):
         _LOGGING_FORMAT = "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
