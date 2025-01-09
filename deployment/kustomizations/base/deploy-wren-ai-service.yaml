@@ -63,6 +63,8 @@ spec:
                   key: LANGFUSE_SECRET_KEY
             - name: CONFIG_PATH
               value: /app/data/config.yaml
+            - name: SQL_PAIRS_PATH
+              value: /app/data/pairs.json
           ports:
             - containerPort: 5555
       volumes:
@@ -72,3 +74,5 @@ spec:
             items:
               - key: config.yaml
                 path: config.yaml
+              - key: pairs.json
+                path: pairs.json

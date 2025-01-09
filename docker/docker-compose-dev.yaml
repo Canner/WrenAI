@@ -45,10 +45,12 @@ services:
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
       CONFIG_PATH: /app/data/config.yaml
+      SQL_PAIRS_PATH: /app/data/pairs.json
     env_file:
       - ${PROJECT_DIR}/.env
     volumes:
       - ${PROJECT_DIR}/config.yaml:/app/data/config.yaml
+      - ${PROJECT_DIR}/pairs.json:/app/data/pairs.json
     networks:
       - wren
     depends_on:
