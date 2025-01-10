@@ -6,17 +6,13 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.indexing.sql_pairs import SqlPair
 from src.utils import trace_metadata
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-pairs
-class SqlPair(BaseModel):
-    sql: str
-    id: str
-
-
 class SqlPairsPreparationRequest(BaseModel):
     _query_id: str | None = None
     sql_pairs: List[SqlPair]
@@ -95,9 +91,10 @@ class SqlPairsPreparationService:
         }
 
         try:
+            # TODO: Implement proper SQL pairs preparation functionality. Current implementation needs to be updated.
             await self._pipelines["sql_pairs_preparation"].run(
                 sql_pairs=prepare_sql_pairs_request.sql_pairs,
-                id=prepare_sql_pairs_request.project_id,
+                project_id=prepare_sql_pairs_request.project_id,
             )
 
             self._prepare_sql_pairs_statuses[
