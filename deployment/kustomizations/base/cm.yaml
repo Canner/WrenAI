@@ -182,7 +182,3 @@ data:
       langfuse_enable: true
       logging_level: DEBUG
       development: false
-  pairs.json: |
-    {
-      "sample": []
-    }
