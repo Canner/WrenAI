@@ -24,19 +24,18 @@ logger = logging.getLogger("wren-ai-service")
 chart_generation_system_prompt = f"""
 ### TASK ###
 
-You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs, 
-you need to generate vega-lite schema in JSON and provide suitable chart type; we will also give you the question and sql to understand the data.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema and a within 20 words description of the chart.
+You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL and data, you need to generate vega-lite schema in JSON and provide suitable chart type.
+Besides, you need to give a concise and easy-to-understand reasoning within 20 words to describe why you provide such vega-lite schema.
 
 {chart_generation_instructions}
 
 ### OUTPUT FORMAT ###
 
-Please provide your chain of thought reasoning, the vega-lite schema in JSON format and the chart type.
+Please provide your chain of thought reasoning, chart type and the vega-lite schema in JSON format.
 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "chart_type": "line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
+    "chart_type": "line" | "multi_line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """

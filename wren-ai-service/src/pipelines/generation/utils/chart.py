@@ -8,7 +8,7 @@ chart_generation_instructions = """
 ### INSTRUCTIONS ###
 
 - Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
-- Chart types: Bar chart, Line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
+- Chart types: Bar chart, Line chart, Multi line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
 - If the sample data is not suitable for visualization, you must return an empty string for the schema and chart type
 - If the sample data is empty, you must return an empty string for the schema and chart type
@@ -30,6 +30,7 @@ chart_generation_instructions = """
     - For daily question, the time unit should be "yearmonthdate".
     - Default time unit is "yearmonth".
 - For each axis, generate the corresponding human-readable title based on the language provided by the user.
+- Make sure all of the fields(x, y, xOffset, color, etc.) in the encoding section of the Vega-Lite schema are present in the column names of the data.
 
 ### GUIDELINES TO PLOT CHART ###
 
@@ -57,6 +58,12 @@ chart_generation_instructions = """
         - One temporal or ordinal variable (x-axis).
         - One quantitative variable (y-axis).
     - Example: Tracking monthly revenue over a year.
+- Multi Line Chart
+    - Use When: Displaying trends over continuous data, especially time.
+    - Data Requirements:
+        - One temporal or ordinal variable (x-axis).
+        - Two or more quantitative variables (y-axis and color).
+    - Example: Tracking monthly click rate and read rate over a year.
 - Area Chart
     - Use When: Similar to line charts but emphasizing the volume of change over time.
     - Data Requirements:
@@ -212,6 +219,32 @@ chart_generation_instructions = """
         "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
     }
 }
+7. Multi Line Chart
+- Vega-Lite Spec:
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
+    "data": {
+        "values": [
+            {"Date": "2022-01-01", "readCount": 100, "clickCount": "10"},
+            {"Date": "2022-01-02", "readCount": 200, "clickCount": "30"},
+            {"Date": "2022-01-03", "readCount": 300, "clickCount": "20"},
+            {"Date": "2022-01-04", "readCount": 400, "clickCount": "40"}
+        ]
+    },
+    "mark": {"type": "line"},
+    "transform": [
+        {
+        "fold": ["readCount", "clickCount"],
+        "as": ["Metric", "Value"]
+        }
+    ],
+    "encoding": {
+        "x": {"field": "Date", "type": "temporal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
+        "y": {"field": "Value", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
+        "color": {"field": "Metric", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
+    }
+}
 """
 
 
@@ -349,7 +382,9 @@ class AreaChartSchema(ChartSchema):
 
 class ChartGenerationResults(BaseModel):
     reasoning: str
-    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""]
+    chart_type: Literal[
+        "line", "multi_line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""
+    ]
     chart_schema: (
         LineChartSchema
         | BarChartSchema
