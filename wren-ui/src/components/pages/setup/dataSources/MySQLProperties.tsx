@@ -65,7 +65,7 @@ const UploadSSL = (props) => {
 export default function MySQLProperties(props: Props) {
   const { mode } = props;
   const isEditMode = mode === FORM_MODE.EDIT;
-  const [sslMode, setSSLMode] = useState<string>(SSL_MODE.DISABLE);
+  const [sslMode, setSSLMode] = useState<string>(SSL_MODE.DISABLED);
   const onSSLModeChange = (value: string) => setSSLMode(value)
   return (
     <>
@@ -146,15 +146,15 @@ export default function MySQLProperties(props: Props) {
       >
         <Input placeholder="MySQL database name" disabled={isEditMode} />
       </Form.Item>
-      <Form.Item label="SSL mode" name="sslMode" initialValue={SSL_MODE.DISABLE}>
+      <Form.Item label="SSL mode" name="sslMode" initialValue={SSL_MODE.DISABLED}>
         <Select
           style={{ width: 120 }}
           onChange={onSSLModeChange}
           disabled={isEditMode}
           options={[
-            { value: SSL_MODE.DISABLE },
-            { value: SSL_MODE.REQUIRE },
-            { value: SSL_MODE.VERIFY_CA },
+            { value: SSL_MODE.DISABLED, label: 'Disabled' },
+            { value: SSL_MODE.ENABLED, label: 'Enabled' },
+            { value: SSL_MODE.VERIFY_CA, label: 'Verify CA' },
           ]}
         />
       </Form.Item>
