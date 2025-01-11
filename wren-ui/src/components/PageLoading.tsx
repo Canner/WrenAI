@@ -47,13 +47,14 @@ export default function PageLoading(props: Props) {
 }
 
 export const FlexLoading = (props) => {
-  const { height } = props;
+  const { height, tip } = props;
   return (
     <div
-      className="d-flex align-center justify-center geekblue-6"
+      className="d-flex align-center justify-center flex-column geekblue-6"
       style={{ height: height || '100%' }}
     >
       {defaultIndicator}
+      {tip && <span className="mt-2">{tip}</span>}
     </div>
   );
 };
@@ -68,3 +69,15 @@ export const Loading = ({
     {children}
   </Spin>
 );
+
+interface LoadingWrapperProps {
+  loading: boolean;
+  tip?: string;
+  children: React.ReactElement;
+}
+
+export const LoadingWrapper = (props: LoadingWrapperProps) => {
+  const { loading, tip, children } = props;
+  if (loading) return <FlexLoading tip={tip} />;
+  return children;
+};

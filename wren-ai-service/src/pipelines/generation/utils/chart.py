@@ -10,7 +10,8 @@ chart_generation_instructions = """
 - Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
 - Chart types: Bar chart, Line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
-- If you think the data is not suitable for visualization, you can return an empty string for the schema
+- If the sample data is not suitable for visualization, you must return an empty string for the schema and chart type
+- If the sample data is empty, you must return an empty string for the schema and chart type
 - The language for the chart and reasoning must be the same language provided by the user
 - Please use the current time provided by the user to generate the chart
 - In order to generate the grouped bar chart, you need to follow the given instructions:
@@ -344,3 +345,16 @@ class AreaChartSchema(ChartSchema):
 
     mark: AreaChartMark
     encoding: AreaChartEncoding
+
+
+class ChartGenerationResults(BaseModel):
+    reasoning: str
+    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""]
+    chart_schema: (
+        LineChartSchema
+        | BarChartSchema
+        | PieChartSchema
+        | GroupedBarChartSchema
+        | StackedBarChartSchema
+        | AreaChartSchema
+    )

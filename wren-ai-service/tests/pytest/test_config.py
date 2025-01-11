@@ -9,11 +9,11 @@ def test_settings_default_values():
     with patch("src.config.Settings.config_loader", return_value=[]):
         settings = Settings()
         assert settings.host == "127.0.0.1"
-        assert settings.port == 5556
+        assert settings.port == 5555
 
         assert settings.column_indexing_batch_size == 50
         assert settings.table_retrieval_size == 10
-        assert settings.table_column_retrieval_size == 1000
+        assert settings.table_column_retrieval_size == 100
 
         assert settings.query_cache_ttl == 3600
         assert settings.query_cache_maxsize == 1_000_000
@@ -22,7 +22,6 @@ def test_settings_default_values():
         assert settings.langfuse_enable is True
 
         assert settings.logging_level == "INFO"
-        assert settings.enable_timer is False
         assert settings.development is False
 
         assert settings.config_path == "config.yaml"

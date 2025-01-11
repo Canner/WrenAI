@@ -93,3 +93,10 @@ export const DeleteRelationshipModal = makeDeleteModal(DefaultDeleteButton, {
   content:
     'This will be permanently deleted, please confirm you want to delete it.',
 });
+
+export const DeleteDashboardItemModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'dashboard item',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});

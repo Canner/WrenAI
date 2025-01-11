@@ -19,7 +19,6 @@ class SemanticsPreparationRequest(BaseModel):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: str = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     project_id: Optional[str] = None
-    user_id: Optional[str] = None
 
 
 class SemanticsPreparationResponse(BaseModel):
@@ -80,7 +79,12 @@ class SemanticsPreparationService:
 
             tasks = [
                 self._pipelines[name].run(**input)
-                for name in ["db_schema", "historical_question", "table_description"]
+                for name in [
+                    "db_schema",
+                    "historical_question",
+                    "table_description",
+                    "sql_pairs",
+                ]
             ]
 
             await asyncio.gather(*tasks)

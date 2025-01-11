@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.13.9"
+version = "0.14.1"
 description = ""
 authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
 license = "AGPL-3.0"
@@ -34,6 +34,7 @@ google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
 litellm = "^1.52.12"
+boto3 = "^1.35.90"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"

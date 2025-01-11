@@ -53,9 +53,6 @@ test-usecases usecases='all':
 load-test:
 	poetry run python -m tests.locust.locust_script
 
-langfuse_dashboard:
-	poetry run streamlit run eval/dashboard/app.py
-
 prepare-wren-engine:
 	rm -rf tools/dev/etc
 	mkdir -p tools/dev/etc
@@ -66,3 +63,12 @@ prepare-wren-engine:
 
 use-wren-ui-as-engine:
 	poetry run python -m src.force_update_config
+
+run-sql mdl_path="" data_source="" sample_dataset="":
+	poetry run python demo/run_sql.py --mdl-path "{{mdl_path}}" --data-source "{{data_source}}" --sample-dataset "{{sample_dataset}}"
+
+report-gen:
+	poetry run python eval/llm_trace_analysis/report_gen.py
+
+mdl-to-str mdl_path="":
+	poetry run python tools/mdl_to_str.py -p {{mdl_path}}

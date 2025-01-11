@@ -1,9 +1,11 @@
+import styled from 'styled-components';
+import { Button } from 'antd';
 import { DataNode } from 'antd/lib/tree';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { PrimaryKeyIcon, RelationshipIcon } from '@/utils/icons';
 import { ComposeDiagramField } from '@/utils/data';
-import { assign, isEmpty, snakeCase } from 'lodash';
-import GroupTreeTitle, { IconsType } from './modeling/GroupTreeTitle';
+import { assign, isEmpty, snakeCase, lowerCase } from 'lodash';
+import GroupTreeTitle, { ActionType } from './modeling/GroupTreeTitle';
 import { getJoinTypeText } from '@/utils/data';
 import { NODE_TYPE } from '@/utils/enum';
 import { getNodeTypeIcon } from '@/utils/nodeType';
@@ -87,7 +89,7 @@ interface GroupSet {
   quotaUsage?: number;
   appendSlot?: React.ReactNode;
   children?: DataNode[];
-  icons: IconsType[];
+  actions: ActionType[];
 }
 
 export const createTreeGroupNode =
@@ -96,14 +98,14 @@ export const createTreeGroupNode =
       groupName = '',
       groupKey = '',
       quotaUsage,
-      icons,
+      actions,
       children = [],
       appendSlot,
     } = assign(sourceData, updatedData);
 
     const emptyChildren = [
       {
-        title: `No ${groupName}`,
+        title: `No ${lowerCase(groupName)}`,
         key: `${groupKey}-empty`,
         selectable: false,
         className: 'adm-treeNode adm-treeNode--empty adm-treeNode--selectNode',
@@ -119,7 +121,7 @@ export const createTreeGroupNode =
             title={groupName}
             quotaUsage={quotaUsage}
             appendSlot={appendSlot}
-            icons={icons}
+            actions={actions}
           />
         ),
         key: groupKey,
@@ -129,3 +131,18 @@ export const createTreeGroupNode =
       ...childrenData,
     ];
   };
+
+export const GroupActionButton = styled(Button)`
+  font-size: 12px;
+  height: auto;
+  background: transparent;
+  color: var(--gray-8);
+  &:hover {
+    background-color: transparent;
+  }
+  &:focus {
+    border-color: var(--gray-5);
+    background: transparent;
+    color: var(--gray-8);
+  }
+`;

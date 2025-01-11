@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
-from src.utils import async_timer, timer
+from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -31,7 +31,7 @@ Also you should provide reasoning for the classification clearly and concisely w
 - Steps to rephrase the user's question:
     - First, try to recognize adjectives in the user's question that are important to the user's intent.
     - Second, change the adjectives to more specific and clear ones that can be matched to columns in the database schema.
-    - Third, if the user's question is related to time/date, add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
+    - Third, if the user's question is related to time/date, take the current time into consideration and add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
 - MUST use the rephrased user's question to make the intent classification.
 - MUST put the rephrased user's question in the rephrased_question output.
 - REASONING MUST be within 20 words.
@@ -103,13 +103,13 @@ intent_classification_user_prompt_template = """
 User's previous questions: {{ query_history }}
 {% endif %}
 User's question: {{query}}
+Current Time: {{ current_time }}
 
 Let's think step by step
 """
 
 
 ## Start of Pipeline
-@async_timer
 @observe(capture_input=False, capture_output=False)
 async def embedding(
     query: str, embedder: Any, history: Optional[AskHistory] = None
@@ -123,7 +123,6 @@ async def embedding(
     return await embedder.run(query)
 
 
-@async_timer
 @observe(capture_input=False)
 async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
     filters = {
@@ -144,7 +143,6 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
     )
 
 
-@async_timer
 @observe(capture_input=False)
 async def dbschema_retrieval(
     table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
@@ -181,7 +179,6 @@ async def dbschema_retrieval(
     return results["documents"]
 
 
-@timer
 @observe()
 def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     db_schemas = {}
@@ -219,13 +216,13 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     return db_schemas_in_ddl
 
 
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
     history: Optional[AskHistory] = None,
+    configuration: Configuration | None = None,
 ) -> dict:
     previous_query_summaries = (
         [step.summary for step in history.steps if step.summary] if history else []
@@ -235,16 +232,15 @@ def prompt(
         query=query,
         db_schemas=construct_db_schemas,
         query_history=previous_query_summaries,
+        current_time=configuration.show_current_time(),
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def classify_intent(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
 
-@timer
 @observe(capture_input=False)
 def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
     try:
@@ -317,10 +313,13 @@ class IntentClassification(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="Intent Classification")
     async def run(
-        self, query: str, id: Optional[str] = None, history: Optional[AskHistory] = None
+        self,
+        query: str,
+        id: Optional[str] = None,
+        history: Optional[AskHistory] = None,
+        configuration: Configuration = Configuration(),
     ):
         logger.info("Intent Classification pipeline is running...")
         return await self._pipe.execute(
@@ -329,6 +328,7 @@ class IntentClassification(BasicPipeline):
                 "query": query,
                 "id": id or "",
                 "history": history,
+                "configuration": configuration,
                 **self._components,
             },
         )

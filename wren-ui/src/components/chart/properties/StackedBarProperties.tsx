@@ -19,7 +19,11 @@ export default function StackedBarProperties(props: PropertiesProps) {
         </Col>
         <Col span={12}>
           <Form.Item className="mb-0" label="Stack groups" name="color">
-            <Select size="small" options={columnOptions} />
+            <Select
+              size="small"
+              options={columnOptions}
+              placeholder="Select stack groups"
+            />
           </Form.Item>
         </Col>
       </Row>

@@ -24,7 +24,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION    string = "0.13.2"
+	WREN_PRODUCT_VERSION    string = "0.14.0"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
@@ -315,6 +315,21 @@ func getConfigFilePath(projectDir string) string {
 	return path.Join(projectDir, "config.yaml")
 }
 
+// RunDockerCompose starts Docker services for a project using docker-compose.
+// It initializes Docker CLI, checks Docker engine availability, and runs docker-compose up.
+// For custom LLM providers, it specifically recreates the wren-ai-service container.
+//
+// Parameters:
+//   - projectName: Name of the Docker Compose project
+//   - projectDir: Directory containing docker-compose.yaml and .env files
+//   - llmProvider: Type of LLM provider (e.g., "custom" or default)
+//
+// Returns an error if Docker initialization, configuration, or service startup fails.
+// Supports both default and custom LLM provider configurations.
+//
+// Example:
+//
+//	err := RunDockerCompose("wren", "/path/to/project", "openai")
 func RunDockerCompose(projectName string, projectDir string, llmProvider string) error {
 	ctx := context.Background()
 	composeFilePath := path.Join(projectDir, "docker-compose.yaml")
@@ -370,7 +385,7 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 				Services: []string{"wren-ai-service"},
 			},
 		}
-		
+
 		// Run the up command with specific options for wren-ai-service
 		err = apiService.Up(ctx, projectType, upOptions)
 		if err != nil {

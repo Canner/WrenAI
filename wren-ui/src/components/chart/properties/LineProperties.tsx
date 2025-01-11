@@ -19,7 +19,11 @@ export default function LineProperties(props: PropertiesProps) {
         </Col>
         <Col span={12}>
           <Form.Item className="mb-0" label="Line groups" name="color">
-            <Select size="small" options={columnOptions} />
+            <Select
+              size="small"
+              options={columnOptions}
+              placeholder="Select line groups"
+            />
           </Form.Item>
         </Col>
       </Row>

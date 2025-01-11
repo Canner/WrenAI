@@ -11,14 +11,12 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import show_current_time
 from src.pipelines.generation.utils.sql import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
 )
-from src.utils import async_timer, timer
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -33,6 +31,16 @@ generate one SQL statement that best potentially answer user's query.
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+{% if sql_samples %}
+### SAMPLES ###
+{% for sample in sql_samples %}
+Question:
+{{sample.question}}
+SQL:
+{{sample.sql}}
+{% endfor %}
+{% endif %}
 
 {% if exclude %}
 ### EXCLUDED STATEMETS ###
@@ -56,16 +64,6 @@ The final answer must be the JSON format like following:
     ]
 }
 
-{% if samples %}
-### SAMPLES ###
-{% for sample in samples %}
-Question:
-{{sample.question}}
-SQL:
-{{sample.sql}}
-{% endfor %}
-{% endif %}
-
 ### QUESTION ###
 User's Question: {{ query }}
 Current Time: {{ current_time }}
@@ -75,7 +73,6 @@ Let's think step by step.
 
 
 ## Start of Pipeline
-@timer
 @observe(capture_input=False)
 def prompt(
     query: str,
@@ -84,7 +81,7 @@ def prompt(
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = None,
-    samples: List[Dict] | None = None,
+    sql_samples: List[Dict] | None = None,
 ) -> dict:
     return prompt_builder.run(
         query=query,
@@ -92,12 +89,11 @@ def prompt(
         exclude=exclude,
         text_to_sql_rules=text_to_sql_rules,
         instructions=construct_instructions(configuration),
-        samples=samples,
-        current_time=show_current_time(configuration.timezone),
+        sql_samples=sql_samples,
+        current_time=configuration.show_current_time(),
     )
 
 
-@async_timer
 @observe(as_type="generation", capture_input=False)
 async def generate_sql(
     prompt: dict,
@@ -106,7 +102,6 @@ async def generate_sql(
     return await generator(prompt=prompt.get("prompt"))
 
 
-@async_timer
 @observe(capture_input=False)
 async def post_process(
     generate_sql: dict,
@@ -162,7 +157,6 @@ class SQLGeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @async_timer
     @observe(name="SQL Generation")
     async def run(
         self,
@@ -170,7 +164,7 @@ class SQLGeneration(BasicPipeline):
         contexts: List[str],
         exclude: List[Dict],
         configuration: Configuration = Configuration(),
-        samples: List[Dict] | None = None,
+        sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
@@ -180,7 +174,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "exclude": exclude,
-                "samples": samples,
+                "sql_samples": sql_samples,
                 "project_id": project_id,
                 "configuration": configuration,
                 **self._components,

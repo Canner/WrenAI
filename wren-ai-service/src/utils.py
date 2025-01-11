@@ -1,41 +1,49 @@
-import asyncio
 import functools
 import logging
 import os
-import time
 from pathlib import Path
 
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
+from src.config import Settings
+
 logger = logging.getLogger("wren-ai-service")
 
 
 class CustomFormatter(logging.Formatter):
-    grey = "\x1b[38;20m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-    format = (
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-    )
+    def __init__(self, is_dev: bool):
+        super().__init__()
 
-    FORMATS = {
-        logging.DEBUG: yellow + format + reset,
-        logging.INFO: grey + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset,
-    }
+        try:
+            if not is_dev:
+                # Imports the Cloud Logging client library
+                import google.cloud.logging
+
+                # Instantiates a client
+                client = google.cloud.logging.Client()
+
+                # Retrieves a Cloud Logging handler based on the environment
+                # you're running in and integrates the handler with the
+                # Python logging module. By default this captures all logs
+                # at INFO level and higher
+                client.setup_logging()
+        except Exception:
+            pass
 
     def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt)
+        _LOGGING_FORMAT = "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
+        _DATE_FMT = "%m%d %H:%M:%S"
+
+        formatter = logging.Formatter(
+            fmt=_LOGGING_FORMAT,
+            datefmt=_DATE_FMT,
+            style="{",
+        )
         return formatter.format(record)
 
 
-def setup_custom_logger(name, level_str: str):
+def setup_custom_logger(name, level_str: str, is_dev: bool):
     level_str = level_str.upper()
 
     if level_str not in logging._nameToLevel:
@@ -44,7 +52,7 @@ def setup_custom_logger(name, level_str: str):
     level = logging._nameToLevel[level_str]
 
     handler = logging.StreamHandler()
-    handler.setFormatter(CustomFormatter())
+    handler.setFormatter(CustomFormatter(is_dev))
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -61,61 +69,11 @@ def load_env_vars() -> str:
     return "prod"
 
 
-def timer(func):
-    @functools.wraps(func)
-    def wrapper_timer(*args, **kwargs):
-        from src.config import settings
-
-        if settings.enable_timer:
-            startTime = time.perf_counter()
-            result = func(*args, **kwargs)
-            endTime = time.perf_counter()
-            elapsed_time = endTime - startTime
-
-            logger.info(
-                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
-            )
-
-            return result
-
-        return func(*args, **kwargs)
-
-    return wrapper_timer
-
-
-def async_timer(func):
-    async def process(func, *args, **kwargs):
-        assert asyncio.iscoroutinefunction(func)
-        return await func(*args, **kwargs)
-
-    @functools.wraps(func)
-    async def wrapper_timer(*args, **kwargs):
-        from src.config import settings
-
-        if settings.enable_timer:
-            startTime = time.perf_counter()
-            result = await process(func, *args, **kwargs)
-            endTime = time.perf_counter()
-            elapsed_time = endTime - startTime
-
-            logger.info(
-                f"{func.__qualname__} Elapsed time: {elapsed_time:0.4f} seconds"
-            )
-
-            return result
-
-        return await process(func, *args, **kwargs)
-
-    return wrapper_timer
-
-
 def remove_trailing_slash(endpoint: str) -> str:
     return endpoint.rstrip("/") if endpoint.endswith("/") else endpoint
 
 
-def init_langfuse():
-    from src.config import settings
-
+def init_langfuse(settings: Settings):
     langfuse_context.configure(
         enabled=settings.langfuse_enable,
         host=settings.langfuse_host,
@@ -197,27 +155,3 @@ def trace_metadata(func):
         return results
 
     return wrapper
-
-
-def remove_sql_summary_duplicates(dicts):
-    """
-    Removes duplicates from a list of dictionaries based on 'sql' and 'summary' fields.
-
-    Args:
-    dicts (list of dict): The list of dictionaries to be deduplicated.
-
-    Returns:
-    list of dict: A list of dictionaries after removing duplicates.
-    """
-    # Convert each dictionary to a tuple of (sql, summary) to make them hashable
-    seen = set()
-    unique_dicts = []
-    for d in dicts:
-        identifier = (
-            d["sql"],
-            d["summary"],
-        )  # This assumes 'sql' and 'summary' always exist
-        if identifier not in seen:
-            seen.add(identifier)
-            unique_dicts.append(d)
-    return unique_dicts

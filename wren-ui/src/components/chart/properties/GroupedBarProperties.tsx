@@ -19,7 +19,11 @@ export default function GroupedBarProperties(props: PropertiesProps) {
         </Col>
         <Col span={12}>
           <Form.Item className="mb-0" label="Sub-category" name="xOffset">
-            <Select size="small" options={columnOptions} />
+            <Select
+              size="small"
+              options={columnOptions}
+              placeholder="Select sub-category"
+            />
           </Form.Item>
         </Col>
       </Row>

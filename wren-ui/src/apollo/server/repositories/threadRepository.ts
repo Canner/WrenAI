@@ -51,7 +51,8 @@ export class ThreadRepository
     if (!isPlainObject(data)) {
       throw new Error('Unexpected dbdata');
     }
-    const transformData = mapValues(data, (value, key) => {
+    const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
+    const transformData = mapValues(camelCaseData, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;
@@ -61,7 +62,7 @@ export class ThreadRepository
       }
       return value;
     });
-    return mapKeys(transformData, (_value, key) => camelCase(key)) as Thread;
+    return transformData as Thread;
   };
 
   protected override transformToDBData = (data: any) => {

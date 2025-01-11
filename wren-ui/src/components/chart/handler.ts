@@ -75,12 +75,14 @@ type ParamsSpec = {
 
 type ChartOptions = {
   width?: number | string;
-  height?: number;
+  height?: number | string;
   stack?: 'zero' | 'normalize';
   point?: boolean;
   donutInner?: number | false;
   categoriesLimit?: number;
   isShowTopCategories?: boolean;
+  isHideLegend?: boolean;
+  isHideTitle?: boolean;
 };
 
 const config: Config = {
@@ -89,12 +91,16 @@ const config: Config = {
   padding: {
     top: 30,
     bottom: 20,
+    left: 0,
+    right: 0,
   },
   title: {
     color: COLOR.GRAY_10,
     fontSize: 14,
   },
   axis: {
+    labelPadding: 0,
+    labelOffset: 0,
     labelFontSize: 10,
     gridColor: COLOR.GRAY_5,
     titleColor: COLOR.GRAY_9,
@@ -111,7 +117,7 @@ const config: Config = {
   legend: {
     symbolLimit: 15,
     columns: 1,
-    labelFontSize: 12,
+    labelFontSize: 10,
     labelColor: COLOR.GRAY_8,
     titleColor: COLOR.GRAY_9,
     titleFontSize: 14,
@@ -119,8 +125,12 @@ const config: Config = {
   range: {
     category: colorScheme,
     ordinal: colorScheme,
+    diverging: colorScheme,
+    symbol: colorScheme,
+    heatmap: colorScheme,
+    ramp: colorScheme,
   },
-  point: { size: 60 },
+  point: { size: 60, color: DEFAULT_COLOR },
 };
 
 export default class ChartSpecHandler {
@@ -151,7 +161,7 @@ export default class ChartSpecHandler {
     // default options
     this.options = {
       width: isNil(options?.width) ? 'container' : options.width,
-      height: isNil(options?.height) ? 280 : options.height,
+      height: isNil(options?.height) ? 'container' : options.height,
       stack: isNil(options?.stack) ? 'zero' : options.stack,
       point: isNil(options?.point) ? true : options.point,
       donutInner: isNil(options?.donutInner) ? 60 : options.donutInner,
@@ -161,6 +171,8 @@ export default class ChartSpecHandler {
       isShowTopCategories: isNil(options?.isShowTopCategories)
         ? false
         : options?.isShowTopCategories,
+      isHideLegend: isNil(options?.isHideLegend) ? false : options.isHideLegend,
+      isHideTitle: isNil(options?.isHideTitle) ? false : options.isHideTitle,
     };
 
     // avoid mutating the original spec
@@ -184,6 +196,17 @@ export default class ChartSpecHandler {
           range: pickedColorScheme,
         },
       } as any;
+    }
+
+    if (this.options.isHideLegend) {
+      this.encoding.color = {
+        ...this.encoding.color,
+        legend: null,
+      } as any;
+    }
+
+    if (this.options.isHideTitle) {
+      this.title = null;
     }
 
     return {
@@ -295,7 +318,7 @@ export default class ChartSpecHandler {
     }
 
     // basic color properties
-    let colorProperties = {
+    const colorProperties = {
       title,
       field: category?.field,
       type: category?.type,
@@ -303,11 +326,6 @@ export default class ChartSpecHandler {
         range: colorScheme,
       },
     } as any;
-    if (this.mark.type === MarkType.LINE) {
-      colorProperties = {
-        value: DEFAULT_COLOR,
-      };
-    }
 
     this.encoding.color = {
       ...colorProperties,

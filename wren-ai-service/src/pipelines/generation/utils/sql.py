@@ -471,6 +471,26 @@ WHERE
   PurchaseTimestamp >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND
   PurchaseTimestamp < DATE_TRUNC('month', CURRENT_DATE)
 
+## LESSON 3 ##
+Finally, you will learn from the sample SQL queries provided in the input. These samples demonstrate best practices and common patterns for querying this specific database.
+
+For each sample, you should:
+1. Study the question that explains what the query aims to accomplish
+2. Analyze the SQL implementation to understand:
+   - Table structures and relationships used
+   - Specific functions and operators employed
+   - Query patterns and techniques demonstrated
+3. Use these samples as reference patterns when generating similar queries
+4. Adapt the techniques shown in the samples to match new query requirements while maintaining consistent style and approach
+
+The samples will help you understand:
+- Preferred table join patterns
+- Common aggregation methods
+- Specific function usage
+- Query structure and formatting conventions
+
+When generating new queries, try to follow similar patterns when applicable, while adapting them to the specific requirements of each new query.
+
 Learn about the usage of the schema structures and generate SQL based on them.
 
 """
