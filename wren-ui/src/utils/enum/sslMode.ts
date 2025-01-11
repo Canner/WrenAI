@@ -1,5 +1,5 @@
 export enum SSL_MODE {
-  DISABLE = 'Disable',
-  REQUIRE = 'Require',
-  VERIFY_CA = 'Verify CA',
+  DISABLED = 'disabled',
+  ENABLED = 'enabled',
+  VERIFY_CA = 'verify_ca',
 }
