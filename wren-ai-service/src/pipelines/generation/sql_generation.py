@@ -42,14 +42,6 @@ SQL:
 {% endfor %}
 {% endif %}
 
-{% if exclude %}
-### EXCLUDED STATEMETS ###
-Ensure that the following excluded statements are not used in the generated queries to maintain variety and avoid repetition.
-{% for doc in exclude %}
-    {{ doc.statement }}
-{% endfor %}
-{% endif %}
-
 {{ text_to_sql_rules }}
 {% if instructions %}
 {{ instructions }}
@@ -77,7 +69,6 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: List[str],
-    exclude: List[Dict],
     text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = None,
@@ -86,7 +77,6 @@ def prompt(
     return prompt_builder.run(
         query=query,
         documents=documents,
-        exclude=exclude,
         text_to_sql_rules=text_to_sql_rules,
         instructions=construct_instructions(configuration),
         sql_samples=sql_samples,
@@ -162,7 +152,6 @@ class SQLGeneration(BasicPipeline):
         self,
         query: str,
         contexts: List[str],
-        exclude: List[Dict],
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
@@ -173,7 +162,6 @@ class SQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
-                "exclude": exclude,
                 "sql_samples": sql_samples,
                 "project_id": project_id,
                 "configuration": configuration,
@@ -191,5 +179,4 @@ if __name__ == "__main__":
         "sql_generation",
         query="this is a test query",
         contexts=[],
-        exclude=[],
     )
