@@ -405,7 +405,7 @@ class ChartGenerationResults(BaseModel):
     reasoning: str
     chart_type: Literal[
         "line", "multi_line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""
-    ]
+    ]  # empty string for no chart
     chart_schema: (
         LineChartSchema
         | MultiLineChartSchema
