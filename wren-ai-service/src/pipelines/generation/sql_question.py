@@ -51,6 +51,22 @@ def prompts(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> list[dict]:
+    """
+    Generate prompts for SQL queries in a specified language using a prompt builder.
+    
+    Parameters:
+        sqls (list[str]): A list of SQL queries to generate prompts for.
+        language (str): The target language for the generated prompts.
+        prompt_builder (PromptBuilder): A prompt builder instance used to create prompts.
+    
+    Returns:
+        list[dict]: A list of generated prompts, one for each input SQL query.
+    
+    Example:
+        prompt_builder = PromptBuilder()
+        sql_queries = ["SELECT * FROM users", "SELECT name FROM employees"]
+        prompts = prompts(sql_queries, "English", prompt_builder)
+    """
     return [
         prompt_builder.run(
             sql=sql,
@@ -63,6 +79,21 @@ def prompts(
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_questions(prompts: list[dict], generator: Any) -> list[dict]:
     # use asyncio.gather to run all prompts in parallel
+    """
+    Asynchronously generate SQL questions by concurrently processing multiple prompts using a generator.
+    
+    Parameters:
+        prompts (list[dict]): A list of dictionaries containing prompts for SQL question generation.
+        generator (Any): An asynchronous function or callable capable of generating responses from prompts.
+    
+    Returns:
+        list[dict]: A list of generated SQL question results, processed in parallel.
+    
+    Notes:
+        - Utilizes asyncio.gather for concurrent execution of generator calls
+        - Each prompt is processed independently and simultaneously
+        - Preserves the order of input prompts in the output results
+    """
     return await asyncio.gather(
         *[generator(prompt=prompt.get("prompt")) for prompt in prompts]
     )
@@ -72,6 +103,20 @@ async def generate_sql_questions(prompts: list[dict], generator: Any) -> list[di
 async def post_process(
     generate_sql_questions: list[dict],
 ) -> list[dict]:
+    """
+    Extracts and returns the generated SQL questions from the pipeline results.
+    
+    Parameters:
+        generate_sql_questions (list[dict]): A list of dictionaries containing generation results from SQL question generation.
+    
+    Returns:
+        list[dict]: A list of generated SQL questions extracted from the first reply of each result.
+    
+    Notes:
+        - Uses orjson for efficient JSON parsing
+        - Assumes each result contains a 'replies' key with at least one JSON-encoded reply
+        - Extracts the 'question' field from the first reply
+    """
     return [
         orjson.loads(result.get("replies")[0])["question"]
         for result in generate_sql_questions
@@ -102,6 +147,22 @@ class SQLQuestion(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
+        """
+        Initialize the SQLQuestion pipeline with a language model provider and optional components.
+        
+        Parameters:
+            llm_provider (LLMProvider): Provider for generating language model responses.
+            **kwargs: Additional optional keyword arguments for pipeline configuration.
+        
+        Attributes:
+            _components (dict): Dictionary containing pipeline components:
+                - 'generator': Language model generator configured with SQL question system prompt
+                - 'prompt_builder': Prompt builder using SQL question user prompt template
+        
+        Notes:
+            - Initializes an asynchronous driver for pipeline execution
+            - Uses default SQL question model configuration and system prompts
+        """
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_question_system_prompt,
@@ -120,6 +181,24 @@ class SQLQuestion(BasicPipeline):
         sqls: list[str],
         configuration: Configuration = Configuration(),
     ):
+        """
+        Asynchronously run the SQL question generation pipeline.
+        
+        Generates natural language questions from a list of SQL queries using the configured pipeline components.
+        
+        Parameters:
+            sqls (list[str]): A list of SQL queries to generate questions for.
+            configuration (Configuration, optional): Configuration settings for the pipeline. 
+                Defaults to a new Configuration instance with default settings.
+        
+        Returns:
+            list[str]: A list of generated natural language questions corresponding to the input SQL queries.
+        
+        Notes:
+            - Uses the pipeline's execute method with 'post_process' as the final stage
+            - Defaults to English language if no language is specified in the configuration
+            - Logs the start of the SQL question generation process
+        """
         logger.info("Sql Question Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],

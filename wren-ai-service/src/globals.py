@@ -53,6 +53,22 @@ def create_service_container(
     pipe_components: dict[str, PipelineComponent],
     settings: Settings,
 ) -> ServiceContainer:
+    """
+    Create a service container with comprehensive pipeline configurations for various AI-powered data services.
+    
+    Parameters:
+        pipe_components (dict[str, PipelineComponent]): A dictionary containing pipeline components for different services.
+        settings (Settings): Configuration settings for service initialization, including cache and retrieval parameters.
+    
+    Returns:
+        ServiceContainer: A fully configured container with multiple specialized services for data processing, SQL generation, chart creation, and question recommendation.
+    
+    Notes:
+        - Initializes services with specific pipeline configurations
+        - Configures query caching based on provided settings
+        - Sets up services for semantics description, SQL generation, chart services, and more
+        - Supports flexible service configuration through pipeline components
+    """
     query_cache = {
         "maxsize": settings.query_cache_maxsize,
         "ttl": settings.query_cache_ttl,

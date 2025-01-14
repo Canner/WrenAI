@@ -21,10 +21,22 @@ class SqlQuestionRequest(BaseModel):
 
     @property
     def query_id(self) -> str:
+        """
+        Get the unique identifier for the SQL question query.
+        
+        Returns:
+            str: The query ID associated with the SQL question request.
+        """
         return self._query_id
 
     @query_id.setter
     def query_id(self, query_id: str):
+        """
+        Set the query ID for the SQL question request.
+        
+        Parameters:
+            query_id (str): A unique identifier for the SQL question request.
+        """
         self._query_id = query_id
 
 
@@ -54,6 +66,18 @@ class SqlQuestionService:
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
+        """
+        Initialize the SqlQuestionService with pipelines and caching configuration.
+        
+        Parameters:
+            pipelines (Dict[str, BasicPipeline]): A dictionary of pipelines used for processing SQL questions.
+            maxsize (int, optional): Maximum number of entries in the result cache. Defaults to 1,000,000.
+            ttl (int, optional): Time-to-live for cache entries in seconds. Defaults to 120 seconds.
+        
+        Attributes:
+            _pipelines (Dict[str, BasicPipeline]): Stores the provided pipelines for SQL question processing.
+            _sql_question_results (TTLCache): A time-limited cache to store SQL question results with specified max size and TTL.
+        """
         self._pipelines = pipelines
         self._sql_question_results: Dict[str, SqlQuestionResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
@@ -66,6 +90,31 @@ class SqlQuestionService:
         sql_question_request: SqlQuestionRequest,
         **kwargs,
     ):
+        """
+        Asynchronously process SQL questions and generate results using a predefined pipeline.
+        
+        This method takes a SQL question request, runs it through a SQL question generation pipeline,
+        and caches the results with different status states (generating, succeeded, or failed).
+        
+        Parameters:
+            sql_question_request (SqlQuestionRequest): Request containing SQL statements, project ID, 
+                and configuration for question generation.
+            **kwargs: Additional keyword arguments for flexible method invocation.
+        
+        Returns:
+            dict: A dictionary containing:
+                - 'sql_question_result': Generated SQL questions
+                - 'metadata': Error information if processing fails
+        
+        Raises:
+            Exception: Captures and logs any errors during SQL question generation, 
+            updating the result cache with a failure status.
+        
+        Notes:
+            - Uses an internal pipeline for SQL question generation
+            - Manages result caching with different processing states
+            - Provides comprehensive error tracking and logging
+        """
         results = {
             "sql_question_result": {},
             "metadata": {
@@ -118,6 +167,22 @@ class SqlQuestionService:
         self,
         sql_question_result_request: SqlQuestionResultRequest,
     ) -> SqlQuestionResultResponse:
+        """
+        Retrieves the result of a SQL question from the cache based on the provided query ID.
+        
+        Parameters:
+            sql_question_result_request (SqlQuestionResultRequest): A request containing the query ID to retrieve results for.
+        
+        Returns:
+            SqlQuestionResultResponse: The cached result of the SQL question, or a failure response if the query ID is not found.
+        
+        Raises:
+            No explicit exceptions are raised, but logs an error if the query ID is not in the cache.
+        
+        Notes:
+            - Uses a TTL cache (`self._sql_question_results`) to store and retrieve SQL question results.
+            - Returns a failure response with an "OTHERS" error code if the query ID is not found.
+        """
         if (
             result := self._sql_question_results.get(
                 sql_question_result_request.query_id
