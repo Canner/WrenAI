@@ -40,6 +40,11 @@ def ask_service():
             "data_assistance": generation.DataAssistance(
                 **pipe_components["data_assistance"],
             ),
+            "user_guide_assistance": generation.UserGuideAssistance(
+                **pipe_components["user_guide_assistance"],
+                is_oss=settings.is_oss,
+                doc_endpoint=settings.doc_endpoint,
+            ),
             "retrieval": retrieval.Retrieval(
                 **pipe_components["db_schema_retrieval"],
             ),
@@ -153,13 +158,14 @@ def _ask_service_ttl_mock(query: str):
     return AskService(
         {
             "intent_classification": IntentClassificationMock(),
-            "data_assistance": "",
             "retrieval": RetrievalMock(
                 [
                     f"mock document 1 for {query}",
                     f"mock document 2 for {query}",
                 ]
             ),
+            "data_assistance": "",
+            "user_guide_assistance": "",
             "historical_question": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
                 valid=[{"sql": "select count(*) from books"}],

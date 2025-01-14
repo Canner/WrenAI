@@ -619,8 +619,8 @@ def ask(query: str, timezone: str, query_history: Optional[dict] = None):
 
     if asks_status == "finished":
         st.session_state["asks_results_type"] = asks_type
-        if asks_type == "GENERAL":
-            display_general_response(query_id)
+        if asks_type == "GENERAL" or asks_type == "USER_GUIDE":
+            display_streaming_response(query_id)
         elif asks_type == "TEXT_TO_SQL":
             st.session_state["asks_results"] = asks_status_response.json()["response"]
         else:
@@ -632,7 +632,7 @@ def ask(query: str, timezone: str, query_history: Optional[dict] = None):
         )
 
 
-def display_general_response(query_id: str):
+def display_streaming_response(query_id: str):
     url = f"{WREN_AI_SERVICE_BASE_URL}/v1/asks/{query_id}/streaming-result"
     headers = {"Accept": "text/event-stream"}
     response = with_requests(url, headers)
