@@ -63,6 +63,9 @@ chart_generation_instructions = """
     - Data Requirements:
         - One temporal or ordinal variable (x-axis).
         - Two or more quantitative variables (y-axis and color).
+    - Implementation Notes:
+        - Uses `transform` with `fold` to combine multiple metrics into a single series
+        - The folded metrics are distinguished using the color encoding
     - Example: Tracking monthly click rate and read rate over a year.
 - Area Chart
     - Use When: Similar to line charts but emphasizing the volume of change over time.
@@ -226,10 +229,10 @@ chart_generation_instructions = """
     "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
     "data": {
         "values": [
-            {"Date": "2022-01-01", "readCount": 100, "clickCount": "10"},
-            {"Date": "2022-01-02", "readCount": 200, "clickCount": "30"},
-            {"Date": "2022-01-03", "readCount": 300, "clickCount": "20"},
-            {"Date": "2022-01-04", "readCount": 400, "clickCount": "40"}
+            {"Date": "2022-01-01", "readCount": 100, "clickCount": 10},
+            {"Date": "2022-01-02", "readCount": 200, "clickCount": 30},
+            {"Date": "2022-01-03", "readCount": 300, "clickCount": 20},
+            {"Date": "2022-01-04", "readCount": 400, "clickCount": 40}
         ]
     },
     "mark": {"type": "line"},
@@ -312,6 +315,24 @@ class LineChartSchema(ChartSchema):
     encoding: LineChartEncoding
 
 
+class MultiLineChartSchema(ChartSchema):
+    class MultiLineChartMark(BaseModel):
+        type: Literal["line"] = Field(default="line")
+
+    class MultiLineChartTransform(BaseModel):
+        fold: list[str]
+        as_: list[str] = Field(alias="as")
+
+    class MultiLineChartEncoding(BaseModel):
+        x: TemporalChartEncoding | ChartSchema.ChartEncoding
+        y: ChartSchema.ChartEncoding
+        color: ChartSchema.ChartEncoding
+
+    mark: MultiLineChartMark
+    transform: list[MultiLineChartTransform]
+    encoding: MultiLineChartEncoding
+
+
 class BarChartSchema(ChartSchema):
     class BarChartMark(BaseModel):
         type: Literal["bar"] = Field(default="bar")
@@ -387,6 +408,7 @@ class ChartGenerationResults(BaseModel):
     ]
     chart_schema: (
         LineChartSchema
+        | MultiLineChartSchema
         | BarChartSchema
         | PieChartSchema
         | GroupedBarChartSchema
