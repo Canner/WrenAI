@@ -18,7 +18,7 @@ import {
 } from '@server/types';
 import { ColumnMDL, Manifest } from '@server/mdl/type';
 import { getLogger } from '@server/utils';
-import { MDLBuilder } from '../mdl/mdlBuilder';
+import { MDLBuilderFactory } from '../mdl/mdlBuilderFactory';
 
 const logger = getLogger('DiagramResolver');
 logger.level = 'debug';
@@ -52,7 +52,7 @@ export class DiagramResolver {
       projectId: project.id,
     });
 
-    const builder = new MDLBuilder({
+    const builder = MDLBuilderFactory.create({
       project,
       models,
       columns: modelColumns,

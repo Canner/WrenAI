@@ -46,6 +46,9 @@ export interface IConfig {
   projectRecommendationQuestionsMaxQuestions?: number;
   threadRecommendationQuestionMaxCategories?: number;
   threadRecommendationQuestionsMaxQuestions?: number;
+
+  // mdl
+  mdlFilePath?: string;
 }
 
 const defaultConfig = {
@@ -77,6 +80,9 @@ const defaultConfig = {
   // encryption
   encryptionPassword: 'sementic',
   encryptionSalt: 'layer',
+
+  // mdl
+  mdlFilePath: '',
 };
 
 const config = {
@@ -148,6 +154,9 @@ const config = {
     .THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS
     ? parseInt(process.env.THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS)
     : 1,
+
+  // mdl
+  mdlFilePath: process.env.MDL_FILE_PATH,
 };
 
 export function getConfig(): IConfig {
