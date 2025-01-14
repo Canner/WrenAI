@@ -69,10 +69,8 @@ class SqlQuestionService:
         results = {
             "sql_question_result": {},
             "metadata": {
-                "error": {
-                    "type": "",
-                    "message": "",
-                }
+                "error_type": "",
+                "error_message": "",
             },
         }
 
