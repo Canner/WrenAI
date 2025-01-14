@@ -155,6 +155,8 @@ pipes:
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_executor
     engine: wren_ui
+  - name: sql_question_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
 
 ---
 settings:

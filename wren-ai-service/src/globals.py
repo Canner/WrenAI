@@ -19,6 +19,7 @@ from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
 from src.web.v1.services.sql_explanation import SqlExplanationService
 from src.web.v1.services.sql_pairs_preparation import SqlPairsPreparationService
+from src.web.v1.services.sql_question import SqlQuestionService
 from src.web.v1.services.sql_regeneration import SqlRegenerationService
 
 logger = logging.getLogger("wren-ai-service")
@@ -39,6 +40,7 @@ class ServiceContainer:
     sql_explanation_service: SqlExplanationService
     sql_regeneration_service: SqlRegenerationService
     sql_pairs_preparation_service: SqlPairsPreparationService
+    sql_question_service: SqlQuestionService
 
 
 @dataclass
@@ -230,6 +232,14 @@ def create_service_container(
                 "sql_pairs_deletion": indexing.SqlPairsDeletion(
                     **pipe_components["sql_pairs_deletion"],
                 ),
+            },
+            **query_cache,
+        ),
+        sql_question_service=SqlQuestionService(
+            pipelines={
+                "sql_question_generation": generation.SQLQuestion(
+                    **pipe_components["sql_question_generation"],
+                )
             },
             **query_cache,
         ),
