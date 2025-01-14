@@ -46,6 +46,7 @@ const COMMON_CHART_DETAIL = gql`
     queryId
     status
     description
+    chartType
     chartSchema
     error {
       ...CommonError

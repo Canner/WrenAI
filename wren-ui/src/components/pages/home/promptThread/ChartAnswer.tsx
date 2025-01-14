@@ -128,7 +128,7 @@ export default function ChartAnswer(props: Props) {
   }, [chartDetail]);
 
   const chartOptionValues = useMemo(() => {
-    return getChartSpecOptionValues(chartSpec);
+    return getChartSpecOptionValues(chartDetail);
   }, [chartSpec]);
 
   const chartSpecFieldTitleMap = useMemo(() => {

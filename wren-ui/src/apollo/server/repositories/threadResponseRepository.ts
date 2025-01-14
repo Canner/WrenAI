@@ -34,6 +34,7 @@ export interface ThreadResponseChartDetail {
   status: string;
   error?: object;
   description?: string;
+  chartType?: string;
   chartSchema?: Record<string, any>;
   adjustment?: boolean;
 }
