@@ -213,13 +213,13 @@ def create_service_container(
                     **pipe_components["question_recommendation"],
                 ),
                 "retrieval": retrieval.Retrieval(
-                    **pipe_components["db_schema_retrieval"],
+                    **pipe_components["question_recommendation_db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
                     allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "sql_generation": generation.SQLGeneration(
-                    **pipe_components["sql_generation"],
+                    **pipe_components["question_recommendation_sql_generation"],
                 ),
             },
             **query_cache,

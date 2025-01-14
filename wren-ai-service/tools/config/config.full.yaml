@@ -2,28 +2,28 @@ type: llm
 provider: litellm_llm
 timeout: 120
 models:
-- model: gpt-4o-mini-2024-07-18
-  api_base: https://api.openai.com/v1
-  api_key_name: LLM_OPENAI_API_KEY
-  kwargs:
-    temperature: 0
-    n: 1
-    # for better consistency of llm response
-    seed: 0
-    max_tokens: 4096
-    response_format:
-      type: json_object
-- model: gpt-4o-2024-08-06
-  api_base: https://api.openai.com/v1
-  api_key_name: LLM_OPENAI_API_KEY
-  kwargs:
-    temperature: 0
-    n: 1
-    # for better consistency of llm response
-    seed: 0
-    max_tokens: 4096
-    response_format:
-      type: json_object
+  - model: gpt-4o-mini-2024-07-18
+    api_base: https://api.openai.com/v1
+    api_key_name: LLM_OPENAI_API_KEY
+    kwargs:
+      temperature: 0
+      n: 1
+      # for better consistency of llm response
+      seed: 0
+      max_tokens: 4096
+      response_format:
+        type: json_object
+  - model: gpt-4o-2024-08-06
+    api_base: https://api.openai.com/v1
+    api_key_name: LLM_OPENAI_API_KEY
+    kwargs:
+      temperature: 0
+      n: 1
+      # for better consistency of llm response
+      seed: 0
+      max_tokens: 4096
+      response_format:
+        type: json_object
 
 ---
 type: embedder
@@ -131,6 +131,13 @@ pipes:
     engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: question_recommendation_db_schema_retrieval
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: question_recommendation_sql_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
   - name: chart_generation
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: chart_adjustment
@@ -146,7 +153,7 @@ pipes:
     embedder: openai_embedder.text-embedding-3-large
   - name: sql_pairs_deletion
     document_store: qdrant
-    embedder: openai_embedder.text-embedding-3-large 
+    embedder: openai_embedder.text-embedding-3-large
   - name: sql_pairs_retrieval
     document_store: qdrant
     embedder: openai_embedder.text-embedding-3-large

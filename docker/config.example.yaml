@@ -98,6 +98,13 @@ pipes:
     engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: question_recommendation_db_schema_retrieval
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: question_recommendation_sql_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
   - name: intent_classification
     llm: litellm_llm.gpt-4o-mini-2024-07-18
     embedder: openai_embedder.text-embedding-3-large
