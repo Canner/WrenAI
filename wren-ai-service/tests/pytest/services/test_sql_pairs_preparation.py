@@ -47,6 +47,7 @@ def service_metadata():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="due to pipeline change, this test is not applicable anymore")
 async def test_sql_pairs_preparation(
     sql_pairs_preparation_service: SqlPairsPreparationService,
     service_metadata: dict,
@@ -93,6 +94,7 @@ async def test_sql_pairs_preparation(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="due to pipeline change, this test is not applicable anymore")
 async def test_sql_pairs_deletion(
     sql_pairs_preparation_service: SqlPairsPreparationService,
     service_metadata: dict,

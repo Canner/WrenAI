@@ -27,10 +27,10 @@
   </a>
 </p>
 
-> Wren AI is an **open-source SQL AI Agent** that empowers data, product, and business teams to access insights through chat, built-in well designed intuitive UI and UX, integrating seamlessly with tools like Excel and Google Sheets.
+> Open-source AI Agent that empowers data-driven teams to chat with their data to generate Text-to-SQL, charts, spreadsheets, reports, and BI. 
 
 <p align="center">
-  <img src="./misc/wrenai_view.png">
+  <img src="./misc/wren_workflow.png">
 </p>
 
 ## 🕶 Try it yourself!

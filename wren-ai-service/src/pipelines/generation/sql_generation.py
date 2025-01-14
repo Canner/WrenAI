@@ -32,6 +32,16 @@ generate one SQL statement that best potentially answer user's query.
     {{ document }}
 {% endfor %}
 
+{% if sql_samples %}
+### SAMPLES ###
+{% for sample in sql_samples %}
+Question:
+{{sample.question}}
+SQL:
+{{sample.sql}}
+{% endfor %}
+{% endif %}
+
 {% if exclude %}
 ### EXCLUDED STATEMETS ###
 Ensure that the following excluded statements are not used in the generated queries to maintain variety and avoid repetition.
@@ -53,16 +63,6 @@ The final answer must be the JSON format like following:
         {"sql": <SQL_QUERY_STRING>}
     ]
 }
-
-{% if sql_samples %}
-### SAMPLES ###
-{% for sample in sql_samples %}
-Summary:
-{{sample.summary}}
-SQL:
-{{sample.sql}}
-{% endfor %}
-{% endif %}
 
 ### QUESTION ###
 User's Question: {{ query }}

@@ -79,7 +79,12 @@ class SemanticsPreparationService:
 
             tasks = [
                 self._pipelines[name].run(**input)
-                for name in ["db_schema", "historical_question", "table_description"]
+                for name in [
+                    "db_schema",
+                    "historical_question",
+                    "table_description",
+                    "sql_pairs",
+                ]
             ]
 
             await asyncio.gather(*tasks)
