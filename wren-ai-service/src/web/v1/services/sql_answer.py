@@ -19,6 +19,7 @@ class SqlAnswerRequest(BaseModel):
     query: str
     sql: str
     sql_data: Dict
+    project_id: Optional[str] = None
     thread_id: Optional[str] = None
     configurations: Optional[Configuration] = Configuration()
 
