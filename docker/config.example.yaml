@@ -107,6 +107,10 @@ pipes:
   - name: sql_pairs_indexing
     document_store: qdrant
     embedder: openai_embedder.text-embedding-3-large
+  - name: sql_pairs_preparation
+    document_store: qdrant
+    embedder: openai_embedder.text-embedding-3-large
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_pairs_deletion
     document_store: qdrant
     embedder: openai_embedder.text-embedding-3-large 
