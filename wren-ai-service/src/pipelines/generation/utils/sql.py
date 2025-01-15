@@ -9,7 +9,6 @@ from haystack import component
 from src.core.engine import (
     Engine,
     add_quotes,
-    clean_generation_result,
 )
 from src.web.v1.services import Configuration
 
@@ -29,7 +28,7 @@ class SQLBreakdownGenPostProcessor:
         replies: List[str],
         project_id: str | None = None,
     ) -> Dict[str, Any]:
-        cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
+        cleaned_generation_result = orjson.loads(replies[0])
 
         steps = cleaned_generation_result.get("steps", [])
         if not steps:
@@ -119,18 +118,14 @@ class SQLGenPostProcessor:
                 for reply in replies:
                     try:
                         cleaned_generation_result.append(
-                            orjson.loads(clean_generation_result(reply["replies"][0]))[
-                                "results"
-                            ][0]
+                            orjson.loads(reply["replies"][0])["sql"]
                         )
                     except Exception as e:
                         logger.exception(f"Error in SQLGenPostProcessor: {e}")
             else:
-                cleaned_generation_result = orjson.loads(
-                    clean_generation_result(replies[0])
-                )["results"]
+                cleaned_generation_result = orjson.loads(replies[0])["sql"]
 
-            if isinstance(cleaned_generation_result, dict):
+            if isinstance(cleaned_generation_result, str):
                 cleaned_generation_result = [cleaned_generation_result]
 
             (
@@ -153,13 +148,13 @@ class SQLGenPostProcessor:
             }
 
     async def _classify_invalid_generation_results(
-        self, generation_results: List[Dict[str, str]], project_id: str | None = None
+        self, generation_results: list[str], project_id: str | None = None
     ) -> List[Optional[Dict[str, str]]]:
         valid_generation_results = []
         invalid_generation_results = []
 
-        async def _task(result: Dict[str, str]):
-            quoted_sql, no_error = add_quotes(result["sql"])
+        async def _task(sql: str):
+            quoted_sql, no_error = add_quotes(sql)
 
             if no_error:
                 status, _, addition = await self._engine.execute_sql(
@@ -185,7 +180,7 @@ class SQLGenPostProcessor:
             else:
                 invalid_generation_results.append(
                     {
-                        "sql": result["sql"],
+                        "sql": sql,
                         "type": "ADD_QUOTES",
                         "error": "add_quotes failed",
                     }
@@ -334,6 +329,9 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
 """
 
+_sql_generation_system_prompt = """
+You are a helpful assistant that converts natural language queries into SQL queries.
+"""
 
 sql_generation_system_prompt = """
 You are an ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.

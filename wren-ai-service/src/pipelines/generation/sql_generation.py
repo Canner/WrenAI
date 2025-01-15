@@ -22,6 +22,13 @@ from src.web.v1.services import Configuration
 logger = logging.getLogger("wren-ai-service")
 
 
+_sql_generation_user_prompt_template = """
+Convert this to SQL: {{query}}
+
+Documents:
+{{documents}}
+"""
+
 sql_generation_user_prompt_template = """
 ### TASK ###
 Given a user query, your task is to interpret the query based on the database schema and
@@ -47,14 +54,22 @@ SQL:
 {{ instructions }}
 {% endif %}
 
-### FINAL ANSWER FORMAT ###
-The final answer must be the JSON format like following:
+### QUESTION ###
+User's Question: {{ query }}
+Current Time: {{ current_time }}
 
-{
-    "results": [
-        {"sql": <SQL_QUERY_STRING>}
-    ]
-}
+Let's think step by step.
+"""
+
+_sql_generation_user_prompt_template = """
+### TASK ###
+Given a user query, your task is to interpret the query based on the database schema and
+generate one SQL statement that best potentially answer user's query.
+
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
 
 ### QUESTION ###
 User's Question: {{ query }}
@@ -102,22 +117,14 @@ async def post_process(
 
 
 ## End of Pipeline
-class SQLResult(BaseModel):
+
+
+class SqlGenerationResult(BaseModel):
     sql: str
 
 
-class GenerationResults(BaseModel):
-    results: list[SQLResult]
-
-
 SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_results",
-            "schema": GenerationResults.model_json_schema(),
-        },
-    }
+    "response_format": SqlGenerationResult,
 }
 
 
