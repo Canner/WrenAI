@@ -83,6 +83,7 @@ const getDynamicProperties = (chartType: ChartType) => {
     [ChartType.GROUPED_BAR]: GroupedBarProperties,
     [ChartType.STACKED_BAR]: StackedBarProperties,
     [ChartType.LINE]: LineProperties,
+    [ChartType.MULTI_LINE]: LineProperties,
     [ChartType.PIE]: DonutProperties,
   };
   return propertiesMap[chartType] || BasicProperties;
@@ -129,7 +130,7 @@ export default function ChartAnswer(props: Props) {
 
   const chartOptionValues = useMemo(() => {
     return getChartSpecOptionValues(chartDetail);
-  }, [chartSpec]);
+  }, [chartDetail]);
 
   const chartSpecFieldTitleMap = useMemo(() => {
     return getChartSpecFieldTitleMap(chartSpec?.encoding);
