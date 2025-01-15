@@ -158,5 +158,5 @@ if __name__ == "__main__":
         query="query",
         contexts=[],
         history=AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
-        timezone=Configuration.Timezone(name="UTC", utc_offset="+00:00"),
+        configuration=Configuration(),
     )
