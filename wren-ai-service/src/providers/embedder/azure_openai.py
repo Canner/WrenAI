@@ -202,9 +202,8 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         dimension: int = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
-            else 0
-        )
-        or EMBEDDING_MODEL_DIMENSION,
+            else None,
+        ),
         timeout: Optional[float] = (
             float(os.getenv("EMBEDDER_TIMEOUT"))
             if os.getenv("EMBEDDER_TIMEOUT")

@@ -181,12 +181,11 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         api_base: str = os.getenv("EMBEDDER_OPENAI_API_BASE")
         or EMBEDDER_OPENAI_API_BASE,
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        dimension: int = (
+        dimension: Optional[int] = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
-            else 0
-        )
-        or EMBEDDING_MODEL_DIMENSION,
+            else None
+        ),
         timeout: Optional[float] = (
             float(os.getenv("EMBEDDER_TIMEOUT"))
             if os.getenv("EMBEDDER_TIMEOUT")

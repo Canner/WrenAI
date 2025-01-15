@@ -2,8 +2,6 @@ import importlib
 import logging
 import pkgutil
 
-from ollama import Client
-
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -99,20 +97,3 @@ def get_default_embedding_model_dim(embedder_provider: str):
     return importlib.import_module(
         f"src.providers.embedder.{file_name}"
     ).EMBEDDING_MODEL_DIMENSION
-
-
-# TODO: remove this function after litellm provider is stable; users should pull the model themselves. Make the solution simpler.
-def pull_ollama_model(url: str, model_name: str):
-    client = Client(host=url)
-    models = [model["name"] for model in client.list()["models"]]
-    if model_name not in models:
-        logger.info(f"Pulling Ollama model {model_name}")
-        percentage = 0
-        for progress in client.pull(model_name, stream=True):
-            if "completed" in progress and "total" in progress:
-                new_percentage = int(progress["completed"] / progress["total"] * 100)
-                if new_percentage > percentage:
-                    percentage = new_percentage
-                    logger.info(f"Pulling Ollama model {model_name}: {percentage}%")
-    else:
-        logger.info(f"Ollama model {model_name} already exists")

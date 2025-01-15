@@ -129,7 +129,7 @@ def embedder_processor(entry: dict) -> dict:
         returned[identifier] = {
             "provider": entry["provider"],
             "model": model["model"],
-            "dimension": model["dimension"],
+            "dimension": model.get("dimension"),
             **others,
         }
 
