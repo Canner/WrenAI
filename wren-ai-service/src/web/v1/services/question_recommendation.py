@@ -77,7 +77,6 @@ class QuestionRecommendation:
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
                 contexts=documents,
-                exclude=[],
                 configuration=Configuration(),
                 project_id=project_id,
             )
