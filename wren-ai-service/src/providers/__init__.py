@@ -1,10 +1,7 @@
 import logging
-import os
-from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Tuple
 
-from src.core.engine import Engine, EngineConfig
+from src.core.engine import Engine
 from src.core.pipeline import PipelineComponent
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.providers import loader
@@ -299,54 +296,6 @@ def transform(config: list[dict]) -> Configuration:
     )
 
 
-# TODO: DEPRECATED: use generate_components instead
-def init_providers(
-    engine_config: EngineConfig,
-) -> Tuple[LLMProvider, EmbedderProvider, DocumentStoreProvider, Engine]:
-    from src.utils import load_env_vars
-
-    load_env_vars()
-
-    logger.info("Initializing providers...")
-    loader.import_mods()
-
-    llm_provider = loader.get_provider(os.getenv("LLM_PROVIDER", "openai_llm"))()
-    embedder_provider = loader.get_provider(
-        os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
-    )()
-    document_store_provider = loader.get_provider(
-        os.getenv("DOCUMENT_STORE_PROVIDER", "qdrant")
-    )()
-    engine = loader.get_provider(engine_config.provider)(**engine_config.config)
-
-    return llm_provider, embedder_provider, document_store_provider, engine
-
-
-class Wrapper(Mapping):
-    def __init__(self):
-        from src.utils import load_env_vars
-
-        load_env_vars()
-
-        self.value = PipelineComponent(
-            *init_providers(
-                engine_config=EngineConfig(provider=os.getenv("ENGINE", "wren_ui"))
-            )
-        )
-
-    def __getitem__(self, key):
-        return self.value
-
-    def __repr__(self):
-        return f"Wrapper({self.value})"
-
-    def __iter__(self):
-        return iter(self.value)
-
-    def __len__(self):
-        return len(self.value)
-
-
 def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
     """
     Generate pipeline components from configuration.
@@ -375,17 +324,6 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
 
     """
     loader.import_mods()
-
-    # TODO:DEPRECATED: remove this fallback in the future
-    if not configs:
-        message = """
-        Warning: No configuration provided. Falling back to environment variables for settings.
-        This is a legacy approach and will be deprecated soon. Please refer to the README for
-        instructions on migrating to the new configuration format. It is strongly recommended
-        to update your configuration to ensure future compatibility and take advantage of new features.
-        """
-        logger.warning(message)
-        return Wrapper()
 
     config = transform(configs)
 
