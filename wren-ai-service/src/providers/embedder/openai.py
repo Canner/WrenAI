@@ -18,7 +18,6 @@ logger = logging.getLogger("wren-ai-service")
 
 EMBEDDER_OPENAI_API_BASE = "https://api.openai.com/v1"
 EMBEDDING_MODEL = "text-embedding-3-large"
-EMBEDDING_MODEL_DIMENSION = 3072
 
 
 @component
@@ -181,12 +180,6 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         api_base: str = os.getenv("EMBEDDER_OPENAI_API_BASE")
         or EMBEDDER_OPENAI_API_BASE,
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        dimension: int = (
-            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
-            if os.getenv("EMBEDDING_MODEL_DIMENSION")
-            else 0
-        )
-        or EMBEDDING_MODEL_DIMENSION,
         timeout: Optional[float] = (
             float(os.getenv("EMBEDDER_TIMEOUT"))
             if os.getenv("EMBEDDER_TIMEOUT")
@@ -197,7 +190,6 @@ class OpenAIEmbedderProvider(EmbedderProvider):
         self._api_key = Secret.from_token(api_key)
         self._api_base = remove_trailing_slash(api_base)
         self._embedding_model = model
-        self._embedding_model_dim = dimension
         self._timeout = timeout
 
         logger.info(

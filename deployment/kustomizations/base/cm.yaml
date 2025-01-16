@@ -79,7 +79,6 @@ data:
     provider: openai_embedder
     models:
       - model: text-embedding-3-large
-        dimension: 3072
     api_base: https://api.openai.com/v1
     timeout: 120
 
