@@ -49,7 +49,6 @@ def test_service_metadata(service_metadata: ServiceMetadata):
             "llm_model": "mock-llm-model",
             "llm_model_kwargs": {},
             "embedding_model": "mock-embedding-model",
-            "embedding_model_dim": 768,
         },
     }
 
