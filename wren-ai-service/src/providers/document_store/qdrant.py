@@ -25,7 +25,7 @@ from qdrant_client.http import models as rest
 from tqdm import tqdm
 
 from src.core.provider import DocumentStoreProvider
-from src.providers.loader import get_default_embedding_model_dim, provider
+from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -340,9 +340,6 @@ class QdrantProvider(DocumentStoreProvider):
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
-        )
-        or get_default_embedding_model_dim(
-            os.getenv("EMBEDDER_PROVIDER", "openai_embedder")
         ),
         recreate_index: bool = (
             bool(os.getenv("SHOULD_FORCE_DEPLOY"))

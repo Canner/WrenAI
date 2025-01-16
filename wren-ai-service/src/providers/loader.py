@@ -90,10 +90,3 @@ def get_provider(name: str):
     """
     logger.info(f"Getting provider: {name} from {PROVIDERS}")
     return PROVIDERS[name]
-
-
-def get_default_embedding_model_dim(embedder_provider: str):
-    file_name = embedder_provider.split("_embedder")[0]
-    return importlib.import_module(
-        f"src.providers.embedder.{file_name}"
-    ).EMBEDDING_MODEL_DIMENSION

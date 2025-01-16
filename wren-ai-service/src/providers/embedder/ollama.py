@@ -19,7 +19,6 @@ logger = logging.getLogger("wren-ai-service")
 
 EMBEDDER_OLLAMA_URL = "http://localhost:11434"
 EMBEDDING_MODEL = "nomic-embed-text:latest"
-EMBEDDING_MODEL_DIMENSION = 768  # https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
 
 
 @component
@@ -159,11 +158,6 @@ class OllamaEmbedderProvider(EmbedderProvider):
         self,
         url: str = os.getenv("EMBEDDER_OLLAMA_URL") or EMBEDDER_OLLAMA_URL,
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        dimension: Optional[int] = (
-            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
-            if os.getenv("EMBEDDING_MODEL_DIMENSION")
-            else None
-        ),
         timeout: Optional[int] = (
             int(os.getenv("EMBEDDER_TIMEOUT")) if os.getenv("EMBEDDER_TIMEOUT") else 120
         ),
@@ -171,7 +165,6 @@ class OllamaEmbedderProvider(EmbedderProvider):
     ):
         self._url = remove_trailing_slash(url)
         self._embedding_model = model
-        self._embedding_model_dim = dimension
         self._timeout = timeout
 
         logger.info(f"Using Ollama Embedding Model: {self._embedding_model}")
