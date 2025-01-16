@@ -129,9 +129,6 @@ def embedder_processor(entry: dict) -> dict:
         returned[identifier] = {
             "provider": entry["provider"],
             "model": model["model"],
-            "dimension": model.get(
-                "dimension"
-            ),  # embedding model dimension is optional
             **others,
         }
 
