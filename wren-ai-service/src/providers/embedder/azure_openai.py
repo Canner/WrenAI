@@ -199,7 +199,7 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         api_base: str = os.getenv("EMBEDDER_AZURE_OPENAI_API_BASE"),
         api_version: str = os.getenv("EMBEDDER_AZURE_OPENAI_VERSION"),
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        dimension: int = (
+        dimension: Optional[int] = (
             int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else None,
