@@ -293,7 +293,6 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=documents,
-                        exclude=historical_question_result,
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
                         sql_samples=sql_samples,
