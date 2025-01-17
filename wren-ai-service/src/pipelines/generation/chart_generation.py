@@ -25,7 +25,7 @@ chart_generation_system_prompt = f"""
 ### TASK ###
 
 You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL and data, you need to generate vega-lite schema in JSON and provide suitable chart type.
-Besides, you need to give a concise and easy-to-understand reasoning within 20 words to describe why you provide such vega-lite schema.
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL and data.
 
 {chart_generation_instructions}
 
