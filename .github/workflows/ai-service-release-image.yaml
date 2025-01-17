@@ -43,7 +43,7 @@ jobs:
           else
             tag_name=commit-$(git log -1 --pretty=%h)
           fi
-          echo "TAG_NAME=$tag_name" >> $GITHUB_ENV
+          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Prepare platform
