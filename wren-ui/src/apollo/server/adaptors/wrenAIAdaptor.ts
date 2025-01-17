@@ -447,6 +447,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       error,
       response: {
         reasoning: body.response?.reasoning,
+        chartType: body.response?.chart_type,
         chartSchema: body.response?.chart_schema,
       },
     };
