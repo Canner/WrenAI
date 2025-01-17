@@ -320,8 +320,7 @@ class AskPipeline(Eval):
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
-            samples=prediction["samples"],
-            exclude=[],
+            sql_samples=[],
         )
 
         prediction["actual_output"] = actual_output
