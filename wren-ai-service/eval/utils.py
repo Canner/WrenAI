@@ -196,8 +196,6 @@ def trace_metadata(
     return {
         "commit": meta["commit"],
         "dataset_id": meta["dataset_id"],
-        "embedding_model": meta["embedding_model"],
-        "generation_model": meta["generation_model"],
         "column_indexing_batch_size": meta["column_indexing_batch_size"],
         "table_retrieval_size": meta["table_retrieval_size"],
         "table_column_retrieval_size": meta["table_column_retrieval_size"],
