@@ -78,6 +78,7 @@ export enum ChartType {
   BAR = 'BAR',
   GROUPED_BAR = 'GROUPED_BAR',
   LINE = 'LINE',
+  MULTI_LINE = 'MULTI_LINE',
   PIE = 'PIE',
   STACKED_BAR = 'STACKED_BAR'
 }
@@ -1127,6 +1128,7 @@ export type ThreadResponseChartDetail = {
   __typename?: 'ThreadResponseChartDetail';
   adjustment?: Maybe<Scalars['Boolean']>;
   chartSchema?: Maybe<Scalars['JSON']>;
+  chartType?: Maybe<ChartType>;
   description?: Maybe<Scalars['String']>;
   error?: Maybe<Error>;
   queryId?: Maybe<Scalars['String']>;

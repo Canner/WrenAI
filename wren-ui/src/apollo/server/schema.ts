@@ -561,6 +561,7 @@ export const typeDefs = gql`
     BAR
     PIE
     LINE
+    MULTI_LINE
     AREA
     GROUPED_BAR
     STACKED_BAR
@@ -683,6 +684,7 @@ export const typeDefs = gql`
     status: ChartTaskStatus!
     error: Error
     description: String
+    chartType: ChartType
     chartSchema: JSON
     adjustment: Boolean
   }

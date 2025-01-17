@@ -191,6 +191,7 @@ export enum ChartType {
   GROUPED_BAR = 'grouped_bar',
   STACKED_BAR = 'stacked_bar',
   LINE = 'line',
+  MULTI_LINE = 'multi_line',
   PIE = 'pie',
   AREA = 'area',
 }
@@ -222,6 +223,7 @@ export interface ChartAdjustmentInput {
 
 export interface ChartResponse {
   reasoning: string;
+  chartType: ChartType;
   chartSchema: Record<string, any>;
 }
 

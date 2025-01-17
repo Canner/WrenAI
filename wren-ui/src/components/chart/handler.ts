@@ -1,4 +1,7 @@
-import { ChartType } from '@/apollo/client/graphql/__types__';
+import {
+  ChartType,
+  ThreadResponseChartDetail,
+} from '@/apollo/client/graphql/__types__';
 import { isNil, cloneDeep, uniq, sortBy, omit, isNumber } from 'lodash';
 import { Config, TopLevelSpec } from 'vega-lite';
 
@@ -72,6 +75,7 @@ type ParamsSpec = {
   };
   value?: any;
 }[];
+type TransformSpec = Extract<TopLevelSpec, { transform?: any }>['transform'];
 
 type ChartOptions = {
   width?: number | string;
@@ -143,6 +147,7 @@ export default class ChartSpecHandler {
   public mark: MarkSpec;
   public autosize: AutosizeSpec;
   public params: ParamsSpec;
+  public transform: TransformSpec;
 
   constructor(spec: TopLevelSpec, options?: ChartOptions) {
     this.config = config;
@@ -219,12 +224,14 @@ export default class ChartSpecHandler {
       autosize: this.autosize,
       encoding: this.encoding,
       params: this.params,
+      transform: this.transform,
     } as TopLevelSpec;
   }
 
   private parseSpec(spec: TopLevelSpec) {
     this.$schema = spec.$schema;
     this.title = spec.title as string;
+    this.transform = spec.transform;
 
     if ('mark' in spec) {
       const mark =
@@ -420,8 +427,11 @@ export const convertToChartType = (
   return markType ? (markType.toUpperCase() as ChartType) : null;
 };
 
-export const getChartSpecOptionValues = (spec: TopLevelSpec) => {
-  let chartType: string | null = null;
+export const getChartSpecOptionValues = (
+  chartDetail: ThreadResponseChartDetail,
+) => {
+  const spec = chartDetail?.chartSchema;
+  let chartType: string | null = chartDetail?.chartType || null;
   let xAxis: string | null = null;
   let yAxis: string | null = null;
   let color: string | null = null;
@@ -435,7 +445,7 @@ export const getChartSpecOptionValues = (spec: TopLevelSpec) => {
     color = (encoding?.color as any)?.field || null;
     xOffset = (encoding?.xOffset as any)?.field || null;
     theta = (encoding?.theta as any)?.field || null;
-    if ('mark' in spec) {
+    if (chartType === null) {
       chartType = convertToChartType(
         typeof spec.mark === 'string' ? spec.mark : spec.mark.type,
         encoding,
