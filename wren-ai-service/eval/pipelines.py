@@ -30,13 +30,10 @@ from eval.utils import (
     get_contexts_from_sql,
     trace_metadata,
 )
-from src.core.engine import Engine
-from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.globals import ServiceContainer
 from src.pipelines import generation, indexing, retrieval
 
 
-def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
+def deploy_model(mdl: str, pipe: indexing.DBSchema) -> None:
     async def wrapper():
         await pipe.run(orjson.dumps(mdl).decode())
 
