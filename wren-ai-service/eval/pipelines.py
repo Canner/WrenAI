@@ -13,6 +13,7 @@ from tqdm.asyncio import tqdm_asyncio
 
 sys.path.append(f"{Path().parent.resolve()}")
 
+from eval import EvalSettings
 from eval.metrics import (
     AccuracyMetric,
     AccuracyMultiCandidateMetric,
@@ -31,9 +32,8 @@ from eval.utils import (
 )
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.generation import sql_generation
-from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import retrieval
+from src.globals import ServiceContainer
+from src.pipelines import generation, indexing, retrieval
 
 
 def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
@@ -118,8 +118,7 @@ class Eval:
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
-    def _process(self, prediction: dict, **_) -> dict:
-        ...
+    def _process(self, prediction: dict, **_) -> dict: ...
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
@@ -176,26 +175,23 @@ class RetrievalPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
-        llm_provider: LLMProvider,
-        embedder_provider: EmbedderProvider,
-        document_store_provider: DocumentStoreProvider,
+        pipe_components: dict,
+        settings: EvalSettings,
         **kwargs,
     ):
         super().__init__(meta)
 
-        document_store_provider.get_store(recreate_index=True)
-        _indexing = indexing.Indexing(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
+        _indexing = indexing.DBSchema(
+            **pipe_components["db_schema_indexing"],
+            column_batch_size=settings.column_indexing_batch_size,
         )
         deploy_model(mdl, _indexing)
 
         self._retrieval = retrieval.Retrieval(
-            llm_provider=llm_provider,
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
-            table_retrieval_size=meta["table_retrieval_size"],
-            table_column_retrieval_size=meta["table_column_retrieval_size"],
+            **pipe_components["db_schema_retrieval"],
+            table_retrieval_size=settings.table_retrieval_size,
+            table_column_retrieval_size=settings.table_column_retrieval_size,
+            allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
 
     async def _process(self, prediction: dict, **_) -> dict:
@@ -226,15 +222,13 @@ class GenerationPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
-        llm_provider: LLMProvider,
-        engine: Engine,
+        pipe_components: dict,
         **kwargs,
     ):
         super().__init__(meta, 3)
         self._mdl = mdl
-        self._generation = sql_generation.SQLGeneration(
-            llm_provider=llm_provider,
-            engine=engine,
+        self._generation = generation.SQLGeneration(
+            **pipe_components["sql_generation"],
         )
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
@@ -293,30 +287,27 @@ class AskPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
-        llm_provider: LLMProvider,
-        embedder_provider: EmbedderProvider,
-        document_store_provider: DocumentStoreProvider,
-        engine: Engine,
+        pipe_components: dict,
+        settings: EvalSettings,
         **kwargs,
     ):
         super().__init__(meta, 3)
 
-        document_store_provider.get_store(recreate_index=True)
-        _indexing = indexing.Indexing(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
+        _indexing = indexing.DBSchema(
+            **pipe_components["db_schema_indexing"],
+            column_batch_size=settings.column_indexing_batch_size,
         )
         deploy_model(mdl, _indexing)
 
         self._mdl = mdl
         self._retrieval = retrieval.Retrieval(
-            llm_provider=llm_provider,
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
+            **pipe_components["db_schema_retrieval"],
+            table_retrieval_size=settings.table_retrieval_size,
+            table_column_retrieval_size=settings.table_column_retrieval_size,
+            allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
-        self._generation = sql_generation.SQLGeneration(
-            llm_provider=llm_provider,
-            engine=engine,
+        self._generation = generation.SQLGeneration(
+            **pipe_components["sql_generation"],
         )
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
@@ -377,9 +368,16 @@ def init(
     name: Literal["retrieval", "generation", "ask"],
     meta: dict,
     mdl: dict,
-    providers: Dict[str, Any],
+    components: Dict[str, Any],
+    settings: EvalSettings,
 ) -> Eval:
-    args = {"meta": meta, "mdl": mdl, **providers}
+    args = {
+        "meta": meta,
+        "mdl": mdl,
+        "pipe_components": components,
+        "settings": settings,
+    }
+
     match name:
         case "retrieval":
             return RetrievalPipeline(**args)

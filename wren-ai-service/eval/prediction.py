@@ -106,8 +106,8 @@ if __name__ == "__main__":
     path, pipe_name = parse_args()
 
     settings = EvalSettings()
-    pipe_components = provider.generate_components(settings.components)
     # todo: handle duckdb as datasource
+    pipe_components = provider.generate_components(settings.components)
     container = globals.create_service_container(pipe_components, settings)
     utils.init_langfuse(settings)
 
@@ -115,11 +115,12 @@ if __name__ == "__main__":
 
     meta = generate_meta(path=path, dataset=dataset, pipe=pipe_name, settings=settings)
 
-    pipe = pipelines.init(
+    pipe: pipelines.Eval = pipelines.init(
         pipe_name,
         meta,
         mdl=dataset["mdl"],
-        providers=providers,
+        components=pipe_components,
+        settings=settings,
     )
 
     predictions = pipe.predict(dataset["eval_dataset"])
