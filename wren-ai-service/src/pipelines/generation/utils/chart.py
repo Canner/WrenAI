@@ -10,6 +10,7 @@ chart_generation_instructions = """
 - Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
 - Chart types: Bar chart, Line chart, Multi line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
+- Generated chart should answer the user's question and based on the semantics of the SQL query, and the sample data is used to help you generate the suitable chart type
 - If the sample data is not suitable for visualization, you must return an empty string for the schema and chart type
 - If the sample data is empty, you must return an empty string for the schema and chart type
 - The language for the chart and reasoning must be the same language provided by the user
@@ -256,7 +257,7 @@ class ChartDataPreprocessor:
     @component.output_types(
         results=Dict[str, Any],
     )
-    def run(self, data: Dict[str, Any]):
+    def run(self, data: Dict[str, Any], sample_data_count: int = 3):
         columns = [
             column.get("name", "") if isinstance(column, dict) else column
             for column in data.get("results", {}).get("columns", [])
@@ -264,8 +265,9 @@ class ChartDataPreprocessor:
         data = data.get("results", {}).get("data", [])
 
         df = pd.DataFrame(data, columns=columns)
-        if len(df) > 10:
-            sample_data = df.sample(n=10).to_dict(orient="records")
+
+        if len(df) > sample_data_count:
+            sample_data = df.sample(n=sample_data_count).to_dict(orient="records")
         else:
             sample_data = df.to_dict(orient="records")
 

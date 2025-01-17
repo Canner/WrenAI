@@ -25,9 +25,9 @@ logger = logging.getLogger("wren-ai-service")
 chart_adjustment_system_prompt = f"""
 ### TASK ###
 
-You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL, data, vega-lite schema and adjustment options, 
+You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL, data, original vega-lite schema and adjustment options, 
 you need to re-generate vega-lite schema in JSON and provide suitable chart type.
-Besides, you need to give a concise and easy-to-understand reasoning within 20 words to describe why you provide such vega-lite schema.
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, data, original vega-lite schema and adjustment options.
 
 {chart_generation_instructions}
 - If you think the adjustment options are not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
