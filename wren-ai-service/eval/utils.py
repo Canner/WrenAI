@@ -88,7 +88,7 @@ async def get_contexts_from_sql(
     def _get_contexts_from_sql_analysis_results(sql_analysis_results: list[dict]):
         def _compose_contexts_of_select_type(select_items: list[dict]):
             return [
-                f'{expr_source['sourceDataset']}.{expr_source['sourceColumn']}'
+                f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                 for select_item in select_items
                 for expr_source in select_item["exprSources"]
             ]
@@ -97,7 +97,7 @@ async def get_contexts_from_sql(
             contexts = []
             if filter["type"] == "EXPR":
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                    f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                     for expr_source in filter["exprSources"]
                 ]
             elif filter["type"] in ("AND", "OR"):
@@ -110,7 +110,7 @@ async def get_contexts_from_sql(
             contexts = []
             for groupby_key_list in groupby_keys:
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                    f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                     for groupby_key in groupby_key_list
                     for expr_source in groupby_key["exprSources"]
                 ]
@@ -118,7 +118,7 @@ async def get_contexts_from_sql(
 
         def _compose_contexts_of_sorting_type(sortings: list[dict]):
             return [
-                f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                 for sorting in sortings
                 for expr_source in sorting["exprSources"]
             ]
@@ -127,7 +127,7 @@ async def get_contexts_from_sql(
             contexts = []
             if relation["type"] != "TABLE" and relation["type"] != "SUBQUERY":
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                    f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                     for expr_source in relation["exprSources"]
                 ]
 
@@ -233,13 +233,13 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                         column["properties"]["alias"] = column["properties"].pop(
                             "displayName", ""
                         )
-                        comment = f"-- {orjson.dumps(column['properties']).decode("utf-8")}\n  "
+                        comment = f"-- {orjson.dumps(column['properties']).decode('utf-8')}\n  "
                     else:
                         comment = ""
                     if "isCalculated" in column and column["isCalculated"]:
                         comment = (
                             comment
-                            + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
+                            + f"-- This column is a Calculated Field\n  -- column expression: {column['expression']}\n  "
                         )
                     column_name = column["name"]
                     column_type = column["type"]
@@ -289,7 +289,7 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                     "displayName", ""
                 )
                 comment = (
-                    f"\n/* {orjson.dumps(model['properties']).decode("utf-8")} */\n"
+                    f"\n/* {orjson.dumps(model['properties']).decode('utf-8')} */\n"
                 )
             else:
                 comment = ""
@@ -326,11 +326,11 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
             for measure in metric["measure"]:
                 column_name = measure["name"]
                 column_type = measure["type"]
-                comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
+                comment = f"-- This column is a measure\n  -- expression: {measure['expression']}\n  "
                 column_ddl = f"{comment}{column_name} {column_type}"
                 columns_ddl.append(column_ddl)
 
-            comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
+            comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric['baseObject']} */\n"
             create_table_ddl = (
                 f"{comment}CREATE TABLE {table_name} (\n  "
                 + ",\n  ".join(columns_ddl)
