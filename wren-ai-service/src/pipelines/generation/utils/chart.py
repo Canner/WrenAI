@@ -255,14 +255,14 @@ chart_generation_instructions = """
 @component
 class ChartDataPreprocessor:
     @component.output_types(
-        results=Dict[str, Any],
+        sample_data=Dict[str, Any],
     )
     def run(self, data: Dict[str, Any], sample_data_count: int = 3):
         columns = [
             column.get("name", "") if isinstance(column, dict) else column
-            for column in data.get("results", {}).get("columns", [])
+            for column in data.get("columns", [])
         ]
-        data = data.get("results", {}).get("data", [])
+        data = data.get("data", [])
 
         df = pd.DataFrame(data, columns=columns)
 
@@ -272,9 +272,7 @@ class ChartDataPreprocessor:
             sample_data = df.to_dict(orient="records")
 
         return {
-            "results": {
-                "sample_data": sample_data,
-            }
+            "sample_data": sample_data,
         }
 
 

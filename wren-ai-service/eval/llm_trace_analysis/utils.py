@@ -134,26 +134,3 @@ async def get_all_observations(
         )
 
     return observations
-
-
-async def main():
-    client = get_langfuse_client()
-    observations = await get_all_observations(
-        client,
-        name="generate_chart",
-        type="GENERATION",
-    )
-
-    print(observations[0])
-
-    observations = await get_all_observations(
-        client,
-        name="Chart Generation",
-        type="SPAN",
-    )
-
-    print(observations[0])
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import orjson
 from hamilton import base
@@ -60,6 +60,7 @@ class ChartGenerationPostProcessor:
         self,
         replies: str,
         vega_schema: Dict[str, Any],
+        remove_data_from_chart_schema: bool,
     ):
         try:
             generation_result = orjson.loads(replies[0])
@@ -71,7 +72,10 @@ class ChartGenerationPostProcessor:
                     chart_schema = orjson.loads(chart_schema)
 
                 validate(chart_schema, schema=vega_schema)
-                chart_schema["data"]["values"] = []
+
+                if remove_data_from_chart_schema:
+                    chart_schema["data"]["values"] = []
+
                 return {
                     "results": {
                         "chart_schema": chart_schema,
@@ -114,7 +118,7 @@ class ChartGenerationPostProcessor:
 def preprocess_data(
     data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
 ) -> dict:
-    return chart_data_preprocessor.run(data)
+    return chart_data_preprocessor.run(data)["sample_data"]
 
 
 @observe(capture_input=False)
@@ -125,12 +129,10 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    sample_data = preprocess_data["results"]["sample_data"]
-
     return prompt_builder.run(
         query=query,
         sql=sql,
-        sample_data=sample_data,
+        sample_data=preprocess_data,
         language=language,
     )
 
@@ -144,9 +146,12 @@ async def generate_chart(prompt: dict, generator: Any) -> dict:
 def post_process(
     generate_chart: dict,
     vega_schema: Dict[str, Any],
+    remove_data_from_chart_schema: bool,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
-    return post_processor.run(generate_chart.get("replies"), vega_schema)
+    return post_processor.run(
+        generate_chart.get("replies"), vega_schema, remove_data_from_chart_schema
+    )
 
 
 ## End of Pipeline
@@ -197,6 +202,7 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
+        remove_data_from_chart_schema: Optional[bool] = True,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -206,6 +212,7 @@ class ChartGeneration(BasicPipeline):
                 "sql": sql,
                 "data": data,
                 "language": language,
+                "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 **self._components,
                 **self._configs,
             },

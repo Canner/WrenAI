@@ -138,7 +138,7 @@ class ChartAdjustmentPostProcessor:
 def preprocess_data(
     data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
 ) -> dict:
-    return chart_data_preprocessor.run(data)
+    return chart_data_preprocessor.run(data)["sample_data"]
 
 
 @observe(capture_input=False)
@@ -151,14 +151,12 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    sample_data = preprocess_data["results"]["sample_data"]
-
     return prompt_builder.run(
         query=query,
         sql=sql,
         adjustment_option=adjustment_option,
         chart_schema=chart_schema,
-        sample_data=sample_data,
+        sample_data=preprocess_data,
         language=language,
     )
 

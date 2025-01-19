@@ -1,9 +1,11 @@
 import asyncio
 import os
+import time
 from typing import Any, Dict, List
 
 import orjson
 import pytz
+import requests
 import streamlit as st
 from utils import (
     ObservationsView,
@@ -68,13 +70,12 @@ def get_chart_data(
             chart_data.append(
                 {
                     "project_id": chart_trace.metadata["project_id"],
-                    "start_time": chart_span.start_time.astimezone(tz),
-                    "latency": (
-                        chart_span.end_time - chart_span.start_time
-                    ).total_seconds(),
+                    "timestamp": chart_trace.timestamp.astimezone(tz),
+                    "latency": chart_trace.latency,
                     "url": f'{os.getenv("LANGFUSE_HOST")}/project/{chart_span.projectId}/traces/{chart_span.trace_id}?observation={chart_span.id}',
                     "query": chart_span.input["kwargs"]["query"],
                     "sql": chart_span.input["kwargs"]["sql"],
+                    "data": chart_span.input["kwargs"]["data"]["results"],
                     "reasoning": chart_output.get("reasoning", ""),
                     "chart_type": chart_output.get("chart_type", ""),
                     "chart_schema": chart_output.get("chart_schema", ""),
@@ -106,8 +107,52 @@ def on_change_llms():
     st.session_state["llms"] = set(st.session_state["llms_input"])
 
 
+def on_change_language():
+    st.session_state["language"] = st.session_state["language_input"]
+
+
 def on_change_skip_empty_chart():
     st.session_state["skip_empty_chart"] = st.session_state["skip_empty_chart_input"]
+
+
+def rerun_chart_generation(chart_data: Dict[str, Any], language: str):
+    POLLING_INTERVAL = 0.5
+
+    chart_response = requests.post(
+        f"{os.getenv('WREN_AI_SERVICE_BASE_URL', 'http://localhost:5556')}/v1/charts",
+        json={
+            "query": chart_data["query"],
+            "sql": chart_data["sql"],
+            "data": chart_data["data"],
+            "remove_data_from_chart_schema": False,
+            "configurations": {
+                "language": language,
+            },
+        },
+    )
+
+    assert chart_response.status_code == 200
+    query_id = chart_response.json()["query_id"]
+    charts_status = None
+
+    while not charts_status or (
+        charts_status != "finished"
+        and charts_status != "failed"
+        and charts_status != "stopped"
+    ):
+        charts_status_response = requests.get(
+            f"{os.getenv('WREN_AI_SERVICE_BASE_URL', 'http://localhost:5556')}/v1/charts/{query_id}"
+        )
+        assert charts_status_response.status_code == 200
+        charts_status = charts_status_response.json()["status"]
+        time.sleep(POLLING_INTERVAL)
+
+    chart_generation_result = charts_status_response.json()
+    st.session_state["rerun_chart_data_results"][chart_data["url"]] = {
+        "reasoning": chart_generation_result["response"]["reasoning"],
+        "chart_type": chart_generation_result["response"]["chart_type"],
+        "chart_schema": chart_generation_result["response"]["chart_schema"],
+    }
 
 
 def load_more():
@@ -154,10 +199,14 @@ async def main():
         st.session_state["chart_types"] = set()
     if "llms" not in st.session_state:
         st.session_state["llms"] = set()
+    if "language" not in st.session_state:
+        st.session_state["language"] = "English"
     if "skip_empty_chart" not in st.session_state:
         st.session_state["skip_empty_chart"] = False
     if "release" not in st.session_state:
         st.session_state["release"] = ""
+    if "rerun_chart_data_results" not in st.session_state:
+        st.session_state["rerun_chart_data_results"] = {}
 
     if (
         not st.session_state["chart_traces"]
@@ -216,6 +265,26 @@ async def main():
         on_change=on_change_llms,
     )
 
+    available_languages = [
+        "English",
+        "Traditional Chinese",
+        "Simplified Chinese",
+        "Spanish",
+        "French",
+        "German",
+        "Portuguese",
+        "Russian",
+        "Japanese",
+        "Korean",
+    ]
+    st.selectbox(
+        "Select language",
+        index=available_languages.index(st.session_state["language"]),
+        options=available_languages,
+        key="language_input",
+        on_change=on_change_language,
+    )
+
     st.checkbox(
         "Skip empty chart",
         key="skip_empty_chart_input",
@@ -238,10 +307,25 @@ async def main():
     for i, row in enumerate(chart_data[: st.session_state["load_num"]]):
         st.markdown(f"## {i + 1}")
         col1, col2 = st.columns(2)
+        copied_row = row.copy()
         chart_schema = row["chart_schema"]
         del row["chart_schema"]
+        del row["data"]
+
+        rerun_chart_data_results = st.session_state["rerun_chart_data_results"].get(
+            row["url"]
+        )
         with col1:
             st.table(row)
+            st.button(
+                "Rerun Chart Generation",
+                key=f"rerun_chart_generation_{i}",
+                on_click=rerun_chart_generation,
+                kwargs={
+                    "chart_data": copied_row,
+                    "language": st.session_state["language"],
+                },
+            )
         with col2:
             if chart_schema:
                 st.markdown("### Vega-Lite Chart")
@@ -249,6 +333,23 @@ async def main():
                 st.json(chart_schema, expanded=False)
                 st.markdown("Chart")
                 st.vega_lite_chart(chart_schema, use_container_width=True)
+
+        if rerun_chart_data_results:
+            _col1, _col2 = st.columns(2)
+
+            rerun_chart_data_results = rerun_chart_data_results.copy()
+            if rerun_chart_schema := rerun_chart_data_results.get("chart_schema"):
+                rerun_chart_schema = rerun_chart_schema.copy()
+                del rerun_chart_data_results["chart_schema"]
+            with _col1:
+                st.table(rerun_chart_data_results)
+            with _col2:
+                if rerun_chart_schema:
+                    st.markdown("Chart Schema")
+                    st.json(rerun_chart_schema, expanded=False)
+                    st.markdown("Chart")
+                    st.vega_lite_chart(rerun_chart_schema, use_container_width=True)
+
         st.divider()
 
     st.button("Load More", on_click=load_more, use_container_width=True)
