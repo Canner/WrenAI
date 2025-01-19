@@ -1,11 +1,16 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from dotenv import load_dotenv
 from langfuse.api.client import AsyncFernLangfuse
-from langfuse.client import FetchTracesResponse, TraceWithDetails
+from langfuse.client import (
+    FetchObservationsResponse,
+    FetchTracesResponse,
+    ObservationsView,
+    TraceWithDetails,
+)
 
 load_dotenv("eval/llm_trace_analysis/.env", override=True)
 
@@ -86,3 +91,69 @@ def filter_traces(
     traces: List[TraceWithDetails], trace_names: List[str]
 ) -> List[TraceWithDetails]:
     return [trace for trace in traces if trace.name in trace_names]
+
+
+async def get_all_observations(
+    client: AsyncFernLangfuse,
+    name: Optional[str] = None,
+    type: Optional[Literal["GENERATION", "SPAN", "EVENT"]] = None,
+    from_start_time: Optional[datetime] = None,
+    to_start_time: Optional[datetime] = None,
+) -> List[ObservationsView]:
+    # Get first page to determine total pages
+    first_page = await client.observations.get_many(
+        name=name,
+        page=1,
+        type=type,
+        from_start_time=from_start_time,
+        to_start_time=to_start_time,
+    )
+
+    # Create tasks for all remaining pages
+    tasks = [
+        client.observations.get_many(
+            name=name,
+            page=page,
+            type=type,
+            from_start_time=from_start_time,
+            to_start_time=to_start_time,
+        )
+        for page in range(2, first_page.meta.total_pages + 1)
+    ]
+
+    # Gather all pages concurrently
+    all_responses = [first_page]
+    if tasks:  # Only gather if there are additional pages
+        all_responses.extend(await asyncio.gather(*tasks))
+
+    # Combine all traces
+    observations = []
+    for response in all_responses:
+        observations.extend(
+            FetchObservationsResponse(data=response.data, meta=response.meta).data
+        )
+
+    return observations
+
+
+async def main():
+    client = get_langfuse_client()
+    observations = await get_all_observations(
+        client,
+        name="generate_chart",
+        type="GENERATION",
+    )
+
+    print(observations[0])
+
+    observations = await get_all_observations(
+        client,
+        name="Chart Generation",
+        type="SPAN",
+    )
+
+    print(observations[0])
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
