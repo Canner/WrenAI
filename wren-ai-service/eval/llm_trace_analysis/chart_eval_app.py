@@ -43,6 +43,7 @@ def get_chart_data(
     chart_types: set[str] = set(),
     llms: set[str] = set(),
     skip_empty_chart: bool = False,
+    only_empty_chart: bool = False,
 ) -> List[Dict[str, Any]]:
     chart_data = []
     tz = pytz.timezone("Asia/Taipei")
@@ -61,6 +62,8 @@ def get_chart_data(
             if llms and chart_observation.output["meta"][0]["model"] not in llms:
                 continue
             if skip_empty_chart and not chart_output.get("chart_schema", ""):
+                continue
+            if only_empty_chart and chart_output.get("chart_schema", {}):
                 continue
             if release and release != str(
                 chart_trace_input["kwargs"]["service_metadata"]["service_version"]
@@ -113,6 +116,10 @@ def on_change_language():
 
 def on_change_skip_empty_chart():
     st.session_state["skip_empty_chart"] = st.session_state["skip_empty_chart_input"]
+
+
+def on_change_only_empty_chart():
+    st.session_state["only_empty_chart"] = st.session_state["only_empty_chart_input"]
 
 
 def rerun_chart_generation(chart_data: Dict[str, Any], language: str):
@@ -203,6 +210,8 @@ async def main():
         st.session_state["language"] = "English"
     if "skip_empty_chart" not in st.session_state:
         st.session_state["skip_empty_chart"] = False
+    if "only_empty_chart" not in st.session_state:
+        st.session_state["only_empty_chart"] = False
     if "release" not in st.session_state:
         st.session_state["release"] = ""
     if "rerun_chart_data_results" not in st.session_state:
@@ -290,6 +299,15 @@ async def main():
         key="skip_empty_chart_input",
         value=st.session_state["skip_empty_chart"],
         on_change=on_change_skip_empty_chart,
+        disabled=st.session_state["only_empty_chart"],
+    )
+
+    st.checkbox(
+        "Only empty chart",
+        key="only_empty_chart_input",
+        value=st.session_state["only_empty_chart"],
+        on_change=on_change_only_empty_chart,
+        disabled=st.session_state["skip_empty_chart"],
     )
 
     chart_data = get_chart_data(
@@ -301,6 +319,7 @@ async def main():
         chart_types=st.session_state["chart_types"],
         llms=st.session_state["llms"],
         skip_empty_chart=st.session_state["skip_empty_chart"],
+        only_empty_chart=st.session_state["only_empty_chart"],
     )
 
     st.markdown(f"Total number of chart data: {len(chart_data)}")
