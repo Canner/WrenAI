@@ -211,6 +211,7 @@ async def main():
         skip_empty_chart=st.session_state["skip_empty_chart"],
     )
 
+    st.markdown(f"Total number of chart data: {len(chart_data)}")
     for i, row in enumerate(chart_data[: st.session_state["load_num"]]):
         st.markdown(f"## {i + 1}")
         col1, col2 = st.columns(2)
