@@ -36,6 +36,7 @@ def get_chart_data(
     chart_traces: List[TraceWithDetails],
     chart_spans: List[ObservationsView],
     char_observations: List[ObservationsView],
+    release: str = "",
     project_id: str = "",
     chart_types: set[str] = set(),
     llms: set[str] = set(),
@@ -49,6 +50,7 @@ def get_chart_data(
     ):
         try:
             chart_output = orjson.loads(chart_observation.output["replies"][0])
+            chart_trace_input = orjson.loads(chart_trace.input)
 
             if project_id and project_id != str(chart_trace.metadata["project_id"]):
                 continue
@@ -57,6 +59,10 @@ def get_chart_data(
             if llms and chart_observation.output["meta"][0]["model"] not in llms:
                 continue
             if skip_empty_chart and not chart_output.get("chart_schema", ""):
+                continue
+            if release and release != str(
+                chart_trace_input["kwargs"]["service_metadata"]["service_version"]
+            ):
                 continue
 
             chart_data.append(
@@ -73,12 +79,19 @@ def get_chart_data(
                     "chart_type": chart_output.get("chart_type", ""),
                     "chart_schema": chart_output.get("chart_schema", ""),
                     "llm": chart_observation.output["meta"][0]["model"],
+                    "version": chart_trace_input["kwargs"]["service_metadata"][
+                        "service_version"
+                    ],
                 }
             )
         except Exception:
             continue
 
     return chart_data
+
+
+def on_change_release():
+    st.session_state["release"] = st.session_state["release_input"]
 
 
 def on_change_project_id():
@@ -143,6 +156,8 @@ async def main():
         st.session_state["llms"] = set()
     if "skip_empty_chart" not in st.session_state:
         st.session_state["skip_empty_chart"] = False
+    if "release" not in st.session_state:
+        st.session_state["release"] = ""
 
     if (
         not st.session_state["chart_traces"]
@@ -157,6 +172,13 @@ async def main():
         st.session_state["chart_traces"] = chart_traces
         st.session_state["chart_spans"] = chart_spans
         st.session_state["chart_observations"] = chart_observations
+
+    st.text_input(
+        "Enter release",
+        key="release_input",
+        value=st.session_state["release"],
+        on_change=on_change_release,
+    )
 
     st.text_input(
         "Enter project_id",
@@ -205,6 +227,7 @@ async def main():
         st.session_state["chart_traces"],
         st.session_state["chart_spans"],
         st.session_state["chart_observations"],
+        release=st.session_state["release"],
         project_id=st.session_state["project_id"],
         chart_types=st.session_state["chart_types"],
         llms=st.session_state["llms"],
