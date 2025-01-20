@@ -16,7 +16,7 @@ chart_generation_instructions = """
 
 - Chart types: Bar chart, Line chart, Multi line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
-- Generated chart should answer the user's question and based on the semantics of the SQL query, and the sample data is used to help you generate the suitable chart type
+- Generated chart should answer the user's question and based on the semantics of the SQL query, and the sample data, sample column values are used to help you generate the suitable chart type
 - If the sample data is not suitable for visualization, you must return an empty string for the schema and chart type
 - If the sample data is empty, you must return an empty string for the schema and chart type
 - The language for the chart and reasoning must be the same language provided by the user
