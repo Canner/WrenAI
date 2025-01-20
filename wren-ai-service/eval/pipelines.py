@@ -1,5 +1,4 @@
 import asyncio
-import os
 import re
 import sys
 from abc import abstractmethod
@@ -21,8 +20,6 @@ from eval.metrics import (
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
-    ExactMatchAccuracy,
-    ExecutionAccuracy,
     FaithfulnessMetric,
 )
 from eval.utils import (
@@ -207,7 +204,7 @@ class RetrievalPipeline(Eval):
     def mertics(engine_info: dict) -> dict:
         return {
             "metrics": [
-                ContextualRecallMetric(engine_info),
+                ContextualRecallMetric(engine_info=engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
             ]
@@ -266,14 +263,15 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(engine_config: dict, enable_semantics_comparison: bool) -> dict:
+    def mertics(engine_info: dict, enable_semantics_comparison: bool) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(engine_config, enable_semantics_comparison),
-                AnswerRelevancyMetric(engine_config),
-                FaithfulnessMetric(engine_config),
-                ExactMatchAccuracy(),
-                ExecutionAccuracy(),
+                AccuracyMetric(engine_info=engine_info, enable_semantics_comparison=enable_semantics_comparison),
+                AnswerRelevancyMetric(engine_info=engine_info),
+                FaithfulnessMetric(engine_info=engine_info),
+                # this is for spider dataset, rn we temporarily disable it
+                # ExactMatchAccuracy(),
+                # ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -343,19 +341,21 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(
-        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
-    ) -> dict:
+    def mertics(engine_info: dict, enable_semantics_comparison: bool) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(accuracy_config, enable_semantics_comparison),
-                AnswerRelevancyMetric(config),
-                FaithfulnessMetric(config),
-                ContextualRecallMetric(config),
+                AccuracyMetric(
+                    engine_info=engine_info,
+                    enable_semantics_comparison=enable_semantics_comparison,
+                ),
+                AnswerRelevancyMetric(engine_info=engine_info),
+                FaithfulnessMetric(engine_info=engine_info),
+                ContextualRecallMetric(engine_info=engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
-                ExactMatchAccuracy(),
-                ExecutionAccuracy(),
+                # this is for spider dataset, rn we temporarily disable it
+                # ExactMatchAccuracy(),
+                # ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
