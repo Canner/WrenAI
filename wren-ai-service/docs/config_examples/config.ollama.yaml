@@ -16,6 +16,7 @@ type: embedder
 provider: ollama_embedder
 models:
   - model: nomic-embed-text  # put your ollama embedder model name here
+    dimension: 768  # put your embedding model dimension here
 url: http://host.docker.internal:11434  # change this to your ollama host, url should be <ollama_url>
 timeout: 120
 

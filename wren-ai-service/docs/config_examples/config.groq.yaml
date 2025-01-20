@@ -17,6 +17,7 @@ type: embedder
 provider: openai_embedder
 models:
   - model: text-embedding-3-large  # put your openai compatible embedder model name here
+    dimension: 3072  # put your embedding model dimension here
 url: https://api.openai.com/v1  # change this according to your openai compatible embedder model
 timeout: 120
 
