@@ -162,8 +162,8 @@ def rerun_chart_generation(chart_data: Dict[str, Any], language: str):
     }
 
 
-def load_more():
-    st.session_state["load_num"] += 10
+def load_more(num: int):
+    st.session_state["load_num"] += num
 
 
 async def get_chart_traces_spans_and_observations():
@@ -371,7 +371,13 @@ async def main():
 
         st.divider()
 
-    st.button("Load More", on_click=load_more, use_container_width=True)
+    num = 10
+    st.button(
+        f"Load {num} more chart data",
+        on_click=load_more,
+        use_container_width=True,
+        kwargs={"num": num},
+    )
 
 
 if __name__ == "__main__":
