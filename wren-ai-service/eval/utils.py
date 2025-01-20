@@ -204,11 +204,13 @@ def trace_metadata(
     }
 
 
-def engine_config(mdl: dict) -> dict:
+def engine_config(mdl: dict, pipe_components: dict = {}) -> dict:
+    engine = pipe_components.get("sql_generation", {}).get("engine", {})
+
     return {
         "mdl_json": mdl,
-        "data_source": os.getenv("DATA_SOURCE"),
-        "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
+        "data_source": engine._source,
+        "api_endpoint": engine._endpoint,
         "timeout": 10,
     }
 

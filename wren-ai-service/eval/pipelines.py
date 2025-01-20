@@ -228,10 +228,12 @@ class GenerationPipeline(Eval):
             **pipe_components["sql_generation"],
         )
 
+        self._engine_info = engine_config(mdl, pipe_components)
+
     async def _flat(self, prediction: dict, actual: str) -> dict:
         prediction["actual_output"] = actual
         prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **engine_config(self._mdl)
+            sql=actual["sql"], **self._engine_info
         )
 
         return prediction
@@ -296,7 +298,6 @@ class AskPipeline(Eval):
         )
         deploy_model(mdl, _indexing)
 
-        self._mdl = mdl
         self._retrieval = retrieval.Retrieval(
             **pipe_components["db_schema_retrieval"],
             table_retrieval_size=settings.table_retrieval_size,
@@ -307,10 +308,12 @@ class AskPipeline(Eval):
             **pipe_components["sql_generation"],
         )
 
+        self._engine_info = engine_config(mdl, pipe_components)
+
     async def _flat(self, prediction: dict, actual: str) -> dict:
         prediction["actual_output"] = actual
         prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **engine_config(self._mdl)
+            sql=actual["sql"], **self._engine_info
         )
         return prediction
 

@@ -1,12 +1,10 @@
 import argparse
-import os
 import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-import dotenv
 from git import Repo
 from langfuse.decorators import langfuse_context
 from tomlkit import document, dumps
@@ -16,9 +14,8 @@ import eval.pipelines as pipelines
 import src.globals as globals
 import src.providers as provider
 import src.utils as utils
-from eval.utils import parse_toml
 from eval import EvalSettings
-from src.core.provider import EmbedderProvider, LLMProvider
+from eval.utils import parse_toml
 
 
 def generate_meta(
