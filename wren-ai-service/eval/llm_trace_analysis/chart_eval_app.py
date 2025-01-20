@@ -300,7 +300,7 @@ async def main():
         "Korean",
     ]
     st.selectbox(
-        "Select language",
+        "Select chart-rerun output language",
         index=available_languages.index(st.session_state["language"]),
         options=available_languages,
         key="language_input",
