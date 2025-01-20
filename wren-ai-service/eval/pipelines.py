@@ -204,10 +204,10 @@ class RetrievalPipeline(Eval):
         return [prediction, await self.flat(prediction.copy())]
 
     @staticmethod
-    def mertics(config: dict) -> dict:
+    def mertics(engine_info: dict) -> dict:
         return {
             "metrics": [
-                ContextualRecallMetric(config),
+                ContextualRecallMetric(engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
             ]
@@ -266,14 +266,12 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(
-        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
-    ) -> dict:
+    def mertics(engine_config: dict, enable_semantics_comparison: bool) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(accuracy_config, enable_semantics_comparison),
-                AnswerRelevancyMetric(config),
-                FaithfulnessMetric(config),
+                AccuracyMetric(engine_config, enable_semantics_comparison),
+                AnswerRelevancyMetric(engine_config),
+                FaithfulnessMetric(engine_config),
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
             ],
@@ -389,38 +387,14 @@ def init(
 
 
 def metrics_initiator(
-    pipeline: str, mdl: dict, enable_semantics_comparison: bool = True
+    pipeline: str,
+    engine_info: dict,
+    enable_semantics_comparison: bool = True,
 ) -> dict:
-    # todo: refactor configs
-    config = engine_config(mdl)
-    if os.getenv("DATA_SOURCE") == "bigquery":
-        accuracy_config = {
-            "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
-            "data_source": "bigquery",
-            "mdl_json": mdl,
-            "connection_info": {
-                "project_id": os.getenv("bigquery.project-id"),
-                "dataset_id": os.getenv("bigquery.dataset-id"),
-                "credentials": os.getenv("bigquery.credentials-key"),
-            },
-            "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
-            if os.getenv("WREN_IBIS_TIMEOUT")
-            else 10,
-            "limit": 10,
-        }
-
-    if os.getenv("DATA_SOURCE") == "duckdb":
-        accuracy_config = config
-        accuracy_config["connection_info"] = None
-
     match pipeline:
         case "retrieval":
-            return RetrievalPipeline.mertics(config)
+            return RetrievalPipeline.mertics(engine_info)
         case "generation":
-            return GenerationPipeline.mertics(
-                config, accuracy_config, enable_semantics_comparison
-            )
+            return GenerationPipeline.mertics(engine_info, enable_semantics_comparison)
         case "ask":
-            return AskPipeline.mertics(
-                config, accuracy_config, enable_semantics_comparison
-            )
+            return AskPipeline.mertics(engine_info, enable_semantics_comparison)

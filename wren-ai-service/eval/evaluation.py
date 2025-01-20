@@ -1,19 +1,11 @@
 import argparse
-import os
 import sys
 from pathlib import Path
 from typing import Tuple
 
-import dotenv
 from deepeval import evaluate
 from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
-from dspy_modules.prompt_optimizer import (
-    build_optimizing_module,
-    configure_llm_provider,
-    optimizer_parameters,
-    prepare_dataset,
-)
 from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
@@ -21,7 +13,9 @@ sys.path.append(f"{Path().parent.resolve()}")
 import traceback
 
 import eval.pipelines as pipelines
-from eval.utils import parse_toml, trace_metadata
+import src.providers as provider
+from eval import EvalSettings
+from eval.utils import engine_config, parse_toml, trace_metadata
 from src import utils
 
 
@@ -149,31 +143,33 @@ class Evaluator:
 if __name__ == "__main__":
     args = parse_args()
 
-    dotenv.load_dotenv()
-    utils.load_env_vars()
+    settings = EvalSettings()
+    pipe_components = provider.generate_components(settings.components)
+    utils.init_langfuse(settings)
 
     predicted_file = parse_toml(f"outputs/predictions/{args.file}")
     meta = predicted_file["meta"]
     predictions = predicted_file["predictions"]
 
     dataset = parse_toml(meta["evaluation_dataset"])
-    metrics = pipelines.metrics_initiator(
-        meta["pipeline"], dataset["mdl"], args.semantics
-    )
+    engine_info = engine_config(dataset["mdl"], pipe_components)
+    metrics = pipelines.metrics_initiator(meta["pipeline"], engine_info, args.semantics)
 
     evaluator = Evaluator(**metrics)
-    if args.training_dataset:
-        optimizer_parameters["evaluator"] = evaluator
-        optimizer_parameters["metrics"] = metrics
-        optimizer_parameters["meta"] = meta
-        optimizer_parameters["predictions"] = predictions
-        configure_llm_provider(
-            os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
-        )
-        trainset, devset = prepare_dataset(args.training_dataset)
-        build_optimizing_module(trainset)
-    else:
-        evaluator.eval(meta, predictions)
+    evaluator.eval(meta, predictions)
+    # if args.training_dataset:
+    #     # todo: for now comment dspy related code
+    #     optimizer_parameters["evaluator"] = evaluator
+    #     optimizer_parameters["metrics"] = metrics
+    #     optimizer_parameters["meta"] = meta
+    #     optimizer_parameters["predictions"] = predictions
+    #     configure_llm_provider(
+    #         os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
+    #     )
+    #     trainset, devset = prepare_dataset(args.training_dataset)
+    #     build_optimizing_module(trainset)
+    # else:
+    #     evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
 
