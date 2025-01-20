@@ -208,15 +208,15 @@ def engine_config(mdl: dict, pipe_components: dict = {}) -> dict:
     engine = pipe_components.get("sql_generation", {}).get("engine")
 
     if engine is None:
-        raise ValueError("Engine Definition not found in pipe_components for SQL Generation")
-
-    connection_info = orjson.loads(base64.b64decode(engine._connection_info))
+        raise ValueError(
+            "Engine Definition not found in pipe_components for SQL Generation"
+        )
 
     return {
         "mdl_json": mdl,
         "data_source": engine._source,
         "api_endpoint": engine._endpoint,
-        "connection_info": connection_info,
+        "connection_info": engine._connection_info,
         "timeout": 10,
     }
 
