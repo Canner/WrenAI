@@ -82,7 +82,7 @@ class Evaluator:
 
             try:
                 test_case = LLMTestCase(**formatter(prediction, meta))
-                result = evaluate([test_case], self._metrics, ignore_errors=True)[0]
+                result = evaluate([test_case], self._metrics, ignore_errors=True).test_results[0]
                 self._score_metrics(test_case, result)
                 [metric.collect(test_case, result) for metric in self._post_metrics]
             except Exception:
