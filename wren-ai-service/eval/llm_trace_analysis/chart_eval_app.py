@@ -162,8 +162,12 @@ def rerun_chart_generation(chart_data: Dict[str, Any], language: str):
     }
 
 
-def load_more(num: int):
-    st.session_state["load_num"] += num
+def load_last_chart_data(num: int):
+    st.session_state["load_num_start_idx"] -= num
+
+
+def load_next_chart_data(num: int):
+    st.session_state["load_num_start_idx"] += num
 
 
 async def get_chart_traces_spans_and_observations():
@@ -198,8 +202,8 @@ async def main():
         st.session_state["chart_spans"] = []
     if "chart_observations" not in st.session_state:
         st.session_state["chart_observations"] = []
-    if "load_num" not in st.session_state:
-        st.session_state["load_num"] = 10
+    if "load_num_start_idx" not in st.session_state:
+        st.session_state["load_num_start_idx"] = 0
     if "project_id" not in st.session_state:
         st.session_state["project_id"] = ""
     if "chart_types" not in st.session_state:
@@ -216,6 +220,8 @@ async def main():
         st.session_state["release"] = ""
     if "rerun_chart_data_results" not in st.session_state:
         st.session_state["rerun_chart_data_results"] = {}
+
+    LOAD_NUM = 10
 
     if (
         not st.session_state["chart_traces"]
@@ -323,8 +329,24 @@ async def main():
     )
 
     st.markdown(f"Total number of chart data: {len(chart_data)}")
-    for i, row in enumerate(chart_data[: st.session_state["load_num"]]):
-        st.markdown(f"## {i + 1}")
+
+    if st.session_state["load_num_start_idx"]:
+        st.button(
+            f"Load last {LOAD_NUM} chart data",
+            on_click=load_last_chart_data,
+            use_container_width=True,
+            kwargs={"num": LOAD_NUM},
+        )
+
+    for i, row in enumerate(
+        chart_data[
+            st.session_state["load_num_start_idx"] : st.session_state[
+                "load_num_start_idx"
+            ]
+            + LOAD_NUM
+        ]
+    ):
+        st.markdown(f"## {st.session_state['load_num_start_idx'] + i + 1}")
         col1, col2 = st.columns(2)
         copied_row = row.copy()
         chart_schema = row["chart_schema"]
@@ -371,12 +393,11 @@ async def main():
 
         st.divider()
 
-    num = 10
     st.button(
-        f"Load {num} more chart data",
-        on_click=load_more,
+        f"Load next {LOAD_NUM} chart data",
+        on_click=load_next_chart_data,
         use_container_width=True,
-        kwargs={"num": num},
+        kwargs={"num": LOAD_NUM},
     )
 
 
