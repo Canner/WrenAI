@@ -1,13 +1,19 @@
-from typing import Any, Dict, Literal
+import logging
+from typing import Any, Dict, Literal, Optional
 
+import orjson
 import pandas as pd
 from haystack import component
+from jsonschema import validate
+from jsonschema.exceptions import ValidationError
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("wren-ai-service")
+
 
 chart_generation_instructions = """
 ### INSTRUCTIONS ###
 
-- Please generate vega-lite schema using v5 version, which is https://vega.github.io/schema/vega-lite/v5.json
 - Chart types: Bar chart, Line chart, Multi line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
 - You can only use the chart types provided in the instructions
 - Generated chart should answer the user's question and based on the semantics of the SQL query, and the sample data is used to help you generate the suitable chart type
@@ -31,7 +37,7 @@ chart_generation_instructions = """
     - For daily question, the time unit should be "yearmonthdate".
     - Default time unit is "yearmonth".
 - For each axis, generate the corresponding human-readable title based on the language provided by the user.
-- Make sure all of the fields(x, y, xOffset, color, etc.) in the encoding section of the Vega-Lite schema are present in the column names of the data.
+- Make sure all of the fields(x, y, xOffset, color, etc.) in the encoding section of the chart schema are present in the column names of the data.
 
 ### GUIDELINES TO PLOT CHART ###
 
@@ -98,18 +104,16 @@ chart_generation_instructions = """
 ### EXAMPLES ###
 
 1. Bar Chart
-- Vega-Lite Spec:
+- Sample Data:
+ [
+    {"Region": "North", "Sales": 100},
+    {"Region": "South", "Sales": 200},
+    {"Region": "East", "Sales": 300},
+    {"Region": "West", "Sales": 400}
+]
+- Chart Schema:
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "data": {
-        "values": [
-            {"Region": "North", "Sales": 100},
-            {"Region": "South", "Sales": 200},
-            {"Region": "East", "Sales": 300},
-            {"Region": "West", "Sales": 400}
-        ]
-    },
     "mark": {"type": "bar"},
     "encoding": {
         "x": {"field": "Region", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
@@ -118,18 +122,16 @@ chart_generation_instructions = """
     }
 }
 2. Line Chart
-- Vega-Lite Spec:
+- Sample Data:
+[
+    {"Date": "2022-01-01", "Sales": 100},
+    {"Date": "2022-01-02", "Sales": 200},
+    {"Date": "2022-01-03", "Sales": 300},
+    {"Date": "2022-01-04", "Sales": 400}
+]
+- Chart Schema:
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "data": {
-        "values": [
-            {"Date": "2022-01-01", "Sales": 100},
-            {"Date": "2022-01-02", "Sales": 200},
-            {"Date": "2022-01-03", "Sales": 300},
-            {"Date": "2022-01-04", "Sales": 400}
-        ]
-    },
     "mark": {"type": "line"},
     "encoding": {
         "x": {"field": "Date", "type": "temporal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
@@ -137,18 +139,16 @@ chart_generation_instructions = """
     }
 }
 3. Pie Chart
-- Vega-Lite Spec:
+- Sample Data:
+[
+    {"Company": "Company A", "Market Share": 0.4},
+    {"Company": "Company B", "Market Share": 0.3},
+    {"Company": "Company C", "Market Share": 0.2},
+    {"Company": "Company D", "Market Share": 0.1}
+]
+- Chart Schema:
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "data": {
-        "values": [
-            {"Company": "Company A", "Market Share": 0.4},
-            {"Company": "Company B", "Market Share": 0.3},
-            {"Company": "Company C", "Market Share": 0.2},
-            {"Company": "Company D", "Market Share": 0.1}
-        ]
-    },
     "mark": {"type": "arc"},
     "encoding": {
         "theta": {"field": "Market Share", "type": "quantitative"},
@@ -156,18 +156,16 @@ chart_generation_instructions = """
     }
 }
 4. Area Chart
-- Vega-Lite Spec:
+- Sample Data:
+[
+    {"Date": "2022-01-01", "Sales": 100},
+    {"Date": "2022-01-02", "Sales": 200},
+    {"Date": "2022-01-03", "Sales": 300},
+    {"Date": "2022-01-04", "Sales": 400}
+]
+- Chart Schema:
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
-    "data": {
-        "values": [
-            {"Date": "2022-01-01", "Sales": 100},
-            {"Date": "2022-01-02", "Sales": 200},
-            {"Date": "2022-01-03", "Sales": 300},
-            {"Date": "2022-01-04", "Sales": 400}
-        ]
-    },
     "mark": {"type": "area"},
     "encoding": {
         "x": {"field": "Date", "type": "temporal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
@@ -175,22 +173,20 @@ chart_generation_instructions = """
     }
 }
 5. Stacked Bar Chart
-- Vega-Lite Spec:
+- Sample Data:
+[
+    {"Region": "North", "Product": "A", "Sales": 100},
+    {"Region": "North", "Product": "B", "Sales": 150},
+    {"Region": "South", "Product": "A", "Sales": 200},
+    {"Region": "South", "Product": "B", "Sales": 250},
+    {"Region": "East", "Product": "A", "Sales": 300},
+    {"Region": "East", "Product": "B", "Sales": 350},
+    {"Region": "West", "Product": "A", "Sales": 400},
+    {"Region": "West", "Product": "B", "Sales": 450}
+]
+- Chart Schema:
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
-    "data": {
-        "values": [
-            {"Region": "North", "Product": "A", "Sales": 100},
-            {"Region": "North", "Product": "B", "Sales": 150},
-            {"Region": "South", "Product": "A", "Sales": 200},
-            {"Region": "South", "Product": "B", "Sales": 250},
-            {"Region": "East", "Product": "A", "Sales": 300},
-            {"Region": "East", "Product": "B", "Sales": 350},
-            {"Region": "West", "Product": "A", "Sales": 400},
-            {"Region": "West", "Product": "B", "Sales": 450}
-        ]
-    },
     "mark": {"type": "bar"},
     "encoding": {
         "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
@@ -199,22 +195,20 @@ chart_generation_instructions = """
     }
 }
 6. Grouped Bar Chart
-- Vega-Lite Spec:
+- Sample Data:
+[
+    {"Region": "North", "Product": "A", "Sales": 100},
+    {"Region": "North", "Product": "B", "Sales": 150},
+    {"Region": "South", "Product": "A", "Sales": 200},
+    {"Region": "South", "Product": "B", "Sales": 250},
+    {"Region": "East", "Product": "A", "Sales": 300},
+    {"Region": "East", "Product": "B", "Sales": 350},
+    {"Region": "West", "Product": "A", "Sales": 400},
+    {"Region": "West", "Product": "B", "Sales": 450}
+]
+- Chart Schema:
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
-    "data": {
-        "values": [
-            {"Region": "North", "Product": "A", "Sales": 100},
-            {"Region": "North", "Product": "B", "Sales": 150},
-            {"Region": "South", "Product": "A", "Sales": 200},
-            {"Region": "South", "Product": "B", "Sales": 250},
-            {"Region": "East", "Product": "A", "Sales": 300},
-            {"Region": "East", "Product": "B", "Sales": 350},
-            {"Region": "West", "Product": "A", "Sales": 400},
-            {"Region": "West", "Product": "B", "Sales": 450}
-        ]
-    },
     "mark": {"type": "bar"},
     "encoding": {
         "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
@@ -224,18 +218,16 @@ chart_generation_instructions = """
     }
 }
 7. Multi Line Chart
-- Vega-Lite Spec:
+- Sample Data:
+[
+    {"Date": "2022-01-01", "readCount": 100, "clickCount": 10},
+    {"Date": "2022-01-02", "readCount": 200, "clickCount": 30},
+    {"Date": "2022-01-03", "readCount": 300, "clickCount": 20},
+    {"Date": "2022-01-04", "readCount": 400, "clickCount": 40}
+]
+- Chart Schema:
 {
-    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "data": {
-        "values": [
-            {"Date": "2022-01-01", "readCount": 100, "clickCount": 10},
-            {"Date": "2022-01-02", "readCount": 200, "clickCount": 30},
-            {"Date": "2022-01-03", "readCount": 300, "clickCount": 20},
-            {"Date": "2022-01-04", "readCount": 400, "clickCount": 40}
-        ]
-    },
     "mark": {"type": "line"},
     "transform": [
         {
@@ -255,9 +247,15 @@ chart_generation_instructions = """
 @component
 class ChartDataPreprocessor:
     @component.output_types(
-        sample_data=Dict[str, Any],
+        sample_data=list[dict],
+        sample_column_values=dict[str, Any],
     )
-    def run(self, data: Dict[str, Any], sample_data_count: int = 3):
+    def run(
+        self,
+        data: Dict[str, Any],
+        sample_data_count: int = 30,
+        sample_column_size: int = 5,
+    ):
         columns = [
             column.get("name", "") if isinstance(column, dict) else column
             for column in data.get("columns", [])
@@ -265,6 +263,9 @@ class ChartDataPreprocessor:
         data = data.get("data", [])
 
         df = pd.DataFrame(data, columns=columns)
+        sample_column_values = {
+            col: list(df[col].unique())[:sample_column_size] for col in df.columns
+        }
 
         if len(df) > sample_data_count:
             sample_data = df.sample(n=sample_data_count).to_dict(orient="records")
@@ -273,7 +274,76 @@ class ChartDataPreprocessor:
 
         return {
             "sample_data": sample_data,
+            "sample_column_values": sample_column_values,
         }
+
+
+@component
+class ChartGenerationPostProcessor:
+    @component.output_types(
+        results=Dict[str, Any],
+    )
+    def run(
+        self,
+        replies: str,
+        vega_schema: Dict[str, Any],
+        sample_data: list[dict],
+        remove_data_from_chart_schema: Optional[bool] = True,
+    ):
+        try:
+            generation_result = orjson.loads(replies[0])
+            reasoning = generation_result.get("reasoning", "")
+            chart_type = generation_result.get("chart_type", "")
+            if chart_schema := generation_result.get("chart_schema", {}):
+                # sometimes the chart_schema is still in string format
+                if isinstance(chart_schema, str):
+                    chart_schema = orjson.loads(chart_schema)
+
+                chart_schema[
+                    "$schema"
+                ] = "https://vega.github.io/schema/vega-lite/v5.json"
+                chart_schema["data"] = {"values": sample_data}
+
+                validate(chart_schema, schema=vega_schema)
+
+                if remove_data_from_chart_schema:
+                    chart_schema["data"]["values"] = []
+
+                return {
+                    "results": {
+                        "chart_schema": chart_schema,
+                        "reasoning": reasoning,
+                        "chart_type": chart_type,
+                    }
+                }
+
+            return {
+                "results": {
+                    "chart_schema": {},
+                    "reasoning": reasoning,
+                    "chart_type": chart_type,
+                }
+            }
+        except ValidationError as e:
+            logger.exception(f"Vega-lite schema is not valid: {e}")
+
+            return {
+                "results": {
+                    "chart_schema": {},
+                    "reasoning": "",
+                    "chart_type": "",
+                }
+            }
+        except Exception as e:
+            logger.exception(f"JSON deserialization failed: {e}")
+
+            return {
+                "results": {
+                    "chart_schema": {},
+                    "reasoning": "",
+                    "chart_type": "",
+                }
+            }
 
 
 class ChartSchema(BaseModel):
@@ -281,18 +351,14 @@ class ChartSchema(BaseModel):
         type: Literal["bar", "line", "area", "arc"]
 
     class ChartData(BaseModel):
-        values: list[dict]
+        values: list[dict] = []
 
     class ChartEncoding(BaseModel):
         field: str
         type: Literal["ordinal", "quantitative", "nominal"]
         title: str
 
-    chart_schema: str = Field(
-        alias="$schema", default="https://vega.github.io/schema/vega-lite/v5.json"
-    )
     title: str
-    data: ChartData
     mark: ChartType
     encoding: ChartEncoding
 

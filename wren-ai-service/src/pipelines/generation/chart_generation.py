@@ -5,16 +5,14 @@ from typing import Any, Dict, Optional
 import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
+    ChartGenerationPostProcessor,
     ChartGenerationResults,
     chart_generation_instructions,
 )
@@ -51,74 +49,12 @@ Please think step by step
 """
 
 
-@component
-class ChartGenerationPostProcessor:
-    @component.output_types(
-        results=Dict[str, Any],
-    )
-    def run(
-        self,
-        replies: str,
-        vega_schema: Dict[str, Any],
-        remove_data_from_chart_schema: bool,
-    ):
-        try:
-            generation_result = orjson.loads(replies[0])
-            reasoning = generation_result.get("reasoning", "")
-            chart_type = generation_result.get("chart_type", "")
-            if chart_schema := generation_result.get("chart_schema", {}):
-                # sometimes the chart_schema is still in string format
-                if isinstance(chart_schema, str):
-                    chart_schema = orjson.loads(chart_schema)
-
-                validate(chart_schema, schema=vega_schema)
-
-                if remove_data_from_chart_schema:
-                    chart_schema["data"]["values"] = []
-
-                return {
-                    "results": {
-                        "chart_schema": chart_schema,
-                        "reasoning": reasoning,
-                        "chart_type": chart_type,
-                    }
-                }
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": reasoning,
-                    "chart_type": chart_type,
-                }
-            }
-        except ValidationError as e:
-            logger.exception(f"Vega-lite schema is not valid: {e}")
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": "",
-                    "chart_type": "",
-                }
-            }
-        except Exception as e:
-            logger.exception(f"JSON deserialization failed: {e}")
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": "",
-                    "chart_type": "",
-                }
-            }
-
-
 ## Start of Pipeline
 @observe(capture_input=False)
 def preprocess_data(
     data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
 ) -> dict:
-    return chart_data_preprocessor.run(data)["sample_data"]
+    return chart_data_preprocessor.run(data)
 
 
 @observe(capture_input=False)
@@ -129,10 +65,14 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    sample_data = preprocess_data.get("sample_data")
+    sample_column_values = preprocess_data.get("sample_column_values")
+
     return prompt_builder.run(
         query=query,
         sql=sql,
-        sample_data=preprocess_data,
+        sample_data=sample_data,
+        sample_column_values=sample_column_values,
         language=language,
     )
 
@@ -147,10 +87,14 @@ def post_process(
     generate_chart: dict,
     vega_schema: Dict[str, Any],
     remove_data_from_chart_schema: bool,
+    preprocess_data: dict,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
-        generate_chart.get("replies"), vega_schema, remove_data_from_chart_schema
+        generate_chart.get("replies"),
+        vega_schema,
+        preprocess_data["sample_data"],
+        remove_data_from_chart_schema,
     )
 
 

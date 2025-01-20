@@ -5,22 +5,21 @@ from typing import Any, Dict
 import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
+    ChartGenerationPostProcessor,
     ChartGenerationResults,
     chart_generation_instructions,
 )
 from src.web.v1.services.chart_adjustment import ChartAdjustmentOption
 
 logger = logging.getLogger("wren-ai-service")
+
 
 chart_adjustment_system_prompt = f"""
 ### TASK ###
@@ -75,70 +74,12 @@ Please think step by step
 """
 
 
-@component
-class ChartAdjustmentPostProcessor:
-    @component.output_types(
-        results=Dict[str, Any],
-    )
-    def run(
-        self,
-        replies: str,
-        vega_schema: Dict[str, Any],
-    ):
-        try:
-            generation_result = orjson.loads(replies[0])
-            reasoning = generation_result.get("reasoning", "")
-            chart_type = generation_result.get("chart_type", "")
-            if chart_schema := generation_result.get("chart_schema", {}):
-                # sometimes the chart_schema is still in string format
-                if isinstance(chart_schema, str):
-                    chart_schema = orjson.loads(chart_schema)
-
-                validate(chart_schema, schema=vega_schema)
-                chart_schema["data"]["values"] = []
-                return {
-                    "results": {
-                        "chart_schema": chart_schema,
-                        "reasoning": reasoning,
-                        "chart_type": chart_type,
-                    }
-                }
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": reasoning,
-                    "chart_type": chart_type,
-                }
-            }
-        except ValidationError as e:
-            logger.exception(f"Vega-lite schema is not valid: {e}")
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": "",
-                    "chart_type": "",
-                }
-            }
-        except Exception as e:
-            logger.exception(f"JSON deserialization failed: {e}")
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": "",
-                    "chart_type": "",
-                }
-            }
-
-
 ## Start of Pipeline
 @observe(capture_input=False)
 def preprocess_data(
     data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
 ) -> dict:
-    return chart_data_preprocessor.run(data)["sample_data"]
+    return chart_data_preprocessor.run(data)
 
 
 @observe(capture_input=False)
@@ -151,12 +92,16 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    sample_data = preprocess_data.get("sample_data")
+    sample_column_values = preprocess_data.get("sample_column_values")
+
     return prompt_builder.run(
         query=query,
         sql=sql,
         adjustment_option=adjustment_option,
         chart_schema=chart_schema,
-        sample_data=preprocess_data,
+        sample_data=sample_data,
+        sample_column_values=sample_column_values,
         language=language,
     )
 
@@ -170,9 +115,15 @@ async def generate_chart_adjustment(prompt: dict, generator: Any) -> dict:
 def post_process(
     generate_chart_adjustment: dict,
     vega_schema: Dict[str, Any],
-    post_processor: ChartAdjustmentPostProcessor,
+    preprocess_data: dict,
+    post_processor: ChartGenerationPostProcessor,
 ) -> dict:
-    return post_processor.run(generate_chart_adjustment.get("replies"), vega_schema)
+    return post_processor.run(
+        generate_chart_adjustment.get("replies"),
+        vega_schema,
+        preprocess_data["sample_data"],
+        remove_data_from_chart_schema=False,
+    )
 
 
 ## End of Pipeline
@@ -202,7 +153,7 @@ class ChartAdjustment(BasicPipeline):
                 generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
-            "post_processor": ChartAdjustmentPostProcessor(),
+            "post_processor": ChartGenerationPostProcessor(),
         }
 
         with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
@@ -226,6 +177,7 @@ class ChartAdjustment(BasicPipeline):
         language: str,
     ) -> dict:
         logger.info("Chart Adjustment pipeline is running...")
+
         return await self._pipe.execute(
             ["post_process"],
             inputs={
@@ -251,6 +203,6 @@ if __name__ == "__main__":
         sql="",
         adjustment_option=ChartAdjustmentOption(),
         chart_schema={},
-        data={},
+        # data={},
         language="English",
     )
