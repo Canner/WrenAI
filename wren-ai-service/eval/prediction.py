@@ -11,7 +11,6 @@ from tomlkit import document, dumps
 
 sys.path.append(f"{Path().parent.resolve()}")
 import eval.pipelines as pipelines
-import src.globals as globals
 import src.providers as provider
 import src.utils as utils
 from eval import EvalSettings
@@ -105,7 +104,6 @@ if __name__ == "__main__":
     settings = EvalSettings()
     # todo: handle duckdb as datasource
     pipe_components = provider.generate_components(settings.components)
-    container = globals.create_service_container(pipe_components, settings)
     utils.init_langfuse(settings)
 
     dataset = parse_toml(path)
