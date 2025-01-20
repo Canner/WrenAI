@@ -39,11 +39,11 @@
 
 ## 🕶 Try it yourself!
 
-#### GenBI (Generative Business Intelligence)
+### GenBI (Generative Business Intelligence)
 
 https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b
 
-#### Ask any questions
+### Ask any questions
 
 https://github.com/user-attachments/assets/e4e78006-0088-4094-b58f-8868689bf787
 
