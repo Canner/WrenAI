@@ -1,6 +1,6 @@
 {
   "name": "wren-ui",
-  "version": "0.19.1",
+  "version": "0.19.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
