@@ -6,6 +6,7 @@ class EvalSettings(Settings):
     batch_size: int = 4
     batch_interval: int = 1
     datasource: str = "bigquery"
+    config_path: str = "eval/config.yaml"
 
     @property
     def langfuse_url(self) -> str:
