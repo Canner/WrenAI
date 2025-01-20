@@ -123,7 +123,6 @@ def post_process(
         generate_chart_adjustment.get("replies"),
         vega_schema,
         preprocess_data["sample_data"],
-        remove_data_from_chart_schema=False,
     )
 
 
