@@ -253,7 +253,7 @@ class ChartDataPreprocessor:
     def run(
         self,
         data: Dict[str, Any],
-        sample_data_count: int = 30,
+        sample_data_count: int = 15,
         sample_column_size: int = 5,
     ):
         columns = [

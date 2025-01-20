@@ -22,8 +22,8 @@ logger = logging.getLogger("wren-ai-service")
 chart_generation_system_prompt = f"""
 ### TASK ###
 
-You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL and data, you need to generate vega-lite schema in JSON and provide suitable chart type.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL and data.
+You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to generate vega-lite schema in JSON and provide suitable chart type.
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
 
 {chart_generation_instructions}
 
@@ -43,6 +43,7 @@ chart_generation_user_prompt_template = """
 Question: {{ query }}
 SQL: {{ sql }}
 Sample Data: {{ sample_data }}
+Sample Column Values: {{ sample_column_values }}
 Language: {{ language }}
 
 Please think step by step
