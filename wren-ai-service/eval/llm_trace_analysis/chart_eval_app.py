@@ -96,30 +96,37 @@ def get_chart_data(
 
 def on_change_release():
     st.session_state["release"] = st.session_state["release_input"]
+    st.session_state["load_num_start_idx"] = 0
 
 
 def on_change_project_id():
     st.session_state["project_id"] = st.session_state["project_id_input"]
+    st.session_state["load_num_start_idx"] = 0
 
 
 def on_change_chart_types():
     st.session_state["chart_types"] = set(st.session_state["chart_types_input"])
+    st.session_state["load_num_start_idx"] = 0
 
 
 def on_change_llms():
     st.session_state["llms"] = set(st.session_state["llms_input"])
+    st.session_state["load_num_start_idx"] = 0
 
 
 def on_change_language():
     st.session_state["language"] = st.session_state["language_input"]
+    st.session_state["load_num_start_idx"] = 0
 
 
 def on_change_skip_empty_chart():
     st.session_state["skip_empty_chart"] = st.session_state["skip_empty_chart_input"]
+    st.session_state["load_num_start_idx"] = 0
 
 
 def on_change_only_empty_chart():
     st.session_state["only_empty_chart"] = st.session_state["only_empty_chart_input"]
+    st.session_state["load_num_start_idx"] = 0
 
 
 def rerun_chart_generation(chart_data: Dict[str, Any], language: str):
