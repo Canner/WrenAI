@@ -392,12 +392,13 @@ async def main():
 
         st.divider()
 
-    st.button(
-        f"Load next {LOAD_NUM} chart data",
-        on_click=load_next_chart_data,
-        use_container_width=True,
-        kwargs={"num": LOAD_NUM},
-    )
+    if st.session_state["load_num_start_idx"] + LOAD_NUM < len(chart_data):
+        st.button(
+            f"Load next {LOAD_NUM} chart data",
+            on_click=load_next_chart_data,
+            use_container_width=True,
+            kwargs={"num": LOAD_NUM},
+        )
 
 
 if __name__ == "__main__":
