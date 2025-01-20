@@ -353,9 +353,6 @@ async def main():
         del row["chart_schema"]
         del row["data"]
 
-        rerun_chart_data_results = st.session_state["rerun_chart_data_results"].get(
-            row["url"]
-        )
         with col1:
             st.table(row)
             st.button(
@@ -375,17 +372,19 @@ async def main():
                 st.markdown("Chart")
                 st.vega_lite_chart(chart_schema, use_container_width=True)
 
-        if rerun_chart_data_results:
+        if rerun_chart_data_results := st.session_state["rerun_chart_data_results"].get(
+            row["url"]
+        ):
             _col1, _col2 = st.columns(2)
 
-            rerun_chart_data_results = rerun_chart_data_results.copy()
-            if rerun_chart_schema := rerun_chart_data_results.get("chart_schema"):
-                rerun_chart_schema = rerun_chart_schema.copy()
-                del rerun_chart_data_results["chart_schema"]
+            _rerun_chart_data_results = rerun_chart_data_results.copy()
+            if "chart_schema" in _rerun_chart_data_results:
+                del _rerun_chart_data_results["chart_schema"]
+
             with _col1:
-                st.table(rerun_chart_data_results)
+                st.table(_rerun_chart_data_results)
             with _col2:
-                if rerun_chart_schema:
+                if rerun_chart_schema := rerun_chart_data_results.get("chart_schema"):
                     st.markdown("Chart Schema")
                     st.json(rerun_chart_schema, expanded=False)
                     st.markdown("Chart")
