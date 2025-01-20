@@ -1,7 +1,7 @@
 import asyncio
 import os
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import orjson
 import pytz
@@ -16,11 +16,11 @@ from utils import (
 )
 
 
-def match(
+def match_traces_spans_observations(
     traces: List[TraceWithDetails],
     observations: List[ObservationsView],
     spans: List[TraceWithDetails],
-) -> List[ObservationsView]:
+) -> Tuple[List[TraceWithDetails], List[TraceWithDetails], List[ObservationsView]]:
     filtered_traces = []
     filtered_spans = []
     _id = 0
@@ -37,7 +37,7 @@ def match(
 def get_chart_data(
     chart_traces: List[TraceWithDetails],
     chart_spans: List[ObservationsView],
-    char_observations: List[ObservationsView],
+    chart_observations: List[ObservationsView],
     release: str = "",
     project_id: str = "",
     chart_types: set[str] = set(),
@@ -49,7 +49,7 @@ def get_chart_data(
     tz = pytz.timezone("Asia/Taipei")
 
     for chart_trace, chart_span, chart_observation in zip(
-        *match(chart_traces, char_observations, chart_spans)
+        *match_traces_spans_observations(chart_traces, chart_observations, chart_spans)
     ):
         try:
             chart_output = orjson.loads(chart_observation.output["replies"][0])
