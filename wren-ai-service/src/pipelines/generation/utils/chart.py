@@ -350,9 +350,6 @@ class ChartSchema(BaseModel):
     class ChartType(BaseModel):
         type: Literal["bar", "line", "area", "arc"]
 
-    class ChartData(BaseModel):
-        values: list[dict] = []
-
     class ChartEncoding(BaseModel):
         field: str
         type: Literal["ordinal", "quantitative", "nominal"]
