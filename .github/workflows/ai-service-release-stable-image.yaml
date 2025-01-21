@@ -81,8 +81,6 @@ jobs:
           git push origin "release/ai-service/$version"
   build-image:
     needs: upgrade-ai-service-version
-    outputs:
-      tag_name: latest
     strategy:
       fail-fast: false
       matrix:
@@ -147,7 +145,8 @@ jobs:
         with:
           images: ${{ env.WREN_AI_SERVICE_IMAGE }}
           tags: |
-            ${{ needs.build-image.outputs.tag_name }}
+            type=raw,${{ github.event.inputs.version }}
+            type=raw,latest
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
