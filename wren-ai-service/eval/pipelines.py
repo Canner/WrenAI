@@ -219,7 +219,7 @@ class GenerationPipeline(Eval):
         pipe_components: dict,
         **kwargs,
     ):
-        super().__init__(meta, 3)
+        super().__init__(meta)
         self._mdl = mdl
         self._generation = generation.SQLGeneration(
             **pipe_components["sql_generation"],
@@ -286,7 +286,7 @@ class AskPipeline(Eval):
         settings: EvalSettings,
         **kwargs,
     ):
-        super().__init__(meta, 3)
+        super().__init__(meta)
 
         _indexing = indexing.DBSchema(
             **pipe_components["db_schema_indexing"],
