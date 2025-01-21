@@ -163,7 +163,7 @@ async def get_contexts_from_sql(
 
         async with aiohttp.request(
             "GET",
-            f"{api_endpoint}/v1/analysis/sql",
+            f"{api_endpoint}/v2/analysis/sql",
             json={
                 "sql": quoted_sql,
                 "manifest": mdl_json,
