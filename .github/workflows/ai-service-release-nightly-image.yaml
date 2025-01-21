@@ -2,9 +2,9 @@ name: AI Service Release nightly image
 
 on:
   push:
-    branches: [main, chore/fix-stable-release]
-    # paths:
-    #   - 'wren-ai-service/**'
+    branches: [main]
+    paths:
+      - 'wren-ai-service/**'
 
 env:
   WREN_AI_SERVICE_IMAGE: ghcr.io/canner/wren-ai-service
