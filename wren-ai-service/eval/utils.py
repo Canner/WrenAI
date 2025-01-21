@@ -161,12 +161,14 @@ async def get_contexts_from_sql(
         quoted_sql, no_error = add_quotes(sql)
         assert no_error, f"Error in quoting SQL: {sql}"
 
+        manifest_str = base64.b64encode(orjson.dumps(mdl_json)).decode()
+
         async with aiohttp.request(
             "GET",
-            f"{api_endpoint}/v1/analysis/sql",
+            f"{api_endpoint}/v2/analysis/sql",
             json={
                 "sql": quoted_sql,
-                "manifest": mdl_json,
+                "manifestStr": manifest_str,
             },
             timeout=aiohttp.ClientTimeout(total=timeout),
         ) as response:

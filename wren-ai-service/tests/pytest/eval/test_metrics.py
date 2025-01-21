@@ -47,7 +47,7 @@ def mocker():
 def _success_analysis_sql(m, engine_config, repeat=1):
     for _ in range(repeat):
         m.get(
-            f"{engine_config['api_endpoint']}/v1/analysis/sql",
+            f"{engine_config['api_endpoint']}/v2/analysis/sql",
             payload=[
                 {
                     "selectItems": [
