@@ -27,6 +27,7 @@ wren-ai-service/demo/custom_dataset
 wren-ai-service/demo/.env
 wren-ai-service/tools/dev/etc/**
 .deepeval-cache.json
+.deepeval_telemtry.txt
 docker/config.yaml
 
 # python
