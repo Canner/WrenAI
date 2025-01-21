@@ -79,7 +79,7 @@ def obtain_commit_hash() -> str:
     return f"{repo.head.commit}@{branch.name}"
 
 
-def parse_args() -> Tuple[str]:
+def parse_args() -> Tuple[str, str]:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--file",

@@ -204,12 +204,12 @@ def trace_metadata(
     }
 
 
-def engine_config(mdl: dict, pipe_components: dict = {}) -> dict:
+def engine_config(mdl: dict, pipe_components: dict[str, Any] = {}) -> dict:
     engine = pipe_components.get("sql_generation", {}).get("engine")
 
     if engine is None:
         raise ValueError(
-            "Engine Definition not found in pipe_components for SQL Generation"
+            "SQL Generation engine not found in pipe_components. Ensure 'sql_generation' key exists and contains 'engine' configuration."
         )
 
     return {

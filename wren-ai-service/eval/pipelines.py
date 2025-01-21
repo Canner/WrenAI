@@ -201,7 +201,7 @@ class RetrievalPipeline(Eval):
         return [prediction, await self.flat(prediction.copy())]
 
     @staticmethod
-    def mertics(engine_info: dict) -> dict:
+    def metrics(engine_info: dict) -> dict:
         return {
             "metrics": [
                 ContextualRecallMetric(engine_info=engine_info),
@@ -263,7 +263,7 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(engine_info: dict, enable_semantics_comparison: bool) -> dict:
+    def metrics(engine_info: dict, enable_semantics_comparison: bool) -> dict:
         return {
             "metrics": [
                 AccuracyMetric(engine_info=engine_info, enable_semantics_comparison=enable_semantics_comparison),
@@ -341,7 +341,7 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(engine_info: dict, enable_semantics_comparison: bool) -> dict:
+    def metrics(engine_info: dict, enable_semantics_comparison: bool) -> dict:
         return {
             "metrics": [
                 AccuracyMetric(
@@ -393,8 +393,8 @@ def metrics_initiator(
 ) -> dict:
     match pipeline:
         case "retrieval":
-            return RetrievalPipeline.mertics(engine_info)
+            return RetrievalPipeline.metrics(engine_info)
         case "generation":
-            return GenerationPipeline.mertics(engine_info, enable_semantics_comparison)
+            return GenerationPipeline.metrics(engine_info, enable_semantics_comparison)
         case "ask":
-            return AskPipeline.mertics(engine_info, enable_semantics_comparison)
+            return AskPipeline.metrics(engine_info, enable_semantics_comparison)
