@@ -133,10 +133,12 @@ class ChartAdjustmentService:
                 status="fetching"
             )
 
-            sql_data = await self._pipelines["sql_executor"].run(
-                sql=chart_adjustment_request.sql,
-                project_id=chart_adjustment_request.project_id,
-            )
+            sql_data = (
+                await self._pipelines["sql_executor"].run(
+                    sql=chart_adjustment_request.sql,
+                    project_id=chart_adjustment_request.project_id,
+                )
+            )["execute_sql"]["results"]
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
                 status="generating"
@@ -147,7 +149,7 @@ class ChartAdjustmentService:
                 sql=chart_adjustment_request.sql,
                 adjustment_option=chart_adjustment_request.adjustment_option,
                 chart_schema=chart_adjustment_request.chart_schema,
-                data=sql_data["execute_sql"],
+                data=sql_data,
                 language=chart_adjustment_request.configurations.language,
             )
             chart_result = chart_adjustment_result["post_process"]["results"]
