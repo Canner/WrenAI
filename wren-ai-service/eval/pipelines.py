@@ -2,14 +2,35 @@ import asyncio
 import os
 import re
 import sys
+import uuid
 from abc import abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Literal
 
 import orjson
+import json
 from haystack import Document
 from langfuse.decorators import langfuse_context, observe
 from tqdm.asyncio import tqdm_asyncio
+from src.config import settings
+from src.providers import generate_components
+from src.web.v1.services.semantics_preparation import (
+    SemanticsPreparationRequest,
+    SemanticsPreparationService,
+)
+from src.web.v1.services.ask import (
+    AskRequest,
+    AskResultRequest,
+    AskResultResponse,
+    AskService,
+)
+from src.pipelines.generation import (
+    data_assistance,
+    intent_classification,
+    sql_correction,
+    sql_generation,
+)
+from src.pipelines.retrieval import historical_question, retrieval
 
 sys.path.append(f"{Path().parent.resolve()}")
 
@@ -32,15 +53,15 @@ from eval.utils import (
 from src.core.engine import Engine
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.generation import sql_generation
-from src.pipelines.indexing import indexing
 from src.pipelines.retrieval import retrieval
+from src.pipelines import indexing
 
 
-def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
-    async def wrapper():
-        await pipe.run(orjson.dumps(mdl).decode())
+# def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
+#     async def wrapper():
+#         await pipe.run(orjson.dumps(mdl).decode())
 
-    asyncio.run(wrapper())
+#     asyncio.run(wrapper())
 
 
 def extract_units(docs: list) -> list:
@@ -107,6 +128,7 @@ class Eval:
             ]
 
         async def wrapper(batch: list):
+            # self() will call sub-class's __call__ in every service
             tasks = [self(query) for query in batch]
             results = await tqdm_asyncio.gather(*tasks, desc="Generating Predictions")
             await asyncio.sleep(self._batch_interval)
@@ -184,11 +206,11 @@ class RetrievalPipeline(Eval):
         super().__init__(meta)
 
         document_store_provider.get_store(recreate_index=True)
-        _indexing = indexing.Indexing(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
-        )
-        deploy_model(mdl, _indexing)
+        # _indexing = indexing.Indexing(
+        #     embedder_provider=embedder_provider,
+        #     document_store_provider=document_store_provider,
+        # )
+        # deploy_model(mdl, _indexing)
 
         self._retrieval = retrieval.Retrieval(
             llm_provider=llm_provider,
@@ -288,36 +310,82 @@ class GenerationPipeline(Eval):
         }
 
 
+
 class AskPipeline(Eval):
+    def indexing_service(self):
+
+        return SemanticsPreparationService(
+            {
+                "db_schema": indexing.DBSchema(
+                    **self.pipe_components["db_schema_indexing"],
+                ),
+                "historical_question": indexing.HistoricalQuestion(
+                    **self.pipe_components["historical_question_indexing"],
+                ),
+                "table_description": indexing.TableDescription(
+                    **self.pipe_components["table_description_indexing"],
+                ),
+            }
+        )
+
+    def ask_service(self):
+
+        return AskService(
+            {
+                "intent_classification": intent_classification.IntentClassification(
+                    **self.pipe_components["intent_classification"],
+                ),
+                "data_assistance": data_assistance.DataAssistance(
+                    **self.pipe_components["data_assistance"],
+                ),
+                "retrieval": retrieval.Retrieval(
+                    **self.pipe_components["db_schema_retrieval"],
+                ),
+                "historical_question": historical_question.HistoricalQuestion(
+                    **self.pipe_components["historical_question_retrieval"],
+                ),
+                "sql_generation": sql_generation.SQLGeneration(
+                    **self.pipe_components["sql_generation"],
+                ),
+                "sql_correction": sql_correction.SQLCorrection(
+                    **self.pipe_components["sql_correction"],
+                ),
+            }
+        )
+    def dict_to_string(self, d: dict) -> str:
+        if not isinstance(d, dict):
+            return str(d)
+
+        result = "{"
+        for key, value in d.items():
+            result += f"'{key}': {self.dict_to_string(value)}, "
+        result = result.rstrip(", ") + "}"
+        return result
+
     def __init__(
         self,
         meta: dict,
         mdl: dict,
-        llm_provider: LLMProvider,
-        embedder_provider: EmbedderProvider,
-        document_store_provider: DocumentStoreProvider,
-        engine: Engine,
-        **kwargs,
+        service_metadata,
+        pipe_components,
     ):
         super().__init__(meta, 3)
+        self.service_metadata = service_metadata
 
-        document_store_provider.get_store(recreate_index=True)
-        _indexing = indexing.Indexing(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
-        )
-        deploy_model(mdl, _indexing)
-
+        # document_store_provider.get_store(recreate_index=True)
+        # _indexing = indexing.Indexing(
+        #     embedder_provider=embedder_provider,
+        #     document_store_provider=document_store_provider,
+        # )
+        # deploy_model(mdl, _indexing)
+        self.pipe_components = pipe_components
+        self.project_id = str(uuid.uuid4().int >> 65)
+        self.indexing_service_var = self.indexing_service()
+        self.mdl_str_var = json.dumps(mdl)
+        self.ask_service_var = self.ask_service()
+        self.service_metadata = service_metadata
         self._mdl = mdl
-        self._retrieval = retrieval.Retrieval(
-            llm_provider=llm_provider,
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
-        )
-        self._generation = sql_generation.SQLGeneration(
-            llm_provider=llm_provider,
-            engine=engine,
-        )
+        self.mdl_hash = str(hash(self.mdl_str_var))
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
         prediction["actual_output"] = actual
@@ -327,17 +395,54 @@ class AskPipeline(Eval):
         return prediction
 
     async def _process(self, prediction: dict, **_) -> dict:
-        result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("construct_retrieval_results", [])
-        actual_output = await self._generation.run(
-            query=prediction["input"],
-            contexts=documents,
-            samples=prediction["samples"],
-            exclude=[],
+
+        await self.indexing_service_var.prepare_semantics(
+            SemanticsPreparationRequest(
+                mdl=self.mdl_str_var,
+                mdl_hash=self.mdl_hash,
+                project_id=self.project_id
+            ),
+            service_metadata=self.service_metadata,
         )
 
-        prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(documents)
+        # asking
+        ask_request = AskRequest(
+            query=prediction["input"],
+            mdl_hash=self.mdl_hash,
+            project_id = self.project_id,
+
+        )
+        ask_request.query_id = str(uuid.uuid4().int >> 65)
+        await self.ask_service_var.ask(ask_request, service_metadata=self.service_metadata)
+        # getting ask result
+        ask_result_response = self.ask_service_var.get_ask_result(
+            AskResultRequest(
+                query_id=ask_request.query_id,
+            )
+        )
+
+        while (
+            ask_result_response.status != "finished"
+            and ask_result_response.status != "failed"
+        ):
+            # getting ask result
+            ask_result_response = self.ask_service_var.get_ask_result(
+                AskResultRequest(
+                    query_id=ask_request.query_id,
+                )
+            )
+
+        # result = await self._retrieval.run(query=prediction["input"])
+        # documents = result.get("construct_retrieval_results", [])
+        # actual_output = await self._generation.run(
+        #     query=prediction["input"],
+        #     contexts=documents,
+        #     samples=prediction["samples"],
+        #     exclude=[],
+        # )
+
+        prediction["actual_output"] = ask_result_response.response[0].sql
+        #prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
 
@@ -377,9 +482,10 @@ def init(
     name: Literal["retrieval", "generation", "ask"],
     meta: dict,
     mdl: dict,
-    providers: Dict[str, Any],
+    service_metadata,
+    pipe_components: Dict[str, Any],
 ) -> Eval:
-    args = {"meta": meta, "mdl": mdl, **providers}
+    args = {"meta": meta, "mdl": mdl, "service_metadata":service_metadata,"pipe_components":pipe_components}
     match name:
         case "retrieval":
             return RetrievalPipeline(**args)

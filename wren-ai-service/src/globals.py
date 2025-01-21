@@ -47,6 +47,13 @@ class ServiceContainer:
 class ServiceMetadata:
     pipes_metadata: dict
     service_version: str
+    def get(self, key: str):
+        if key=="service_version":
+            return self.service_version
+        elif key=="pipes_metadata":
+            return self.pipes_metadata
+        else:
+            return None
 
 
 def create_service_container(

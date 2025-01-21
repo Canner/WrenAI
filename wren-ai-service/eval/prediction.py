@@ -14,13 +14,17 @@ from langfuse.decorators import langfuse_context
 from tomlkit import document, dumps
 
 sys.path.append(f"{Path().parent.resolve()}")
+from src.config import settings
+from src.providers import generate_components
 import eval.pipelines as pipelines
-import src.providers as provider
 import src.utils as utils
 from eval.utils import parse_toml
 from src.core.engine import EngineConfig
 from src.core.provider import EmbedderProvider, LLMProvider
-
+from src.globals import (
+    create_service_container,
+    create_service_metadata,
+)
 
 def generate_meta(
     path: str,
@@ -46,10 +50,10 @@ def generate_meta(
         "commit": obtain_commit_hash(),
         "embedding_model": embedder_provider.get_model(),
         "generation_model": llm_provider.get_model(),
-        "column_indexing_batch_size": int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
+        "column_indexing_batch_size": int(settings.column_indexing_batch_size)
         or 50,
-        "table_retrieval_size": int(os.getenv("TABLE_RETRIEVAL_SIZE")) or 10,
-        "table_column_retrieval_size": int(os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE"))
+        "table_retrieval_size": int(settings.table_retrieval_size) or 10,
+        "table_column_retrieval_size": int(settings.table_column_retrieval_size)
         or 100,
         "pipeline": pipe,
         "batch_size": os.getenv("BATCH_SIZE") or 4,
@@ -138,12 +142,12 @@ def init_providers(mdl: dict) -> dict:
     if engine_config is None:
         raise ValueError("Invalid datasource")
 
-    providers = provider.init_providers(engine_config=engine_config)
+    providers_inner = provider.init_providers(engine_config=engine_config)
     return {
-        "llm_provider": providers[0],
-        "embedder_provider": providers[1],
-        "document_store_provider": providers[2],
-        "engine": providers[3],
+        "llm_provider": providers_inner[0],
+        "embedder_provider": providers_inner[1],
+        "document_store_provider": providers_inner[2],
+        "engine": providers_inner[3],
     }
 
 
@@ -171,23 +175,24 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv()
     utils.load_env_vars()
-    utils.init_langfuse()
+    utils.init_langfuse(settings)
 
     dataset = parse_toml(path)
-    providers = init_providers(dataset["mdl"])
 
+    pipe_components = generate_components(settings.components)
     meta = generate_meta(
         path=path,
         dataset=dataset,
         pipe=pipe_name,
-        **providers,
+        **pipe_components["db_schema_retrieval"],
     )
-
+    service_metadata = create_service_metadata(pipe_components)
     pipe = pipelines.init(
         pipe_name,
         meta,
         mdl=dataset["mdl"],
-        providers=providers,
+        service_metadata=service_metadata,
+        pipe_components=pipe_components,
     )
 
     predictions = pipe.predict(dataset["eval_dataset"])
