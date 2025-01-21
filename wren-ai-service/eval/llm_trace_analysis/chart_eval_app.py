@@ -38,6 +38,7 @@ def get_chart_data(
     chart_traces: List[TraceWithDetails],
     chart_spans: List[ObservationsView],
     chart_observations: List[ObservationsView],
+    query: str = "",
     release: str = "",
     project_id: str = "",
     chart_types: set[str] = set(),
@@ -55,6 +56,8 @@ def get_chart_data(
             chart_output = orjson.loads(chart_observation.output["replies"][0])
             chart_trace_input = orjson.loads(chart_trace.input)
 
+            if query and query != chart_span.input["kwargs"]["query"]:
+                continue
             if project_id and project_id != str(chart_trace.metadata["project_id"]):
                 continue
             if chart_types and chart_output.get("chart_type", "") not in chart_types:
@@ -92,6 +95,11 @@ def get_chart_data(
             continue
 
     return chart_data
+
+
+def on_change_query():
+    st.session_state["query"] = st.session_state["query_input"]
+    st.session_state["load_num_start_idx"] = 0
 
 
 def on_change_release():
@@ -211,6 +219,8 @@ async def main():
         st.session_state["chart_observations"] = []
     if "load_num_start_idx" not in st.session_state:
         st.session_state["load_num_start_idx"] = 0
+    if "query" not in st.session_state:
+        st.session_state["query"] = ""
     if "project_id" not in st.session_state:
         st.session_state["project_id"] = ""
     if "chart_types" not in st.session_state:
@@ -243,6 +253,13 @@ async def main():
         st.session_state["chart_traces"] = chart_traces
         st.session_state["chart_spans"] = chart_spans
         st.session_state["chart_observations"] = chart_observations
+
+    st.text_input(
+        "Enter query",
+        key="query_input",
+        value=st.session_state["query"],
+        on_change=on_change_query,
+    )
 
     st.text_input(
         "Enter release",
@@ -327,6 +344,7 @@ async def main():
         st.session_state["chart_traces"],
         st.session_state["chart_spans"],
         st.session_state["chart_observations"],
+        query=st.session_state["query"],
         release=st.session_state["release"],
         project_id=st.session_state["project_id"],
         chart_types=st.session_state["chart_types"],
