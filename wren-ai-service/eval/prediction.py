@@ -1,14 +1,10 @@
 import argparse
-import base64
-import os
 import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-import dotenv
-import orjson
 from git import Repo
 from langfuse.decorators import langfuse_context
 from tomlkit import document, dumps
@@ -17,26 +13,19 @@ sys.path.append(f"{Path().parent.resolve()}")
 import eval.pipelines as pipelines
 import src.providers as provider
 import src.utils as utils
+from eval import EvalSettings
 from eval.utils import parse_toml
-from src.core.engine import EngineConfig
-from src.core.provider import EmbedderProvider, LLMProvider
 
 
 def generate_meta(
     path: str,
     dataset: dict,
     pipe: str,
-    llm_provider: LLMProvider,
-    embedder_provider: EmbedderProvider,
+    settings: EvalSettings,
     **kwargs,
 ) -> Dict[str, Any]:
-    if langfuse_project_id := os.getenv("LANGFUSE_PROJECT_ID"):
-        langfuse_url = f'{os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").rstrip('/')}/project/{langfuse_project_id}'
-    else:
-        langfuse_url = ""
-
     return {
-        "langfuse_url": langfuse_url,
+        "langfuse_url": settings.langfuse_url,
         "user_id": "wren-evaluator",  # this property is using for langfuse
         "session_id": f"eval_{pipe}_{uuid.uuid4()}",
         "date": datetime.now(),
@@ -44,18 +33,14 @@ def generate_meta(
         "evaluation_dataset": path,
         "query_count": len(dataset["eval_dataset"]),
         "commit": obtain_commit_hash(),
-        "embedding_model": embedder_provider.get_model(),
-        "generation_model": llm_provider.get_model(),
-        "column_indexing_batch_size": int(os.getenv("COLUMN_INDEXING_BATCH_SIZE"))
-        or 50,
-        "table_retrieval_size": int(os.getenv("TABLE_RETRIEVAL_SIZE")) or 10,
-        "table_column_retrieval_size": int(os.getenv("TABLE_COLUMN_RETRIEVAL_SIZE"))
-        or 100,
+        "column_indexing_batch_size": settings.column_indexing_batch_size,
+        "table_retrieval_size": settings.table_retrieval_size,
+        "table_column_retrieval_size": settings.table_column_retrieval_size,
         "pipeline": pipe,
-        "batch_size": os.getenv("BATCH_SIZE") or 4,
-        "batch_interval": os.getenv("BATCH_INTERVAL") or 1,
+        "batch_size": settings.batch_size,
+        "batch_interval": settings.batch_interval,
         "catalog": dataset["mdl"]["catalog"],
-        "datasource": os.getenv("DATA_SOURCE"),
+        "datasource": settings.datasource,
     }
 
 
@@ -65,7 +50,7 @@ def write_prediction(
     if Path(dir_path).exists() is False:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-    output_file = f"prediction_{meta['session_id']}_{meta['date'].strftime("%Y_%m_%d_%H%M%S")}.toml"
+    output_file = f"prediction_{meta['session_id']}_{meta['date'].strftime('%Y_%m_%d_%H%M%S')}.toml"
     output_path = f"{dir_path}/{output_file}"
 
     doc = document()
@@ -94,60 +79,7 @@ def obtain_commit_hash() -> str:
     return f"{repo.head.commit}@{branch.name}"
 
 
-def init_providers(mdl: dict) -> dict:
-    engine_config = None
-
-    if os.getenv("DATA_SOURCE") == "bigquery":
-        engine_config = EngineConfig(
-            provider="wren_ibis",
-            config={
-                "source": "bigquery",
-                "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
-                "connection_info": base64.b64encode(
-                    orjson.dumps(
-                        {
-                            "project_id": os.getenv("bigquery.project-id"),
-                            "dataset_id": os.getenv("bigquery.dataset-id"),
-                            "credentials": os.getenv("bigquery.credentials-key"),
-                        }
-                    )
-                ).decode(),
-            },
-        )
-
-    if os.getenv("DATA_SOURCE") == "duckdb":
-        print("datasource is duckdb")
-        # init duckdb
-        from eval.utils import prepare_duckdb_init_sql, prepare_duckdb_session_sql
-
-        endpoint = os.getenv("WREN_ENGINE_ENDPOINT")
-        os.environ["WREN_ENGINE_MANIFEST"] = base64.b64encode(
-            orjson.dumps(mdl)
-        ).decode()
-
-        prepare_duckdb_session_sql(endpoint)
-        prepare_duckdb_init_sql(endpoint, mdl["catalog"])
-
-        engine_config = EngineConfig(
-            provider="wren_engine",
-            config={
-                "endpoint": endpoint,
-            },
-        )
-
-    if engine_config is None:
-        raise ValueError("Invalid datasource")
-
-    providers = provider.init_providers(engine_config=engine_config)
-    return {
-        "llm_provider": providers[0],
-        "embedder_provider": providers[1],
-        "document_store_provider": providers[2],
-        "engine": providers[3],
-    }
-
-
-def parse_args() -> Tuple[str]:
+def parse_args() -> Tuple[str, str]:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--file",
@@ -163,31 +95,27 @@ def parse_args() -> Tuple[str]:
         help="Specify the pipeline that you want to evaluate",
     )
     args = parser.parse_args()
-    return f"eval/dataset/{args.file}", args.pipeline
+    return args.file, args.pipeline
 
 
 if __name__ == "__main__":
     path, pipe_name = parse_args()
 
-    dotenv.load_dotenv()
-    utils.load_env_vars()
-    utils.init_langfuse()
+    settings = EvalSettings()
+    # todo: handle duckdb as datasource
+    pipe_components = provider.generate_components(settings.components)
+    utils.init_langfuse(settings)
 
     dataset = parse_toml(path)
-    providers = init_providers(dataset["mdl"])
 
-    meta = generate_meta(
-        path=path,
-        dataset=dataset,
-        pipe=pipe_name,
-        **providers,
-    )
+    meta = generate_meta(path=path, dataset=dataset, pipe=pipe_name, settings=settings)
 
-    pipe = pipelines.init(
+    pipe: pipelines.Eval = pipelines.init(
         pipe_name,
         meta,
         mdl=dataset["mdl"],
-        providers=providers,
+        components=pipe_components,
+        settings=settings,
     )
 
     predictions = pipe.predict(dataset["eval_dataset"])
