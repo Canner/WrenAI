@@ -1,0 +1,257 @@
+nameOverride:
+fullnameOverride:
+
+commonLabels: {}
+#   myLabel: label-value
+
+podAnnotations: {}
+
+credentials:
+  name: registry-credentials
+  type: kubernetes.io/dockerconfigjson
+
+application:
+  api:
+    replicas: 1
+    image:
+      repository: ghcr.io/canner/wren-ai-service
+      tag: 0.3.7
+      pullPolicy: IfNotPresent
+    ports:
+    - name: api
+      containerPort: 5555
+      protocol: TCP
+    containerName: api
+    command: []
+    args: []
+
+  frontend:
+    replicas: 1
+    image:
+      repository: ghcr.io/canner/wren-ui
+      tag: 0.5.6
+      pullPolicy: IfNotPresent
+    ports:
+    - name: frontend
+      containerPort: 3000
+      protocol: TCP
+    containerName: frontend
+    command: []
+    args: []
+
+  engine:
+    initContainers:
+    - name: bootstrap
+      image: ghcr.io/canner/wren-bootstrap:0.1.4
+      env:
+      - name: DATA_PATH
+        valueFrom:
+          configMapKeyRef:
+            name: wren
+            key: WREN_ENGINE_DATA_PATH
+      - name: PG_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: wren-postgresql
+            key: postgres-password
+      - name: PG_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: wren
+            key: PG_USERNAME
+      volumeMounts:
+      - name: wren-data
+        mountPath: /app/data
+      command: ["/bin/sh", "/app/init.sh"]
+    replicas: 1
+    image:
+      repository: ghcr.io/canner/wren-engine
+      tag: 0.4.4
+      pullPolicy: IfNotPresent
+    ports:
+    - name: engine
+      containerPort: 8080
+      protocol: TCP
+    - name: engine-base
+      containerPort: 7432
+      protocol: TCP
+    containerName: engine
+    command: []
+    args: []
+
+  server:
+    replicas: 1
+    image:
+      repository: ghcr.io/canner/wren-engine-ibis
+      tag: 0.5.0
+      pullPolicy: IfNotPresent
+    ports:
+    - name: server
+      containerPort: 8000
+      protocol: TCP
+    containerName: server
+    command: []
+    args: []
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 25%
+    maxSurge: 25%
+
+persistentVolumesClaims:
+- name: wren-data
+  size: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
+
+service:
+  frontend:
+    enabled: true
+    name: frontend
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+
+  engine:
+    enabled: true
+    name: engine
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+
+  enginebase:
+    enabled: true
+    name: enginebase
+    type: ClusterIP
+    port: 7432
+    targetPort: 7432
+
+  server:
+    enabled: true
+    name: server
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+
+  api:
+    enabled: true
+    name: api
+    type: ClusterIP
+    port: 5555
+    targetPort: 5555
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+  hosts:
+  - host: wren-ai.dc-tech.work
+    paths:
+    - path: /
+      pathType: Prefix
+  tls:
+  - secretName: wren-tls
+    hosts:
+    - wren-ai.dc-tech.work
+
+
+env: []
+# - name: EXAMPLE_VAR
+#   value: "example-value"
+
+envFrom:
+- configMapRef:
+    name: wren
+- secretRef:
+    name: wren
+
+initContainers: []
+
+volumes:
+- name: wren-data
+  persistentVolumeClaim:
+    claimName: wren-data
+# - name: google-cloud-config
+#   configMap:
+#     name: gcp-config
+
+volumeMounts:
+- name: wren-data
+  mountPath: /usr/src/app/etc
+  readOnly: false
+
+externalSecrets: []
+# - name: bridge-env
+#   gcp_secret_id: bridge_env
+#   extract_key_value: false
+
+secrets:
+  dotenv:
+  - name: wren
+    path: values/home/secrets/secrets.env
+  - name: wren-postgresql
+    path: values/home/secrets/postgres.env
+  files: []
+
+configMaps:
+  dotenv:
+  - name: wren
+    path: values/home/app.env
+  files: []
+  # - name: scripts
+  #   path: values/prod/configs/scripts/*
+
+serviceAccount:
+  name: wren
+  create: true
+# annotations: {}
+# #   iam.gke.io/gcp-service-account: app@gcp-project-id.iam.gserviceaccount.com
+
+livenessProbe: {}
+# httpGet:
+#   scheme: HTTP
+#   path: /
+#   port: 80
+# initialDelaySeconds: 5
+# periodSeconds: 10
+# timeoutSeconds: 1
+# successThreshold: 1
+# failureThreshold: 3
+
+readinessProbe: {}
+# httpGet:
+#   scheme: HTTP
+#   path: /
+#   port: 80
+# initialDelaySeconds: 5
+# periodSeconds: 10
+# timeoutSeconds: 1
+# successThreshold: 1
+# failureThreshold: 3
+
+resources:
+  frontend: {}
+  api: {}
+  engine: {}
+  server: {}
+#   limits:
+#     memory: 800Mi
+#   requests:
+#     cpu: 500m
+#     memory: 256Mi
+
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+postgresql:
+  enabled: true
+  auth:
+    database: admin_ui
+    username: wren
+    password: wren
+    secretKeys:
+      adminPasswordKey: postgres-password
+    existingSecret: wren-postgresql
