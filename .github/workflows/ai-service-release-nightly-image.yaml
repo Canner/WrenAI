@@ -2,9 +2,9 @@ name: AI Service Release nightly image
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'wren-ai-service/**'
+    branches: [main, chore/fix-stable-release]
+    # paths:
+    #   - 'wren-ai-service/**'
 
 env:
   WREN_AI_SERVICE_IMAGE: ghcr.io/canner/wren-ai-service
@@ -84,7 +84,8 @@ jobs:
         with:
           images: ${{ env.WREN_AI_SERVICE_IMAGE }}
           tags: |
-            ${{ needs.build-image.outputs.tag_name }}
+            type=raw,${{ needs.build-image.outputs.tag_name }}
+            type=raw,nightly
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
