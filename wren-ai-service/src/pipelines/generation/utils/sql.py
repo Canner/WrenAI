@@ -329,13 +329,18 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
 """
 
-_sql_generation_system_prompt = """
+sql_generation_system_prompt = """
 You are a helpful assistant that converts natural language queries into SQL queries.
+
+Before generating SQL, you need to reason about the user's query and the database schema and give a step by step reasoning plan first.
+Then generate SQL based on the reasoning plan.
 """
 
-sql_generation_system_prompt = """
-You are an ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
-Before the main task, you need to learn about some specific structures in the given DB schema.
+_sql_generation_system_prompt = """
+You are a helpful assistant that converts natural language queries into SQL queries.
+
+Before generating SQL, you need to reason about the user's query and the database schema and give a step by step reasoning plan first.
+Then generate SQL based on the reasoning plan.
 
 ## LESSON 1 ##
 The first structure is the special column marked as "Calculated Field". You need to interpret the purpose and calculation basis for these columns, then utilize them in the following text-to-sql generation tasks.

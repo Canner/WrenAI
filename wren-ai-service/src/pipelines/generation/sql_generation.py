@@ -22,6 +22,34 @@ from src.web.v1.services import Configuration
 logger = logging.getLogger("wren-ai-service")
 
 
+sql_generation_user_prompt_template = """
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+
+{% if sql_samples %}
+### EXAMPLES ###
+{% for sample in sql_samples %}
+Question:
+{{sample.question}}
+SQL:
+{{sample.sql}}
+{% endfor %}
+{% endif %}
+
+{{ text_to_sql_rules }}
+{% if instructions %}
+{{ instructions }}
+{% endif %}
+
+### QUESTION ###
+User's Question: {{ query }}
+Current Time: {{ current_time }}
+
+Let's think step by step.
+"""
+
 _sql_generation_user_prompt_template = """
 Convert this to SQL: {{query}}
 
@@ -29,7 +57,7 @@ Documents:
 {{documents}}
 """
 
-sql_generation_user_prompt_template = """
+_sql_generation_user_prompt_template = """
 ### TASK ###
 Given a user query, your task is to interpret the query based on the database schema and
 generate one SQL statement that best potentially answer user's query.
@@ -120,6 +148,7 @@ async def post_process(
 
 
 class SqlGenerationResult(BaseModel):
+    reasoning_plan: str
     sql: str
 
 
