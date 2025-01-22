@@ -799,6 +799,7 @@ export const typeDefs = gql`
     BAR
     PIE
     LINE
+    MULTI_LINE
     AREA
     GROUPED_BAR
     STACKED_BAR

@@ -178,6 +178,7 @@ export enum DashboardItemType {
   BAR = 'BAR',
   GROUPED_BAR = 'GROUPED_BAR',
   LINE = 'LINE',
+  MULTI_LINE = 'MULTI_LINE',
   NUMBER = 'NUMBER',
   PIE = 'PIE',
   STACKED_BAR = 'STACKED_BAR',
