@@ -47,6 +47,15 @@ export function toIbisConnectionInfo(dataSourceType, connectionInfo) {
   return dataSource[dataSourceType].toIbisConnectionInfo(connectionInfo);
 }
 
+export function toMultipleIbisConnectionInfos(dataSourceType, connectionInfo) {
+  if (!dataSource[dataSourceType].toMultipleIbisConnectionInfos) {
+    return null;
+  }
+  return dataSource[dataSourceType].toMultipleIbisConnectionInfos(
+    connectionInfo,
+  );
+}
+
 interface IDataSourceConnectionInfo<C, I> {
   sensitiveProps: string[];
   toIbisConnectionInfo(connectionInfo: C): I;
@@ -169,11 +178,16 @@ const dataSource = {
   [DataSourceName.TRINO]: {
     sensitiveProps: ['password'],
     toIbisConnectionInfo(connectionInfo) {
-      const { catalog, host, password, port, schema, ssl, username } =
+      const { host, password, port, schemas, username, ssl } =
         decryptConnectionInfo(
           DataSourceName.TRINO,
           connectionInfo,
         ) as TRINO_CONNECTION_INFO;
+      // pick first schema from schemas
+      const [catalog, schema] = schemas.split(',')?.[0]?.split('.') ?? [];
+      if (!catalog || !schema) {
+        throw new Error('Invalid schema format, expected catalog.schema');
+      }
       return {
         host: ssl ? `https://${host}` : `http://${host}`,
         port,
@@ -182,6 +196,36 @@ const dataSource = {
         user: username,
         password,
       };
+    },
+    toMultipleIbisConnectionInfos(connectionInfo) {
+      const { host, port, schemas, username, password, ssl } =
+        decryptConnectionInfo(
+          DataSourceName.TRINO,
+          connectionInfo,
+        ) as TRINO_CONNECTION_INFO;
+
+      // schemas format will be `catalog.schema, catalog.schema, ...`
+      // split and trim schemas into array of catalog & schema
+      const schemasArray = schemas.split(',').map((schema) => schema.trim());
+      if (schemasArray.length === 0) {
+        throw new Error('Invalid schemas format');
+      }
+
+      return schemasArray.map((schema) => {
+        const [catalog, schemaName] = schema.split('.');
+        if (!catalog || !schemaName) {
+          throw new Error('Invalid schema format, expected catalog.schema');
+        }
+
+        return {
+          host: ssl ? `https://${host}` : `http://${host}`,
+          port,
+          catalog,
+          schema: schemaName,
+          user: username,
+          password,
+        };
+      });
     },
   } as IDataSourceConnectionInfo<
     TRINO_CONNECTION_INFO,

@@ -14,7 +14,10 @@ import {
 } from '@server/services';
 import { snakeCase } from 'lodash';
 import { WREN_AI_CONNECTION_INFO } from '../repositories';
-import { toIbisConnectionInfo } from '../dataSource';
+import {
+  toIbisConnectionInfo,
+  toMultipleIbisConnectionInfos,
+} from '../dataSource';
 
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
@@ -269,19 +272,40 @@ export class IbisAdaptor implements IIbisAdaptor {
     dataSource: DataSourceName,
     connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<CompactTable[]> {
-    connectionInfo = this.updateConnectionInfo(connectionInfo);
-    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
-    const body = {
-      connectionInfo: ibisConnectionInfo,
-    };
     try {
-      logger.debug(`Getting tables from ibis`);
-      const res: AxiosResponse<CompactTable[]> = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/tables`,
-        body,
-      );
+      const getTablesByConnectionInfo = async (ibisConnectionInfo) => {
+        const body = {
+          connectionInfo: ibisConnectionInfo,
+        };
+        logger.debug(`Getting tables from ibis`);
+        const res: AxiosResponse<CompactTable[]> = await axios.post(
+          `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/tables`,
+          body,
+        );
 
-      return this.transformDescriptionToProperties(res.data);
+        return this.transformDescriptionToProperties(res.data);
+      };
+
+      connectionInfo = this.updateConnectionInfo(connectionInfo);
+
+      // If the dataSource supports multiple connection info, we need to get tables from each connection info
+      const multipleIbisConnectionInfos = toMultipleIbisConnectionInfos(
+        dataSource,
+        connectionInfo,
+      );
+      if (multipleIbisConnectionInfos) {
+        const results = await Promise.all(
+          multipleIbisConnectionInfos.map(getTablesByConnectionInfo),
+        );
+        return results.flat();
+      }
+
+      // If the dataSource does not support multiple connection info, we only need to get tables from one connection info
+      const ibisConnectionInfo = toIbisConnectionInfo(
+        dataSource,
+        connectionInfo,
+      );
+      return getTablesByConnectionInfo(ibisConnectionInfo);
     } catch (e) {
       logger.debug(`Got error when getting table: ${e.response.data}`);
 

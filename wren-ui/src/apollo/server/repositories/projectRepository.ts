@@ -53,8 +53,7 @@ export interface CLICK_HOUSE_CONNECTION_INFO {
 export interface TRINO_CONNECTION_INFO {
   host: string;
   port: number;
-  catalog: string;
-  schema: string;
+  schemas: string;
   username: string;
   password: string;
   ssl: boolean;
