@@ -67,9 +67,9 @@ Wren AI supports integration with various Large Language Models (LLMs), includin
 
 ## 🎯 Our Vision & Mission
 
-Wren AI’s mission is to democratize data by bringing AI agents with SQL ability to any data source.
+At Wren AI, our mission is to revolutionize business intelligence by empowering organizations with seamless access to data through Generative Business Intelligence (GenBI). We aim to break down barriers to data insights with advanced AI-driven solutions, composable data frameworks, and semantic intelligence, enabling every team member to make faster, smarter, and data-driven decisions with confidence.
 
-🤩 [Learn more about Wren AI and our Mission](https://docs.getwren.ai/oss/overview/introduction/?utm_source=github&utm_medium=content&utm_campaign=readme)
+🤩 [Learn more about GenBI](https://getwren.ai/genbi?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 ## 🤖 A User-Centric, End-to-End Open-source SQL AI Agent - Text-to-SQL Total Solution
 
