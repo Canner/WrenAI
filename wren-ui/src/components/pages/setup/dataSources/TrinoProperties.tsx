@@ -100,7 +100,7 @@ export default function TrinoProperties({ mode }: Props) {
           },
         ]}
       >
-        <Input placeholder="Input password" />
+        <Input.Password placeholder="Input password" />
       </Form.Item>
       <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
         <Switch />

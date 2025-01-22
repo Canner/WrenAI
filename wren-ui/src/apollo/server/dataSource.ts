@@ -4,6 +4,7 @@ import {
   HostBasedConnectionInfo,
   UrlBasedConnectionInfo,
   IbisSnowflakeConnectionInfo,
+  IbisTrinoConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
   BIG_QUERY_CONNECTION_INFO,
@@ -49,6 +50,7 @@ export function toIbisConnectionInfo(dataSourceType, connectionInfo) {
 interface IDataSourceConnectionInfo<C, I> {
   sensitiveProps: string[];
   toIbisConnectionInfo(connectionInfo: C): I;
+  toMultipleIbisConnectionInfos?(connectionInfo: C): I[];
 }
 
 const dataSource = {
@@ -172,13 +174,19 @@ const dataSource = {
           DataSourceName.TRINO,
           connectionInfo,
         ) as TRINO_CONNECTION_INFO;
-      let connectionUrl = `trino://${username}${password ? `:${password}` : ''}@${host}:${port}/${catalog}/${schema}`;
-      if (ssl) {
-        connectionUrl += '&SSL=true';
-      }
-      return { connectionUrl };
+      return {
+        host: ssl ? `https://${host}` : `http://${host}`,
+        port,
+        catalog,
+        schema,
+        user: username,
+        password,
+      };
     },
-  } as IDataSourceConnectionInfo<TRINO_CONNECTION_INFO, UrlBasedConnectionInfo>,
+  } as IDataSourceConnectionInfo<
+    TRINO_CONNECTION_INFO,
+    IbisTrinoConnectionInfo
+  >,
 
   // Snowflake
   [DataSourceName.SNOWFLAKE]: {
