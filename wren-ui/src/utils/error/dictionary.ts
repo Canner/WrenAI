@@ -46,9 +46,6 @@ export const ERROR_TEXTS = {
     SCHEMAS: {
       REQUIRED: 'Please input list of catalog.schema separated by comma.',
     },
-    CATALOG: {
-      REQUIRED: 'Please input catalog name.',
-    },
     ACCOUNT: {
       REQUIRED: 'Please input account.',
     },
