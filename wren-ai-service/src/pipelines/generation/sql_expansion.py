@@ -121,8 +121,6 @@ class SQLExpansion(BasicPipeline):
         history: AskHistory,
         configuration: Configuration = Configuration(),
         project_id: str | None = None,
-        has_calculated_field: bool = False,
-        has_metric: bool = False,
     ):
         logger.info("Sql Expansion Generation pipeline is running...")
         return await self._pipe.execute(
@@ -133,8 +131,6 @@ class SQLExpansion(BasicPipeline):
                 "history": history,
                 "project_id": project_id,
                 "configuration": configuration,
-                "has_calculated_field": has_calculated_field,
-                "has_metric": has_metric,
                 **self._components,
             },
         )
