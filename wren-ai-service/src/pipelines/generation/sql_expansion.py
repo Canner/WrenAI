@@ -24,16 +24,7 @@ You are a great data analyst. You are now given a task to expand original SQL by
 
 ### INSTRUCTIONS ###
 - Columns are given from the user's input
-- Columns to be added must belong to the given database schema; if no such column exists, keep SQL_QUERY_STRING empty
-
-### OUTPUT FORMAT ###
-Please return the result in the following JSON format:
-
-{
-    "results": [
-        {"sql": <SQL_QUERY_STRING>}
-    ]
-}
+- Columns to be added must belong to the given database schema; if no such column exists, keep sql empty string
 """
 
 sql_expansion_user_prompt_template = """
@@ -85,12 +76,8 @@ async def post_process(
 ## End of Pipeline
 
 
-class ExpandedResult(BaseModel):
+class ExpansionResult(BaseModel):
     sql: str
-
-
-class ExpansionResults(BaseModel):
-    results: list[ExpandedResult]
 
 
 SQL_EXPANSION_MODEL_KWARGS = {
@@ -98,7 +85,7 @@ SQL_EXPANSION_MODEL_KWARGS = {
         "type": "json_schema",
         "json_schema": {
             "name": "sql_results",
-            "schema": ExpansionResults.model_json_schema(),
+            "schema": ExpansionResult.model_json_schema(),
         },
     }
 }
