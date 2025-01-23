@@ -112,7 +112,8 @@ class Eval:
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
-    def _process(self, prediction: dict, **_) -> dict: ...
+    def _process(self, prediction: dict, **_) -> dict:
+        ...
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
@@ -190,7 +191,9 @@ class RetrievalPipeline(Eval):
 
     async def _process(self, prediction: dict, **_) -> dict:
         result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("construct_retrieval_results", [])
+        documents = result.get("construct_retrieval_results", {}).get(
+            "retrieval_results", []
+        )
         prediction["retrieval_context"] = extract_units(documents)
 
         return prediction
@@ -241,7 +244,8 @@ class GenerationPipeline(Eval):
             query=prediction["input"],
             contexts=documents,
             samples=prediction["samples"],
-            exclude=[],
+            has_calculated_field=prediction.get("has_calculated_field", False),
+            has_metric=prediction.get("has_metric", False),
         )
 
         prediction["actual_output"] = actual_output
@@ -266,7 +270,10 @@ class GenerationPipeline(Eval):
     def metrics(engine_info: dict, enable_semantics_comparison: bool) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(engine_info=engine_info, enable_semantics_comparison=enable_semantics_comparison),
+                AccuracyMetric(
+                    engine_info=engine_info,
+                    enable_semantics_comparison=enable_semantics_comparison,
+                ),
                 AnswerRelevancyMetric(engine_info=engine_info),
                 FaithfulnessMetric(engine_info=engine_info),
                 # this is for spider dataset, rn we temporarily disable it
@@ -315,15 +322,23 @@ class AskPipeline(Eval):
 
     async def _process(self, prediction: dict, **_) -> dict:
         result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("construct_retrieval_results", [])
+        documents = result.get("construct_retrieval_results", {}).get(
+            "retrieval_results", []
+        )
+        has_calculated_field = result.get("has_calculated_field", False)
+        has_metric = result.get("has_metric", False)
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
             sql_samples=[],
+            has_calculated_field=has_calculated_field,
+            has_metric=has_metric,
         )
 
         prediction["actual_output"] = actual_output
         prediction["retrieval_context"] = extract_units(documents)
+        prediction["has_calculated_field"] = has_calculated_field
+        prediction["has_metric"] = has_metric
 
         return prediction
 

@@ -12,7 +12,6 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -28,8 +27,13 @@ sql_generation_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
+{% if instructions %}
+### INSTRUCTIONS ###
+{{ instructions }}
+{% endif %}
+
 {% if sql_samples %}
-### EXAMPLES ###
+### SQL SAMPLES ###
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
@@ -37,67 +41,6 @@ SQL:
 {{sample.sql}}
 {% endfor %}
 {% endif %}
-
-{{ text_to_sql_rules }}
-{% if instructions %}
-{{ instructions }}
-{% endif %}
-
-### QUESTION ###
-User's Question: {{ query }}
-Current Time: {{ current_time }}
-
-Let's think step by step.
-"""
-
-_sql_generation_user_prompt_template = """
-Convert this to SQL: {{query}}
-
-Documents:
-{{documents}}
-"""
-
-_sql_generation_user_prompt_template = """
-### TASK ###
-Given a user query, your task is to interpret the query based on the database schema and
-generate one SQL statement that best potentially answer user's query.
-
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
-
-{% if sql_samples %}
-### SAMPLES ###
-{% for sample in sql_samples %}
-Question:
-{{sample.question}}
-SQL:
-{{sample.sql}}
-{% endfor %}
-{% endif %}
-
-{{ text_to_sql_rules }}
-{% if instructions %}
-{{ instructions }}
-{% endif %}
-
-### QUESTION ###
-User's Question: {{ query }}
-Current Time: {{ current_time }}
-
-Let's think step by step.
-"""
-
-_sql_generation_user_prompt_template = """
-### TASK ###
-Given a user query, your task is to interpret the query based on the database schema and
-generate one SQL statement that best potentially answer user's query.
-
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
 
 ### QUESTION ###
 User's Question: {{ query }}
@@ -112,16 +55,21 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: List[str],
-    text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = None,
     sql_samples: List[Dict] | None = None,
+    has_calculated_field: bool = False,
+    has_metric: bool = False,
 ) -> dict:
     return prompt_builder.run(
         query=query,
         documents=documents,
-        text_to_sql_rules=text_to_sql_rules,
-        instructions=construct_instructions(configuration),
+        instructions=construct_instructions(
+            configuration,
+            has_calculated_field,
+            has_metric,
+            sql_samples,
+        ),
         sql_samples=sql_samples,
         current_time=configuration.show_current_time(),
     )
@@ -175,10 +123,6 @@ class SQLGeneration(BasicPipeline):
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
-        self._configs = {
-            "text_to_sql_rules": TEXT_TO_SQL_RULES,
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -191,6 +135,8 @@ class SQLGeneration(BasicPipeline):
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
+        has_calculated_field: bool = False,
+        has_metric: bool = False,
     ):
         logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(
@@ -201,8 +147,9 @@ class SQLGeneration(BasicPipeline):
                 "sql_samples": sql_samples,
                 "project_id": project_id,
                 "configuration": configuration,
+                "has_calculated_field": has_calculated_field,
+                "has_metric": has_metric,
                 **self._components,
-                **self._configs,
             },
         )
 
