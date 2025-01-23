@@ -44,6 +44,7 @@ export interface AskingTask {
     sql: string;
   }>;
   error: WrenAIError | null;
+  intentReasoning?: string;
 }
 
 // DetailedThread is a type that represents a detailed thread, which is a thread with responses.
@@ -224,6 +225,7 @@ export class AskingResolver {
       status: askResult.status,
       error: askResult.error,
       candidates,
+      intentReasoning: askResult.intentReasoning,
     };
   }
 
