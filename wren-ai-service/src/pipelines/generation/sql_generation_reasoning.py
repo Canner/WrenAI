@@ -18,13 +18,13 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_generation_reasoning_system_prompt = """
 ### TASK ###
-You are a helpful data analyst that great at thinking deeply and reasoning about the user's question and the database schema and give a step by step reasoning plan in order to answer user's question.
+You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question and the database schema.
 2. Give a step by step reasoning plan in order to answer user's question.
 3. The reasoning plan should be in the language same as the language user provided in the input.
-4. Make sure considering current time provided in the input.
+4. Make sure to consider the current time provided in the input if the user's question is related to the date/time.
 """
 
 sql_generation_reasoning_user_prompt_template = """
@@ -48,7 +48,7 @@ def prompt(
     query: str,
     documents: List[str],
     prompt_builder: PromptBuilder,
-    configuration: Configuration | None = None,
+    configuration: Configuration | None = Configuration(),
 ) -> dict:
     return prompt_builder.run(
         query=query,
