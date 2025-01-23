@@ -131,7 +131,10 @@ class SqlExpansionService:
                     query=query_for_retrieval,
                     id=sql_expansion_request.project_id,
                 )
-                documents = retrieval_result.get("construct_retrieval_results", [])
+                _retrieval_result = retrieval_result.get(
+                    "construct_retrieval_results", {}
+                )
+                documents = _retrieval_result.get("retrieval_results", [])
 
                 if not documents:
                     logger.exception(
