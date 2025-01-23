@@ -272,6 +272,18 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                 )
 
+                sql_generation_reasoning = (
+                    (
+                        await self._pipelines["sql_generation_reasoning"].run(
+                            query=user_query,
+                            contexts=documents,
+                            configuration=ask_request.configurations,
+                        )
+                    )
+                    .get("post_process", {})
+                    .get("reasoning_plan")
+                )
+
                 sql_samples = (
                     await self._pipelines["sql_pairs_retrieval"].run(
                         query=ask_request.query,
@@ -289,6 +301,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=documents,
+                        sql_generation_reasoning=sql_generation_reasoning,
                         history=ask_request.history,
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
@@ -302,6 +315,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=documents,
+                        sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
                         sql_samples=sql_samples,

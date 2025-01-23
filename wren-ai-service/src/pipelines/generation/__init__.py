@@ -12,6 +12,7 @@ from .sql_correction import SQLCorrection
 from .sql_expansion import SQLExpansion
 from .sql_explanation import SQLExplanation
 from .sql_generation import SQLGeneration
+from .sql_generation_reasoning import SQLGenerationReasoning
 from .sql_question import SQLQuestion
 from .sql_regeneration import SQLRegeneration
 from .sql_summary import SQLSummary
@@ -32,6 +33,7 @@ __all__ = [
     "SQLExpansion",
     "SQLExplanation",
     "SQLGeneration",
+    "SQLGenerationReasoning",
     "SQLSummary",
     "SQLQuestion",
 ]

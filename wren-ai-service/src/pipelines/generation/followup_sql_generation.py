@@ -58,6 +58,9 @@ Previous SQL Query: {{ history.sql }}
 User's Follow-up Question: {{ query }}
 Current Time: {{ current_time }}
 
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+
 Let's think step by step.
 """
 
@@ -67,6 +70,7 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: List[str],
+    sql_generation_reasoning: str,
     history: AskHistory,
     configuration: Configuration,
     prompt_builder: PromptBuilder,
@@ -79,6 +83,7 @@ def prompt(
     return prompt_builder.run(
         query=query,
         documents=documents,
+        sql_generation_reasoning=sql_generation_reasoning,
         history=history,
         previous_query_summaries=previous_query_summaries,
         instructions=construct_instructions(
@@ -143,6 +148,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         self,
         query: str,
         contexts: List[str],
+        sql_generation_reasoning: str,
         history: AskHistory,
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
@@ -156,6 +162,7 @@ class FollowUpSQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "sql_generation_reasoning": sql_generation_reasoning,
                 "history": history,
                 "project_id": project_id,
                 "configuration": configuration,
