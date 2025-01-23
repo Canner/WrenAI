@@ -117,7 +117,13 @@ async def post_process(
 
 
 FOLLOWUP_SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": SqlGenerationResult,
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_generation_results",
+            "schema": SqlGenerationResult.model_json_schema(),
+        },
+    }
 }
 
 
