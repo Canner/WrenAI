@@ -83,6 +83,7 @@ class AskResultResponse(BaseModel):
     status: Literal[
         "understanding",
         "searching",
+        "planning",
         "generating",
         "correcting",
         "finished",
@@ -266,7 +267,7 @@ class AskService:
 
             if not self._is_stopped(query_id) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
-                    status="generating",
+                    status="planning",
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
@@ -282,6 +283,14 @@ class AskService:
                     )
                     .get("post_process", {})
                     .get("reasoning_plan")
+                )
+
+            if not self._is_stopped(query_id) and not api_results:
+                self._ask_results[query_id] = AskResultResponse(
+                    status="generating",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
                 )
 
                 sql_samples = (
