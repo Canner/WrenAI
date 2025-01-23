@@ -30,9 +30,10 @@ from eval.utils import (
 from src.pipelines import generation, indexing, retrieval
 
 
-def deploy_model(mdl: str, pipe: indexing.DBSchema) -> None:
+def deploy_model(mdl: str, pipes: list) -> None:
     async def wrapper():
-        await pipe.run(orjson.dumps(mdl).decode())
+        tasks = [pipe.run(orjson.dumps(mdl).decode()) for pipe in pipes]
+        await asyncio.gather(*tasks)
 
     asyncio.run(wrapper())
 
@@ -295,11 +296,14 @@ class AskPipeline(Eval):
     ):
         super().__init__(meta)
 
-        _indexing = indexing.DBSchema(
+        _db_schema_indexing = indexing.DBSchema(
             **pipe_components["db_schema_indexing"],
             column_batch_size=settings.column_indexing_batch_size,
         )
-        deploy_model(mdl, _indexing)
+        _table_description_indexing = indexing.TableDescription(
+            **pipe_components["table_description_indexing"],
+        )
+        deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
         self._retrieval = retrieval.Retrieval(
             **pipe_components["db_schema_retrieval"],
@@ -322,11 +326,11 @@ class AskPipeline(Eval):
 
     async def _process(self, prediction: dict, **_) -> dict:
         result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("construct_retrieval_results", {}).get(
-            "retrieval_results", []
-        )
-        has_calculated_field = result.get("has_calculated_field", False)
-        has_metric = result.get("has_metric", False)
+        _retrieval_result = result.get("construct_retrieval_results", {})
+
+        documents = _retrieval_result.get("retrieval_results", [])
+        has_calculated_field = _retrieval_result.get("has_calculated_field", False)
+        has_metric = _retrieval_result.get("has_metric", False)
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
