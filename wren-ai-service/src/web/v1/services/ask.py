@@ -424,8 +424,6 @@ class AskService:
                     code="OTHERS",
                     message=str(e),
                 ),
-                rephrased_question=rephrased_question,
-                intent_reasoning=intent_reasoning,
             )
 
             results["metadata"]["error_type"] = "OTHERS"

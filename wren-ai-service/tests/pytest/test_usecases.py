@@ -212,7 +212,7 @@ if __name__ == "__main__":
         os.makedirs("outputs")
 
     with open(
-        f"outputs/final_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json",
+        f"outputs/usecases_final_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.yaml",
         "w",
     ) as f:
-        json.dump(final_results, f, indent=2)
+        yaml.safe_dump(final_results, f, sort_keys=False, allow_unicode=True)
