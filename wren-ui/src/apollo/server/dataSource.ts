@@ -4,6 +4,7 @@ import {
   HostBasedConnectionInfo,
   UrlBasedConnectionInfo,
   IbisSnowflakeConnectionInfo,
+  IbisTrinoConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
   BIG_QUERY_CONNECTION_INFO,
@@ -46,9 +47,19 @@ export function toIbisConnectionInfo(dataSourceType, connectionInfo) {
   return dataSource[dataSourceType].toIbisConnectionInfo(connectionInfo);
 }
 
+export function toMultipleIbisConnectionInfos(dataSourceType, connectionInfo) {
+  if (!dataSource[dataSourceType].toMultipleIbisConnectionInfos) {
+    return null;
+  }
+  return dataSource[dataSourceType].toMultipleIbisConnectionInfos(
+    connectionInfo,
+  );
+}
+
 interface IDataSourceConnectionInfo<C, I> {
   sensitiveProps: string[];
   toIbisConnectionInfo(connectionInfo: C): I;
+  toMultipleIbisConnectionInfos?(connectionInfo: C): I[];
 }
 
 const dataSource = {
@@ -167,18 +178,69 @@ const dataSource = {
   [DataSourceName.TRINO]: {
     sensitiveProps: ['password'],
     toIbisConnectionInfo(connectionInfo) {
-      const { catalog, host, password, port, schema, ssl, username } =
+      const { host, password, port, schemas, username, ssl } =
         decryptConnectionInfo(
           DataSourceName.TRINO,
           connectionInfo,
         ) as TRINO_CONNECTION_INFO;
-      let connectionUrl = `trino://${username}${password ? `:${password}` : ''}@${host}:${port}/${catalog}/${schema}`;
-      if (ssl) {
-        connectionUrl += '&SSL=true';
+      // pick first schema from schemas
+      const [catalog, schema] = schemas.split(',')?.[0]?.split('.') ?? [];
+      if (!catalog || !schema) {
+        throw new Error('Invalid schema format, expected catalog.schema');
       }
-      return { connectionUrl };
+      return {
+        host: ssl ? `https://${host}` : `http://${host}`,
+        port,
+        catalog,
+        schema,
+        user: username,
+        password,
+      };
     },
-  } as IDataSourceConnectionInfo<TRINO_CONNECTION_INFO, UrlBasedConnectionInfo>,
+    toMultipleIbisConnectionInfos(connectionInfo) {
+      const { host, port, schemas, username, password, ssl } =
+        decryptConnectionInfo(
+          DataSourceName.TRINO,
+          connectionInfo,
+        ) as TRINO_CONNECTION_INFO;
+
+      // Helper function to parse and validate schema
+      const parseSchema = (schemaStr: string) => {
+        const trimmed = schemaStr.trim();
+        const [catalog, schema] = trimmed.split('.');
+        if (!catalog || !schema) {
+          throw new Error(
+            `Invalid schema format: "${trimmed}". Expected format: catalog.schema`,
+          );
+        }
+        return { catalog, schema };
+      };
+
+      // schemas format will be `catalog.schema, catalog.schema, ...`
+      const schemasArray = schemas.split(',').filter(Boolean);
+      if (schemasArray.length === 0) {
+        throw new Error(
+          'No valid schemas provided. Expected format: catalog.schema[, catalog.schema, ...]',
+        );
+      }
+
+      return schemasArray.map((schema) => {
+        const { catalog, schema: schemaName } = parseSchema(schema);
+
+        return {
+          host: ssl ? `https://${host}` : `http://${host}`,
+          port,
+          catalog,
+          schema: schemaName,
+          user: username,
+          password,
+        };
+      });
+    },
+  } as IDataSourceConnectionInfo<
+    TRINO_CONNECTION_INFO,
+    IbisTrinoConnectionInfo
+  >,
 
   // Snowflake
   [DataSourceName.SNOWFLAKE]: {
