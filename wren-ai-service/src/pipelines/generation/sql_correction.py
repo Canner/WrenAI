@@ -89,7 +89,13 @@ class SqlCorrectionResult(BaseModel):
 
 
 SQL_CORRECTION_MODEL_KWARGS = {
-    "response_format": SqlCorrectionResult,
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_correction_results",
+            "schema": SqlCorrectionResult.model_json_schema(),
+        },
+    }
 }
 
 

@@ -81,7 +81,13 @@ class SqlGenerationReasoningResult(BaseModel):
 
 
 SQL_GENERATION_REASONING_MODEL_KWARGS = {
-    "response_format": SqlGenerationReasoningResult,
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_generation_reasoning_results",
+            "schema": SqlGenerationReasoningResult.model_json_schema(),
+        },
+    }
 }
 
 
