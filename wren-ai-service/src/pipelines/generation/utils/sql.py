@@ -333,8 +333,7 @@ TEXT_TO_SQL_RULES = """
 sql_generation_system_prompt = f"""
 You are a helpful assistant that converts natural language queries into SQL queries.
 
-Before generating SQL, you need to think deeply and reason about the user's question and the database schema and give a step by step reasoning plan first.
-Then generate SQL based on the reasoning plan to answer the user's question.
+Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
 {TEXT_TO_SQL_RULES}
 """
@@ -524,5 +523,4 @@ def construct_instructions(
 
 
 class SqlGenerationResult(BaseModel):
-    reasoning_plan: str
     sql: str

@@ -108,6 +108,9 @@ def create_service_container(
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["sql_generation"],
                 ),
+                "sql_generation_reasoning": generation.SQLGenerationReasoning(
+                    **pipe_components["sql_generation_reasoning"],
+                ),
                 "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
                 ),
@@ -220,6 +223,9 @@ def create_service_container(
                 ),
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["question_recommendation_sql_generation"],
+                ),
+                "sql_generation_reasoning": generation.SQLGenerationReasoning(
+                    **pipe_components["sql_generation_reasoning"],
                 ),
             },
             **query_cache,
