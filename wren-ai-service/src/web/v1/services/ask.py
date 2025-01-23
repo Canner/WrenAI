@@ -242,10 +242,10 @@ class AskService:
                     history=ask_request.history,
                     id=ask_request.project_id,
                 )
-                _retrieval_results = retrieval_result.get(
+                _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
                 )
-                documents = _retrieval_results.get("retrieval_results", [])
+                documents = _retrieval_result.get("retrieval_results", [])
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -279,9 +279,9 @@ class AskService:
                     )
                 )["formatted_output"].get("documents", [])
                 has_calculated_field = (
-                    _retrieval_results.get("has_calculated_field", False),
+                    _retrieval_result.get("has_calculated_field", False),
                 )
-                has_metric = (_retrieval_results.get("has_metric", False),)
+                has_metric = (_retrieval_result.get("has_metric", False),)
 
                 if ask_request.history:
                     text_to_sql_generation_results = await self._pipelines[

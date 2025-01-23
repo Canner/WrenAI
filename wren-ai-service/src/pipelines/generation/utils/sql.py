@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import orjson
 from haystack import component
+from pydantic import BaseModel
 
 from src.core.engine import (
     Engine,
@@ -682,3 +683,8 @@ def construct_instructions(
         instructions += sql_samples_instructions
 
     return instructions
+
+
+class SqlGenerationResult(BaseModel):
+    reasoning_plan: str
+    sql: str

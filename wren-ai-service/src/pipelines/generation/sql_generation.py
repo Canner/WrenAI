@@ -6,12 +6,12 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
+    SqlGenerationResult,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -93,11 +93,6 @@ async def post_process(
 
 
 ## End of Pipeline
-
-
-class SqlGenerationResult(BaseModel):
-    reasoning_plan: str
-    sql: str
 
 
 SQL_GENERATION_MODEL_KWARGS = {

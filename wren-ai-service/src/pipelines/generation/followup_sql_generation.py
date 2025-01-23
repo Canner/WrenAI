@@ -6,12 +6,12 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
+    SqlGenerationResult,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -68,10 +68,11 @@ def prompt(
     query: str,
     documents: List[str],
     history: AskHistory,
-    alert: str,
     configuration: Configuration,
     prompt_builder: PromptBuilder,
     sql_samples: List[Dict] | None = None,
+    has_calculated_field: bool = False,
+    has_metric: bool = False,
 ) -> dict:
     previous_query_summaries = [step.summary for step in history.steps if step.summary]
 
@@ -80,8 +81,12 @@ def prompt(
         documents=documents,
         history=history,
         previous_query_summaries=previous_query_summaries,
-        alert=alert,
-        instructions=construct_instructions(configuration),
+        instructions=construct_instructions(
+            configuration,
+            has_calculated_field,
+            has_metric,
+            sql_samples,
+        ),
         current_time=configuration.show_current_time(),
         sql_samples=sql_samples,
     )
@@ -106,23 +111,8 @@ async def post_process(
 ## End of Pipeline
 
 
-class SQLResult(BaseModel):
-    reasoning: str
-    sql: str
-
-
-class GenerationResults(BaseModel):
-    results: list[SQLResult]
-
-
 FOLLOWUP_SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_results",
-            "schema": GenerationResults.model_json_schema(),
-        },
-    }
+    "response_format": SqlGenerationResult,
 }
 
 
