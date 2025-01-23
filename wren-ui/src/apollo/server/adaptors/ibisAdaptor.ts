@@ -305,13 +305,16 @@ export class IbisAdaptor implements IIbisAdaptor {
         dataSource,
         connectionInfo,
       );
-      return getTablesByConnectionInfo(ibisConnectionInfo);
+      return await getTablesByConnectionInfo(ibisConnectionInfo);
     } catch (e) {
-      logger.debug(`Got error when getting table: ${e.response.data}`);
-
+      logger.debug(
+        `Got error when getting table: ${e.response?.data || e.message}`,
+      );
       throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
         customMessage:
-          e.response.data || 'Error getting table from ibis server',
+          e.response?.data ||
+          e.message ||
+          'Error getting table from ibis server',
         originalError: e,
       });
     }

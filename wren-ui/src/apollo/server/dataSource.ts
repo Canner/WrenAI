@@ -204,18 +204,28 @@ const dataSource = {
           connectionInfo,
         ) as TRINO_CONNECTION_INFO;
 
+      // Helper function to parse and validate schema
+      const parseSchema = (schemaStr: string) => {
+        const trimmed = schemaStr.trim();
+        const [catalog, schema] = trimmed.split('.');
+        if (!catalog || !schema) {
+          throw new Error(
+            `Invalid schema format: "${trimmed}". Expected format: catalog.schema`,
+          );
+        }
+        return { catalog, schema };
+      };
+
       // schemas format will be `catalog.schema, catalog.schema, ...`
-      // split and trim schemas into array of catalog & schema
-      const schemasArray = schemas.split(',').map((schema) => schema.trim());
+      const schemasArray = schemas.split(',').filter(Boolean);
       if (schemasArray.length === 0) {
-        throw new Error('Invalid schemas format');
+        throw new Error(
+          'No valid schemas provided. Expected format: catalog.schema[, catalog.schema, ...]',
+        );
       }
 
       return schemasArray.map((schema) => {
-        const [catalog, schemaName] = schema.split('.');
-        if (!catalog || !schemaName) {
-          throw new Error('Invalid schema format, expected catalog.schema');
-        }
+        const { catalog, schema: schemaName } = parseSchema(schema);
 
         return {
           host: ssl ? `https://${host}` : `http://${host}`,
