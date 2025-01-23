@@ -24,7 +24,7 @@ You are a great data analyst. You are now given a task to expand original SQL by
 
 ### INSTRUCTIONS ###
 - Columns are given from the user's input
-- Columns to be added must belong to the given database schema; if no such column exists, keep SQL_QUERY_STRING empty
+- Columns to be added must belong to the given database schema; if no such column exists, keep sql empty string
 """
 
 sql_expansion_user_prompt_template = """
