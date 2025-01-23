@@ -92,6 +92,7 @@ class AskResultResponse(BaseModel):
     ]
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
+    generation_reasoning: Optional[str] = None
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
@@ -285,12 +286,21 @@ class AskService:
                     .get("reasoning_plan")
                 )
 
+                self._ask_results[query_id] = AskResultResponse(
+                    status="planning",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
+                    generation_reasoning=sql_generation_reasoning,
+                )
+
             if not self._is_stopped(query_id) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="generating",
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
+                    generation_reasoning=sql_generation_reasoning,
                 )
 
                 sql_samples = (
@@ -358,6 +368,7 @@ class AskService:
                         contexts=documents,
                         invalid_generation_results=failed_dry_run_results,
                         project_id=ask_request.project_id,
+                        generation_reasoning=sql_generation_reasoning,
                     )
 
                     if valid_generation_results := sql_correction_results[
@@ -381,6 +392,7 @@ class AskService:
                         response=api_results,
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
+                        generation_reasoning=sql_generation_reasoning,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -396,6 +408,7 @@ class AskService:
                         ),
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
+                        generation_reasoning=sql_generation_reasoning,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                 results["metadata"]["type"] = "TEXT_TO_SQL"
