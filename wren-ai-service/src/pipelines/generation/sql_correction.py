@@ -34,15 +34,6 @@ With given database schema, please think step by step to correct the wrong ANSI 
     {{ document }}
 {% endfor %}
 
-### FINAL ANSWER FORMAT ###
-The final answer must be a list of corrected SQL quries in JSON format:
-
-{
-    "results": [
-        {"sql": <CORRECTED_SQL_QUERY_STRING>},
-    ]
-}
-
 {{ alert }}
 
 ### QUESTION ###
@@ -93,22 +84,12 @@ async def post_process(
 ## End of Pipeline
 
 
-class CorrectedSQLResult(BaseModel):
+class SqlCorrectionResult(BaseModel):
     sql: str
 
 
-class CorrectedResults(BaseModel):
-    results: list[CorrectedSQLResult]
-
-
 SQL_CORRECTION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "corrected_sql",
-            "schema": CorrectedResults.model_json_schema(),
-        },
-    }
+    "response_format": SqlCorrectionResult,
 }
 
 

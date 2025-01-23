@@ -85,7 +85,7 @@ def parse_args() -> Tuple[str, str]:
         "--file",
         "-F",
         type=str,
-        help="Eval dataset file name in the eval/dataset folder",
+        help="Eval dataset file path",
     )
     parser.add_argument(
         "--pipeline",

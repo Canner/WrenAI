@@ -73,12 +73,17 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 id=project_id,
             )
-            documents = retrieval_result.get("construct_retrieval_results", [])
+            _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
+            documents = _retrieval_result.get("retrieval_results", [])
+            has_calculated_field = _retrieval_result.get("has_calculated_field", False)
+            has_metric = _retrieval_result.get("has_metric", False)
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
                 contexts=documents,
                 configuration=Configuration(),
                 project_id=project_id,
+                has_calculated_field=has_calculated_field,
+                has_metric=has_metric,
             )
 
             post_process = generated_sql["post_process"]

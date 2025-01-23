@@ -6,13 +6,12 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    TEXT_TO_SQL_RULES,
+    SqlGenerationResult,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -33,74 +32,9 @@ generate one SQL query to best answer user's question.
     {{ document }}
 {% endfor %}
 
-### EXAMPLES ###
-
-Example 1
-[INPUT]
-Previous SQL Summary: A query to find the number of employees in each department.
-Previous SQL Query: SELECT department, COUNT(*) as employee_count FROM employees GROUP BY department;
-User's Question: How do I modify this to only show departments with more than 10 employees?
-
-[OUTPUT]
-{
-    "results": [
-        {
-            "sql": "SELECT department, COUNT() as employee_count FROM employees GROUP BY department HAVING COUNT() > 10"
-        }
-    ]
-}
-
-Example 2
-[INPUT]
-Previous SQL Summary: A query to retrieve the total sales per product.
-Previous SQL Query: SELECT product_id, SUM(sales) as total_sales FROM sales GROUP BY product_id;
-User's Question: Can you adjust this to include the product name as well?
-
-[OUTPUT]
-{
-    "results": [
-        {
-            "sql": "SELECT products.name, SUM(sales.sales) as total_sales FROM sales JOIN products ON sales.product_id = products.id GROUP BY products.name"
-        }
-    ]
-}
-
-Example 3
-[INPUT]
-Previous SQL Summary: Query to find the highest salary in each department.
-Previous SQL Query: SELECT department_id, MAX(salary) as highest_salary FROM employees GROUP BY department_id;
-User's Question: What if I want to see the employee names with the highest salary in each department?
-
-[OUTPUT]
-{
-    "results": [
-        {
-            "sql": "SELECT department_id, employee_name, salary FROM employees WHERE (department_id, salary) IN (SELECT department_id, MAX(salary) FROM employees GROUP BY department_id)"
-        }
-    ]
-}
-
-### FINAL ANSWER FORMAT ###
-The final answer must be the JSON format like following:
-
-{
-    "results": [
-        {"sql": <SQL_QUERY_STRING>}
-    ]
-}
-
-{{ alert }}
-
-### CONTEXT ###
-Previous SQL Summary:
-{% for summary in previous_query_summaries %}
-    {{ summary }}
-{% endfor %}
-Previous SQL Query: {{ history.sql }}
-Current Time: {{ current_time }}
-
 {% if instructions %}
-Instructions: {{ instructions }}
+### INSTRUCTIONS ###
+{{ instructions }}
 {% endif %}
 
 {% if sql_samples %}
@@ -113,8 +47,16 @@ SQL:
 {% endfor %}
 {% endif %}
 
-### INPUT ###
+### CONTEXT ###
+Previous SQL Summary:
+{% for summary in previous_query_summaries %}
+    {{ summary }}
+{% endfor %}
+Previous SQL Query: {{ history.sql }}
+
+### QUESTION ###
 User's Follow-up Question: {{ query }}
+Current Time: {{ current_time }}
 
 Let's think step by step.
 """
@@ -126,10 +68,11 @@ def prompt(
     query: str,
     documents: List[str],
     history: AskHistory,
-    alert: str,
     configuration: Configuration,
     prompt_builder: PromptBuilder,
     sql_samples: List[Dict] | None = None,
+    has_calculated_field: bool = False,
+    has_metric: bool = False,
 ) -> dict:
     previous_query_summaries = [step.summary for step in history.steps if step.summary]
 
@@ -138,8 +81,12 @@ def prompt(
         documents=documents,
         history=history,
         previous_query_summaries=previous_query_summaries,
-        alert=alert,
-        instructions=construct_instructions(configuration),
+        instructions=construct_instructions(
+            configuration,
+            has_calculated_field,
+            has_metric,
+            sql_samples,
+        ),
         current_time=configuration.show_current_time(),
         sql_samples=sql_samples,
     )
@@ -164,22 +111,8 @@ async def post_process(
 ## End of Pipeline
 
 
-class SQLResult(BaseModel):
-    sql: str
-
-
-class GenerationResults(BaseModel):
-    results: list[SQLResult]
-
-
 FOLLOWUP_SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_results",
-            "schema": GenerationResults.model_json_schema(),
-        },
-    }
+    "response_format": SqlGenerationResult,
 }
 
 
@@ -201,10 +134,6 @@ class FollowUpSQLGeneration(BasicPipeline):
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
-        self._configs = {
-            "alert": TEXT_TO_SQL_RULES,
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -218,6 +147,8 @@ class FollowUpSQLGeneration(BasicPipeline):
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
+        has_calculated_field: bool = False,
+        has_metric: bool = False,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
         return await self._pipe.execute(
@@ -229,8 +160,9 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "project_id": project_id,
                 "configuration": configuration,
                 "sql_samples": sql_samples,
+                "has_calculated_field": has_calculated_field,
+                "has_metric": has_metric,
                 **self._components,
-                **self._configs,
             },
         )
 

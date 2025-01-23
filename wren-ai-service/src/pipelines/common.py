@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from haystack import Document, component
 
@@ -7,11 +7,15 @@ from src.core.pipeline import BasicPipeline
 
 def build_table_ddl(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
-) -> str:
+) -> Tuple[str, bool]:
     columns_ddl = []
+    has_calculated_field = False
+
     for column in content["columns"]:
         if column["type"] == "COLUMN":
             if not columns or (columns and column["name"] in columns):
+                if "This column is a Calculated Field" in column["comment"]:
+                    has_calculated_field = True
                 column_ddl = (
                     f"{column['comment']}{column['name']} {column['data_type']}"
                 )
@@ -26,7 +30,7 @@ def build_table_ddl(
         f"{content['comment']}CREATE TABLE {content['name']} (\n  "
         + ",\n  ".join(columns_ddl)
         + "\n);"
-    )
+    ), has_calculated_field
 
 
 def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
