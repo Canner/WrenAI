@@ -536,6 +536,7 @@ export const typeDefs = gql`
   enum AskingTaskStatus {
     UNDERSTANDING
     SEARCHING
+    PLANNING
     GENERATING
     CORRECTING
     FINISHED
