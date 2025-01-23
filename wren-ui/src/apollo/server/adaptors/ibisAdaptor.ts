@@ -219,14 +219,17 @@ export class IbisAdaptor implements IIbisAdaptor {
         processTime: res.headers['x-process-time'],
       };
     } catch (e) {
-      logger.debug(`Got error when querying ibis: ${e.response.data}`);
+      logger.debug(
+        `Got error when querying ibis: ${e.response?.data || e.message}`,
+      );
 
       throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
-        customMessage: e.response.data || 'Error querying ibis server',
+        customMessage:
+          e.response?.data || e.message || 'Error querying ibis server',
         originalError: e,
         other: {
-          correlationId: e.response.headers['x-correlation-id'],
-          processTime: e.response.headers['x-process-time'],
+          correlationId: e.response?.headers['x-correlation-id'],
+          processTime: e.response?.headers['x-process-time'],
         },
       });
     }
@@ -258,11 +261,11 @@ export class IbisAdaptor implements IIbisAdaptor {
     } catch (err) {
       logger.info(`Got error when dry running ibis`);
       throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
-        customMessage: err.response.data,
+        customMessage: err.response?.data || err.message,
         originalError: err,
         other: {
-          correlationId: err.response.headers['x-correlation-id'],
-          processTime: err.response.headers['x-process-time'],
+          correlationId: err.response?.headers['x-correlation-id'],
+          processTime: err.response?.headers['x-process-time'],
         },
       });
     }
@@ -337,11 +340,15 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Got error when getting constraint: ${e.response.data}`);
+      logger.debug(
+        `Got error when getting constraint: ${e.response?.data || e.message}`,
+      );
 
       throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
         customMessage:
-          e.response.data || 'Error getting constraint from ibis server',
+          e.response?.data ||
+          e.message ||
+          'Error getting constraint from ibis server',
         originalError: e,
       });
     }
@@ -369,9 +376,11 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return { valid: true, message: null };
     } catch (e) {
-      logger.debug(`Got error when validating connection: ${e.response.data}`);
+      logger.debug(
+        `Got error when validating connection: ${e.response?.data || e.message}`,
+      );
 
-      return { valid: false, message: e.response.data };
+      return { valid: false, message: e.response?.data || e.message };
     }
   }
 
