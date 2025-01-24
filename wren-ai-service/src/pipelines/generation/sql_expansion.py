@@ -20,7 +20,7 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_expansion_system_prompt = """
 ### TASK ###
-You are a great data analyst. You are now given a task to expand SQL from user input.
+You are a great data analyst. You are now given a task to expand original SQL from user input.
 
 ### INSTRUCTIONS ###
 - Columns are given from the user's adjustment request
@@ -37,7 +37,7 @@ sql_expansion_user_prompt_template = """
 
 ### QUESTION ###
 User's adjustment request: {{query}}
-SQL: {{sql}}
+Original SQL: {{sql}}
 Current Time: {{ current_time }}
 """
 
