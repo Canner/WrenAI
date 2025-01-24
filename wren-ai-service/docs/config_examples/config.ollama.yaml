@@ -120,6 +120,9 @@ pipes:
     engine: wren_ui
   - name: sql_question_generation
     llm: litellm_llm.openai/phi4:14b
+  - name: sql_generation_reasoning
+    llm: litellm_llm.openai/phi4:14b
+
 ---
 settings:
   column_indexing_batch_size: 50
