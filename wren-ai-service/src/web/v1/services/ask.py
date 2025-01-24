@@ -173,6 +173,7 @@ class AskService:
                         )
                         for result in historical_question_result
                     ]
+                    sql_generation_reasoning = ""
                 else:
                     intent_classification_result = (
                         await self._pipelines["intent_classification"].run(
