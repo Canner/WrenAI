@@ -128,6 +128,7 @@ export const ASKING_TASK = gql`
       error {
         ...CommonError
       }
+      intentReasoning
     }
   }
   ${COMMON_ERROR}

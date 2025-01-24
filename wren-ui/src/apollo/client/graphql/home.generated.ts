@@ -25,7 +25,7 @@ export type AskingTaskQueryVariables = Types.Exact<{
 }>;
 
 
-export type AskingTaskQuery = { __typename?: 'Query', askingTask: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+export type AskingTaskQuery = { __typename?: 'Query', askingTask: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, intentReasoning?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
 
 export type ThreadsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -318,6 +318,7 @@ export const AskingTaskDocument = gql`
     error {
       ...CommonError
     }
+    intentReasoning
   }
 }
     ${CommonErrorFragmentDoc}`;

@@ -119,7 +119,9 @@ export type AskResult = AskResponse<
     viewId?: number | null;
   }>,
   AskResultStatus
->;
+> & {
+  intentReasoning?: string;
+};
 
 export enum RecommendationQuestionStatus {
   GENERATING = 'GENERATING',
