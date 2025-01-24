@@ -268,9 +268,8 @@ def prompt(
             "db_schemas token count is greater than 100,000, so we will prune columns"
         )
         db_schemas = [
-            ddl
+            build_table_ddl(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas
-            for ddl, _ in build_table_ddl(construct_db_schema)
         ]
 
         if history:
@@ -417,8 +416,9 @@ class Retrieval(BasicPipeline):
 
         # for the first time, we need to load the encodings
         _model = llm_provider.get_model()
-        if "gpt-4o" in _model or "gpt-4o-mini" in _model:
-            allow_using_db_schemas_without_pruning = True
+        if allow_using_db_schemas_without_pruning and (
+            "gpt-4o" in _model or "gpt-4o-mini" in _model
+        ):
             _encoding = tiktoken.get_encoding("o200k_base")
         else:
             _encoding = tiktoken.get_encoding("cl100k_base")
