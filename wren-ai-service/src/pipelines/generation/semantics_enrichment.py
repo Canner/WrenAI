@@ -88,27 +88,27 @@ def normalize(generate: dict) -> dict:
 
 
 ## End of Pipeline
-class ModelProperties(BaseModel):
+class Properties(BaseModel):
     alias: str
     description: str
 
 
 class ModelColumns(BaseModel):
     name: str
-    properties: ModelProperties
+    properties: Properties
 
 
 class SemanticModel(BaseModel):
     name: str
     columns: list[ModelColumns]
-    properties: ModelProperties
+    properties: Properties
 
 
 class SemanticResult(BaseModel):
     models: list[SemanticModel]
 
 
-semantics_enrichment_KWARGS = {
+SEMANTICS_ENRICHMENT_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -137,34 +137,9 @@ Guidelines:
 - Aliases should be intuitive and user-friendly
 - Use the user's context to inform the descriptions
 - Maintain technical accuracy while being accessible to non-technical users
-
-Output Format:
-{
-    "models": [{
-        "name": "model",
-        "columns": [{
-            "name": "column",
-            "properties": {
-                "alias": "User-friendly column name",
-                "description": "Clear explanation of column purpose"
-            }
-        }],
-        "properties": {
-            "alias": "User-friendly model name", 
-            "description": "Clear explanation of model purpose"
-        }
-    }]
-}
-
-Example:
-Input model "orders" with column "created_at" might become:
-{
-    "name": "created_at",
-    "properties": {
-        "alias": "Order Creation Date",
-        "description": "Timestamp when the order was first created in the system"
-    }
-}
+- IMPORTANT: Never modify the model/table and column names in the 'name' field as this will invalidate the data model
+- Only update the 'alias' field to provide user-friendly display names
+- When the user prompt includes operators to modify names, apply those modifications to the alias field only
 
 Focus on providing business value through clear, accurate descriptions while maintaining JSON structure integrity.
 """
@@ -185,7 +160,7 @@ class SemanticsEnrichment(BasicPipeline):
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(
                 system_prompt=system_prompt,
-                generation_kwargs=semantics_enrichment_KWARGS,
+                generation_kwargs=SEMANTICS_ENRICHMENT_KWARGS,
             ),
         }
         self._final = "normalize"
