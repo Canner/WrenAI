@@ -4,6 +4,7 @@ import { PROCESS_STATE } from '@/utils/enum';
 export const getIsProcessing = (status: PROCESS_STATE) =>
   [
     PROCESS_STATE.UNDERSTANDING,
+    PROCESS_STATE.PLANNING,
     PROCESS_STATE.GENERATING,
     PROCESS_STATE.SEARCHING,
   ].includes(status);
