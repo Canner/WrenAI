@@ -1136,7 +1136,7 @@ export const sampleDatasets: Record<string, SampleDataset> = {
     questions: [
       {
         question:
-          'What are the top 3 value for orders placed by customers in each city?',
+          'Which are the top 3 cities with the highest number of orders?',
         label: 'Ranking',
       },
       {
