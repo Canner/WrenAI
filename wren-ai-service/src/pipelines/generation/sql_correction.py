@@ -8,33 +8,33 @@ from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    TEXT_TO_SQL_RULES,
+    SqlGenerationResult,
     SQLGenPostProcessor,
-    sql_generation_system_prompt,
 )
 
 logger = logging.getLogger("wren-ai-service")
 
 
-sql_correction_user_prompt_template = """
+sql_correction_system_prompt = """
+### TASK ###
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
-### TASK ###
 Now you are given syntactically incorrect ANSI SQL query and related error message.
-With given database schema, please think step by step to correct the wrong ANSI SQL query.
+With given database schema, please think step by step to generate the syntactically correct ANSI SQL query without changing semantics.
 
+{TEXT_TO_SQL_RULES}
+"""
+
+sql_correction_user_prompt_template = """
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{{ alert }}
 
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
@@ -49,14 +49,12 @@ Let's think step by step.
 def prompts(
     documents: List[Document],
     invalid_generation_results: List[Dict],
-    alert: str,
     prompt_builder: PromptBuilder,
 ) -> list[dict]:
     return [
         prompt_builder.run(
             documents=documents,
             invalid_generation_result=invalid_generation_result,
-            alert=alert,
         )
         for invalid_generation_result in invalid_generation_results
     ]
@@ -84,16 +82,12 @@ async def post_process(
 ## End of Pipeline
 
 
-class SqlCorrectionResult(BaseModel):
-    sql: str
-
-
 SQL_CORRECTION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "sql_correction_results",
-            "schema": SqlCorrectionResult.model_json_schema(),
+            "schema": SqlGenerationResult.model_json_schema(),
         },
     }
 }
@@ -108,17 +102,13 @@ class SQLCorrection(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt,
+                system_prompt=sql_correction_system_prompt,
                 generation_kwargs=SQL_CORRECTION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-        }
-
-        self._configs = {
-            "alert": TEXT_TO_SQL_RULES,
         }
 
         super().__init__(
@@ -140,7 +130,6 @@ class SQLCorrection(BasicPipeline):
                 "documents": contexts,
                 "project_id": project_id,
                 **self._components,
-                **self._configs,
             },
         )
 
