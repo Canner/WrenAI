@@ -20,22 +20,24 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_expansion_system_prompt = """
 ### TASK ###
-You are a great data analyst. You are now given a task to expand original SQL by adding more columns or add more keywords such as DISTINCT.
+You are a great data analyst. You are now given a task to expand original SQL from user input.
 
 ### INSTRUCTIONS ###
-- Columns are given from the user's input
-- Columns to be added must belong to the given database schema; if no such column exists, keep sql empty string
+- Columns are given from the user's adjustment request
+- Columns to be adjusted must belong to the given database schema; if no such column exists, keep sql empty string
+- You can add/delete/modify columns, add/delete/modify keywords such as DISTINCT or apply aggregate functions on columns
+- Consider current time from user input if user's adjustment request is related to date and time
 """
 
 sql_expansion_user_prompt_template = """
-SQL: {{sql}}
-
-Database Schema:
+### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
 
-User's input: {{query}}
+### QUESTION ###
+User's adjustment request: {{query}}
+Original SQL: {{sql}}
 Current Time: {{ current_time }}
 """
 
