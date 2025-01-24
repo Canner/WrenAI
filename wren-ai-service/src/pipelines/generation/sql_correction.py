@@ -13,6 +13,7 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
+    TEXT_TO_SQL_RULES,
     SqlGenerationResult,
     SQLGenPostProcessor,
 )
@@ -20,7 +21,7 @@ from src.pipelines.generation.utils.sql import (
 logger = logging.getLogger("wren-ai-service")
 
 
-sql_correction_system_prompt = """
+sql_correction_system_prompt = f"""
 ### TASK ###
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
