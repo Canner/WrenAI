@@ -7,4 +7,3 @@ export * from './path';
 export * from './diagram';
 export * from './home';
 export * from './settings';
-export * from './sslMode';

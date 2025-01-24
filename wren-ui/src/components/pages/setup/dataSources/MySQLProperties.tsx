@@ -3,8 +3,9 @@ import { Form, Input, Select, Button, Upload } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
 import { UploadFile } from 'antd/lib/upload/interface';
 import { ERROR_TEXTS } from '@/utils/error';
-import { FORM_MODE, SSL_MODE } from '@/utils/enum';
+import { FORM_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
+import { SSLMode } from '@/apollo/server/types';
 
 interface Props {
   mode?: FORM_MODE;
@@ -65,7 +66,7 @@ const UploadSSL = (props) => {
 export default function MySQLProperties(props: Props) {
   const { mode } = props;
   const isEditMode = mode === FORM_MODE.EDIT;
-  const [sslMode, setSSLMode] = useState<string>(SSL_MODE.DISABLED);
+  const [sslMode, setSSLMode] = useState<string>(SSLMode.DISABLED);
   const onSSLModeChange = (value: string) => setSSLMode(value)
   return (
     <>
@@ -146,20 +147,20 @@ export default function MySQLProperties(props: Props) {
       >
         <Input placeholder="MySQL database name" disabled={isEditMode} />
       </Form.Item>
-      <Form.Item label="SSL mode" name="sslMode" initialValue={SSL_MODE.DISABLED}>
+      <Form.Item label="SSL mode" name="sslMode" initialValue={SSLMode.DISABLED}>
         <Select
           style={{ width: 120 }}
           onChange={onSSLModeChange}
           disabled={isEditMode}
           options={[
-            { value: SSL_MODE.DISABLED, label: 'Disabled' },
-            { value: SSL_MODE.ENABLED, label: 'Enabled' },
-            { value: SSL_MODE.VERIFY_CA, label: 'Verify CA' },
+            { value: SSLMode.DISABLED, label: 'Disabled' },
+            { value: SSLMode.ENABLED, label: 'Enabled' },
+            { value: SSLMode.VERIFY_CA, label: 'Verify CA' },
           ]}
         />
       </Form.Item>
       {
-        sslMode === SSL_MODE.VERIFY_CA &&
+        sslMode === SSLMode.VERIFY_CA &&
         <Form.Item
           label="SSL CA file"
           name="sslCA"
