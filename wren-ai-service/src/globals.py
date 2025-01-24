@@ -29,18 +29,18 @@ logger = logging.getLogger("wren-ai-service")
 class ServiceContainer:
     ask_service: AskService
     ask_details_service: AskDetailsService
+    chart_service: ChartService
+    chart_adjustment_service: ChartAdjustmentService
     question_recommendation: QuestionRecommendation
     relationship_recommendation: RelationshipRecommendation
     semantics_enrichment: SemanticsEnrichment
     semantics_preparation_service: SemanticsPreparationService
-    chart_service: ChartService
-    chart_adjustment_service: ChartAdjustmentService
     sql_answer_service: SqlAnswerService
     sql_expansion_service: SqlExpansionService
     sql_explanation_service: SqlExplanationService
-    sql_regeneration_service: SqlRegenerationService
     sql_pairs_preparation_service: SqlPairsPreparationService
     sql_question_service: SqlQuestionService
+    sql_regeneration_service: SqlRegenerationService
 
 
 @dataclass

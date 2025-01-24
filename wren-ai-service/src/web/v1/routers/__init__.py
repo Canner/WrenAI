@@ -7,10 +7,8 @@ from src.web.v1.routers import (
     chart_adjustment,
     question_recommendation,
     relationship_recommendation,
-    semantics_description,
-    semantics_preparation,
     semantics_enrichment,
-    semantics_preparations,
+    semantics_preparation,
     sql_answers,
     sql_expansions,
     sql_explanations,
@@ -25,8 +23,6 @@ router.include_router(ask_details.router)
 router.include_router(question_recommendation.router)
 router.include_router(relationship_recommendation.router)
 router.include_router(semantics_enrichment.router)
-router.include_router(semantics_preparations.router)
-router.include_router(semantics_description.router)
 router.include_router(semantics_preparation.router)
 router.include_router(sql_answers.router)
 router.include_router(sql_expansions.router)

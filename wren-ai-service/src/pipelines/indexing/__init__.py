@@ -120,8 +120,8 @@ from .table_description import TableDescription  # noqa: E402
 
 __all__ = [
     "DBSchema",
-    "TableDescription",
     "HistoricalQuestion",
-    "SqlPairsDeletion",
     "SqlPairs",
+    "SqlPairsDeletion",
+    "TableDescription",
 ]
