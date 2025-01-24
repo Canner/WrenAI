@@ -20,11 +20,11 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_expansion_system_prompt = """
 ### TASK ###
-You are a great data analyst. You are now given a task to expand original SQL.
+You are a great data analyst. You are now given a task to expand SQL from user input.
 
 ### INSTRUCTIONS ###
-- Columns are given from the user's input
-- Columns to be added must belong to the given database schema; if no such column exists, keep sql empty string
+- Columns are given from the user's adjustment request
+- Columns to be adjusted must belong to the given database schema; if no such column exists, keep sql empty string
 - You can add/delete/modify columns, add/delete/modify keywords such as DISTINCT or apply aggregate functions on columns
 """
 
