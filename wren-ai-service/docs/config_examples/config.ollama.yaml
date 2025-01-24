@@ -17,7 +17,6 @@ type: embedder
 provider: ollama_embedder
 models:
   - model: nomic-embed-text  # put your ollama embedder model name here
-    dimension: 768  # put your embedding model dimension here
 url: http://host.docker.internal:11434  # change this to your ollama host, url should be <ollama_url>
 timeout: 120
 
@@ -35,6 +34,7 @@ timeout: 120
 recreate_index: false
 
 ---
+# please change the llm and embedder names to the ones you want to use
 # the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06
 # the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 type: pipeline
