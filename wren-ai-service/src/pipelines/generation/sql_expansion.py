@@ -31,7 +31,6 @@ You are a great data analyst. You are now given a task to expand original SQL fr
 
 sql_expansion_user_prompt_template = """
 ### DATABASE SCHEMA ###
-
 {% for document in documents %}
     {{ document }}
 {% endfor %}
