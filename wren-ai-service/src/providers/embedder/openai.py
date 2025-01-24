@@ -73,7 +73,10 @@ class AsyncTextEmbedder(OpenAITextEmbedder):
                 model=self.model, input=text_to_embed
             )
 
-        meta = {"model": response.model, "usage": dict(response.usage)}
+        meta = {
+            "model": response.model,
+            "usage": dict(response.usage) if response.usage else {},
+        }
 
         return {"embedding": response.data[0].embedding, "meta": meta}
 
@@ -140,7 +143,7 @@ class AsyncDocumentEmbedder(OpenAIDocumentEmbedder):
             if "model" not in meta:
                 meta["model"] = response.model
             if "usage" not in meta:
-                meta["usage"] = dict(response.usage)
+                meta["usage"] = dict(response.usage) if response.usage else {}
             else:
                 meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
                 meta["usage"]["total_tokens"] += response.usage.total_tokens
