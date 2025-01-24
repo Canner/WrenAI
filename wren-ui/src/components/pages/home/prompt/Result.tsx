@@ -150,6 +150,7 @@ const NoResult = makeProcessingError({
 
 const Understanding = makeProcessing('Understanding question');
 const Searching = makeProcessing('Searching data');
+const Planning = makeProcessing('Organizing thoughts');
 const Generating = makeProcessing('Generating answer');
 const Finished = (props: Props) => {
   const { data, onSelectResult } = props;
@@ -269,6 +270,7 @@ const getDefaultStateComponent = (state: PROCESS_STATE) => {
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
       [PROCESS_STATE.SEARCHING]: Searching,
+      [PROCESS_STATE.PLANNING]: Planning,
       [PROCESS_STATE.GENERATING]: Generating,
       [PROCESS_STATE.FINISHED]: Finished,
       [PROCESS_STATE.FAILED]: Failed,

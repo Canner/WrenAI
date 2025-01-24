@@ -71,6 +71,7 @@ export interface AsyncQueryResponse {
 export enum AskResultStatus {
   UNDERSTANDING = 'UNDERSTANDING',
   SEARCHING = 'SEARCHING',
+  PLANNING = 'PLANNING',
   GENERATING = 'GENERATING',
   CORRECTING = 'CORRECTING',
   FINISHED = 'FINISHED',

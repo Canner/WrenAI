@@ -61,6 +61,7 @@ const convertAskingTaskToProcessState = (data: AskingTask) => {
   const processState = {
     [AskingTaskStatus.UNDERSTANDING]: PROCESS_STATE.UNDERSTANDING,
     [AskingTaskStatus.SEARCHING]: PROCESS_STATE.SEARCHING,
+    [AskingTaskStatus.PLANNING]: PROCESS_STATE.PLANNING,
     [AskingTaskStatus.GENERATING]: PROCESS_STATE.GENERATING,
     // Show generating state component when AI correcting
     [AskingTaskStatus.CORRECTING]: PROCESS_STATE.GENERATING,
@@ -202,6 +203,8 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     <PromptStyle className="d-flex align-end bg-gray-2 p-3 border border-gray-3 rounded">
       <Input.TextArea
         ref={$promptInput}
+        // disable grammarly
+        data-gramm="false"
         size="large"
         autoSize
         placeholder="Ask to explore your data"
