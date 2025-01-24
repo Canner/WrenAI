@@ -177,11 +177,14 @@ class RetrievalPipeline(Eval):
     ):
         super().__init__(meta)
 
-        _indexing = indexing.DBSchema(
+        _db_schema_indexing = indexing.DBSchema(
             **pipe_components["db_schema_indexing"],
             column_batch_size=settings.column_indexing_batch_size,
         )
-        deploy_model(mdl, _indexing)
+        _table_description_indexing = indexing.TableDescription(
+            **pipe_components["table_description_indexing"],
+        )
+        deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
         self._retrieval = retrieval.Retrieval(
             **pipe_components["db_schema_retrieval"],
@@ -247,6 +250,7 @@ class GenerationPipeline(Eval):
             samples=prediction["samples"],
             has_calculated_field=prediction.get("has_calculated_field", False),
             has_metric=prediction.get("has_metric", False),
+            sql_generation_reasoning=prediction.get("reasoning", ""),
         )
 
         prediction["actual_output"] = actual_output
@@ -337,6 +341,7 @@ class AskPipeline(Eval):
             sql_samples=[],
             has_calculated_field=has_calculated_field,
             has_metric=has_metric,
+            sql_generation_reasoning=prediction.get("reasoning", ""),
         )
 
         prediction["actual_output"] = actual_output

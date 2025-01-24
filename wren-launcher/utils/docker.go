@@ -159,6 +159,10 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 	config := string(content)
 	config = strings.ReplaceAll(config, "litellm_llm.gpt-4o-mini-2024-07-18", "litellm_llm."+generationModelToModelName[generationModel])
 
+	// replace allow_using_db_schemas_without_pruning setting
+	// enable this feature since OpenAI models have sufficient context window size to handle full schema
+	config = strings.ReplaceAll(config, "allow_using_db_schemas_without_pruning: false", "allow_using_db_schemas_without_pruning: true")
+
 	// write back to config.yaml
 	err = os.WriteFile(configPath, []byte(config), 0644)
 	if err != nil {
