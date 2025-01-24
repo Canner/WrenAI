@@ -27,6 +27,7 @@ export type AskingTask = {
   __typename?: 'AskingTask';
   candidates: Array<ResultCandidate>;
   error?: Maybe<Error>;
+  intentReasoning?: Maybe<Scalars['String']>;
   status: AskingTaskStatus;
   type?: Maybe<AskingTaskType>;
 };

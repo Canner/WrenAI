@@ -583,6 +583,7 @@ export const typeDefs = gql`
     type: AskingTaskType
     error: Error
     candidates: [ResultCandidate!]!
+    intentReasoning: String
   }
 
   input InstantRecommendedQuestionsInput {

@@ -105,6 +105,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
       candidates: askingTask?.candidates || [], // for text to sql answer, only one candidate
       askingStreamTask, // for general answer
       recommendedQuestions, // guiding user to ask
+      intentReasoning: askingTask?.intentReasoning || '',
     }),
     [data],
   );

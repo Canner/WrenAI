@@ -507,7 +507,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformAskResult(body: any): AskResult {
-    const { type } = body;
+    const { type, intent_reasoning } = body;
     const { status, error } = this.transformStatusAndError(body);
     const candidates = (body?.response || []).map((candidate: any) => ({
       type: candidate?.type?.toUpperCase() as AskCandidateType,
@@ -520,6 +520,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       status: status as AskResultStatus,
       error,
       response: candidates,
+      intentReasoning: intent_reasoning,
     };
   }
 
