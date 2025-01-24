@@ -368,7 +368,6 @@ class AskService:
                         contexts=documents,
                         invalid_generation_results=failed_dry_run_results,
                         project_id=ask_request.project_id,
-                        generation_reasoning=sql_generation_reasoning,
                     )
 
                     if valid_generation_results := sql_correction_results[
