@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.15.3"
+version = "0.15.4"
 description = ""
 authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
 license = "AGPL-3.0"
