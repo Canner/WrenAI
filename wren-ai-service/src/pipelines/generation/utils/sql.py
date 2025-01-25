@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from src.core.engine import (
     Engine,
     add_quotes,
+    clean_generation_result,
 )
 from src.web.v1.services import Configuration
 
@@ -29,7 +30,7 @@ class SQLBreakdownGenPostProcessor:
         replies: List[str],
         project_id: str | None = None,
     ) -> Dict[str, Any]:
-        cleaned_generation_result = orjson.loads(replies[0])
+        cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
 
         steps = cleaned_generation_result.get("steps", [])
         if not steps:
@@ -119,12 +120,16 @@ class SQLGenPostProcessor:
                 for reply in replies:
                     try:
                         cleaned_generation_result.append(
-                            orjson.loads(reply["replies"][0])["sql"]
+                            orjson.loads(clean_generation_result(reply["replies"][0]))[
+                                "sql"
+                            ]
                         )
                     except Exception as e:
                         logger.exception(f"Error in SQLGenPostProcessor: {e}")
             else:
-                cleaned_generation_result = orjson.loads(replies[0])["sql"]
+                cleaned_generation_result = orjson.loads(
+                    clean_generation_result(replies[0])
+                )["sql"]
 
             if isinstance(cleaned_generation_result, str):
                 cleaned_generation_result = [cleaned_generation_result]
@@ -336,6 +341,13 @@ You are a helpful assistant that converts natural language queries into SQL quer
 Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
 {TEXT_TO_SQL_RULES}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a SQL query in JSON format:
+
+{{
+    "sql": <SQL_QUERY_STRING>
+}}
 """
 
 calculated_field_instructions = """
