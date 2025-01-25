@@ -27,6 +27,13 @@ You are a great data analyst. You are now given a task to expand original SQL fr
 - Columns to be adjusted must belong to the given database schema; if no such column exists, keep sql empty string
 - You can add/delete/modify columns, add/delete/modify keywords such as DISTINCT or apply aggregate functions on columns
 - Consider current time from user input if user's adjustment request is related to date and time
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a SQL query in JSON format:
+
+{
+    "sql": <SQL_QUERY_STRING>
+}
 """
 
 sql_expansion_user_prompt_template = """

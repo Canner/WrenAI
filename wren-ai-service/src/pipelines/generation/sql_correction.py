@@ -26,9 +26,16 @@ sql_correction_system_prompt = f"""
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
 Now you are given syntactically incorrect ANSI SQL query and related error message.
-With given database schema, please think step by step to generate the syntactically correct ANSI SQL query without changing semantics.
+With given database schema, please generate the syntactically correct ANSI SQL query without changing original semantics.
 
 {TEXT_TO_SQL_RULES}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a corrected SQL query in JSON format:
+
+{{
+    "sql": <CORRECTED_SQL_QUERY_STRING>
+}}
 """
 
 sql_correction_user_prompt_template = """
