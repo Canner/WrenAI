@@ -46,7 +46,7 @@ class LitellmLLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        combined_generation_kwargs = {**self._model_kwargs, **(generation_kwargs or {})}
+        combined_generation_kwargs = {**(generation_kwargs or {}), **self._model_kwargs}
 
         async def _run(
             prompt: str,
