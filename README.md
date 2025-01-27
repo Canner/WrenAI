@@ -54,6 +54,7 @@
 Wren AI supports integration with various Large Language Models (LLMs), including but not limited to:
 - OpenAI Models
 - Azure OpenAI Models
+- DeepSeek Models
 - Google AI Studio – Gemini Models
 - Vertex AI Models (Gemini + Anthropic)
 - Bedrock Models
@@ -61,6 +62,8 @@ Wren AI supports integration with various Large Language Models (LLMs), includin
 - Groq Models
 - Ollama Models
 - Databricks Models
+
+Check [configuration examples here](https://github.com/Canner/WrenAI/tree/main/wren-ai-service/docs/config_examples)!
 
 > [!CAUTION]
 > The performance of Wren AI depends significantly on the capabilities of the LLM you choose. We strongly recommend using the most powerful model available for optimal results. Using less capable models may lead to reduced performance, slower response times, or inaccurate outputs.
