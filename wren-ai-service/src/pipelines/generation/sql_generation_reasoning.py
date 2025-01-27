@@ -25,6 +25,13 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 2. Give a step by step reasoning plan in order to answer user's question.
 3. The reasoning plan should be in the language same as the language user provided in the input.
 4. Make sure to consider the current time provided in the input if the user's question is related to the date/time.
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a reasoning plan in JSON format:
+
+{{
+    "reasoning_plan": <REASONING_PLAN_STRING>
+}}
 """
 
 sql_generation_reasoning_user_prompt_template = """
