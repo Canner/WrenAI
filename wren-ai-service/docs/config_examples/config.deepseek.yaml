@@ -18,7 +18,7 @@ models:
     n: 1
     temperature: 0
     response_format:
-      type: json_object
+      type: text
   model: deepseek/deepseek-chat
 
 ---
@@ -39,7 +39,7 @@ endpoint: http://wren-ui:3000
 type: document_store
 provider: qdrant
 location: http://qdrant:6333
-embedding_model_dim: 768  # put your embedding model dimension here
+embedding_model_dim: 3072  # put your embedding model dimension here
 timeout: 120
 recreate_index: false
 
