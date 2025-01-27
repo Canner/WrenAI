@@ -29,9 +29,9 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in JSON format:
 
-{{
+{
     "reasoning_plan": <REASONING_PLAN_STRING>
-}}
+}
 """
 
 sql_generation_reasoning_user_prompt_template = """
