@@ -61,8 +61,6 @@ data:
         n: 1
         seed: 0
         max_tokens: 4096
-        response_format:
-          type: json_object
     - model: gpt-4o-2024-08-06
       api_base: https://api.openai.com/v1
       api_key_name: LLM_OPENAI_API_KEY
@@ -71,8 +69,6 @@ data:
         n: 1
         seed: 0
         max_tokens: 4096
-        response_format:
-          type: json_object
 
     ---
     type: embedder

@@ -11,8 +11,6 @@ models:
     # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
     seed: 0
     max_tokens: 4096
-    response_format:
-      type: json_object
 - model: gpt-4o-2024-08-06
   api_base: https://api.openai.com/v1
   api_key_name: LLM_OPENAI_API_KEY
@@ -22,8 +20,6 @@ models:
     # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
     seed: 0
     max_tokens: 4096
-    response_format:
-      type: json_object
 
 ---
 type: embedder
