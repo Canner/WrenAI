@@ -3,7 +3,7 @@ from src.providers import loader
 
 def test_import_mods():
     loader.import_mods("src.providers")
-    assert len(loader.PROVIDERS) == 11
+    assert len(loader.PROVIDERS) == 12
 
 
 def test_get_provider():
