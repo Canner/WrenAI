@@ -32,6 +32,9 @@ def test_get_provider():
     provider = loader.get_provider("ollama_embedder")
     assert provider.__name__ == "OllamaEmbedderProvider"
 
+    provider = loader.get_provider("litellm_embedder")
+    assert provider.__name__ == "LitellmEmbedderProvider"
+
     # document store provider
     provider = loader.get_provider("qdrant")
     assert provider.__name__ == "QdrantProvider"
