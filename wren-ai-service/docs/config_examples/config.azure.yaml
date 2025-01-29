@@ -1,0 +1,151 @@
+type: llm
+provider: litellm_llm  # litellm supports Azure through its provider
+timeout: 120
+models:
+- model: azure/gpt-4     # Your Azure deployment name, put 'azure/' before deployment name
+  api_base: https://endpoint.openai.azure.com/      #Replace with your custom Azure endpoint
+  api_key_name: LLM_AZURE_OPENAI_API_KEY
+  deployment_name: gpt-4   # Optional
+  api_version: "2024-02-15-preview"
+  
+  kwargs:
+    temperature: 0
+    n: 1
+    seed: 0
+    max_tokens: 4096
+    response_format:
+      type: json_object
+
+---
+type: embedder
+provider: azure_openai_embedder  
+models:
+  - model: text-embedding-ada-002  # Your Azure deployment name
+    dimension: 1536  # Must match model output check for your model
+  
+api_base: https://endpoint.openai.azure.com/     # Replace with your custom Azure endpoint
+api_version: "2023-05-15"   # Your Azure deployment name
+timeout: 300
+
+---
+type: engine
+provider: wren_ui
+endpoint: http://wren-ui:3000
+
+---
+type: document_store
+#name: qdrant
+provider: qdrant
+location: http://qdrant:6333  # Donot set the QDRANT_API_KEY if you are using the qdrant from docker
+
+embedding_model_dim: 1536  # Must match model dimension from embedder
+timeout: 120
+recreate_index: true
+
+# For each pipe line component 
+# Replace llm with Azure deployed LLM model
+# Replace Embeddings with Azure deployed Embedding model
+---
+type: pipeline
+pipes:
+  - name: db_schema_indexing
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    document_store: qdrant  # Match document_store name
+    llm: litellm_llm.azure/gpt-4
+  - name: historical_question_indexing
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    document_store: qdrant
+  - name: table_description_indexing
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    document_store: qdrant
+  - name: db_schema_retrieval
+    llm: litellm_llm.azure/gpt-4
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    document_store: qdrant
+  - name: historical_question_retrieval
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    document_store: qdrant
+  - name: sql_generation
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: sql_correction
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: followup_sql_generation
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: sql_summary
+    llm: litellm_llm.azure/gpt-4
+  - name: sql_answer
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: sql_breakdown
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: sql_expansion
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: sql_explanation
+    llm: litellm_llm.azure/gpt-4
+  - name: sql_regeneration
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: semantics_description
+    llm: litellm_llm.azure/gpt-4
+  - name: relationship_recommendation
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: question_recommendation
+    llm: litellm_llm.azure/gpt-4
+  - name: intent_classification
+    llm: litellm_llm.azure/gpt-4
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    document_store: qdrant
+  - name: data_assistance
+    llm: litellm_llm.azure/gpt-4
+  - name: sql_pairs_preparation
+    document_store: qdrant
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    llm: litellm_llm.azure/gpt-4
+  - name: sql_pairs_deletion
+    document_store: qdrant
+    embedder: azure_openai_embedder.text-embedding-ada-002 
+  - name: sql_pairs_retrieval
+    document_store: qdrant
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    llm: litellm_llm.azure/gpt-4
+  - name: preprocess_sql_data
+    llm: litellm_llm.azure/gpt-4
+  - name: sql_executor
+    engine: wren_ui
+  - name: chart_generation
+    llm: litellm_llm.azure/gpt-4
+  - name: chart_adjustment
+    llm: litellm_llm.azure/gpt-4
+  - name: sql_pairs_indexing
+    document_store: qdrant
+    embedder: azure_openai_embedder.text-embedding-ada-002
+  - name: sql_generation_reasoning
+    llm: litellm_llm.azure/gpt-4
+  - name: question_recommendation_db_schema_retrieval
+    llm: litellm_llm.azure/gpt-4
+    embedder: azure_openai_embedder.text-embedding-ada-002
+    document_store: qdrant
+  - name: question_recommendation_sql_generation
+    llm: litellm_llm.azure/gpt-4
+    engine: wren_ui
+  - name: sql_question_generation
+    llm: litellm_llm.azure/gpt-4
+
+---
+settings:
+  column_indexing_batch_size: 50
+  table_retrieval_size: 10
+  table_column_retrieval_size: 100
+  allow_using_db_schemas_without_pruning: false
+  query_cache_maxsize: 1000
+  query_cache_ttl: 3600
+  langfuse_host: https://cloud.langfuse.com
+  langfuse_enable: true
+  logging_level: DEBUG
+  development: false
