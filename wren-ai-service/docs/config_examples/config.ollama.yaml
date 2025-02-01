@@ -16,8 +16,8 @@ models:
 type: embedder
 provider: litellm_embedder
 models:
-- model: openai/nomic-embed-text  # put your ollama embedder model name here
-  api_base: http://host.docker.internal:11434/v1  # change this to your ollama host, url should be <ollama_url>
+- model: openai/nomic-embed-text  # put your ollama embedder model name here, openai/<ollama_model_name>
+  api_base: http://host.docker.internal:11434/v1  # change this to your ollama host, api_base should be <ollama_url>/v1
   timeout: 120
 
 ---
