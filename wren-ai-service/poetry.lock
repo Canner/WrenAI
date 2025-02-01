@@ -2068,13 +2068,13 @@ hyperframe = ">=6.0,<7"
 
 [[package]]
 name = "haystack-ai"
-version = "2.9.0"
+version = "2.7.0"
 description = "LLM framework to build customizable, production-ready LLM applications. Connect components (models, vector DBs, file converters) to pipelines or agents that can interact with your data."
 optional = false
-python-versions = "<3.13,>=3.8"
+python-versions = ">=3.8"
 files = [
-    {file = "haystack_ai-2.9.0-py3-none-any.whl", hash = "sha256:e6f80ffdb1f775d1ab44612862b1a1d2b6a43558f875cce1944f0342c270d45f"},
-    {file = "haystack_ai-2.9.0.tar.gz", hash = "sha256:ffaf32a8d1a3b15e5f6dc9277670f7167d2651f8c0c778178649b20c693f3dcd"},
+    {file = "haystack_ai-2.7.0-py3-none-any.whl", hash = "sha256:9226fb099403ed676a7fee908a0c0dd6435d52bc5a092c867c34958333a0d358"},
+    {file = "haystack_ai-2.7.0.tar.gz", hash = "sha256:b950bbba229c3cb036cf4db1726bea8c8d1ca8c8b7a9afe27225394e55c6ba65"},
 ]
 
 [package.dependencies]
@@ -2084,10 +2084,9 @@ lazy-imports = "*"
 more-itertools = "*"
 networkx = "*"
 numpy = "*"
-openai = ">=1.56.1"
+openai = ">=1.1.0"
 pandas = "*"
 posthog = "*"
-pydantic = "*"
 python-dateutil = "*"
 pyyaml = "*"
 requests = "*"
@@ -7111,4 +7110,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12.*, <3.13"
-content-hash = "c25a04c365e863e196cdbfe695256fd980c021a4f3e395d379049e80625d29d1"
+content-hash = "91928923473008bda18bbd127286f65470851b215f18478ee81f19f53048ff61"
