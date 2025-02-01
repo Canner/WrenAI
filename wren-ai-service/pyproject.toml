@@ -8,7 +8,7 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.12.*, <4.0"
+python = ">=3.12.*, <3.13"
 fastapi = "^0.115.2"
 uvicorn = {extras = ["standard"], version = "^0.30.1"}
 python-dotenv = "^1.0.1"
