@@ -46,8 +46,10 @@ SQL:
 User's Question: {{ query }}
 Current Time: {{ current_time }}
 
+{% if sql_generation_reasoning %}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
+{% endif %}
 
 Let's think step by step.
 """
@@ -58,8 +60,8 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: List[str],
-    sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
+    sql_generation_reasoning: str | None = None,
     configuration: Configuration | None = None,
     sql_samples: List[Dict] | None = None,
     has_calculated_field: bool = False,
@@ -138,7 +140,7 @@ class SQLGeneration(BasicPipeline):
         self,
         query: str,
         contexts: List[str],
-        sql_generation_reasoning: str,
+        sql_generation_reasoning: str | None = None,
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
