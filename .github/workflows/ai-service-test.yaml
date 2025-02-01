@@ -42,7 +42,7 @@ jobs:
           python-version-file: ./wren-ai-service/pyproject.toml
           cache: "poetry"
       - name: Install the project dependencies
-        run: poetry install --without dev,eval
+        run: poetry install --without eval
       - name: Install Just
         uses: extractions/setup-just@v2
         with:
