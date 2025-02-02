@@ -6,25 +6,24 @@ models:
   api_base: https://endpoint.openai.azure.com/      #Replace with your custom Azure endpoint
   api_key_name: LLM_AZURE_OPENAI_API_KEY
   deployment_name: gpt-4   # Optional
-  api_version: "2024-02-15-preview"
+  api_version: 2024-02-15-preview
   
   kwargs:
     temperature: 0
     n: 1
     seed: 0
     max_tokens: 4096
-    response_format:
-      type: json_object
+    
 
 ---
 type: embedder
 provider: azure_openai_embedder  
 models:
   - model: text-embedding-ada-002  # Your Azure deployment name
-    dimension: 1536  # Must match model output check for your model
+      # Must match model output check for your model
   
 api_base: https://endpoint.openai.azure.com/     # Replace with your custom Azure endpoint
-api_version: "2023-05-15"   # Your Azure deployment name
+api_version: 2023-05-15  # Your Azure deployment name
 timeout: 300
 
 ---
