@@ -40,7 +40,7 @@ provider: qdrant
 location: http://qdrant:6333
 embedding_model_dim: 3072
 timeout: 120
-recreate_index: false
+recreate_index: true
 
 ---
 type: pipeline
