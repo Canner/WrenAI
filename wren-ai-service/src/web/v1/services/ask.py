@@ -102,6 +102,7 @@ class AskService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
+        allow_sql_generation_reasoning: bool = True,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -109,6 +110,7 @@ class AskService:
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
 
     def _is_stopped(self, query_id: str):
         if (
@@ -142,6 +144,7 @@ class AskService:
         query_id = ask_request.query_id
         rephrased_question = None
         intent_reasoning = None
+        sql_generation_reasoning = None
         api_results = []
 
         try:
@@ -267,7 +270,11 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
-            if not self._is_stopped(query_id) and not api_results:
+            if (
+                not self._is_stopped(query_id)
+                and not api_results
+                and self._allow_sql_generation_reasoning
+            ):
                 self._ask_results[query_id] = AskResultResponse(
                     status="planning",
                     type="TEXT_TO_SQL",

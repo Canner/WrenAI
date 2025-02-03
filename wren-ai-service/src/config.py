@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     table_column_retrieval_size: int = Field(default=100)
     allow_using_db_schemas_without_pruning: bool = Field(default=False)
 
+    # generation config
+    allow_sql_generation_reasoning: bool = Field(default=True)
+
     # service config
     query_cache_ttl: int = Field(default=3600)  # unit: seconds
     query_cache_maxsize: int = Field(
