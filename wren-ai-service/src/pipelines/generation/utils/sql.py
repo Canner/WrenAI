@@ -45,8 +45,8 @@ class SQLBreakdownGenPostProcessor:
         steps[-1]["cte_name"] = ""
 
         for step in steps:
-            step["sql"], no_error = add_quotes(step["sql"])
-            if not no_error:
+            step["sql"], error_message = add_quotes(step["sql"])
+            if not error_message:
                 return {
                     "results": {
                         "description": cleaned_generation_result["description"],
@@ -160,9 +160,9 @@ class SQLGenPostProcessor:
         invalid_generation_results = []
 
         async def _task(sql: str):
-            quoted_sql, no_error = add_quotes(sql)
+            quoted_sql, error_message = add_quotes(sql)
 
-            if no_error:
+            if not error_message:
                 status, _, addition = await self._engine.execute_sql(
                     quoted_sql, session, project_id=project_id
                 )
@@ -188,7 +188,7 @@ class SQLGenPostProcessor:
                     {
                         "sql": sql,
                         "type": "ADD_QUOTES",
-                        "error": "add_quotes failed",
+                        "error": error_message,
                     }
                 )
 
