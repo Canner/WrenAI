@@ -30,18 +30,16 @@ endpoint: http://wren-ui:3000
 
 ---
 type: document_store
-#name: qdrant
 provider: qdrant
 location: http://qdrant:6333  # Donot set the QDRANT_API_KEY if you are using the qdrant from docker
-
 embedding_model_dim: 1536  # Must match model dimension from embedder
 timeout: 120
 recreate_index: true
 
-# For each pipe line component 
-# Replace llm with Azure deployed LLM model
-# Replace Embeddings with Azure deployed Embedding model
 ---
+# please change the llm and embedder names to the ones you want to use
+# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06
+# the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 type: pipeline
 pipes:
   - name: db_schema_indexing
