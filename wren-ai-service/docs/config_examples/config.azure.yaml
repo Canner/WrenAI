@@ -2,9 +2,9 @@ type: llm
 provider: litellm_llm  # litellm supports Azure through its provider
 timeout: 120
 models:
+# put AZURE_API_KEY=<your_api_key> in ~/.wrenai/.env
 - model: azure/gpt-4     # Your Azure deployment name, put 'azure/' before deployment name
   api_base: https://endpoint.openai.azure.com  # Replace with your custom Azure endpoint
-  api_key_name: LLM_AZURE_OPENAI_API_KEY
   api_version: 2024-02-15-preview
   kwargs:
     temperature: 0
@@ -17,6 +17,7 @@ models:
 type: embedder
 provider: litellm_embedder  
 models:
+# put AZURE_API_KEY=<your_api_key> in ~/.wrenai/.env
 - model: azure/text-embedding-ada-002  # Your Azure deployment name, put 'azure/' before deployment name
   api_base: https://endpoint.openai.azure.com  # Replace with your custom Azure endpoint
   api_version: 2023-05-15
