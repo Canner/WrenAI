@@ -69,6 +69,14 @@ data:
         n: 1
         seed: 0
         max_tokens: 4096
+    - model: o3-mini-2025-01-31
+      api_base: https://api.openai.com/v1
+      api_key_name: LLM_OPENAI_API_KEY
+      kwargs:
+        n: 1
+        seed: 0
+        max_completion_tokens: 4096
+        reasoning_effort: low
 
     ---
     type: embedder
