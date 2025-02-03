@@ -1,12 +1,11 @@
 type: llm
-provider: litellm_llm  # litellm supports Azure through its provider
+provider: litellm_llm
 timeout: 120
 models:
+# put AZURE_API_KEY=<your_api_key> in ~/.wrenai/.env
 - model: azure/gpt-4     # Your Azure deployment name, put 'azure/' before deployment name
-  api_base: https://endpoint.openai.azure.com/      #Replace with your custom Azure endpoint
-  api_key_name: LLM_AZURE_OPENAI_API_KEY
+  api_base: https://endpoint.openai.azure.com  # Replace with your custom Azure endpoint
   api_version: 2024-02-15-preview
-  
   kwargs:
     temperature: 0
     n: 1
@@ -16,14 +15,13 @@ models:
 
 ---
 type: embedder
-provider: azure_openai_embedder  
+provider: litellm_embedder  
 models:
-  - model: text-embedding-ada-002  # Your Azure deployment name
-      # Must match model output check for your model
-  
-api_base: https://endpoint.openai.azure.com/     # Replace with your custom Azure endpoint
-api_version: 2023-05-15  # Your Azure deployment name
-timeout: 300
+# put AZURE_API_KEY=<your_api_key> in ~/.wrenai/.env
+- model: azure/text-embedding-ada-002  # Your Azure deployment name, put 'azure/' before deployment name
+  api_base: https://endpoint.openai.azure.com  # Replace with your custom Azure endpoint
+  api_version: 2023-05-15
+  timeout: 300
 
 ---
 type: engine
@@ -32,36 +30,34 @@ endpoint: http://wren-ui:3000
 
 ---
 type: document_store
-#name: qdrant
 provider: qdrant
 location: http://qdrant:6333  # Donot set the QDRANT_API_KEY if you are using the qdrant from docker
-
 embedding_model_dim: 1536  # Must match model dimension from embedder
 timeout: 120
 recreate_index: true
 
-# For each pipe line component 
-# Replace llm with Azure deployed LLM model
-# Replace Embeddings with Azure deployed Embedding model
 ---
+# please change the llm and embedder names to the ones you want to use
+# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06
+# the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 type: pipeline
 pipes:
   - name: db_schema_indexing
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     document_store: qdrant  # Match document_store name
     llm: litellm_llm.azure/gpt-4
   - name: historical_question_indexing
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     document_store: qdrant
   - name: table_description_indexing
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     document_store: qdrant
   - name: db_schema_retrieval
     llm: litellm_llm.azure/gpt-4
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     document_store: qdrant
   - name: historical_question_retrieval
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     document_store: qdrant
   - name: sql_generation
     llm: litellm_llm.azure/gpt-4
@@ -97,20 +93,20 @@ pipes:
     llm: litellm_llm.azure/gpt-4
   - name: intent_classification
     llm: litellm_llm.azure/gpt-4
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     document_store: qdrant
   - name: data_assistance
     llm: litellm_llm.azure/gpt-4
   - name: sql_pairs_preparation
     document_store: qdrant
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     llm: litellm_llm.azure/gpt-4
   - name: sql_pairs_deletion
     document_store: qdrant
-    embedder: azure_openai_embedder.text-embedding-ada-002 
+    embedder: litellm_embedder.azure/text-embedding-ada-002 
   - name: sql_pairs_retrieval
     document_store: qdrant
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     llm: litellm_llm.azure/gpt-4
   - name: preprocess_sql_data
     llm: litellm_llm.azure/gpt-4
@@ -122,12 +118,12 @@ pipes:
     llm: litellm_llm.azure/gpt-4
   - name: sql_pairs_indexing
     document_store: qdrant
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
   - name: sql_generation_reasoning
     llm: litellm_llm.azure/gpt-4
   - name: question_recommendation_db_schema_retrieval
     llm: litellm_llm.azure/gpt-4
-    embedder: azure_openai_embedder.text-embedding-ada-002
+    embedder: litellm_embedder.azure/text-embedding-ada-002
     document_store: qdrant
   - name: question_recommendation_sql_generation
     llm: litellm_llm.azure/gpt-4

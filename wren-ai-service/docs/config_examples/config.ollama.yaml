@@ -14,11 +14,11 @@ models:
 
 ---
 type: embedder
-provider: ollama_embedder
+provider: litellm_embedder
 models:
-  - model: nomic-embed-text  # put your ollama embedder model name here
-url: http://host.docker.internal:11434  # change this to your ollama host, url should be <ollama_url>
-timeout: 120
+- model: openai/nomic-embed-text  # put your ollama embedder model name here, openai/<ollama_model_name>
+  api_base: http://host.docker.internal:11434/v1  # change this to your ollama host, api_base should be <ollama_url>/v1
+  timeout: 120
 
 ---
 type: engine
@@ -40,20 +40,20 @@ recreate_index: false
 type: pipeline
 pipes:
   - name: db_schema_indexing
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     document_store: qdrant
   - name: historical_question_indexing
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     document_store: qdrant
   - name: table_description_indexing
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     document_store: qdrant
   - name: db_schema_retrieval
     llm: litellm_llm.openai/phi4:14b
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     document_store: qdrant
   - name: historical_question_retrieval
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     document_store: qdrant
   - name: sql_generation
     llm: litellm_llm.openai/phi4:14b
@@ -89,7 +89,7 @@ pipes:
     llm: litellm_llm.openai/phi4:14b
   - name: question_recommendation_db_schema_retrieval
     llm: litellm_llm.openai/phi4:14b
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     document_store: qdrant
   - name: question_recommendation_sql_generation
     llm: litellm_llm.openai/phi4:14b
@@ -100,19 +100,19 @@ pipes:
     llm: litellm_llm.openai/phi4:14b
   - name: intent_classification
     llm: litellm_llm.openai/phi4:14b
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     document_store: qdrant
   - name: data_assistance
     llm: litellm_llm.openai/phi4:14b
   - name: sql_pairs_indexing
     document_store: qdrant
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
   - name: sql_pairs_deletion
     document_store: qdrant
-    embedder: ollama_embedder.nomic-embed-text 
+    embedder: litellm_embedder.openai/nomic-embed-text 
   - name: sql_pairs_retrieval
     document_store: qdrant
-    embedder: ollama_embedder.nomic-embed-text
+    embedder: litellm_embedder.openai/nomic-embed-text
     llm: litellm_llm.openai/phi4:14b
   - name: preprocess_sql_data
     llm: litellm_llm.openai/phi4:14b

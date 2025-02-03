@@ -123,9 +123,13 @@ def embedder_processor(entry: dict) -> dict:
     returned = {}
     for model in entry["models"]:
         identifier = f"{entry['provider']}.{model['model']}"
+        model_additional_params = {
+            k: v for k, v in model.items() if k not in ["model", "kwargs"]
+        }
         returned[identifier] = {
             "provider": entry["provider"],
             "model": model["model"],
+            **model_additional_params,
             **others,
         }
 

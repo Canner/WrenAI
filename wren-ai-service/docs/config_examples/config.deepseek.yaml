@@ -30,12 +30,13 @@ models:
 
 ---
 type: embedder
-provider: openai_embedder
+provider: litellm_embedder
 models:
-  # find EMBEDDER_OPENAI_API_KEY and fill in value of api key in ~/.wrenai/.env
-  - model: text-embedding-3-large  # put your openai compatible embedder model name here
-url: https://api.openai.com/v1  # change this according to your openai compatible embedder model
-timeout: 120
+  # define OPENAI_API_KEY=<api_key> in ~/.wrenai/.env if you are using openai embedding model
+  # please refer to LiteLLM documentation for more details: https://docs.litellm.ai/docs/providers
+  - model: text-embedding-3-large  # put your embedding model name here, if it is not openai embedding model, should be <provider>/<model_name>
+    api_base: https://api.openai.com/v1  # change this according to your embedding model
+    timeout: 120
 
 ---
 type: engine
@@ -57,20 +58,20 @@ recreate_index: false
 type: pipeline
 pipes:
   - name: db_schema_indexing
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     document_store: qdrant
   - name: historical_question_indexing
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     document_store: qdrant
   - name: table_description_indexing
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     document_store: qdrant
   - name: db_schema_retrieval
     llm: litellm_llm.deepseek/deepseek-coder
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     document_store: qdrant
   - name: historical_question_retrieval
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     document_store: qdrant
   - name: sql_generation
     llm: litellm_llm.deepseek/deepseek-coder
@@ -106,7 +107,7 @@ pipes:
     llm: litellm_llm.deepseek/deepseek-coder
   - name: question_recommendation_db_schema_retrieval
     llm: litellm_llm.deepseek/deepseek-coder
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     document_store: qdrant
   - name: question_recommendation_sql_generation
     llm: litellm_llm.deepseek/deepseek-coder
@@ -117,19 +118,19 @@ pipes:
     llm: litellm_llm.deepseek/deepseek-coder
   - name: intent_classification
     llm: litellm_llm.deepseek/deepseek-coder
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     document_store: qdrant
   - name: data_assistance
     llm: litellm_llm.deepseek/deepseek-chat
   - name: sql_pairs_indexing
     document_store: qdrant
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
   - name: sql_pairs_deletion
     document_store: qdrant
-    embedder: openai_embedder.text-embedding-3-large 
+    embedder: litellm_embedder.text-embedding-3-large 
   - name: sql_pairs_retrieval
     document_store: qdrant
-    embedder: openai_embedder.text-embedding-3-large
+    embedder: litellm_embedder.text-embedding-3-large
     llm: litellm_llm.deepseek/deepseek-coder
   - name: preprocess_sql_data
     llm: litellm_llm.deepseek/deepseek-coder
