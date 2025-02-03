@@ -5,7 +5,6 @@ models:
 - model: azure/gpt-4     # Your Azure deployment name, put 'azure/' before deployment name
   api_base: https://endpoint.openai.azure.com/      #Replace with your custom Azure endpoint
   api_key_name: LLM_AZURE_OPENAI_API_KEY
-  deployment_name: gpt-4   # Optional
   api_version: 2024-02-15-preview
   
   kwargs:
