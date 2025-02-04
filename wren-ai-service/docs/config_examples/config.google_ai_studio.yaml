@@ -16,8 +16,8 @@ type: embedder
 provider: litellm_embedder
 models:
   # put GEMINI_API_KEY=<your_api_key> in ~/.wrenai/.env
-  - model: gemini/text-embedding-004  # gemini/<gemini_model_name>
-    api_base: https://generativelanguage.googleapis.com/v1beta/openai  # change this according to your embedding model
+  - model: text-embedding-004
+    api_base: https://generativelanguage.googleapis.com/v1beta/models
     timeout: 120
 
 ---
