@@ -100,7 +100,7 @@ intent_classification_user_prompt_template = """
 
 ### INPUT ###
 {% if query_history %}
-User's previous questions: {{ query_history }}
+User's previous SQLs: {{ query_history }}
 {% endif %}
 User's question: {{query}}
 Current Time: {{ current_time }}
@@ -221,14 +221,10 @@ def prompt(
     history: Optional[AskHistory] = None,
     configuration: Configuration | None = None,
 ) -> dict:
-    previous_query_summaries = (
-        [step.summary for step in history.steps if step.summary] if history else []
-    )
-
     return prompt_builder.run(
         query=query,
         db_schemas=construct_db_schemas,
-        query_history=previous_query_summaries,
+        query_history=history.sql if history else [],
         current_time=configuration.show_current_time(),
     )
 
