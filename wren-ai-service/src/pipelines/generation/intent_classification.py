@@ -32,6 +32,7 @@ Also you should provide reasoning for the classification clearly and concisely w
     - First, try to recognize adjectives in the user's question that are important to the user's intent.
     - Second, change the adjectives to more specific and clear ones that can be matched to columns in the database schema.
     - Third, only if the user's question contains time/date related information, take the current time into consideration and add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
+    - Fourth, if the user's input contains previous SQLs, consider them to make the rephrased question.
 - MUST use the rephrased user's question to make the intent classification.
 - MUST put the rephrased user's question in the rephrased_question output.
 - REASONING MUST be within 20 words.
