@@ -32,11 +32,11 @@ models:
 type: embedder
 provider: litellm_embedder
 models:
-  # define OPENAI_API_KEY=<api_key> in ~/.wrenai/.env if you are using openai embedding model
-  # please refer to LiteLLM documentation for more details: https://docs.litellm.ai/docs/providers
-  - model: text-embedding-3-large  # put your embedding model name here, if it is not openai embedding model, should be <provider>/<model_name>
-    api_base: https://api.openai.com/v1  # change this according to your embedding model
-    timeout: 120
+# define OPENAI_API_KEY=<api_key> in ~/.wrenai/.env if you are using openai embedding model
+# please refer to LiteLLM documentation for more details: https://docs.litellm.ai/docs/providers
+- model: text-embedding-3-large  # put your embedding model name here, if it is not openai embedding model, should be <provider>/<model_name>
+  api_base: https://api.openai.com/v1  # change this according to your embedding model
+  timeout: 120
 
 ---
 type: engine
