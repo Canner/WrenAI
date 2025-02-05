@@ -21,8 +21,8 @@ logger = logging.getLogger("wren-ai-service")
 
 class SqlPair(BaseModel):
     id: str
-    sql: str
-    question: str
+    sql: str = ""
+    question: str = ""
 
 
 @component
@@ -179,6 +179,19 @@ class SqlPairs(BasicPipeline):
                 "project_id": project_id,
                 **self._components,
             },
+        )
+
+    @observe(name="Clean Documents for SQL Pairs")
+    async def clean(
+        self,
+        sql_pairs: List[SqlPair],
+        project_id: Optional[str] = None,
+    ) -> None:
+        await clean(
+            sql_pairs=sql_pairs,
+            embedding={"documents": []},
+            cleaner=self._components["cleaner"],
+            project_id=project_id,
         )
 
 

@@ -92,27 +92,27 @@ class SqlPairsPreparationService:
 
         try:
             # TODO: Implement proper SQL pairs preparation functionality. Current implementation needs to be updated.
-            await self._pipelines["sql_pairs_preparation"].run(
+            await self._pipelines["sql_pairs"].run(
                 sql_pairs=prepare_sql_pairs_request.sql_pairs,
                 project_id=prepare_sql_pairs_request.project_id,
             )
 
-            self._prepare_sql_pairs_statuses[
-                prepare_sql_pairs_request.query_id
-            ] = SqlPairsPreparationStatusResponse(
-                status="finished",
+            self._prepare_sql_pairs_statuses[prepare_sql_pairs_request.query_id] = (
+                SqlPairsPreparationStatusResponse(
+                    status="finished",
+                )
             )
         except Exception as e:
             logger.exception(f"Failed to prepare SQL pairs: {e}")
 
-            self._prepare_sql_pairs_statuses[
-                prepare_sql_pairs_request.query_id
-            ] = SqlPairsPreparationStatusResponse(
-                status="failed",
-                error=SqlPairsPreparationStatusResponse.SqlPairsPreparationError(
-                    code="OTHERS",
-                    message=f"Failed to prepare SQL pairs: {e}",
-                ),
+            self._prepare_sql_pairs_statuses[prepare_sql_pairs_request.query_id] = (
+                SqlPairsPreparationStatusResponse(
+                    status="failed",
+                    error=SqlPairsPreparationStatusResponse.SqlPairsPreparationError(
+                        code="OTHERS",
+                        message=f"Failed to prepare SQL pairs: {e}",
+                    ),
+                )
             )
 
             results["metadata"]["error_type"] = "INDEXING_FAILED"
@@ -122,7 +122,7 @@ class SqlPairsPreparationService:
 
     @observe(name="Delete SQL Pairs")
     @trace_metadata
-    async def delete_sql_pairs(
+    async def delete(
         self,
         delete_sql_pairs_request: DeleteSqlPairsRequest,
         **kwargs,
@@ -135,28 +135,28 @@ class SqlPairsPreparationService:
         }
 
         try:
-            # todo: use sql pairs pipeline instead, there have the method to delete sql pairs
-            await self._pipelines["sql_pairs_deletion"].run(
-                sql_pair_ids=delete_sql_pairs_request.ids,
-                id=delete_sql_pairs_request.project_id,
+            sql_pairs = [SqlPair(id=id) for id in delete_sql_pairs_request.ids]
+            await self._pipelines["sql_pairs"].clean(
+                sql_pairs=sql_pairs,
+                project_id=delete_sql_pairs_request.project_id,
             )
 
-            self._prepare_sql_pairs_statuses[
-                delete_sql_pairs_request.query_id
-            ] = SqlPairsPreparationStatusResponse(
-                status="finished",
+            self._prepare_sql_pairs_statuses[delete_sql_pairs_request.query_id] = (
+                SqlPairsPreparationStatusResponse(
+                    status="finished",
+                )
             )
         except Exception as e:
             logger.exception(f"Failed to delete SQL pairs: {e}")
 
-            self._prepare_sql_pairs_statuses[
-                delete_sql_pairs_request.query_id
-            ] = SqlPairsPreparationStatusResponse(
-                status="failed",
-                error=SqlPairsPreparationStatusResponse.SqlPairsPreparationError(
-                    code="OTHERS",
-                    message=f"Failed to delete SQL pairs: {e}",
-                ),
+            self._prepare_sql_pairs_statuses[delete_sql_pairs_request.query_id] = (
+                SqlPairsPreparationStatusResponse(
+                    status="failed",
+                    error=SqlPairsPreparationStatusResponse.SqlPairsPreparationError(
+                        code="OTHERS",
+                        message=f"Failed to delete SQL pairs: {e}",
+                    ),
+                )
             )
 
             results["metadata"]["error_type"] = "DELETION_FAILED"

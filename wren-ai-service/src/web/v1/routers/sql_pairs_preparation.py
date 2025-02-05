@@ -104,7 +104,7 @@ async def delete_sql_pairs(
     )
 
     background_tasks.add_task(
-        service_container.sql_pairs_preparation_service.delete_sql_pairs,
+        service_container.sql_pairs_preparation_service.delete,
         delete_sql_pairs_request,
         service_metadata=asdict(service_metadata),
     )

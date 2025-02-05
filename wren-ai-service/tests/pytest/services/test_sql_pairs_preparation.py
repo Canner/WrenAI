@@ -136,7 +136,7 @@ async def test_sql_pairs_deletion(
         project_id="fake-id",
     )
     deletion_request.query_id = request.query_id
-    await sql_pairs_preparation_service.delete_sql_pairs(deletion_request)
+    await sql_pairs_preparation_service.delete(deletion_request)
 
     sql_pairs_preparation_response = (
         sql_pairs_preparation_service.get_prepare_sql_pairs_status(

@@ -244,7 +244,7 @@ def create_service_container(
         ),
         sql_pairs_preparation_service=SqlPairsPreparationService(
             pipelines={
-                "sql_pairs_preparation": indexing.SqlPairs(
+                "sql_pairs": indexing.SqlPairs(
                     **pipe_components["sql_pairs_indexing"],
                     sql_pairs_path=settings.sql_pairs_path,
                 )
