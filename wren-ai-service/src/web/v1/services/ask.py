@@ -146,6 +146,8 @@ class AskService:
         error_message = ""
 
         try:
+            user_query = ask_request.query
+
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
             if not self._is_stopped(query_id):
@@ -154,7 +156,7 @@ class AskService:
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=ask_request.query,
+                    query=user_query,
                     id=ask_request.project_id,
                 )
 
@@ -178,7 +180,7 @@ class AskService:
                 elif self._allow_intent_classification:
                     intent_classification_result = (
                         await self._pipelines["intent_classification"].run(
-                            query=ask_request.query,
+                            query=user_query,
                             history=ask_request.history,
                             id=ask_request.project_id,
                             configuration=ask_request.configurations,
@@ -190,11 +192,8 @@ class AskService:
                     )
                     intent_reasoning = intent_classification_result.get("reasoning")
 
-                    user_query = (
-                        ask_request.query
-                        if not rephrased_question
-                        else rephrased_question
-                    )
+                    if rephrased_question:
+                        user_query = rephrased_question
 
                     if intent == "MISLEADING_QUERY":
                         self._ask_results[query_id] = AskResultResponse(
