@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -106,10 +106,13 @@ async def generate_sql_in_followup(prompt: dict, generator: Any) -> dict:
 async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
+    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
-        generate_sql_in_followup.get("replies"), project_id=project_id
+        generate_sql_in_followup.get("replies"),
+        timeout=engine_timeout,
+        project_id=project_id,
     )
 
 
@@ -132,6 +135,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
@@ -143,6 +147,10 @@ class FollowUpSQLGeneration(BasicPipeline):
                 template=text_to_sql_with_followup_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
+        }
+
+        self._configs = {
+            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -176,6 +184,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 **self._components,
+                **self._configs,
             },
         )
 

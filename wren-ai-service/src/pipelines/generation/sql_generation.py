@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -94,9 +94,14 @@ async def generate_sql(
 async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
-    return await post_processor.run(generate_sql.get("replies"), project_id=project_id)
+    return await post_processor.run(
+        generate_sql.get("replies"),
+        timeout=engine_timeout,
+        project_id=project_id,
+    )
 
 
 ## End of Pipeline
@@ -118,6 +123,7 @@ class SQLGeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
@@ -129,6 +135,10 @@ class SQLGeneration(BasicPipeline):
                 template=sql_generation_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
+        }
+
+        self._configs = {
+            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -160,6 +170,7 @@ class SQLGeneration(BasicPipeline):
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 **self._components,
+                **self._configs,
             },
         )
 

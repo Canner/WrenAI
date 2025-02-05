@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # generation config
     allow_sql_generation_reasoning: bool = Field(default=True)
 
+    # engine config
+    engine_timeout: float = Field(default=30.0)
+
     # service config
     query_cache_ttl: int = Field(default=3600)  # unit: seconds
     query_cache_maxsize: int = Field(

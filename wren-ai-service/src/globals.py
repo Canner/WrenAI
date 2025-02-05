@@ -107,15 +107,18 @@ def create_service_container(
                 ),
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["sql_generation"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_generation_reasoning": generation.SQLGenerationReasoning(
                     **pipe_components["sql_generation_reasoning"],
                 ),
                 "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "followup_sql_generation": generation.FollowUpSQLGeneration(
                     **pipe_components["followup_sql_generation"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_summary": generation.SQLSummary(
                     **pipe_components["sql_summary"],
@@ -128,6 +131,7 @@ def create_service_container(
             pipelines={
                 "sql_executor": retrieval.SQLExecutor(
                     **pipe_components["sql_executor"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "chart_generation": generation.ChartGeneration(
                     **pipe_components["chart_generation"],
@@ -139,6 +143,7 @@ def create_service_container(
             pipelines={
                 "sql_executor": retrieval.SQLExecutor(
                     **pipe_components["sql_executor"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "chart_adjustment": generation.ChartAdjustment(
                     **pipe_components["chart_adjustment"],
@@ -153,6 +158,7 @@ def create_service_container(
                 ),
                 "sql_answer": generation.SQLAnswer(
                     **pipe_components["sql_answer"],
+                    engine_timeout=settings.engine_timeout,
                 ),
             },
             **query_cache,
@@ -161,6 +167,7 @@ def create_service_container(
             pipelines={
                 "sql_breakdown": generation.SQLBreakdown(
                     **pipe_components["sql_breakdown"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_summary": generation.SQLSummary(
                     **pipe_components["sql_summary"],
@@ -177,9 +184,11 @@ def create_service_container(
                 ),
                 "sql_expansion": generation.SQLExpansion(
                     **pipe_components["sql_expansion"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_summary": generation.SQLSummary(
                     **pipe_components["sql_summary"],
@@ -207,6 +216,7 @@ def create_service_container(
             pipelines={
                 "relationship_recommendation": generation.RelationshipRecommendation(
                     **pipe_components["relationship_recommendation"],
+                    engine_timeout=settings.engine_timeout,
                 )
             },
             **query_cache,
@@ -224,6 +234,7 @@ def create_service_container(
                 ),
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["question_recommendation_sql_generation"],
+                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_generation_reasoning": generation.SQLGenerationReasoning(
                     **pipe_components["sql_generation_reasoning"],

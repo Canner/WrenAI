@@ -29,6 +29,7 @@ class SQLBreakdownGenPostProcessor:
         self,
         replies: List[str],
         project_id: str | None = None,
+        timeout: Optional[float] = 30.0,
     ) -> Dict[str, Any]:
         cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
 
@@ -56,7 +57,11 @@ class SQLBreakdownGenPostProcessor:
 
         sql = self._build_cte_query(steps)
 
-        if not await self._check_if_sql_executable(sql, project_id=project_id):
+        if not await self._check_if_sql_executable(
+            sql,
+            project_id=project_id,
+            timeout=timeout,
+        ):
             return {
                 "results": {
                     "description": cleaned_generation_result["description"],
@@ -84,12 +89,14 @@ class SQLBreakdownGenPostProcessor:
         self,
         sql: str,
         project_id: str | None = None,
+        timeout: Optional[float] = 30.0,
     ):
         async with aiohttp.ClientSession() as session:
             status, _, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
+                timeout=timeout,
             )
 
         if not status:
@@ -112,6 +119,7 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
+        timeout: Optional[float] = 30.0,
         project_id: str | None = None,
     ) -> dict:
         try:
@@ -138,7 +146,9 @@ class SQLGenPostProcessor:
                 valid_generation_results,
                 invalid_generation_results,
             ) = await self._classify_invalid_generation_results(
-                cleaned_generation_result, project_id=project_id
+                cleaned_generation_result,
+                project_id=project_id,
+                timeout=timeout,
             )
 
             return {
@@ -154,7 +164,10 @@ class SQLGenPostProcessor:
             }
 
     async def _classify_invalid_generation_results(
-        self, generation_results: list[str], project_id: str | None = None
+        self,
+        generation_results: list[str],
+        timeout: float,
+        project_id: str | None = None,
     ) -> List[Optional[Dict[str, str]]]:
         valid_generation_results = []
         invalid_generation_results = []
@@ -164,7 +177,7 @@ class SQLGenPostProcessor:
 
             if not error_message:
                 status, _, addition = await self._engine.execute_sql(
-                    quoted_sql, session, project_id=project_id
+                    quoted_sql, session, project_id=project_id, timeout=timeout
                 )
 
                 if status:
