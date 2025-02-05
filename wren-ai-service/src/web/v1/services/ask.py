@@ -102,6 +102,7 @@ class AskService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
+        allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -111,6 +112,7 @@ class AskService:
             maxsize=maxsize, ttl=ttl
         )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
+        self._allow_intent_classification = allow_intent_classification
 
     def _is_stopped(self, query_id: str):
         if (
@@ -173,7 +175,7 @@ class AskService:
                         for result in historical_question_result
                     ]
                     sql_generation_reasoning = ""
-                else:
+                elif self._allow_intent_classification:
                     intent_classification_result = (
                         await self._pipelines["intent_classification"].run(
                             query=ask_request.query,
