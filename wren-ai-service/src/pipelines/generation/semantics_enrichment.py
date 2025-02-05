@@ -17,7 +17,7 @@ logger = logging.getLogger("wren-ai-service")
 
 ## Start of Pipeline
 @observe(capture_input=False)
-def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
+def picked_models(mdl: dict) -> list[dict]:
     def relation_filter(column: dict) -> bool:
         return "relationship" not in column
 
@@ -27,6 +27,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
                 "name": column["name"],
                 "type": column["type"],
                 "properties": {
+                    "alias": column["properties"].get("displayName", ""),
                     "description": column["properties"].get("description", ""),
                 },
             }
@@ -35,19 +36,17 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
         ]
 
     def extract(model: dict) -> dict:
+        prop = model["properties"]
         return {
             "name": model["name"],
             "columns": column_formatter(model["columns"]),
             "properties": {
-                "description": model["properties"].get("description", ""),
+                "alias": prop.get("displayName", ""),
+                "description": prop.get("description", ""),
             },
         }
 
-    return [
-        extract(model)
-        for model in mdl.get("models", [])
-        if model.get("name", "") in selected_models
-    ]
+    return [extract(model) for model in mdl.get("models", [])]
 
 
 @observe(capture_input=False)
@@ -89,95 +88,60 @@ def normalize(generate: dict) -> dict:
 
 
 ## End of Pipeline
-class ModelProperties(BaseModel):
+class Properties(BaseModel):
+    alias: str
     description: str
 
 
 class ModelColumns(BaseModel):
     name: str
-    properties: ModelProperties
+    properties: Properties
 
 
 class SemanticModel(BaseModel):
     name: str
     columns: list[ModelColumns]
-    properties: ModelProperties
+    properties: Properties
 
 
 class SemanticResult(BaseModel):
     models: list[SemanticModel]
 
 
-SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
+SEMANTICS_ENRICHMENT_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "semantic_description",
+            "name": "semantics_enrichment",
             "schema": SemanticResult.model_json_schema(),
         },
     }
 }
 
 system_prompt = """
-I have a data model represented in JSON format, with the following structure:
+You are a data model expert. Your task is to enrich a JSON data model with descriptive metadata.
 
-```
-[
-    {'name': 'model', 'columns': [
-            {'name': 'column_1', 'type': 'type', 'properties': {}
-            },
-            {'name': 'column_2', 'type': 'type', 'properties': {}
-            },
-            {'name': 'column_3', 'type': 'type', 'properties': {}
-            }
-        ], 'properties': {}
-    }
-]
-```
+Input Format:
+[{
+    'name': 'model',
+    'columns': [{'name': 'column', 'type': 'type', 'properties': {'alias': 'alias', 'description': 'description'}}],
+    'properties': {'alias': 'alias', 'description': 'description'}
+}]
 
-Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
-Each `description` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns.
-Follow these steps:
-1. **For the `model`**: Prompt the user to provide a brief description of the model's overall purpose or its context. Insert this description in the `properties` field of the `model`.
-2. **For each `column`**: Ask the user to describe each column's role or significance. Each column's description should be added under its respective `properties` field in the format: `'description': 'user-provided text'`.
-3. Ensure that the output is a well-formatted JSON structure, preserving the input's original format and adding the appropriate `description` fields.
+For each model and column, you will:
+1. Add a clear, concise alias that serves as a business-friendly name
+2. Add a detailed description explaining its purpose and usage
 
-### Output Format:
+Guidelines:
+- Descriptions should be clear, concise and business-focused
+- Aliases should be intuitive and user-friendly
+- Use the user's context to inform the descriptions
+- Maintain technical accuracy while being accessible to non-technical users
+- IMPORTANT: Never modify the model/table and column names in the 'name' field as this will invalidate the data model
+- Only update the 'alias' field to provide user-friendly display names
+- When the user prompt includes operators to modify names, apply those modifications to the alias field only
 
-```
-{
-    "models": [
-        {
-        "name": "model",
-        "columns": [
-            {
-                "name": "column_1",
-                "properties": {
-                    "description": "<description for column_1>"
-                }
-            },
-            {
-                "name": "column_2",
-                "properties": {
-                    "description": "<description for column_1>"
-                }
-            },
-            {
-                "name": "column_3",
-                "properties": {
-                    "description": "<description for column_1>"
-                }
-            }
-        ],
-        "properties": {
-                "description": "<description for model>"
-            }
-        }
-    ]
-}
-```
-
-Make sure that the descriptions are concise, informative, and contextually appropriate based on the input provided by the user.
+Focus on providing business value through clear, accurate descriptions while maintaining JSON structure integrity.
 """
 
 user_prompt_template = """
@@ -186,17 +150,17 @@ User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
 Localization Language: {{ language }}
 
-Please provide a brief description for the model and each column based on the user's prompt.
+Please provide a brief description and alias for the model and each column based on the user's prompt.
 """
 
 
-class SemanticsDescription(BasicPipeline):
+class SemanticsEnrichment(BasicPipeline):
     def __init__(self, llm_provider: LLMProvider, **_):
         self._components = {
             "prompt_builder": PromptBuilder(template=user_prompt_template),
             "generator": llm_provider.get_generator(
                 system_prompt=system_prompt,
-                generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
+                generation_kwargs=SEMANTICS_ENRICHMENT_KWARGS,
             ),
         }
         self._final = "normalize"
@@ -209,16 +173,13 @@ class SemanticsDescription(BasicPipeline):
     async def run(
         self,
         user_prompt: str,
-        selected_models: list[str],
         mdl: dict,
         language: str = "en",
     ) -> dict:
-        logger.info("Semantics Description Generation pipeline is running...")
         return await self._pipe.execute(
             [self._final],
             inputs={
                 "user_prompt": user_prompt,
-                "selected_models": selected_models,
                 "mdl": mdl,
                 "language": language,
                 **self._components,
@@ -230,10 +191,9 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        SemanticsDescription,
-        "semantics_description",
+        SemanticsEnrichment,
+        "semantics_enrichment",
         user_prompt="Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
-        selected_models=[],
         mdl={},
         language="en",
     )

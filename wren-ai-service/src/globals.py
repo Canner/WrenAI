@@ -13,7 +13,7 @@ from src.web.v1.services.chart import ChartService
 from src.web.v1.services.chart_adjustment import ChartAdjustmentService
 from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
-from src.web.v1.services.semantics_description import SemanticsDescription
+from src.web.v1.services.semantics_enrichment import SemanticsEnrichment
 from src.web.v1.services.semantics_preparation import SemanticsPreparationService
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
@@ -29,18 +29,18 @@ logger = logging.getLogger("wren-ai-service")
 class ServiceContainer:
     ask_service: AskService
     ask_details_service: AskDetailsService
-    question_recommendation: QuestionRecommendation
-    relationship_recommendation: RelationshipRecommendation
-    semantics_description: SemanticsDescription
-    semantics_preparation_service: SemanticsPreparationService
     chart_service: ChartService
     chart_adjustment_service: ChartAdjustmentService
+    question_recommendation: QuestionRecommendation
+    relationship_recommendation: RelationshipRecommendation
+    semantics_enrichment: SemanticsEnrichment
+    semantics_preparation_service: SemanticsPreparationService
     sql_answer_service: SqlAnswerService
     sql_expansion_service: SqlExpansionService
     sql_explanation_service: SqlExplanationService
-    sql_regeneration_service: SqlRegenerationService
     sql_pairs_preparation_service: SqlPairsPreparationService
     sql_question_service: SqlQuestionService
+    sql_regeneration_service: SqlRegenerationService
 
 
 @dataclass
@@ -58,10 +58,10 @@ def create_service_container(
         "ttl": settings.query_cache_ttl,
     }
     return ServiceContainer(
-        semantics_description=SemanticsDescription(
+        semantics_enrichment=SemanticsEnrichment(
             pipelines={
-                "semantics_description": generation.SemanticsDescription(
-                    **pipe_components["semantics_description"],
+                "semantics_enrichment": generation.SemanticsEnrichment(
+                    **pipe_components["semantics_enrichment"],
                 )
             },
             **query_cache,

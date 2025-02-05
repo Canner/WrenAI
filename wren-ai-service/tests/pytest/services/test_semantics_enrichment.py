@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import orjson
 import pytest
 
-from src.web.v1.services.semantics_description import SemanticsDescription
+from src.web.v1.services.semantics_enrichment import SemanticsEnrichment
 
 
 @pytest.fixture
@@ -13,22 +13,35 @@ def service():
     mock_pipeline.run.return_value = {
         "normalize": {
             "model1": {
-                "columns": [],
-                "properties": {"description": "Test description"},
+                "columns": [
+                    {
+                        "name": "column1",
+                        "type": "varchar",
+                        "notNull": False,
+                        "properties": {
+                            "description": "Test description",
+                            "alias": "column1_alias",
+                        },
+                    }
+                ],
+                "properties": {
+                    "description": "Test description",
+                    "alias": "model1_alias",
+                },
             }
         }
     }
 
-    pipelines = {"semantics_description": mock_pipeline}
-    return SemanticsDescription(pipelines=pipelines)
+    pipelines = {"semantics_enrichment": mock_pipeline}
+    return SemanticsEnrichment(pipelines=pipelines)
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description(
-    service: SemanticsDescription,
+async def test_generate_semantics_enrichment(
+    service: SemanticsEnrichment,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = SemanticsEnrichment.Resource(id="test_id")
+    request = SemanticsEnrichment.Input(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -42,19 +55,32 @@ async def test_generate_semantics_description(
     assert response.status == "finished"
     assert response.response == {
         "model1": {
-            "columns": [],
-            "properties": {"description": "Test description"},
+            "columns": [
+                {
+                    "name": "column1",
+                    "type": "varchar",
+                    "notNull": False,
+                    "properties": {
+                        "description": "Test description",
+                        "alias": "column1_alias",
+                    },
+                }
+            ],
+            "properties": {
+                "description": "Test description",
+                "alias": "model1_alias",
+            },
         }
     }
     assert response.error is None
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description_with_invalid_mdl(
-    service: SemanticsDescription,
+async def test_generate_semantics_enrichment_with_invalid_mdl(
+    service: SemanticsEnrichment,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = SemanticsEnrichment.Resource(id="test_id")
+    request = SemanticsEnrichment.Input(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -72,18 +98,18 @@ async def test_generate_semantics_description_with_invalid_mdl(
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description_with_exception(
-    service: SemanticsDescription,
+async def test_generate_semantics_enrichment_with_exception(
+    service: SemanticsEnrichment,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = SemanticsEnrichment.Resource(id="test_id")
+    request = SemanticsEnrichment.Input(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
         mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
-    service._pipelines["semantics_description"].run.side_effect = Exception(
+    service._pipelines["semantics_enrichment"].run.side_effect = Exception(
         "Test exception"
     )
 
@@ -94,16 +120,13 @@ async def test_generate_semantics_description_with_exception(
     assert response.status == "failed"
     assert response.response is None
     assert response.error.code == "OTHERS"
-    assert (
-        "An error occurred during semantics description generation"
-        in response.error.message
-    )
+    assert "An error occurred during semantics enrichment:" in response.error.message
 
 
-def test_get_semantics_description_result(
-    service: SemanticsDescription,
+def test_get_semantics_enrichment_result(
+    service: SemanticsEnrichment,
 ):
-    expected_response = SemanticsDescription.Resource(
+    expected_response = SemanticsEnrichment.Resource(
         id="test_id",
         status="finished",
         response={"model1": {"description": "Test description"}},
@@ -115,8 +138,8 @@ def test_get_semantics_description_result(
     assert result == expected_response
 
 
-def test_get_non_existent_semantics_description_result(
-    service: SemanticsDescription,
+def test_get_non_existent_semantics_enrichment_result(
+    service: SemanticsEnrichment,
 ):
     result = service["non_existent_id"]
 
@@ -129,10 +152,10 @@ def test_get_non_existent_semantics_description_result(
 
 @pytest.mark.asyncio
 async def test_batch_processing_with_multiple_models(
-    service: SemanticsDescription,
+    service: SemanticsEnrichment,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    service["test_id"] = SemanticsEnrichment.Resource(id="test_id")
+    request = SemanticsEnrichment.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3"],
@@ -140,7 +163,7 @@ async def test_batch_processing_with_multiple_models(
     )
 
     # Mock pipeline responses for each chunk
-    service._pipelines["semantics_description"].run.side_effect = [
+    service._pipelines["semantics_enrichment"].run.side_effect = [
         {"normalize": {"model1": {"description": "Description 1"}}},
         {"normalize": {"model2": {"description": "Description 2"}}},
         {"normalize": {"model3": {"description": "Description 3"}}},
@@ -161,45 +184,79 @@ async def test_batch_processing_with_multiple_models(
     assert len(chunks) == 3  # Default chunk_size=1
     assert all("user_prompt" in chunk for chunk in chunks)
     assert all("mdl" in chunk for chunk in chunks)
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1]
 
 
 def test_batch_processing_with_custom_chunk_size(
-    service: SemanticsDescription,
+    service: SemanticsEnrichment,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    test_mdl = {
+        "models": [
+            {
+                "name": "model1",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model2",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model3",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model4",
+                "columns": [
+                    {"name": "column1", "type": "varchar", "notNull": False},
+                    {"name": "column2", "type": "varchar", "notNull": False},
+                ],
+            },
+        ]
+    }
+    service["test_id"] = SemanticsEnrichment.Resource(id="test_id")
+    request = SemanticsEnrichment.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3", "model4"],
-        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model4", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
+        mdl=orjson.dumps(test_mdl),
     )
 
     # Test chunking with custom chunk size
-    chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
+    chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=1)
 
-    assert len(chunks) == 4
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1, 1]
-    assert chunks[0]["selected_models"] == ["model1"]
-    assert chunks[1]["selected_models"] == ["model2"]
-    assert chunks[2]["selected_models"] == ["model3"]
-    assert chunks[3]["selected_models"] == ["model4"]
+    assert len(chunks) == 5
+    assert chunks[0]["mdl"]["models"][0]["name"] == "model1"
+    assert chunks[1]["mdl"]["models"][0]["name"] == "model2"
+    assert chunks[2]["mdl"]["models"][0]["name"] == "model3"
+    assert chunks[3]["mdl"]["models"][0]["name"] == "model4"
+    assert chunks[4]["mdl"]["models"][0]["name"] == "model4"
 
 
 @pytest.mark.asyncio
 async def test_batch_processing_partial_failure(
-    service: SemanticsDescription,
+    service: SemanticsEnrichment,
 ):
-    service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    test_mdl = {
+        "models": [
+            {
+                "name": "model1",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+            {
+                "name": "model2",
+                "columns": [{"name": "column1", "type": "varchar", "notNull": False}],
+            },
+        ]
+    }
+    service["test_id"] = SemanticsEnrichment.Resource(id="test_id")
+    request = SemanticsEnrichment.Input(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2"],
-        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
+        mdl=orjson.dumps(test_mdl),
     )
 
     # Mock first chunk succeeds, second chunk fails
-    service._pipelines["semantics_description"].run.side_effect = [
+    service._pipelines["semantics_enrichment"].run.side_effect = [
         {"normalize": {"model1": {"description": "Description 1"}}},
         Exception("Failed processing model2"),
     ]
@@ -215,12 +272,12 @@ async def test_batch_processing_partial_failure(
 
 @pytest.mark.asyncio
 async def test_concurrent_updates_no_race_condition(
-    service: SemanticsDescription,
+    service: SemanticsEnrichment,
 ):
     test_id = "concurrent_test"
-    service[test_id] = SemanticsDescription.Resource(id=test_id)
+    service[test_id] = SemanticsEnrichment.Resource(id=test_id)
 
-    request = SemanticsDescription.Input(
+    request = SemanticsEnrichment.Input(
         id=test_id,
         user_prompt="Test concurrent updates",
         selected_models=["model1", "model2", "model3", "model4", "model5"],
@@ -236,7 +293,7 @@ async def test_concurrent_updates_no_race_condition(
             }
         }
 
-    service._pipelines["semantics_description"].run.side_effect = [
+    service._pipelines["semantics_enrichment"].run.side_effect = [
         await delayed_response(1),
         await delayed_response(2),
         await delayed_response(3),

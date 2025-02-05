@@ -5,7 +5,7 @@ from .followup_sql_generation import FollowUpSQLGeneration
 from .intent_classification import IntentClassification
 from .question_recommendation import QuestionRecommendation
 from .relationship_recommendation import RelationshipRecommendation
-from .semantics_description import SemanticsDescription
+from .semantics_enrichment import SemanticsEnrichment
 from .sql_answer import SQLAnswer
 from .sql_breakdown import SQLBreakdown
 from .sql_correction import SQLCorrection
@@ -18,15 +18,14 @@ from .sql_regeneration import SQLRegeneration
 from .sql_summary import SQLSummary
 
 __all__ = [
-    "SQLRegeneration",
-    "ChartGeneration",
     "ChartAdjustment",
+    "ChartGeneration",
     "DataAssistance",
     "FollowUpSQLGeneration",
     "IntentClassification",
     "QuestionRecommendation",
     "RelationshipRecommendation",
-    "SemanticsDescription",
+    "SemanticsEnrichment",
     "SQLAnswer",
     "SQLBreakdown",
     "SQLCorrection",
@@ -34,6 +33,7 @@ __all__ = [
     "SQLExplanation",
     "SQLGeneration",
     "SQLGenerationReasoning",
-    "SQLSummary",
     "SQLQuestion",
+    "SQLRegeneration",
+    "SQLSummary",
 ]
