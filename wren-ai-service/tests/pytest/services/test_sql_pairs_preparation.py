@@ -6,12 +6,12 @@ from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.globals import create_service_container
 from src.providers import generate_components
-from src.web.v1.services.sql_pairs_preparation import (
+from src.web.v1.services.sql_pairs import (
     DeleteSqlPairsRequest,
     SqlPair,
     SqlPairsPreparationRequest,
-    SqlPairsPreparationService,
     SqlPairsPreparationStatusRequest,
+    SqlPairsService,
 )
 
 
@@ -28,7 +28,7 @@ def sql_pairs_preparation_service():
         recreate_index=True,
     )
 
-    return service_container.sql_pairs_preparation_service
+    return service_container.sql_pairs_service
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def service_metadata():
 @pytest.mark.asyncio
 @pytest.mark.skip(reason="due to pipeline change, this test is not applicable anymore")
 async def test_sql_pairs_preparation(
-    sql_pairs_preparation_service: SqlPairsPreparationService,
+    sql_pairs_preparation_service: SqlPairsService,
     service_metadata: dict,
 ):
     request = SqlPairsPreparationRequest(
@@ -60,7 +60,7 @@ async def test_sql_pairs_preparation(
         project_id="fake-id",
     )
     request.query_id = str(uuid.uuid4())
-    await sql_pairs_preparation_service.prepare_sql_pairs(
+    await sql_pairs_preparation_service.index(
         request,
         service_metadata=service_metadata,
     )
@@ -96,7 +96,7 @@ async def test_sql_pairs_preparation(
 @pytest.mark.asyncio
 @pytest.mark.skip(reason="due to pipeline change, this test is not applicable anymore")
 async def test_sql_pairs_deletion(
-    sql_pairs_preparation_service: SqlPairsPreparationService,
+    sql_pairs_preparation_service: SqlPairsService,
     service_metadata: dict,
 ):
     request = SqlPairsPreparationRequest(
@@ -107,7 +107,7 @@ async def test_sql_pairs_deletion(
         project_id="fake-id",
     )
     request.query_id = str(uuid.uuid4())
-    await sql_pairs_preparation_service.prepare_sql_pairs(
+    await sql_pairs_preparation_service.index(
         request,
         service_metadata=service_metadata,
     )

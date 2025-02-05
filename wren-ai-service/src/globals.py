@@ -18,7 +18,7 @@ from src.web.v1.services.semantics_preparation import SemanticsPreparationServic
 from src.web.v1.services.sql_answer import SqlAnswerService
 from src.web.v1.services.sql_expansion import SqlExpansionService
 from src.web.v1.services.sql_explanation import SqlExplanationService
-from src.web.v1.services.sql_pairs_preparation import SqlPairsPreparationService
+from src.web.v1.services.sql_pairs import SqlPairsService
 from src.web.v1.services.sql_question import SqlQuestionService
 from src.web.v1.services.sql_regeneration import SqlRegenerationService
 
@@ -39,7 +39,7 @@ class ServiceContainer:
     sql_expansion_service: SqlExpansionService
     sql_explanation_service: SqlExplanationService
     sql_regeneration_service: SqlRegenerationService
-    sql_pairs_preparation_service: SqlPairsPreparationService
+    sql_pairs_service: SqlPairsService
     sql_question_service: SqlQuestionService
 
 
@@ -242,7 +242,7 @@ def create_service_container(
             },
             **query_cache,
         ),
-        sql_pairs_preparation_service=SqlPairsPreparationService(
+        sql_pairs_service=SqlPairsService(
             pipelines={
                 "sql_pairs": indexing.SqlPairs(
                     **pipe_components["sql_pairs_indexing"],
