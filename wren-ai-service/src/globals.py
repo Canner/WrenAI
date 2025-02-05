@@ -246,6 +246,7 @@ def create_service_container(
             pipelines={
                 "sql_pairs_preparation": indexing.SqlPairs(
                     **pipe_components["sql_pairs_indexing"],
+                    sql_pairs_path=settings.sql_pairs_path,
                 ),
                 "sql_pairs_deletion": indexing.SqlPairsDeletion(
                     **pipe_components["sql_pairs_deletion"],
