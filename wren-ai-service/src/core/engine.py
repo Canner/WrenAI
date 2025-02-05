@@ -50,12 +50,14 @@ def remove_limit_statement(sql: str) -> str:
     return modified_sql
 
 
-def add_quotes(sql: str) -> Tuple[str, bool]:
+def add_quotes(sql: str) -> Tuple[str, str]:
     try:
-        quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
+        quoted_sql = sqlglot.transpile(
+            sql, read="trino", identify=True, error_level=sqlglot.ErrorLevel.RAISE
+        )[0]
     except Exception as e:
         logger.exception(f"Error in sqlglot.transpile to {sql}: {e}")
 
-        return "", False
+        return "", str(e)
 
-    return quoted_sql, True
+    return quoted_sql, ""
