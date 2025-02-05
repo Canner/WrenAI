@@ -179,8 +179,9 @@ class SqlPairs(BasicPipeline):
                 document_store=store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
-            "external_pairs": _load_sql_pairs(sql_pairs_path),
         }
+
+        self._external_pairs = _load_sql_pairs(sql_pairs_path)
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -191,19 +192,23 @@ class SqlPairs(BasicPipeline):
         self,
         mdl_str: str,
         project_id: Optional[str] = "",
+        external_pairs: Optional[Dict[str, Any]] = {},
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
         )
 
-        return await self._pipe.execute(
-            ["write"],
-            inputs={
-                "mdl_str": mdl_str,
-                "project_id": project_id,
-                **self._components,
+        input = {
+            "mdl_str": mdl_str,
+            "project_id": project_id,
+            "external_pairs": {
+                **self._external_pairs,
+                **external_pairs,
             },
-        )
+            **self._components,
+        }
+
+        return await self._pipe.execute(["write"], inputs=input)
 
     @observe(name="Clean Documents for SQL Pairs")
     async def clean(

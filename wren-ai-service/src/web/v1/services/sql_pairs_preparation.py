@@ -91,10 +91,14 @@ class SqlPairsPreparationService:
         }
 
         try:
-            # TODO: Implement proper SQL pairs preparation functionality. Current implementation needs to be updated.
+            external_pairs = {
+                "sql_pairs": [sql_pair.model_dump() for sql_pair in prepare_sql_pairs_request.sql_pairs],
+            }
+
             await self._pipelines["sql_pairs"].run(
-                sql_pairs=prepare_sql_pairs_request.sql_pairs,
                 project_id=prepare_sql_pairs_request.project_id,
+                mdl_str='{"models": [{"properties": {"boilerplate": "sql_pairs"}}]}',
+                external_pairs=external_pairs,
             )
 
             self._prepare_sql_pairs_statuses[prepare_sql_pairs_request.query_id] = (
