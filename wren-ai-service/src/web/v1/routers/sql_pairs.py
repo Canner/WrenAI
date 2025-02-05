@@ -12,7 +12,7 @@ from src.globals import (
     get_service_metadata,
 )
 from src.pipelines.indexing.sql_pairs import SqlPair
-from src.web.v1.services.sql_pairs import SqlPairsService
+from src.web.v1.services import SqlPairsService
 
 router = APIRouter()
 

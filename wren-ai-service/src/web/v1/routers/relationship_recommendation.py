@@ -11,8 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import Configuration
-from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
+from src.web.v1.services import Configuration, RelationshipRecommendation
 
 router = APIRouter()
 

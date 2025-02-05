@@ -11,8 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import Configuration
-from src.web.v1.services.semantics_description import SemanticsDescription
+from src.web.v1.services import Configuration, SemanticsDescription
 
 router = APIRouter()
 
