@@ -135,6 +135,7 @@ class SqlPairsPreparationService:
         }
 
         try:
+            # todo: use sql pairs pipeline instead, there have the method to delete sql pairs
             await self._pipelines["sql_pairs_deletion"].run(
                 sql_pair_ids=delete_sql_pairs_request.ids,
                 id=delete_sql_pairs_request.project_id,
