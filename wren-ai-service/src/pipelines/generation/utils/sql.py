@@ -188,11 +188,14 @@ class SQLGenPostProcessor:
                         }
                     )
                 else:
+                    error_message = addition.get("error_message", "")
                     invalid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "type": "DRY_RUN",
-                            "error": addition.get("error_message", ""),
+                            "type": "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else "DRY_RUN",
+                            "error": error_message,
                             "correlation_id": addition.get("correlation_id", ""),
                         }
                     )

@@ -361,32 +361,35 @@ class AskService:
                 elif failed_dry_run_results := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_results"]:
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="correcting",
-                    )
-                    sql_correction_results = await self._pipelines[
-                        "sql_correction"
-                    ].run(
-                        contexts=documents,
-                        invalid_generation_results=failed_dry_run_results,
-                        project_id=ask_request.project_id,
-                    )
+                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="correcting",
+                        )
+                        sql_correction_results = await self._pipelines[
+                            "sql_correction"
+                        ].run(
+                            contexts=documents,
+                            invalid_generation_results=failed_dry_run_results,
+                            project_id=ask_request.project_id,
+                        )
 
-                    if valid_generation_results := sql_correction_results[
-                        "post_process"
-                    ]["valid_generation_results"]:
-                        api_results = [
-                            AskResult(
-                                **{
-                                    "sql": valid_generation_result.get("sql"),
-                                    "type": "llm",
-                                }
-                            )
-                            for valid_generation_result in valid_generation_results
-                        ][:1]
-                    elif failed_dry_run_results := sql_correction_results[
-                        "post_process"
-                    ]["invalid_generation_results"]:
+                        if valid_generation_results := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_results"]:
+                            api_results = [
+                                AskResult(
+                                    **{
+                                        "sql": valid_generation_result.get("sql"),
+                                        "type": "llm",
+                                    }
+                                )
+                                for valid_generation_result in valid_generation_results
+                            ][:1]
+                        elif failed_dry_run_results := sql_correction_results[
+                            "post_process"
+                        ]["invalid_generation_results"]:
+                            error_message = failed_dry_run_results[0]["error"]
+                    else:
                         error_message = failed_dry_run_results[0]["error"]
 
             if api_results:
