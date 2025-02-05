@@ -99,11 +99,11 @@ async def prepare(
     service = service_container.sql_pairs_service
     service[id] = SqlPairsService.Resource(id=id, status="indexing")
 
+    index_request = SqlPairsService.IndexRequest(id=id, **request.model_dump())
+
     background_tasks.add_task(
         service.index,
-        id,
-        sql_pairs=request.sql_pairs,
-        project_id=request.project_id,
+        index_request,
         service_metadata=asdict(service_metadata),
     )
     return PostResponse(id=id)
@@ -129,11 +129,14 @@ async def delete(
     service = service_container.sql_pairs_service
     service[id] = SqlPairsService.Resource(id=id, status="deleting")
 
+    delete_request = SqlPairsService.DeleteRequest(
+        id=id,
+        **request.model_dump(),
+    )
+
     background_tasks.add_task(
         service.delete,
-        id,
-        sql_pair_ids=request.sql_pair_ids,
-        project_id=request.project_id,
+        delete_request,
         service_metadata=asdict(service_metadata),
     )
     return DeleteResponse(id=id)

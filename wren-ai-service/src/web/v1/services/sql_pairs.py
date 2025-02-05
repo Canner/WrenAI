@@ -45,62 +45,70 @@ class SqlPairsService:
         )
         logger.error(error_message)
 
+    class IndexRequest(BaseModel):
+        id: str
+        sql_pairs: List[SqlPair]
+        project_id: Optional[str] = None
+
     @observe(name="Prepare SQL Pairs")
     @trace_metadata
     async def index(
         self,
-        id: str,
-        sql_pairs: List[SqlPair],
-        project_id: Optional[str] = None,
+        request: IndexRequest,
         **kwargs,
     ):
-        logger.info(f"Request {id}: SQL Pairs Indexing process is running...")
+        logger.info(f"Request {request.id}: SQL Pairs Indexing process is running...")
 
         try:
             input = {
                 "mdl_str": '{"models": [{"properties": {"boilerplate": "sql_pairs"}}]}',
-                "project_id": project_id,
+                "project_id": request.project_id,
                 "external_pairs": {
-                    "sql_pairs": [sql_pair.model_dump() for sql_pair in sql_pairs],
+                    "sql_pairs": [
+                        sql_pair.model_dump() for sql_pair in request.sql_pairs
+                    ],
                 },
             }
             await self._pipelines["sql_pairs"].run(**input)
 
-            self._cache[id] = self.Resource(id=id, status="finished")
+            self._cache[request.id] = self.Resource(id=request.id, status="finished")
 
         except Exception as e:
             self._handle_exception(
-                id,
+                request.id,
                 f"An error occurred during SQL pairs indexing: {str(e)}",
             )
 
-        return self._cache[id].with_metadata()
+        return self._cache[request.id].with_metadata()
+
+    class DeleteRequest(BaseModel):
+        id: str
+        sql_pair_ids: List[str]
+        project_id: Optional[str] = None
 
     @observe(name="Delete SQL Pairs")
     @trace_metadata
     async def delete(
         self,
-        id: str,
-        sql_pair_ids: List[str],
-        project_id: Optional[str] = None,
+        request: DeleteRequest,
         **kwargs,
     ):
-        logger.info(f"Request {id}: SQL Pairs Deletion process is running...")
+        logger.info(f"Request {request.id}: SQL Pairs Deletion process is running...")
 
         try:
-            sql_pairs = [SqlPair(id=id) for id in sql_pair_ids]
+            sql_pairs = [SqlPair(id=id) for id in request.sql_pair_ids]
             await self._pipelines["sql_pairs"].clean(
-                sql_pairs=sql_pairs, project_id=project_id
+                sql_pairs=sql_pairs, project_id=request.project_id
             )
 
-            self._cache[id] = self.Resource(id=id, status="finished")
+            self._cache[request.id] = self.Resource(id=request.id, status="finished")
         except Exception as e:
             self._handle_exception(
-                id,
+                request.id,
                 f"Failed to delete SQL pairs: {e}",
             )
 
-        return self._cache[id].with_metadata()
+        return self._cache[request.id].with_metadata()
 
     def __getitem__(self, id: str) -> Resource:
         response = self._cache.get(id)
