@@ -8,13 +8,13 @@ import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document, component
-from haystack.document_stores.types import DuplicatePolicy
+from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.indexing import AsyncDocumentWriter, SqlPairsCleaner
+from src.pipelines.indexing import AsyncDocumentWriter
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -47,6 +47,30 @@ class SqlPairsConverter:
                 for sql_pair in sql_pairs
             ]
         }
+
+
+@component
+class SqlPairsCleaner:
+    def __init__(self, sql_pairs_store: DocumentStore) -> None:
+        self.store = sql_pairs_store
+
+    @component.output_types()
+    async def run(
+        self, sql_pair_ids: List[str], project_id: Optional[str] = None
+    ) -> None:
+        filter = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
+            ],
+        }
+
+        if project_id:
+            filter["conditions"].append(
+                {"field": "project_id", "operator": "==", "value": project_id}
+            )
+
+        return await self.store.delete_documents(filter)
 
 
 ## Start of Pipeline
