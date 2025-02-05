@@ -117,9 +117,6 @@ pipes:
   - name: sql_pairs_indexing
     document_store: qdrant
     embedder: litellm_embedder.text-embedding-3-large
-  - name: sql_pairs_deletion
-    document_store: qdrant
-    embedder: litellm_embedder.text-embedding-3-large 
   - name: sql_pairs_retrieval
     document_store: qdrant
     embedder: litellm_embedder.text-embedding-3-large

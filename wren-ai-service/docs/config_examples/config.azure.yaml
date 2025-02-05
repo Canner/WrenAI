@@ -101,9 +101,6 @@ pipes:
     document_store: qdrant
     embedder: litellm_embedder.azure/text-embedding-ada-002
     llm: litellm_llm.azure/gpt-4
-  - name: sql_pairs_deletion
-    document_store: qdrant
-    embedder: litellm_embedder.azure/text-embedding-ada-002 
   - name: sql_pairs_retrieval
     document_store: qdrant
     embedder: litellm_embedder.azure/text-embedding-ada-002
