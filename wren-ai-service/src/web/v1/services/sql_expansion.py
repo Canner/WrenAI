@@ -170,20 +170,23 @@ class SqlExpansionService:
                 if failed_dry_run_results := sql_expansion_generation_results[
                     "post_process"
                 ]["invalid_generation_results"]:
-                    sql_correction_results = await self._pipelines[
-                        "sql_correction"
-                    ].run(
-                        contexts=documents,
-                        invalid_generation_results=failed_dry_run_results,
-                        project_id=sql_expansion_request.project_id,
-                    )
-                    if sql_correction_valid_results := sql_correction_results[
-                        "post_process"
-                    ]["valid_generation_results"]:
-                        valid_generation_results += sql_correction_valid_results
-                    elif failed_dry_run_results := sql_correction_results[
-                        "post_process"
-                    ]["invalid_generation_results"]:
+                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                        sql_correction_results = await self._pipelines[
+                            "sql_correction"
+                        ].run(
+                            contexts=documents,
+                            invalid_generation_results=failed_dry_run_results,
+                            project_id=sql_expansion_request.project_id,
+                        )
+                        if sql_correction_valid_results := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_results"]:
+                            valid_generation_results += sql_correction_valid_results
+                        elif failed_dry_run_results := sql_correction_results[
+                            "post_process"
+                        ]["invalid_generation_results"]:
+                            error_message = failed_dry_run_results[0]["error"]
+                    else:
                         error_message = failed_dry_run_results[0]["error"]
 
                 valid_sql_summary_results = []
