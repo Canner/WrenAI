@@ -28,7 +28,7 @@ async def test_generate_semantics_description(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -54,7 +54,7 @@ async def test_generate_semantics_description_with_invalid_mdl(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -76,7 +76,7 @@ async def test_generate_semantics_description_with_exception(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -132,7 +132,7 @@ async def test_batch_processing_with_multiple_models(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3"],
@@ -168,7 +168,7 @@ def test_batch_processing_with_custom_chunk_size(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3", "model4"],
@@ -191,7 +191,7 @@ async def test_batch_processing_partial_failure(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2"],
@@ -220,7 +220,7 @@ async def test_concurrent_updates_no_race_condition(
     test_id = "concurrent_test"
     service[test_id] = SemanticsDescription.Resource(id=test_id)
 
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id=test_id,
         user_prompt="Test concurrent updates",
         selected_models=["model1", "model2", "model3", "model4", "model5"],
