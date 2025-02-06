@@ -70,6 +70,8 @@ if "timezone" not in st.session_state:
     st.session_state["timezone"] = "UTC"
 if "chosen_tab_id" not in st.session_state:
     st.session_state["chosen_tab_id"] = "1"
+if "sql_generation_reasoning" not in st.session_state:
+    st.session_state["sql_generation_reasoning"] = None
 
 
 def onchange_demo_dataset():

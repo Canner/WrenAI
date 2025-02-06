@@ -174,6 +174,26 @@ def get_data_from_wren_engine(
 
 
 # ui related
+def on_change_sql_generation_reasoning():
+    st.session_state["sql_generation_reasoning"] = st.session_state[
+        "sql_generation_reasoning_input"
+    ]
+
+
+def on_click_regenerate_sql():
+    if not st.session_state["sql_generation_reasoning"]:
+        sql_generation_reasoning = st.session_state["asks_results"][
+            "sql_generation_reasoning"
+        ]
+    else:
+        sql_generation_reasoning = st.session_state["sql_generation_reasoning"]
+
+    ask_feedback(
+        sql_generation_reasoning,
+        st.session_state["asks_results"]["response"][0]["sql"],
+    )
+
+
 def show_query_history():
     if st.session_state["query_history"]:
         with st.expander("Query History", expanded=False):
@@ -203,7 +223,15 @@ def show_asks_results():
     st.markdown(f"{st.session_state['query']}")
 
     st.markdown("### SQL Generation Reasoning")
-    st.markdown(st.session_state["asks_results"]["generation_reasoning"])
+    st.text_area(
+        "SQL Generation Reasoning",
+        st.session_state["asks_results"]["sql_generation_reasoning"],
+        key="sql_generation_reasoning_input",
+        height=300,
+        on_change=on_change_sql_generation_reasoning,
+    )
+
+    st.button("Regenerate SQL", on_click=on_click_regenerate_sql)
 
     st.markdown("### SQL Query Result")
     if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
@@ -263,30 +291,6 @@ def show_asks_details_results():
             language="sql",
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
-
-        # st.button(
-        #     label="Preview Data",
-        #     key=f"preview_data_btn_{i}",
-        #     on_click=on_click_preview_data_button,
-        #     args=[i, sqls],
-        # )
-
-        # if (
-        #     st.session_state["preview_data_button_index"] is not None
-        #     and st.session_state["preview_sql"] is not None
-        #     and i == st.session_state["preview_data_button_index"]
-        # ):
-        #     st.markdown(
-        #         f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
-        #     )
-
-        #     st.dataframe(
-        #         get_data_from_wren_engine(
-        #             st.session_state["preview_sql"],
-        #             st.session_state["dataset_type"],
-        #             st.session_state["mdl_json"],
-        #         )
-        #     )
 
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
@@ -631,6 +635,45 @@ def ask(query: str, timezone: str, query_history: Optional[dict] = None):
     elif asks_status == "failed":
         st.error(
             f'An error occurred while processing the query: {asks_status_response.json()['error']}',
+            icon="🚨",
+        )
+
+
+def ask_feedback(sql_generation_reasoning: str, sql: str):
+    ask_feedback_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-feedbacks",
+        json={
+            "sql_generation_reasoning": sql_generation_reasoning,
+            "sql": sql,
+            "configurations": {
+                "language": st.session_state["language"],
+            },
+        },
+    )
+
+    assert ask_feedback_response.status_code == 200
+    query_id = ask_feedback_response.json()["query_id"]
+    ask_feedback_status = None
+
+    while not ask_feedback_status or (
+        ask_feedback_status != "finished"
+        and ask_feedback_status != "failed"
+        and ask_feedback_status != "stopped"
+    ):
+        ask_feedback_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-feedbacks/{query_id}"
+        )
+        assert ask_feedback_status_response.status_code == 200
+        ask_feedback_status = ask_feedback_status_response.json()["status"]
+        st.toast(f"The query processing status: {ask_feedback_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if ask_feedback_status_response == "finished":
+        st.session_state["asks_results_type"] = "TEXT_TO_SQL"
+        st.session_state["asks_results"] = ask_feedback_status_response.json()
+    elif ask_feedback_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {ask_feedback_status_response.json()['error']}',
             icon="🚨",
         )
 
