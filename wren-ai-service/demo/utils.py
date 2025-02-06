@@ -199,25 +199,28 @@ def show_query_history():
 def show_asks_results():
     show_query_history()
 
-    st.markdown("### Query")
+    st.markdown("### Question")
     st.markdown(f"{st.session_state['query']}")
 
-    st.markdown("### Query Result")
+    st.markdown("### SQL Generation Reasoning")
+    st.markdown(st.session_state["asks_results"]["generation_reasoning"])
+
+    st.markdown("### SQL Query Result")
     if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
-        asks_result_count = len(st.session_state["asks_results"])
+        asks_result_count = len(st.session_state["asks_results"]["response"])
         ask_result_cols = st.columns(asks_result_count)
         for i, ask_result_col in enumerate(ask_result_cols):
             with ask_result_col:
                 st.code(
                     body=sqlparse.format(
-                        st.session_state["asks_results"][i]["sql"],
+                        st.session_state["asks_results"]["response"][i]["sql"],
                         reindent=True,
                         keyword_case="upper",
                     ),
                     language="sql",
                 )
 
-        sql = st.session_state["asks_results"][0]["sql"]
+        sql = st.session_state["asks_results"]["response"][0]["sql"]
 
         st.session_state["chosen_query_result"] = {
             "index": 0,
@@ -622,7 +625,7 @@ def ask(query: str, timezone: str, query_history: Optional[dict] = None):
         if asks_type == "GENERAL":
             display_general_response(query_id)
         elif asks_type == "TEXT_TO_SQL":
-            st.session_state["asks_results"] = asks_status_response.json()["response"]
+            st.session_state["asks_results"] = asks_status_response.json()
         else:
             st.session_state["asks_results"] = asks_type
     elif asks_status == "failed":
