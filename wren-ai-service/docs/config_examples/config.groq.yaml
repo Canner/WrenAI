@@ -77,11 +77,6 @@ pipes:
   - name: sql_expansion
     llm: litellm_llm.groq/llama-3.3-70b-specdec
     engine: wren_ui
-  - name: sql_explanation
-    llm: litellm_llm.groq/llama-3.3-70b-specdec
-  - name: sql_regeneration
-    llm: litellm_llm.groq/llama-3.3-70b-specdec
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.groq/llama-3.3-70b-specdec
   - name: relationship_recommendation

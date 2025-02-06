@@ -24,8 +24,6 @@ class ServiceContainer:
     chart_adjustment_service: services.ChartAdjustmentService
     sql_answer_service: services.SqlAnswerService
     sql_expansion_service: services.SqlExpansionService
-    sql_explanation_service: services.SqlExplanationService
-    sql_regeneration_service: services.SqlRegenerationService
     sql_pairs_service: services.SqlPairsService
     sql_question_service: services.SqlQuestionService
 
@@ -181,22 +179,6 @@ def create_service_container(
                 "sql_summary": generation.SQLSummary(
                     **pipe_components["sql_summary"],
                 ),
-            },
-            **query_cache,
-        ),
-        sql_explanation_service=services.SqlExplanationService(
-            pipelines={
-                "sql_explanation": generation.SQLExplanation(
-                    **pipe_components["sql_explanation"],
-                )
-            },
-            **query_cache,
-        ),
-        sql_regeneration_service=services.SqlRegenerationService(
-            pipelines={
-                "sql_regeneration": generation.SQLRegeneration(
-                    **pipe_components["sql_regeneration"],
-                )
             },
             **query_cache,
         ),

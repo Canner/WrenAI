@@ -95,11 +95,6 @@ pipes:
   - name: sql_expansion
     llm: litellm_llm.deepseek/deepseek-coder
     engine: wren_ui
-  - name: sql_explanation
-    llm: litellm_llm.deepseek/deepseek-coder
-  - name: sql_regeneration
-    llm: litellm_llm.deepseek/deepseek-coder
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.deepseek/deepseek-coder
   - name: relationship_recommendation

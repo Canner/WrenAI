@@ -76,11 +76,6 @@ pipes:
   - name: sql_expansion
     llm: litellm_llm.openai/phi4:14b
     engine: wren_ui
-  - name: sql_explanation
-    llm: litellm_llm.openai/phi4:14b
-  - name: sql_regeneration
-    llm: litellm_llm.openai/phi4:14b
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.openai/phi4:14b
   - name: relationship_recommendation

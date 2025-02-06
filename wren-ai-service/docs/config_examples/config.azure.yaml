@@ -79,11 +79,6 @@ pipes:
   - name: sql_expansion
     llm: litellm_llm.azure/gpt-4
     engine: wren_ui
-  - name: sql_explanation
-    llm: litellm_llm.azure/gpt-4
-  - name: sql_regeneration
-    llm: litellm_llm.azure/gpt-4
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.azure/gpt-4
   - name: relationship_recommendation

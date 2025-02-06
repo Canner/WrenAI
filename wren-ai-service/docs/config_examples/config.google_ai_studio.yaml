@@ -84,11 +84,6 @@ pipes:
   - name: sql_expansion
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
     engine: wren_ui
-  - name: sql_explanation
-    llm: litellm_llm.gemini/gemini-2.0-flash-exp
-  - name: sql_regeneration
-    llm: litellm_llm.gemini/gemini-2.0-flash-exp
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
   - name: relationship_recommendation
