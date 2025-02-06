@@ -33,7 +33,12 @@ def build_table_ddl(
     ), has_calculated_field
 
 
-def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
+def dry_run_pipeline(
+    pipeline_cls: BasicPipeline,
+    pipeline_name: str,
+    method: str = "run",
+    **kwargs,
+):
     from langfuse.decorators import langfuse_context
 
     from src.config import settings
@@ -41,13 +46,13 @@ def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
     from src.providers import generate_components
     from src.utils import init_langfuse, setup_custom_logger
 
-    setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
+    setup_custom_logger("wren-ai-service", level_str=settings.logging_level, is_dev=True)
 
     pipe_components = generate_components(settings.components)
     pipeline = pipeline_cls(**pipe_components[pipeline_name])
     init_langfuse(settings)
 
-    async_validate(lambda: pipeline.run(**kwargs))
+    async_validate(lambda: getattr(pipeline, method)(**kwargs))
 
     langfuse_context.flush()
 

@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     config_path: str = Field(default="config.yaml")
     _components: list[dict]
 
-    sql_pairs_path: str = Field(default="pairs.json")
+    sql_pairs_path: str = Field(default="sql_pairs.json")
 
     def __init__(self):
         load_dotenv(".env.dev", override=True)

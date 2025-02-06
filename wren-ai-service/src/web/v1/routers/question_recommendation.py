@@ -11,8 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import Configuration
-from src.web.v1.services.question_recommendation import QuestionRecommendation
+from src.web.v1.services import Configuration, QuestionRecommendation
 
 router = APIRouter()
 

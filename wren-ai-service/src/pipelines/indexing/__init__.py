@@ -87,41 +87,15 @@ class AsyncDocumentWriter(DocumentWriter):
         return {"documents_written": documents_written}
 
 
-@component
-class SqlPairsCleaner:
-    def __init__(self, sql_pairs_store: DocumentStore) -> None:
-        self._sql_pairs_store = sql_pairs_store
-
-    @component.output_types()
-    async def run(
-        self, sql_pair_ids: List[str], project_id: Optional[str] = None
-    ) -> None:
-        filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
-            ],
-        }
-
-        if project_id:
-            filters["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
-
-        return await self._sql_pairs_store.delete_documents(filters)
-
-
 # Put the pipelines imports here to avoid circular imports and make them accessible directly to the rest of packages
 from .db_schema import DBSchema  # noqa: E402
 from .historical_question import HistoricalQuestion  # noqa: E402
 from .sql_pairs import SqlPairs  # noqa: E402
-from .sql_pairs_deletion import SqlPairsDeletion  # noqa: E402
 from .table_description import TableDescription  # noqa: E402
 
 __all__ = [
     "DBSchema",
     "TableDescription",
     "HistoricalQuestion",
-    "SqlPairsDeletion",
     "SqlPairs",
 ]
