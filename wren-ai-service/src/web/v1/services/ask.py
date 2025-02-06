@@ -92,10 +92,67 @@ class AskResultResponse(BaseModel):
     ]
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
-    generation_reasoning: Optional[str] = None
+    sql_generation_reasoning: Optional[str] = None
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
+
+
+# POST /v1/ask-feedbacks
+class AskFeedbackRequest(BaseModel):
+    _query_id: str | None = None
+    sql_generation_reasoning: str
+    sql: str
+    project_id: Optional[str] = None
+    configurations: Optional[Configuration] = Configuration()
+
+    @property
+    def query_id(self) -> str:
+        return self._query_id
+
+    @query_id.setter
+    def query_id(self, query_id: str):
+        self._query_id = query_id
+
+
+class AskFeedbackResponse(BaseModel):
+    query_id: str
+
+
+# PATCH /v1/ask-feedbacks/{query_id}
+class StopAskFeedbackRequest(BaseModel):
+    _query_id: str | None = None
+    status: Literal["stopped"]
+
+    @property
+    def query_id(self) -> str:
+        return self._query_id
+
+    @query_id.setter
+    def query_id(self, query_id: str):
+        self._query_id = query_id
+
+
+class StopAskFeedbackResponse(BaseModel):
+    query_id: str
+
+
+# GET /v1/ask-feedbacks/{query_id}
+class AskFeedbackResultRequest(BaseModel):
+    query_id: str
+
+
+class AskFeedbackResultResponse(BaseModel):
+    status: Literal[
+        "understanding",
+        "generating",
+        "correcting",
+        "finished",
+        "failed",
+        "stopped",
+    ]
+    error: Optional[AskError] = None
+    response: Optional[List[AskResult]] = None
 
 
 class AskService:
@@ -111,12 +168,15 @@ class AskService:
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._ask_feedback_results: Dict[str, AskFeedbackResultResponse] = TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
         self._allow_intent_classification = allow_intent_classification
 
-    def _is_stopped(self, query_id: str):
+    def _is_stopped(self, query_id: str, container: dict):
         if (
-            result := self._ask_results.get(query_id)
+            result := container.get(query_id)
         ) is not None and result.status == "stopped":
             return True
 
@@ -150,7 +210,7 @@ class AskService:
 
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
-            if not self._is_stopped(query_id):
+            if not self._is_stopped(query_id, self._ask_results):
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
                 )
@@ -232,7 +292,7 @@ class AskService:
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
                         )
-            if not self._is_stopped(query_id) and not api_results:
+            if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
                     type="TEXT_TO_SQL",
@@ -252,7 +312,7 @@ class AskService:
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
-                    if not self._is_stopped(query_id):
+                    if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
                             type="TEXT_TO_SQL",
@@ -268,7 +328,7 @@ class AskService:
                     return results
 
             if (
-                not self._is_stopped(query_id)
+                not self._is_stopped(query_id, self._ask_results)
                 and not api_results
                 and self._allow_sql_generation_reasoning
             ):
@@ -296,16 +356,16 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    generation_reasoning=sql_generation_reasoning,
+                    sql_generation_reasoning=sql_generation_reasoning,
                 )
 
-            if not self._is_stopped(query_id) and not api_results:
+            if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="generating",
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    generation_reasoning=sql_generation_reasoning,
+                    sql_generation_reasoning=sql_generation_reasoning,
                 )
 
                 sql_samples = (
@@ -394,20 +454,20 @@ class AskService:
                         error_message = failed_dry_run_results[0]["error"]
 
             if api_results:
-                if not self._is_stopped(query_id):
+                if not self._is_stopped(query_id, self._ask_results):
                     self._ask_results[query_id] = AskResultResponse(
                         status="finished",
                         type="TEXT_TO_SQL",
                         response=api_results,
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
-                        generation_reasoning=sql_generation_reasoning,
+                        sql_generation_reasoning=sql_generation_reasoning,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
                 logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
-                if not self._is_stopped(query_id):
+                if not self._is_stopped(query_id, self._ask_results):
                     self._ask_results[query_id] = AskResultResponse(
                         status="failed",
                         type="TEXT_TO_SQL",
@@ -417,7 +477,7 @@ class AskService:
                         ),
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
-                        generation_reasoning=sql_generation_reasoning,
+                        sql_generation_reasoning=sql_generation_reasoning,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                 results["metadata"]["error_message"] = error_message
@@ -483,3 +543,80 @@ class AskService:
                     data=SSEEvent.SSEEventMessage(message=chunk),
                 )
                 yield event.serialize()
+
+    @observe(name="Ask Feedback")
+    @trace_metadata
+    async def ask_feedback(
+        self,
+        ask_feedback_request: AskFeedbackRequest,
+        **kwargs,
+    ):
+        results = {
+            "ask_feedback_result": {},
+            "metadata": {
+                "error_type": "",
+                "error_message": "",
+            },
+        }
+
+        query_id = ask_feedback_request.query_id
+        # api_results = []
+        # error_message = ""
+
+        try:
+            if not self._is_stopped(query_id, self._ask_feedback_results):
+                self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
+                    status="understanding",
+                )
+
+            if not self._is_stopped(query_id, self._ask_feedback_results):
+                self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
+                    status="generating",
+                )
+
+        except Exception as e:
+            logger.exception(f"ask feedback pipeline - OTHERS: {e}")
+
+            self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
+                status="failed",
+                error=AskError(
+                    code="OTHERS",
+                    message=str(e),
+                ),
+            )
+
+            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error_message"] = str(e)
+            return results
+
+    def stop_ask_feedback(
+        self,
+        stop_ask_feedback_request: StopAskFeedbackRequest,
+    ):
+        self._ask_feedback_results[
+            stop_ask_feedback_request.query_id
+        ] = AskFeedbackResultResponse(
+            status="stopped",
+        )
+
+    def get_ask_feedback_result(
+        self,
+        ask_feedback_result_request: AskFeedbackResultRequest,
+    ) -> AskFeedbackResultResponse:
+        if (
+            result := self._ask_feedback_results.get(
+                ask_feedback_result_request.query_id
+            )
+        ) is None:
+            logger.exception(
+                f"ask feedback pipeline - OTHERS: {ask_feedback_result_request.query_id} is not found"
+            )
+            return AskFeedbackResultResponse(
+                status="failed",
+                error=AskError(
+                    code="OTHERS",
+                    message=f"{ask_feedback_result_request.query_id} is not found",
+                ),
+            )
+
+        return result

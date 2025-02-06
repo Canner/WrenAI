@@ -134,6 +134,9 @@ pipes:
     llm: litellm_llm.deepseek/deepseek-coder
   - name: sql_generation_reasoning
     llm: litellm_llm.deepseek/deepseek-reasoner
+  - name: sql_regeneration
+    llm: litellm_llm.deepseek/deepseek-coder
+    engine: wren_ui
 
 ---
 settings:

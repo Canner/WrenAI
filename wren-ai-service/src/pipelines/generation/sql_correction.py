@@ -13,8 +13,8 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
-    SqlGenerationResult,
     SQLGenPostProcessor,
 )
 
@@ -95,17 +95,6 @@ async def post_process(
 ## End of Pipeline
 
 
-SQL_CORRECTION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_correction_results",
-            "schema": SqlGenerationResult.model_json_schema(),
-        },
-    }
-}
-
-
 class SQLCorrection(BasicPipeline):
     def __init__(
         self,
@@ -117,7 +106,7 @@ class SQLCorrection(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_correction_system_prompt,
-                generation_kwargs=SQL_CORRECTION_MODEL_KWARGS,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template

@@ -123,6 +123,9 @@ pipes:
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
   - name: sql_generation_reasoning
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
+  - name: sql_regeneration
+    llm: litellm_llm.gemini/gemini-2.0-flash-exp
+    engine: wren_ui
 
 ---
 settings:

@@ -11,7 +11,7 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    SqlGenerationResult,
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -119,17 +119,6 @@ async def post_process(
 ## End of Pipeline
 
 
-FOLLOWUP_SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_generation_results",
-            "schema": SqlGenerationResult.model_json_schema(),
-        },
-    }
-}
-
-
 class FollowUpSQLGeneration(BasicPipeline):
     def __init__(
         self,
@@ -141,7 +130,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
-                generation_kwargs=FOLLOWUP_SQL_GENERATION_MODEL_KWARGS,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=text_to_sql_with_followup_user_prompt_template

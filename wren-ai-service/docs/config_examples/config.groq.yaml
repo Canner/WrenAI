@@ -116,6 +116,9 @@ pipes:
     llm: litellm_llm.groq/llama-3.3-70b-specdec
   - name: sql_generation_reasoning
     llm: litellm_llm.groq/llama-3.3-70b-specdec
+  - name: sql_regeneration
+    llm: litellm_llm.groq/llama-3.3-70b-specdec
+    engine: wren_ui
 
 ---
 settings:

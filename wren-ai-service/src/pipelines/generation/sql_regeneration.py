@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -14,70 +14,38 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
-    sql_generation_system_prompt,
 )
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
 
-sql_generation_user_prompt_template = """
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
+sql_regeneration_system_prompt = """
+"""
 
-{% if instructions %}
-### INSTRUCTIONS ###
-{{ instructions }}
-{% endif %}
-
-{% if sql_samples %}
-### SQL SAMPLES ###
-{% for sample in sql_samples %}
-Question:
-{{sample.question}}
-SQL:
-{{sample.sql}}
-{% endfor %}
-{% endif %}
-
-### QUESTION ###
-User's Question: {{ query }}
-Current Time: {{ current_time }}
-
-{% if sql_generation_reasoning %}
-### REASONING PLAN ###
-{{ sql_generation_reasoning }}
-{% endif %}
-
-Let's think step by step.
+sql_regeneration_user_prompt_template = """
 """
 
 
 ## Start of Pipeline
 @observe(capture_input=False)
 def prompt(
-    query: str,
-    documents: List[str],
+    sql_generation_reasoning: str,
+    sql: str,
     prompt_builder: PromptBuilder,
-    sql_generation_reasoning: str | None = None,
     configuration: Configuration | None = None,
-    sql_samples: List[Dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
 ) -> dict:
     return prompt_builder.run(
-        query=query,
-        documents=documents,
+        sql=sql,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             configuration,
             has_calculated_field,
             has_metric,
-            sql_samples,
+            sql_samples=[],
         ),
-        sql_samples=sql_samples,
         current_time=configuration.show_current_time(),
     )
 
@@ -107,7 +75,7 @@ async def post_process(
 ## End of Pipeline
 
 
-class SQLGeneration(BasicPipeline):
+class SQLRegeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -117,11 +85,11 @@ class SQLGeneration(BasicPipeline):
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt,
+                system_prompt=sql_regeneration_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
-                template=sql_generation_user_prompt_template
+                template=sql_regeneration_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
@@ -134,26 +102,22 @@ class SQLGeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(name="SQL Generation")
+    @observe(name="SQL Regeneration")
     async def run(
         self,
-        query: str,
-        contexts: List[str],
-        sql_generation_reasoning: str | None = None,
+        sql_generation_reasoning: str,
+        sql: str,
         configuration: Configuration = Configuration(),
-        sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
     ):
-        logger.info("SQL Generation pipeline is running...")
+        logger.info("SQL Regeneration pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
-                "query": query,
-                "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
-                "sql_samples": sql_samples,
+                "sql": sql,
                 "project_id": project_id,
                 "configuration": configuration,
                 "has_calculated_field": has_calculated_field,
@@ -168,8 +132,8 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        SQLGeneration,
-        "sql_generation",
-        query="this is a test query",
-        contexts=[],
+        SQLRegeneration,
+        "sql_regeneration",
+        sql_generation_reasoning="this is a test query",
+        sql="select * from users",
     )
