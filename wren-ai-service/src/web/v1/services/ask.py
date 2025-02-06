@@ -102,6 +102,7 @@ class AskService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
+        allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -111,6 +112,7 @@ class AskService:
             maxsize=maxsize, ttl=ttl
         )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
+        self._allow_intent_classification = allow_intent_classification
 
     def _is_stopped(self, query_id: str):
         if (
@@ -144,6 +146,8 @@ class AskService:
         error_message = ""
 
         try:
+            user_query = ask_request.query
+
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
             if not self._is_stopped(query_id):
@@ -152,7 +156,7 @@ class AskService:
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
-                    query=ask_request.query,
+                    query=user_query,
                     id=ask_request.project_id,
                 )
 
@@ -173,10 +177,10 @@ class AskService:
                         for result in historical_question_result
                     ]
                     sql_generation_reasoning = ""
-                else:
+                elif self._allow_intent_classification:
                     intent_classification_result = (
                         await self._pipelines["intent_classification"].run(
-                            query=ask_request.query,
+                            query=user_query,
                             history=ask_request.history,
                             id=ask_request.project_id,
                             configuration=ask_request.configurations,
@@ -188,11 +192,8 @@ class AskService:
                     )
                     intent_reasoning = intent_classification_result.get("reasoning")
 
-                    user_query = (
-                        ask_request.query
-                        if not rephrased_question
-                        else rephrased_question
-                    )
+                    if rephrased_question:
+                        user_query = rephrased_question
 
                     if intent == "MISLEADING_QUERY":
                         self._ask_results[query_id] = AskResultResponse(

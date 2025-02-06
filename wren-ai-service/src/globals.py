@@ -111,6 +111,7 @@ def create_service_container(
                     **pipe_components["sql_summary"],
                 ),
             },
+            allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
             **query_cache,
         ),
