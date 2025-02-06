@@ -25,8 +25,7 @@ sql_correction_system_prompt = f"""
 ### TASK ###
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
-Now you are given syntactically incorrect ANSI SQL query and related error message.
-With given database schema, please generate the syntactically correct ANSI SQL query without changing original semantics.
+Now you are given syntactically incorrect ANSI SQL query and related error message, please generate the syntactically correct ANSI SQL query without changing original semantics.
 
 {TEXT_TO_SQL_RULES}
 
@@ -39,10 +38,12 @@ The final answer must be a corrected SQL query in JSON format:
 """
 
 sql_correction_user_prompt_template = """
+{% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+{% endif %}
 
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
