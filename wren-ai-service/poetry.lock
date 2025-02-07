@@ -2946,23 +2946,23 @@ testing = ["packaging", "pytest"]
 
 [[package]]
 name = "litellm"
-version = "1.59.12"
+version = "1.60.5"
 description = "Library to easily interface with LLM API providers"
 optional = false
 python-versions = "!=2.7.*,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,!=3.7.*,>=3.8"
 files = [
-    {file = "litellm-1.59.12-py3-none-any.whl", hash = "sha256:72c19a7612ec4684c98b451762ef04b6edeaf0aae540e1f5108698ee812023b9"},
-    {file = "litellm-1.59.12.tar.gz", hash = "sha256:8d9aa62dc8e8b03c6e74536b9e2639a9355527a4e9c9e76af05ad03dd8a46c34"},
+    {file = "litellm-1.60.5-py3-none-any.whl", hash = "sha256:11a77ba092974b5a5bc8f0435c6243daa6219318d3467e7fddc233e59571708b"},
+    {file = "litellm-1.60.5.tar.gz", hash = "sha256:a62afaeedc1ed5751047a6813a5c2eddb65f5fe332b5241cca30b83586a48095"},
 ]
 
 [package.dependencies]
 aiohttp = "*"
 click = "*"
-httpx = ">=0.23.0,<0.28.0"
+httpx = ">=0.23.0"
 importlib-metadata = ">=6.8.0"
 jinja2 = ">=3.1.2,<4.0.0"
 jsonschema = ">=4.22.0,<5.0.0"
-openai = ">=1.55.3"
+openai = ">=1.61.0"
 pydantic = ">=2.0.0,<3.0.0"
 python-dotenv = ">=0.2.0"
 tiktoken = ">=0.7.0"
@@ -7110,4 +7110,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12.*, <3.13"
-content-hash = "91928923473008bda18bbd127286f65470851b215f18478ee81f19f53048ff61"
+content-hash = "6029475d60f6588b5fbf8c07dd8ce3179115fcf7b018ea6d1e88adf561d49e73"
