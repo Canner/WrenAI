@@ -15,14 +15,6 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class SemanticsDescription:
-    class Input(BaseModel):
-        id: str
-        selected_models: list[str]
-        user_prompt: str
-        mdl: str
-        configuration: Optional[Configuration] = Configuration()
-        project_id: Optional[str] = None  # this is for tracing purpose
-
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
             code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
@@ -40,25 +32,31 @@ class SemanticsDescription:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._cache: Dict[str, SemanticsDescription.Resource] = TTLCache(
-            maxsize=maxsize, ttl=ttl
-        )
+        self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     def _handle_exception(
         self,
-        request: Input,
+        id: str,
         error_message: str,
         code: str = "OTHERS",
     ):
-        self[request.id] = self.Resource(
-            id=request.id,
+        self[id] = self.Resource(
+            id=id,
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
         )
         logger.error(error_message)
 
+    class GenerateRequest(BaseModel):
+        id: str
+        selected_models: list[str]
+        user_prompt: str
+        mdl: str
+        configuration: Optional[Configuration] = Configuration()
+        project_id: Optional[str] = None  # this is for tracing purpose
+
     def _chunking(
-        self, mdl_dict: dict, request: Input, chunk_size: int = 50
+        self, mdl_dict: dict, request: GenerateRequest, chunk_size: int = 50
     ) -> list[dict]:
         template = {
             "user_prompt": request.user_prompt,
@@ -86,21 +84,21 @@ class SemanticsDescription:
 
     async def _generate_task(self, request_id: str, chunk: dict):
         resp = await self._pipelines["semantics_description"].run(**chunk)
-        normalize = resp.get("normalize")
+        output = resp.get("output")
 
         current = self[request_id]
         current.response = current.response or {}
 
-        for key in normalize.keys():
+        for key in output.keys():
             if key not in current.response:
-                current.response[key] = normalize[key]
+                current.response[key] = output[key]
                 continue
 
-            current.response[key]["columns"].extend(normalize[key]["columns"])
+            current.response[key]["columns"].extend(output[key]["columns"])
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
-    async def generate(self, request: Input, **kwargs) -> Resource:
+    async def generate(self, request: GenerateRequest, **kwargs) -> Resource:
         logger.info("Generate Semantics Description pipeline is running...")
 
         try:
@@ -114,13 +112,13 @@ class SemanticsDescription:
             self[request.id].status = "finished"
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                request,
+                request.id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
             )
         except Exception as e:
             self._handle_exception(
-                request,
+                request.id,
                 f"An error occurred during semantics description generation: {str(e)}",
             )
 
