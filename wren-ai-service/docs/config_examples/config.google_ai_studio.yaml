@@ -1,3 +1,4 @@
+# please upgrade the version of wren-ai-service to at least 0.15.10 first
 # you should rename this file to config.yaml and put it in ~/.wrenai
 # please pay attention to the comments starting with # and adjust the config accordingly
 
