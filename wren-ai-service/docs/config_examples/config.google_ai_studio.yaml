@@ -10,6 +10,13 @@ models:
   kwargs:
     n: 1
     temperature: 0
+- model: gemini/gemini-2.0-flash-exp  # gemini/<gemini_model_name>
+  alias: gemini-llm-for-chart
+  kwargs:
+    n: 1
+    temperature: 0
+    response_format:
+      type: json_object
 
 ---
 type: embedder
@@ -95,9 +102,9 @@ pipes:
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
     engine: wren_ui
   - name: chart_generation
-    llm: litellm_llm.gemini/gemini-2.0-flash-exp
+    llm: litellm_llm.gemini-llm-for-chart
   - name: chart_adjustment
-    llm: litellm_llm.gemini/gemini-2.0-flash-exp
+    llm: litellm_llm.gemini-llm-for-chart
   - name: intent_classification
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
     embedder: litellm_embedder.gemini/text-embedding-004
