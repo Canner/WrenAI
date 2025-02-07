@@ -42,7 +42,7 @@ recreate_index: true
 
 ---
 # please change the llm and embedder names to the ones you want to use
-# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06
+# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06 or <provider>.<alias> such as litellm_llm.gemini-llm-for-chart
 # the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 type: pipeline
 pipes:
