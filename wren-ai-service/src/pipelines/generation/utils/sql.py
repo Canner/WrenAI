@@ -351,14 +351,14 @@ TEXT_TO_SQL_RULES = """
 """
 
 sql_generation_system_prompt = f"""
-You are a helpful assistant that converts natural language queries into SQL queries.
+You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
 Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
 {TEXT_TO_SQL_RULES}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format:
+The final answer must be a ANSI SQL query in JSON format:
 
 {{
     "sql": <SQL_QUERY_STRING>
