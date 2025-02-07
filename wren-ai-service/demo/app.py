@@ -52,18 +52,6 @@ if "preview_sql" not in st.session_state:
     st.session_state["preview_sql"] = None
 if "query_history" not in st.session_state:
     st.session_state["query_history"] = None
-if "sql_explanation_question" not in st.session_state:
-    st.session_state["sql_explanation_question"] = None
-if "sql_explanation_steps_with_analysis" not in st.session_state:
-    st.session_state["sql_explanation_steps_with_analysis"] = None
-if "sql_analysis_results" not in st.session_state:
-    st.session_state["sql_analysis_results"] = None
-if "sql_explanation_results" not in st.session_state:
-    st.session_state["sql_explanation_results"] = None
-if "sql_user_corrections_by_step" not in st.session_state:
-    st.session_state["sql_user_corrections_by_step"] = []
-if "sql_regeneration_results" not in st.session_state:
-    st.session_state["sql_regeneration_results"] = None
 if "language" not in st.session_state:
     st.session_state["language"] = "English"
 if "timezone" not in st.session_state:
@@ -242,10 +230,6 @@ if st.session_state["asks_results"]:
             ask_details_result = ask_details()
             if ask_details_response := ask_details_result.get("response"):
                 st.session_state["asks_details_result"] = ask_details_response
-                st.session_state["sql_explanation_question"] = None
-                st.session_state["sql_explanation_steps_with_analysis"] = None
-                st.session_state["sql_analysis_results"] = None
-                st.session_state["sql_explanation_results"] = None
             else:
                 st.error(
                     f'An error occurred while processing the query: {ask_details_result.get("error")}',
