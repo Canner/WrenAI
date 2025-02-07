@@ -38,7 +38,7 @@ provider: qdrant
 location: http://qdrant:6333
 embedding_model_dim: 768  # put your embedding model dimension here
 timeout: 120
-recreate_index: false
+recreate_index: true
 
 ---
 # please change the llm and embedder names to the ones you want to use
