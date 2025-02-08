@@ -1,3 +1,4 @@
+# please upgrade the version of wren-ai-service to at least 0.15.10 first
 # you should rename this file to config.yaml and put it in ~/.wrenai
 # please pay attention to the comments starting with # and adjust the config accordingly
 
@@ -10,6 +11,13 @@ models:
   kwargs:
     n: 1
     temperature: 0
+- model: gemini/gemini-2.0-flash-exp  # gemini/<gemini_model_name>
+  alias: gemini-llm-for-chart
+  kwargs:
+    n: 1
+    temperature: 0
+    response_format:
+      type: json_object
 
 ---
 type: embedder
@@ -31,11 +39,11 @@ provider: qdrant
 location: http://qdrant:6333
 embedding_model_dim: 768  # put your embedding model dimension here
 timeout: 120
-recreate_index: false
+recreate_index: true
 
 ---
 # please change the llm and embedder names to the ones you want to use
-# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06
+# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06 or <provider>.<alias> such as litellm_llm.gemini-llm-for-chart
 # the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 type: pipeline
 pipes:
@@ -95,9 +103,9 @@ pipes:
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
     engine: wren_ui
   - name: chart_generation
-    llm: litellm_llm.gemini/gemini-2.0-flash-exp
+    llm: litellm_llm.gemini-llm-for-chart
   - name: chart_adjustment
-    llm: litellm_llm.gemini/gemini-2.0-flash-exp
+    llm: litellm_llm.gemini-llm-for-chart
   - name: intent_classification
     llm: litellm_llm.gemini/gemini-2.0-flash-exp
     embedder: litellm_embedder.gemini/text-embedding-004
