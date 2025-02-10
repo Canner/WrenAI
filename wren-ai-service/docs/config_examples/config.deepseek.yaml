@@ -3,30 +3,32 @@
 
 type: llm
 provider: litellm_llm
-timeout: 120
 models:
 # put DEEPSEEK_API_KEY=<your_api_key> in ~/.wrenai/.env
 - api_base: https://api.deepseek.com/v1
-  kwargs:
-    n: 1
-    temperature: 0
-    response_format:
-      type: text
   model: deepseek/deepseek-reasoner
-- api_base: https://api.deepseek.com/v1
+  timeout: 120
   kwargs:
     n: 1
     temperature: 0
     response_format:
       type: text
-  model: deepseek/deepseek-chat
 - api_base: https://api.deepseek.com/v1
+  model: deepseek/deepseek-chat
+  timeout: 120
+  kwargs:
+    n: 1
+    temperature: 0
+    response_format:
+      type: text
+- api_base: https://api.deepseek.com/v1
+  model: deepseek/deepseek-coder
+  timeout: 120
   kwargs:
     n: 1
     temperature: 0
     response_format:
       type: json_object
-  model: deepseek/deepseek-coder
 
 ---
 type: embedder
