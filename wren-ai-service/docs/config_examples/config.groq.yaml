@@ -3,11 +3,11 @@
 
 type: llm
 provider: litellm_llm
-timeout: 120
 models:
 # put GROQ_API_KEY=<your_api_key> in ~/.wrenai/.env
 - api_base: https://api.groq.com/openai/v1
   model: groq/llama-3.3-70b-specdec  # groq/<ollama_model_name>
+  timeout: 120
   kwargs:
     n: 1
     temperature: 0

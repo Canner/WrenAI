@@ -158,6 +158,7 @@ if __name__ == "__main__":
         "hubspot": "bigquery",
         "ga4": "bigquery",
         "woocommerce": "bigquery",
+        "stripe": "bigquery",
         "ecommerce": "duckdb",
         "hr": "duckdb",
     }
@@ -168,12 +169,12 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         default=["all"],
-        choices=["all", "hubspot", "ga4", "ecommerce", "hr", "woocommerce"],
+        choices=["all", "hubspot", "ga4", "ecommerce", "hr", "woocommerce", "stripe"],
     )
     args = parser.parse_args()
 
     if "all" in args.usecases:
-        usecases = ["hubspot", "ga4", "ecommerce", "hr", "woocommerce"]
+        usecases = ["hubspot", "ga4", "ecommerce", "hr", "woocommerce", "stripe"]
     else:
         usecases = args.usecases
 

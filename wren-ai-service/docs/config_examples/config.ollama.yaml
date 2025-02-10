@@ -3,11 +3,11 @@
 
 type: llm
 provider: litellm_llm
-timeout: 120
 models:
 # put OPENAI_API_KEY=<random_string> in ~/.wrenai/.env
 - api_base: http://host.docker.internal:11434/v1  # change this to your ollama host, api_base should be <ollama_url>/v1
   model: openai/phi4:14b  # openai/<ollama_model_name>
+  timeout: 600
   kwargs:
     n: 1
     temperature: 0
@@ -19,7 +19,7 @@ models:
 # put OPENAI_API_KEY=<random_string> in ~/.wrenai/.env
 - model: openai/nomic-embed-text  # put your ollama embedder model name here, openai/<ollama_model_name>
   api_base: http://host.docker.internal:11434/v1  # change this to your ollama host, api_base should be <ollama_url>/v1
-  timeout: 120
+  timeout: 600
 
 ---
 type: engine
