@@ -3,6 +3,7 @@ import copy
 import json
 import os
 import time
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -187,6 +188,13 @@ def on_click_regenerate_sql():
     )
 
 
+def on_click_save_sql_pair(edited_sql: str):
+    save_sql_pair(
+        st.session_state["query"],
+        edited_sql,
+    )
+
+
 def show_query_history():
     if st.session_state["query_history"]:
         with st.expander("Query History", expanded=False):
@@ -228,20 +236,22 @@ def show_asks_results():
 
     st.markdown("### SQL Query Result")
     if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
-        asks_result_count = len(st.session_state["asks_results"]["response"])
-        ask_result_cols = st.columns(asks_result_count)
-        for i, ask_result_col in enumerate(ask_result_cols):
-            with ask_result_col:
-                st.code(
-                    body=sqlparse.format(
-                        st.session_state["asks_results"]["response"][i]["sql"],
-                        reindent=True,
-                        keyword_case="upper",
-                    ),
-                    language="sql",
-                )
+        edited_sql = st.text_area(
+            label="",
+            value=sqlparse.format(
+                st.session_state["asks_results"]["response"][0]["sql"],
+                reindent=True,
+                keyword_case="upper",
+            ),
+            height=250,
+        )
+        st.button(
+            "Save Question-SQL pair",
+            on_click=on_click_save_sql_pair,
+            args=(edited_sql,),
+        )
 
-        sql = st.session_state["asks_results"]["response"][0]["sql"]
+        sql = edited_sql
 
         st.session_state["chosen_query_result"] = {
             "index": 0,
@@ -609,6 +619,44 @@ def ask_feedback(sql_generation_reasoning: str, sql: str):
     elif ask_feedback_status == "failed":
         st.error(
             f'An error occurred while processing the query: {ask_feedback_status_response.json()['error']}',
+            icon="🚨",
+        )
+
+
+def save_sql_pair(question: str, sql: str):
+    save_sql_pair_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-pairs",
+        json={
+            "sql_pairs": [
+                {
+                    "id": str(uuid.uuid4()),
+                    "question": question,
+                    "sql": sql,
+                }
+            ],
+        },
+    )
+
+    assert save_sql_pair_response.status_code == 200
+    query_id = save_sql_pair_response.json()["id"]
+    save_sql_pair_status = None
+
+    while not save_sql_pair_status or (
+        save_sql_pair_status != "finished" and save_sql_pair_status != "failed"
+    ):
+        save_sql_pair_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-pairs/{query_id}"
+        )
+        assert save_sql_pair_status_response.status_code == 200
+        save_sql_pair_status = save_sql_pair_status_response.json()["status"]
+        st.toast(f"The sql pair processing status: {save_sql_pair_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if save_sql_pair_status == "finished":
+        st.toast("The sql pair is saved successfully", icon="🎉")
+    elif save_sql_pair_status == "failed":
+        st.error(
+            f'An error occurred while processing the sql pair: {save_sql_pair_status_response.json()['error']}',
             icon="🚨",
         )
 

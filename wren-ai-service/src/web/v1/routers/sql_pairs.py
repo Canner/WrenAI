@@ -144,7 +144,7 @@ async def delete(
 
 class GetResponse(BaseModel):
     id: str
-    status: Literal["deleting", "finished", "failed"]
+    status: Literal["indexing", "deleting", "finished", "failed"]
     error: Optional[dict]
 
 
