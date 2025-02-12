@@ -156,9 +156,9 @@ def eval_and_or(pred, label):
 def get_nestedSQL(sql):
     nested = []
     for cond_unit in sql["from"]["conds"][::2] + sql["where"][::2] + sql["having"][::2]:
-        if type(cond_unit[3]) is dict:
+        if isinstance(cond_unit[3], dict):
             nested.append(cond_unit[3])
-        if type(cond_unit[4]) is dict:
+        if isinstance(cond_unit[4], dict):
             nested.append(cond_unit[4])
     if sql["intersect"] is not None:
         nested.append(sql["intersect"])
@@ -498,11 +498,11 @@ def rebuild_cond_unit_val(cond_unit):
         return cond_unit
 
     not_op, op_id, val_unit, val1, val2 = cond_unit
-    if type(val1) is not dict:
+    if not isinstance(val1, dict):
         val1 = None
     else:
         val1 = rebuild_sql_val(val1)
-    if type(val2) is not dict:
+    if not isinstance(val2, dict):
         val2 = None
     else:
         val2 = rebuild_sql_val(val2)
@@ -564,7 +564,7 @@ def tokenize(sql: str, schema: dict, kmap: dict) -> dict:
 
     try:
         struct = get_sql(schema, rewritten_sql)
-    except:
+    except Exception:
         struct = {
             "except": None,
             "from": {"conds": [], "table_units": []},
@@ -625,14 +625,18 @@ def build_foreign_key_map(entry):
 
 
 def build_foreign_key_map_from_json(table):
-    import json
+    try:
+        import json
 
-    with open(table) as f:
-        data = json.load(f)
-    tables = {}
-    for entry in data:
-        tables[entry["db_id"]] = build_foreign_key_map(entry)
-    return tables
+        with open(table) as f:
+            data = json.load(f)
+        tables = {}
+        for entry in data:
+            tables[entry["db_id"]] = build_foreign_key_map(entry)
+        return tables
+    except Exception as e:
+        print(f"Error building foreign key map from JSON: {e}")
+        return {}
 
 
 VALUE_NUM_SYMBOL = "VALUERARE"

@@ -105,11 +105,24 @@ if __name__ == "__main__":
     dataset = parse_toml(path)
 
     settings = EvalSettings()
+    _mdl = base64.b64encode(orjson.dumps(dataset["mdl"])).decode("utf-8")
     if "spider_" in path:
         settings.datasource = "duckdb"
-        _mdl = base64.b64encode(orjson.dumps(dataset["mdl"])).decode("utf-8")
         replace_wren_engine_env_variables(
             "wren_engine", {"manifest": _mdl}, settings.config_path
+        )
+    else:
+        _connection_info = base64.b64encode(
+            orjson.dumps(settings.bigquery_info)
+        ).decode("utf-8")
+        replace_wren_engine_env_variables(
+            "wren_ibis",
+            {
+                "manifest": _mdl,
+                "source": settings.datasource,
+                "connection_info": _connection_info,
+            },
+            settings.config_path,
         )
 
     pipe_components = provider.generate_components(settings.components)
