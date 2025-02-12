@@ -10,6 +10,7 @@ class EvalSettings(Settings):
     datasource: str = "bigquery"
     config_path: str = "eval/config.yaml"
     openai_api_key: SecretStr = Field(alias="LLM_OPENAI_API_KEY")
+    allow_sql_samples: bool = True
 
     # BigQuery
     bigquery_project_id: str = Field(default="")
