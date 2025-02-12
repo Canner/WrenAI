@@ -10,9 +10,12 @@ import orjson
 import requests
 import sqlglot
 import tomlkit
+import yaml
 from dotenv import load_dotenv
 from openai import AsyncClient
 from tomlkit import parse
+
+from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
 
@@ -27,10 +30,10 @@ def add_quotes(sql: str) -> Tuple[str, bool]:
 
 async def get_data_from_wren_engine(
     sql: str,
-    data_source: str,
     mdl_json: dict,
-    connection_info: dict,
     api_endpoint: str,
+    data_source: Optional[str] = None,
+    connection_info: Optional[dict] = None,
     timeout: float = 300,
     limit: Optional[int] = None,
 ):
@@ -213,6 +216,16 @@ def engine_config(mdl: dict, pipe_components: dict[str, Any] = {}) -> dict:
         raise ValueError(
             "SQL Generation engine not found in pipe_components. Ensure 'sql_generation' key exists and contains 'engine' configuration."
         )
+
+    if isinstance(engine, WrenEngine):
+        print("datasource is duckdb")
+        prepare_duckdb_session_sql(engine._endpoint)
+        prepare_duckdb_init_sql(engine._endpoint, mdl["catalog"])
+        return {
+            "mdl_json": mdl,
+            "api_endpoint": engine._endpoint,
+            "timeout": 10,
+        }
 
     return {
         "mdl_json": mdl,
@@ -552,3 +565,22 @@ def get_openai_client(
         api_key=api_key,
         timeout=timeout,
     )
+
+
+def replace_wren_engine_env_variables(engine_type: str, data: dict, config_path: str):
+    assert engine_type in ("wren_engine", "wren_ibis")
+
+    with open(config_path, "r") as f:
+        configs = list(yaml.safe_load_all(f))
+
+        for config in configs:
+            if config.get("type") == "engine" and config.get("provider") == engine_type:
+                for key, value in data.items():
+                    config[key] = value
+            if "pipes" in config:
+                for i, pipe in enumerate(config["pipes"]):
+                    if "engine" in pipe:
+                        config["pipes"][i]["engine"] = engine_type
+
+    with open(config_path, "w") as f:
+        yaml.safe_dump_all(configs, f, default_flow_style=False)

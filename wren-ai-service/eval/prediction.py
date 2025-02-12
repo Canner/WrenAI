@@ -1,10 +1,12 @@
 import argparse
+import base64
 import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+import orjson
 from git import Repo
 from langfuse.decorators import langfuse_context
 from tomlkit import document, dumps
@@ -14,7 +16,7 @@ import eval.pipelines as pipelines
 import src.providers as provider
 import src.utils as utils
 from eval import EvalSettings
-from eval.utils import parse_toml
+from eval.utils import parse_toml, replace_wren_engine_env_variables
 
 
 def generate_meta(
@@ -100,13 +102,31 @@ def parse_args() -> Tuple[str, str]:
 
 if __name__ == "__main__":
     path, pipe_name = parse_args()
+    dataset = parse_toml(path)
 
     settings = EvalSettings()
-    # todo: handle duckdb as datasource
+    _mdl = base64.b64encode(orjson.dumps(dataset["mdl"])).decode("utf-8")
+    if "spider_" in path:
+        settings.datasource = "duckdb"
+        replace_wren_engine_env_variables(
+            "wren_engine", {"manifest": _mdl}, settings.config_path
+        )
+    else:
+        _connection_info = base64.b64encode(
+            orjson.dumps(settings.bigquery_info)
+        ).decode("utf-8")
+        replace_wren_engine_env_variables(
+            "wren_ibis",
+            {
+                "manifest": _mdl,
+                "source": settings.datasource,
+                "connection_info": _connection_info,
+            },
+            settings.config_path,
+        )
+
     pipe_components = provider.generate_components(settings.components)
     utils.init_langfuse(settings)
-
-    dataset = parse_toml(path)
 
     meta = generate_meta(path=path, dataset=dataset, pipe=pipe_name, settings=settings)
 

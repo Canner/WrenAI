@@ -11,7 +11,7 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    SqlGenerationResult,
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -39,6 +39,7 @@ Question:
 {{sample.question}}
 SQL:
 {{sample.sql}}
+
 {% endfor %}
 {% endif %}
 
@@ -105,17 +106,6 @@ async def post_process(
 
 
 ## End of Pipeline
-
-
-SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_generation_result",
-            "schema": SqlGenerationResult.model_json_schema(),
-        },
-    }
-}
 
 
 class SQLGeneration(BasicPipeline):

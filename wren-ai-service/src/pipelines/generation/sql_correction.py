@@ -13,8 +13,8 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
-    SqlGenerationResult,
     SQLGenPostProcessor,
 )
 
@@ -25,8 +25,7 @@ sql_correction_system_prompt = f"""
 ### TASK ###
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
-Now you are given syntactically incorrect ANSI SQL query and related error message.
-With given database schema, please generate the syntactically correct ANSI SQL query without changing original semantics.
+Now you are given syntactically incorrect ANSI SQL query and related error message, please generate the syntactically correct ANSI SQL query without changing original semantics.
 
 {TEXT_TO_SQL_RULES}
 
@@ -39,10 +38,12 @@ The final answer must be a corrected SQL query in JSON format:
 """
 
 sql_correction_user_prompt_template = """
+{% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+{% endif %}
 
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
@@ -95,17 +96,6 @@ async def post_process(
 ## End of Pipeline
 
 
-SQL_CORRECTION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_correction_results",
-            "schema": SqlGenerationResult.model_json_schema(),
-        },
-    }
-}
-
-
 class SQLCorrection(BasicPipeline):
     def __init__(
         self,
@@ -117,7 +107,7 @@ class SQLCorrection(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_correction_system_prompt,
-                generation_kwargs=SQL_CORRECTION_MODEL_KWARGS,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template

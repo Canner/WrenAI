@@ -6,12 +6,14 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.generation.utils.sql import SQLGenPostProcessor
+from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
+    SQLGenPostProcessor,
+)
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -88,21 +90,6 @@ async def post_process(
 ## End of Pipeline
 
 
-class ExpansionResult(BaseModel):
-    sql: str
-
-
-SQL_EXPANSION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_results",
-            "schema": ExpansionResult.model_json_schema(),
-        },
-    }
-}
-
-
 class SQLExpansion(BasicPipeline):
     def __init__(
         self,
@@ -114,7 +101,7 @@ class SQLExpansion(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_expansion_system_prompt,
-                generation_kwargs=SQL_EXPANSION_MODEL_KWARGS,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_expansion_user_prompt_template

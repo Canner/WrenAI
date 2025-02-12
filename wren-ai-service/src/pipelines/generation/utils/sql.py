@@ -351,14 +351,14 @@ TEXT_TO_SQL_RULES = """
 """
 
 sql_generation_system_prompt = f"""
-You are a helpful assistant that converts natural language queries into SQL queries.
+You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
 Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
 {TEXT_TO_SQL_RULES}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a SQL query in JSON format:
+The final answer must be a ANSI SQL query in JSON format:
 
 {{
     "sql": <SQL_QUERY_STRING>
@@ -530,11 +530,14 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 
 def construct_instructions(
-    configuration: Configuration | None,
-    has_calculated_field: bool,
-    has_metric: bool,
-    sql_samples: list,
+    configuration: Configuration | None = Configuration(),
+    has_calculated_field: bool = False,
+    has_metric: bool = False,
+    sql_samples: list | None = None,
 ):
+    if sql_samples is None:
+        sql_samples = []
+
     instructions = ""
     if configuration:
         if configuration.fiscal_year:
@@ -551,3 +554,14 @@ def construct_instructions(
 
 class SqlGenerationResult(BaseModel):
     sql: str
+
+
+SQL_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_generation_result",
+            "schema": SqlGenerationResult.model_json_schema(),
+        },
+    }
+}

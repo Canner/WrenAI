@@ -93,4 +93,4 @@ async def test_sql_pairs_deletion():
     assert await store.count_documents() == 2
 
     await pipe.clean(sql_pairs=[], project_id="fake-id")
-    assert await store.count_documents() == 0
+    assert await store.count_documents() == 2

@@ -20,6 +20,8 @@ from eval.metrics import (
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
+    ExactMatchAccuracy,
+    ExecutionAccuracy,
     FaithfulnessMetric,
 )
 from eval.utils import (
@@ -224,6 +226,7 @@ class GenerationPipeline(Eval):
         meta: dict,
         mdl: dict,
         pipe_components: dict,
+        settings: EvalSettings,
         **kwargs,
     ):
         super().__init__(meta)
@@ -232,6 +235,7 @@ class GenerationPipeline(Eval):
             **pipe_components["sql_generation"],
         )
 
+        self._allow_sql_samples = settings.allow_sql_samples
         self._engine_info = engine_config(mdl, pipe_components)
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
@@ -247,7 +251,7 @@ class GenerationPipeline(Eval):
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
-            samples=prediction["samples"],
+            samples=prediction.get("samples", []) if self._allow_sql_samples else [],
             has_calculated_field=prediction.get("has_calculated_field", False),
             has_metric=prediction.get("has_metric", False),
             sql_generation_reasoning=prediction.get("reasoning", ""),
@@ -282,8 +286,8 @@ class GenerationPipeline(Eval):
                 AnswerRelevancyMetric(engine_info=engine_info),
                 FaithfulnessMetric(engine_info=engine_info),
                 # this is for spider dataset, rn we temporarily disable it
-                # ExactMatchAccuracy(),
-                # ExecutionAccuracy(),
+                ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }
@@ -318,6 +322,7 @@ class AskPipeline(Eval):
         self._generation = generation.SQLGeneration(
             **pipe_components["sql_generation"],
         )
+        self._allow_sql_samples = settings.allow_sql_samples
 
         self._engine_info = engine_config(mdl, pipe_components)
 
@@ -338,7 +343,9 @@ class AskPipeline(Eval):
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
-            sql_samples=[],
+            sql_samples=prediction.get("samples", [])
+            if self._allow_sql_samples
+            else [],
             has_calculated_field=has_calculated_field,
             has_metric=has_metric,
             sql_generation_reasoning=prediction.get("reasoning", ""),
@@ -378,8 +385,8 @@ class AskPipeline(Eval):
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
                 # this is for spider dataset, rn we temporarily disable it
-                # ExactMatchAccuracy(),
-                # ExecutionAccuracy(),
+                ExactMatchAccuracy(),
+                ExecutionAccuracy(),
             ],
             "post_metrics": [AccuracyMultiCandidateMetric()],
         }

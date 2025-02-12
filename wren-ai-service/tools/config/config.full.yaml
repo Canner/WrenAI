@@ -103,11 +103,6 @@ pipes:
   - name: sql_expansion
     llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
-  - name: sql_explanation
-    llm: litellm_llm.gpt-4o-mini-2024-07-18
-  - name: sql_regeneration
-    llm: litellm_llm.gpt-4o-mini-2024-07-18
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: relationship_recommendation
@@ -147,6 +142,9 @@ pipes:
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_generation_reasoning
     llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_regeneration
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
 
 ---
 settings:
