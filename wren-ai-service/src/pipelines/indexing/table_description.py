@@ -54,6 +54,7 @@ class TableDescriptionChunker:
             return {
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
+                "columns": [column["name"] for column in payload.get("columns", [])],
                 "properties": payload.get("properties", {}),
             }
 
@@ -66,8 +67,8 @@ class TableDescriptionChunker:
         return [
             {
                 "name": resource["name"],
-                "mdl_type": resource["mdl_type"],
                 "description": resource["properties"].get("description", ""),
+                "columns": ", ".join(resource["columns"]),
             }
             for resource in resources
             if resource["name"] is not None
