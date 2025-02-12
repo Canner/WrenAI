@@ -27,7 +27,7 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 4. Make sure to consider the current time provided in the input if the user's question is related to the date/time.
 5. Don't include SQL in the reasoning plan.
 6. Each step in the reasoning plan must start with a number, and a reasoning for the step.
-7. If QUESTION-SQL PAIR EXAMPLES are provided, make sure to consider them in the reasoning plan.
+7. If SQL SAMPLES are provided, make sure to consider them in the reasoning plan.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in JSON format:
@@ -44,9 +44,12 @@ sql_generation_reasoning_user_prompt_template = """
 {% endfor %}
 
 {% if sql_samples %}
-### QUESTION-SQL PAIR EXAMPLES ###
+### SQL SAMPLES ###
 {% for sql_sample in sql_samples %}
-    {{ sql_sample }}
+Question:
+{{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
