@@ -94,7 +94,7 @@ class AskResultResponse(BaseModel):
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
-    retrieval_response: Optional[List[str]] = None
+    retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -341,7 +341,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    retrieval_response=table_names,
+                    retrieved_tables=table_names,
                 )
 
                 sql_samples = (
@@ -369,7 +369,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    retrieval_response=table_names,
+                    retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                 )
 
@@ -379,7 +379,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    retrieval_response=table_names,
+                    retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                 )
 
@@ -437,7 +437,7 @@ class AskService:
                             type="TEXT_TO_SQL",
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
-                            retrieval_response=table_names,
+                            retrieved_tables=table_names,
                             sql_generation_reasoning=sql_generation_reasoning,
                         )
                         sql_correction_results = await self._pipelines[
@@ -475,7 +475,7 @@ class AskService:
                         response=api_results,
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
-                        retrieval_response=table_names,
+                        retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                     )
                 results["ask_result"] = api_results
@@ -492,7 +492,7 @@ class AskService:
                         ),
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
-                        retrieval_response=table_names,
+                        retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
