@@ -57,7 +57,7 @@ def prompt(
     sql_generation_reasoning: str,
     sql: str,
     prompt_builder: PromptBuilder,
-    configuration: Configuration | None = None,
+    configuration: Configuration | None = Configuration(),
     has_calculated_field: bool = False,
     has_metric: bool = False,
 ) -> dict:
