@@ -202,6 +202,7 @@ class AskService:
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
+        sql_samples = []
         api_results = []
         error_message = ""
 
@@ -339,11 +340,19 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                 )
 
+                sql_samples = (
+                    await self._pipelines["sql_pairs_retrieval"].run(
+                        query=ask_request.query,
+                        id=ask_request.project_id,
+                    )
+                )["formatted_output"].get("documents", [])
+
                 sql_generation_reasoning = (
                     (
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=documents,
+                            sql_samples=sql_samples,
                             configuration=ask_request.configurations,
                         )
                     )
@@ -368,12 +377,6 @@ class AskService:
                     sql_generation_reasoning=sql_generation_reasoning,
                 )
 
-                sql_samples = (
-                    await self._pipelines["sql_pairs_retrieval"].run(
-                        query=ask_request.query,
-                        id=ask_request.project_id,
-                    )
-                )["formatted_output"].get("documents", [])
                 has_calculated_field = (
                     _retrieval_result.get("has_calculated_field", False),
                 )

@@ -46,7 +46,9 @@ def dry_run_pipeline(
     from src.providers import generate_components
     from src.utils import init_langfuse, setup_custom_logger
 
-    setup_custom_logger("wren-ai-service", level_str=settings.logging_level, is_dev=True)
+    setup_custom_logger(
+        "wren-ai-service", level_str=settings.logging_level, is_dev=True
+    )
 
     pipe_components = generate_components(settings.components)
     pipeline = pipeline_cls(**pipe_components[pipeline_name])
@@ -62,11 +64,16 @@ class ScoreFilter:
     @component.output_types(
         documents=List[Document],
     )
-    def run(self, documents: List[Document], score: float = 0.9):
+    def run(
+        self,
+        documents: List[Document],
+        score: float = 0.9,
+        max_size: int = 10,
+    ):
         return {
             "documents": sorted(
                 filter(lambda document: document.score >= score, documents),
                 key=lambda document: document.score,
                 reverse=True,
-            )
+            )[:max_size]
         }
